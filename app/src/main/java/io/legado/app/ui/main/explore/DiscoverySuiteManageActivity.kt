@@ -65,7 +65,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.flexbox.FlexboxLayout
@@ -81,6 +80,7 @@ import io.legado.app.databinding.ItemFilletTextBinding
 import io.legado.app.databinding.ItemFindBookBinding
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
+import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.help.source.exploreKinds
@@ -1411,6 +1411,7 @@ private fun addClassicUrlTagPreview(
     tv.maxLines = 1
     tv.ellipsize = TextUtils.TruncateAt.END
     tv.setPadding(14.dpToPx(), 4.dpToPx(), 14.dpToPx(), 4.dpToPx())
+    tv.background = tv.context.filletControlBackground()
     applyClassicDiscoverFlexStyle(tv, kind)
     applyClassicDiscoverTagSelectedStyle(tv, selected)
     tv.setOnClickListener { onClick() }
@@ -1431,6 +1432,7 @@ private fun addClassicTextPreview(
     tv.ellipsize = TextUtils.TruncateAt.END
     tv.isEnabled = enabled
     tv.alpha = if (enabled) 1f else 0.78f
+    tv.background = tv.context.filletControlBackground()
     applyClassicDiscoverFlexStyle(tv, kind)
     applyClassicDiscoverTagSelectedStyle(tv, selected)
 }
@@ -1442,6 +1444,7 @@ private fun addClassicSelectPreview(
 ) {
     val binding = ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false)
     flexbox.addView(binding.root)
+    binding.root.background = binding.root.context.filletControlBackground()
     binding.spName.text = kind.suiteDiscoverTagText()
     binding.root.applyUiBodyTypefaceDeep(binding.root.context.uiTypeface())
     val chars = kind.chars?.filterNotNull().orEmpty()
@@ -1471,6 +1474,7 @@ private fun addClassicInputPreview(
     input.typeface = input.context.uiTypeface()
     input.isFocusable = false
     input.isFocusableInTouchMode = false
+    input.background = input.context.filletControlBackground()
     applyClassicDiscoverFlexStyle(input, kind)
 }
 
@@ -1504,7 +1508,8 @@ private fun setClassicDiscoverGravity(view: View, gravity: Int) {
 private fun applyClassicDiscoverTagSelectedStyle(tv: TextView, selected: Boolean) {
     val context = tv.context
     if (!selected) {
-        tv.background = ContextCompat.getDrawable(context, R.drawable.selector_fillet_btn_bg)
+        // 未选中态与发现页其它圆角控件一致，跟随主题主色调
+        tv.background = context.filletControlBackground()
         tv.setTextColor(context.primaryTextColor)
         return
     }

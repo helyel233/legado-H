@@ -24,6 +24,7 @@ import io.legado.app.databinding.PopupKeyboardToolBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.utils.activity
@@ -105,6 +106,7 @@ class KeyboardToolPop(
         binding.recyclerView.adapter = adapter
         adapter.addHeaderView {
             ItemFilletTextBinding.inflate(context.layoutInflater, it, false).apply {
+                root.background = context.filletControlBackground()
                 textView.text = helpChar
                 root.setOnClickListener {
                     helpAlert()
@@ -115,6 +117,7 @@ class KeyboardToolPop(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             adapter.addHeaderView {
                 ItemFilletTextBinding.inflate(context.layoutInflater, it, false).apply {
+                    root.background = context.filletControlBackground()
                     textView.text = "↩\uFE0F"
                     root.setOnClickListener {
                         callBack.onUndoClicked()
@@ -123,6 +126,7 @@ class KeyboardToolPop(
             }
             adapter.addHeaderView {
                 ItemFilletTextBinding.inflate(context.layoutInflater, it, false).apply {
+                    root.background = context.filletControlBackground()
                     textView.text = "↪\uFE0F"
                     root.setOnClickListener {
                         callBack.onRedoClicked()
@@ -181,7 +185,9 @@ class KeyboardToolPop(
         }
 
         override fun getViewBinding(parent: ViewGroup): ItemFilletTextBinding {
-            return ItemFilletTextBinding.inflate(inflater, parent, false)
+            return ItemFilletTextBinding.inflate(inflater, parent, false).apply {
+                root.background = context.filletControlBackground()
+            }
         }
 
         override fun convert(

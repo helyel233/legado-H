@@ -37,6 +37,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.widget.ModernActionPopup
@@ -526,7 +527,9 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     @Synchronized
     private fun getFlexboxChild(flexbox: FlexboxLayout): TextView {
         return if (recycler.isEmpty()) {
-            ItemFilletTextBinding.inflate(inflater, flexbox, false).root
+            ItemFilletTextBinding.inflate(inflater, flexbox, false).root.apply {
+                background = context.filletControlBackground()
+            }
         } else {
             recycler.removeLastElement()
         }
@@ -535,7 +538,9 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     @Synchronized
     private fun getFlexboxChildText(flexbox: FlexboxLayout): AutoCompleteTextView {
         return if (textRecycler.isEmpty()) {
-            ItemFilletCompleteTextBinding.inflate(inflater, flexbox, false).root
+            ItemFilletCompleteTextBinding.inflate(inflater, flexbox, false).root.apply {
+                background = context.filletControlBackground()
+            }
         } else {
             textRecycler.removeLastElement()
         }
@@ -544,7 +549,9 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     @Synchronized
     private fun getFlexboxChildSelect(flexbox: FlexboxLayout): LinearLayout {
         return if (selectRecycler.isEmpty()) {
-            ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false).root
+            ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false).root.apply {
+                background = context.filletControlBackground()
+            }
         } else {
             selectRecycler.removeLastElement()
         }

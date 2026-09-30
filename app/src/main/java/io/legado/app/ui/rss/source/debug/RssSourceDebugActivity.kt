@@ -13,6 +13,7 @@ import io.legado.app.databinding.ActivityRssSourceDebugBinding
 import io.legado.app.help.source.sortUrls
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.applyThemedFilletControlBackground
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.applyNavigationBarPadding
@@ -36,6 +37,7 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.root.applyThemedFilletControlBackground()
         initRecyclerView()
         initSearchView()
         viewModel.initData(intent.getStringExtra("key")) {

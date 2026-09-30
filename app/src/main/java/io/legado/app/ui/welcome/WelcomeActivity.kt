@@ -3,6 +3,7 @@ package io.legado.app.ui.welcome
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.PreferKey
@@ -16,6 +17,9 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.setStatusBarColorAuto
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>(imageBg = false) {
 
@@ -52,10 +56,14 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>(imageBg = fals
 
     private fun startMainActivity() {
         startActivity<MainActivity>()
-        if (getPrefBoolean(PreferKey.defaultToRead) && appDb.bookDao.lastReadBook != null) {
-            startActivity<ReadBookActivity>()
+        lifecycleScope.launch {
+            // 避免在主线程同步查询数据库导致启动卡顿
+            val lastReadBook = withContext(IO) { appDb.bookDao.lastReadBook }
+            if (getPrefBoolean(PreferKey.defaultToRead) && lastReadBook != null) {
+                startActivity<ReadBookActivity>()
+            }
+            finish()
         }
-        finish()
     }
 
 }

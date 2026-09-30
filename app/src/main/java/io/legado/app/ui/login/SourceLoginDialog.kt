@@ -24,6 +24,7 @@ import io.legado.app.databinding.ItemSourceEditBinding
 import io.legado.app.databinding.ItemSelectorSingleBinding
 import io.legado.app.help.book.ParagraphRuleJsExtensions
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.filletTopBackground
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.utils.GSON
@@ -484,6 +485,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     binding.root,
                     false
                 ).let {
+                    it.root.background = binding.root.context.filletControlBackground()
                     binding.flexbox.addView(it.root, insertIndex)
                     rowUi.style().apply {
                         when (this.layout_justifySelf) {
@@ -547,6 +549,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     binding.root,
                     false
                 ).let {
+                    it.root.background = binding.root.context.filletControlBackground()
                     var newName = name
                     var left = true
                     binding.flexbox.addView(it.root, insertIndex)

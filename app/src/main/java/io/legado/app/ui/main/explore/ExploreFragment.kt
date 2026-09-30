@@ -6,7 +6,6 @@ import android.database.sqlite.SQLiteBlobTooBigException
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -88,6 +87,7 @@ import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.book.explore.ExploreShowBookCallback
@@ -2439,6 +2439,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     ) {
         val binding = ItemFilletSelectorSingleBinding.inflate(layoutInflater, flexbox, false)
         val root = binding.root
+        root.background = requireContext().filletControlBackground()
         flexbox.addView(root)
         kind.style().apply {
             when (layout_justifySelf) {
@@ -2484,6 +2485,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         java: SourceLoginJsExtensions
     ) {
         val input = ItemFilletCompleteTextBinding.inflate(layoutInflater, flexbox, false).root
+        input.background = requireContext().filletControlBackground()
         flexbox.addView(input)
         kind.style().apply {
             when (layout_justifySelf) {
@@ -2522,6 +2524,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun createDiscoverDialogTextView(flexbox: FlexboxLayout): TextView {
         return ItemFilletTextBinding.inflate(layoutInflater, flexbox, false).root.apply {
             typeface = requireContext().uiTypeface()
+            background = requireContext().filletControlBackground()
         }
     }
 
@@ -2633,6 +2636,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         binding.textView.maxLines = 1
         binding.textView.ellipsize = TextUtils.TruncateAt.END
         binding.textView.setPadding(16.dpToPx(), 4.dpToPx(), 16.dpToPx(), 4.dpToPx())
+        binding.textView.background = requireContext().filletControlBackground()
         applyDiscoverDialogFlexStyle(binding.root, item)
         binding.root.setOnClickListener {
             when (item.role) {
@@ -2663,6 +2667,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     private fun createDiscoverDialogSelect(item: DiscoverTagItem): View {
         val binding = ItemFilletSelectorSingleBinding.inflate(layoutInflater, null, false)
+        binding.root.background = requireContext().filletControlBackground()
         binding.spName.text = item.text
         val source = selectedDiscoverSource ?: return binding.root
         val key = item.kind.title

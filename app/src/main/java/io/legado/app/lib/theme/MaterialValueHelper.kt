@@ -7,6 +7,9 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.StateListDrawable
+import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.ColorInt
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
@@ -192,6 +195,52 @@ val Context.filletBackground: Drawable
     get() {
         return UiCorner.panelRounded(this, backgroundColor, UiCorner.panelRadius(this))
     }
+
+/**
+ * 圆角小控件（发现页、书源登录、书源调试、视频控制条等）的主题化背景：
+ * 跟随主题主色调的半透明底（日间 0x1A、夜间 0x33，按下加深），
+ * 替代上游硬编码蓝色的 selector_fillet_btn_bg。
+ */
+fun Context.filletControlBackground(): StateListDrawable {
+    val base = primaryColor
+    val alpha = if (AppConfig.isNightTheme) 0x33 else 0x1A
+    fun state(alphaBonus: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = UiCorner.actionRadius(this@filletControlBackground)
+            setColor(
+                androidx.core.graphics.ColorUtils.setAlphaComponent(
+                    base,
+                    (alpha + alphaBonus).coerceAtMost(0xFF)
+                )
+            )
+        }
+    }
+    return StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_pressed), state(0x1A))
+        addState(intArrayOf(), state(0))
+    }
+}
+
+/**
+ * 递归把布局里静态引用 selector_fillet_btn_bg 的控件替换为主题化背景，
+ * 供布局直接引用该 drawable 的页面（调试页、视频控制条等）调用。
+ */
+fun View.applyThemedFilletControlBackground() {
+    val target = ContextCompat.getDrawable(context, R.drawable.selector_fillet_btn_bg)
+        ?.constantState ?: return
+    fun walk(view: View) {
+        if (view.background?.constantState == target) {
+            view.background = context.filletControlBackground()
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                walk(view.getChildAt(index))
+            }
+        }
+    }
+    walk(this)
+}
 
 val Context.dialogSurfaceBackground: GradientDrawable
     get() {

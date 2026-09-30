@@ -392,6 +392,11 @@ class EpubReadView @JvmOverloads constructor(
         }
         val listener = listener ?: return
         listener.onPageClick(x, y)
+        // 与 ReadView.setRect9x 一致：左右边缘阈值区域不响应分区点击
+        val edgeInset = AppConfig.pageTouchClick
+        if (edgeInset > 0 && (x < edgeInset || x > width - edgeInset)) {
+            return
+        }
         val column = when {
             x < width / 3f -> 0
             x < width * 2f / 3f -> 1
