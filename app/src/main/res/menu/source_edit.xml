@@ -33,6 +33,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_source_api"
+        android:title="@string/source_api_usage"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_clear_cookie"
         android:title="@string/cookie"
         app:showAsAction="never" />

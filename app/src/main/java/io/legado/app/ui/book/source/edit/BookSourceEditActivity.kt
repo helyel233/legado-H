@@ -47,6 +47,8 @@ import io.legado.app.utils.imeHeight
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.launch
 import io.legado.app.utils.navigationBarHeight
+import io.legado.app.help.source.SourceApiField
+import io.legado.app.help.source.SourceApiUsageScanner
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
@@ -195,6 +197,7 @@ class BookSourceEditActivity :
             }
 
             R.id.menu_set_source_variable -> setSourceVariable()
+            R.id.menu_source_api -> showSourceApiUsage()
             R.id.menu_search -> viewModel.save(getSource()) { source ->
                 SearchActivity.start(this, source)
             }
@@ -628,6 +631,53 @@ class BookSourceEditActivity :
         source.ruleContent = contentRule
 //        source.ruleReview = reviewRule
         return source
+    }
+
+    private fun showSourceApiUsage() {
+        val usages = SourceApiUsageScanner.scan(sourceApiFields())
+        showDialogFragment(
+            SourceApiUsageDialog.create(
+                usages = usages,
+                onJumpToField = ::jumpToField,
+                onCopyUsageList = { text ->
+                    sendToClip(text)
+                    toastOnUi(R.string.source_api_usage_copied)
+                }
+            )
+        )
+    }
+
+    private fun sourceApiFields(): List<SourceApiField> {
+        val tabNames = listOf(
+            getString(R.string.source_tab_base),
+            getString(R.string.source_tab_search),
+            getString(R.string.source_tab_find),
+            getString(R.string.source_tab_info),
+            getString(R.string.source_tab_toc),
+            getString(R.string.source_tab_content)
+        )
+        val entityLists = listOf(
+            sourceEntities, searchEntities, exploreEntities,
+            infoEntities, tocEntities, contentEntities
+        )
+        return entityLists.flatMapIndexed { index, entities ->
+            entities.map { SourceApiField(index, tabNames[index], it.key, it.value) }
+        }
+    }
+
+    private fun jumpToField(tabIndex: Int, fieldKey: String) {
+        if (tabIndex !in 0..5) return
+        binding.tabLayout.getTabAt(tabIndex)?.select()
+        setEditEntities(tabIndex)
+        val index = adapter.editEntities.indexOfFirst { it.key == fieldKey }
+        if (index < 0) return
+        binding.recyclerView.post {
+            binding.recyclerView.scrollToPosition(index)
+            binding.recyclerView.postDelayed({
+                val holder = binding.recyclerView.findViewHolderForAdapterPosition(index)
+                holder?.itemView?.findViewById<EditText>(R.id.editText)?.requestFocus()
+            }, 200)
+        }
     }
 
     private fun alertGroups() {

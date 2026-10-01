@@ -2394,4 +2394,18 @@ bookUrl：%7$s
     <string name="auto_task_debug_missing">未找到任务</string>
     <string name="auto_task_debug_duration">耗时：%1$d 毫秒</string>
     <string name="auto_task_debug_result">结果：%1$s</string>
+    <string name="source_api_usage">源所用API</string>
+    <string name="source_api_usage_search_hint">搜索 API</string>
+    <string name="source_api_usage_empty">未扫描到 API 使用</string>
+    <string name="source_api_usage_copy">复制清单</string>
+    <string name="source_api_usage_copied">已复制源所用API清单</string>
+    <string name="source_api_usage_times">%1$d 次</string>
+    <string name="bookshelf_tag_rename">重命名标签</string>
+    <string name="bookshelf_tag_rename_hint">新标签名</string>
+    <string name="bookshelf_tag_rename_done">标签已重命名</string>
+    <string name="bookshelf_tag_delete_cleanup">已从 %1$d 本书中移除标签</string>
+    <string name="tip_custom_template">自定义模板</string>
+    <string name="tip_custom_template_edit">编辑模板：%1$s</string>
+    <string name="tip_custom_template_hint">例如：{书名} · {章节名}</string>
+    <string name="tip_custom_template_help">可用占位符：{书名} {章节名} {时间} {电量} {电量百分比} {页码} {总页数} {进度}</string>
 </resources>

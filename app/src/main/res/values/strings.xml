@@ -2580,4 +2580,18 @@ Selected text or question:
     <string name="auto_task_import_duplicate_id">Task IDs must be unique</string>
     <string name="auto_task_import_done">Tasks imported</string>
     <string name="auto_task_import_select_none">Select at least one task</string>
+    <string name="source_api_usage">Source APIs used</string>
+    <string name="source_api_usage_search_hint">Search API</string>
+    <string name="source_api_usage_empty">No API usage found</string>
+    <string name="source_api_usage_copy">Copy usage list</string>
+    <string name="source_api_usage_copied">API usage list copied</string>
+    <string name="source_api_usage_times">%1$d times</string>
+    <string name="bookshelf_tag_rename">Rename tag</string>
+    <string name="bookshelf_tag_rename_hint">New tag name</string>
+    <string name="bookshelf_tag_rename_done">Tag renamed</string>
+    <string name="bookshelf_tag_delete_cleanup">Tag removed from %1$d books</string>
+    <string name="tip_custom_template">Custom template</string>
+    <string name="tip_custom_template_edit">Edit template: %1$s</string>
+    <string name="tip_custom_template_hint">e.g. {书名} · {章节名}</string>
+    <string name="tip_custom_template_help">Available placeholders: {书名} {章节名} {时间} {电量} {电量百分比} {页码} {总页数} {进度}</string>
 </resources>
