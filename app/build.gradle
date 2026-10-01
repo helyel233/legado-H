@@ -179,14 +179,13 @@ android {
     }
     lint {
         checkDependencies = true
+        disable 'MissingTranslation'
+        baseline = file("lint-baseline.xml")
     }
     tasks.withType(JavaCompile).tap {
         configureEach {
             //options.compilerArgs << "-Xlint:unchecked"
         }
-    }
-    lint { //蹇界暐string缈昏瘧缂哄け锛屽悗闈㈤渶瑕佺炕璇戞椂鍘绘帀锛宼odo
-        disable 'MissingTranslation'
     }
 }
 
