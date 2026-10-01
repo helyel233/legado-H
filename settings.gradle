@@ -18,6 +18,11 @@ pluginManagement {
     // no custom resolutionStrategy; use published plugin markers
 }
 
+plugins {
+    // 自动下载缺失的 JDK toolchain（项目要求 JDK 17，本机仅有 JDK 21）
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
