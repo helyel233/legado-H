@@ -100,6 +100,7 @@ internal fun BookshelfTagManageScreen(
     onTagVisibilityChange: (Long, String, Boolean) -> Unit,
     onManageBooks: (BookshelfTagGroupUi, String) -> Unit,
     onDeleteTag: (BookshelfTagGroupUi, String) -> Unit,
+    onRenameTag: (BookshelfTagGroupUi, String) -> Unit,
     onDismissAssignment: () -> Unit,
     onSaveAssignment: (BookTagAssignmentUi, Set<String>) -> Unit
 ) {
@@ -157,7 +158,8 @@ internal fun BookshelfTagManageScreen(
                         onTagVisibilityChange(selectedGroup.groupId, tag, visible)
                     },
                     onManageBooks = { onManageBooks(selectedGroup, it) },
-                    onDeleteTag = { onDeleteTag(selectedGroup, it) }
+                    onDeleteTag = { onDeleteTag(selectedGroup, it) },
+                    onRenameTag = { onRenameTag(selectedGroup, it) }
                 )
             }
         }
@@ -236,7 +238,8 @@ private fun TagGroupContent(
     onAddTags: () -> Unit,
     onTagVisibilityChange: (String, Boolean) -> Unit,
     onManageBooks: (String) -> Unit,
-    onDeleteTag: (String) -> Unit
+    onDeleteTag: (String) -> Unit,
+    onRenameTag: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -297,7 +300,8 @@ private fun TagGroupContent(
                     palette = palette,
                     onVisibilityChange = { onTagVisibilityChange(tag.name, it) },
                     onManageBooks = { onManageBooks(tag.name) },
-                    onDelete = { onDeleteTag(tag.name) }
+                    onDelete = { onDeleteTag(tag.name) },
+                    onRename = { onRenameTag(tag.name) }
                 )
             }
         }
@@ -310,7 +314,8 @@ private fun TagCard(
     palette: AppManagementPalette,
     onVisibilityChange: (Boolean) -> Unit,
     onManageBooks: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRename: () -> Unit
 ) {
     AppManagementCard(palette = palette) {
         Row(
@@ -358,6 +363,12 @@ private fun TagCard(
                 onClick = onManageBooks,
                 modifier = Modifier.weight(1f),
                 primary = true
+            )
+            LegadoMiuixActionButton(
+                text = stringResource(R.string.bookshelf_tag_rename),
+                palette = palette.miuix,
+                onClick = onRename,
+                modifier = Modifier.weight(1f)
             )
             LegadoMiuixActionButton(
                 text = stringResource(R.string.delete),

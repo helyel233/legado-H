@@ -55,4 +55,32 @@ class BookTagManagementTest {
             BookTagManagement.updateTag("科幻", "科幻", false)
         )
     }
+
+    @Test
+    fun renameTagReplacesOldWithNew() {
+        assertEquals(
+            BookTagManagement.TagWrite("科幻,完结"),
+            BookTagManagement.renameTag("收藏 完结", "收藏", "科幻")
+        )
+    }
+
+    @Test
+    fun renameTagReturnsNullWhenSameName() {
+        assertNull(BookTagManagement.renameTag("科幻,完结", "科幻", "科幻"))
+        assertNull(BookTagManagement.renameTag(null, "科幻", "科幻"))
+    }
+
+    @Test
+    fun renameTagRemovesOldWhenNewAlreadyPresent() {
+        assertEquals(
+            BookTagManagement.TagWrite("科幻,完结"),
+            BookTagManagement.renameTag("收藏,科幻,完结", "收藏", "科幻")
+        )
+    }
+
+    @Test
+    fun renameTagReturnsNullWhenOldTagMissing() {
+        assertNull(BookTagManagement.renameTag("科幻 完结", "收藏", "玄幻"))
+        assertNull(BookTagManagement.renameTag(null, "收藏", "玄幻"))
+    }
 }

@@ -295,7 +295,12 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
             fragmentMap[groupId]?.setBookTagFilter("")
         }
         binding.topBar.tagsBar.submitItems(
-            bookTags.map { RoundedTagBarView.Item(it.ifBlank { allText }) },
+            bookTags.map { tag ->
+                val label = tag.ifBlank { allText }
+                val count = if (tag.isBlank()) books.size
+                else books.count { BookTagHelper.has(it.customTag, tag) }
+                RoundedTagBarView.Item("$label ($count)")
+            },
             bookTags.indexOf(selectedBookTag).takeIf { it >= 0 } ?: 0
         )
         scheduleTopBarOverlayUpdate()

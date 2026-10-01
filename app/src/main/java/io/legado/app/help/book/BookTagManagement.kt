@@ -47,4 +47,23 @@ object BookTagManagement {
         }
         return TagWrite(BookTagHelper.join(tags))
     }
+
+    /**
+     * 全局重命名：把 [customTag] 中的 [oldTag] 替换为 [newTag]。
+     * 若该标签已包含 [newTag]，仅移除 [oldTag]，避免重复。
+     * @return null when the stored value does not need an update.
+     */
+    fun renameTag(customTag: String?, oldTag: String, newTag: String): TagWrite? {
+        if (oldTag.equals(newTag, ignoreCase = true)) return null
+        val hasOld = BookTagHelper.has(customTag, oldTag)
+        val hasNew = BookTagHelper.has(customTag, newTag)
+        if (!hasOld) return null
+        if (!hasNew) {
+            val tags = BookTagHelper.parse(customTag).map {
+                if (it.equals(oldTag, ignoreCase = true)) newTag else it
+            }
+            return TagWrite(BookTagHelper.join(tags))
+        }
+        return updateTag(customTag, oldTag, selected = false)
+    }
 }

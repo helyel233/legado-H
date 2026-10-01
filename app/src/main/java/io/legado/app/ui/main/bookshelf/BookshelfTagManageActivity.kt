@@ -19,8 +19,11 @@ import io.legado.app.help.book.BookTagManagement
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.ui.widget.compose.ComposeTextInputDialog
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -60,6 +63,7 @@ class BookshelfTagManageActivity : BaseActivity<ActivityBookshelfTagManageBindin
                         )
                     },
                     onDeleteTag = ::confirmDeleteTag,
+                    onRenameTag = ::confirmRenameTag,
                     onDismissAssignment = { assignmentState = null },
                     onSaveAssignment = ::saveAssignment
                 )
@@ -207,6 +211,52 @@ class BookshelfTagManageActivity : BaseActivity<ActivityBookshelfTagManageBindin
             }
             cancelButton()
         }
+    }
+
+    private fun confirmRenameTag(group: BookshelfTagGroupUi, tag: String) {
+        showDialogFragment(
+            ComposeTextInputDialog.create(
+                title = getString(R.string.bookshelf_tag_rename),
+                hint = getString(R.string.bookshelf_tag_rename_hint),
+                initialValue = tag,
+                positiveText = getString(android.R.string.ok),
+                negativeText = getString(R.string.cancel),
+                onPositive = { newName ->
+                val trimmed = newName.trim()
+                if (trimmed.isEmpty() || trimmed.equals(tag, ignoreCase = true)) return@create
+                lifecycleScope.launch {
+                    withContext(IO) {
+                        appDb.withTransaction {
+                            group.books.forEach { book ->
+                                val write = BookTagManagement.renameTag(
+                                    customTag = book.customTag,
+                                    oldTag = tag,
+                                    newTag = trimmed
+                                ) ?: return@forEach
+                                appDb.bookDao.updateCustomTag(book.bookUrl, write.customTag)
+                            }
+                            val tagMap = AppConfig.bookshelfGroupTags.toMutableMap()
+                            tagMap[group.groupId] = tagMap[group.groupId].orEmpty().map {
+                                if (it.equals(tag, ignoreCase = true)) trimmed else it
+                            }
+                            AppConfig.bookshelfGroupTags = tagMap
+                            val hiddenMap = AppConfig.bookshelfHiddenTags.toMutableMap()
+                            val hidden = hiddenMap[group.groupId].orEmpty()
+                            if (hidden.isNotEmpty()) {
+                                hiddenMap[group.groupId] = hidden.map {
+                                    if (it.equals(tag, ignoreCase = true)) trimmed else it
+                                }.toSet()
+                                AppConfig.bookshelfHiddenTags = hiddenMap
+                            }
+                        }
+                    }
+                    postEvent(EventBus.BOOKSHELF_REFRESH, "")
+                    toastOnUi(R.string.bookshelf_tag_rename_done)
+                    loadTags()
+                }
+            }
+        )
+        )
     }
 
     private fun booksInGroup(
