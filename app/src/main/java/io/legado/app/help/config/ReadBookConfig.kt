@@ -809,6 +809,12 @@ object ReadBookConfig {
             exportConfig.tipFooterLeft = shareConfig.tipFooterLeft
             exportConfig.tipFooterMiddle = shareConfig.tipFooterMiddle
             exportConfig.tipFooterRight = shareConfig.tipFooterRight
+            exportConfig.tipHeaderLeftTemplate = shareConfig.tipHeaderLeftTemplate
+            exportConfig.tipHeaderMiddleTemplate = shareConfig.tipHeaderMiddleTemplate
+            exportConfig.tipHeaderRightTemplate = shareConfig.tipHeaderRightTemplate
+            exportConfig.tipFooterLeftTemplate = shareConfig.tipFooterLeftTemplate
+            exportConfig.tipFooterMiddleTemplate = shareConfig.tipFooterMiddleTemplate
+            exportConfig.tipFooterRightTemplate = shareConfig.tipFooterRightTemplate
             exportConfig.tipColor = shareConfig.tipColor
             exportConfig.headerMode = shareConfig.headerMode
             exportConfig.footerMode = shareConfig.footerMode
@@ -980,6 +986,12 @@ object ReadBookConfig {
         var tipFooterLeft: Int = ReadTipConfig.chapterTitle,
         var tipFooterMiddle: Int = ReadTipConfig.none,
         var tipFooterRight: Int = ReadTipConfig.pageAndTotal,
+        var tipHeaderLeftTemplate: String = "",
+        var tipHeaderMiddleTemplate: String = "",
+        var tipHeaderRightTemplate: String = "",
+        var tipFooterLeftTemplate: String = "",
+        var tipFooterMiddleTemplate: String = "",
+        var tipFooterRightTemplate: String = "",
         var tipColor: Int = 0,
         var tipDividerColor: Int = -1,
         var headerMode: Int = 0,
@@ -1334,6 +1346,12 @@ object ReadBookConfig {
             "tipFooterLeft" to tipFooterLeft,
             "tipFooterMiddle" to tipFooterMiddle,
             "tipFooterRight" to tipFooterRight,
+            "tipHeaderLeftTemplate" to tipHeaderLeftTemplate,
+            "tipHeaderMiddleTemplate" to tipHeaderMiddleTemplate,
+            "tipHeaderRightTemplate" to tipHeaderRightTemplate,
+            "tipFooterLeftTemplate" to tipFooterLeftTemplate,
+            "tipFooterMiddleTemplate" to tipFooterMiddleTemplate,
+            "tipFooterRightTemplate" to tipFooterRightTemplate,
             "tipColor" to tipColor,
             "tipDividerColor" to tipDividerColor,
             "headerMode" to headerMode,

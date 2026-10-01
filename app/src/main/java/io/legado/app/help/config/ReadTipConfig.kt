@@ -27,10 +27,12 @@ object ReadTipConfig {
     const val timeBattery = 8
     const val timeBatteryPercentage = 9
     const val totalProgress1 = 11
+    const val customTemplate = 12
 
     val tipValues = arrayOf(
         none, bookName, chapterTitle, time, battery, batteryPercentage, page,
-        totalProgress, totalProgress1, pageAndTotal, timeBattery, timeBatteryPercentage
+        totalProgress, totalProgress1, pageAndTotal, timeBattery, timeBatteryPercentage,
+        customTemplate
     )
     val tipNames get() = appCtx.resources.getStringArray(R.array.read_tip).toList()
 
@@ -72,6 +74,42 @@ object ReadTipConfig {
         get() = ReadBookConfig.config.tipFooterRight
         set(value) {
             ReadBookConfig.config.tipFooterRight = value
+        }
+
+    var tipHeaderLeftTemplate: String
+        get() = ReadBookConfig.config.tipHeaderLeftTemplate
+        set(value) {
+            ReadBookConfig.config.tipHeaderLeftTemplate = value
+        }
+
+    var tipHeaderMiddleTemplate: String
+        get() = ReadBookConfig.config.tipHeaderMiddleTemplate
+        set(value) {
+            ReadBookConfig.config.tipHeaderMiddleTemplate = value
+        }
+
+    var tipHeaderRightTemplate: String
+        get() = ReadBookConfig.config.tipHeaderRightTemplate
+        set(value) {
+            ReadBookConfig.config.tipHeaderRightTemplate = value
+        }
+
+    var tipFooterLeftTemplate: String
+        get() = ReadBookConfig.config.tipFooterLeftTemplate
+        set(value) {
+            ReadBookConfig.config.tipFooterLeftTemplate = value
+        }
+
+    var tipFooterMiddleTemplate: String
+        get() = ReadBookConfig.config.tipFooterMiddleTemplate
+        set(value) {
+            ReadBookConfig.config.tipFooterMiddleTemplate = value
+        }
+
+    var tipFooterRightTemplate: String
+        get() = ReadBookConfig.config.tipFooterRightTemplate
+        set(value) {
+            ReadBookConfig.config.tipFooterRightTemplate = value
         }
 
     var headerMode: Int

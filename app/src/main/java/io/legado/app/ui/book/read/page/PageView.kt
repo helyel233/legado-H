@@ -45,6 +45,7 @@ import io.legado.app.help.config.AdvancedTitleFontAssetDelegate
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
+import io.legado.app.help.config.TipTemplateRenderer
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -568,11 +569,12 @@ class PageView(context: Context) : FrameLayout(context) {
     fun upTime() {
         tvTime?.text = timeFormat.format(Date(System.currentTimeMillis()))
         upTimeBattery()
+        lastTipContext = lastTipContext.copy(time = AdvancedTipConfig.currentTimeText())
         if (ReadTipConfig.isHeaderAdvanced() || ReadTipConfig.isFooterAdvanced()) {
-            lastTipContext = lastTipContext.copy(time = AdvancedTipConfig.currentTimeText())
             refreshAdvancedTipFieldsIfBound()
             markSnapDirty()
         }
+        renderCustomTipTemplates()
     }
 
     /**
@@ -584,11 +586,12 @@ class PageView(context: Context) : FrameLayout(context) {
         tvBattery?.setBattery(battery)
         tvBatteryP?.text = "$battery%"
         upTimeBattery()
+        lastTipContext = lastTipContext.copy(battery = battery.toString())
         if (ReadTipConfig.isHeaderAdvanced() || ReadTipConfig.isFooterAdvanced()) {
-            lastTipContext = lastTipContext.copy(battery = battery.toString())
             refreshAdvancedTipFieldsIfBound()
             markSnapDirty()
         }
+        renderCustomTipTemplates()
     }
 
     /**
@@ -1105,6 +1108,49 @@ class PageView(context: Context) : FrameLayout(context) {
             time = AdvancedTipConfig.currentTimeText(),
             battery = battery.toString(),
             author = ReadBook.book?.author.orEmpty()
+        )
+        renderCustomTipTemplates()
+    }
+
+    /**
+     * 渲染槽位为「自定义模板」的页眉页脚文本
+     */
+    private fun renderCustomTipTemplates() {
+        val context = lastTipContext
+        fun render(tip: Int, template: String, view: BatteryView?) {
+            if (tip == ReadTipConfig.customTemplate && view != null) {
+                view.setTextIfNotEqual(TipTemplateRenderer.render(template, context))
+            }
+        }
+        render(
+            ReadTipConfig.tipHeaderLeft,
+            ReadTipConfig.tipHeaderLeftTemplate,
+            binding.tvHeaderLeft
+        )
+        render(
+            ReadTipConfig.tipHeaderMiddle,
+            ReadTipConfig.tipHeaderMiddleTemplate,
+            binding.tvHeaderMiddle
+        )
+        render(
+            ReadTipConfig.tipHeaderRight,
+            ReadTipConfig.tipHeaderRightTemplate,
+            binding.tvHeaderRight
+        )
+        render(
+            ReadTipConfig.tipFooterLeft,
+            ReadTipConfig.tipFooterLeftTemplate,
+            binding.tvFooterLeft
+        )
+        render(
+            ReadTipConfig.tipFooterMiddle,
+            ReadTipConfig.tipFooterMiddleTemplate,
+            binding.tvFooterMiddle
+        )
+        render(
+            ReadTipConfig.tipFooterRight,
+            ReadTipConfig.tipFooterRightTemplate,
+            binding.tvFooterRight
         )
     }
 

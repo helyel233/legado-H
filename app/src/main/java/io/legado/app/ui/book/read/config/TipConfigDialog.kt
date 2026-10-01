@@ -52,6 +52,7 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.ComposeActionListDialog
+import io.legado.app.ui.widget.compose.ComposeTextInputDialog
 import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.ui.config.AdvancedTitleManageActivity
@@ -94,6 +95,7 @@ class TipConfigDialog : ReaderBottomSheetComposeDialogFragment() {
                             startActivity(Intent(requireContext(), AdvancedTitleManageActivity::class.java))
                         },
                         onShowSelector = ::showActionSelector,
+                        onShowTemplateEditor = ::showTemplateEditor,
                         onShowTipColorPicker = {
                             ColorPickerDialog.newBuilder()
                                 .setShowAlphaSlider(false)
@@ -127,6 +129,22 @@ class TipConfigDialog : ReaderBottomSheetComposeDialogFragment() {
             onSelected = onSelected
         ).show(parentFragmentManager, "tipConfigSelector")
     }
+
+    private fun showTemplateEditor(
+        title: String,
+        initialValue: String,
+        onSaved: (String) -> Unit
+    ) {
+        ComposeTextInputDialog.create(
+            title = getString(R.string.tip_custom_template_edit, title),
+            hint = getString(R.string.tip_custom_template_hint),
+            message = getString(R.string.tip_custom_template_help),
+            initialValue = initialValue,
+            positiveText = getString(R.string.confirm),
+            negativeText = getString(R.string.cancel),
+            onPositive = onSaved
+        ).show(parentFragmentManager, "tipTemplateEditor")
+    }
 }
 
 @Composable
@@ -135,6 +153,7 @@ private fun TipConfigContent(
     colorRefreshTick: Int,
     onShowAdvancedTitleConfig: () -> Unit,
     onShowSelector: (String, List<String>, (Int) -> Unit) -> Unit,
+    onShowTemplateEditor: (String, String, (String) -> Unit) -> Unit,
     onShowTipColorPicker: () -> Unit,
     onShowTipDividerColorPicker: () -> Unit,
     onColorChanged: () -> Unit
@@ -215,12 +234,37 @@ private fun TipConfigContent(
         if (footerMiddle == value) { footerMiddle = ReadTipConfig.none; ReadTipConfig.tipFooterMiddle = ReadTipConfig.none }
         if (footerRight == value) { footerRight = ReadTipConfig.none; ReadTipConfig.tipFooterRight = ReadTipConfig.none }
     }
-    fun chooseTip(title: String, onAssign: (Int) -> Unit) {
+    fun customTemplateOf(slotKey: String): String = when (slotKey) {
+        "headerLeft" -> ReadTipConfig.tipHeaderLeftTemplate
+        "headerMiddle" -> ReadTipConfig.tipHeaderMiddleTemplate
+        "headerRight" -> ReadTipConfig.tipHeaderRightTemplate
+        "footerLeft" -> ReadTipConfig.tipFooterLeftTemplate
+        "footerMiddle" -> ReadTipConfig.tipFooterMiddleTemplate
+        else -> ReadTipConfig.tipFooterRightTemplate
+    }
+
+    fun setCustomTemplate(slotKey: String, value: String) {
+        when (slotKey) {
+            "headerLeft" -> ReadTipConfig.tipHeaderLeftTemplate = value
+            "headerMiddle" -> ReadTipConfig.tipHeaderMiddleTemplate = value
+            "headerRight" -> ReadTipConfig.tipHeaderRightTemplate = value
+            "footerLeft" -> ReadTipConfig.tipFooterLeftTemplate = value
+            "footerMiddle" -> ReadTipConfig.tipFooterMiddleTemplate = value
+            else -> ReadTipConfig.tipFooterRightTemplate = value
+        }
+    }
+    fun chooseTip(title: String, slotKey: String, onAssign: (Int) -> Unit) {
         onShowSelector(title, tipNames) { index ->
             val value = tipValues.getOrElse(index) { ReadTipConfig.none }
             clearRepeat(value)
             onAssign(value)
             postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6))
+            if (value == ReadTipConfig.customTemplate) {
+                onShowTemplateEditor(title, customTemplateOf(slotKey)) { text ->
+                    setCustomTemplate(slotKey, text)
+                    postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6))
+                }
+            }
         }
     }
 
@@ -306,9 +350,9 @@ private fun TipConfigContent(
                     }
                 }
             },
-            onLeftClick = { chooseTip(context.getString(R.string.left)) { headerLeft = it; ReadTipConfig.tipHeaderLeft = it } },
-            onMiddleClick = { chooseTip(context.getString(R.string.middle)) { headerMiddle = it; ReadTipConfig.tipHeaderMiddle = it } },
-            onRightClick = { chooseTip(context.getString(R.string.right)) { headerRight = it; ReadTipConfig.tipHeaderRight = it } },
+            onLeftClick = { chooseTip(context.getString(R.string.left), "headerLeft") { headerLeft = it; ReadTipConfig.tipHeaderLeft = it } },
+            onMiddleClick = { chooseTip(context.getString(R.string.middle), "headerMiddle") { headerMiddle = it; ReadTipConfig.tipHeaderMiddle = it } },
+            onRightClick = { chooseTip(context.getString(R.string.right), "headerRight") { headerRight = it; ReadTipConfig.tipHeaderRight = it } },
             manageLabel = if (!directEpub && headerMode == ReadTipConfig.HEADER_MODE_ADVANCED) {
                 stringResource(R.string.advanced_header_manage)
             } else null,
@@ -344,9 +388,9 @@ private fun TipConfigContent(
                     }
                 }
             },
-            onLeftClick = { chooseTip(context.getString(R.string.left)) { footerLeft = it; ReadTipConfig.tipFooterLeft = it } },
-            onMiddleClick = { chooseTip(context.getString(R.string.middle)) { footerMiddle = it; ReadTipConfig.tipFooterMiddle = it } },
-            onRightClick = { chooseTip(context.getString(R.string.right)) { footerRight = it; ReadTipConfig.tipFooterRight = it } },
+            onLeftClick = { chooseTip(context.getString(R.string.left), "footerLeft") { footerLeft = it; ReadTipConfig.tipFooterLeft = it } },
+            onMiddleClick = { chooseTip(context.getString(R.string.middle), "footerMiddle") { footerMiddle = it; ReadTipConfig.tipFooterMiddle = it } },
+            onRightClick = { chooseTip(context.getString(R.string.right), "footerRight") { footerRight = it; ReadTipConfig.tipFooterRight = it } },
             manageLabel = if (!directEpub && footerMode == ReadTipConfig.FOOTER_MODE_ADVANCED) {
                 stringResource(R.string.advanced_footer_manage)
             } else null,
