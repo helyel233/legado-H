@@ -309,6 +309,12 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                             onClick = { restoreOld.launch() }
                         ),
                         switch(
+                            key = PreferKey.backupBookFiles,
+                            title = getString(R.string.backup_book_files_t),
+                            summary = getString(R.string.backup_book_files_s),
+                            defaultValue = false
+                        ),
+                        switch(
                             key = PreferKey.onlyLatestBackup,
                             title = getString(R.string.only_latest_backup_t),
                             summary = getString(R.string.only_latest_backup_s),
