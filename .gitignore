@@ -40,3 +40,4 @@ cloudflare/**/.wrangler/
 # local build logs (Claude)
 /rb*.log
 /release-build*.log
+.legadoh/
