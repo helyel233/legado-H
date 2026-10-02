@@ -1348,6 +1348,8 @@
     <string name="set_local_password_summary">本地密码用来对备份的敏感信息加密和解密,如需在不同设备之间同步,本地密码需一致.</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
+    <string name="backup_book_files_t">备份书籍文件</string>
+    <string name="backup_book_files_s">将已下载书籍本体与正文缓存纳入备份，体积较大，默认关闭</string>
     <string name="webdav_delete_old_backup_t">自动删除旧备份</string>
     <string name="custom_group_add_suffix">（添加分组）</string>
     <string name="webdav_delete_old_backup_s">上传备份成功后自动删除 WebDAV 目录中之前的备份文件，只保留最新备份</string>

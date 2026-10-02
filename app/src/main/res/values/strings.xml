@@ -1659,6 +1659,8 @@ function login() {
     <string name="set_local_password_summary">The local password is used to encrypt and decrypt the sensitive information of the backup, if you need to synchronize between different devices, the local password should be the same.</string>
     <string name="only_latest_backup_t">Keep only the latest backup</string>
     <string name="only_latest_backup_s">Local backup keeps only the latest backup file</string>
+    <string name="backup_book_files_t">Backup book files</string>
+    <string name="backup_book_files_s">Include downloaded book files and chapter cache in backups. Large size, disabled by default.</string>
     <string name="webdav_delete_old_backup_t">Delete old WebDAV backups</string>
     <string name="custom_group_add_suffix"> (add to group)</string>
     <string name="webdav_delete_old_backup_s">Automatically delete previous backup files in the WebDAV directory after uploading, keeping only the latest backup</string>

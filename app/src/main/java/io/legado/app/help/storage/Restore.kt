@@ -38,6 +38,7 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.upType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AdvancedTitleDirectoryRestorer
@@ -285,6 +286,7 @@ object Restore {
         }
         restoreBackgroundAssets(path)
         restoreFonts(path)
+        restoreBookFiles(path)
         restoreThemePackages(path)
         restoreNavigationIcons(path)
         restoreTopBarPackages(path)
@@ -329,6 +331,7 @@ object Restore {
             edit.commit()
         }
         normalizeBackgroundPrefs()
+        normalizeUiFontPathPrefs()
         // The restored preferences can point at a different font folder, and any cached
         // lookup from before the restore would now be answering for the wrong one.
         io.legado.app.help.AppFont.invalidateFontList()
@@ -736,6 +739,21 @@ object Restore {
         }
     }
 
+    /**
+     * 恢复书籍文件（已下载书籍本体与正文缓存）：备份里有就还原，
+     * 覆盖本地同名文件。
+     */
+    private fun restoreBookFiles(path: String) {
+        val sourceDir = File(path, Backup.bookCacheBackupDirName)
+        if (!sourceDir.isDirectory) return
+        runCatching {
+            copyDir(sourceDir, File(BookHelp.cachePath))
+            AppLog.put("恢复书籍文件完成")
+        }.onFailure {
+            AppLog.put("恢复书籍文件出错\n${it.localizedMessage}", it)
+        }
+    }
+
     private fun restoreThemePackages(path: String) {
         restorePackageDirectory(File(path, "themePackages"), ThemePackageManager.rootDir)
     }
@@ -860,6 +878,37 @@ object Restore {
             if (File(current).exists()) return@forEach
             val fileName = File(current).name.takeIf { it.isNotBlank() } ?: return@forEach
             val restoredFile = appCtx.externalFiles.getFile(key, fileName)
+            if (restoredFile.exists()) {
+                edit.putString(key, restoredFile.absolutePath)
+                changed = true
+            }
+        }
+        if (changed) {
+            edit.commit()
+        }
+    }
+
+    /**
+     * 修正界面/标题字体路径：恢复后的 pref 指向旧设备的绝对路径且已失效时，
+     * 若备份 fonts/ 内有同名文件（restoreFonts 已还原到应用私有 font 目录），
+     * 改写为新路径，使 UI/标题字体在换设备后仍然生效。
+     */
+    private fun normalizeUiFontPathPrefs() {
+        val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
+        if (!fontDir.isDirectory) return
+        val edit = appCtx.defaultSharedPreferences.edit()
+        var changed = false
+        listOf(
+            PreferKey.uiFontPath,
+            PreferKey.uiFontPathN,
+            PreferKey.titleFontPath,
+            PreferKey.titleFontPathN
+        ).forEach { key ->
+            val current = appCtx.getPrefString(key) ?: return@forEach
+            if (current.isBlank() || current.startsWith("http") || current.startsWith("content://")) return@forEach
+            if (File(current).exists()) return@forEach
+            val fileName = File(current).name.takeIf { it.isNotBlank() } ?: return@forEach
+            val restoredFile = File(fontDir, fileName)
             if (restoredFile.exists()) {
                 edit.putString(key, restoredFile.absolutePath)
                 changed = true

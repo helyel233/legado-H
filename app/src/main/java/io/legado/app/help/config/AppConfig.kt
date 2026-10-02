@@ -2527,6 +2527,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val onlyLatestBackup get() = appCtx.getPrefBoolean(PreferKey.onlyLatestBackup, true)
 
+    /** 备份/恢复已下载书籍本体与正文缓存（体积较大，默认关闭） */
+    val backupBookFiles get() = appCtx.getPrefBoolean(PreferKey.backupBookFiles, false)
+
     val webDavDeleteOldBackup get() = appCtx.getPrefBoolean(PreferKey.webDavDeleteOldBackup, false)
 
     val webDavBackupCover get() = appCtx.getPrefBoolean(PreferKey.webDavBackupCover, false)

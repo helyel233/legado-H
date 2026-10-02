@@ -15,6 +15,7 @@ import io.legado.app.lib.cloud.S3CapacityFullException
 import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.LocalConfig
@@ -78,6 +79,7 @@ object Backup {
     internal const val advancedTitlePackagesDirName = "advancedTitlePackages"
     internal const val bubblePackagesDirName = "bubblePackages"
     internal const val fontsDirName = "fonts"
+    internal const val bookCacheBackupDirName = "book_cache"
 
     private const val AT_FONT_PREFIX = "@font:"
 
@@ -204,6 +206,7 @@ object Backup {
         exportVisualResourcePackages()
         exportReaderFonts()
         exportBackgroundAssets()
+        exportBookFiles()
         GSON.toJson(appDb.serverDao.all).let { json ->
             aes.runCatching {
                 encryptBase64(json)
@@ -287,8 +290,13 @@ object Backup {
             paths[i] = backupPath + File.separator + paths[i]
         }
         File(backupPath, bookCharacterAvatarsDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+        File(backupPath, fontsDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
         File(backupPath, advancedTitlePackagesDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
         File(backupPath, bubblePackagesDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+        Restore.backgroundAssetDirNames.forEach { dir ->
+            File(backupPath, dir).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+        }
+        File(backupPath, bookCacheBackupDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
         File(backupPath, io.legado.app.help.book.highlight.HighlightRules.BACKUP_DIR)
             .takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
         File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
@@ -437,6 +445,15 @@ object Backup {
         ReadBookConfig.allLayoutConfigs().forEach { config ->
             config.textFont.takeIf { it.isNotBlank() }?.let(refs::add)
         }
+        // 界面字体（编辑主题里的 UI/标题字体，日夜间分离）同样引用字体文件
+        listOf(
+            PreferKey.uiFontPath,
+            PreferKey.uiFontPathN,
+            PreferKey.titleFontPath,
+            PreferKey.titleFontPathN
+        ).forEach { key ->
+            appCtx.getPrefString(key)?.takeIf { it.isNotBlank() }?.let(refs::add)
+        }
         if (refs.isEmpty()) return
         val targetDir = File(backupPath, fontsDirName)
         var exported = 0
@@ -502,6 +519,23 @@ object Backup {
             }.onFailure {
                 AppLog.put("备份背景图出错 ${file.name}\n${it.localizedMessage}", it)
             }
+        }
+    }
+
+    /**
+     * 备份书籍文件（已下载书籍本体与正文缓存），体积较大，
+     * 由「备份书籍文件」开关控制（默认关闭）。
+     */
+    private fun exportBookFiles() {
+        if (!AppConfig.backupBookFiles) return
+        val sourceDir = File(BookHelp.cachePath)
+        if (!sourceDir.isDirectory) return
+        val targetDir = File(backupPath, bookCacheBackupDirName)
+        runCatching {
+            copyDir(sourceDir, targetDir)
+            AppLog.put("备份书籍文件完成")
+        }.onFailure {
+            AppLog.put("备份书籍文件出错\n${it.localizedMessage}", it)
         }
     }
 
