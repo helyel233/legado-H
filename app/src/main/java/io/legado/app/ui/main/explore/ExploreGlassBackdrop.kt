@@ -21,7 +21,7 @@ import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.ui.main.MainThemeBackgroundState
 import io.legado.app.ui.widget.compose.ComposeThemeImageCrop
 import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.stackBlur
+import io.legado.app.utils.stackBlurSoftware
 import java.io.File
 import kotlin.math.max
 
@@ -40,8 +40,8 @@ object ExploreGlassBackdrop {
     /** 未设置时的默认毛玻璃强度。 */
     const val LEVEL_DEFAULT = 60
 
-    /** 背景位图相对屏幕的降采样比例，保留磨砂结构的同时控制体积/耗时。 */
-    private const val DOWNSCALE = 4f
+    /** 背景位图相对屏幕的降采样比例，配合模糊抹平高频纹理（布纹/细线条）保留大块明暗。 */
+    private const val DOWNSCALE = 6f
 
     private data class BackdropCache(
         val key: String,
@@ -166,9 +166,12 @@ object ExploreGlassBackdrop {
             }
         }
         // 主题背景自身的模糊设置按降采样比例折算，再叠加毛玻璃强度。
-        // 模糊必须保留壁纸明暗结构，否则行背景会退化成纯色色块。
-        val radius = (blurPref / DOWNSCALE + 2f + strength * 9f).toInt().coerceIn(2, 25)
-        return runCatching { result.stackBlur(radius) }.getOrNull() ?: result
+        // 模糊必须足以抹平壁纸高频纹理（条纹布纹、细线），否则会透过玻璃形成摩尔纹条纹；
+        // 大块明暗结构（人物、光斑）仍保留，才看得出磨砂质感。
+        // 固定用纯软件模糊：不依赖 renderscript toolkit 的 native 库，
+        // 避免 16KB 内核页设备上 native 库异常导致的任何不确定性。
+        val radius = (blurPref / DOWNSCALE + 3f + strength * 14f).toInt().coerceIn(3, 25)
+        return runCatching { result.stackBlurSoftware(radius) }.getOrNull() ?: result
     }
 }
 

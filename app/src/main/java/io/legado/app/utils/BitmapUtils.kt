@@ -336,12 +336,12 @@ fun Bitmap.stackBlur(radius: Int = 8): Bitmap {
     } catch (e: Throwable) {
         // renderscript toolkit 的 native 库未适配 16KB 内核页（Android 15+ 部分设备），
         // dlopen 失败抛 UnsatisfiedLinkError；退化为纯软件 StackBlur 保证模糊生效
-        softwareStackBlur(radius)
+        stackBlurSoftware(radius)
     }
 }
 
-/** 纯软件 StackBlur（Mario Klingemann 算法），Toolkit 不可用时的兑底。 */
-private fun Bitmap.softwareStackBlur(radius: Int): Bitmap {
+/** 纯软件 StackBlur（Mario Klingemann 算法），不依赖 renderscript toolkit 的 native 库。 */
+fun Bitmap.stackBlurSoftware(radius: Int = 8): Bitmap {
     val rad = radius.coerceIn(1, 25)
     val w = width
     val h = height
