@@ -602,6 +602,22 @@
                         android:textColor="@color/primaryText"
                         android:textSize="15sp" />
 
+                    <TextView
+                        android:id="@+id/tv_toc_jump"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_book_info_action_secondary"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:text="@string/view_toc"
+                        android:textColor="@color/primaryText"
+                        android:textSize="15sp" />
+
                     <io.legado.app.ui.widget.text.AccentBgTextView
                         android:id="@+id/tv_read"
                         android:layout_width="0dp"

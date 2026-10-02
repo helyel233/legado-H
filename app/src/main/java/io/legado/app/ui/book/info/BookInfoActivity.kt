@@ -986,13 +986,15 @@ class BookInfoActivity :
                 UiCorner.actionRadius(this@BookInfoActivity)
             )
         }
-        tvShelf.background = UiCorner.actionStrokeSelector(
-            actionColor,
-            menuColor,
-            UiCorner.actionRadius(this@BookInfoActivity),
-            1.dpToPx(),
-            strokeColor
-        )
+        listOfNotNull(tvShelf, tvTocJump).forEach {
+            it.background = UiCorner.actionStrokeSelector(
+                actionColor,
+                menuColor,
+                UiCorner.actionRadius(this@BookInfoActivity),
+                1.dpToPx(),
+                strokeColor
+            )
+        }
     }
 
     private fun applyBookInfoTypography() = binding.run {
@@ -1021,7 +1023,7 @@ class BookInfoActivity :
         listOfNotNull(tvName, tvCatalogTitle).forEach {
             it.setTextColor(titleColor)
         }
-        listOfNotNull(tvShelf, etCatalogSearch).forEach {
+        listOfNotNull(tvShelf, tvTocJump, etCatalogSearch).forEach {
             it.setTextColor(bodyColor)
         }
         etCatalogSearch.setHintTextColor(secondaryColor)
@@ -3097,6 +3099,7 @@ class BookInfoActivity :
                 }
             }
         }
+        tvTocJump.setOnClickListener { openChapterListSafely() }
         tvShelf.setOnClickListener {
             viewModel.getBook()?.let { book ->
                 if (viewModel.inBookshelf) {
