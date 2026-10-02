@@ -797,8 +797,9 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     /** 发现页毛玻璃效果（0-100%，拖动实时调整，确定后随主题配置保存）。 */
     private fun setupExploreGlassBlurRow(row: ItemThemePackageSliderBinding) {
-        applyOptionRowBackground(
-            ItemThemePackageOptionBinding.bind(row.root)
+        row.root.background = UiCorner.opaqueRounded(
+            themeCardColorOrDefault(),
+            UiCorner.panelRadius(this)
         )
         row.tvTitle.text = getString(R.string.theme_explore_glass_blur)
         val accent = accentColor
