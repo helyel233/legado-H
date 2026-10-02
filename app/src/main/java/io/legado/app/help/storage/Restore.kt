@@ -284,6 +284,7 @@ object Restore {
             ReadBookConfig.initShareConfig()
         }
         restoreBackgroundAssets(path)
+        restoreFonts(path)
         restoreThemePackages(path)
         restoreNavigationIcons(path)
         restoreTopBarPackages(path)
@@ -687,6 +688,52 @@ object Restore {
         val value = bgStr?.trim().orEmpty()
         if (value.isBlank() || value.startsWith("http", ignoreCase = true)) return null
         return File(value).name.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * 恢复阅读字体：备份 fonts/ 目录内的字体文件复制到应用私有 font 目录，
+     * 使 readConfig 中 @font:名 引用重新命中；
+     * 旧数据的绝对路径引用若已失效且同名文件可用，改写为 @font:引用。
+     */
+    private fun restoreFonts(path: String) {
+        val sourceDir = File(path, Backup.fontsDirName)
+        if (!sourceDir.isDirectory) return
+        val fontFiles = sourceDir.listFiles()?.filter { it.isFile }.orEmpty()
+        if (fontFiles.isEmpty()) return
+        runCatching {
+            val targetDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
+            if (!targetDir.exists()) {
+                targetDir.mkdirs()
+            }
+            fontFiles.forEach { file ->
+                file.copyTo(File(targetDir, file.name), overwrite = true)
+            }
+            io.legado.app.help.AppFont.invalidateFontList()
+        }.onFailure {
+            AppLog.put("恢复阅读字体出错\n${it.localizedMessage}", it)
+            return
+        }
+        normalizeReaderFontRefs()
+    }
+
+    private fun normalizeReaderFontRefs() {
+        val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
+        var changed = false
+        ReadBookConfig.allLayoutConfigs().forEach { config ->
+            val ref = config.textFont.trim()
+            if (!ref.startsWith("/") || File(ref).isFile) return@forEach
+            val name = File(ref).name.takeIf { it.isNotBlank() } ?: return@forEach
+            if (File(fontDir, name).isFile) {
+                config.textFont = "@font:$name"
+                changed = true
+            }
+        }
+        if (!changed) return
+        runCatching {
+            ReadBookConfig.saveLayoutFiles()
+        }.onFailure {
+            AppLog.put("修正阅读字体引用出错\n${it.localizedMessage}", it)
+        }
     }
 
     private fun restoreThemePackages(path: String) {

@@ -37,6 +37,7 @@ import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefString
 import io.legado.app.utils.getSharedPreferences
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.normalizeFileName
@@ -76,6 +77,9 @@ object Backup {
     internal const val bookCharacterAvatarsDirName = "bookCharacterAvatars"
     internal const val advancedTitlePackagesDirName = "advancedTitlePackages"
     internal const val bubblePackagesDirName = "bubblePackages"
+    internal const val fontsDirName = "fonts"
+
+    private const val AT_FONT_PREFIX = "@font:"
 
     private const val TAG = "Backup"
 
@@ -198,6 +202,8 @@ object Backup {
         }
         exportBookCharacterAvatars()
         exportVisualResourcePackages()
+        exportReaderFonts()
+        exportBackgroundAssets()
         GSON.toJson(appDb.serverDao.all).let { json ->
             aes.runCatching {
                 encryptBase64(json)
@@ -419,6 +425,84 @@ object Backup {
             BubblePackageManager.rootDir,
             File(backupPath, bubblePackagesDirName)
         ) { name -> name !in setOf("temp", "remote_cache", BubblePackageManager.BUILTIN_DIR_NAME) }
+    }
+
+    /**
+     * 备份阅读界面选择的字体文件：readConfig 各样式的 textFont 引用的字体本体
+     * 复制到备份 fonts/ 目录（@font:名 与绝对路径均支持），
+     * 恢复端将文件还原到应用私有 font 目录后引用即可命中。
+     */
+    private fun exportReaderFonts() {
+        val refs = linkedSetOf<String>()
+        ReadBookConfig.allLayoutConfigs().forEach { config ->
+            config.textFont.takeIf { it.isNotBlank() }?.let(refs::add)
+        }
+        if (refs.isEmpty()) return
+        val targetDir = File(backupPath, fontsDirName)
+        var exported = 0
+        refs.forEach { ref ->
+            resolveReaderFontFile(ref)?.let { file ->
+                runCatching {
+                    val target = File(targetDir, file.name)
+                    if (file.absolutePath != target.absolutePath) {
+                        if (!targetDir.exists()) targetDir.mkdirs()
+                        file.copyTo(target, overwrite = true)
+                    }
+                    exported++
+                }.onFailure {
+                    AppLog.put("备份阅读字体出错 ${file.name}\n${it.localizedMessage}", it)
+                }
+            }
+        }
+        if (exported > 0) {
+            AppLog.put("备份阅读字体 $exported 个")
+        }
+    }
+
+    private fun resolveReaderFontFile(ref: String): File? {
+        val raw = ref.trim()
+        if (raw.isEmpty() || raw.startsWith("http", ignoreCase = true)) return null
+        // @font:名 / 裸名：应用私有 font 目录
+        val normalized = raw.removePrefix(AT_FONT_PREFIX)
+        val name = if (normalized.contains(File.separator) || normalized.contains("://")) {
+            null
+        } else {
+            normalized.trim().takeIf { it.isNotBlank() }
+        }
+        name?.let {
+            File(FileUtils.getPath(appCtx.externalFiles, "font"), it)
+                .takeIf { file -> file.isFile }?.let { return it }
+        }
+        // 旧数据可能是绝对路径
+        if (raw.startsWith("/")) {
+            File(raw).takeIf { it.isFile }?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * 备份主题背景图本体：主界面/书籍详情页/面板背景引用的本地图片文件，
+     * 按 Restore.backgroundAssetDirNames 的目录名存放；
+     * 恢复端 restoreBackgroundAssets + normalizeBackgroundPrefs 已有完整管线，
+     * 修复此前只恢复不导出的半成品闭环。
+     */
+    private fun exportBackgroundAssets() {
+        Restore.backgroundAssetDirNames.forEach { key ->
+            val path = appCtx.getPrefString(key)?.trim().orEmpty()
+            if (path.isEmpty() || !path.startsWith("/")) return@forEach
+            val file = File(path)
+            if (!file.isFile) return@forEach
+            runCatching {
+                val targetDir = File(backupPath, key)
+                val target = File(targetDir, file.name)
+                if (file.absolutePath != target.absolutePath) {
+                    if (!targetDir.exists()) targetDir.mkdirs()
+                    file.copyTo(target, overwrite = true)
+                }
+            }.onFailure {
+                AppLog.put("备份背景图出错 ${file.name}\n${it.localizedMessage}", it)
+            }
+        }
     }
 
     private fun copyPackageDirectories(
