@@ -1660,6 +1660,7 @@ function login() {
     <string name="only_latest_backup_t">Keep only the latest backup</string>
     <string name="only_latest_backup_s">Local backup keeps only the latest backup file</string>
     <string name="webdav_delete_old_backup_t">Delete old WebDAV backups</string>
+    <string name="custom_group_add_suffix"> (add to group)</string>
     <string name="webdav_delete_old_backup_s">Automatically delete previous backup files in the WebDAV directory after uploading, keeping only the latest backup</string>
     <string name="webdav_backup_cover_t">Backup bookshelf covers</string>
     <string name="webdav_backup_cover_s">Upload locally stored cover files of shelf books to the WebDAV covers directory and download them back when restoring</string>

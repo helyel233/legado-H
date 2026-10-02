@@ -282,7 +282,7 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
 
                 if (!customGroup.isNullOrBlank()) {
                     Text(
-                        text = customGroup + if (addGroup) "（添加分组）" else "",
+                        text = customGroup + if (addGroup) stringResource(R.string.custom_group_add_suffix) else "",
                         color = style.secondaryText,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 8.dp)

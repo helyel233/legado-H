@@ -1349,6 +1349,7 @@
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
     <string name="webdav_delete_old_backup_t">自动删除旧备份</string>
+    <string name="custom_group_add_suffix">（添加分组）</string>
     <string name="webdav_delete_old_backup_s">上传备份成功后自动删除 WebDAV 目录中之前的备份文件，只保留最新备份</string>
     <string name="webdav_backup_cover_t">备份书架封面</string>
     <string name="webdav_backup_cover_s">将书架中本地存储的封面文件上传到 WebDAV 的 covers 目录，恢复备份时自动下载还原</string>
