@@ -125,6 +125,7 @@ import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.hexString
 import io.legado.app.utils.putPrefString
@@ -178,6 +179,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private var pendingCardShadow: Int? = null
     private var pendingCardBackgroundBlur: Float? = null
     private var pendingExploreGlassBlur = ExploreGlassBackdrop.LEVEL_DEFAULT
+        private var exploreGlassBlurAtEditStart = ExploreGlassBackdrop.LEVEL_DEFAULT
     private var pendingFontScale = 0
     private var pendingUiCornerSearchFollow = false
     private var pendingUiCornerReplyFollow = false
@@ -501,7 +503,11 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         pendingShelfColor = normalizeOptionalColor(current.shelfColor)
         pendingCardShadow = current.cardShadow
         pendingCardBackgroundBlur = current.cardBackgroundBlur
-        pendingExploreGlassBlur = current.exploreGlassBlur ?: ExploreGlassBackdrop.LEVEL_DEFAULT
+                pendingExploreGlassBlur = getPrefInt(
+                    ThemeRuntimeKeys.themeExploreGlassBlur(configNight),
+                    current.exploreGlassBlur ?: ExploreGlassBackdrop.LEVEL_DEFAULT
+                )
+                exploreGlassBlurAtEditStart = pendingExploreGlassBlur
         pendingFontScale = current.fontScale ?: getPrefInt(ThemeRuntimeKeys.fontScale(configNight), 0)
         pendingUiFontPath = current.uiFontPath ?: getPrefString(ThemeRuntimeKeys.uiFontPath(configNight)).orEmpty()
         pendingTitleFontPath = current.titleFontPath ?: getPrefString(ThemeRuntimeKeys.titleFontPath(configNight)).orEmpty()
@@ -594,6 +600,11 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             }
         }
         binding.btnCancel.setOnClickListener {
+            // 滑杆拖动时即时落盘过，取消时恢复打开对话框前的值
+            putPrefInt(
+                ThemeRuntimeKeys.themeExploreGlassBlur(editingConfigNight == true),
+                exploreGlassBlurAtEditStart
+            )
             dialog.dismiss()
         }
         binding.btnConfirm.setOnClickListener {
@@ -812,6 +823,12 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 pendingExploreGlassBlur = progress.coerceIn(0, 100)
                 row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingExploreGlassBlur)
+                // 即时写入运行时偏好：拖动后返回发现页立即生效，
+                // 不依赖"保存主题且该主题处于已应用状态"才落盘
+                putPrefInt(
+                    ThemeRuntimeKeys.themeExploreGlassBlur(editingConfigNight == true),
+                    pendingExploreGlassBlur
+                )
             }
         })
     }
