@@ -325,6 +325,7 @@ object Restore {
         io.legado.app.help.AppFont.invalidateFontList()
         ReaderDataRepair.repairAfterRestore()
         refreshWebDavAfterRestore()
+        restoreBookCovers()
         restoreReadConfigBackgrounds()
         ReaderDataRepair.repairAfterRestore()
         restoreAppliedUiPackages()
@@ -760,6 +761,15 @@ object Restore {
             AppCloudStorage.upConfig()
         }.onFailure {
             AppLog.put("refresh WebDAV after restore failed\n${it.localizedMessage}", it)
+        }
+    }
+
+    private suspend fun restoreBookCovers() {
+        if (!AppConfig.webDavBackupCover) return
+        runCatching {
+            AppCloudStorage.downBookCovers()
+        }.onFailure {
+            AppLog.put("恢复书架封面出错\n${it.localizedMessage}", it)
         }
     }
 

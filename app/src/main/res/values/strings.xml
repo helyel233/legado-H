@@ -1659,6 +1659,10 @@ function login() {
     <string name="set_local_password_summary">The local password is used to encrypt and decrypt the sensitive information of the backup, if you need to synchronize between different devices, the local password should be the same.</string>
     <string name="only_latest_backup_t">Keep only the latest backup</string>
     <string name="only_latest_backup_s">Local backup keeps only the latest backup file</string>
+    <string name="webdav_delete_old_backup_t">Delete old WebDAV backups</string>
+    <string name="webdav_delete_old_backup_s">Automatically delete previous backup files in the WebDAV directory after uploading, keeping only the latest backup</string>
+    <string name="webdav_backup_cover_t">Backup bookshelf covers</string>
+    <string name="webdav_backup_cover_s">Upload locally stored cover files of shelf books to the WebDAV covers directory and download them back when restoring</string>
     <string name="webdav_application_authorization_error">Fail to authorize WebDav application</string>
     <string name="respondTime">respondTime: %1$d ms</string>
     <string name="load_word_count">Load word count</string>

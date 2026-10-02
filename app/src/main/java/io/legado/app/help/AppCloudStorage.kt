@@ -8,6 +8,7 @@ import io.legado.app.data.entities.BookProgress
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.CacheCloudIndex
 import io.legado.app.help.book.CacheCloudIndexStore
+import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.Restore
@@ -26,6 +27,8 @@ import io.legado.app.utils.AlphanumComparator
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.UrlUtil
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.isContentScheme
 import io.legado.app.help.storage.BackupArchiveExtractor
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonObject
@@ -48,6 +51,7 @@ object AppCloudStorage {
     private const val TOP_BARS_DIR = "topBars/"
     private const val COVER_COLLECTIONS_DIR = "coverCollections/"
     private const val BUBBLES_DIR = "bubbles/"
+    private const val COVERS_DIR = "covers/"
 
     private val webDavBackend = WebDavCloudStorageBackend()
     private val s3Backend = S3CloudStorageBackend()
@@ -113,12 +117,37 @@ object AppCloudStorage {
     suspend fun backup(fileName: String) {
         ensureNetwork()
         storage(S3ContainerScope.MAIN_BACKUP).upload(fileName, Backup.zipFilePath)
+        deleteOldWebDavBackups(fileName)
     }
 
     suspend fun backupToWebDav(fileName: String) {
         ensureNetwork()
         webDavBackend.upConfig()
         webDavBackend.upload(fileName, Backup.zipFilePath)
+        deleteOldWebDavBackups(fileName)
+    }
+
+    /**
+     * 自动删除 WebDAV 目录中之前的备份，只保留最新备份
+     */
+    private suspend fun deleteOldWebDavBackups(fileName: String) {
+        if (!AppConfig.webDavDeleteOldBackup) return
+        runCatching {
+            webDavBackend.listFiles("")
+                .filter { !it.isDir && it.displayName.startsWith("backup") }
+                .filter { it.displayName != fileName && it.displayName.endsWith(".zip", ignoreCase = true) }
+                .forEach { file ->
+                    runCatching {
+                        webDavBackend.delete(file.displayName)
+                    }.onFailure {
+                        io.legado.app.constant.AppLog.put(
+                            "删除云端旧备份失败: ${file.displayName}\n${it.localizedMessage}", it
+                        )
+                    }
+                }
+        }.onFailure {
+            io.legado.app.constant.AppLog.put("清理云端旧备份出错\n${it.localizedMessage}", it)
+        }
     }
 
     fun listContainers(): List<S3Container> = S3ContainerManager.listContainers()
@@ -321,6 +350,114 @@ object AppCloudStorage {
         }
         return restored
     }
+
+    /**
+     * 上传书架中本地存储的封面文件到 WebDAV covers 目录
+     */
+    suspend fun upBookCovers() {
+        if (!AppConfig.webDavBackupCover) return
+        val target = webDavBackend
+        if (!NetworkUtils.isAvailable() || !target.isOk) return
+        val files = collectBookCoverFiles()
+        if (files.isEmpty()) return
+        runCatching {
+            target.makeDir(COVERS_DIR)
+            val remoteFiles = target.listFiles(COVERS_DIR).associate { it.displayName to it.size }
+            files.forEach { file ->
+                if (remoteFiles[file.name] == file.length()) return@forEach
+                runCatching {
+                    target.upload(COVERS_DIR + file.name, file)
+                }.onFailure {
+                    io.legado.app.constant.AppLog.put(
+                        "上传书架封面失败: ${file.name}\n${it.localizedMessage}", it
+                    )
+                }
+            }
+        }.onFailure {
+            io.legado.app.constant.AppLog.put("备份书架封面出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    /**
+     * 从 WebDAV covers 目录下载书架封面到本地
+     */
+    suspend fun downBookCovers() {
+        if (!AppConfig.webDavBackupCover) return
+        val target = webDavBackend
+        if (!NetworkUtils.isAvailable() || !target.isOk) return
+        val wanted = collectBookCoverRestoreTargets()
+        if (wanted.exactNames.isEmpty() && wanted.prefixes.isEmpty()) return
+        val coversDir = appCtx.externalFiles.getFile("covers").apply { mkdirs() }
+        runCatching {
+            target.listFiles(COVERS_DIR).filter { !it.isDir }.forEach { remote ->
+                val name = remote.displayName
+                val matched = wanted.exactNames.contains(name)
+                        || wanted.prefixes.any { name.startsWith(it) }
+                if (!matched) return@forEach
+                val localFile = coversDir.getFile(name)
+                if (localFile.exists()) return@forEach
+                runCatching {
+                    target.downloadTo(COVERS_DIR + name, localFile, true)
+                }.onFailure {
+                    localFile.delete()
+                    io.legado.app.constant.AppLog.put(
+                        "下载书架封面失败: $name\n${it.localizedMessage}", it
+                    )
+                }
+            }
+        }.onFailure {
+            io.legado.app.constant.AppLog.put("恢复书架封面出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun collectBookCoverFiles(): List<File> {
+        val files = linkedSetOf<File>()
+        val localBookCoverPrefixes = hashSetOf<String>()
+        val coversDir = appCtx.externalFiles.getFile("covers")
+        appDb.bookDao.all.forEach { book ->
+            val cover = book.getDisplayCover()
+            if (!cover.isNullOrBlank()
+                && !cover.startsWith("http", true)
+                && !cover.isContentScheme()
+            ) {
+                File(cover).takeIf { it.isFile }?.let { files.add(it) }
+            }
+            if (book.isLocal) {
+                localBookCoverPrefixes.add(MD5Utils.md5Encode16(book.bookUrl))
+            }
+        }
+        if (localBookCoverPrefixes.isNotEmpty()) {
+            coversDir.listFiles()?.forEach { file ->
+                if (file.isFile && localBookCoverPrefixes.any { file.name.startsWith(it) }) {
+                    files.add(file)
+                }
+            }
+        }
+        return files.toList()
+    }
+
+    private fun collectBookCoverRestoreTargets(): CoverRestoreTargets {
+        val exactNames = hashSetOf<String>()
+        val prefixes = hashSetOf<String>()
+        appDb.bookDao.all.forEach { book ->
+            val cover = book.getDisplayCover()
+            if (!cover.isNullOrBlank()
+                && !cover.startsWith("http", true)
+                && !cover.isContentScheme()
+            ) {
+                File(cover).name.takeIf { it.isNotBlank() }?.let { exactNames.add(it) }
+            }
+            if (book.isLocal) {
+                prefixes.add(MD5Utils.md5Encode16(book.bookUrl))
+            }
+        }
+        return CoverRestoreTargets(exactNames, prefixes)
+    }
+
+    private data class CoverRestoreTargets(
+        val exactNames: Set<String>,
+        val prefixes: Set<String>
+    )
 
     suspend fun export(byteArray: ByteArray, fileName: String) {
         val target = storage(S3ContainerScope.DEFAULT)

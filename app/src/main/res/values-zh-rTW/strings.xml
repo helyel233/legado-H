@@ -1120,6 +1120,10 @@
     <string name="set_local_password_summary">本地密码用来对备份的敏感信息加密和解密,如需在不同设备之间同步,本地密码需一致.</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
+    <string name="webdav_delete_old_backup_t">自動刪除舊備份</string>
+    <string name="webdav_delete_old_backup_s">上傳備份成功後自動刪除 WebDAV 目錄中之前的備份檔案，只保留最新備份</string>
+    <string name="webdav_backup_cover_t">備份書架封面</string>
+    <string name="webdav_backup_cover_s">將書架中本地儲存的封面檔案上傳到 WebDAV 的 covers 目錄，還原備份時自動下載還原</string>
     <string name="webdav_application_authorization_error">webDav应用验证失败</string>
     <string name="load_word_count">加載字數</string>
     <string name="replace_exclude_scope">排除范围，选填书名或者书源 URL</string>

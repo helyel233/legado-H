@@ -318,6 +318,7 @@ object Backup {
                     AppCloudStorage.backup(zipFileName)
                 }
                 AppLog.put("Cloud backup finished: ${cloudType.name} $zipFileName")
+                AppCloudStorage.upBookCovers()
             }
             backupSuccess = true
         } else {

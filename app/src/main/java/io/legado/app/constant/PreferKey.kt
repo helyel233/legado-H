@@ -363,6 +363,8 @@ object PreferKey {
     const val bookshelfReturnToTopAfterRead = "bookshelfReturnToTopAfterRead"
     const val clearWebViewData = "clearWebViewData"
     const val onlyLatestBackup = "onlyLatestBackup"
+    const val webDavDeleteOldBackup = "webDavDeleteOldBackup"
+    const val webDavBackupCover = "webDavBackupCover"
     const val brightnessVwPos = "brightnessVwPos"
     const val shrinkDatabase = "shrinkDatabase"
     const val batchChangeSourceDelay = "batchChangeSourceDelay"

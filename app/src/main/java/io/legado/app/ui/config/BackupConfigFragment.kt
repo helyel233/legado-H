@@ -204,6 +204,18 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                                 )
                             }
                         ),
+                        switch(
+                            key = PreferKey.webDavDeleteOldBackup,
+                            title = getString(R.string.webdav_delete_old_backup_t),
+                            summary = getString(R.string.webdav_delete_old_backup_s),
+                            defaultValue = false
+                        ),
+                        switch(
+                            key = PreferKey.webDavBackupCover,
+                            title = getString(R.string.webdav_backup_cover_t),
+                            summary = getString(R.string.webdav_backup_cover_s),
+                            defaultValue = false
+                        ),
                         SettingActionSpec(
                             key = KEY_S3_CONTAINER_MANAGE,
                             title = getString(R.string.s3_container_manage),
