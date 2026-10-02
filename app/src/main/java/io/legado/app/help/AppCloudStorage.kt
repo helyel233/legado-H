@@ -117,7 +117,10 @@ object AppCloudStorage {
     suspend fun backup(fileName: String) {
         ensureNetwork()
         storage(S3ContainerScope.MAIN_BACKUP).upload(fileName, Backup.zipFilePath)
-        deleteOldWebDavBackups(fileName)
+        // 仅当上传目标为 WebDAV 时才清理，避免 S3 备份误删 WebDAV 上的旧备份
+        if (type == CloudStorageType.WEBDAV) {
+            deleteOldWebDavBackups(fileName)
+        }
     }
 
     suspend fun backupToWebDav(fileName: String) {
@@ -132,6 +135,7 @@ object AppCloudStorage {
      */
     private suspend fun deleteOldWebDavBackups(fileName: String) {
         if (!AppConfig.webDavDeleteOldBackup) return
+        if (!webDavBackend.isOk) return
         runCatching {
             webDavBackend.listFiles("")
                 .filter { !it.isDir && it.displayName.startsWith("backup") }
