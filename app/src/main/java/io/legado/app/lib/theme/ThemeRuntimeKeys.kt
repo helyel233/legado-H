@@ -28,7 +28,8 @@ object ThemeRuntimeKeys {
         PreferKey.themeTabBackgroundColor to PreferKey.themeTabBackgroundColorN,
         PreferKey.themeShelfColor to PreferKey.themeShelfColorN,
         PreferKey.themeCardShadow to PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur to PreferKey.themeCardBackgroundBlurN
+        PreferKey.themeCardBackgroundBlur to PreferKey.themeCardBackgroundBlurN,
+        PreferKey.themeExploreGlassBlur to PreferKey.themeExploreGlassBlurN
     )
 
     fun migrateLegacyNightValues(context: Context) {
@@ -102,6 +103,9 @@ object ThemeRuntimeKeys {
     fun themeCardBackgroundBlur(isNight: Boolean = AppConfig.isNightTheme): String =
         if (isNight) PreferKey.themeCardBackgroundBlurN else PreferKey.themeCardBackgroundBlur
 
+    fun themeExploreGlassBlur(isNight: Boolean = AppConfig.isNightTheme): String =
+        if (isNight) PreferKey.themeExploreGlassBlurN else PreferKey.themeExploreGlassBlur
+
     fun activeColorKey(key: String, isNight: Boolean = AppConfig.isNightTheme): String {
         return when (key) {
             PreferKey.themeCardColor, PreferKey.themeCardColorN -> themeCardColor(isNight)
@@ -148,6 +152,8 @@ object ThemeRuntimeKeys {
         PreferKey.themeCardShadow,
         PreferKey.themeCardShadowN,
         PreferKey.themeCardBackgroundBlur,
-        PreferKey.themeCardBackgroundBlurN
+        PreferKey.themeCardBackgroundBlurN,
+        PreferKey.themeExploreGlassBlur,
+        PreferKey.themeExploreGlassBlurN
     )
 }

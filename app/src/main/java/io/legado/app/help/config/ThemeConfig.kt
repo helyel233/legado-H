@@ -738,6 +738,7 @@ object ThemeConfig {
             shelfColor = config.shelfColor,
             cardShadow = config.cardShadow,
             cardBackgroundBlur = config.cardBackgroundBlur,
+            exploreGlassBlur = config.exploreGlassBlur ?: stored.exploreGlassBlur,
             uiCornerSearchFollow = config.uiCornerSearchFollow ?: stored.uiCornerSearchFollow,
             uiCornerReplyFollow = config.uiCornerReplyFollow ?: stored.uiCornerReplyFollow,
             fontScale = config.fontScale ?: stored.fontScale,
@@ -788,6 +789,9 @@ object ThemeConfig {
         config.cardBackgroundBlur?.let {
             context.putPrefInt(ThemeRuntimeKeys.themeCardBackgroundBlur(isNightTheme), (it * 10f).toInt().coerceIn(0, 250))
         } ?: context.removePref(ThemeRuntimeKeys.themeCardBackgroundBlur(isNightTheme))
+        config.exploreGlassBlur?.let {
+            context.putPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme), it.coerceIn(0, 100))
+        } ?: context.removePref(ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme))
     }
 
     private fun Context.putOrClearThemeColor(key: String, value: String?) {
@@ -1129,6 +1133,7 @@ object ThemeConfig {
         var shelfColor: String? = null,
         var cardShadow: Int? = null,
         var cardBackgroundBlur: Float? = null,
+        var exploreGlassBlur: Int? = null,
         var uiCornerSearchFollow: Boolean? = null,
         var uiCornerReplyFollow: Boolean? = null,
         var fontScale: Int? = null,
@@ -1170,6 +1175,7 @@ object ThemeConfig {
                         && other.shelfColor == shelfColor
                         && other.cardShadow == cardShadow
                         && other.cardBackgroundBlur == cardBackgroundBlur
+                        && other.exploreGlassBlur == exploreGlassBlur
                         && other.uiCornerSearchFollow == uiCornerSearchFollow
                         && other.uiCornerReplyFollow == uiCornerReplyFollow
                         && other.fontScale == fontScale
@@ -1207,6 +1213,7 @@ object ThemeConfig {
             "shelfColor" to shelfColor,
             "cardShadow" to cardShadow,
             "cardBackgroundBlur" to cardBackgroundBlur,
+            "exploreGlassBlur" to exploreGlassBlur,
             "uiCornerSearchFollow" to uiCornerSearchFollow,
             "uiCornerReplyFollow" to uiCornerReplyFollow,
             "fontScale" to fontScale,

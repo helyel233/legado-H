@@ -2167,6 +2167,7 @@ function login() {
     <string name="theme_color_shelf">Bookshelf background color</string>
     <string name="theme_card_shadow">Card shadow</string>
     <string name="theme_card_background_blur">Card blur</string>
+    <string name="theme_explore_glass_blur">Explore page glass blur</string>
     <string name="theme_value_follow_default">Follow default</string>
     <string name="theme_image_main_background">Main background</string>
     <string name="theme_image_book_info_background">Book detail background</string>

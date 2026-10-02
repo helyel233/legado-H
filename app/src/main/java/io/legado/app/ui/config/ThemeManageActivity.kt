@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -72,6 +73,7 @@ import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.databinding.DialogImageBlurringBinding
 import io.legado.app.databinding.DialogThemePackageEditBinding
 import io.legado.app.databinding.ItemThemePackageOptionBinding
+import io.legado.app.databinding.ItemThemePackageSliderBinding
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.config.AppearanceKitManager
@@ -102,6 +104,7 @@ import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.font.FontSelectDialog
 import io.legado.app.ui.image.ImageCropContract
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -174,6 +177,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private var pendingShelfColor: String? = null
     private var pendingCardShadow: Int? = null
     private var pendingCardBackgroundBlur: Float? = null
+    private var pendingExploreGlassBlur = ExploreGlassBackdrop.LEVEL_DEFAULT
     private var pendingFontScale = 0
     private var pendingUiCornerSearchFollow = false
     private var pendingUiCornerReplyFollow = false
@@ -497,6 +501,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         pendingShelfColor = normalizeOptionalColor(current.shelfColor)
         pendingCardShadow = current.cardShadow
         pendingCardBackgroundBlur = current.cardBackgroundBlur
+        pendingExploreGlassBlur = current.exploreGlassBlur ?: ExploreGlassBackdrop.LEVEL_DEFAULT
         pendingFontScale = current.fontScale ?: getPrefInt(ThemeRuntimeKeys.fontScale(configNight), 0)
         pendingUiFontPath = current.uiFontPath ?: getPrefString(ThemeRuntimeKeys.uiFontPath(configNight)).orEmpty()
         pendingTitleFontPath = current.titleFontPath ?: getPrefString(ThemeRuntimeKeys.titleFontPath(configNight)).orEmpty()
@@ -639,6 +644,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         setupOptionalFloatRow(rowCardBackgroundBlur, R.string.theme_card_background_blur, pendingCardBackgroundBlur) {
             pendingCardBackgroundBlur = it
         }
+        setupExploreGlassBlurRow(binding.rowExploreGlassBlur)
         setupFontScaleRow(rowFontScale)
         setupUiFontRow(rowUiFont)
         setupOptionalColorRow(rowUiFontColor, R.string.theme_ui_font_color, pendingUiFontColor, colorUiFont)
@@ -699,6 +705,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             binding.rowPanelBorderAlpha.tvTitle,
             binding.rowCardShadow.tvTitle,
             binding.rowCardBackgroundBlur.tvTitle,
+            binding.rowExploreGlassBlur.tvTitle,
             binding.rowFontScale.tvTitle,
             binding.rowUiFont.tvTitle,
             binding.rowUiFontColor.tvTitle,
@@ -786,6 +793,26 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingUiLayoutAlpha)
                 }
         }
+    }
+
+    /** 发现页毛玻璃效果（0-100%，拖动实时调整，确定后随主题配置保存）。 */
+    private fun setupExploreGlassBlurRow(row: ItemThemePackageSliderBinding) {
+        applyOptionRowBackground(
+            ItemThemePackageOptionBinding.bind(row.root)
+        )
+        row.tvTitle.text = getString(R.string.theme_explore_glass_blur)
+        val accent = accentColor
+        row.seekBar.progressTintList = android.content.res.ColorStateList.valueOf(accent)
+        row.seekBar.thumbTintList = android.content.res.ColorStateList.valueOf(accent)
+        row.seekBar.max = 100
+        row.seekBar.progress = pendingExploreGlassBlur
+        row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingExploreGlassBlur)
+        row.seekBar.setOnSeekBarChangeListener(object : SeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                pendingExploreGlassBlur = progress.coerceIn(0, 100)
+                row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingExploreGlassBlur)
+            }
+        })
     }
 
     private fun setupDialogAlphaRow(row: ItemThemePackageOptionBinding) {
@@ -1257,6 +1284,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 shelfColor = pendingShelfColor,
                 cardShadow = pendingCardShadow,
                 cardBackgroundBlur = pendingCardBackgroundBlur,
+                exploreGlassBlur = pendingExploreGlassBlur,
                 uiCornerSearchFollow = pendingUiCornerSearchFollow,
                 uiCornerReplyFollow = pendingUiCornerReplyFollow,
                 fontScale = pendingFontScale,
@@ -1423,6 +1451,10 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             cardBackgroundBlur = getPrefInt(ThemeRuntimeKeys.themeCardBackgroundBlur(isNightTheme), -1)
                 .takeIf { it >= 0 }
                 ?.let { it / 10f },
+            exploreGlassBlur = getPrefInt(
+                ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme),
+                ExploreGlassBackdrop.LEVEL_DEFAULT
+            ),
             uiCornerSearchFollow = themeUiCornerSearchFollow(isNightTheme),
             uiCornerReplyFollow = themeUiCornerReplyFollow(isNightTheme),
             fontScale = getPrefInt(ThemeRuntimeKeys.fontScale(isNightTheme), 0),

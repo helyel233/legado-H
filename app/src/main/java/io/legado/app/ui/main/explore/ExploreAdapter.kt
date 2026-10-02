@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatSpinner
 import androidx.collection.LruCache
+import androidx.core.content.ContextCompat
 import androidx.core.view.children
 import com.google.android.flexbox.FlexboxLayout
 import com.script.rhino.runScriptWithContext
@@ -91,6 +92,11 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.run {
+            // 书源名行毛玻璃背景：强度由主题「发现页毛玻璃效果」控制，0 为透明原样
+            llTitle.background = ExploreGlassBackdrop.rowBackground(
+                llTitle,
+                ExploreGlassBackdrop.level(context)
+            ) ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
             if (holder.layoutPosition == itemCount - 1) {
                 root.setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
             } else {

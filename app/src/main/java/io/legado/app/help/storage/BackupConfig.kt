@@ -120,6 +120,8 @@ object BackupConfig {
         PreferKey.themeCardShadowN,
         PreferKey.themeCardBackgroundBlur,
         PreferKey.themeCardBackgroundBlurN,
+        PreferKey.themeExploreGlassBlur,
+        PreferKey.themeExploreGlassBlurN,
         PreferKey.fontScale,
         PreferKey.fontScaleN,
         PreferKey.uiFontPath,

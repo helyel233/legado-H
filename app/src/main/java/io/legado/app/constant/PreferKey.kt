@@ -256,6 +256,8 @@ object PreferKey {
     const val themeCardShadowN = "themeCardShadowNight"
     const val themeCardBackgroundBlur = "themeCardBackgroundBlur"
     const val themeCardBackgroundBlurN = "themeCardBackgroundBlurNight"
+    const val themeExploreGlassBlur = "themeExploreGlassBlur"
+    const val themeExploreGlassBlurN = "themeExploreGlassBlurNight"
     const val uiCornerSearchFollow = "uiCornerSearchFollow"
     const val uiCornerSearchFollowN = "uiCornerSearchFollowNight"
     const val uiCornerReplyFollow = "uiCornerReplyFollow"

@@ -1920,6 +1920,7 @@
     <string name="theme_color_shelf">书架背景色</string>
     <string name="theme_card_shadow">卡片阴影</string>
     <string name="theme_card_background_blur">卡片模糊</string>
+<string name="theme_explore_glass_blur">发现页毛玻璃效果</string>
     <string name="theme_value_follow_default">跟随默认</string>
     <string name="theme_image_main_background">主界面背景</string>
     <string name="theme_image_book_info_background">详情页背景</string>
