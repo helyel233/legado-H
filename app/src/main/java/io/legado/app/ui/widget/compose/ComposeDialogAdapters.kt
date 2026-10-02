@@ -47,6 +47,8 @@ fun Fragment.showComposeActionListDialog(
     message: CharSequence? = null,
     descriptions: List<CharSequence> = emptyList(),
     dangerIndices: Set<Int> = emptySet(),
+    toggleIndices: Set<Int> = emptySet(),
+    isChecked: ((Int) -> Boolean)? = null,
     negativeText: CharSequence = getString(R.string.cancel),
     onSelected: (Int) -> Unit
 ) {
@@ -57,6 +59,8 @@ fun Fragment.showComposeActionListDialog(
             message = message?.toString(),
             descriptions = descriptions.map { it.toString() },
             dangerIndices = dangerIndices,
+            toggleIndices = toggleIndices,
+            isChecked = isChecked,
             negativeText = negativeText.toString(),
             onSelected = onSelected
         )
@@ -317,6 +321,8 @@ fun AppCompatActivity.showComposeActionListDialog(
     message: CharSequence? = null,
     descriptions: List<CharSequence> = emptyList(),
     dangerIndices: Set<Int> = emptySet(),
+    toggleIndices: Set<Int> = emptySet(),
+    isChecked: ((Int) -> Boolean)? = null,
     negativeText: CharSequence = getString(R.string.cancel),
     onSelected: (Int) -> Unit
 ) {
@@ -327,6 +333,8 @@ fun AppCompatActivity.showComposeActionListDialog(
             message = message?.toString(),
             descriptions = descriptions.map { it.toString() },
             dangerIndices = dangerIndices,
+            toggleIndices = toggleIndices,
+            isChecked = isChecked,
             negativeText = negativeText.toString(),
             onSelected = onSelected
         )

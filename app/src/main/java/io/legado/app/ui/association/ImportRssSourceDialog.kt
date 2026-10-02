@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import io.legado.app.R
-import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.config.AppConfig
@@ -56,7 +57,6 @@ import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.showDialogFragment
 
 /**
@@ -103,7 +103,7 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
         }
     }
 
-    private fun showGroupDialog() {
+    private fun showGroupDialog(onOptionsChanged: () -> Unit = {}) {
         showComposeTextFormDialogWithChecks(
             title = getString(R.string.diy_edit_source_group),
             labels = listOf(getString(R.string.group_name)),
@@ -115,11 +115,12 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
             onPositive = { values, checked ->
                 viewModel.isAddGroup = checked.getOrNull(0) ?: false
                 viewModel.groupName = values.getOrNull(0)
+                onOptionsChanged()
             }
         )
     }
 
-    private fun showMenuDialog() {
+    private fun showMenuDialog(onOptionsChanged: () -> Unit = {}) {
         val labels = mutableListOf(
             getString(R.string.diy_source_group),
             getString(R.string.keep_original_name),
@@ -127,20 +128,43 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
             getString(R.string.keep_enable),
             getString(R.string.show_source_comment)
         )
-        showComposeActionListDialog(
-            title = getString(R.string.import_rss_source),
-            labels = labels
-        ) { index ->
-            when (index) {
-                0 -> showGroupDialog()
-                1 -> putPrefBoolean(PreferKey.importKeepName, !AppConfig.importKeepName)
-                2 -> putPrefBoolean(PreferKey.importKeepGroup, !AppConfig.importKeepGroup)
-                3 -> AppConfig.importKeepEnable = !AppConfig.importKeepEnable
-                4 -> AppConfig.importShowComment = !AppConfig.importShowComment
+        val descriptions = List(labels.size) { index ->
+            if (index == 0) {
+                viewModel.groupName?.takeIf { it.isNotBlank() } ?: ""
+            } else {
+                ""
             }
         }
+        showComposeActionListDialog(
+            title = getString(R.string.import_rss_source),
+            labels = labels,
+            descriptions = descriptions,
+            toggleIndices = setOf(1, 2, 3, 4),
+            isChecked = { index ->
+                when (index) {
+                    1 -> AppConfig.importKeepName
+                    2 -> AppConfig.importKeepGroup
+                    3 -> AppConfig.importKeepEnable
+                    4 -> AppConfig.importShowComment
+                    else -> false
+                }
+            },
+            onSelected = { index ->
+                when (index) {
+                    0 -> showGroupDialog(onOptionsChanged)
+                    1 -> AppConfig.importKeepName = !AppConfig.importKeepName
+                    2 -> AppConfig.importKeepGroup = !AppConfig.importKeepGroup
+                    3 -> AppConfig.importKeepEnable = !AppConfig.importKeepEnable
+                    4 -> AppConfig.importShowComment = !AppConfig.importShowComment
+                }
+                if (index >= 1) {
+                    onOptionsChanged()
+                }
+            }
+        )
     }
 
+    @OptIn(ExperimentalLayoutApi::class)
     @Composable
     private fun ImportRssSourceContent() {
         val style = rememberAppDialogStyle()
@@ -148,6 +172,20 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
         var loadState by remember { mutableStateOf(ImportLoadState.LOADING) }
         var errorMsg by remember { mutableStateOf("") }
         var refreshTrigger by remember { mutableIntStateOf(0) }
+        var keepName by remember { mutableStateOf(AppConfig.importKeepName) }
+        var keepGroup by remember { mutableStateOf(AppConfig.importKeepGroup) }
+        var keepEnable by remember { mutableStateOf(AppConfig.importKeepEnable) }
+        var showComment by remember { mutableStateOf(AppConfig.importShowComment) }
+        var customGroup by remember { mutableStateOf(viewModel.groupName) }
+        var addGroup by remember { mutableStateOf(viewModel.isAddGroup) }
+        val syncOptions = {
+            keepName = AppConfig.importKeepName
+            keepGroup = AppConfig.importKeepGroup
+            keepEnable = AppConfig.importKeepEnable
+            showComment = AppConfig.importShowComment
+            customGroup = viewModel.groupName
+            addGroup = viewModel.isAddGroup
+        }
 
         DisposableEffect(Unit) {
             val errorObserver = Observer<String> {
@@ -185,14 +223,69 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                     LegadoMiuixActionButton(
                         text = getString(R.string.diy_source_group),
                         palette = palette,
-                        onClick = { showGroupDialog() },
+                        onClick = { showGroupDialog(syncOptions) },
                         cornerRadius = style.actionRadius
                     )
                     LegadoMiuixActionButton(
-                        text = getString(R.string.keep_original_name),
+                        text = getString(R.string.more),
                         palette = palette,
-                        onClick = { showMenuDialog() },
+                        onClick = { showMenuDialog(syncOptions) },
                         cornerRadius = style.actionRadius
+                    )
+                }
+
+                // 保留选项状态一览，可直接点按切换，高亮为已开启
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    KeepOptionChip(
+                        text = getString(R.string.keep_original_name),
+                        checked = keepName,
+                        palette = palette,
+                        cornerRadius = style.actionRadius
+                    ) {
+                        AppConfig.importKeepName = it
+                        keepName = it
+                    }
+                    KeepOptionChip(
+                        text = getString(R.string.keep_group),
+                        checked = keepGroup,
+                        palette = palette,
+                        cornerRadius = style.actionRadius
+                    ) {
+                        AppConfig.importKeepGroup = it
+                        keepGroup = it
+                    }
+                    KeepOptionChip(
+                        text = getString(R.string.keep_enable),
+                        checked = keepEnable,
+                        palette = palette,
+                        cornerRadius = style.actionRadius
+                    ) {
+                        AppConfig.importKeepEnable = it
+                        keepEnable = it
+                    }
+                    KeepOptionChip(
+                        text = getString(R.string.show_source_comment),
+                        checked = showComment,
+                        palette = palette,
+                        cornerRadius = style.actionRadius
+                    ) {
+                        AppConfig.importShowComment = it
+                        showComment = it
+                    }
+                }
+
+                if (!customGroup.isNullOrBlank()) {
+                    Text(
+                        text = customGroup + if (addGroup) "（添加分组）" else "",
+                        color = style.secondaryText,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
 

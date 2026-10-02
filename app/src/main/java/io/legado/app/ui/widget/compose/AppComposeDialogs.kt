@@ -1684,6 +1684,7 @@ class ComposeActionListDialog : ComposeDialogFragment() {
     override val dialogSize: AppDialogSize = AppDialogSize.Form
 
     private var onSelected: ((Int) -> Unit)? = null
+    private var isChecked: ((Int) -> Boolean)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -1712,6 +1713,12 @@ class ComposeActionListDialog : ComposeDialogFragment() {
                     .orEmpty()
                     .ifBlank { stringResource(R.string.cancel) }
                 val canSelect = onSelected != null
+                val toggleIndices = remember {
+                    args.getIntegerArrayList(ARG_TOGGLE_INDICES)?.toSet().orEmpty()
+                }
+                var checkedStates by remember {
+                    mutableStateOf(itemLabels.indices.map { index -> isChecked?.invoke(index) ?: false })
+                }
                 AppDialogFrame(
                     title = args.getString(ARG_TITLE).orEmpty(),
                     message = args.getString(ARG_MESSAGE),
@@ -1726,17 +1733,34 @@ class ComposeActionListDialog : ComposeDialogFragment() {
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 itemsIndexed(itemLabels) { index, label ->
-                                    LegadoMiuixActionRow(
-                                        text = label,
-                                        palette = palette,
-                                        onClick = {
-                                            dismissAllowingStateLoss()
-                                            onSelected?.invoke(index)
-                                        },
-                                        description = itemDescriptions.getOrNull(index),
-                                        danger = index in dangerIndices,
-                                        cornerRadius = style.actionRadius
-                                    )
+                                    if (index in toggleIndices) {
+                                        val checked = checkedStates.getOrNull(index) ?: false
+                                        ComposeActionListToggleRow(
+                                            label = label,
+                                            description = itemDescriptions.getOrNull(index),
+                                            checked = checked,
+                                            palette = palette,
+                                            cornerRadius = style.actionRadius,
+                                            onToggle = {
+                                                onSelected?.invoke(index)
+                                                checkedStates = checkedStates.toMutableList().also {
+                                                    it[index] = isChecked?.invoke(index) ?: !checked
+                                                }
+                                            }
+                                        )
+                                    } else {
+                                        LegadoMiuixActionRow(
+                                            text = label,
+                                            palette = palette,
+                                            onClick = {
+                                                dismissAllowingStateLoss()
+                                                onSelected?.invoke(index)
+                                            },
+                                            description = itemDescriptions.getOrNull(index),
+                                            danger = index in dangerIndices,
+                                            cornerRadius = style.actionRadius
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1762,6 +1786,8 @@ class ComposeActionListDialog : ComposeDialogFragment() {
             message: String? = null,
             descriptions: List<String> = emptyList(),
             dangerIndices: Set<Int> = emptySet(),
+            toggleIndices: Set<Int> = emptySet(),
+            isChecked: ((Int) -> Boolean)? = null,
             negativeText: String,
             onSelected: (Int) -> Unit
         ): ComposeActionListDialog {
@@ -1775,6 +1801,9 @@ class ComposeActionListDialog : ComposeDialogFragment() {
             val safeDangerIndices = dangerIndices.filterTo(linkedSetOf()) {
                 it in safeLabels.indices
             }
+            val safeToggleIndices = toggleIndices.filterTo(linkedSetOf()) {
+                it in safeLabels.indices
+            }
             return ComposeActionListDialog().apply {
                 arguments = Bundle().apply {
                     putString(ARG_TITLE, title)
@@ -1782,9 +1811,11 @@ class ComposeActionListDialog : ComposeDialogFragment() {
                     putString(ARG_MESSAGE, message)
                     putStringArrayList(ARG_DESCRIPTIONS, ArrayList(safeDescriptions))
                     putIntegerArrayList(ARG_DANGER_INDICES, ArrayList(safeDangerIndices))
+                    putIntegerArrayList(ARG_TOGGLE_INDICES, ArrayList(safeToggleIndices))
                     putString(ARG_NEGATIVE_TEXT, negativeText)
                 }
                 this.onSelected = onSelected
+                this.isChecked = isChecked
             }
         }
 
@@ -1793,7 +1824,60 @@ class ComposeActionListDialog : ComposeDialogFragment() {
         private const val ARG_MESSAGE = "message"
         private const val ARG_DESCRIPTIONS = "descriptions"
         private const val ARG_DANGER_INDICES = "dangerIndices"
+        private const val ARG_TOGGLE_INDICES = "toggleIndices"
         private const val ARG_NEGATIVE_TEXT = "negativeText"
+    }
+}
+
+/**
+ * 动作列表中的切换项：带开关状态，点击后不关闭弹窗，与普通动作项在 UI 上区分
+ */
+@Composable
+private fun ComposeActionListToggleRow(
+    label: String,
+    description: String?,
+    checked: Boolean,
+    palette: LegadoMiuixPalette,
+    cornerRadius: Dp,
+    onToggle: () -> Unit
+) {
+    LegadoMiuixCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        color = palette.surfaceVariant,
+        contentColor = palette.primaryText,
+        cornerRadius = cornerRadius,
+        insidePadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = if (checked) palette.primaryText else palette.secondaryText,
+                    fontSize = 15.sp,
+                    fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                description?.takeIf { it.isNotBlank() }?.let {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = it,
+                        color = palette.secondaryText,
+                        fontSize = 11.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            LegadoMiuixSwitch(
+                checked = checked,
+                onCheckedChange = { onToggle() },
+                palette = palette
+            )
+        }
     }
 }
 

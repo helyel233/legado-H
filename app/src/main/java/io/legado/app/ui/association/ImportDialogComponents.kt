@@ -2,6 +2,7 @@ package io.legado.app.ui.association
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,10 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 /**
@@ -111,4 +114,26 @@ fun ImportSourceItemRow(
             )
         }
     }
+}
+
+/**
+ * 保留选项切换芯片：高亮（accent 填充）表示已开启，与普通动作按钮区分
+ */
+@Composable
+internal fun KeepOptionChip(
+    text: String,
+    checked: Boolean,
+    palette: LegadoMiuixPalette,
+    cornerRadius: Dp,
+    onToggle: (Boolean) -> Unit
+) {
+    LegadoMiuixActionButton(
+        text = text,
+        palette = palette,
+        onClick = { onToggle(!checked) },
+        primary = checked,
+        cornerRadius = cornerRadius,
+        minHeight = 34.dp,
+        insidePadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+    )
 }

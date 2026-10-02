@@ -2418,8 +2418,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.batchChangeSourceDelay, value)
         }
 
-    val importKeepName get() = appCtx.getPrefBoolean(PreferKey.importKeepName)
-    val importKeepGroup get() = appCtx.getPrefBoolean(PreferKey.importKeepGroup)
+    var importKeepName: Boolean
+            get() = appCtx.getPrefBoolean(PreferKey.importKeepName)
+            set(value) {
+                appCtx.putPrefBoolean(PreferKey.importKeepName, value)
+            }
+    var importKeepGroup: Boolean
+            get() = appCtx.getPrefBoolean(PreferKey.importKeepGroup)
+            set(value) {
+                appCtx.putPrefBoolean(PreferKey.importKeepGroup, value)
+            }
     var importKeepEnable: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.importKeepEnable, false)
         set(value) {
