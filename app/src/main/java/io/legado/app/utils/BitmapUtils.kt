@@ -331,7 +331,140 @@ fun Bitmap.resizeAndRecycle(newWidth: Int, newHeight: Int): Bitmap {
  * 高斯模糊
  */
 fun Bitmap.stackBlur(radius: Int = 8): Bitmap {
-    return Toolkit.blur(this, radius)
+    return try {
+        Toolkit.blur(this, radius)
+    } catch (e: Throwable) {
+        // renderscript toolkit 的 native 库未适配 16KB 内核页（Android 15+ 部分设备），
+        // dlopen 失败抛 UnsatisfiedLinkError；退化为纯软件 StackBlur 保证模糊生效
+        softwareStackBlur(radius)
+    }
+}
+
+/** 纯软件 StackBlur（Mario Klingemann 算法），Toolkit 不可用时的兑底。 */
+private fun Bitmap.softwareStackBlur(radius: Int): Bitmap {
+    val rad = radius.coerceIn(1, 25)
+    val w = width
+    val h = height
+    if (isRecycled || w <= 0 || h <= 0) return this
+    val pix = IntArray(w * h)
+    getPixels(pix, 0, w, 0, 0, w, h)
+    val wm = w - 1
+    val hm = h - 1
+    val wh = w * h
+    val div = rad + rad + 1
+    val r1 = rad + 1
+    val divsum = (div + 1) shr 1
+    val dv = IntArray(256 * divsum * divsum) { it / (divsum * divsum) }
+    val r = IntArray(wh)
+    val g = IntArray(wh)
+    val b = IntArray(wh)
+    val vmin = IntArray(maxOf(w, h))
+    val stack = Array(div) { IntArray(3) }
+
+    var yw = 0
+    var yi = 0
+    for (y in 0 until h) {
+        var rsum = 0; var gsum = 0; var bsum = 0
+        var rinsum = 0; var ginsum = 0; var binsum = 0
+        var routsum = 0; var goutsum = 0; var boutsum = 0
+        for (i in -rad..rad) {
+            val p = pix[yi + minOf(wm, maxOf(i, 0))]
+            val sir = stack[i + rad]
+            sir[0] = (p and 0x00ff0000) shr 16
+            sir[1] = (p and 0x0000ff00) shr 8
+            sir[2] = p and 0x000000ff
+            val rbs = r1 - abs(i)
+            rsum += sir[0] * rbs
+            gsum += sir[1] * rbs
+            bsum += sir[2] * rbs
+            if (i > 0) {
+                rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+            } else {
+                routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+            }
+        }
+        var stackpointer = rad
+        for (x in 0 until w) {
+            r[yi] = dv[rsum]
+            g[yi] = dv[gsum]
+            b[yi] = dv[bsum]
+            rsum -= routsum; gsum -= goutsum; bsum -= boutsum
+            val stackstart = stackpointer - rad + div
+            val sirOut = stack[stackstart % div]
+            routsum -= sirOut[0]; goutsum -= sirOut[1]; boutsum -= sirOut[2]
+            if (y == 0) {
+                vmin[x] = minOf(x + r1, wm)
+            }
+            val p = pix[yw + vmin[x]]
+            sirOut[0] = (p and 0x00ff0000) shr 16
+            sirOut[1] = (p and 0x0000ff00) shr 8
+            sirOut[2] = p and 0x000000ff
+            rinsum += sirOut[0]; ginsum += sirOut[1]; binsum += sirOut[2]
+            rsum += rinsum; gsum += ginsum; bsum += binsum
+            stackpointer = (stackpointer + 1) % div
+            val sirIn = stack[stackpointer]
+            routsum += sirIn[0]; goutsum += sirIn[1]; boutsum += sirIn[2]
+            rinsum -= sirIn[0]; ginsum -= sirIn[1]; binsum -= sirIn[2]
+            yi++
+        }
+        yw += w
+    }
+
+    for (x in 0 until w) {
+        var rsum = 0; var gsum = 0; var bsum = 0
+        var rinsum = 0; var ginsum = 0; var binsum = 0
+        var routsum = 0; var goutsum = 0; var boutsum = 0
+        var yp = -rad * w
+        for (i in -rad..rad) {
+            val yiv = maxOf(0, yp) + x
+            val sir = stack[i + rad]
+            sir[0] = r[yiv]
+            sir[1] = g[yiv]
+            sir[2] = b[yiv]
+            val rbs = r1 - abs(i)
+            rsum += r[yiv] * rbs
+            gsum += g[yiv] * rbs
+            bsum += b[yiv] * rbs
+            if (i > 0) {
+                rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+            } else {
+                routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+            }
+            if (i < hm) {
+                yp += w
+            }
+        }
+        var stackpointer = rad
+        var yi = x
+        for (y in 0 until h) {
+            pix[yi] = (0xff000000.toInt() shl 24) or
+                (dv[rsum] shl 16) or
+                (dv[gsum] shl 8) or
+                dv[bsum]
+            rsum -= routsum; gsum -= goutsum; bsum -= boutsum
+            val stackstart = stackpointer - rad + div
+            val sirOut = stack[stackstart % div]
+            routsum -= sirOut[0]; goutsum -= sirOut[1]; boutsum -= sirOut[2]
+            if (x == 0) {
+                vmin[y] = minOf(y + r1, hm) * w
+            }
+            val p = x + vmin[y]
+            sirOut[0] = r[p]
+            sirOut[1] = g[p]
+            sirOut[2] = b[p]
+            rinsum += sirOut[0]; ginsum += sirOut[1]; binsum += sirOut[2]
+            rsum += rinsum; gsum += ginsum; bsum += binsum
+            stackpointer = (stackpointer + 1) % div
+            val sirIn = stack[stackpointer]
+            routsum += sirIn[0]; goutsum += sirIn[1]; boutsum += sirIn[2]
+            rinsum -= sirIn[0]; ginsum -= sirIn[1]; binsum -= sirIn[2]
+            yi += w
+        }
+    }
+
+    val result = Bitmap.createBitmap(w, h, Config.ARGB_8888)
+    result.setPixels(pix, 0, w, 0, 0, w, h)
+    return result
 }
 
 /**
