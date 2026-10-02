@@ -20,6 +20,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.storage.Restore
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.ui.book.group.GroupManageDialog
@@ -207,6 +208,15 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 }
             )
         )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 恢复备份时主界面可能在后台，RECREATE/刷新事件会被丢弃；
+        // 这里在回到书架时消费标记并重建，保证恢复的数据立即显示
+        if (Restore.consumeBookshelfRebuildPending()) {
+            postEvent(EventBus.BOOKSHELF_STRUCTURE_CHANGED, "")
+        }
     }
 
     protected fun initBookGroupData() {

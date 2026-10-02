@@ -199,11 +199,12 @@ val Context.filletBackground: Drawable
 /**
  * 圆角小控件（发现页、书源登录、书源调试、视频控制条等）的主题化背景：
  * 跟随主题主色调的半透明底（日间 0x1A、夜间 0x33，按下加深），
+ * 并乘以主题设置的界面不透明度（UiCorner.layoutAlpha），与全局主题保持同步，
  * 替代上游硬编码蓝色的 selector_fillet_btn_bg。
  */
 fun Context.filletControlBackground(): StateListDrawable {
     val base = primaryColor
-    val alpha = if (AppConfig.isNightTheme) 0x33 else 0x1A
+    val baseAlpha = ((if (AppConfig.isNightTheme) 0x33 else 0x1A) * UiCorner.layoutAlpha()).toInt()
     fun state(alphaBonus: Int): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -211,7 +212,7 @@ fun Context.filletControlBackground(): StateListDrawable {
             setColor(
                 androidx.core.graphics.ColorUtils.setAlphaComponent(
                     base,
-                    (alpha + alphaBonus).coerceAtMost(0xFF)
+                    (baseAlpha + alphaBonus).coerceIn(0, 0xFF)
                 )
             )
         }

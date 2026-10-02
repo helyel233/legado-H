@@ -526,34 +526,35 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     @Synchronized
     private fun getFlexboxChild(flexbox: FlexboxLayout): TextView {
-        return if (recycler.isEmpty()) {
-            ItemFilletTextBinding.inflate(inflater, flexbox, false).root.apply {
-                background = context.filletControlBackground()
-            }
+        // 回收复用的控件也重新套用主题背景，保证主题/透明度变化后同步
+        return (if (recycler.isEmpty()) {
+            ItemFilletTextBinding.inflate(inflater, flexbox, false).root
         } else {
             recycler.removeLastElement()
+        }).apply {
+            background = context.filletControlBackground()
         }
     }
 
     @Synchronized
     private fun getFlexboxChildText(flexbox: FlexboxLayout): AutoCompleteTextView {
-        return if (textRecycler.isEmpty()) {
-            ItemFilletCompleteTextBinding.inflate(inflater, flexbox, false).root.apply {
-                background = context.filletControlBackground()
-            }
+        return (if (textRecycler.isEmpty()) {
+            ItemFilletCompleteTextBinding.inflate(inflater, flexbox, false).root
         } else {
             textRecycler.removeLastElement()
+        }).apply {
+            background = context.filletControlBackground()
         }
     }
 
     @Synchronized
     private fun getFlexboxChildSelect(flexbox: FlexboxLayout): LinearLayout {
-        return if (selectRecycler.isEmpty()) {
-            ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false).root.apply {
-                background = context.filletControlBackground()
-            }
+        return (if (selectRecycler.isEmpty()) {
+            ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false).root
         } else {
             selectRecycler.removeLastElement()
+        }).apply {
+            background = context.filletControlBackground()
         }
     }
 

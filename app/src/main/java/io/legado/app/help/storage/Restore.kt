@@ -105,6 +105,14 @@ object Restore {
         PreferKey.panelBgImageN
     )
 
+    /** 恢复成功后书架需要重建；由书架界面 onResume 时消费，避免事件在主界面后台时被丢弃。 */
+    @Volatile
+    private var bookshelfRebuildPending = false
+
+    fun consumeBookshelfRebuildPending(): Boolean {
+        return bookshelfRebuildPending.also { bookshelfRebuildPending = false }
+    }
+
     suspend fun restore(context: Context, uri: Uri) {
         LogUtils.d(TAG, "开始恢复备份 uri:$uri")
         kotlin.runCatching {
@@ -344,6 +352,7 @@ object Restore {
             }
         }
         AutoTask.refreshSchedule()
+        bookshelfRebuildPending = true
         appCtx.toastOnUi(R.string.restore_success)
         withContext(Main) {
             delay(100)
