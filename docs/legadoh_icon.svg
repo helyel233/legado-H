@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="904" y2="944" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F6BFF"/>
+      <stop offset="0.55" stop-color="#3D4FD6"/>
+      <stop offset="1" stop-color="#2A3A9E"/>
+    </linearGradient>
+  </defs>
+  <!-- 圆角方形渐变底 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="202" fill="url(#bg)"/>
+  <!-- H 左竖 -->
+  <rect x="296" y="288" width="108" height="448" rx="50" fill="#FFFFFF"/>
+  <!-- H 右竖 -->
+  <rect x="620" y="288" width="108" height="448" rx="50" fill="#FFFFFF"/>
+  <!-- H 横梁 -->
+  <rect x="404" y="468" width="212" height="88" rx="44" fill="#FFFFFF"/>
+  <!-- 琥珀书签 -->
+  <path d="M642,288 h64 v104 l-32,-28 l-32,28 z" fill="#FFB35C"/>
+</svg>

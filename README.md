@@ -1,48 +1,53 @@
-# Legado-H
+# LegadoH
 
 [中文](README.md) · [English](English.md)
 
-<p align="center"><img width="125" height="125" src="docs/archive_icon.svg" alt="Legado-H"></p>
+<p align="center"><img width="128" height="128" src="docs/legadoh_icon.svg" alt="LegadoH"></p>
 
-Legado-H 是「阅读 Archive」的分支，在继承 [Legado](https://github.com/gedoor/legado) 与 Luoyacheng 分支的 EPUB 阅读引擎、页面/加载模板、主题体系等深度定制能力的同时，吸收 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优点改进，命名为 **Legado-H**。
+<p align="center"><b>LegadoH</b> —— 一款可自定义来源与界面的 Android 阅读器，基于 <a href="https://github.com/gedoor/legado">Legado（阅读 3.0）</a>深度定制。</p>
 
-应用不内置书籍内容。你可以自行添加书源，也可以导入本地 TXT、EPUB 书籍。
+---
 
-## 下载与更新
+## 简介
 
-- [GitHub Releases](https://github.com/helyel233/legado-H/releases)：安装包与更新说明。
+LegadoH 不内置任何书籍或书源内容，你可以在应用内自行添加网络书源，也可以导入本地 TXT、EPUB 书籍。项目在完整继承 Legado 自定义书源、替换净化、TTS 听书、RSS 订阅、Web 服务等能力的基础上，围绕**排版质量、主题外观与阅读工具**做了大量深度定制：
 
-## 本分支特性
+- **独立 EPUB 排版引擎**：支持图片图案高亮与复杂 CSS 效果，默认「山茶花」加载模板，背景延伸至状态栏并适配日夜模式。
+- **页面模板体系**：分页模板固定画框滚动、字体配色页眉页脚统一管理、横排与竖排自由切换。
+- **主题体系**：Minecraft、明日香、诡秘之主、哆啦 A 梦等内置阅读主题，高级标题与页眉页脚 Lottie 动效，顶栏/底栏/弹窗不透明度可独立调节。
+- **AI 辅助阅读**：可配置 AI 服务，支持书源搜索、书籍与章节内容读取、阅读记录查询及联网工具。
+- **界面现代化**：Compose 书架与发现页、自适应图标与主题图标单色层、毛玻璃顶栏与底栏。
 
-在 Archive 深度路线（EPUB 排版引擎、页面/加载模板、主题体系）的基础上，吸收 Legado_Max 的优点改进：
+## 下载
 
-- **书源「源所用API」**：书源编辑页顶栏一键扫描书源规则中使用的 API（`java.xxx`、`cookie.xxx`、`ajax(` 等），按 API 分组显示使用位置与次数，支持搜索、点击跳转到对应字段、一键复制清单。
-- **书架智能标签增强**：标签栏显示每个标签的命中书籍数；支持标签全局重命名（批量更新所有书籍的 `customTag` 并同步配置清单）；删除标签时自动清理分组成员身上的残留。
-- **页眉页脚自定义模板**：页眉页脚六个槽位支持「自定义模板」，使用占位符（`{书名}` `{章节名}` `{时间}` `{电量}` `{电量百分比}` `{页码}` `{总页数}` `{进度}`）自由组合显示内容。
-- **Lint 基线门禁**：合并统一 lint 配置并入库基线文件，存量问题不阻塞构建，仅拦截新增问题。
-- **连续字重 100–900**：正文字重不再局限于常规/加粗两档，可在任意字重间细调（兼容旧配置）。
-- **选区放大镜**：长按选择文本时显示放大镜，跨页选择更精准。
+前往 [GitHub Releases](https://github.com/helyel233/legado-H/releases) 获取最新安装包（tag 前缀 `legadoh-`），应用内「我的 → 关于 → 检查更新」同样指向本仓库 Releases。
 
-既有优势一览：
-
-- 独立 EPUB 排版引擎与加载模板（默认「山茶花」），背景延伸至状态栏并适配日夜模式。
-- 页面模板体系：分页模板固定画框滚动、字体配色页眉页脚统一管理、横排与竖排。
-- 主题体系：Minecraft、明日香、诡秘之主、哆啦 A 梦四套内置阅读主题，高级标题与页眉页脚 Lottie 动效。
+- 包名：`io.legado.app.LegadoH`，可与旧版「阅读 Archive」（`io.legado.app.Archive`）在设备上**共存**，互不影响。
+- 两版数据完全独立；可从旧版的 WebDAV/本地备份一键恢复书源、书架与阅读配置。
 
 ## 功能总览
 
 | 方向 | 主要能力 |
 | --- | --- |
 | 阅读 | 书源与本地书籍、原生与 EPUB 排版、翻页动画、阅读样式、书签与进度 |
-| 书架与详情 | 列表和网格、分组、智能标签、批量管理、沉浸详情、目录与定时更新 |
-| 高亮与模板 | 本地 RED 规则、图案高亮、字体选择、页面 HTML/CSS/JavaScript、横排与竖排 |
-| 素材与主题 | 共用图片字体库、日夜主题、背景、高级标题、页眉页脚与气泡 |
+| 书架与详情 | 列表和网格、分组、智能标签（命中计数/全局重命名）、批量管理、沉浸详情 |
+| 排版与模板 | 独立 EPUB 引擎、页面/加载模板、页眉页脚自定义模板（占位符组合）、横竖排 |
+| 高亮与规则 | 本地 `.red` 规则、图案高亮、正则净化、页面 HTML/CSS/JavaScript |
+| 素材与主题 | 共用图片字体库、日夜主题、背景、高级标题 Lottie、气泡包、连续字重 100–900 |
 | 听书与多媒体 | 系统和网络 TTS、原文跟随、跨应用悬浮控件、漫画与视频入口 |
 | AI | 可配置 AI 服务、书源搜索、书籍与章节读取、阅读记录查询及联网工具 |
-| 自动化与数据 | 定时任务、缓存、备份恢复、WebDAV、对象存储与容器管理 |
+| 自动化与数据 | 定时任务、缓存、备份恢复、WebDAV、对象存储（S3）与容器管理 |
 | 网络 | DNS/DoH 选择、按功能分流、域名例外、服务配置与测速 |
 
 [查看详细功能及模式差异](docs/features.md)
+
+## 定制亮点
+
+- **书源「源所用API」扫描**：书源编辑页一键列出规则中使用的全部 API（`java.xxx`、`cookie.xxx`、`ajax(` 等），按 API 分组显示使用位置与次数，支持搜索、跳转与复制。
+- **书架智能标签增强**：标签栏显示每个标签的命中书籍数；支持全局重命名与删除时自动清理残留。
+- **页眉页脚自定义模板**：六个槽位支持占位符（`{书名}` `{章节名}` `{时间}` `{电量}` `{页码}` `{总页数}` `{进度}` 等）自由组合。
+- **选区放大镜**：长按选择文本时显示放大镜，跨页选择更精准。
+- **Lint 基线门禁**：统一 lint 配置并入库基线文件，存量问题不阻塞构建，仅拦截新增问题。
 
 ## 使用文档
 
@@ -53,12 +58,33 @@ Legado-H 是「阅读 Archive」的分支，在继承 [Legado](https://github.co
 - [Web 与 Content Provider API](api.md)
 - [上游帮助文档](https://www.yuque.com/legado/wiki)
 
-高亮规则使用本地 `.red` 文件导入。完整图片图案与复杂 CSS 效果使用 EPUB 渲染；普通正文的 EPUB 模式当前不启用段落规则与 `pclick`，原始图片 `click` 和替换净化继续支持。页面模板库提供独立备份。
+## 本地构建
+
+```bash
+git clone https://github.com/helyel233/legado-H.git
+cd legado-H
+./gradlew :app:assembleAppDebug        # Debug 构建
+./gradlew :app:testAppDebugUnitTest    # 单元测试
+```
+
+要求 JDK 17 及 Android SDK 36。Release 签名密钥由维护者本地持有（`.legadoh/`，不入库），未配置签名时 Release 变体回退 CI 调试证书。
+
+## 免责声明
+
+- 本项目仅供学习交流使用，请于下载后 24 小时内删除。
+- 项目不内置、不存储、不传播任何书籍内容；所有网络内容均来自用户自行配置的第三方来源。
+- 使用本项目产生的任何直接或间接后果由使用者自行承担，与开发者无关。请支持正版，尊重作者版权。
 
 ## 开源与致谢
 
-感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进，Legado-H 从中吸收并持续完善。定时任务功能感谢明月的贡献与支持。
+感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进。定时任务功能感谢明月的贡献与支持。
 
-项目使用了 Rhino、Jsoup、OkHttp、Glide、Miuix、Paged.js 等开源组件；各组件保留各自许可。项目许可见 [LICENSE](LICENSE)，应用内使用的组件说明见 [开源许可](app/src/main/assets/LICENSE.md)。
+项目使用了 Rhino、Jsoup、OkHttp、Glide、Miuix、Paged.js 等开源组件；各组件保留各自许可。应用内使用的组件说明见 [开源许可](app/src/main/assets/LICENSE.md)。
 
 [更新日志](CHANGELOG.md) · [历史说明](docs/changelog/2026-07.md) · [上游历史日志](docs/changelog/upstream-2022.md)
+
+## 许可证
+
+本项目基于 [GPL-3.0](LICENSE) 许可证开源。
+
+Copyright © 2026 LegadoH 贡献者
