@@ -239,6 +239,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var selectedDiscoverUrlIndex = -1
     private var discoverRequestVersion = 0L
     private var discoverSourceVersion = 0L
+    private var lastExploreGlassLevel = Int.MIN_VALUE
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
@@ -3628,6 +3629,12 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             refreshSuiteConfig()
         }
         if (!usingModernDiscovery && !usingSuiteDiscovery) {
+            // 毛玻璃强度在编辑主题中调整后，返回发现页时刷新行背景
+            val glassLevel = ExploreGlassBackdrop.level(requireContext())
+            if (glassLevel != lastExploreGlassLevel) {
+                lastExploreGlassLevel = glassLevel
+                adapter.notifyDataSetChanged()
+            }
             adapter.upResumed(true)
         }
     }

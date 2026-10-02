@@ -40,8 +40,8 @@ object ExploreGlassBackdrop {
     /** 未设置时的默认毛玻璃强度。 */
     const val LEVEL_DEFAULT = 60
 
-    /** 背景位图相对屏幕的降采样比例，模糊后肉眼不可分辨且体积/耗时可控。 */
-    private const val DOWNSCALE = 6f
+    /** 背景位图相对屏幕的降采样比例，保留磨砂结构的同时控制体积/耗时。 */
+    private const val DOWNSCALE = 4f
 
     private data class BackdropCache(
         val key: String,
@@ -67,7 +67,7 @@ object ExploreGlassBackdrop {
             backdrop = backdrop(context, strength),
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             tintColor = context.themeMutedColorOrDefault(),
-            tintAlpha = 0.16f + 0.44f * strength
+            tintAlpha = 0.10f + 0.28f * strength
         )
     }
 
@@ -165,8 +165,9 @@ object ExploreGlassBackdrop {
                 src.recycle()
             }
         }
-        // 主题背景自身的模糊设置按降采样比例折算，再叠加毛玻璃强度
-        val radius = (blurPref / DOWNSCALE + 2f + strength * 16f).toInt().coerceIn(2, 25)
+        // 主题背景自身的模糊设置按降采样比例折算，再叠加毛玻璃强度。
+        // 模糊必须保留壁纸明暗结构，否则行背景会退化成纯色色块。
+        val radius = (blurPref / DOWNSCALE + 2f + strength * 9f).toInt().coerceIn(2, 25)
         return runCatching { result.stackBlur(radius) }.getOrNull() ?: result
     }
 }
