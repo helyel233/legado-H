@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--App-->
-    <string name="app_name">阅读Archive</string>
+    <string name="app_name">LegadoH</string>
     <string name="app_launcher_name">阅读</string>
     <string name="app_name_a">阅读Archive·A</string>
     <string name="app_name_s" translatable="false">阅读ArchivePlus</string>
@@ -1853,12 +1853,10 @@ function login() {
     <string name="video_setting">视频设置</string>
     <string name="video_setting_summary">自动播放、全屏播放等配置</string>
     <string name="history">历史记录</string>
-    <string name="app_name_sigma">阅读Archive</string>
-    <string name="about_description_sigma">\u3000\u3000阅读Archive 基于 Legado 持续定制，专注阅读体验、书源工具与 AI 辅助能力。</string>
-    <string name="contributors_summary_sigma">当前维护仓库：Rimchars/legado，详情请在 GitHub 中查看</string>
-    <string name="app_share_description_sigma">
-        阅读Archive 下载地址：\nhttps://gitee.com/zziji/legado/releases\nGitHub 备用：\nhttps://github.com/Rimchars/legado/releases
-    </string>
+    <string name="app_name_sigma">LegadoH</string>
+    <string name="about_description_sigma">\u3000\u3000LegadoH 基于开源阅读 Legado 深度定制，专注阅读体验、书源工具与 AI 辅助能力。</string>
+    <string name="contributors_summary_sigma">当前维护仓库：helyel233/legado-H，详情请在 GitHub 中查看</string>
+    <string name="app_share_description_sigma">\n        LegadoH 下载地址：\nhttps://github.com/helyel233/legado-H/releases\n</string>
     <string name="sure_cache_book">是否确认开始缓存？</string>
     <string name="non_printable_set">不可视字符设定</string>
     <string name="whitespace_leading">行首</string>

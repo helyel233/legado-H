@@ -1,6 +1,17 @@
 # 更新日志
-欢迎关注公众号[阅读Plus]即时了解软件更新资讯  
-<img src="https://open.weixin.qq.com/qr/code?username=legado_plus" width="200">
+LegadoH 项目地址：https://github.com/helyel233/legado-H  
+Release 下载：https://github.com/helyel233/legado-H/releases
+
+## LegadoH
+
+**v3.26.10021031 · 2026/10/02**
+
+- 正式版包名变更为 io.legado.app.LegadoH，可与旧版阅读 Archive 并存安装
+- 全新 LegadoH 应用图标与关于页品牌信息
+- 修复 S3 云备份成功后误删 WebDAV 旧备份的数据丢失缺陷，并补充未配置 WebDAV 时的清理防护
+- 导入书源/订阅源弹窗新增保留选项状态可视化，并与动作按钮区分
+- 检查更新迁移至 LegadoH 仓库 Release 渠道，默认只使用 GitHub
+- 以下为继承自阅读 Archive 的历史更新记录
 
 ## cronet版本: 128.0.6613.40
 
