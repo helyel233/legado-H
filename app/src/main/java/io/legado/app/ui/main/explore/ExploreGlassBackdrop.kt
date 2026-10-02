@@ -231,12 +231,11 @@ private class FrostedGlassDrawable(
     private fun shellShader(height: Int): LinearGradient {
         val cached = shellShaderCache
         if (cached != null && shellShaderHeight == height) return cached
-        // 壳层遮盖需显著高于底栏同款公式：底栏处于壁纸暗区，而发现页行可能落在
-        // 高亮壁纸区（银白裙摆等），底栏数值在亮区遮不住，文字与壁纸混在一起。
-        // 100% 时中心遮盖 ≈0.5（叠加白 tint 后总遮盖 ≈0.55），接近实底；低档仍保留透光。
-        val startAlpha = (0.34f + glassLevel * 0.50f).coerceIn(0f, 0.84f)
-        val centerAlpha = (0.26f + glassLevel * 0.44f).coerceIn(0f, 0.70f)
-        val endAlpha = (0.22f + glassLevel * 0.38f).coerceIn(0f, 0.60f)
+        // 滑杆直接对应遮盖度：100% 时壳层中心 ≈0.88（叠加后接近实底），
+        // 60% ≈0.58，低档仅轻磨砂；上深下浅保留底栏同款垂直渐变。
+        val centerAlpha = (0.10f + glassLevel * 1.6f).coerceIn(0f, 0.88f)
+        val startAlpha = (centerAlpha + 0.08f).coerceIn(0f, 0.94f)
+        val endAlpha = (centerAlpha - 0.08f).coerceIn(0f, 0.80f)
         return LinearGradient(
             0f, 0f, 0f, height.toFloat(),
             intArrayOf(
