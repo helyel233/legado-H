@@ -1,54 +1,90 @@
-# Legado-H
+# LegadoH
 
 [English](English.md) · [中文](README.md)
 
-Legado-H is a fork of Reading Archive. It inherits the deep customizations of the Legado branch maintained by Lyc — the EPUB layout engine, page/loading templates and the theme system — and adopts improvements from the community fork [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max).
+<p align="center"><img width="128" height="128" src="docs/legadoh_icon.svg" alt="LegadoH"></p>
 
-The app does not include books or book sources. Add your own sources or import local TXT and EPUB files.
+<p align="center"><b>LegadoH</b> — a customizable Android reader for your own content sources, deeply built on <a href="https://github.com/gedoor/legado">Legado</a>.</p>
 
-## Downloads
+---
 
-- [GitHub Releases](https://github.com/helyel233/legado-H/releases)
+## About
 
-## What this fork adds
+LegadoH ships with no books and no book sources. Add your own online sources in the app, or import local TXT and EPUB files. On top of everything Legado already offers — configurable sources, replacement and purify rules, TTS, RSS, the built-in web service — LegadoH focuses on **typesetting quality, theming and reading tools**:
 
-On top of the Archive deep-dive features (EPUB layout engine, page/loading templates, theme system), Legado-H adopts improvements from Legado_Max:
+- **Independent EPUB layout engine**: supports image-based pattern highlights and rich CSS effects, with the default "Camellia" loading template and artwork extending behind the status bar in day/night modes.
+- **Page template system**: fixed-frame scrolling templates, unified font/color/header/footer management, horizontal and vertical typesetting.
+- **Theme system**: built-in Minecraft, Asuka, Lord of the Mysteries and Doraemon reading themes, advanced-title and header/footer Lottie animations, independently adjustable opacity for the top bar, bottom bar and dialogs.
+- **AI-assisted reading**: configurable AI services for source search, book and chapter reading, reading-record queries and web-connected tools.
+- **Modernized UI**: Compose bookshelf and explore pages, adaptive launcher icon with a monochrome themed layer, frosted-glass top and bottom bars.
 
-- **Source API usage scanner**: a one-tap entry in the book source editor lists every API used by the source rules (`java.xxx`, `cookie.xxx`, `ajax(` and more), grouped by API with usage counts, search, jump-to-field and copy-as-list.
-- **Smart bookshelf tags**: tag bar shows hit counts per tag; tags can be renamed globally (updating the `customTag` of all matching books and synced config lists); deleting a tag cleans up leftovers from member books.
-- **Custom header/footer templates**: each of the six header/footer slots supports a custom template built from placeholders (`{书名}` book, `{章节名}` title, `{时间}` time, `{电量}` battery, `{电量百分比}` battery %, `{页码}` page, `{总页数}` pages, `{进度}` progress).
-- **Lint baseline gate**: unified lint config with a checked-in baseline file so existing issues no longer block builds while new issues are caught.
-- **Continuous font weight 100–900**: body text weight is no longer limited to regular/bold and can be fine-tuned (backwards compatible with old configs).
-- **Selection magnifier**: a magnifier shows while long-pressing to select text for more precise cross-page selection.
+## Download
 
-Existing highlights:
+Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/releases) (tag prefix `legadoh-`); the in-app "Me → About → Check for updates" entry points to the same Releases page.
 
-- Independent EPUB layout engine and loading templates (Camellia by default) with day/night palettes and artwork extending behind the status bar.
-- Page template system: fixed-frame scrolling templates, unified font/color/header/footer management, horizontal and vertical typesetting.
-- Theme system: Minecraft, Asuka, Lord of the Mysteries and Doraemon built-in themes, advanced title and header/footer Lottie animations.
+- Package name: `io.legado.app.LegadoH`. It can be installed **side by side** with the old "Reading Archive" (`io.legado.app.Archive`).
+- The two versions keep data separate; sources, bookshelf and reading settings can be restored in one tap from an old WebDAV/local backup.
 
 ## Features
 
-- Read from configurable book sources or local files, with bookmarks, chapter caching and reading progress.
-- Organize books with groups, smart tags, batch management and an immersive details page.
-- Use native rendering or EPUB rendering for ordinary text, with separate layout settings.
-- Import local Reeden `.red` highlight rules, search and edit rules, and select fonts and background images.
-- Customize first and continuation pages with HTML, CSS and JavaScript. Scrolling templates keep the frame fixed while the text scrolls.
-- Share locally imported images and fonts between highlight rules and page templates.
-- Use system or network TTS, text following, floating playback controls, and comic or video entry points.
-- Configure AI services and reading tools, scheduled tasks, backups, WebDAV and object storage.
-- Configure DNS/DoH providers, routing by feature, domain exceptions and DNS measurements.
+| Area | Highlights |
+| --- | --- |
+| Reading | Book sources and local books, native and EPUB typesetting, page-turn animations, reading styles, bookmarks and progress |
+| Bookshelf | List and grid layouts, groups, smart tags (hit counts / global rename), batch management, immersive details |
+| Typesetting | Independent EPUB engine, page/loading templates, custom header/footer templates with placeholders, horizontal and vertical text |
+| Highlights & rules | Local `.red` rules, pattern highlights, regex purify rules, page HTML/CSS/JavaScript |
+| Assets & themes | Shared image/font library, day/night themes, backgrounds, advanced-title Lottie, bubble packs, continuous font weight 100–900 |
+| TTS & media | System and network TTS, text following, floating playback controls, comic and video entries |
+| AI | Configurable AI services, source search, book and chapter reading, reading-record queries and web tools |
+| Automation & data | Scheduled tasks, caching, backup and restore, WebDAV, object storage (S3) and container management |
+| Network | DNS/DoH selection, per-feature routing, domain exceptions, service configuration and speed tests |
+
+[Full feature guide (Chinese)](docs/features.md)
+
+## Custom highlights
+
+- **Source API usage scanner**: a one-tap entry in the book source editor lists every API used by the rules (`java.xxx`, `cookie.xxx`, `ajax(` and more), grouped by API with usage counts, search, jump-to-field and copy-as-list.
+- **Smart bookshelf tags**: the tag bar shows hit counts per tag; tags support global rename, and deleting a tag cleans up leftovers from member books.
+- **Custom header/footer templates**: each of the six header/footer slots accepts a template built from placeholders (`{书名}` book, `{章节名}` title, `{时间}` time, `{电量}` battery, `{页码}` page, `{总页数}` pages, `{进度}` progress, etc.).
+- **Selection magnifier**: a magnifier shows while long-pressing to select text for more precise cross-page selection.
+- **Lint baseline gate**: unified lint config with a checked-in baseline file so existing issues no longer block builds while new issues are caught.
 
 ## Documentation
 
-- [Full feature guide (Chinese)](docs/features.md)
 - [Page templates](docs/reader-templates.md)
 - [Network and DNS](docs/doh-network.md)
-- [Changelog](CHANGELOG.md)
-- [API](api.md)
+- [Visual resource packages (advanced titles, etc.)](docs/visual-resource-packages.md)
+- [Paragraph rules and bubble pack import](docs/online-package-import.md)
+- [Web and Content Provider API](api.md)
+- [Upstream help documentation](https://www.yuque.com/legado/wiki)
+
+## Building from source
+
+```bash
+git clone https://github.com/helyel233/legado-H.git
+cd legado-H
+./gradlew :app:assembleAppDebug        # Debug build
+./gradlew :app:testAppDebugUnitTest    # Unit tests
+```
+
+JDK 17 and Android SDK 36 are required. The release signing key is kept locally by the maintainer (`.legadoh/`, not committed); without it the release variant falls back to the CI debug certificate.
+
+## Disclaimer
+
+- This project is for learning and communication only; please delete it within 24 hours of downloading.
+- The app includes, stores and distributes no book content; all online content comes from third-party sources configured by the user.
+- Users are responsible for any consequences of using this project. Please support authors and respect copyright.
 
 ## Credits
 
-Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements Legado-H builds on. Thanks to Mingyue for the scheduled task contribution.
+Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements LegadoH builds on. Thanks to Mingyue for the scheduled task contribution.
 
-See [LICENSE](LICENSE) and the [third-party license notices](app/src/main/assets/LICENSE.md).
+Rhino, Jsoup, OkHttp, Glide, Miuix, Paged.js and other open-source components are used by this project; each keeps its own license. See the [third-party license notices](app/src/main/assets/LICENSE.md).
+
+[Changelog](CHANGELOG.md) · [History notes](docs/changelog/2026-07.md) · [Upstream changelog](docs/changelog/upstream-2022.md)
+
+## License
+
+LegadoH is open source under the [GPL-3.0](LICENSE) license.
+
+Copyright © 2026 LegadoH contributors
