@@ -2460,4 +2460,19 @@ bookUrl：%7$s
     <string name="source_recycle_bin_disabled">回收模式已关闭</string>
     <string name="overwrite">覆盖</string>
     <string name="delete_forever">彻底删除</string>
+    <string name="book_cache_export_title">书籍缓存导出</string>
+    <string name="book_cache_export_empty">暂无可导出的书籍缓存</string>
+    <string name="book_cache_export_summary">共 %1$d 本书有缓存</string>
+    <string name="book_cache_export">导出 ZIP</string>
+    <string name="book_cache_import">导入</string>
+    <string name="book_cache_export_name">书籍缓存%s.zip</string>
+    <string name="book_cache_export_progress">导出中 (%1$d/%2$d)：%3$s</string>
+    <string name="book_cache_export_packaging">正在打包...</string>
+    <string name="book_cache_export_writing">正在写入文件...</string>
+    <string name="book_cache_import_extracting">正在解压...</string>
+    <string name="book_cache_export_done">书籍缓存导出成功</string>
+    <string name="book_cache_import_done">书籍缓存导入成功</string>
+    <string name="book_cache_import_restoring_shelf">正在恢复书架...</string>
+    <string name="book_cache_import_restoring_toc">正在恢复章节目录...</string>
+    <string name="book_cache_import_restoring_files">正在恢复缓存文件...</string>
 </resources>

@@ -1284,4 +1284,19 @@
     <string name="source_recycle_bin_disabled">回收模式已關閉</string>
     <string name="overwrite">覆蓋</string>
     <string name="delete_forever">徹底刪除</string>
+    <string name="book_cache_export_title">書籍快取匯出</string>
+    <string name="book_cache_export_empty">暫無可匯出嘅書籍快取</string>
+    <string name="book_cache_export_summary">共 %1$d 本書有快取</string>
+    <string name="book_cache_export">匯出 ZIP</string>
+    <string name="book_cache_import">匯入</string>
+    <string name="book_cache_export_name">書籍快取%s.zip</string>
+    <string name="book_cache_export_progress">匯出中 (%1$d/%2$d)：%3$s</string>
+    <string name="book_cache_export_packaging">正在打包...</string>
+    <string name="book_cache_export_writing">正在寫入檔案...</string>
+    <string name="book_cache_import_extracting">正在解壓...</string>
+    <string name="book_cache_export_done">書籍快取匯出成功</string>
+    <string name="book_cache_import_done">書籍快取導入成功</string>
+    <string name="book_cache_import_restoring_shelf">正在還原書架...</string>
+    <string name="book_cache_import_restoring_toc">正在還原章節目錄...</string>
+    <string name="book_cache_import_restoring_files">正在還原快取檔案...</string>
 </resources>

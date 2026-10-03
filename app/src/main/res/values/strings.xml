@@ -2646,4 +2646,19 @@ Selected text or question:
     <string name="source_recycle_bin_disabled">Recycle mode disabled</string>
     <string name="overwrite">Overwrite</string>
     <string name="delete_forever">Delete permanently</string>
+    <string name="book_cache_export_title">Book Cache Export</string>
+    <string name="book_cache_export_empty">No book cache available for export</string>
+    <string name="book_cache_export_summary">%1$d books with cache</string>
+    <string name="book_cache_export">Export ZIP</string>
+    <string name="book_cache_import">Import</string>
+    <string name="book_cache_export_name">Book cache %s.zip</string>
+    <string name="book_cache_export_progress">Exporting (%1$d/%2$d): %3$s</string>
+    <string name="book_cache_export_packaging">Packaging...</string>
+    <string name="book_cache_export_writing">Writing file...</string>
+    <string name="book_cache_import_extracting">Extracting ZIP...</string>
+    <string name="book_cache_export_done">Book cache exported</string>
+    <string name="book_cache_import_done">Book cache imported</string>
+    <string name="book_cache_import_restoring_shelf">Restoring bookshelf...</string>
+    <string name="book_cache_import_restoring_toc">Restoring chapters...</string>
+    <string name="book_cache_import_restoring_files">Restoring cache files...</string>
 </resources>

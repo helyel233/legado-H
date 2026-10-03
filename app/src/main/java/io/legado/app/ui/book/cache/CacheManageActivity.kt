@@ -27,6 +27,7 @@ import io.legado.app.utils.gone
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -129,12 +130,17 @@ class CacheManageActivity :
             setIcon(R.drawable.ic_outline_cloud_24)
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
+        menu.add(0, MENU_BOOK_CACHE_EXPORT, 3, R.string.book_cache_export_title)
         updateSortButton()
         updateContainerMenu()
         return true
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == MENU_BOOK_CACHE_EXPORT) {
+            startActivity<BookCacheExportActivity>()
+            return true
+        }
         if (item.itemId == MENU_SORT) {
             showSortSelector()
             return true
@@ -571,6 +577,7 @@ private const val TERMINAL_TASK_RELOAD_DELAY_MS = 600L
 private const val MENU_SEARCH = 0x53ff
 private const val MENU_SORT = 0x5400
 private const val MENU_CONTAINER = 0x5401
+private const val MENU_BOOK_CACHE_EXPORT = 0x5402
 
 enum class CacheManageSortMode(val titleRes: Int) {
     RECENT(R.string.cache_manage_sort_time),

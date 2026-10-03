@@ -287,6 +287,12 @@ object Restore {
         restoreBackgroundAssets(path)
         restoreFonts(path)
         restoreBookFiles(path)
+        runCatching {
+            // 兼容带书籍缓存索引的备份包（Legado_Max 语义）：恢复书架与章节目录
+            BookCacheZip.restoreIndexedBookCache(File(path))
+        }.onFailure {
+            AppLog.put("恢复书籍缓存索引出错\n${it.localizedMessage}", it)
+        }
         restoreThemePackages(path)
         restoreNavigationIcons(path)
         restoreTopBarPackages(path)
