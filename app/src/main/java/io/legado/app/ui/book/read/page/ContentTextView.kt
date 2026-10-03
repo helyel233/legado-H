@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -657,23 +658,28 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      * 开始选择符移动
      */
     fun selectStartMove(x: Float, y: Float) {
-        touchRough(x, y) { _, textPos, _, _, _ ->
-            if (selectStart.compare(textPos) == 0) {
-                return@touchRough
-            }
-            if (textPos.compare(selectEnd) <= 0) {
-                selectStartMoveIndex(textPos)
-            } else {
-                touchRough(x - 2 * cursorWidth, y) { _, textPos, _, _, _ ->
-                    if (textPos.compare(selectEnd) > 0) {
-                        reverseStartCursor = true
-                        reverseEndCursor = false
-                        selectEnd.columnIndex++
-                        selectStartMoveIndex(selectEnd)
-                        selectEndMoveIndex(textPos)
+        indexMoveFromDrag = true
+        try {
+            touchRough(x, y) { _, textPos, _, _, _ ->
+                if (selectStart.compare(textPos) == 0) {
+                    return@touchRough
+                }
+                if (textPos.compare(selectEnd) <= 0) {
+                    selectStartMoveIndex(textPos)
+                } else {
+                    touchRough(x - 2 * cursorWidth, y) { _, textPos, _, _, _ ->
+                        if (textPos.compare(selectEnd) > 0) {
+                            reverseStartCursor = true
+                            reverseEndCursor = false
+                            selectEnd.columnIndex++
+                            selectStartMoveIndex(selectEnd)
+                            selectEndMoveIndex(textPos)
+                        }
                     }
                 }
             }
+        } finally {
+            indexMoveFromDrag = false
         }
     }
 
@@ -681,23 +687,28 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      * 结束选择符移动
      */
     fun selectEndMove(x: Float, y: Float) {
-        touchRough(x, y) { _, textPos, _, _, _ ->
-            if (textPos.compare(selectEnd) == 0) {
-                return@touchRough
-            }
-            if (textPos.compare(selectStart) >= 0) {
-                selectEndMoveIndex(textPos)
-            } else {
-                touchRough(x + 2 * cursorWidth, y) { _, textPos, _, _, _ ->
-                    if (textPos.compare(selectStart) < 0) {
-                        reverseEndCursor = true
-                        reverseStartCursor = false
-                        selectStart.columnIndex--
-                        selectEndMoveIndex(selectStart)
-                        selectStartMoveIndex(textPos)
+        indexMoveFromDrag = true
+        try {
+            touchRough(x, y) { _, textPos, _, _, _ ->
+                if (textPos.compare(selectEnd) == 0) {
+                    return@touchRough
+                }
+                if (textPos.compare(selectStart) >= 0) {
+                    selectEndMoveIndex(textPos)
+                } else {
+                    touchRough(x + 2 * cursorWidth, y) { _, textPos, _, _, _ ->
+                        if (textPos.compare(selectStart) < 0) {
+                            reverseEndCursor = true
+                            reverseStartCursor = false
+                            selectStart.columnIndex--
+                            selectEndMoveIndex(selectStart)
+                            selectStartMoveIndex(textPos)
+                        }
                     }
                 }
             }
+        } finally {
+            indexMoveFromDrag = false
         }
     }
 
@@ -865,6 +876,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         selectStart.relativePagePos = relativePagePos
         selectStart.lineIndex = lineIndex
         selectStart.columnIndex = max(0, charIndex)
+        if (indexMoveFromDrag) {
+            lastMovedEndpointIsStart = true
+            lastMovedEndpointPos.relativePagePos = relativePagePos
+            lastMovedEndpointPos.lineIndex = lineIndex
+            lastMovedEndpointPos.columnIndex = selectStart.columnIndex
+        }
         refreshSelectionHandles()
         upSelectChars()
     }
@@ -891,12 +908,66 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         selectEnd.relativePagePos = relativePage
         selectEnd.lineIndex = lineIndex
         selectEnd.columnIndex = min(charIndex, textLine.columns.lastIndex)
+        if (indexMoveFromDrag) {
+            lastMovedEndpointIsStart = false
+            lastMovedEndpointPos.relativePagePos = relativePage
+            lastMovedEndpointPos.lineIndex = lineIndex
+            lastMovedEndpointPos.columnIndex = selectEnd.columnIndex
+        }
         refreshSelectionHandles()
         upSelectChars()
     }
 
     fun selectEndMoveIndex(textPos: TextPos) = textPos.run {
         selectEndMoveIndex(relativePagePos, lineIndex, columnIndex)
+    }
+
+    /** 最近一次实际生效的选择端点移动（仅记录坐标拖动路径，供放大镜取景） */
+    private val lastMovedEndpointPos = TextPos(0, -1, -1)
+    private var lastMovedEndpointIsStart = true
+
+    /** 标记随后的 index 端点移动是否来自坐标拖动（手柄/手指），长按与正文拖选的端点设置不记录 */
+    private var indexMoveFromDrag = false
+
+    /**
+     * 选择端点的锚点（本视图坐标）
+     * x 取选区边界、y 取端点所在行的中线，与手柄落点一致；
+     * 放大镜按这个点取景，气泡里看到的选中状态才能和实际选区严格对上（不能按手指落点取景）
+     */
+    fun getSelectEndpointAnchor(textPos: TextPos, startPoint: Boolean): PointF {
+        val page = relativePage(textPos.relativePagePos)
+        val line = page.getLine(textPos.lineIndex)
+        // columnIndex 为 -1 表示行首之前（selectEndMoveIndex 的合法语义），
+        // getColumn 需钳制到第 0 列，否则会静默取到最后一列，锚点跳到行尾
+        val column = line.getColumn(
+            textPos.columnIndex.coerceIn(0, line.columns.lastIndex.coerceAtLeast(0))
+        )
+        val x = if (startPoint) {
+            if (textPos.columnIndex < line.columns.size) column.start else column.end
+        } else {
+            if (textPos.columnIndex > -1) column.end else column.start
+        }
+        val offset = relativeOffset(textPos.relativePagePos)
+        return PointF(
+            x + pageHorizontalOffset(textPos.relativePagePos),
+            (line.lineTop + line.lineBottom) / 2f + offset
+        )
+    }
+
+    /** 手柄拖动路径：读取最近一次端点移动的锚点，无记录时返回 null */
+    fun takeLastMovedEndpointAnchor(): PointF? {
+        if (lastMovedEndpointPos.lineIndex < 0) return null
+        return getSelectEndpointAnchor(lastMovedEndpointPos, lastMovedEndpointIsStart)
+    }
+
+    /**
+     * 当前选区某一端的锚点（该端未选中时返回 null）。
+     * 手柄拖动在本次移动被吸附早退（端点没变）时，用它回退取景。
+     */
+    fun getSelectionEndpointAnchor(startPoint: Boolean): PointF? {
+        val endpoint = if (startPoint) selectStart else selectEnd
+        if (!endpoint.isSelected()) return null
+        return getSelectEndpointAnchor(endpoint, startPoint)
     }
 
     private fun upSelectChars() {
@@ -1012,6 +1083,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
         selectStart.reset()
         selectEnd.reset()
+        lastMovedEndpointPos.reset()
         resetReverseCursor()
         postInvalidate()
         callBack.onCancelSelect()

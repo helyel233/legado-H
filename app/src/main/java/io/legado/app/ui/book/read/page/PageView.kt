@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.PointF
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -26,6 +27,7 @@ import com.airbnb.lottie.TextDelegate
 import com.airbnb.lottie.model.LottieCompositionCache
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
+import androidx.core.graphics.withTranslation
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnPreDraw
@@ -1351,6 +1353,46 @@ class PageView(context: Context) : FrameLayout(context) {
 
     val selectionTop: Float get() = headerHeight + ChapterProvider.visibleRect.top
     val selectionBottom: Float get() = headerHeight + ChapterProvider.visibleRect.bottom
+
+    /**
+     * 选择端点的锚点（本视图坐标）：选区边界 x + 端点所在行的中线 y
+     * 放大镜按这个点取景，气泡里看到的选中状态才能和实际选区一致
+     */
+    fun getSelectEndpointAnchor(textPos: TextPos, startPoint: Boolean): PointF {
+        val anchor = binding.contentTextView.getSelectEndpointAnchor(textPos, startPoint)
+        anchor.x += imgBgPaddingStart
+        anchor.y += headerHeight
+        return anchor
+    }
+
+    /** 手柄拖动路径：读取最近一次拖动实际生效的端点锚点，无记录时返回 null */
+    fun takeLastMovedEndpointAnchor(): PointF? {
+        binding.contentTextView.takeLastMovedEndpointAnchor()?.let { anchor ->
+            anchor.x += imgBgPaddingStart
+            anchor.y += headerHeight
+            return anchor
+        }
+        return null
+    }
+
+    /** 当前选区某一端的锚点（该端未选中时返回 null），供手柄拖动在端点未实际移动时回退取景 */
+    fun getSelectionEndpointAnchor(startPoint: Boolean): PointF? {
+        return binding.contentTextView.getSelectionEndpointAnchor(startPoint)?.let { anchor ->
+            anchor.x += imgBgPaddingStart
+            anchor.y += headerHeight
+            anchor
+        }
+    }
+
+    /**
+     * 把正文内容画到画布上（不含页眉页脚与手柄），供自绘放大镜复用
+     */
+    fun drawContentText(canvas: Canvas) {
+        val content = binding.contentTextView
+        canvas.withTranslation(content.left.toFloat(), content.top.toFloat()) {
+            content.draw(this)
+        }
+    }
 
     fun selectStartMoveIndex(
         relativePagePos: Int,

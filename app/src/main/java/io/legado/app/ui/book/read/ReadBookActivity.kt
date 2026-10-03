@@ -543,6 +543,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         binding.cursorRight.setColorFilter(accentColor)
         binding.cursorLeft.setOnTouchListener(this)
         binding.cursorRight.setOnTouchListener(this)
+        // 选区放大镜由浮层自绘，接上阅读视图（浮层在手柄之上，布局里位于手柄后面）
+        binding.selectionMagnifier.readView = binding.readView
+        binding.readView.magnifierOverlay = binding.selectionMagnifier
         binding.readAiPanel.attach(this)
         binding.readAiSummaryPanel.attach(this)
         binding.readAloudPlayerPanel.attach(this, this)
