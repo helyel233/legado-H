@@ -2087,6 +2087,7 @@ bookUrl：%7$s
     <string name="press_speed">&#38271;&#25353;&#20493;&#36895;</string>
     <string name="press_speed_summary">&#38271;&#25353;&#20493;&#36895; %.1f</string>
     <string name="full_bottom_progress">&#20840;&#23631;&#26102;&#26174;&#31034;&#24213;&#37096;&#36827;&#24230;&#26465;</string>
+    <string name="video_play_cache">&#36793;&#25773;&#25918;&#36793;&#32531;&#23384;</string>
     <string name="json_format">JSON &#26684;&#24335;</string>
     <string name="open_other_video_player">&#20854;&#23427;&#25773;&#25918;&#22120;&#25171;&#24320;</string>
     <string name="show_source_comment">&#26174;&#31034;&#28304;&#27880;&#37322;</string>

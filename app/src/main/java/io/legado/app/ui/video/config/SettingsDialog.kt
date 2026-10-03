@@ -69,6 +69,7 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
         var startFull by rememberSaveable { mutableStateOf(VideoPlay.startFull) }
         var showStartFull by rememberSaveable { mutableStateOf(true) }
         var fullBottomProgress by rememberSaveable { mutableStateOf(VideoPlay.fullBottomProgressBar) }
+        var playCacheEnabled by rememberSaveable { mutableStateOf(VideoPlay.playCacheEnabled) }
         var longPressSpeed by rememberSaveable { mutableIntStateOf(VideoPlay.longPressSpeed) }
 
         LegadoMiuixCard(
@@ -118,6 +119,14 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
                     onCheckedChange = { checked ->
                         fullBottomProgress = checked
                         VideoPlay.fullBottomProgressBar = checked
+                    }
+                )
+                AppDialogSwitchRow(
+                    text = stringResource(R.string.video_play_cache),
+                    checked = playCacheEnabled,
+                    onCheckedChange = { checked ->
+                        playCacheEnabled = checked
+                        VideoPlay.playCacheEnabled = checked
                     }
                 )
                 LegadoMiuixActionRow(

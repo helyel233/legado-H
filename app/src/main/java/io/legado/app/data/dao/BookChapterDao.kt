@@ -43,4 +43,7 @@ interface BookChapterDao {
     @Query("update chapters set wordCount = :wordCount where bookUrl = :bookUrl and url = :url")
     fun upWordCount(bookUrl: String, url: String, wordCount: String)
 
+    @Query("update chapters set resourceUrl = :resourceUrl where bookUrl = :bookUrl and url = :url")
+    fun upResourceUrl(bookUrl: String, url: String, resourceUrl: String?)
+
 }

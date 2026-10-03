@@ -18,6 +18,8 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.SourceType
 import io.legado.app.data.appDb
+import io.legado.app.help.book.CacheManifestHelper
+import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -114,6 +116,13 @@ object VideoPlay : CoroutineScope by MainScope(){
         get() = videoPrefs.getBoolean("fullBottomProgressBar", true)
         set(value) {
             videoPrefs.edit { putBoolean("fullBottomProgressBar", value) }
+        }
+
+    /**  边播放边缓存：开启后播放的数据会写进书籍视频缓存目录（看完即可离线），默认关闭  **/
+    var playCacheEnabled
+        get() = videoPrefs.getBoolean("playCacheEnabled", false)
+        set(value) {
+            videoPrefs.edit { putBoolean("playCacheEnabled", value) }
         }
     /**  弹幕滚动速度  **/
     var danmakuSpeed = 1.2f
@@ -279,6 +288,44 @@ object VideoPlay : CoroutineScope by MainScope(){
         }
         val chapterSource = source as BookSource
         val chapterCacheKey = buildChapterCacheKey(chapterSource, book, chapter)
+        // 探测要读清单/缓存正文/缓存索引，放在 IO 执行，避免拖慢起播；结果在主线程接管播放
+        Coroutine.async(loadScope, IO) {
+        // 已经离线缓存的章节直接播本地缓存，不再解析链接（链接可能已过期）；
+        // 缓存按缓存当时的地址做 key，所以这里取"确实有缓存的地址"，章节表里的地址变了也能读到缓存；
+        // 清单功能之前缓存的老书连地址都没留下，只有一章时按缓存内容反推一次
+        val cachedUrl = CacheManifestHelper.cachedMediaUrl(book, chapter)
+            ?: CacheManifestHelper.recoverLegacyMediaUrl(book)
+        if (cachedUrl != null) {
+            val writeBack = chapter.resourceUrl != cachedUrl
+            if (writeBack) {
+                chapter.resourceUrl = cachedUrl
+                appDb.bookChapterDao.upResourceUrl(book.bookUrl, chapter.url, cachedUrl)
+            }
+            // 请求头仍按书源规则生成：缓存不完整需要回源时，缺 Referer/Cookie 会被拒。
+            // 取不到请求头不影响本地播放，失败就用空请求头
+            val headers = runCatching {
+                AnalyzeUrl(
+                    cachedUrl,
+                    source = chapterSource,
+                    ruleData = book,
+                    chapter = chapter,
+                ).headerMap
+            }.getOrDefault(emptyMap())
+            withContext(Main) {
+                videoUrl = cachedUrl
+                when (val danmaku = chapter.getDanmaku()) {
+                    is String -> danmakuStr = danmaku
+                    is File -> danmakuFile = danmaku
+                }
+                player.mapHeadData = headers.toMutableMap()
+                player.setUp(cachedUrl, false, ExoPlayerHelper.videoBookCacheDir(book), chapter.title)
+                if (autoPlay) {
+                    player.startPlayLogic()
+                }
+            }
+            preloadNextEpisode(chapterSource, book)
+            return@async
+        }
         val cached = chapterLinkCache[chapterCacheKey]?.takeIf {
             System.currentTimeMillis() - it.createdAt <= CHAPTER_LINK_CACHE_TTL
         }
@@ -288,14 +335,15 @@ object VideoPlay : CoroutineScope by MainScope(){
                 is String -> danmakuStr = danmaku
                 is File -> danmakuFile = danmaku
             }
-            player.mapHeadData = cached.headers.toMutableMap()
-            player.setUp(cached.playUrl, false, File(appCtx.externalCache, "exoplayer"), chapter.title)
-            if (autoPlay) {
-                player.startPlayLogic()
+            withContext(Main) {
+                player.mapHeadData = cached.headers.toMutableMap()
+                player.setUp(cached.playUrl, false, ExoPlayerHelper.videoBookCacheDir(book), chapter.title)
+                if (autoPlay) {
+                    player.startPlayLogic()
+                }
             }
             preloadNextEpisode(chapterSource, book)
-            isLoading = false
-            return
+            return@async
         }
         WebBook.getContent(loadScope, chapterSource, book, chapter)
             .onSuccess(IO) { content ->
@@ -322,6 +370,11 @@ object VideoPlay : CoroutineScope by MainScope(){
                     is File -> danmakuFile = danmaku
                 }
                 val playUrl = analyzeUrl.url
+                // 解析出的真实地址写回章节，离线缓存与缓存判定都依赖它
+                if (chapter.resourceUrl != playUrl) {
+                    chapter.resourceUrl = playUrl
+                    appDb.bookChapterDao.upResourceUrl(chapter.bookUrl, chapter.url, playUrl)
+                }
                 chapterLinkCache[chapterCacheKey] = CachedPlayLink(
                     playUrl = playUrl,
                     headers = analyzeUrl.headerMap.toMap(),
@@ -330,7 +383,7 @@ object VideoPlay : CoroutineScope by MainScope(){
                 )
                 withContext(Main) {
                     player.mapHeadData = analyzeUrl.headerMap
-                    player.setUp(playUrl, false, File(appCtx.externalCache, "exoplayer"), chapter.title)
+                    player.setUp(playUrl, false, ExoPlayerHelper.videoBookCacheDir(book), chapter.title)
                     if (autoPlay) {
                         player.startPlayLogic()
                     }
@@ -339,6 +392,7 @@ object VideoPlay : CoroutineScope by MainScope(){
             }.onError {
                 AppLog.put("获取资源链接出错\n$it", it, true)
             }
+        }
         isLoading = false
     }
 

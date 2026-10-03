@@ -69,6 +69,8 @@ object BookHelp {
         io.legado.app.model.ReadBook.book?.bookUrl?.let {
             io.legado.app.model.ReadBook.invalidateDirectTextContent(it)
         }
+        // 先释放所有书级媒体缓存的 SimpleCache 实例，否则残留实例会让后续探测误判命中
+        io.legado.app.help.exoplayer.ExoPlayerHelper.releaseAllBookCaches()
         FileUtils.delete(
             FileUtils.getPath(downloadDir, cacheFolderName)
         )
@@ -77,6 +79,8 @@ object BookHelp {
     fun clearCache(book: Book) {
         io.legado.app.model.ReadBook.invalidateDirectTextContent(book.bookUrl)
         val filePath = FileUtils.getPath(downloadDir, cacheFolderName, book.getFolderName())
+        // 先释放书级媒体缓存的 SimpleCache 实例，否则 media3 会持有目录锁导致删除失败
+        io.legado.app.help.exoplayer.ExoPlayerHelper.releaseBookMediaCacheOf(File(filePath))
         FileUtils.delete(filePath)
     }
 
@@ -98,6 +102,8 @@ object BookHelp {
             cacheFolderName,
             newFolderName
         )
+        // 先释放旧目录的媒体缓存实例再移动，否则 media3 会持有目录锁导致移动失败
+        io.legado.app.help.exoplayer.ExoPlayerHelper.releaseBookMediaCacheOf(File(oldFolderPath))
         FileUtils.move(oldFolderPath, newFolderPath)
     }
 
@@ -118,6 +124,8 @@ object BookHelp {
                     if (!bookFolderNames.contains(bookFile.name)
                         && !CacheManifestHelper.hasManifest(bookFile)
                     ) {
+                        // 孤儿目录可能还有书级媒体缓存实例持有目录锁，删除前先释放
+                        io.legado.app.help.exoplayer.ExoPlayerHelper.releaseBookMediaCacheOf(bookFile)
                         FileUtils.delete(bookFile.absolutePath)
                     }
                 }

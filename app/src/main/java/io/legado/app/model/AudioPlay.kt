@@ -16,6 +16,9 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.ReadRecentBook
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.ReadRecordDailyHelper
+import io.legado.app.help.book.CacheManifestHelper
+import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.getBookSource
 import io.legado.app.help.book.readSimulating
@@ -35,8 +38,10 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.startService
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import kotlin.text.trim
 
@@ -195,53 +200,78 @@ object AudioPlay : CoroutineScope by MainScope() {
                     removeLoading(index)
                     return
                 }
-                chapter.resourceUrl
-                    ?.takeIf { ExoPlayerHelper.isMediaCached(it) }
-                    ?.let { cachedUrl ->
-                        durPlayUrl = cachedUrl
-                        durLyric = chapter.getVariable("lyric")
-                        upLoading(false)
-                        upPlayUrl()
-                        removeLoading(index)
-                        return
-                    }
-                if (bookSource == null) {
-                    upLoading(false)
-                    appCtx.toastOnUi(R.string.book_source_not_found)
-                    removeLoading(index)
-                    return
-                }
-                if (!refreshedToc && MediaTocRefresh.shouldRefresh(chapter)) {
-                    refreshTocAndRetry(index)
-                    return
-                }
-                upLoading(true)
-                WebBook.getContent(this, bookSource, book, chapter)
-                    .onSuccess { content ->
-                        val content = content.trim()
-                        if (content.isEmpty()) {
-                            if (!refreshedToc && AppConfig.autoRefreshMediaToc) {
-                                refreshTocAndRetry(index)
-                                return@onSuccess
+                // 章节表地址没缓存时，再按清单/缓存正文找"缓存时的地址"
+                // （地址刷新被覆盖后，已缓存的章节仍能离线播放）
+                // 探测要读清单文件与缓存索引，放 IO 执行，避免拖慢起播；结果回主线程接管播放
+                Coroutine.async {
+                    val cachedUrl = book.takeIf { it.isAudio || it.isVideo }
+                        ?.let { CacheManifestHelper.cachedMediaUrl(it, chapter) }
+                        ?: chapter.resourceUrl?.takeIf { ExoPlayerHelper.isMediaCached(it) }
+                    withContext(Dispatchers.Main) {
+                        if (cachedUrl != null) {
+                            if (chapter.resourceUrl != cachedUrl) {
+                                chapter.resourceUrl = cachedUrl
+                                chapter.update()
                             }
-                            appCtx.toastOnUi(R.string.cache_manage_audio_url_empty)
+                            durPlayUrl = cachedUrl
+                            durLyric = chapter.getVariable("lyric")
+                            upLoading(false)
+                            upPlayUrl()
+                            removeLoading(index)
                         } else {
-                            contentLoadFinish(chapter, content)
+                            loadPlayUrlAfterProbe(index, refreshedToc, book, bookSource, chapter)
                         }
-                    }.onError {
-                        AppLog.put("获取资源链接出错\n$it", it, true)
-                        upLoading(false)
-                    }.onCancel {
-                        removeLoading(index)
-                    }.onFinally {
-                        callback?.upLyric(durLyric)
-                        removeLoading(index)
                     }
+                }
             } else {
                 removeLoading(index)
                 appCtx.toastOnUi(R.string.book_source_not_found)
             }
         }
+    }
+
+    /**
+     * 缓存探测未命中后的加载流程（清单/缓存里都找不到时按原逻辑走书源）
+     */
+    private fun loadPlayUrlAfterProbe(
+        index: Int,
+        refreshedToc: Boolean,
+        book: Book,
+        bookSource: BookSource?,
+        chapter: BookChapter
+    ) {
+        if (bookSource == null) {
+            upLoading(false)
+            appCtx.toastOnUi(R.string.book_source_not_found)
+            removeLoading(index)
+            return
+        }
+        if (!refreshedToc && MediaTocRefresh.shouldRefresh(chapter)) {
+            refreshTocAndRetry(index)
+            return
+        }
+        upLoading(true)
+        WebBook.getContent(this, bookSource, book, chapter)
+            .onSuccess { content ->
+                val content = content.trim()
+                if (content.isEmpty()) {
+                    if (!refreshedToc && AppConfig.autoRefreshMediaToc) {
+                        refreshTocAndRetry(index)
+                        return@onSuccess
+                    }
+                    appCtx.toastOnUi(R.string.cache_manage_audio_url_empty)
+                } else {
+                    contentLoadFinish(chapter, content)
+                }
+            }.onError {
+                AppLog.put("获取资源链接出错\n$it", it, true)
+                upLoading(false)
+            }.onCancel {
+                removeLoading(index)
+            }.onFinally {
+                callback?.upLyric(durLyric)
+                removeLoading(index)
+            }
     }
 
     /**
