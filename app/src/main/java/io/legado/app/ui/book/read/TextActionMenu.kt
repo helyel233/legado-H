@@ -164,6 +164,7 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
         R.id.menu_ask_ai -> ContentSelectConfig.ACTION_ASK_AI
         R.id.menu_generate_image -> ContentSelectConfig.ACTION_GENERATE_IMAGE
         R.id.menu_share_image -> ContentSelectConfig.ACTION_SHARE_IMAGE
+        R.id.menu_review -> ContentSelectConfig.ACTION_REVIEW
         else -> null
     }
 
@@ -172,6 +173,9 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
             val actionId = menuItemToActionId(item.itemId) ?: return@mapNotNull null
             if (!configuredActionIds.contains(actionId)) return@mapNotNull null
             if (actionId == ContentSelectConfig.ACTION_REPLACE && !callBack.supportsReplaceRules()) {
+                return@mapNotNull null
+            }
+            if (actionId == ContentSelectConfig.ACTION_REVIEW && !callBack.supportsReview()) {
                 return@mapNotNull null
             }
             TextMenuAction(
@@ -409,6 +413,9 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
         val selectedText: String
 
         fun supportsReplaceRules(): Boolean = true
+
+        /** 选区对应段落存在段评入口时返回 true，用于控制“段评”菜单项可见性 */
+        fun supportsReview(): Boolean = false
 
         fun onMenuItemSelected(itemId: Int): Boolean
 

@@ -26,7 +26,39 @@ object DatabaseMigrations {
             migration_103_104, migration_104_105, migration_105_106,
             migration_106_107, migration_107_108, migration_108_109, migration_109_110,
             migration_110_111, migration_111_112, MIGRATION_112_113, MIGRATION_113_114,
+            MIGRATION_114_115,
         )
+    }
+
+    val MIGRATION_114_115 = object : Migration(114, 115) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 离线评论账本：离线评论模式下拦截记录的待发评论，全历史保留直至用户清除
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `pending_review_comments` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `bookUrl` TEXT NOT NULL,
+                    `bookName` TEXT NOT NULL,
+                    `chapterUrl` TEXT NOT NULL,
+                    `chapterIndex` INTEGER NOT NULL,
+                    `chapterTitle` TEXT NOT NULL,
+                    `origin` TEXT,
+                    `buttonSrc` TEXT,
+                    `reviewPageUrl` TEXT,
+                    `kind` INTEGER NOT NULL,
+                    `para` TEXT,
+                    `targetCommentId` TEXT,
+                    `content` TEXT NOT NULL,
+                    `status` INTEGER NOT NULL,
+                    `attempts` INTEGER NOT NULL,
+                    `lastError` TEXT,
+                    `lastAttemptAt` INTEGER,
+                    `sentAt` INTEGER
+                )
+                """.trimIndent()
+            )
+        }
     }
 
     val MIGRATION_113_114 = object : Migration(113, 114) {

@@ -24,6 +24,10 @@ object AppPattern {
 
     //dataURL图片类型
     val dataUriRegex = Regex("^data:.*?;base64,(.*)")
+
+    //URL 选项 JSON 分隔：URL 后的 `,{`（逗号与 { 之间允许空白）
+    //供 AnalyzeUrl.paramPattern 与零评论泡解析等场景共用同一解析口径
+    val urlOptionPattern: Pattern = Pattern.compile("\\s*,\\s*(?=\\{)")
     //提取标题中的段评
     val imgRegex = Regex("(.*)((?:data|https?):[\\s\\S]+)$", RegexOption.IGNORE_CASE)
 

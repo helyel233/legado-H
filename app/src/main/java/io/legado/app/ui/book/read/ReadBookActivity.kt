@@ -72,6 +72,7 @@ import io.legado.app.help.ai.AiReadAloudRoleState
 import io.legado.app.help.book.BookCloudEntryMode
 import io.legado.app.help.book.BookCloudEntryModeStore
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookImgClick
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.help.book.ReadMenuCustomButtonExecutor
@@ -184,6 +185,11 @@ import io.legado.app.ui.book.read.page.ReadView
 import io.legado.app.ui.book.read.page.LottieImageBitmapCache
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
+import io.legado.app.ui.book.read.page.entities.ReviewButton
+import io.legado.app.help.review.SyntheticParaContent
+import io.legado.app.help.review.SyntheticReviewEntry
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxDispatcher
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
@@ -392,6 +398,24 @@ class ReadBookActivity : BaseReadBookActivity(),
             viewModel.saveImage(it.value, uri)
         }
     }
+    private val offlineReviewExport = registerForActivityResult(HandleFileContract()) { result ->
+        val uri = result.uri ?: return@registerForActivityResult
+        val json = offlineReviewExportCache ?: return@registerForActivityResult
+        lifecycleScope.launch {
+            withContext(IO) {
+                contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(json.toByteArray(Charsets.UTF_8))
+                } ?: error("无法写入导出文件: $uri")
+            }
+            val total = offlineReviewExportCount
+            toastOnUi(getString(R.string.offline_review_export_done, total))
+            AppLog.putDebug(
+                "${ReviewOutboxStore.LogTag} 导出离线评论 $total 条 → $uri"
+            )
+        }
+    }
+    private var offlineReviewExportCache: String? = null
+    private var offlineReviewExportCount = 0
     private var menu: Menu? = null
     private var modernMenuPopup: ModernActionPopup.Handle? = null
     private var backupJob: Job? = null
@@ -402,6 +426,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var commentBrowserOpening = false
     @Volatile
     private var commentBrowserShowing = false
+    private var selectedReviewButton: ReviewButton? = null
+    private var selectedSyntheticPara: SyntheticParaContent? = null
     val textActionMenu: TextActionMenu by lazy {
         TextActionMenu(this, this)
     }
@@ -768,6 +794,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         })
         window.setBackgroundDrawable(null)
         upScreenTimeOut()
+        lifecycleScope.launch {
+            withContext(IO) { ReviewOutboxStore.recoverSendingOnStart() }
+        }
         ReadBook.register(this)
         Backup.autoBack(this)
         onBackPressedDispatcher.addCallback(this) {
@@ -1088,6 +1117,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
                     R.id.menu_reverse_content -> item.isVisible = onLine && !isEpubCoreMode()
                     R.id.menu_paragraph_rule_manage -> item.isVisible = !book.isEpub && !isEpubCoreMode()
+                    R.id.menu_offline_review_mode -> item.isChecked = AppConfig.offlineReviewMode
                 }
             }
         }
@@ -1273,6 +1303,34 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_effective_replaces -> showEffectiveReplaces()
 
+            R.id.menu_offline_review_mode -> {
+                AppConfig.offlineReviewMode = !AppConfig.offlineReviewMode
+                item.isChecked = AppConfig.offlineReviewMode
+                if (AppConfig.offlineReviewMode) {
+                    toastOnUi(R.string.offline_review_mode_on)
+                } else {
+                    toastOnUi(R.string.offline_review_mode_off)
+                }
+                AppLog.putDebug(
+                    "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}"
+                )
+            }
+
+            R.id.menu_send_offline_reviews -> {
+                binding.readMenu.runMenuOut()
+                sendOfflineReviews()
+            }
+
+            R.id.menu_export_offline_reviews -> {
+                binding.readMenu.runMenuOut()
+                exportOfflineReviews()
+            }
+
+            R.id.menu_clear_offline_reviews -> {
+                binding.readMenu.runMenuOut()
+                clearOfflineReviews()
+            }
+
             R.id.menu_highlight_rule_manage -> showHighlightRuleManage()
             R.id.menu_paragraph_rule_manage -> ReadBook.book?.let {
                 startActivity<ParagraphRuleManageActivity> {
@@ -1283,6 +1341,111 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_help -> showHelp()
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun sendOfflineReviews() {
+        lifecycleScope.launch {
+            val unknown = withContext(IO) { ReviewOutboxStore.unknownCount() }
+            if (unknown > 0) {
+                AlertDialog.Builder(this@ReadBookActivity)
+                    .setTitle(R.string.menu_send_offline_reviews)
+                    .setMessage(getString(R.string.offline_review_send_confirm_unknown, unknown))
+                    .setPositiveButton(R.string.sure) { _, _ -> launchOfflineReviewSend() }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+            } else {
+                launchOfflineReviewSend()
+            }
+        }
+    }
+
+    private fun launchOfflineReviewSend() {
+        lifecycleScope.launch {
+            val count = withContext(IO) { ReviewOutboxStore.countSendable() }
+            if (count == 0) {
+                toastOnUi(R.string.offline_review_no_records)
+                return@launch
+            }
+            toastOnUi(getString(R.string.offline_review_send_start, count))
+            ReviewOutboxDispatcher.sendInBackground { summary ->
+                // 批次独立于页面生命周期，回调统一用全局资源，不引用 Activity
+                val summary = summary ?: run {
+                    splitties.init.appCtx.toastOnUi(R.string.offline_review_send_running)
+                    return@sendInBackground
+                }
+                if (summary.total == 0) {
+                    splitties.init.appCtx.toastOnUi(R.string.offline_review_no_records)
+                    return@sendInBackground
+                }
+                splitties.init.appCtx.toastOnUi(
+                    splitties.init.appCtx.getString(
+                        R.string.offline_review_send_done, summary.success, summary.failures.size
+                    )
+                )
+                if (summary.failures.isNotEmpty()) {
+                    val detail = summary.failures.joinToString("\n") { failure ->
+                        "《${failure.item.bookName}》${failure.item.kindText()} ：${failure.message}"
+                    }
+                    splitties.init.appCtx.toastOnUi(
+                        splitties.init.appCtx.getString(
+                            R.string.offline_review_send_failed_detail, detail
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun exportOfflineReviews() {
+        lifecycleScope.launch {
+            val json = withContext(IO) {
+                val items = ReviewOutboxStore.all()
+                if (items.isEmpty()) {
+                    null
+                } else {
+                    ReviewOutboxStore.buildExportJson(items).also {
+                        offlineReviewExportCount = items.size
+                    }
+                }
+            }
+            if (json == null) {
+                toastOnUi(R.string.offline_review_export_empty)
+                return@launch
+            }
+            offlineReviewExportCache = json
+            val fileName = "离线评论_" +
+                java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US)
+                    .format(java.util.Date()) + ".json"
+            offlineReviewExport.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = HandleFileContract.FileData(
+                    fileName,
+                    json.toByteArray(Charsets.UTF_8),
+                    "application/json"
+                )
+            }
+        }
+    }
+
+    private fun clearOfflineReviews() {
+        lifecycleScope.launch {
+            val total = withContext(IO) { ReviewOutboxStore.countAll() }
+            if (total == 0) {
+                toastOnUi(R.string.offline_review_no_records)
+                return@launch
+            }
+            AlertDialog.Builder(this@ReadBookActivity)
+                .setTitle(R.string.offline_review_clear_confirm_title)
+                .setMessage(getString(R.string.offline_review_clear_confirm_message, total))
+                .setPositiveButton(R.string.sure) { _, _ ->
+                    lifecycleScope.launch {
+                        val cleared = withContext(IO) { ReviewOutboxStore.clearAll() }
+                        toastOnUi(getString(R.string.offline_review_clear_done, cleared))
+                    }
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
     }
 
     private fun refreshContentAll(book: Book) {
@@ -1475,6 +1638,8 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 取消文字选择
      */
     override fun onCancelSelect() = binding.run {
+        selectedReviewButton = null
+        selectedSyntheticPara = null
         activeSelectionCursor = null
         if (epubCoreActive) {
             clearEpubSelectionUi()
@@ -1508,6 +1673,9 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 显示文本操作菜单
      */
     override fun showTextActionMenu() {
+        val reviewEntry = findSelectedReviewEntry()
+        selectedReviewButton = reviewEntry?.button
+        selectedSyntheticPara = reviewEntry?.syntheticPara
         val navigationBarHeight =
             if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
                 binding.navigationBar.height else 0
@@ -1543,6 +1711,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         startBottomY: Float = bottomY,
         endBottomY: Float = bottomY
     ) = binding.run {
+        selectedReviewButton = null
+        selectedSyntheticPara = null
         val navigationBarHeight =
             if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
                 binding.navigationBar.height else 0
@@ -1580,6 +1750,53 @@ class ReadBookActivity : BaseReadBookActivity(),
         )
     }
 
+    private data class SelectedReviewEntry(
+        val button: ReviewButton,
+        val syntheticPara: SyntheticParaContent?,
+    )
+
+    /**
+     * 段评菜单只对应选区起始段落；跨段选区沿用“取第一段”语义。
+     * 优先用书源注入的评论泡（含零评论收纳泡）；完全没有泡的段落由
+     * [SyntheticReviewEntry.resolve] 借同章锚点泡合成入口，走同一条 click 链路。
+     */
+    private fun findSelectedReviewEntry(): SelectedReviewEntry? {
+        val chapter = ReadBook.curTextChapter ?: return null
+        val pageView = binding.readView.curPage
+        val startPos = pageView.selectStartPos
+        val endPos = pageView.selectEndPos
+        if (!startPos.isSelected() || !endPos.isSelected()) return null
+        val startPage = pageView.relativePage(startPos.relativePagePos)
+        val endPage = pageView.relativePage(endPos.relativePagePos)
+        val startParaNum = startPage.getLine(startPos.lineIndex).paragraphNum
+        val endParaNum = endPage.getLine(endPos.lineIndex).paragraphNum
+        if (startParaNum <= 0 || endParaNum <= 0) return null
+        val targetNum = minOf(startParaNum, endParaNum)
+        chapter.paragraphs
+            .getOrNull(targetNum - 1)
+            ?.hiddenReviewButtons
+            ?.firstOrNull { button -> BookImgClick.hasAction(button.src, button.click) }
+            ?.let { button ->
+                // 收纳泡自带原始 src（快照即本段），同样回填段落原文，
+                // 修复零评论段发评时页面用评论内容充当 para_content 的错文
+                val syntheticPara = SyntheticReviewEntry.parsePara(button.click)?.let { para ->
+                    SyntheticReviewEntry.paragraphContent(chapter, targetNum)?.let { content ->
+                        SyntheticParaContent(para, content)
+                    }
+                }
+                return SelectedReviewEntry(button, syntheticPara)
+            }
+        val synthesized = SyntheticReviewEntry.resolve(chapter, targetNum) ?: return null
+        return SelectedReviewEntry(
+            synthesized.button,
+            SyntheticParaContent(
+                synthesized.para,
+                synthesized.paraContent,
+                snapshotFallbackAllowed = false,
+            )
+        )
+    }
+
     /**
      * 当前选择的文本
      */
@@ -1602,6 +1819,24 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_aloud -> {
                 handleSelectedTextReadAloud()
+                return true
+            }
+
+            R.id.menu_review -> {
+                selectedReviewButton?.let { button ->
+                    if (button.click.isNullOrBlank()) {
+                        oldClickImg(button.src)
+                    } else {
+                        BookImgClick.clickImg(
+                            this,
+                            lifecycleScope,
+                            button.click,
+                            button.src,
+                            ReadBook.curTextChapter?.chapter,
+                            selectedSyntheticPara
+                        )
+                    }
+                }
                 return true
             }
 
@@ -5668,6 +5903,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun supportsReplaceRules(): Boolean = ReadBook.book?.let {
         ReadMenuButtonConfig.supportsReplaceRules(it.isEpub, it.usesDirectReader)
     } == true
+
+    override fun supportsReview(): Boolean = selectedReviewButton != null
 
     override fun epubCoreChapterTitle(): String? {
         val book = ReadBook.book?.takeIf { it.usesDirectReader } ?: return null

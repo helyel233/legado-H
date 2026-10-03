@@ -45,6 +45,7 @@ import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.SourceRecycleBinDao
+import io.legado.app.data.dao.PendingReviewCommentDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.AiAgentJob
 import io.legado.app.data.entities.AiAgentSession
@@ -74,6 +75,7 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ParagraphRule
 import io.legado.app.data.entities.ParagraphRuleVar
+import io.legado.app.data.entities.PendingReviewComment
 import io.legado.app.data.entities.ReadAloudBgmAssignmentCache
 import io.legado.app.data.entities.ReadAloudBgmGroup
 import io.legado.app.data.entities.ReadAloudBgmTrack
@@ -110,7 +112,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 114,
+    version = 115,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -128,7 +130,7 @@ val appDb by lazy {
         AiReadAloudUsageRecord::class,
         AiAgentSession::class, AiAgentJob::class, AiAgentTrace::class,
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
-        AutoTaskRule::class, SourceRecycleBin::class],
+        AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -220,6 +222,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val aiMemoryDao: AiMemoryDao
     abstract val autoTaskRuleDao: AutoTaskRuleDao
     abstract val sourceRecycleBinDao: SourceRecycleBinDao
+    abstract val pendingReviewCommentDao: PendingReviewCommentDao
 
     companion object {
 

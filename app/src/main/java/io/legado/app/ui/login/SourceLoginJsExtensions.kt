@@ -22,13 +22,13 @@ import java.io.File
 import java.lang.ref.WeakReference
 
 @Suppress("unused")
-class SourceLoginJsExtensions(
+open class SourceLoginJsExtensions(
     activity: AppCompatActivity?,
     source: BaseSource?,
     bookType: Int = 0,
     callback: Callback? = null
 ) : RssJsExtensions(activity, source, bookType) {
-    private val callbackRef: WeakReference<Callback> = WeakReference(callback)
+    protected val callbackRef: WeakReference<Callback> = WeakReference(callback)
     interface Callback {
         fun upUiData(data: Map<String, Any?>?)
         fun reUiView(deltaUp: Boolean = false)
@@ -103,7 +103,7 @@ class SourceLoginJsExtensions(
     }
 
     @JvmOverloads
-    fun showBrowser(url: String, html: String? = null, preloadJs: String? = null, config: String? = null) {
+    open fun showBrowser(url: String, html: String? = null, preloadJs: String? = null, config: String? = null) {
         val source = getSource() ?: return
         if (callbackRef.get()?.showBrowser(url, html, preloadJs, config) == true) {
             return

@@ -21,6 +21,8 @@ import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
 import io.legado.app.help.http.dns.DnsScope
+import io.legado.app.help.http.StrResponse
+import com.script.rhino.rhinoContext
 import io.legado.app.model.Debug
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.GSON
@@ -84,6 +86,62 @@ class AnalyzeRule(
     private var evalJSCallCount = 0
 
     private var coroutineContext: CoroutineContext = EmptyCoroutineContext
+
+    /**
+     * 浏览器打开请求拦截（评论快照抓取等无界面场景）：
+     * 默认不拦截，行为与用户点击完全一致；抓取时由调用方挂接。
+     */
+    var onBrowserOpenRequestedHook: ((url: String, title: String, html: String?) -> Boolean)? = null
+    var onBrowserAwaitRequestedHook: ((url: String, title: String, html: String?) -> StrResponse?)? = null
+
+    override fun onBrowserOpenRequested(url: String, title: String, html: String?): Boolean {
+        return onBrowserOpenRequestedHook?.invoke(url, title, html) ?: false
+    }
+
+    override fun onBrowserAwaitRequested(
+        url: String,
+        title: String,
+        html: String?
+    ): StrResponse? {
+        return onBrowserAwaitRequestedHook?.invoke(url, title, html)
+    }
+
+    /**
+     * 评论“网络优先”兑底快照：网络加载失败/超时时 WebView 切换到的本地 HTML。
+     * 仅评论打开链路设置，默认为空不改变任何默认行为。
+     */
+    var fallbackBrowserHtml: String? = null
+    var fallbackReviewResourceBook: Book? = null
+
+    override fun startBrowser(url: String, title: String, html: String?) {
+        rhinoContext.ensureActive()
+        if (onBrowserOpenRequested(url, title, html)) return
+        io.legado.app.help.source.SourceVerificationHelp.startBrowser(
+            getSource(),
+            url,
+            title,
+            html = html,
+            fallbackHtml = fallbackBrowserHtml,
+            fallbackReviewResourceBook = fallbackReviewResourceBook,
+        )
+    }
+
+    override fun startBrowserAwait(
+        url: String,
+        title: String,
+        refetchAfterSuccess: Boolean,
+        html: String?
+    ): StrResponse {
+        rhinoContext.ensureActive()
+        onBrowserAwaitRequested(url, title, html)?.let { return it }
+        val pair = io.legado.app.help.source.SourceVerificationHelp.getVerificationResult(
+            getSource(), url, title, true, refetchAfterSuccess, html,
+            fallbackHtml = fallbackBrowserHtml,
+            fallbackReviewResourceBook = fallbackReviewResourceBook,
+        )
+        val (url2, body) = pair
+        return StrResponse(url2.ifEmpty { url }, body)
+    }
 
     private var loggedNonStandardJSON = false
     private var ruleName: String? = null

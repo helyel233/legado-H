@@ -1,0 +1,596 @@
+package io.legado.app.help.review
+
+import android.util.AtomicFile
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.cache.CacheOperationDiagnostics
+import io.legado.app.utils.GSON
+import io.legado.app.utils.MD5Utils
+import java.io.File
+import java.io.FileOutputStream
+
+/**
+ * 评论页快照实体：一章的某个评论按钮对应一份“真实评论页”网页快照。
+ * html 已在抓取时穷尽展开/回复/加载更多，并把样式与图片内联，可完全离线渲染。
+ *
+ * 快照主键 = chapter.url + buttonSrc：目录前插章节、重新排序后 index 会变化，
+ * url 才是稳定标识；chapterIndex 只作为兼容/展示字段。
+ */
+data class ReviewSnapshot(
+    val version: Int = 2,
+    val bookUrl: String = "",
+    /** 章节稳定标识：主键一部分 */
+    val chapterUrl: String = "",
+    /** 章节序号，仅兼容/展示用，不作为主键 */
+    val chapterIndex: Int = 0,
+    val chapterTitle: String = "",
+    /** 抓取时的评论按钮 src（含选项 JSON），作为快照主键的一部分 */
+    val buttonSrc: String = "",
+    /** 真实评论页地址（click JS 执行后由 startBrowser/showBrowser 拦截得到） */
+    val url: String = "",
+    val title: String = "",
+    val html: String = "",
+    /**
+     * 本快照 HTML 引用的全部资源库 key（review-resource://<key> 对应的 key）。
+     * 抓取生成快照时顺手写入；GC 只读本字段判定存活资源，不再扫描巨大 HTML。
+     * null = 旧格式快照（写入时没有该字段），引用未知，GC 必须放弃本次回收。
+     */
+    val resourceKeys: List<String>? = null,
+    /**
+     * 部分成功快照：页面 HTML 已抓到并落盘，但存在下载失败的资源（缺失引用以
+     * # 占位）。部分快照可离线渲染，但在计数与重试判定中不等同于完整快照，
+     * 对应按钮仍计为失败，等待重新抓取覆盖。
+     */
+    val partial: Boolean = false,
+    val savedAt: Long = 0L,
+    val downloadEngine: String = "web",
+    /** 包括按用户完整性策略忽略的失败；不能把成功状态当作资源齐全。 */
+    val resourceFailures: List<String> = emptyList(),
+)
+
+/**
+ * Durable result for the latest review-cache attempt of a chapter.
+ *
+ * Snapshot files only exist after a successful capture, so they cannot describe
+ * buttons that failed to capture. This sidecar keeps that result explicit for
+ * cache management and retry actions.
+ */
+data class ReviewChapterSnapshotStatus(
+    val version: Int = 2,
+    val bookUrl: String = "",
+    val chapterUrl: String = "",
+    val chapterIndex: Int = 0,
+    val chapterTitle: String = "",
+    val totalSnapshots: Int = 0,
+    val failedSnapshots: Int = 0,
+    /** Stable identities of the failed buttons; required for an exact retry. */
+    val failedButtonSources: List<String>? = null,
+    val updatedAt: Long = 0L,
+) {
+    /**
+     * A count alone cannot identify which bubble is safe to retry. Older status files without
+     * these identities remain visible, but are deliberately not eligible for a broad retry.
+     */
+    fun failedButtonSourcesForRetry(): List<String>? {
+        val sources = failedButtonSources.orEmpty().map(String::trim)
+        return sources.takeIf {
+            failedSnapshots > 0 &&
+                it.size == failedSnapshots &&
+                it.none(String::isBlank) &&
+                it.distinct().size == it.size
+        }
+    }
+}
+
+data class ReviewSnapshotCounts(
+    private val byChapterUrl: Map<String, Int>,
+) {
+    fun forChapter(chapter: BookChapter): Int {
+        return byChapterUrl[chapter.url.trim()] ?: 0
+    }
+}
+
+/**
+ * 评论页快照存储。
+ *
+ * 存储位置：<book_cache>/<book folder>/reviews/r_<md5(chapterUrl|buttonSrc)>.json
+ * 快照主键 = 章节 URL + 评论按钮 src，与正文缓存相互独立：
+ * 正文已缓存绝不代表评论快照已存在，“是否需要补评论”必须单独按键检查。
+ */
+object ReviewSnapshotStore {
+
+    const val REVIEWS_DIR_NAME = "reviews"
+    private const val FILE_PREFIX = "r_"
+    private const val STATUS_FILE_PREFIX = "s_"
+    private const val FILE_SUFFIX = ".json"
+
+    /**
+     * 章评 tab 补充快照的保留 buttonSrc：主键 = (真实章节 url, CHAPTER_TAB_SRC)，
+     * 每章只存一份，与该章评论按钮的段评快照互不覆盖。
+     */
+    const val CHAPTER_TAB_SRC = "__chapter_tab__"
+
+    /**
+     * 书评 tab 补充快照的保留伪章节 url 与 buttonSrc：主键 = (BOOK_TAB_CHAPTER_URL,
+     * BOOK_TAB_SRC)，整本书只存一份。伪章节 url 不对应任何真实章节，
+     * 章节统计与按章导出必须排除。
+     */
+    const val BOOK_TAB_CHAPTER_URL = "__book_tab__"
+    const val BOOK_TAB_SRC = "__book_tab__"
+
+    /** 该 chapterUrl 是否为书评补充快照的伪章节身份 */
+    fun isSupplementChapterUrl(url: String): Boolean = url.trim() == BOOK_TAB_CHAPTER_URL
+
+    fun reviewsDir(book: Book): File {
+        return File(BookHelp.getCacheDir(book), REVIEWS_DIR_NAME)
+    }
+
+    /** 新版文件名：以章节 URL 为主键 */
+    fun fileName(chapterUrl: String, buttonSrc: String): String {
+        return "$FILE_PREFIX${MD5Utils.md5Encode16("${chapterUrl.trim()}|${buttonSrc.trim()}")}$FILE_SUFFIX"
+    }
+
+    private fun statusFileName(chapterUrl: String): String {
+        return "$STATUS_FILE_PREFIX${MD5Utils.md5Encode16(chapterUrl.trim())}$FILE_SUFFIX"
+    }
+
+    fun isSnapshotFile(file: File): Boolean {
+        return file.name.startsWith(FILE_PREFIX) && file.name.endsWith(FILE_SUFFIX)
+    }
+
+    private fun reviewFiles(book: Book): Array<File> {
+        return reviewsDir(book).listFiles()
+            ?.filter(::isSnapshotFile)
+            ?.toTypedArray()
+            ?: emptyArray()
+    }
+
+    private fun statusFiles(book: Book): Array<File> {
+        return reviewsDir(book).listFiles()
+            ?.filter { it.name.startsWith(STATUS_FILE_PREFIX) && it.name.endsWith(FILE_SUFFIX) }
+            ?.toTypedArray()
+            ?: emptyArray()
+    }
+
+    internal fun hasPersistedReviewData(book: Book): Boolean {
+        return reviewFiles(book).isNotEmpty() || statusFiles(book).isNotEmpty()
+    }
+
+    private fun requireCurrentFormatIfReviewData(book: Book) {
+        if (hasPersistedReviewData(book)) {
+            ReviewSnapshotResourceStore.requireDatabase(book)
+        }
+    }
+
+    internal fun put(
+        book: Book,
+        snapshot: ReviewSnapshot,
+        diagnostics: CacheOperationDiagnostics.Context? = null,
+    ) {
+        require(snapshot.html.isNotBlank()) { "review snapshot HTML must not be blank" }
+        val trace = CacheOperationDiagnostics.begin(
+            diagnostics?.forChapter(snapshot.chapterIndex)
+                ?: CacheOperationDiagnostics.Context(
+                    domain = CacheOperationDiagnostics.Domain.REVIEW,
+                    chapterIndex = snapshot.chapterIndex,
+                ),
+            "SNAPSHOT_WRITE",
+            CacheOperationDiagnostics.Metrics(inputChars = snapshot.html.length),
+            startAlways = true,
+        )
+        val dir = reviewsDir(book)
+        try {
+            check(dir.exists() || dir.mkdirs()) {
+                "cannot create review snapshot directory: ${dir.absolutePath}"
+            }
+            require(snapshot.chapterUrl.isNotBlank()) { "review snapshot requires chapterUrl" }
+            require(snapshot.buttonSrc.isNotBlank()) { "review snapshot requires buttonSrc" }
+            require(snapshot.resourceKeys != null) { "review snapshot requires resourceKeys" }
+            ReviewSnapshotResourceStore.requireDatabase(book)
+            ReviewSnapshotResourceStore.validateSnapshot(book, snapshot)
+            val name = fileName(snapshot.chapterUrl, snapshot.buttonSrc)
+            val target = File(dir, name)
+            // 快照 HTML 可能很大。Gson 直接写入 Writer，避免先构造整份 JSON String 和 UTF-8
+            // ByteArray；它们会在原 HTML 仍存活时额外复制完整快照，放大 Java heap 峰值。
+            writeJsonAtomically(target) { writer -> GSON.toJson(snapshot, writer) }
+            trace.done(CacheOperationDiagnostics.Metrics(outputBytes = target.length()))
+        } catch (error: Throwable) {
+            trace.fail(error)
+            throw error
+        }
+    }
+
+    fun get(book: Book, chapter: BookChapter, buttonSrc: String): ReviewSnapshot? {
+        requireCurrentFormatIfReviewData(book)
+        val dir = reviewsDir(book)
+        val file = File(dir, fileName(chapter.url, buttonSrc))
+        if (!file.isFile) return null
+        val snapshot = readCompleteSnapshot(book, file)
+        require(snapshot.chapterUrl.trim() == chapter.url.trim()) {
+            "review snapshot chapterUrl mismatch: ${file.absolutePath}"
+        }
+        require(snapshot.buttonSrc.trim() == buttonSrc.trim()) {
+            "review snapshot buttonSrc mismatch: ${file.absolutePath}"
+        }
+        return snapshot
+    }
+
+    /** 读取该章的章评 tab 补充快照；缺失或校验失败返回 null */
+    fun getChapterTab(book: Book, chapter: BookChapter): ReviewSnapshot? {
+        return runCatching { get(book, chapter, CHAPTER_TAB_SRC) }.getOrNull()
+    }
+
+    /** 读取该书的书评 tab 补充快照（伪章节主键）；缺失或校验失败返回 null */
+    fun getBookTab(book: Book): ReviewSnapshot? {
+        requireCurrentFormatIfReviewData(book)
+        val file = File(reviewsDir(book), fileName(BOOK_TAB_CHAPTER_URL, BOOK_TAB_SRC))
+        if (!file.isFile) return null
+        return runCatching { readCompleteSnapshot(book, file) }.getOrNull()
+    }
+
+    /** Validate an extracted snapshot against the already-imported resource database. */
+    internal fun validateImportedSnapshot(book: Book, file: File): ReviewSnapshot {
+        require(isSnapshotFile(file)) { "not a review snapshot file: ${file.absolutePath}" }
+        val snapshot = readSnapshot(file)
+            ?: error("review snapshot file is empty: ${file.absolutePath}")
+        require(snapshot.bookUrl.isNotBlank()) { "review snapshot bookUrl is blank: ${file.absolutePath}" }
+        require(snapshot.chapterUrl.isNotBlank()) { "review snapshot chapterUrl is blank: ${file.absolutePath}" }
+        require(snapshot.buttonSrc.isNotBlank()) { "review snapshot buttonSrc is blank: ${file.absolutePath}" }
+        ReviewSnapshotResourceStore.validateSnapshot(book, snapshot)
+        return snapshot
+    }
+
+    private fun readCompleteSnapshot(book: Book, file: File): ReviewSnapshot {
+        val snapshot = readSnapshot(file)
+            ?: error("review snapshot file is empty: ${file.absolutePath}")
+        require(snapshot.bookUrl == book.bookUrl) {
+            "review snapshot bookUrl mismatch: ${file.absolutePath}"
+        }
+        ReviewSnapshotResourceStore.validateSnapshot(book, snapshot)
+        return snapshot
+    }
+
+    private fun readSnapshot(file: File): ReviewSnapshot? {
+        if (!file.isFile) return null
+        return file.bufferedReader(Charsets.UTF_8).use { reader ->
+            GSON.fromJson(reader, ReviewSnapshot::class.java)
+        }
+            ?.also { require(it.html.isNotBlank()) { "review snapshot HTML is blank: ${file.absolutePath}" } }
+            ?: error("review snapshot file is empty: ${file.absolutePath}")
+    }
+
+    fun has(book: Book, chapter: BookChapter, buttonSrc: String): Boolean {
+        return readOwnSnapshotMetadata(book, chapter, buttonSrc) != null
+    }
+
+    /**
+     * 该按钮是否已有完整快照。部分成功快照（partial）可离线渲染但不完整，
+     * 在跳过/重试/进度基线判定中必须视为未完成，等待重新抓取覆盖。
+     */
+    fun hasComplete(book: Book, chapter: BookChapter, buttonSrc: String): Boolean {
+        val metadata = readOwnSnapshotMetadata(book, chapter, buttonSrc) ?: return false
+        return !metadata.partial
+    }
+
+    /**
+     * 补充快照（章评/书评 tab）按显式 (chapterUrl, buttonSrc) 按键读取元数据。
+     * 与 [readOwnSnapshotMetadata] 的差异仅在于不需要 BookChapter 实体：
+     * 书评补充快照挂在伪章节 url 上，整本书只有一份。
+     */
+    private fun readSupplementMetadata(
+        book: Book,
+        chapterUrl: String,
+        buttonSrc: String,
+    ): ReviewSnapshotHotMetadata? {
+        requireCurrentFormatIfReviewData(book)
+        val file = File(reviewsDir(book), fileName(chapterUrl, buttonSrc))
+        if (!file.isFile) return null
+        val metadata = readHotMetadata(book, file)
+        require(metadata.chapterUrl.trim() == chapterUrl.trim()) {
+            "review snapshot chapterUrl mismatch: ${file.absolutePath}"
+        }
+        require(metadata.buttonSrc.trim() == buttonSrc.trim()) {
+            "review snapshot buttonSrc mismatch: ${file.absolutePath}"
+        }
+        return metadata
+    }
+
+    /** 该章的章评 tab 补充快照是否已完整存在 */
+    fun hasCompleteChapterTab(book: Book, chapter: BookChapter): Boolean {
+        val metadata = readSupplementMetadata(book, chapter.url, CHAPTER_TAB_SRC) ?: return false
+        return !metadata.partial
+    }
+
+    /** 该书的书评 tab 补充快照是否已完整存在 */
+    fun hasCompleteBookTab(book: Book): Boolean {
+        val metadata = readSupplementMetadata(book, BOOK_TAB_CHAPTER_URL, BOOK_TAB_SRC)
+            ?: return false
+        return !metadata.partial
+    }
+
+    /** 读取并校验属于 [chapter]/[buttonSrc] 的快照热元数据；文件不存在返回 null。 */
+    private fun readOwnSnapshotMetadata(
+        book: Book,
+        chapter: BookChapter,
+        buttonSrc: String,
+    ): ReviewSnapshotHotMetadata? {
+        requireCurrentFormatIfReviewData(book)
+        val file = File(reviewsDir(book), fileName(chapter.url, buttonSrc))
+        if (!file.isFile) return null
+        val metadata = readHotMetadata(book, file)
+        require(metadata.chapterUrl.trim() == chapter.url.trim()) {
+            "review snapshot chapterUrl mismatch: ${file.absolutePath}"
+        }
+        require(metadata.buttonSrc.trim() == buttonSrc.trim()) {
+            "review snapshot buttonSrc mismatch: ${file.absolutePath}"
+        }
+        return metadata
+    }
+
+    fun delete(book: Book, chapter: BookChapter, buttonSrc: String) {
+        File(reviewsDir(book), fileName(chapter.url, buttonSrc)).delete()
+    }
+
+    /**
+     * 删除该章节（含章内全部评论按钮）的快照。
+     * 主键是整体 md5，无法按文件名前缀过滤，因此逐条解析后按 chapterUrl 匹配。
+     */
+    fun deleteChapter(book: Book, chapter: BookChapter) {
+        reviewFiles(book).forEach { file ->
+            readMetadata(file)?.let { snapshot ->
+                val matches = snapshot.chapterUrl.trim() == chapter.url.trim()
+                if (matches) file.delete()
+            }
+        }
+        File(reviewsDir(book), statusFileName(chapter.url)).delete()
+    }
+
+    /** 管理统计使用目录索引，书评补充快照不计入章节。 */
+    fun chapterUrls(book: Book, checkActive: () -> Unit = {}): Set<String> {
+        return ReviewSnapshotInventory.read(book, checkActive).files.values.asSequence()
+            .filter { it.status == null }
+            .map { it.chapterUrl }
+            .filterNot(::isSupplementChapterUrl)
+            .toSet()
+    }
+
+    /** Counts persisted snapshots without reading their potentially huge HTML fields. */
+    fun snapshotCounts(book: Book): ReviewSnapshotCounts {
+        return managementState(book).first
+    }
+
+    /** 一次索引查询同时提供快照计数和状态，避免详情页重复遍历。 */
+    fun managementState(
+        book: Book,
+        checkActive: () -> Unit = {},
+    ): Pair<ReviewSnapshotCounts, List<ReviewChapterSnapshotStatus>> {
+        val entries = ReviewSnapshotInventory.read(book, checkActive).files.values
+        val counts = entries.asSequence()
+            .filter { it.status == null && !isSupplementChapterUrl(it.chapterUrl) }
+            .groupingBy { it.chapterUrl }.eachCount()
+        return ReviewSnapshotCounts(counts) to entries.mapNotNull { it.status }
+    }
+
+    /** Latest completed capture result for every chapter that has been attempted. */
+    fun chapterStatuses(book: Book): List<ReviewChapterSnapshotStatus> {
+        requireCurrentFormatIfReviewData(book)
+        return statusFiles(book).mapNotNull(::readChapterStatus)
+    }
+
+    fun chapterStatus(book: Book, chapter: BookChapter): ReviewChapterSnapshotStatus? {
+        requireCurrentFormatIfReviewData(book)
+        return readChapterStatus(File(reviewsDir(book), statusFileName(chapter.url)))
+    }
+
+    fun isChapterStatusFile(file: File): Boolean {
+        return file.name.startsWith(STATUS_FILE_PREFIX) && file.name.endsWith(FILE_SUFFIX)
+    }
+
+    fun readChapterStatus(file: File): ReviewChapterSnapshotStatus? {
+        if (!isChapterStatusFile(file)) return null
+        return file.bufferedReader(Charsets.UTF_8).use { reader ->
+            GSON.fromJson(reader, ReviewChapterSnapshotStatus::class.java)
+        }?.also { status ->
+            require(status.chapterUrl.isNotBlank()) {
+                "review chapter status is missing chapterUrl: ${file.absolutePath}"
+            }
+            require(status.totalSnapshots > 0) {
+                "review chapter status has invalid totalSnapshots: ${file.absolutePath}"
+            }
+            require(status.failedSnapshots in 0..status.totalSnapshots) {
+                "review chapter status has invalid failedSnapshots: ${file.absolutePath}"
+            }
+            if (status.version >= 2) {
+                val failedSources = requireNotNull(status.failedButtonSources) {
+                    "review chapter status version 2 requires failed button identities"
+                }
+                require(status.failedSnapshots == failedSources.size) {
+                    "review chapter status failed button identities are incomplete"
+                }
+                require(failedSources.all { it.isNotBlank() }) {
+                    "review chapter status contains blank failed button identity"
+                }
+                require(failedSources.distinct().size == failedSources.size) {
+                    "review chapter status contains duplicate failed button identity"
+                }
+            }
+        } ?: error("review chapter status file is empty: ${file.absolutePath}")
+    }
+
+    /** Persists status independently of the successful snapshot payloads. */
+    fun putChapterStatus(book: Book, status: ReviewChapterSnapshotStatus) {
+        require(status.chapterUrl.isNotBlank()) { "review status requires chapterUrl" }
+        require(status.totalSnapshots > 0) { "review status requires totalSnapshots" }
+        require(status.failedSnapshots in 0..status.totalSnapshots) {
+            "review status failedSnapshots is outside totalSnapshots"
+        }
+        if (status.version >= 2) {
+            val failedSources = requireNotNull(status.failedButtonSources) {
+                "review status version 2 requires failed button identities"
+            }
+            require(status.failedSnapshots == failedSources.size) {
+                "review status failed button identities are incomplete"
+            }
+            require(failedSources.all { it.isNotBlank() }) {
+                "review status contains blank failed button identity"
+            }
+            require(failedSources.distinct().size == failedSources.size) {
+                "review status contains duplicate failed button identity"
+            }
+        }
+        ReviewSnapshotResourceStore.requireDatabase(book)
+        val dir = reviewsDir(book)
+        if (!dir.exists()) check(dir.mkdirs()) { "cannot create review status directory: ${dir.absolutePath}" }
+        writeJsonAtomically(File(dir, statusFileName(status.chapterUrl))) { writer ->
+            GSON.toJson(status, writer)
+        }
+    }
+
+    private fun writeJsonAtomically(target: File, write: (java.io.Writer) -> Unit) {
+        val atomicFile = AtomicFile(target)
+        var output: FileOutputStream? = null
+        try {
+            val stream = atomicFile.startWrite()
+            output = stream
+            val writer = stream.bufferedWriter(Charsets.UTF_8)
+            write(writer)
+            writer.flush()
+            atomicFile.finishWrite(stream)
+            output = null
+        } catch (error: Throwable) {
+            output?.let(atomicFile::failWrite)
+            throw error
+        }
+    }
+
+    /** 按原文件字节流导出，避免“读取所有快照 -> 重新序列化所有快照”的全量内存占用。 */
+    fun copyAllTo(
+        book: Book,
+        targetDir: File,
+        onIssue: (item: String, error: Throwable) -> Unit = { _, _ -> },
+    ): String? {
+        return copyTo(book, targetDir, selectedChapterUrls = null, onIssue = onIssue)
+    }
+
+    /**
+     * Exports review artifacts owned by [chapters] only. The snapshot/status files and their
+     * resource library are selected by the same stable chapterUrl set.
+     */
+    fun copyChaptersTo(
+        book: Book,
+        targetDir: File,
+        chapters: Collection<BookChapter>,
+        onIssue: (item: String, error: Throwable) -> Unit = { _, _ -> },
+    ): String? {
+        val chapterUrls = chapters.mapNotNullTo(linkedSetOf()) { chapter ->
+            chapter.url.trim().takeIf(String::isNotBlank) ?: run {
+                onIssue(
+                    "第${chapter.index + 1}章 ${chapter.title}",
+                    IllegalArgumentException("评论导出章节缺少 chapterUrl"),
+                )
+                null
+            }
+        }
+        return copyTo(book, targetDir, selectedChapterUrls = chapterUrls, onIssue = onIssue)
+    }
+
+    private fun copyTo(
+        book: Book,
+        targetDir: File,
+        selectedChapterUrls: Set<String>?,
+        onIssue: (item: String, error: Throwable) -> Unit,
+    ): String? {
+        val sourceDir = reviewsDir(book)
+        val sources = sourceDir.walkTopDown().onFail { file, error ->
+            onIssue(file.relativeToOrSelf(sourceDir).path, error)
+        }.filter(File::isFile).filter { file ->
+            if (selectedChapterUrls == null || !isSnapshotFile(file) && !isChapterStatusFile(file)) {
+                true
+            } else {
+                runCatching {
+                    val chapterUrl = if (isSnapshotFile(file)) {
+                        requireNotNull(readMetadata(file)).chapterUrl
+                    } else {
+                        requireNotNull(readChapterStatus(file)).chapterUrl
+                    }
+                    isSupplementChapterUrl(chapterUrl) || chapterUrl.trim() in selectedChapterUrls
+                }.getOrElse { error ->
+                    // 无法识别归属的原始文件仍然出包，同时明确记录无法筛选的原因。
+                    onIssue(file.name, error)
+                    true
+                }
+            }
+        }.toList()
+        if (sources.isEmpty()) return "没有已缓存的评论快照"
+        check(targetDir.isDirectory || targetDir.mkdirs()) {
+            "无法创建评论快照导出目录: ${targetDir.absolutePath}"
+        }
+        var failed = 0
+        sources.forEach { source ->
+            val relative = source.relativeTo(sourceDir)
+            val target = File(targetDir, relative.path)
+            try {
+                val expected = source.length()
+                target.parentFile?.mkdirs()
+                source.copyTo(target, overwrite = true)
+                check(expected == source.length() && target.length() == expected) {
+                    "评论缓存文件在复制期间变化或复制不完整"
+                }
+            } catch (error: Throwable) {
+                failed++
+                target.delete()
+                onIssue(relative.path, error)
+                return@forEach
+            }
+            // 原始字节已经可靠复制。后续解析只用于把已知的不完整状态写进报告，
+            // 解析失败不能反过来删除这个仍有逃逸价值的原始文件。
+            try {
+                when {
+                    isSnapshotFile(source) -> readMetadata(source)?.takeIf { it.partial }?.let {
+                        onIssue(relative.path, IllegalStateException("原缓存是部分快照"))
+                    }
+                    isChapterStatusFile(source) -> readChapterStatus(source)
+                        ?.takeIf { it.failedSnapshots > 0 }
+                        ?.let { status ->
+                            onIssue(
+                                relative.path,
+                                IllegalStateException("记录了 ${status.failedSnapshots} 项抓取失败"),
+                            )
+                        }
+                }
+            } catch (error: Throwable) {
+                onIssue(relative.path, error)
+            }
+        }
+        return if (failed > 0) "评论缓存有 $failed 个文件未能复制，其余文件已原样导出" else null
+    }
+
+    private fun readMetadata(file: File): ReviewSnapshotHotMetadata? {
+        if (!file.isFile) return null
+        return file.bufferedReader(Charsets.UTF_8).use(::readReviewSnapshotHotMetadata)
+    }
+
+    /** Read only metadata/resourceKeys; the HTML value is skipped by JsonReader. */
+    private fun readHotMetadata(book: Book, file: File): ReviewSnapshotHotMetadata {
+        val metadata = readMetadata(file)
+            ?: error("review snapshot file is empty: ${file.absolutePath}")
+        require(metadata.bookUrl == book.bookUrl) {
+            "review snapshot bookUrl mismatch: ${file.absolutePath}"
+        }
+        require(metadata.chapterUrl.isNotBlank()) {
+            "review snapshot chapterUrl is blank: ${file.absolutePath}"
+        }
+        require(metadata.buttonSrc.isNotBlank()) {
+            "review snapshot buttonSrc is blank: ${file.absolutePath}"
+        }
+        require(metadata.htmlPresent) {
+            "review snapshot HTML is missing: ${file.absolutePath}"
+        }
+        val keys = requireNotNull(metadata.resourceKeys) {
+            "review snapshot is missing resourceKeys: ${file.absolutePath}"
+        }
+        ReviewSnapshotResourceStore.validateResourceKeys(book, keys)
+        return metadata
+    }
+}

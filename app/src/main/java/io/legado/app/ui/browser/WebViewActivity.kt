@@ -15,6 +15,8 @@ import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
@@ -65,6 +67,18 @@ import java.net.URLDecoder
 import androidx.core.graphics.createBitmap
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
+import android.os.Handler
+import android.os.Looper
+import io.legado.app.data.entities.Book
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.review.ReviewSnapshotImages
+import io.legado.app.help.review.ReviewSnapshotManager
+import io.legado.app.help.review.ReviewSnapshotResourceStore
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxBridge
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxContext
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
+import io.legado.app.help.review.reviewoutbox.ReviewOutboxWireUp
+import io.legado.app.utils.configureOfflineResourceLoading
 
 class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     companion object {
@@ -87,6 +101,12 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     private var needClearHistory = true
     private var waitingFirstPageVisible = false
     private var firstPageVisibleToken = 0
+    /** 评论“网络优先”兜底快照：网络加载失败/超时时自动切换到本地快照 */
+    private var fallbackHtml: String? = null
+    private var fallbackReviewResourceBook: Book? = null
+    private var fallbackApplied = false
+    private var fallbackTimeoutRunnable: Runnable? = null
+    private val mHandler = Handler(Looper.getMainLooper())
     private val saveImage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             ACache.get().put(imagePathKey, uri.toString())
@@ -96,6 +116,42 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
 
     private fun refresh() {
         currentWebView.reload()
+    }
+
+    /** 评论“网络优先”兜底：主框架开始加载时启动真正的超时定时任务 */
+    private fun scheduleFallbackTimeout() {
+        if (fallbackHtml == null) return
+        fallbackTimeoutRunnable?.let { mHandler.removeCallbacks(it) }
+        fallbackTimeoutRunnable = Runnable { applyFallbackSnapshot() }
+        mHandler.postDelayed(
+            fallbackTimeoutRunnable!!,
+            ReviewSnapshotManager.NETWORK_FALLBACK_LOAD_TIMEOUT_MS
+        )
+    }
+
+    private fun cancelFallbackTimeout() {
+        fallbackTimeoutRunnable?.let { mHandler.removeCallbacks(it) }
+        fallbackTimeoutRunnable = null
+    }
+
+    /**
+     * 评论“网络优先”兜底：网络加载失败/超时后切换为本地评论快照。
+     * 只影响携带 fallbackHtml 的评论打开链路，其余 WebView 行为不变。
+     */
+    private fun applyFallbackSnapshot() {
+        val html = fallbackHtml ?: return
+        if (fallbackApplied) return
+        fallbackApplied = true
+        cancelFallbackTimeout()
+        currentWebView.settings.configureOfflineResourceLoading(true)
+        currentWebView.loadDataWithBaseURL(
+            viewModel.baseUrl.ifBlank { "https://localhost/" },
+            html,
+            "text/html",
+            "utf-8",
+            null
+        )
+        binding.progressBar.gone()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -108,6 +164,23 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         }
         binding.titleBar.title = intent.getStringExtra("title") ?: getString(R.string.loading)
         binding.titleBar.subtitle = intent.getStringExtra("sourceName")
+        fallbackHtml = intent.getStringExtra("fallbackHtml")
+        @Suppress("DEPRECATION")
+        run {
+            fallbackReviewResourceBook = intent.getParcelableExtra("fallbackReviewResourceBook")
+        }
+        outboxContext = fallbackReviewResourceBook?.let { book ->
+            ReviewOutboxContext(
+                bookUrl = book.bookUrl,
+                bookName = book.name,
+                chapterUrl = "",
+                chapterIndex = 0,
+                chapterTitle = "",
+                origin = intent.getStringExtra("sourceOrigin"),
+                buttonSrc = null,
+                pageUrl = intent.getStringExtra("url").orEmpty(),
+            )
+        }
         viewModel.initData(intent) {
             val url = viewModel.baseUrl
             val headerMap = viewModel.headerMap
@@ -241,6 +314,9 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         }
     }
 
+    /** 离线评论入队上下文：评论“网络优先”兜底打开时由 fallback 书籍构建 */
+    private var outboxContext: ReviewOutboxContext? = null
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun initWebView(url: String, headerMap: HashMap<String, String>) {
         hideWebViewUntilReady()
@@ -249,6 +325,12 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         // 添加 JavaScript 接口
         currentWebView.addJavascriptInterface(JSInterface(this), nameBasic)
         currentWebView.webViewClient = CustomWebViewClient()
+        outboxContext?.let { context ->
+            currentWebView.addJavascriptInterface(
+                ReviewOutboxBridge(context),
+                ReviewOutboxWireUp.bridgeName
+            )
+        }
         currentWebView.settings.apply {
             useWideViewPort = true
             loadWithOverviewMode = true
@@ -503,10 +585,41 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             }
             super.onPageStarted(view, url, favicon)
             currentWebView.evaluateJavascript(basicJs, null)
+            // 评论“网络优先”兜底：主框架开始加载时启动真正的超时定时任务
+            scheduleFallbackTimeout()
         }
-        
+
+        override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: android.webkit.WebResourceError?
+        ) {
+            super.onReceivedError(view, request, error)
+            // 评论“网络优先”兜底：主框架加载失败且有快照 → 切换快照
+            if (fallbackHtml != null && !fallbackApplied &&
+                request?.isForMainFrame == true
+            ) {
+                applyFallbackSnapshot()
+            }
+        }
+
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
+            viewModel.reviewResourceBook = fallbackReviewResourceBook
+            if (fallbackApplied && view != null) {
+                ReviewSnapshotImages.install(view)
+            }
+            // 页面加载成功：取消超时定时任务
+            cancelFallbackTimeout()
+            // 离线评论模式：评论兜底打开的页面注入接管脚本（在线形态拦截发评请求）
+            val context = outboxContext
+            if (context != null && AppConfig.offlineReviewMode) {
+                view?.evaluateJavascript(ReviewOutboxWireUp.buildJs(), null)
+                AppLog.putDebug(
+                    "${ReviewOutboxStore.LogTag} 接管脚本已注入(浏览器页) " +
+                        "url=${url ?: ""} 书=${context.bookName}"
+                )
+            }
             revealWebViewAfterVisualState()
             val cookieManager = CookieManager.getInstance()
             url?.let {
@@ -531,6 +644,10 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         }
 
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {
+            if (fallbackApplied && ReviewSnapshotImages.open(
+                    this@WebViewActivity, fallbackReviewResourceBook, url
+                )
+            ) return true
             return when (url.scheme) {
                 "http", "https" -> false
                 "legado", "yuedu" -> {
@@ -556,6 +673,23 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             error: SslError?
         ) {
             handler?.proceed()
+        }
+
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest,
+        ): WebResourceResponse? {
+            val resourceUrl = request.url.toString()
+            ReviewSnapshotResourceStore.keyFromReference(resourceUrl)?.let { key ->
+                val book = checkNotNull(fallbackReviewResourceBook) {
+                    "评论快照资源引用缺少书籍上下文: $resourceUrl"
+                }
+                val resource = checkNotNull(ReviewSnapshotResourceStore.open(book, key)) {
+                    "评论快照资源不存在: $resourceUrl"
+                }
+                return WebResourceResponse(resource.mimeType, null, resource.inputStream)
+            }
+            return super.shouldInterceptRequest(view, request)
         }
 
     }

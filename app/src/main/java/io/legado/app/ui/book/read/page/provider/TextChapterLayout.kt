@@ -42,6 +42,10 @@ import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.column.ImageColumn
+import io.legado.app.ui.book.read.page.entities.column.HiddenReviewColumn
+import io.legado.app.ui.book.read.page.entities.column.HiddenReviewSpan
+import io.legado.app.ui.book.read.page.entities.ReviewButton
+import io.legado.app.ui.book.read.page.entities.ReviewBubble
 import io.legado.app.ui.book.read.page.entities.column.TextColumn
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
@@ -62,6 +66,7 @@ import android.util.Base64
 import android.util.Size
 import androidx.core.text.HtmlCompat
 import io.legado.app.constant.AppPattern.noWordCountRegex
+import io.legado.app.constant.AppPattern.urlOptionPattern
 import io.legado.app.data.appDb
 import io.legado.app.ui.book.read.page.entities.TextLine.Companion.atLeastApi28
 import io.legado.app.ui.book.read.page.entities.column.TextHtmlColumn
@@ -86,6 +91,7 @@ import io.legado.app.model.localBook.EpubPageColor
 import io.legado.app.ui.book.read.page.entities.column.BaseColumn
 import io.legado.app.ui.book.read.page.entities.column.TextBaseColumn
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.reviewChar
+import io.legado.app.ui.book.read.page.provider.ChapterProvider.hiddenReviewChar
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import org.json.JSONObject
@@ -118,6 +124,43 @@ class TextChapterLayout(
 
     private val contentPaint = ChapterProvider.contentPaint
     private val reviewCharWidth by lazy { contentPaint.measureText(srcReplaceStr) * 1.5556f }
+
+    private fun reviewPlaceholder(src: String): Char {
+        return if (ReviewBubble.hasZeroCount(src)) {
+            hiddenReviewChar
+        } else {
+            reviewChar
+        }
+    }
+
+    /**
+     * HtmlCompat 会把 img 变成 [ImageSpan]。零评论泡在这里换成零宽语义 span，
+     * 从而不参与正文绘制与命中，同时让其所属段落保留书源点击载荷。
+     */
+    private fun replaceZeroReviewImageSpans(spanned: SpannableStringBuilder) {
+        spanned.getSpans(0, spanned.length, ImageSpan::class.java).forEach { imageSpan ->
+            val src = imageSpan.source ?: return@forEach
+            val matcher = urlOptionPattern.matcher(src)
+            if (!matcher.find()) return@forEach
+            val options = GSON.fromJsonObject<Map<String, String>>(src.substring(matcher.end()))
+                .getOrNull() ?: return@forEach
+            if (options["style"] != "TEXT" || !ReviewBubble.hasZeroCount(src)) return@forEach
+            val start = spanned.getSpanStart(imageSpan)
+            val end = spanned.getSpanEnd(imageSpan)
+            if (start < 0 || end != start + 1) {
+                AppLog.put("零评论泡无法建立零宽段评入口: span=$start..$end, src=$src")
+                return@forEach
+            }
+            spanned.removeSpan(imageSpan)
+            spanned.replace(start, end, hiddenReviewChar.toString())
+            spanned.setSpan(
+                HiddenReviewSpan(ReviewButton(src, options["click"])),
+                start,
+                start + 1,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+    }
     private val contentPaintTextHeight = ChapterProvider.contentPaintTextHeight
     private val contentPaintFontMetrics = ChapterProvider.contentPaintFontMetrics
 
@@ -320,7 +363,7 @@ class TextChapterLayout(
                         "TEXT" -> {
                             srcList.add(imageInfo.renderSrc)
                             clickList.add(click)
-                            reviewChar
+                            reviewPlaceholder(imageInfo.renderSrc)
                         }
                         else -> {
                             setTypeImage(
@@ -457,7 +500,7 @@ class TextChapterLayout(
                         }
                         when (style) {
                             "TEXT" -> {
-                                sb.append(reviewChar)
+                                sb.append(reviewPlaceholder(imgSrc))
                                 srcList.add(imageInfo.renderSrc)
                                 clickList.add(click)
                             }
@@ -1610,6 +1653,7 @@ class TextChapterLayout(
             preparedHtml.parseAsHtml(HtmlCompat.FROM_HTML_MODE_COMPACT, tagHandler = textViewTagHandler)
         )
         HtmlAppFont.applySpans(spanned)
+        replaceZeroReviewImageSpans(spanned)
         val width = layoutWidth.coerceIn(1, visibleWidth)
         val lineAbsStartX = absStartX + layoutStartOffset
         // Copy: StaticLayout/AppFontSpan must not mutate shared ChapterProvider.contentPaint
@@ -1683,6 +1727,17 @@ class TextChapterLayout(
                     charX + charWidth
                 }
                 var needAddText = true
+                spanned.getSpans(charIndex, charIndex + 1, HiddenReviewSpan::class.java)
+                    .firstOrNull()?.let { span ->
+                        columns.add(
+                            HiddenReviewColumn(
+                                start = lineAbsStartX + charX,
+                                end = lineAbsStartX + charX,
+                                reviewButton = span.reviewButton
+                            )
+                        )
+                        needAddText = false
+                    }
                 spanned.getSpans(charIndex, charIndex + 1, ImageSpan::class.java).firstOrNull()?.let { span -> //处理图片
                     val source = span.source ?: return@let
                     val imageInfo = parseImageInfo(source)
@@ -2292,18 +2347,28 @@ class TextChapterLayout(
         clickList: LinkedList<String?>?
     ) {
         val column = when {
-            !srcList.isNullOrEmpty() && (char == srcReplaceStr || char == reviewStr) -> {
+            !srcList.isNullOrEmpty() && (
+                char == srcReplaceStr || char == reviewStr || char == hiddenReviewChar.toString()
+                ) -> {
                 val src = srcList.removeFirst()
                 val click = clickList?.removeFirst()
-                if (!ParagraphBubbleRenderer.isBubbleSrc(src)) {
-                    ImageProvider.cacheImage(book, src, ReadBook.bookSource)
+                if (char == hiddenReviewChar.toString()) {
+                    HiddenReviewColumn(
+                        start = absStartX + xStart,
+                        end = absStartX + xStart,
+                        reviewButton = ReviewButton(src, click)
+                    )
+                } else {
+                    if (!ParagraphBubbleRenderer.isBubbleSrc(src)) {
+                        ImageProvider.cacheImage(book, src, ReadBook.bookSource)
+                    }
+                    ImageColumn(
+                        start = absStartX + xStart,
+                        end = absStartX + xEnd,
+                        src = src,
+                        click = click
+                    )
                 }
-                ImageColumn(
-                    start = absStartX + xStart,
-                    end = absStartX + xEnd,
-                    src = src,
-                    click = click
-                )
             }
 //            isLineEnd && char == ChapterProvider.reviewChar -> {
 //                ReviewColumn(
@@ -2332,7 +2397,7 @@ class TextChapterLayout(
         if (srcList.isNullOrEmpty()) return
         var imageIndex = 0
         text.forEachIndexed { index, char ->
-            if (char == srcReplaceChar || char == reviewChar) {
+            if (char == srcReplaceChar || char == reviewChar || char == hiddenReviewChar) {
                 val src = srcList.getOrNull(imageIndex)
                 if (src != null && ParagraphBubbleRenderer.isBubbleSrc(src)) {
                     widthsArray[index] = ParagraphBubbleRenderer.inlineWidth(widthsArray[index])

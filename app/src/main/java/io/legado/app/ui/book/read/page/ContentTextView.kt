@@ -71,7 +71,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     private var callBack: CallBack
     private val visibleRect = ChapterProvider.visibleRect
     val selectStart = TextPos(0, -1, -1)
-    private val selectEnd = TextPos(0, -1, -1)
+    val selectEnd = TextPos(0, -1, -1)
     private var selectionChapter: TextChapter? = null
     private var selectionBaseIndex = 0
     private val selectionPaintedPages = ArrayList<TextPage>(3)

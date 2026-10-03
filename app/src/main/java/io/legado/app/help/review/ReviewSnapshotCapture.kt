@@ -1,0 +1,2267 @@
+package io.legado.app.help.review
+
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
+import android.net.http.SslError
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import com.google.gson.stream.JsonReader
+import io.legado.app.constant.AppConst
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
+import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.WebCacheManager
+import io.legado.app.help.cache.CacheOperationDiagnostics
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.http.CookieManager as AppCookieManager
+import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.webView.WebJsExtensions
+import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION
+import io.legado.app.help.webView.WebJsExtensions.Companion.JS_URL
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
+import io.legado.app.help.webView.WebJsExtensions.Companion.nameUrl
+import io.legado.app.help.webView.WebViewPool
+import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.utils.GSON
+import io.legado.app.utils.configureOfflineResourceLoading
+import io.legado.app.utils.runOnUI
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import org.apache.commons.text.StringEscapeUtils
+import splitties.init.appCtx
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InterruptedIOException
+import java.io.Reader
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+/**
+ * 评论页快照抓取引擎。
+ *
+ * 两步走：
+ * 1. 在书源 JS 上下文执行评论按钮的 click 代码，通过浏览器打开钩子拦截真实评论页地址；
+ * 2. 用无头 WebView 加载该地址，循环穷尽“展开/查看回复/加载更多/懒加载”，
+ *    把样式与图片内联为 data URI 后序列化 HTML 存为快照。
+ * 快照完全离线可渲染；失败直接抛出，由调用方记日志，绝不影响正文。
+ */
+object ReviewSnapshotCapture {
+
+    private val mHandler = Handler(Looper.getMainLooper())
+    /** 超时看门狗不能依赖 WebView 所在的主线程，否则主线程卡顿会同时拖迟所有 Capture。 */
+    private val timeoutScheduler = ScheduledThreadPoolExecutor(2) { runnable ->
+        Thread(runnable, "ReviewSnapshotTimeout").apply { isDaemon = true }
+    }.apply {
+        setRemoveOnCancelPolicy(true)
+    }
+    /** 等实际 Heavy Thread 退出后再做交接，避免线程尾部仍持有大对象时提前放行下一条。 */
+    private val heavyWorkerReaper = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "ReviewSnapshotWorkerReaper").apply { isDaemon = true }
+    }
+
+    /** 页面加载与评论展开共享的执行预算；不包含重内存阶段的排队或执行。 */
+    private val PAGE_EXECUTION_TIMEOUT_MS get() = ReviewDownloadConfig.Number.PAGE_TIMEOUT.value.toLong()
+    /** 每轮之间的等待 */
+    private val EXPAND_ROUND_INTERVAL_MS get() = ReviewDownloadConfig.Number.STABLE_INTERVAL.value.toLong()
+    /** 连续几轮稳定才判定完成（含慢加载评论） */
+    private val STABLE_ROUNDS_TO_FINISH get() = ReviewDownloadConfig.Number.STABLE_ROUNDS.value
+    /** 章评/书评 tab 点击校验重试上限 */
+    private const val MAX_TAB_CLICK_ATTEMPTS = 5
+    /** 单个资源抓取超时；传输失败会记录并移除该非关键资源，取消仍会中止快照。 */
+    private val RESOURCE_FETCH_TIMEOUT_MS get() = ReviewDownloadConfig.Number.RESOURCE_TIMEOUT.value.toLong()
+    private const val RESOURCE_COPY_BUFFER_BYTES = 32 * 1024
+    /**
+     * 内联资源构建、outerHTML 回传和 JSON 解码会短时保留完整页面及其副本；这是本进程
+     * 唯一的重内存区段。页面加载/展开仍可并行，只有进入该区段才排队。
+     */
+    private val heavyStagePermits = ReviewDownloadScheduler.heavy
+
+    private class CaptureStageTimeoutException(message: String) : NoStackTraceException(message)
+
+    private class InterruptibleStringReader(private val value: String) : Reader() {
+        private var position = 0
+
+        override fun read(buffer: CharArray, offset: Int, length: Int): Int {
+            if (Thread.currentThread().isInterrupted) {
+                throw InterruptedIOException("评论快照 HTML 解码已取消")
+            }
+            if (length == 0) return 0
+            if (position >= value.length) return -1
+            val count = minOf(length, value.length - position)
+            for (index in 0 until count) {
+                buffer[offset + index] = value[position + index]
+            }
+            position += count
+            return count
+        }
+
+        override fun close() = Unit
+    }
+
+    private enum class CaptureStage(val diagnosticsStage: String) {
+        PAGE_EXECUTION("PAGE_EXECUTION"),
+        HEAVY_STAGE_WAIT("HEAVY_STAGE_WAIT"),
+        HEAVY_STAGE_WORK("HEAVY_STAGE_WORK"),
+    }
+
+    /**
+     * 抓取结果（供诊断日志）：快照 + 展开检测轮数 + 实际点击“展开/加载更多”次数。
+     */
+    data class CaptureOutcome(
+        val snapshot: ReviewSnapshot,
+        /** 展开检测轮询轮数（包含“没点按钮”的稳定轮） */
+        val expandRounds: Int,
+        /** 实际点击“展开/回复/加载更多”按钮的次数（stats.clicked 累计） */
+        val expandClickCount: Int,
+        /** 未能入库、以 # 占位或从快照中剔除的资源数；>0 时快照为部分成功 */
+        val droppedResources: Int = 0,
+        val engine: String = "web",
+    )
+
+    /**
+     * showBrowser 带回的 HTML 有效性校验。
+     *
+     * 按“结构”判定，而不是关键词黑名单：真实评论页里“登录/请先登录/操作频繁/
+     * 失败”等字样非常常见（页脚、提示、meta 都可能出现），见词即死会把正常评论页
+     * 误杀成整章 0/615 全部失败，代价远大于“偶尔把一个带这类字样的正常页存成快照”。
+     *
+     * 判为无效的情形：
+     * - 空或纯空白
+     * - 纯 JSON 错误负载（无任何 HTML 标签）
+     * - 无 HTML 标签的纯文本且过短（<512 字符，基本是错误提示）
+     * - 有 HTML 结构但极短（<256 字符）
+     */
+    fun isValidCommentHtml(html: String?): Boolean {
+        if (html.isNullOrBlank()) return false
+        val trimmed = html.trimStart()
+        // 纯 JSON 错误负载（无任何 HTML 标签）
+        if ((trimmed.startsWith("{") || trimmed.startsWith("[")) && !html.contains("<")) {
+            return false
+        }
+        // 无 HTML 标签的纯文本：只有足够长才信，否则是错误提示
+        if (!html.contains("<")) {
+            return html.length >= 512
+        }
+        // 有 HTML 结构：过短按无效，其余视为有效评论页
+        return html.length >= 256
+    }
+
+    /**
+     * 抓取真实评论页快照并序列化。
+     * @param url 真实评论页地址（由调度器经与用户点击共用的执行逻辑解析）
+     * @param initialHtml 书源 showBrowser 已用 ajax 取回的渲染 HTML；
+     *        非空且通过 [isValidCommentHtml] 时作为 WebView 初始页面（不再发起网络请求），
+     *        仍继续展开/内联/序列化；无效则按失败处理
+     * @param preloadJs 书源 showBrowser 传入的 preloadJs：随初始页面注入 JS bridge 环境
+     */
+    internal suspend fun capture(
+        bookSource: BookSource,
+        book: Book,
+        chapter: BookChapter,
+        buttonSrc: String,
+        url: String,
+        initialHtml: String? = null,
+        preloadJs: String? = null,
+        diagnostics: CacheOperationDiagnostics.Context? = null,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean) = { action -> action(); true },
+        incremental: Boolean = false,
+    ): CaptureOutcome {
+        return captureImpl(
+            bookSource,
+            book,
+            url,
+            initialHtml,
+            preloadJs,
+            tab = null,
+            traceChapterIndex = chapter.index,
+            diagnostics = diagnostics,
+            commitIfLeaseActive = commitIfLeaseActive,
+            incremental = incremental,
+        ) { page ->
+            ReviewSnapshot(
+                bookUrl = book.bookUrl,
+                chapterUrl = chapter.url,
+                chapterIndex = chapter.index,
+                chapterTitle = chapter.title,
+                buttonSrc = buttonSrc,
+                url = url,
+                title = "",
+                html = page.html,
+                resourceKeys = page.resourceKeys,
+                partial = page.droppedResources > 0,
+                savedAt = System.currentTimeMillis()
+            )
+        }
+    }
+
+    /**
+     * 章评 tab 补充快照：加载与段评相同的评论页后先点击“章评” tab
+     * （页面自身 JS 完成切换与加载），再穷尽展开并序列化。每章只存一份，
+     * 主键 = (章节 url, [ReviewSnapshotStore.CHAPTER_TAB_SRC])。
+     */
+    internal suspend fun captureChapterTab(
+        bookSource: BookSource,
+        book: Book,
+        chapter: BookChapter,
+        url: String,
+        initialHtml: String?,
+        preloadJs: String?,
+        diagnostics: CacheOperationDiagnostics.Context? = null,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean) = { action -> action(); true },
+        incremental: Boolean = false,
+    ): CaptureOutcome {
+        return captureImpl(
+            bookSource,
+            book,
+            url,
+            initialHtml,
+            preloadJs,
+            tab = ReviewTab.CHAPTER,
+            traceChapterIndex = chapter.index,
+            diagnostics = diagnostics,
+            commitIfLeaseActive = commitIfLeaseActive,
+            incremental = incremental,
+        ) { page ->
+            ReviewSnapshot(
+                bookUrl = book.bookUrl,
+                chapterUrl = chapter.url,
+                chapterIndex = chapter.index,
+                chapterTitle = chapter.title,
+                buttonSrc = ReviewSnapshotStore.CHAPTER_TAB_SRC,
+                url = url,
+                title = ReviewTab.CHAPTER.label,
+                html = page.html,
+                resourceKeys = page.resourceKeys,
+                partial = page.droppedResources > 0,
+                savedAt = System.currentTimeMillis()
+            )
+        }
+    }
+
+    /**
+     * 书评 tab 补充快照：与 [captureChapterTab] 同型，但内容整本书共享一份，
+     * 主键 = ([ReviewSnapshotStore.BOOK_TAB_CHAPTER_URL], [ReviewSnapshotStore.BOOK_TAB_SRC])。
+     */
+    internal suspend fun captureBookTab(
+        bookSource: BookSource,
+        book: Book,
+        url: String,
+        initialHtml: String?,
+        preloadJs: String?,
+        diagnostics: CacheOperationDiagnostics.Context? = null,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean) = { action -> action(); true },
+        incremental: Boolean = false,
+    ): CaptureOutcome {
+        return captureImpl(
+            bookSource,
+            book,
+            url,
+            initialHtml,
+            preloadJs,
+            tab = ReviewTab.BOOK,
+            traceChapterIndex = -1,
+            diagnostics = diagnostics,
+            commitIfLeaseActive = commitIfLeaseActive,
+            incremental = incremental,
+        ) { page ->
+            ReviewSnapshot(
+                bookUrl = book.bookUrl,
+                chapterUrl = ReviewSnapshotStore.BOOK_TAB_CHAPTER_URL,
+                chapterIndex = -1,
+                chapterTitle = ReviewTab.BOOK.label,
+                buttonSrc = ReviewSnapshotStore.BOOK_TAB_SRC,
+                url = url,
+                title = ReviewTab.BOOK.label,
+                html = page.html,
+                resourceKeys = page.resourceKeys,
+                partial = page.droppedResources > 0,
+                savedAt = System.currentTimeMillis()
+            )
+        }
+    }
+
+    /** 评论页内的评论分类 tab；tab 切换由页面自身 JS 完成，抓取端只负责点击与校验 */
+    internal enum class ReviewTab(val label: String, val keywords: List<String>) {
+        CHAPTER("章评", listOf("章评", "本章说", "章节评论")),
+        BOOK("书评", listOf("书评", "本书评论", "作品评论")),
+    }
+
+    private suspend fun captureImpl(
+        bookSource: BookSource,
+        book: Book,
+        url: String,
+        initialHtml: String?,
+        preloadJs: String?,
+        tab: ReviewTab?,
+        traceChapterIndex: Int,
+        diagnostics: CacheOperationDiagnostics.Context?,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean),
+        incremental: Boolean = false,
+        buildSnapshot: (SnapshotPageResult) -> ReviewSnapshot,
+    ): CaptureOutcome {
+        val trace = diagnostics?.let {
+            CacheOperationDiagnostics.begin(
+                it.forChapter(traceChapterIndex),
+                "CAPTURE",
+                CacheOperationDiagnostics.Metrics(inputChars = initialHtml?.length),
+                startAlways = true,
+            )
+        }
+        return try {
+            val protocol = bookSource.ruleReview?.snapshotProtocol?.trim().orEmpty()
+            val engine = ReviewDownloadConfig.engine
+            val supported = engine != ReviewDownloadConfig.Engine.WEB &&
+                ReviewDataCapture.supports(url, initialHtml, tab, protocol)
+            val useData = when (engine) {
+                ReviewDownloadConfig.Engine.WEB -> false
+                ReviewDownloadConfig.Engine.AUTO -> supported
+                ReviewDownloadConfig.Engine.DATA -> {
+                    check(supported) { "当前评论类型/书源不支持数据接口（目前支持 idea_comment 段评）；请选择自动或网页引擎" }
+                    true
+                }
+            }
+            trace?.mark(if (useData) "ENGINE_DATA" else "ENGINE_WEB", force = true)
+            val preparedHtml = if (useData) ReviewDataCapture.capture(
+                url, AnalyzeUrl(url, source = bookSource).headerMap, initialHtml, trace
+            ) else initialHtml
+            if (!useData && initialHtml != null && !isValidCommentHtml(initialHtml)) {
+                throw NoStackTraceException(
+                    "showBrowser 带回的 HTML 非有效评论页（疑似 ajax 错误/异常文本，" +
+                        "${initialHtml.length} 字符，已按失败处理）"
+                )
+            }
+            suspend fun loadPage() = snapshotPage(
+                url,
+                bookSource,
+                book,
+                preparedHtml,
+                if (useData) null else preloadJs,
+                tab,
+                trace,
+                commitIfLeaseActive,
+                paginationEnabled = !incremental,
+                dataPrepared = useData,
+            )
+            val page = if (useData) loadPage() else ReviewDownloadScheduler.pages.withPermit { loadPage() }
+            CaptureOutcome(
+                snapshot = buildSnapshot(page).copy(
+                    downloadEngine = if (useData) "data" else "web",
+                    resourceFailures = page.resourceFailures,
+                ),
+                expandRounds = page.expandRounds,
+                expandClickCount = page.expandClickCount,
+                droppedResources = page.droppedResources,
+                engine = if (useData) "data" else "web",
+            ).also {
+                trace?.done(CacheOperationDiagnostics.Metrics(outputChars = page.html.length))
+            }
+        } catch (error: Throwable) {
+            trace?.fail(error)
+            throw error
+        }
+    }
+
+    /** 一次页面快照的结果：最终 HTML 与诊断数据，以及快照引用的资源库 key。 */
+    private data class SnapshotPageResult(
+        val html: String,
+        val expandRounds: Int,
+        val expandClickCount: Int,
+        val resourceKeys: List<String>,
+        val resourceFailures: List<String>,
+        /** 序列化时被剔除/占位的资源数；>0 表示快照为部分成功 */
+        val droppedResources: Int = 0,
+    )
+
+    /**
+     * 无头加载页面并穷尽展开后返回最终 HTML 与展开诊断数据。
+     *
+     * @param tab 非 null 时页面加载完成后先切换到目标评论 tab 再展开（章评/书评补充抓取）
+     * @param paginationEnabled false = 增量抓取：展开循环不再点击“加载更多”类翻页元素，
+     *        只保留滚动懒加载与楼中楼展开，避免把已缓存的历史评论页整页重新拉取
+     * @return [SnapshotPageResult]：html、展开轮数、点击次数、本快照引用的资源 key 列表
+     */
+    private suspend fun snapshotPage(
+        url: String,
+        bookSource: BookSource,
+        book: Book,
+        initialHtml: String? = null,
+        preloadJs: String? = null,
+        tab: ReviewTab? = null,
+        diagnostics: CacheOperationDiagnostics.Operation? = null,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean),
+        paginationEnabled: Boolean = true,
+        dataPrepared: Boolean = false,
+    ): SnapshotPageResult {
+        val analyzeUrl = AnalyzeUrl(url, source = bookSource)
+        val headerMap = analyzeUrl.headerMap
+        val resourceFailures = java.util.Collections.synchronizedList(mutableListOf<String>())
+        return suspendCancellableCoroutine { block ->
+            val pooledRef = AtomicReference<io.legado.app.help.webView.PooledWebView?>()
+            val sessionRef = AtomicReference<SnapshotSession?>()
+            val released = java.util.concurrent.atomic.AtomicBoolean(false)
+            // 唯一释放点：重复调用被 AtomicBoolean 挡住
+            fun releaseOnce(discard: Boolean = false) {
+                val pooled = pooledRef.getAndSet(null) ?: return
+                if (released.compareAndSet(false, true)) {
+                    runOnUI {
+                        if (discard) WebViewPool.discard(pooled) else WebViewPool.release(pooled)
+                    }
+                }
+            }
+            block.invokeOnCancellation {
+                val session = sessionRef.get()
+                if (session == null) {
+                    releaseOnce()
+                } else {
+                    session.destroy()
+                }
+            }
+            runOnUI {
+                if (!block.isActive) return@runOnUI
+                try {
+                    val pooled = WebViewPool.acquire(appCtx)
+                    pooledRef.set(pooled)
+                    val webView = pooled.realWebView
+                    webView.onResume()
+                    webView.setBackgroundColor(android.graphics.Color.WHITE)
+                    webView.settings.apply {
+                        configureOfflineResourceLoading(false)
+                        headerMap[AppConst.UA_NAME]?.let { userAgentString = it }
+                    }
+                    AppCookieManager.applyToWebView(url)
+                    val jsBridge = if (!dataPrepared && !initialHtml.isNullOrBlank()) {
+                        PageJsBridge(preloadJs)
+                    } else {
+                        null
+                    }
+                    val session = SnapshotSession(
+                        webView,
+                        url,
+                        book,
+                        jsBridge,
+                        tab,
+                        diagnostics,
+                        commitIfLeaseActive,
+                        paginationEnabled,
+                        dataPrepared,
+                        resourceFailures,
+                    ) {
+                        result, error, rounds, clicks, discardWebView, resourceKeys, droppedResources ->
+                        sessionRef.set(null)
+                        releaseOnce(discardWebView)
+                        if (block.isActive) {
+                            if (error != null) block.resumeWithException(error)
+                            else block.resume(
+                                SnapshotPageResult(
+                                    result ?: "",
+                                    rounds,
+                                    clicks,
+                                    resourceKeys,
+                                    resourceFailures.toList(),
+                                    droppedResources
+                                )
+                            )
+                        }
+                    }
+                    sessionRef.set(session)
+                    webView.webViewClient = session.client
+                    if (!initialHtml.isNullOrBlank()) {
+                        // 书源 showBrowser 已取回渲染 HTML：作为初始页面并注入 JS bridge 环境
+                        // （真实评论页可能依赖 window.java/run/ajaxAwait 等），
+                        // 仍走 onPageFinished → 展开/内联/序列化全流程
+                        webView.addJavascriptInterface(WebCacheManager, nameCache)
+                        webView.addJavascriptInterface(bookSource, nameSource)
+                        webView.addJavascriptInterface(WebJsExtensions(bookSource, null, webView), nameJava)
+                        webView.loadDataWithBaseURL(
+                            url, if (dataPrepared) initialHtml else spliceJsUrl(initialHtml), "text/html", "utf-8", url
+                        )
+                    } else {
+                        webView.loadUrl(url, headerMap)
+                    }
+                } catch (e: Throwable) {
+                    val session = sessionRef.get()
+                    if (session == null) {
+                        releaseOnce()
+                        if (block.isActive) block.resumeWithException(e)
+                    } else {
+                        session.abort(e)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 初始 HTML 的 head 后插入 JS_URL（触发 shouldInterceptRequest 加载 preloadJs 桥）。
+     * 与 BottomWebViewDialog 的 preloadJs 注入同一套机制。
+     */
+    private fun spliceJsUrl(html: String): String {
+        val headIndex = html.indexOf("<head", ignoreCase = true)
+        if (headIndex >= 0) {
+            val closingHeadIndex = html.indexOf('>', startIndex = headIndex)
+            if (closingHeadIndex >= 0) {
+                return StringBuilder(html).insert(closingHeadIndex + 1, JS_URL).toString()
+            }
+        }
+        return JS_URL + html
+    }
+
+    /**
+     * 一个页面的穷尽会话：onPageFinished 后循环执行展开脚本直到稳定，
+     * 再收集图片/样式资源内联，最后序列化 HTML。
+     * jsBridge 非空时（初始 HTML 模式）拦截 nameUrl 注入书源 preloadJs 桥。
+     */
+    private class PageJsBridge(val preloadJs: String?)
+
+    private class SnapshotSession(
+        private val webView: WebView,
+        private val url: String,
+        private val book: Book,
+        private val jsBridge: PageJsBridge?,
+        private val tab: ReviewTab?,
+        private val diagnostics: CacheOperationDiagnostics.Operation?,
+        private val commitIfLeaseActive: ((() -> Unit) -> Boolean),
+        private val paginationEnabled: Boolean = true,
+        private val dataPrepared: Boolean = false,
+        private val resourceFailures: MutableList<String>,
+        private val done: (String?, Throwable?, Int, Int, Boolean, List<String>, Int) -> Unit
+    ) {
+
+        private data class TerminalResult(
+            val html: String?,
+            val error: Throwable?,
+            val discardWebView: Boolean,
+            val resourceKeys: List<String> = emptyList(),
+            /** 序列化阶段剔除/占位的资源数；>0 表示快照为部分成功 */
+            val droppedResources: Int = 0,
+        )
+
+        /** 内联资源完成后记录的 key 列表；终态回调时随 [TerminalResult] 带出。 */
+        @Volatile
+        private var capturedResourceKeys: List<String> = emptyList()
+
+        private data class CleanupHandles(
+            val worker: Thread?,
+            val calls: List<okhttp3.Call>,
+        )
+
+        private enum class ResourceKind {
+            IMAGE,
+            CSS,
+            /** CSS 文本内的 url()/@import 子资源（字体、背景图等）；失败按非关键资源跳过。 */
+            SUB_RESOURCE,
+        }
+
+        private data class CollectedImage(
+            val url: String = "",
+            val kind: String = "",
+        )
+
+        private data class CollectedResources(
+            val img: List<CollectedImage> = emptyList(),
+            val css: List<String> = emptyList(),
+        )
+
+        /** The immutable resource policy selected for one complete snapshot capture. */
+        private data class ResourceUrls(
+            val images: List<ImageResource> = emptyList(),
+            val css: List<String> = emptyList(),
+            val databaseImages: Map<String, ReviewSnapshotResourceEntry> = emptyMap(),
+            val cacheAvatars: Boolean = false,
+            val cacheCommentImages: Boolean = false,
+        ) {
+            val resourceCount: Int get() = images.size + css.size
+        }
+
+        private data class ImageResource(
+            val url: String,
+            val compressionMaxBytes: Long?,
+            val required: Boolean,
+        )
+
+        /** A shared URL can occur in both an avatar and a comment image. */
+        private data class ImageRoles(
+            val url: String,
+            var hasAvatar: Boolean = false,
+            var hasCommentImage: Boolean = false,
+        )
+
+        private data class ResourceTarget(
+            val index: Int,
+            val url: String,
+            val kind: ResourceKind,
+            val compressionMaxBytes: Long? = null,
+        )
+
+        /** 已暂存 CSS 的文本与其解析出的子资源引用。 */
+        private data class StagedCss(
+            val url: String,
+            val text: String,
+            val refs: List<CssRefOccurrence>,
+        )
+
+        /** CSS 文本内一个 url()/@import 引用；absolute 非空才会尝试下载。 */
+        private data class CssRefOccurrence(
+            val valueStart: Int,
+            val valueEnd: Int,
+            val absolute: String?,
+            val keepAsIs: Boolean,
+        )
+
+        /** CSS 子资源入库结果：绝对地址 → review-resource: 引用与入库字节总数。 */
+        private data class CssSubStageResult(
+            val references: Map<String, String>,
+            val storedBytes: Long,
+            /** 下载失败（按非关键资源跳过、引用以 # 占位）的子资源数 */
+            val failedCount: Int,
+        )
+
+        private data class StagedResource(
+            val target: ResourceTarget,
+            val file: File,
+            val byteCount: Long,
+        )
+
+        /**
+         * CSS and image downloads enrich an already-captured comment page; they do not define
+         * whether the page snapshot itself is usable. Keep the target in the error so a skipped
+         * resource is visible in cache diagnostics instead of being silently discarded.
+         */
+        private class ResourceDownloadException(
+            target: ResourceTarget,
+            cause: Throwable? = null,
+        ) : java.io.IOException(
+            "评论快照非关键资源下载失败 kind=${target.kind} url=${target.url}",
+            cause,
+        )
+
+        private data class PreparedImage(
+            val file: File,
+            val byteCount: Long,
+            val mimeType: String,
+        )
+
+        @Volatile
+        private var destroyed = false
+        private var expandRounds = 0
+        private var totalExpandClicks = 0
+        private var stableRounds = 0
+        private var lastTextLen = -1
+        private var lastHeight = -1
+        private var lastNodes = -1
+
+        /**
+         * 展开循环重入防护：onPageFinished 可能多次回调，并发多轮 EXPAND_JS
+         * 会在同一轮里把同一个“展开 N 条回复”toggle 点两次（展开→收起），
+         * 快照里就留下永久收起的楼中楼。整条循环必须单实例串行。
+         */
+        private var expandLoopActive = false
+
+        /** 楼中楼兜底强展已执行的轮数 */
+        private var forceExpandPasses = 0
+
+        /** 章评/书评 tab 点击尝试次数 */
+        private var tabClickAttempts = 0
+
+        /** 展开循环结束后、重内存阶段前的楼中楼兜底强展轮数上限 */
+        private val cacheReplies = AppConfig.cacheReviewReplies
+
+        private var jsInjectedForPage = false
+        private val heavyStagePermitHeld = AtomicBoolean(false)
+        private val lifecycleLock = Any()
+        private val queueWaitThread = AtomicReference<Thread?>()
+        private var terminalResult: TerminalResult? = null
+        private var terminalFinalized = false
+        private var activeHeavyWorker: Thread? = null
+        private val activeResourceCalls = linkedSetOf<okhttp3.Call>()
+        @Volatile
+        private var activeStage: CaptureStage? = null
+        @Volatile
+        private var stageTimeout: ScheduledFuture<*>? = null
+
+        init {
+            startTimedStage(
+                CaptureStage.PAGE_EXECUTION,
+                PAGE_EXECUTION_TIMEOUT_MS,
+                "评论页加载/展开",
+            )
+        }
+
+        val client = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, finishedUrl: String?) {
+                if (destroyed) return
+                if (dataPrepared) {
+                    inlineResources()
+                } else if (tab == null) {
+                    mHandler.postDelayed({ expandRound() }, 1500L)
+                } else {
+                    // 章评/书评补充抓取：先点目标 tab，切换校验通过后再进入展开循环
+                    mHandler.postDelayed({ clickTargetTab() }, 1200L)
+                }
+            }
+
+            @SuppressLint("WebViewClientOnReceivedSslError")
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: SslErrorHandler?,
+                error: SslError?
+            ) {
+                handler?.proceed()
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                // 主框架加载失败（DNS/连接/超时等）立即失败，不再干等到 60s 超时：
+                // 部分评论页域名在本机网络解析/连接不通，串行等待会拖死整章
+                if (request?.isForMainFrame == true) {
+                    fail(NoStackTraceException("评论页加载失败 code=${error?.errorCode} ${error?.description}"))
+                }
+            }
+
+            @Deprecated("API 23 以下")
+            override fun onReceivedError(
+                view: WebView?,
+                errorCode: Int,
+                description: String?,
+                failingUrl: String?
+            ) {
+                if (failingUrl == url || failingUrl == url.substringBefore("#")) {
+                    fail(NoStackTraceException("评论页加载失败 code=$errorCode $description"))
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    fail(NoStackTraceException("评论页 HTTP 错误 ${errorResponse?.statusCode}"))
+                }
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                // 评论页内的跳转不跟随，避免快照跑题
+                return request?.isForMainFrame == true &&
+                    !request.url.toString().startsWith(url.substringBefore("#"))
+            }
+
+            override fun shouldInterceptRequest(
+                view: WebView,
+                request: WebResourceRequest
+            ): WebResourceResponse? {
+                if (dataPrepared && request.url.scheme in listOf("http", "https")) {
+                    return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                }
+                // 初始 HTML 模式：拦截 nameUrl，注入 JS_INJECTION + 书源 preloadJs，
+                // 给真实评论页提供 window.java/run/ajaxAwait 等 JS bridge 环境
+                val bridge = jsBridge
+                if (bridge != null && !jsInjectedForPage &&
+                    request.url.toString() == nameUrl
+                ) {
+                    jsInjectedForPage = true
+                    return WebResourceResponse(
+                        "text/javascript",
+                        "utf-8",
+                        ByteArrayInputStream(
+                            ("(() => {$JS_INJECTION\n${bridge.preloadJs.orEmpty()}\n})();")
+                                .toByteArray()
+                        )
+                    )
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
+
+        fun destroy() {
+            val cleanup = acceptTerminal(
+                TerminalResult(
+                    html = null,
+                    error = CancellationException("评论快照 Capture 已取消"),
+                    discardWebView = true,
+                )
+            ) ?: return
+            activeStage = null
+            clearStageTimeout()
+            cancelOutstandingWork(cleanup)
+        }
+
+        fun abort(error: Throwable) {
+            fail(error, discardWebView = true)
+        }
+
+        private fun finish(html: String?, droppedResources: Int = 0) {
+            val cleanup = acceptTerminal(
+                TerminalResult(
+                    html = html,
+                    error = null,
+                    discardWebView = false,
+                    resourceKeys = capturedResourceKeys,
+                    droppedResources = droppedResources,
+                )
+            ) ?: return
+            completeActiveStage(CacheOperationDiagnostics.Metrics(outputChars = html?.length))
+            cancelOutstandingWork(cleanup)
+        }
+
+        private fun fail(
+            error: Throwable,
+            discardWebView: Boolean = error is CaptureStageTimeoutException,
+        ) {
+            val cleanup = acceptTerminal(
+                TerminalResult(
+                    html = null,
+                    error = error,
+                    discardWebView = discardWebView,
+                )
+            ) ?: return
+            failActiveStage(error)
+            cancelOutstandingWork(cleanup)
+        }
+
+        private fun failStageTimeout(stage: CaptureStage, error: CaptureStageTimeoutException) {
+            val cleanup = synchronized(lifecycleLock) {
+                if (terminalResult != null || activeStage != stage) return
+                terminalResult = TerminalResult(
+                    html = null,
+                    error = error,
+                    discardWebView = true,
+                )
+                destroyed = true
+                activeStage = null
+                CleanupHandles(activeHeavyWorker, activeResourceCalls.toList())
+            }
+            clearStageTimeout()
+            diagnostics?.stageFail(stage.diagnosticsStage, error)
+            cancelOutstandingWork(cleanup)
+        }
+
+        private fun acceptTerminal(result: TerminalResult): CleanupHandles? {
+            return synchronized(lifecycleLock) {
+                if (terminalResult != null) return@synchronized null
+                terminalResult = result
+                destroyed = true
+                CleanupHandles(activeHeavyWorker, activeResourceCalls.toList())
+            }
+        }
+
+        private fun cancelOutstandingWork(cleanup: CleanupHandles) {
+            clearStageTimeout()
+            queueWaitThread.get()?.interrupt()
+            cleanup.calls.forEach { it.cancel() }
+            cleanup.worker?.interrupt()
+            tryFinalizeTerminal()
+        }
+
+        /**
+         * 只有 Java 侧 Heavy worker 已真实退出后才释放 permit。这样前一条流水线超时后，
+         * 它残留的下载、资源处理或 decode 不会与下一条 Heavy 流水线重叠。
+         */
+        private fun tryFinalizeTerminal() {
+            val terminal = synchronized(lifecycleLock) {
+                val result = terminalResult
+                if (result == null || terminalFinalized || activeHeavyWorker != null) {
+                    return@synchronized null
+                }
+                terminalFinalized = true
+                result
+            } ?: return
+            runOnUI {
+                done(
+                    terminal.html,
+                    terminal.error,
+                    expandRounds,
+                    totalExpandClicks,
+                    terminal.discardWebView,
+                    terminal.resourceKeys,
+                    terminal.droppedResources,
+                )
+                releaseHeavyStagePermit()
+            }
+        }
+
+        /**
+         * 页面执行超时直接报告失败；资源阶段和 permit 排队不共享页面执行时限。
+         * 单资源网络停滞由网络层超时处理，资源总量不作为失败条件。
+         */
+        private fun startTimedStage(stage: CaptureStage, timeoutMs: Long, timeoutLabel: String) {
+            completeActiveStage()
+            synchronized(lifecycleLock) {
+                if (destroyed) return
+                activeStage = stage
+            }
+            diagnostics?.stageStart(stage.diagnosticsStage, startAlways = true)
+            if (timeoutMs == 0L) return
+            stageTimeout = timeoutScheduler.schedule({
+                failStageTimeout(
+                    stage,
+                    CaptureStageTimeoutException(
+                        "${timeoutLabel}执行超时 ${timeoutMs / 1000}s",
+                    )
+                )
+            }, timeoutMs, TimeUnit.MILLISECONDS)
+        }
+
+        private fun startQueueWaitStage() {
+            completeActiveStage()
+            synchronized(lifecycleLock) {
+                if (destroyed) return
+                activeStage = CaptureStage.HEAVY_STAGE_WAIT
+            }
+            diagnostics?.stageStart(CaptureStage.HEAVY_STAGE_WAIT.diagnosticsStage, startAlways = true)
+        }
+
+        private fun completeActiveStage(metrics: CacheOperationDiagnostics.Metrics = CacheOperationDiagnostics.Metrics()) {
+            val stage = synchronized(lifecycleLock) {
+                val current = activeStage ?: return
+                activeStage = null
+                current
+            }
+            clearStageTimeout()
+            diagnostics?.stageDone(stage.diagnosticsStage, metrics)
+        }
+
+        private fun failActiveStage(error: Throwable) {
+            val stage = synchronized(lifecycleLock) {
+                val current = activeStage ?: return
+                activeStage = null
+                current
+            }
+            clearStageTimeout()
+            diagnostics?.stageFail(stage.diagnosticsStage, error)
+        }
+
+        private fun clearStageTimeout() {
+            stageTimeout?.cancel(false)
+            stageTimeout = null
+        }
+
+        private data class PageStats(val clicked: Int, val textLen: Int, val height: Int, val nodes: Int)
+
+        private fun expandRound() {
+            if (destroyed) return
+            if (expandLoopActive) return
+            expandLoopActive = true
+            webView.evaluateJavascript(expandJs(cacheReplies, paginationEnabled)) { json ->
+                mHandler.post {
+                    if (destroyed) return@post
+                    expandLoopActive = false
+                    val stats = parseStats(json)
+                    if (stats == null) {
+                        // 页面还未就绪：下一轮再试
+                        expandRounds++
+                        mHandler.postDelayed({ expandRound() }, EXPAND_ROUND_INTERVAL_MS)
+                        return@post
+                    }
+                    // 稳定要求：本轮没点过展开按钮，且 文本长度/页面高度/DOM 节点数 全部一致
+                    val stable = stats.clicked == 0 &&
+                        stats.textLen == lastTextLen &&
+                        stats.height == lastHeight &&
+                        stats.nodes == lastNodes
+                    // 累计“实际点击展开/回复/加载更多”次数
+                    totalExpandClicks += stats.clicked
+                    lastTextLen = stats.textLen
+                    lastHeight = stats.height
+                    lastNodes = stats.nodes
+                    stableRounds = if (stable) stableRounds + 1 else 0
+                    expandRounds++
+                    if (stableRounds >= STABLE_ROUNDS_TO_FINISH) {
+                        afterExpandLoop()
+                    } else {
+                        mHandler.postDelayed({ expandRound() }, EXPAND_ROUND_INTERVAL_MS)
+                    }
+                }
+            }
+        }
+
+        /**
+         * 展开循环结束后的收口：开启“缓存楼中楼”时先做穷尽式强展兜底，
+         * 消除懒加载 + 每轮限量点击漏掉的楼中楼；关闭开关时直接进入重内存阶段
+         * （回复层在冻结 DOM 时统一剥离）。
+         */
+        private fun afterExpandLoop() {
+            if (destroyed) return
+            if (!cacheReplies) {
+                inlineResources()
+                return
+            }
+            forceExpandReplies()
+        }
+
+        /**
+         * 楼中楼兜底强展：逐一点击全部未展开的回复 toggle（不限每轮数量），
+         * 直到页面再无“展开 N 条回复”类元素。点击后可能出现新的“加载更多回复”，
+         * 因此按页面稳定状态收敛；页面执行超时必须报错，不能把未展开完的页面当作完整结果。
+         */
+        private fun forceExpandReplies() {
+            if (destroyed) return
+            forceExpandPasses++
+            webView.evaluateJavascript(FORCE_EXPAND_JS) { json ->
+                mHandler.post {
+                    if (destroyed) return@post
+                    val clicked = parseForceClicked(json) ?: run {
+                        fail(IllegalStateException("无法读取评论回复展开结果"))
+                        return@post
+                    }
+                    diagnostics?.mark(
+                        "FORCE_EXPAND_PASS",
+                        CacheOperationDiagnostics.Metrics(resourceCount = clicked),
+                    )
+                    if (clicked > 0) {
+                        mHandler.postDelayed({ forceExpandReplies() }, EXPAND_ROUND_INTERVAL_MS)
+                    } else {
+                        inlineResources()
+                    }
+                }
+            }
+        }
+
+        /** 章评/书评补充抓取：点击目标 tab 并校验切换生效；失败显式暴露，绝不冒充 */
+        private fun clickTargetTab() {
+            if (destroyed || tab == null) return
+            tabClickAttempts++
+            diagnostics?.mark("TAB_CLICK_${tab.name}")
+            webView.evaluateJavascript(tabClickJs(tab)) { json ->
+                mHandler.post {
+                    if (destroyed) return@post
+                    val state = parseTabClickState(json)
+                    when {
+                        state == null || !state.found ->
+                            fail(
+                                NoStackTraceException(
+                                    "评论页未找到“${tab.label}”入口，无法抓取该 tab 快照"
+                                )
+                            )
+                        state.active -> mHandler.postDelayed({ expandRound() }, 800L)
+                        tabClickAttempts >= MAX_TAB_CLICK_ATTEMPTS ->
+                            fail(
+                                NoStackTraceException(
+                                    "评论页“${tab.label}”tab 点击 ${tabClickAttempts} 次仍未切换生效，" +
+                                        "无法抓取该 tab 快照"
+                                )
+                            )
+                        else -> mHandler.postDelayed({ clickTargetTab() }, 800L)
+                    }
+                }
+            }
+        }
+
+        private data class TabClickState(val found: Boolean, val active: Boolean)
+
+        private fun parseTabClickState(json: String?): TabClickState? {
+            json ?: return null
+            return runCatching {
+                val s = StringEscapeUtils.unescapeJson(json).trim('"')
+                if (s == "null") return null
+                val obj = GSON.fromJson(s, Map::class.java)
+                TabClickState(
+                    found = (obj?.get("f") as? Boolean) ?: false,
+                    active = (obj?.get("a") as? Boolean) ?: false,
+                )
+            }.getOrNull()
+        }
+
+        private fun parseForceClicked(json: String?): Int? {
+            json ?: return null
+            return runCatching {
+                val s = StringEscapeUtils.unescapeJson(json).trim('"')
+                if (s == "null") return null
+                val obj = GSON.fromJson(s, Map::class.java)
+                (obj?.get("c") as? Double)?.toInt() ?: 0
+            }.getOrNull()
+        }
+
+        private fun parseStats(json: String?): PageStats? {
+            json ?: return null
+            return runCatching {
+                val s = StringEscapeUtils.unescapeJson(json).trim('"')
+                if (s == "null") return null
+                val obj = GSON.fromJson(s, Map::class.java)
+                PageStats(
+                    clicked = (obj?.get("c") as? Double)?.toInt() ?: 0,
+                    textLen = (obj?.get("t") as? Double)?.toInt() ?: 0,
+                    height = (obj?.get("h") as? Double)?.toInt() ?: 0,
+                    nodes = (obj?.get("n") as? Double)?.toInt() ?: 0
+                )
+            }.getOrNull()
+        }
+
+        /** 收集图片与样式表并内联，然后取最终 HTML */
+        private val inliningStarted = AtomicBoolean(false)
+
+        private fun inlineResources() {
+            if (destroyed || !inliningStarted.compareAndSet(false, true)) return
+            startQueueWaitStage()
+            // 只限流会创建完整 Java 大对象的阶段；此时之前的页面加载与展开可以继续并行。
+            val waiter = Thread {
+                try {
+                    heavyStagePermits.acquire()
+                    if (destroyed) {
+                        heavyStagePermits.release()
+                    } else {
+                        heavyStagePermitHeld.set(true)
+                        mHandler.post {
+                            if (destroyed) {
+                                releaseHeavyStagePermit()
+                            } else {
+                                diagnostics?.mark("HEAVY_STAGE_ACQUIRED")
+                                completeActiveStage()
+                                synchronized(lifecycleLock) {
+                                    activeStage = CaptureStage.HEAVY_STAGE_WORK
+                                }
+                                diagnostics?.stageStart(CaptureStage.HEAVY_STAGE_WORK.diagnosticsStage)
+                                // 网络请求各自超时；完整资源集不共享一个随数量增长必然耗尽的总时限。
+                                collectAndInlineResources()
+                            }
+                        }
+                    }
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    if (!destroyed) mHandler.post { fail(e) }
+                } finally {
+                    queueWaitThread.compareAndSet(Thread.currentThread(), null)
+                }
+            }
+            queueWaitThread.set(waiter)
+            if (destroyed) waiter.interrupt()
+            waiter.start()
+        }
+
+        private fun collectAndInlineResources() {
+            if (destroyed) return
+            webView.evaluateJavascript(
+                collectResourcesJs(stripReplies = !cacheReplies)
+            ) { json ->
+                mHandler.post {
+                    if (destroyed) return@post
+                    val urls = parseResourceUrls(json)
+                    diagnostics?.mark(
+                        "RESOURCE_LIST_READY",
+                        CacheOperationDiagnostics.Metrics(resourceCount = urls.resourceCount),
+                    )
+                    diagnostics?.stageStart(
+                        "RESOURCE_DOWNLOAD",
+                        CacheOperationDiagnostics.Metrics(resourceCount = urls.resourceCount),
+                        startAlways = true,
+                    )
+                    launchHeavyWorker(
+                        name = "ReviewSnapshotResources",
+                        work = { downloadResources(urls) },
+                        onSuccess = { inline ->
+                            diagnostics?.stageDone(
+                                "RESOURCE_DOWNLOAD",
+                                CacheOperationDiagnostics.Metrics(
+                                    resourceCount = inline.resourceCount,
+                                    outputBytes = inline.resourceBytes,
+                                ),
+                            )
+                            diagnostics?.mark(
+                                "RESOURCE_INLINE_READY",
+                                CacheOperationDiagnostics.Metrics(
+                                    resourceCount = inline.resourceCount,
+                                    outputBytes = inline.resourceBytes,
+                                ),
+                            )
+                            applyInline(inline)
+                        },
+                        onFailure = { error ->
+                            diagnostics?.stageFail("RESOURCE_DOWNLOAD", error)
+                            diagnostics?.warn("RESOURCE_INLINE_FAILED", error)
+                            fail(error)
+                        },
+                    )
+                }
+            }
+        }
+
+        private fun <T> launchHeavyWorker(
+            name: String,
+            work: () -> T,
+            onSuccess: (T) -> Unit,
+            onFailure: (Throwable) -> Unit,
+        ) {
+            lateinit var worker: Thread
+            worker = Thread({
+                val result = runCatching {
+                    ensureHeavyActive()
+                    work()
+                }
+                heavyWorkerReaper.execute {
+                    worker.join()
+                    synchronized(lifecycleLock) {
+                        if (activeHeavyWorker === worker) activeHeavyWorker = null
+                    }
+                    if (destroyed) {
+                        tryFinalizeTerminal()
+                    } else {
+                        mHandler.post {
+                            if (!destroyed) result.fold(onSuccess, onFailure)
+                        }
+                    }
+                }
+            }, name)
+            synchronized(lifecycleLock) {
+                if (destroyed) return
+                check(activeHeavyWorker == null) { "评论快照 Heavy worker 重叠" }
+                activeHeavyWorker = worker
+            }
+            try {
+                worker.start()
+            } catch (error: Throwable) {
+                synchronized(lifecycleLock) {
+                    if (activeHeavyWorker === worker) activeHeavyWorker = null
+                }
+                if (destroyed) tryFinalizeTerminal() else onFailure(error)
+            }
+        }
+
+        private fun ensureHeavyActive() {
+            if (destroyed || Thread.currentThread().isInterrupted) {
+                throw InterruptedIOException("评论快照 Heavy 工作已取消")
+            }
+        }
+
+        private fun registerResourceCall(call: okhttp3.Call) {
+            synchronized(lifecycleLock) {
+                if (destroyed) {
+                    call.cancel()
+                    throw InterruptedIOException("评论快照资源请求已取消")
+                }
+                activeResourceCalls += call
+            }
+        }
+
+        private fun unregisterResourceCall(call: okhttp3.Call) {
+            synchronized(lifecycleLock) {
+                activeResourceCalls -= call
+            }
+        }
+
+        private fun cancelActiveResourceCalls() {
+            val calls = synchronized(lifecycleLock) { activeResourceCalls.toList() }
+            calls.forEach { it.cancel() }
+        }
+
+        private fun releaseHeavyStagePermit() {
+            if (heavyStagePermitHeld.compareAndSet(true, false)) {
+                heavyStagePermits.release()
+            }
+        }
+
+        private data class InlineResources(
+            val imgMap: Map<String, String> = emptyMap(),
+            val cssMap: Map<String, String> = emptyMap(),
+            /** CSS 子资源（字体、背景图等）入库后的资源库 key，必须进快照 resourceKeys。 */
+            val subResourceKeys: List<String> = emptyList(),
+            /** 下载阶段未能入库的资源数（下载失败或内容为空）；>0 表示快照为部分成功。 */
+            val droppedResources: Int = 0,
+            val resourceBytes: Long = 0L,
+            val cacheAvatars: Boolean = false,
+            val cacheCommentImages: Boolean = false,
+            /** A resource target existed, so any unstaged external URL must be removed. */
+            val removeUnstagedExternalResources: Boolean = false,
+        ) {
+            val resourceCount: Int get() = imgMap.size + cssMap.size
+
+            /** 本快照 HTML 引用的全部资源库 key（imgMap 的 value 即 review-resource://<key>）。 */
+            val resourceKeys: List<String>
+                get() = (
+                    imgMap.values.mapNotNull { value ->
+                        ReviewSnapshotResourceStore.keyFromReference(value)
+                    } + subResourceKeys
+                    ).distinct()
+        }
+
+        private fun parseResourceUrls(json: String?): ResourceUrls {
+            val cacheAvatars = AppConfig.cacheReviewAvatars
+            val cacheCommentImages = AppConfig.cacheReviewImages
+            val compressAvatars = cacheAvatars && AppConfig.compressReviewAvatars
+            val compressCommentImages = cacheCommentImages && AppConfig.compressReviewImages
+            val avatarCompressionMaxBytes = AppConfig.reviewAvatarCompressionMaxBytes
+            val imageCompressionMaxBytes = AppConfig.reviewImageCompressionMaxBytes
+            if (compressAvatars) {
+                require(avatarCompressionMaxBytes > 0L) {
+                    "评论头像压缩上限必须大于 0"
+                }
+            }
+            if (compressCommentImages) {
+                require(imageCompressionMaxBytes > 0L) {
+                    "评论图片压缩上限必须大于 0"
+                }
+            }
+            json ?: return ResourceUrls(
+                cacheAvatars = cacheAvatars,
+                cacheCommentImages = cacheCommentImages,
+            )
+            val s = StringEscapeUtils.unescapeJson(json).trim('"')
+            if (s == "null") {
+                return ResourceUrls(
+                    cacheAvatars = cacheAvatars,
+                    cacheCommentImages = cacheCommentImages,
+                )
+            }
+            val collected = GSON.fromJson(s, CollectedResources::class.java)
+                ?: error("评论快照资源列表为空")
+            val imageRoles = linkedMapOf<String, ImageRoles>()
+            collected.img.forEach { image ->
+                val imageUrl = image.url.takeIf { it.startsWith("http") } ?: return@forEach
+                val roles = imageRoles.getOrPut(imageUrl) { ImageRoles(imageUrl) }
+                if (image.kind == "avatar") {
+                    roles.hasAvatar = true
+                } else {
+                    roles.hasCommentImage = true
+                }
+            }
+            val selectedImages = imageRoles.values.asSequence()
+                .filter { roles ->
+                    (roles.hasAvatar && cacheAvatars) ||
+                        (roles.hasCommentImage && cacheCommentImages)
+                }
+                .map { roles ->
+                    val maximums = buildList {
+                        if (roles.hasAvatar && compressAvatars) add(avatarCompressionMaxBytes)
+                        if (roles.hasCommentImage && compressCommentImages) {
+                            add(imageCompressionMaxBytes)
+                        }
+                    }
+                    ImageResource(roles.url, maximums.minOrNull(),
+                        (roles.hasAvatar && cacheAvatars && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_AVATARS)) ||
+                        (roles.hasCommentImage && cacheCommentImages && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_IMAGES)))
+                }
+                .toList()
+            val storedImages = ReviewSnapshotResourceStore.entries(book)
+            val reusableImages = linkedMapOf<String, ReviewSnapshotResourceEntry>()
+            val imagesToDownload = selectedImages.filter { image ->
+                val stored = storedImages[image.url]
+                if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && stored != null &&
+                    stored.processing == imageProcessing(image.compressionMaxBytes) &&
+                    (image.compressionMaxBytes == null ||
+                        stored.byteCount <= image.compressionMaxBytes)
+                ) {
+                    reusableImages[image.url] = stored
+                    false
+                } else {
+                    true
+                }
+            }
+            return ResourceUrls(
+                images = imagesToDownload,
+                css = collected.css.filter { it.startsWith("http") }.distinct(),
+                databaseImages = reusableImages,
+                cacheAvatars = cacheAvatars,
+                cacheCommentImages = cacheCommentImages,
+            )
+        }
+
+        private val selectedFontKeys = mutableListOf<String>()
+        private var failedFontGroups = 0
+
+        private fun downloadResources(urls: ResourceUrls): InlineResources {
+            val resourceCount = urls.resourceCount
+            if (resourceCount == 0) {
+                return InlineResources(
+                    imgMap = urls.databaseImages.mapValues { (_, entry) ->
+                        ReviewSnapshotResourceStore.referenceFor(entry.key)
+                    },
+                    resourceBytes = urls.databaseImages.values.sumOf { it.byteCount },
+                    cacheAvatars = urls.cacheAvatars,
+                    cacheCommentImages = urls.cacheCommentImages,
+                )
+            }
+            val targets = ArrayList<ResourceTarget>(resourceCount)
+            urls.images.forEach { image ->
+                targets += ResourceTarget(
+                    index = targets.size,
+                    url = image.url,
+                    kind = ResourceKind.IMAGE,
+                    compressionMaxBytes = image.compressionMaxBytes,
+                )
+            }
+            urls.css.forEach { targets += ResourceTarget(targets.size, it, ResourceKind.CSS) }
+            val stagingDir = File(
+                appCtx.cacheDir,
+                "review_snapshot_${System.nanoTime()}_${Thread.currentThread().id}",
+            )
+            check(stagingDir.mkdirs() || stagingDir.isDirectory) {
+                "无法创建评论快照资源暂存目录"
+            }
+            try {
+                val stagedResources = stageResources(targets, stagingDir)
+                val imgMap = linkedMapOf<String, String>()
+                val cssMap = linkedMapOf<String, String>()
+                var resourceBytes = 0L
+                urls.databaseImages.forEach { (imageUrl, entry) ->
+                    imgMap[imageUrl] = ReviewSnapshotResourceStore.referenceFor(entry.key)
+                    resourceBytes += entry.byteCount
+                }
+                val stagedCss = mutableListOf<StagedCss>()
+                for (staged in stagedResources) {
+                    ensureHeavyActive()
+                    when (staged.target.kind) {
+                        ResourceKind.IMAGE -> {
+                            val image = prepareImage(staged)
+                            resourceBytes += image.byteCount
+                            val committed =
+                                putResource(staged.target.url, image.mimeType, image.file,
+                                    imageProcessing(staged.target.compressionMaxBytes))
+                            imgMap[staged.target.url] =
+                                ReviewSnapshotResourceStore.referenceFor(committed.key)
+                        }
+
+                        ResourceKind.CSS -> {
+                            val bytes = staged.file.readBytes()
+                            check(bytes.size.toLong() == staged.byteCount) {
+                                "评论快照资源暂存文件长度异常: ${staged.target.url}"
+                            }
+                            val text = bytes.toString(Charsets.UTF_8)
+                            if (text.isBlank()) {
+                                val error = IllegalStateException("评论样式表内容为空: ${staged.target.url}")
+                                resourceFailures += error.message.orEmpty()
+                                diagnostics?.warn("RESOURCE_CSS_EMPTY", error)
+                                continue
+                            }
+                            putResource(staged.target.url, "text/css", staged.file)
+                            stagedCss += parseCssSubResources(staged.target.url, selectFontCandidates(staged.target.url, text, stagingDir))
+                        }
+
+                        ResourceKind.SUB_RESOURCE -> Unit
+                    }
+                }
+                // CSS 文本内的 url()/@import 子资源（字体、背景图、@import 样式等）此前
+                // 既不收集也不改写，却会被序列化完整性检查判死（凡样式带字体的评论页
+                // 必失败）。统一入库并把引用改写为 review-resource:；下载失败的子资源
+                // 按非关键资源策略改写为 #，stageResources 已留 RESOURCE_DOWNLOAD_SKIPPED
+                // 诊断，不静默丢弃。
+                val subStage = stageCssSubResources(stagedCss, stagingDir)
+                val subReferences = subStage.references
+                resourceBytes += subStage.storedBytes
+                val subResourceKeys = subReferences.values.mapNotNull { reference ->
+                    ReviewSnapshotResourceStore.keyFromReference(reference)
+                }
+                for (css in stagedCss) {
+                    val rewritten = rewriteCssSubResources(css, subReferences)
+                    val textBytes = rewritten.toByteArray(Charsets.UTF_8).size.toLong()
+                    resourceBytes += textBytes
+                    cssMap[css.url] = rewritten
+                }
+                return InlineResources(
+                    imgMap = imgMap,
+                    cssMap = cssMap,
+                    resourceBytes = resourceBytes,
+                    cacheAvatars = urls.cacheAvatars,
+                    cacheCommentImages = urls.cacheCommentImages,
+                    subResourceKeys = subResourceKeys + selectedFontKeys,
+                    droppedResources = urls.images.count { it.required && imgMap[it.url] == null } +
+                        (if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_CSS)) urls.css.count { cssMap[it] == null } else 0) +
+                        subStage.failedCount + failedFontGroups,
+                    removeUnstagedExternalResources = true,
+                )
+            } finally {
+                stagingDir.deleteRecursively()
+            }
+        }
+
+        /**
+         * 把所有 CSS 文本引用的子资源批量下载入库（跨 CSS 按绝对地址去重），
+         * 返回 绝对地址 → review-resource: 引用与入库字节总数；下载失败的地址不在
+         * 引用表中，由 [rewriteCssSubResources] 改写为 #。
+         */
+        private fun stageCssSubResources(
+            stagedCss: List<StagedCss>,
+            stagingDir: File,
+        ): CssSubStageResult {
+            val subUrls = stagedCss.asSequence()
+                .flatMap { css -> css.refs.asSequence() }
+                .mapNotNull { it.absolute }
+                .distinct()
+                .toList()
+            if (subUrls.isEmpty()) return CssSubStageResult(emptyMap(), 0L, 0)
+            val subTargets = subUrls.mapIndexed { index, url ->
+                ResourceTarget(index, url, ResourceKind.SUB_RESOURCE)
+            }
+            val stagedSubs = stageResources(subTargets, stagingDir)
+            val subReferences = linkedMapOf<String, String>()
+            var storedBytes = 0L
+            for (staged in stagedSubs) {
+                ensureHeavyActive()
+                val committed = putResource(
+                    staged.target.url,
+                    cssSubResourceMime(staged.target.url),
+                    staged.file,
+                )
+                subReferences[staged.target.url] =
+                    ReviewSnapshotResourceStore.referenceFor(committed.key)
+                storedBytes += staged.byteCount
+            }
+            return CssSubStageResult(
+                subReferences,
+                storedBytes,
+                failedCount = subUrls.filter { candidate -> stagedSubs.none { it.target.url == candidate } }.count { candidate ->
+                    ReviewDownloadConfig.enabled(if (cssSubResourceMime(candidate).startsWith("font/"))
+                        ReviewDownloadConfig.REQUIRE_FONTS else ReviewDownloadConfig.REQUIRE_CSS)
+                },
+            )
+        }
+
+        /** src 的多个 URL 是候选格式；成功一个便停止，失败的候选保留在诊断中。 */
+        private fun selectFontCandidates(cssUrl: String, css: String, stagingDir: File): String {
+            val fontFace = Regex("@font-face\\s*\\{[^}]*}", RegexOption.IGNORE_CASE)
+            val src = Regex("(?i)(?<![\\w-])src\\s*:[^;}]*(?:;|(?=}))")
+            return fontFace.replace(css) { face ->
+                src.replace(face.value) declaration@{ declaration ->
+                    val candidates = CSS_URL_REF_REGEX.findAll(declaration.value).toList()
+                    if (candidates.isEmpty()) return@declaration declaration.value
+                    var reference: String? = null
+                    for (candidate in candidates) {
+                        val raw = candidate.groupValues[2]
+                        if (CSS_LOCAL_REF_PREFIX_REGEX.containsMatchIn(raw)) {
+                            reference = raw
+                            break
+                        }
+                        val address = cssUrl.toHttpUrlOrNull()?.resolve(raw)?.toString()
+                            ?: error("字体候选地址无效: $cssUrl -> $raw")
+                        val mime = cssSubResourceMime(address)
+                        val suffix = declaration.value.substring(candidate.range.last + 1).substringBefore(',')
+                        if (!mime.startsWith("font/") && !Regex("(?i)format\\s*\\(\\s*['\"](?:woff2?|truetype|opentype)['\"]\\s*\\)").containsMatchIn(suffix)) {
+                            val error = IllegalStateException("字体候选格式不受支持: $address")
+                            resourceFailures += error.message.orEmpty()
+                            diagnostics?.warn("FONT_FORMAT_UNSUPPORTED", error)
+                            continue
+                        }
+                        val target = ResourceTarget(-1, address, ResourceKind.SUB_RESOURCE)
+                        val staged = stageResources(listOf(target), stagingDir).singleOrNull() ?: continue
+                        val stored = putResource(address, cssSubResourceMime(address), staged.file)
+                        selectedFontKeys += stored.key
+                        reference = ReviewSnapshotResourceStore.referenceFor(stored.key)
+                        break
+                    }
+                    if (reference == null && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_FONTS)) {
+                        failedFontGroups++
+                    }
+                    "src:url('${reference ?: "#"}');"
+                }
+            }
+        }
+
+        /** 按解析结果改写 CSS 文本：入库引用 → review-resource:，失败引用 → #，本地形式保留。 */
+        private fun rewriteCssSubResources(
+            css: StagedCss,
+            subReferences: Map<String, String>,
+        ): String {
+            if (css.refs.isEmpty()) return css.text
+            val builder = StringBuilder(css.text)
+            for (ref in css.refs.sortedByDescending { it.valueStart }) {
+                val replacement = when {
+                    ref.keepAsIs -> null
+                    ref.absolute != null -> subReferences[ref.absolute] ?: "#"
+                    else -> "#"
+                } ?: continue
+                builder.replace(ref.valueStart, ref.valueEnd, replacement)
+            }
+            return builder.toString()
+        }
+
+        /** 解析 CSS 文本内的 url() 与 @import 字符串引用，文法与序列化完整性检查一致。 */
+        private fun parseCssSubResources(cssUrl: String, text: String): StagedCss {
+            val base = cssUrl.toHttpUrlOrNull()
+            val refs = mutableListOf<CssRefOccurrence>()
+            CSS_URL_REF_REGEX.findAll(text).forEach { match ->
+                val value = match.groupValues[2]
+                if (value.isNotBlank()) {
+                    val g = match.groups[2]!!
+                    refs += cssRefOccurrence(base, value, g.range.first, g.range.last + 1)
+                }
+            }
+            CSS_IMPORT_REF_REGEX.findAll(text).forEach { match ->
+                val value = match.groupValues[1]
+                if (value.isNotBlank()) {
+                    val g = match.groups[1]!!
+                    refs += cssRefOccurrence(base, value, g.range.first, g.range.last + 1)
+                }
+            }
+            return StagedCss(cssUrl, text, refs)
+        }
+
+        private fun cssRefOccurrence(
+            base: okhttp3.HttpUrl?,
+            value: String,
+            valueStart: Int,
+            valueEnd: Int,
+        ): CssRefOccurrence {
+            if (CSS_LOCAL_REF_PREFIX_REGEX.containsMatchIn(value)) {
+                return CssRefOccurrence(valueStart, valueEnd, absolute = null, keepAsIs = true)
+            }
+            val absolute = base?.resolve(value)?.toString()
+            return CssRefOccurrence(valueStart, valueEnd, absolute, keepAsIs = false)
+        }
+
+        /** 单个资源入库统一走 lease 提交：lease 失效即取消整个 Capture，不落半套资源。 */
+        private fun imageProcessing(maxBytes: Long?) = maxBytes?.let { "webp-max:$it" } ?: "original"
+
+        private fun putResource(
+            url: String,
+            mimeType: String,
+            file: File,
+            processing: String = "original",
+        ): ReviewSnapshotResourceEntry {
+            var stored: ReviewSnapshotResourceEntry? = null
+            val committedLease = commitIfLeaseActive.invoke {
+                stored = ReviewSnapshotResourceStore.put(
+                    book = book,
+                    url = url,
+                    mimeType = mimeType,
+                    source = file,
+                    processing = processing,
+                )
+            }
+            if (!committedLease) {
+                throw CancellationException("review lease is no longer active at resource commit")
+            }
+            return checkNotNull(stored)
+        }
+
+        /**
+         * 资源线程数只控制网络拉取。响应通过固定小缓冲区写入临时文件，随后才逐项转为
+         * 资源库只保留文件引用，因此提高下载并发不会重新引入多份完整响应 byte[] 同驻 Java heap。
+         */
+        private fun stageResources(
+            targets: List<ResourceTarget>,
+            stagingDir: File,
+        ): List<StagedResource> {
+            val threadCount = ReviewDownloadConfig.Number.RESOURCES.value
+            val executor = Executors.newFixedThreadPool(threadCount) { runnable ->
+                Thread(runnable, "ReviewSnapshotResource").apply { isDaemon = true }
+            }
+            releaseHeavyStagePermit()
+            val futures = targets.map { target ->
+                target to executor.submit(Callable { stageResource(target, stagingDir) })
+            }
+            try {
+                return futures.mapNotNull { (target, future) ->
+                    try {
+                        future.get()
+                    } catch (error: java.util.concurrent.ExecutionException) {
+                        val cause = error.cause ?: error
+                        // 保留每次最终失败；是否标记 partial 由资源角色和用户策略统一判定。
+                        if (cause is ResourceDownloadException) {
+                            resourceFailures += cause.message.orEmpty() + ": " + cause.cause?.message.orEmpty()
+                            diagnostics?.warn("RESOURCE_DOWNLOAD_SKIPPED", cause)
+                            null
+                        } else {
+                            throw cause
+                        }
+                    } catch (error: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw InterruptedIOException("评论快照资源下载已取消").also {
+                            it.initCause(error)
+                        }
+                    }
+                }
+            } catch (error: Throwable) {
+                futures.forEach { (_, future) -> future.cancel(true) }
+                cancelActiveResourceCalls()
+                throw error
+            } finally {
+                shutdownResourceWorkers(executor)
+                ensureHeavyActive()
+                heavyStagePermits.acquire()
+                heavyStagePermitHeld.set(true)
+                ensureHeavyActive()
+            }
+        }
+
+        private fun shutdownResourceWorkers(executor: ExecutorService) {
+            executor.shutdownNow()
+            var restoreInterrupt = Thread.interrupted()
+            while (!executor.isTerminated) {
+                try {
+                    executor.awaitTermination(100L, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    restoreInterrupt = true
+                    cancelActiveResourceCalls()
+                }
+            }
+            if (restoreInterrupt) Thread.currentThread().interrupt()
+        }
+
+        /** 每次尝试单独取得资源配额；退避等待不占用网络配额。 */
+        private fun stageResource(target: ResourceTarget, stagingDir: File): StagedResource {
+            var attempt = 0
+            while (true) {
+                ensureHeavyActive()
+                try {
+                    return ReviewDownloadScheduler.resources.blocking { stageResourceOnce(target, stagingDir) }
+                } catch (error: ResourceDownloadException) {
+                    diagnostics?.warn("RESOURCE_HTTP_FAILED", error)
+                    ensureHeavyActive()
+                    if (attempt >= ReviewDownloadConfig.Number.RETRIES.value) throw error
+                    attempt++
+                    diagnostics?.mark("RESOURCE_HTTP_RETRY_$attempt", force = true)
+                    Thread.sleep(ReviewDownloadConfig.retryDelay(attempt))
+                }
+            }
+        }
+
+        private fun stageResourceOnce(
+            target: ResourceTarget,
+            stagingDir: File,
+        ): StagedResource {
+            val targetFile = File(stagingDir, target.index.toString())
+            if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && target.kind != ResourceKind.IMAGE) {
+                val stored = ReviewSnapshotResourceStore.entries(book)[target.url]
+                if (stored != null) {
+                    val handle = checkNotNull(ReviewSnapshotResourceStore.open(book, stored.key))
+                    handle.inputStream.use { input -> targetFile.outputStream().use { input.copyTo(it) } }
+                    diagnostics?.mark("RESOURCE_CACHE_HIT", force = true)
+                    return StagedResource(target, targetFile, stored.byteCount)
+                }
+            }
+            val request = okhttp3.Request.Builder()
+                .url(target.url)
+                .header("Referer", url)
+                .build()
+            val call = okHttpClient.newBuilder()
+                .connectTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .readTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .callTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .retryOnConnectionFailure(false)
+                .build()
+                .newCall(request)
+            registerResourceCall(call)
+            var completed = false
+            try {
+                ensureHeavyActive()
+                try {
+                    call.execute().use { response ->
+                        if (!response.isSuccessful) {
+                            throw ResourceDownloadException(
+                                target,
+                                IllegalStateException("HTTP ${response.code}"),
+                            )
+                        }
+                        val body = response.body ?: throw ResourceDownloadException(
+                            target,
+                            IllegalStateException("评论快照资源响应为空"),
+                        )
+                        body.byteStream().use { input ->
+                            targetFile.outputStream().buffered().use { output ->
+                                val buffer = ByteArray(RESOURCE_COPY_BUFFER_BYTES)
+                                var copiedBytes = 0L
+                                while (true) {
+                                    ensureHeavyActive()
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    val nextBytes = copiedBytes + count
+                                    output.write(buffer, 0, count)
+                                    copiedBytes = nextBytes
+                                }
+                                if (copiedBytes == 0L) throw ResourceDownloadException(target,
+                                    IllegalStateException("评论资源响应内容为空"))
+                                completed = true
+                                return StagedResource(target, targetFile, copiedBytes)
+                            }
+                        }
+                    }
+                } catch (error: ResourceDownloadException) {
+                    throw error
+                } catch (error: java.io.IOException) {
+                    if (destroyed || Thread.currentThread().isInterrupted) throw error
+                    throw ResourceDownloadException(target, error)
+                }
+            } finally {
+                unregisterResourceCall(call)
+                if (!completed) {
+                    targetFile.delete()
+                }
+            }
+        }
+
+        private fun prepareImage(staged: StagedResource): PreparedImage {
+            check(staged.file.length() == staged.byteCount) {
+                "评论快照图片暂存文件长度异常: ${staged.target.url}"
+            }
+            val maxBytes = staged.target.compressionMaxBytes
+            if (maxBytes == null || staged.byteCount <= maxBytes) {
+                return PreparedImage(
+                    file = staged.file,
+                    byteCount = staged.byteCount,
+                    mimeType = guessMime(staged.target.url, staged.file),
+                )
+            }
+            require(maxBytes > 0L) { "评论图片压缩上限必须大于 0" }
+            return compressImage(staged.file, maxBytes, staged.target.url)
+        }
+
+        /**
+         * Re-encodes one staged image directly to a bounded WebP file. No full byte[] or
+         * encoded String is created here; sampling occurs before decode and every retry replaces
+         * the same temporary file.
+         */
+        @Suppress("DEPRECATION")
+        private fun compressImage(source: File, maxBytes: Long, sourceUrl: String): PreparedImage {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(source.absolutePath, bounds)
+            check(bounds.outWidth > 0 && bounds.outHeight > 0) {
+                "评论图片无法解码，不能压缩: $sourceUrl"
+            }
+            val targetPixels = (maxBytes * 4L).coerceAtMost(Int.MAX_VALUE.toLong())
+            var sampleSize = 1
+            while (
+                bounds.outWidth.toLong() / sampleSize *
+                (bounds.outHeight.toLong() / sampleSize) > targetPixels
+            ) {
+                sampleSize *= 2
+            }
+            var bitmap = BitmapFactory.decodeFile(
+                source.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+            ) ?: error("评论图片无法解码，不能压缩: $sourceUrl")
+            val output = File(source.parentFile, "${source.name}.webp")
+            var completed = false
+            try {
+                while (true) {
+                    for (quality in intArrayOf(92, 80, 65, 50, 35, 20, 10)) {
+                        ensureHeavyActive()
+                        FileOutputStream(output, false).buffered().use { stream ->
+                            check(bitmap.compress(Bitmap.CompressFormat.WEBP, quality, stream)) {
+                                "评论图片 WebP 压缩失败: $sourceUrl"
+                            }
+                        }
+                        if (output.length() <= maxBytes) {
+                            completed = true
+                            return PreparedImage(output, output.length(), "image/webp")
+                        }
+                    }
+                    check(bitmap.width > 1 || bitmap.height > 1) {
+                        "评论图片无法压缩到 ${maxBytes}B: $sourceUrl"
+                    }
+                    val scaled = Bitmap.createScaledBitmap(
+                        bitmap,
+                        (bitmap.width / 2).coerceAtLeast(1),
+                        (bitmap.height / 2).coerceAtLeast(1),
+                        true,
+                    )
+                    bitmap.recycle()
+                    bitmap = scaled
+                }
+            } finally {
+                bitmap.recycle()
+                if (!completed) output.delete()
+            }
+        }
+
+        private fun guessMime(rawUrl: String, file: File): String {
+            val header = ByteArray(16)
+            val headerLength = file.inputStream().use { input -> input.read(header) }
+            val lower = rawUrl.substringBefore('?').lowercase()
+            return when {
+                lower.endsWith(".png") -> "image/png"
+                lower.endsWith(".webp") -> "image/webp"
+                lower.endsWith(".gif") -> "image/gif"
+                lower.endsWith(".svg") -> "image/svg+xml"
+                lower.endsWith(".css") -> "text/css"
+                headerLength > 3 && header[0] == 0xFF.toByte() &&
+                    header[1] == 0xD8.toByte() -> "image/jpeg"
+                else -> "image/jpeg"
+            }
+        }
+
+        /** CSS 子资源入库 MIME：按扩展名判定，浏览器以此决定字体/图片如何消费。 */
+        private fun cssSubResourceMime(url: String): String {
+            val lower = url.substringBefore('?').substringBefore('#').lowercase()
+            return when {
+                lower.endsWith(".woff2") -> "font/woff2"
+                lower.endsWith(".woff") -> "font/woff"
+                lower.endsWith(".ttf") -> "font/ttf"
+                lower.endsWith(".otf") -> "font/otf"
+                lower.endsWith(".eot") -> "application/vnd.ms-fontobject"
+                lower.endsWith(".svg") -> "image/svg+xml"
+                lower.endsWith(".css") -> "text/css"
+                lower.endsWith(".png") -> "image/png"
+                lower.endsWith(".webp") -> "image/webp"
+                lower.endsWith(".gif") -> "image/gif"
+                lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
+                else -> "application/octet-stream"
+            }
+        }
+
+        private fun applyInline(inline: InlineResources) {
+            if (destroyed) return
+            // 内联完成后立即记录本快照引用的资源 key；终态回调据此携带 resourceKeys。
+            capturedResourceKeys = inline.resourceKeys
+            if (inline.imgMap.isEmpty() && inline.cssMap.isEmpty() &&
+                !inline.removeUnstagedExternalResources
+            ) {
+                serialize(inline)
+                return
+            }
+            // Gson 与大 String 的构建不能占用主线程；它仍属于当前 Heavy permit。
+            launchHeavyWorker(
+                name = "ReviewSnapshotInlineJs",
+                work = {
+                    ensureHeavyActive()
+                    buildApplyJs(inline).also { ensureHeavyActive() }
+                },
+                onSuccess = { script ->
+                    webView.evaluateJavascript(script) {
+                        if (!destroyed) serialize(inline)
+                    }
+                },
+                onFailure = { error -> fail(error) },
+            )
+        }
+
+        private fun serialize(inline: InlineResources) {
+            if (destroyed) return
+            // 在冻结 DOM 内完成引用清理、完整性收口和 outerHTML，避免活页面在资源
+            // 下载期间继续改变。JSON 解码移出主线程，不能在回调中阻塞 UI。
+            diagnostics?.stageStart("SANITIZE")
+            webView.evaluateJavascript(buildSerializeSnapshotJs(inline)) { raw ->
+                diagnostics?.mark(
+                    "WEBVIEW_HTML_READY",
+                    CacheOperationDiagnostics.Metrics(inputChars = raw?.length),
+                )
+                launchHeavyWorker(
+                    name = "ReviewSnapshotDecode",
+                    work = { decodeSerializedSnapshot(raw) },
+                    onSuccess = { outcome ->
+                        val failureMessage = when {
+                            outcome == null -> "评论页快照序列化为空 $url"
+                            outcome.rootMissing -> "评论页快照冻结 DOM 丢失 $url"
+                            outcome.html.isBlank() -> "评论页快照序列化为空 $url"
+                            else -> null
+                        }
+                        if (failureMessage != null) {
+                            val error = NoStackTraceException(failureMessage)
+                            diagnostics?.stageFail("SANITIZE", error)
+                            fail(error)
+                        } else {
+                            val completeHtml = outcome!!.html
+                            // 部分成功：页面 HTML 已抓到，下载失败的资源只能剔除或以 #
+                            // 占位；快照照常落盘渲染，按钮仍按失败计，等待重试补全。
+                            val dropped = outcome!!.dropped + inline.droppedResources
+                            if (dropped > 0) {
+                                diagnostics?.mark(
+                                    "SANITIZE_PARTIAL",
+                                    CacheOperationDiagnostics.Metrics(resourceCount = dropped),
+                                )
+                            }
+                            diagnostics?.stageDone(
+                                "SANITIZE",
+                                CacheOperationDiagnostics.Metrics(outputChars = completeHtml.length),
+                            )
+                            finish(completeHtml, dropped)
+                        }
+                    },
+                    onFailure = { error ->
+                        diagnostics?.stageFail("SANITIZE", error)
+                        fail(error)
+                    },
+                )
+            }
+        }
+
+        private data class SerializedSnapshot(
+            val html: String,
+            val dropped: Int,
+            val rootMissing: Boolean,
+        )
+
+        private data class SerializedSnapshotJs(
+            val h: String? = null,
+            val d: Int = 0,
+        )
+
+        /**
+         * 解码序列化 JS 的返回值：JSON {h: outerHTML, d: 剔除资源数}，或冻结 DOM
+         * 丢失哨兵。返回 null 表示序列化为空。
+         */
+        private fun decodeSerializedSnapshot(raw: String?): SerializedSnapshot? {
+            val value = decodeJavascriptString(raw) ?: return null
+            if (value == SNAPSHOT_ROOT_MISSING) {
+                return SerializedSnapshot(html = "", dropped = 0, rootMissing = true)
+            }
+            val parsed = GSON.fromJson(value, SerializedSnapshotJs::class.java) ?: return null
+            return SerializedSnapshot(
+                html = parsed.h.orEmpty(),
+                dropped = parsed.d.coerceAtLeast(0),
+                rootMissing = false,
+            )
+        }
+
+        private fun decodeJavascriptString(raw: String?): String? {
+            if (raw == null || raw == "null") return null
+            // evaluateJavascript 的回调是一个 JSON string。JsonReader 直接解码这一层，
+            // 避免 unescapeJson(...).trim(...) 产生两份完整 HTML 的中间字符串；Reader
+            // 每次供数前检查 interrupt，使 Heavy 超时能够真实终止巨大 HTML 的解码。
+            return JsonReader(InterruptibleStringReader(raw)).use { reader -> reader.nextString() }
+        }
+
+        private fun buildApplyJs(inline: InlineResources): String {
+            val imgJson = GSON.toJson(inline.imgMap)
+            val cssJson = GSON.toJson(inline.cssMap)
+            return "(function(){" +
+                "var root=window.__legadoReviewSnapshotRoot;" +
+                "if(!root)throw new Error('评论快照冻结 DOM 丢失');" +
+                "var m=$imgJson;" +
+                "var c=$cssJson;" +
+                "var cacheAvatars=${inline.cacheAvatars};" +
+                "var cacheCommentImages=${inline.cacheCommentImages};" +
+                "var removeUnstaged=${inline.removeUnstagedExternalResources};" +
+                IMAGE_CLASSIFIER_HELPER_JS +
+                "root.querySelectorAll('img').forEach(function(el){" +
+                "if(!(isAvatarImage(el)?cacheAvatars:cacheCommentImages))return;" +
+                "var source=el.getAttribute('src');" +
+                "if(source&&/^https?:\\/\\//i.test(el.src)){var d=m[el.src]||m[source];" +
+                "if(d)el.src=d;else if(removeUnstaged)el.removeAttribute('src');}" +
+                "var set=el.getAttribute('srcset');if(!set)return;" +
+                // srcset 逐变体处理：已入库变体改写为引用，未命中的外部变体只丢弃该
+                // 部分；不得因个别变体失败丢弃整个 srcset——那会让已入库变体的
+                // resource key 失去 HTML 引用，与 resourceKeys 校验冲突。
+                "var rewritten=[];" +
+                "set.split(',').forEach(function(part){var bits=part.trim().split(/\\s+/);" +
+                "var raw=bits.shift();if(!raw)return;var resolved=raw;" +
+                "try{resolved=new URL(raw,document.baseURI).href;}catch(e){}" +
+                "var mapped=m[resolved];" +
+                "if(mapped)rewritten.push(mapped+(bits.length?' '+bits.join(' '):''));" +
+                "else if(/^(data:|review-resource:|#|about:blank)/i.test(resolved))rewritten.push(part.trim());" +
+                "});" +
+                "if(rewritten.length)el.setAttribute('srcset',rewritten.join(', '));" +
+                "else if(removeUnstaged)el.removeAttribute('srcset');});" +
+                "root.querySelectorAll('link[rel=\"stylesheet\"]').forEach(function(el){" +
+                "if(!/^https?:\\/\\//i.test(el.href))return;var d=c[el.href];" +
+                "if(d){var s=document.createElement('style');" +
+                "s.textContent=d;el.parentNode.insertBefore(s,el);el.remove();}" +
+                "else if(removeUnstaged)el.remove();});" +
+                "})()"
+        }
+
+        private fun buildSerializeSnapshotJs(inline: InlineResources): String {
+            return "(function(){" +
+                "var root=window.__legadoReviewSnapshotRoot;" +
+                "if(!root)return '$SNAPSHOT_ROOT_MISSING';" +
+                "var cacheAvatars=${inline.cacheAvatars};" +
+                "var cacheCommentImages=${inline.cacheCommentImages};" +
+                IMAGE_CLASSIFIER_HELPER_JS +
+                "var scripts=root.querySelectorAll('script');" +
+                "for(var i=scripts.length-1;i>=0;i--){var e=scripts[i];" +
+                "if(e.parentNode)e.parentNode.removeChild(e);}" +
+                // 部分成功收口：无法入库的外部引用不再判死整份快照，而是剔除或以 #
+                // 占位；剔除数量随结果带出，快照照常落盘渲染，按钮仍计失败等待重试。
+                "var dropped=0;" +
+                "function acceptedRef(v){return /^(data:|review-resource:|#|about:blank)/i.test(v);}" +
+                "root.querySelectorAll('img').forEach(function(el){" +
+                "if(!(isAvatarImage(el)?cacheAvatars:cacheCommentImages))return;" +
+                "var source=el.getAttribute('src');" +
+                "if(source&&/^(https?|blob):/i.test(el.src)){el.removeAttribute('src');dropped++;}" +
+                "var set=el.getAttribute('srcset')||'';" +
+                "if(set){var bad=false;set.split(',').forEach(function(part){" +
+                "var raw=part.trim().split(/\\s+/)[0];if(!raw)return;var resolved=raw;" +
+                "try{resolved=new URL(raw,document.baseURI).href;}catch(e){}" +
+                "if(!acceptedRef(resolved))bad=true;});" +
+                "if(bad){el.removeAttribute('srcset');dropped++;}}});" +
+                "root.querySelectorAll('link[rel=\"stylesheet\"][href]').forEach(function(el){" +
+                "if(!/^(data:|review-resource:|about:blank)/i.test(el.href)){" +
+                "el.parentNode.removeChild(el);dropped++;}});" +
+                "root.querySelectorAll('style').forEach(function(el){" +
+                "var text=el.textContent||'';var changed=false;" +
+                "text=text.replace(/url\\s*\\(\\s*([\"']?)([^\"'\\)\\s]+)\\1\\s*\\)/ig,function(m,q,v){" +
+                "if(acceptedRef(v))return m;changed=true;return \"url('#')\";});" +
+                "text=text.replace(/@import\\s*[\"']([^\"']+)[\"']/ig,function(m,v){" +
+                "if(acceptedRef(v))return m;changed=true;return '@import \"#\"';});" +
+                "if(changed){el.textContent=text;dropped++;}});" +
+                "return JSON.stringify({h:root.outerHTML,d:dropped});" +
+                "})()"
+        }
+    }
+
+    /**
+     * 展开循环脚本。每轮点击文本命中“展开/加载更多”等模式的元素（每轮限量），
+     * 并滚动到页底触发懒加载。
+     *
+     * @param includeReplies false = 关闭“缓存楼中楼”：正则不再匹配回复 toggle，
+     *        并跳过一切位于回复容器内的元素（含“加载更多回复”），回复内容不参与展开；
+     *        序列化时回复层会统一剥离。
+     * @param paginationEnabled false = 增量抓取：正则不再匹配“加载更多”类翻页关键词
+     *        （点它们会把已缓存的历史评论页整页重新拉取）；只保留回复展开与滚动懒加载。
+     *        两个开关都关闭时无元素可点，脚本退化为纯滚动探测。
+     */
+    private fun expandJs(includeReplies: Boolean, paginationEnabled: Boolean = true): String {
+        val pattern = when {
+            includeReplies && paginationEnabled ->
+                "(展开|更多回复|查看回复|加载更多|查看更多|查看全部|显示全部|点击查看|继续阅读|load\\s*more|show\\s*more|view\\s*more|expand)"
+            includeReplies -> "(展开|更多回复|查看回复|expand)"
+            paginationEnabled ->
+                "(加载更多|查看更多|查看全部|显示全部|点击查看|继续阅读|load\\s*more|show\\s*more|view\\s*more)"
+            else -> null
+        }
+        val replySkip = if (includeReplies) {
+            ""
+        } else {
+            "if(el.closest&&el.closest('.reply-section'))continue;"
+        }
+        val clickLoop = if (pattern == null) {
+            ""
+        } else {
+            "var pat=/$pattern/i;" +
+                "var els=document.querySelectorAll('a,button,[role=\"button\"],[onclick],div,span,p');" +
+                "for(var i=0;i<els.length;i++){var el=els[i];" +
+                replySkip +
+                "var t=(el.innerText||'').trim();" +
+                "if(!t||t.length>24||!pat.test(t))continue;" +
+                "var r=el.getBoundingClientRect();" +
+                "if(r.width<1||r.height<1)continue;" +
+                "if(el.children.length>2)continue;" +
+                "el.scrollIntoView({block:'center'});" +
+                "try{el.click();}catch(e){}" +
+                "try{el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));" +
+                "el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));" +
+                "el.dispatchEvent(new TouchEvent('touchend',{bubbles:true}));}catch(e){}" +
+                "clicked++;if(clicked>=6)break;}"
+        }
+        return "(function(){" +
+            "var clicked=0;" +
+            clickLoop +
+            "try{window.scrollTo(0,document.body?document.body.scrollHeight:0);}catch(e){}" +
+            "var h=document.body?document.body.scrollHeight:0;" +
+            "var n=document.getElementsByTagName('*').length;" +
+            "return JSON.stringify({c:clicked,t:document.body?document.body.innerText.length:0,h:h,n:n});" +
+            "})()"
+    }
+
+    /**
+     * 楼中楼兜底强展脚本：不限每轮数量地点击全部未展开的回复 toggle。
+     * 展开循环受“每轮 6 个 + 轮数上限”约束，懒加载页面的尾部楼中楼会漏点，
+     * 序列化后离线永远打不开；本脚本在序列化前穷尽兜底，由页面自身 JS
+     * 完成展开（不操作 DOM 结构，通用书源均适用）。
+     */
+    private const val FORCE_EXPAND_JS =
+        "(function(){" +
+            "var pat=/(展开\\s*\\d*\\s*条回复|展开回复|查看回复|全部回复|更多回复|共\\s*\\d+\\s*条回复|load\\s*more\\s*repl)/i;" +
+            "var clicked=0;" +
+            "var els=document.querySelectorAll('a,button,[role=\"button\"],[onclick],div,span,p');" +
+            "for(var i=0;i<els.length;i++){var el=els[i];" +
+            "var t=(el.innerText||'').trim();" +
+            "if(!t||t.length>30||!pat.test(t))continue;" +
+            "var r=el.getBoundingClientRect();" +
+            "if(r.width<1||r.height<1)continue;" +
+            "if(el.children.length>2)continue;" +
+            "el.scrollIntoView({block:'center'});" +
+            "try{el.click();}catch(e){}" +
+            "try{el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));" +
+            "el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));}catch(e){}" +
+            "clicked++;}" +
+            "return JSON.stringify({c:clicked});" +
+            "})()"
+
+    /**
+     * 章评/书评 tab 点击脚本：按关键词定位 tab 元素并点击，返回
+     * {f: 是否找到, a: 点击后是否处于激活态}。切换由页面自身 JS 完成。
+     */
+    private fun tabClickJs(tab: ReviewTab): String {
+        val keywords = GSON.toJson(tab.keywords)
+        return "(function(){" +
+            "var kws=$keywords;" +
+            "var els=document.querySelectorAll('.tab,[role=\"tab\"],[data-tab]');" +
+            "var target=null;" +
+            "for(var i=0;i<els.length;i++){var el=els[i];" +
+            "var t=(el.innerText||'').trim();" +
+            "if(!t||t.length>12)continue;" +
+            "for(var k=0;k<kws.length;k++){if(t.indexOf(kws[k])>=0){target=el;break;}}" +
+            "if(target)break;}" +
+            "if(!target)return JSON.stringify({f:false,a:false});" +
+            "try{target.click();}catch(e){}" +
+            "var cls=(target.className||'')+' '+(target.getAttribute('data-state')||'');" +
+            "var active=/active|checked|selected|current/i.test(cls)||" +
+            "target.getAttribute('aria-selected')==='true';" +
+            "return JSON.stringify({f:true,a:active});" +
+            "})()"
+    }
+
+    /** Shared DOM classifier for collection and inlining so each image obeys the same switch. */
+    private const val IMAGE_CLASSIFIER_HELPER_JS =
+        "function isAvatarImage(el){" +
+            "for(var n=el;n&&n.nodeType===1;n=n.parentElement){" +
+            "var v=((n.className||'')+' '+(n.id||'')+' '+" +
+            "(n.getAttribute('alt')||'')+' '+(n.getAttribute('data-role')||'')).toLowerCase();" +
+            "if(/avatar|profile[-_]?image|head[-_]?img|头像/i.test(v))return true;" +
+            "}return false;}"
+
+    /**
+     * 资源收集脚本：冻结当前 DOM 克隆供后续异步下载与序列化使用。
+     *
+     * @param stripReplies true = 关闭“缓存楼中楼”：从冻结 DOM 中剥离回复层
+     *        （.reply-section，含其内部的回复头像/图片），回复内容不进快照、
+     *        其图片不进资源库。章节/书评 tab 同样适用。
+     */
+    private fun collectResourcesJs(stripReplies: Boolean): String {
+        val strip = if (stripReplies) {
+            "root.querySelectorAll('.reply-section').forEach(function(el){" +
+                "if(el.parentNode)el.parentNode.removeChild(el);});"
+        } else {
+            ""
+        }
+        return "(function(){" +
+            // 后续异步下载期间只操作这份脱离活页面的 DOM，页面脚本无法再改变快照内容。
+            "var root=document.documentElement.cloneNode(true);" +
+            "window.__legadoReviewSnapshotRoot=root;" +
+            IMAGE_CLASSIFIER_HELPER_JS +
+            strip +
+            "var img=[],css=[];" +
+            "function addImage(el,raw){" +
+            "var value=(raw||'').trim();if(!value)return;" +
+            "try{value=new URL(value,document.baseURI).href;}catch(e){}" +
+            "img.push({url:value,kind:isAvatarImage(el)?'avatar':'comment'});}" +
+            "root.querySelectorAll('img').forEach(function(el){" +
+            "var source=el.getAttribute('src');if(source)addImage(el,source);" +
+            "var set=el.getAttribute('srcset')||'';" +
+            "set.split(',').forEach(function(part){var candidate=part.trim().split(/\\s+/)[0];" +
+            "if(candidate)addImage(el,candidate);});});" +
+            "root.querySelectorAll('link[rel=\"stylesheet\"][href]').forEach(function(el){css.push(el.href);});" +
+            "return JSON.stringify({img:img,css:css});" +
+            "})()"
+    }
+
+    private const val SNAPSHOT_ROOT_MISSING = "__LEGADO_REVIEW_SNAPSHOT_ROOT_MISSING__"
+
+    /** 与序列化完整性检查一致的 CSS 引用文法：url() 形式，值不含空白/引号/括号。 */
+    private val CSS_URL_REF_REGEX =
+        Regex("url\\s*\\(\\s*([\"']?)([^\"')\\s]+)\\1\\s*\\)", RegexOption.IGNORE_CASE)
+
+    /** 序列化完整性检查同样判死的 @import 字符串形式。 */
+    private val CSS_IMPORT_REF_REGEX =
+        Regex("@import\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+
+    /** 完整性检查认可的本地引用前缀，命中者原样保留。 */
+    private val CSS_LOCAL_REF_PREFIX_REGEX =
+        Regex("^(?:data:|review-resource:|#|about:blank)", RegexOption.IGNORE_CASE)
+}

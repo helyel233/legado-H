@@ -52,6 +52,13 @@ import java.net.URI
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
+
+    /** 评论打开方式取值 */
+    object ReviewOpenMode {
+        const val NETWORK = "network"
+        const val SNAPSHOT_FIRST = "snapshot_first"
+        const val SNAPSHOT_ONLY = "snapshot_only"
+    }
     const val DISCOVERY_PAGE_MODE_LEGACY = "legacy"
     const val DISCOVERY_PAGE_MODE_MODERN = "modern"
     const val DISCOVERY_PAGE_MODE_SUITE = "suite"
@@ -2826,5 +2833,101 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.sourceRecycleBinEnabled, true)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.sourceRecycleBinEnabled, value)
+        }
+
+    /** 缓存评论时抓取评论页快照 */
+    var syncCacheReview: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.syncCacheReview, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.syncCacheReview, value)
+        }
+
+    /**
+     * 缓存评论快照时保存楼中楼/回复内容。
+     * 关闭后所有评论快照（段评、章评、书评）都不包含回复层；
+     * 章评按章、书评整本各只缓存一份，不受此开关影响。
+     */
+    var cacheReviewReplies: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewReplies, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.cacheReviewReplies, value)
+        }
+
+    /** 阅读或书架刷新时，按正文预下载窗口自动执行正文→评论下载任务。 */
+    var autoDownloadReview: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.autoDownloadReview, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.autoDownloadReview, value)
+        }
+
+    /** 缓存评论快照时保存评论者头像到资源库。 */
+    var cacheReviewAvatars: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewAvatars, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.cacheReviewAvatars, value)
+        }
+
+    /** 缓存评论快照时保存非头像的评论图片到资源库。 */
+    var cacheReviewImages: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewImages, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.cacheReviewImages, value)
+        }
+
+    /** 超过阈值时压缩评论者头像。 */
+    var compressReviewAvatars: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.compressReviewAvatars, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.compressReviewAvatars, value)
+        }
+
+    /** 超过阈值时压缩评论内图片。 */
+    var compressReviewImages: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.compressReviewImages, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.compressReviewImages, value)
+        }
+
+    /** 评论头像压缩后的最大大小，单位 KiB。 */
+    var reviewAvatarCompressionMaxKb: Int
+        get() = appCtx.getPrefInt(PreferKey.reviewAvatarCompressionMaxKb, 2)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.reviewAvatarCompressionMaxKb, value)
+        }
+
+    /** 评论内图片压缩后的最大大小，单位 KiB。 */
+    var reviewImageCompressionMaxKb: Int
+        get() = appCtx.getPrefInt(PreferKey.reviewImageCompressionMaxKb, 50)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.reviewImageCompressionMaxKb, value)
+        }
+
+    val reviewAvatarCompressionMaxBytes: Long
+        get() = reviewAvatarCompressionMaxKb.toLong() * 1024L
+
+    val reviewImageCompressionMaxBytes: Long
+        get() = reviewImageCompressionMaxKb.toLong() * 1024L
+
+    /** 评论打开方式：network / snapshot_first / snapshot_only */
+    val reviewOpenMode: String
+        get() = appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
+            ?: ReviewOpenMode.NETWORK
+
+    /**
+     * 离线评论模式：只控制发送策略，不代表真实网络状态。
+     * 开启后，评论弹窗内的发表动作一律拦截记录为离线评论，不立即发送（无论有无网络）；
+     * 关闭后不拦截，走书源原有发送流程，真实无网时由原流程自行失败。
+     */
+    var offlineReviewMode: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.offlineReviewMode, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.offlineReviewMode, value)
+        }
+
+    /** TXT-ZIP 导出时附带评论页快照 */
+    var exportReviews: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.exportReviews, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.exportReviews, value)
         }
 }

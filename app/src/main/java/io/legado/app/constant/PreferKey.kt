@@ -449,4 +449,18 @@ object PreferKey {
     const val editAutoComplete = "editAutoComplete"
     const val showBoardLine = "showBoardLine"
     const val sourceRecycleBinEnabled = "sourceRecycleBinEnabled"
+
+    // legadoC 评论体系
+    const val syncCacheReview = "syncCacheReview"
+    const val cacheReviewReplies = "cacheReviewReplies"
+    const val autoDownloadReview = "autoDownloadReview"
+    const val cacheReviewAvatars = "cacheReviewAvatars"
+    const val cacheReviewImages = "cacheReviewImages"
+    const val compressReviewAvatars = "compressReviewAvatars"
+    const val compressReviewImages = "compressReviewImages"
+    const val reviewAvatarCompressionMaxKb = "reviewAvatarCompressionMaxKb"
+    const val reviewImageCompressionMaxKb = "reviewImageCompressionMaxKb"
+    const val exportReviews = "exportReviews"
+    const val reviewOpenMode = "reviewOpenMode"
+    const val offlineReviewMode = "offlineReviewMode"
 }

@@ -1,0 +1,288 @@
+package io.legado.app.help.cache
+
+/** A cache request source. The source is diagnostic metadata, not a scheduler. */
+enum class CacheRequestSource {
+    CACHE_ACTIVITY,
+    CACHE_MANAGE,
+    READER,
+    AUTO_PRECACHE,
+    SYSTEM,
+}
+
+/** The book/source domain. Review is a phase of a text or audio task, not a separate session. */
+enum class CacheKind {
+    TEXT,
+    AUDIO,
+    VIDEO,
+}
+
+enum class CachePhase {
+    BODY,
+    REVIEW,
+    MEDIA,
+    TTS,
+}
+
+/** The legal artifact combinations owned by the cache domain. */
+internal fun CacheKind.supports(phase: CachePhase): Boolean = when (this) {
+    CacheKind.TEXT ->
+        phase == CachePhase.BODY || phase == CachePhase.REVIEW || phase == CachePhase.TTS
+    CacheKind.AUDIO -> phase == CachePhase.MEDIA || phase == CachePhase.REVIEW
+    CacheKind.VIDEO -> phase == CachePhase.MEDIA
+}
+
+/** A successful primary unit is the only unit allowed to create a REVIEW sibling. */
+internal fun CacheKind.reviewPrerequisitePhase(): CachePhase? = when (this) {
+    CacheKind.TEXT -> CachePhase.BODY
+    CacheKind.AUDIO -> CachePhase.MEDIA
+    CacheKind.VIDEO -> null
+}
+
+/** TTS 音频是文字书正文的衍生产物：正文产物完整是该章可合成的唯一前置。 */
+internal fun CacheKind.ttsPrerequisitePhase(): CachePhase? = when (this) {
+    CacheKind.TEXT -> CachePhase.BODY
+    CacheKind.AUDIO -> null
+    CacheKind.VIDEO -> null
+}
+
+/** Operational lifecycle. PARTIAL deliberately does not belong here. */
+enum class CacheLifecycle {
+    QUEUED,
+    RUNNING,
+    PAUSING,
+    PAUSED,
+    INTERRUPTED,
+    CANCELLING,
+    COMPLETED,
+    FAILED,
+    CANCELLED,
+}
+
+/** Aggregated unit/session result. A task may finish normally with a PARTIAL result. */
+enum class CacheResult {
+    SUCCEEDED,
+    PARTIAL,
+    FAILED,
+    SKIPPED,
+    CANCELLED,
+}
+
+/** A task-level skip is a scheduler decision, not a worker or chapter failure. */
+enum class CacheTaskSkipReason {
+    ALREADY_RUNNING,
+}
+
+enum class CacheUnitStatus {
+    PENDING,
+    RUNNING,
+    SUCCEEDED,
+    FAILED,
+    SKIPPED,
+    REVIEW_ELIGIBLE,
+    REVIEW_BLOCKED,
+    NOT_APPLICABLE,
+    CANCELLED,
+}
+
+data class CacheUnitKey(
+    val bookUrl: String,
+    val chapterIndex: Int,
+)
+
+data class CacheUnitState(
+    val key: CacheUnitKey,
+    val status: CacheUnitStatus = CacheUnitStatus.PENDING,
+    val error: String? = null,
+    val updatedAt: Long = 0L,
+)
+
+/** Exact failed review buttons selected for a cache-management retry. */
+data class CacheReviewRetryTarget(
+    val unitKey: CacheUnitKey,
+    val buttonSources: List<String>,
+)
+
+data class CacheRequest(
+    val source: CacheRequestSource,
+    val kind: CacheKind,
+    val phase: CachePhase,
+    val bookUrl: String,
+    val bookName: String,
+    val units: List<CacheUnitKey>,
+    val reviewEnabled: Boolean = false,
+    /** Empty for normal review caching; non-empty targets only recorded failed buttons. */
+    val reviewRetryTargets: List<CacheReviewRetryTarget> = emptyList(),
+    /** TEXT+BODY 任务终态后追加 TEXT+TTS 任务。 */
+    val ttsEnabled: Boolean = false,
+    /**
+     * 用户显式下载重复章节时对已完整快照执行增量下载（只补新增评论，不整章强刷）。
+     * 仅显式点击下载的入口置 true；阅读时自动下载保持纯跳过。
+     */
+    val reviewIncremental: Boolean = false,
+)
+
+internal data class CacheWorkerLease(
+    val sessionId: String,
+    val taskId: String,
+    val generation: Long,
+)
+
+data class CacheTaskState(
+    val taskId: String,
+    val sessionId: String,
+    val source: CacheRequestSource,
+    val kind: CacheKind,
+    val phase: CachePhase,
+    val bookUrl: String,
+    val bookName: String,
+    val units: List<CacheUnitState>,
+    val reviewEnabled: Boolean = false,
+    /** Persisted with a REVIEW task so a resumed retry cannot widen back to a chapter refresh. */
+    val reviewRetryTargets: List<CacheReviewRetryTarget> = emptyList(),
+    /** Persisted with a TEXT+BODY task so process recovery still appends the TTS sibling. */
+    val ttsEnabled: Boolean = false,
+    /** Persisted with the prerequisite so the appended REVIEW task keeps the incremental intent. */
+    val reviewIncremental: Boolean = false,
+    val status: CacheLifecycle = CacheLifecycle.QUEUED,
+    val result: CacheResult? = null,
+    val skipReason: CacheTaskSkipReason? = null,
+    val generation: Long = 0L,
+    val error: String? = null,
+    /** Durable outbox bit for Coordinator-owned terminal side effects. */
+    val terminalEffectsPending: Boolean = false,
+    val updatedAt: Long = 0L,
+)
+
+/** Units that may be handed to an executor after submit, resume, or process recovery. */
+internal fun CacheTaskState.runnableUnits(): List<CacheUnitState> = units.filter { unit ->
+    unit.status == CacheUnitStatus.PENDING ||
+        unit.status == CacheUnitStatus.RUNNING ||
+        unit.status == CacheUnitStatus.REVIEW_ELIGIBLE
+}
+
+data class CacheSessionState(
+    val sessionId: String,
+    val title: String,
+    val status: CacheLifecycle = CacheLifecycle.QUEUED,
+    val result: CacheResult? = null,
+    val tasks: List<CacheTaskState> = emptyList(),
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+)
+
+data class CacheSnapshot(
+    val sessions: List<CacheSessionState> = emptyList(),
+)
+
+/**
+ * Non-persistent runtime progress owned by [CacheTaskStore].
+ *
+ * Lifecycle and unit state remain in [CacheSnapshot]; transport and per-chapter work progress
+ * is deliberately reset when a new generation acquires the task.
+ */
+enum class CacheProgressMode {
+    CHAPTERS,
+    BYTES,
+    SNAPSHOTS,
+    /** TTS 章节内部的朗读单元合成进度。 */
+    UNITS,
+    INDETERMINATE,
+}
+
+data class CacheProgressState(
+    val sessionId: String,
+    val taskId: String,
+    val generation: Long,
+    val unitKey: CacheUnitKey? = null,
+    val mode: CacheProgressMode,
+    val current: Long = 0L,
+    val total: Long? = null,
+    /** Unit-local failures observed while this progress state is active. */
+    val failed: Long = 0L,
+    val updatedAt: Long = 0L,
+)
+
+/**
+ * Store-owned runtime progress projection. It is not part of [CacheSnapshot] persistence.
+ * [displaySessionId] is selected by the Store and remains stable across ordinary progress ticks.
+ * [display] is the current task/unit progress within that session.
+ */
+data class CacheProgressSnapshot(
+    val states: List<CacheProgressState> = emptyList(),
+    val displaySessionId: String? = null,
+    val display: CacheProgressState? = null,
+)
+
+object CacheLifecycleRules {
+
+    fun canTransition(from: CacheLifecycle, to: CacheLifecycle): Boolean {
+        if (from == to) return true
+        return when (from) {
+            CacheLifecycle.QUEUED -> to == CacheLifecycle.RUNNING ||
+                to == CacheLifecycle.CANCELLING ||
+                to == CacheLifecycle.CANCELLED ||
+                to == CacheLifecycle.FAILED
+            CacheLifecycle.RUNNING -> to == CacheLifecycle.PAUSING ||
+                to == CacheLifecycle.CANCELLING ||
+                to == CacheLifecycle.COMPLETED ||
+                to == CacheLifecycle.FAILED
+            CacheLifecycle.PAUSING -> to == CacheLifecycle.PAUSED ||
+                to == CacheLifecycle.CANCELLING
+            CacheLifecycle.PAUSED -> to == CacheLifecycle.RUNNING ||
+                to == CacheLifecycle.CANCELLING ||
+                to == CacheLifecycle.CANCELLED
+            CacheLifecycle.INTERRUPTED -> to == CacheLifecycle.RUNNING ||
+                to == CacheLifecycle.CANCELLING ||
+                to == CacheLifecycle.CANCELLED
+            CacheLifecycle.CANCELLING -> to == CacheLifecycle.CANCELLED
+            CacheLifecycle.COMPLETED,
+            CacheLifecycle.FAILED,
+            CacheLifecycle.CANCELLED -> false
+        }
+    }
+
+    fun isTerminal(status: CacheLifecycle): Boolean {
+        return status == CacheLifecycle.COMPLETED ||
+            status == CacheLifecycle.FAILED ||
+            status == CacheLifecycle.CANCELLED
+    }
+}
+
+data class CacheSubmission(
+    val sessionId: String,
+    val taskId: String,
+)
+
+/** Internal worker-facing port. UI code must not depend on this interface. */
+internal interface CacheWorkerPort {
+    fun acquire(submission: CacheSubmission): CacheWorkerLease?
+    fun reclaim(submission: CacheSubmission): CacheWorkerLease?
+    fun failQueued(submission: CacheSubmission, error: String): Boolean
+    fun confirmPaused(submission: CacheSubmission): Boolean
+    fun commitIfLeaseActive(lease: CacheWorkerLease, action: () -> Unit): Boolean
+    fun updateUnit(
+        lease: CacheWorkerLease,
+        key: CacheUnitKey,
+        status: CacheUnitStatus,
+        error: String? = null,
+    ): Boolean
+    fun updateProgress(
+        lease: CacheWorkerLease,
+        unitKey: CacheUnitKey?,
+        mode: CacheProgressMode,
+        current: Long,
+        total: Long? = null,
+        failed: Long = 0L,
+    ): Boolean
+    fun finish(
+        lease: CacheWorkerLease,
+        result: CacheResult,
+        error: String? = null,
+    ): Boolean
+    fun skip(
+        lease: CacheWorkerLease,
+        reason: CacheTaskSkipReason,
+        detail: String,
+    ): Boolean
+    fun confirmCancelled(submission: CacheSubmission): Boolean
+}

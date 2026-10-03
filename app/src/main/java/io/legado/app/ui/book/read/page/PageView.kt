@@ -2776,6 +2776,8 @@ class PageView(context: Context) : FrameLayout(context) {
 
     val selectStartPos get() = binding.contentTextView.selectStart
 
+    val selectEndPos get() = binding.contentTextView.selectEnd
+
     fun selectedStartPage(): TextPage? = binding.contentTextView.selectedStartPage()
 
     private companion object {

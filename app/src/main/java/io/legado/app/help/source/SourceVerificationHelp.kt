@@ -2,6 +2,7 @@ package io.legado.app.help.source
 
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BaseSource
+import io.legado.app.data.entities.Book
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.IntentData
@@ -36,7 +37,9 @@ object SourceVerificationHelp {
         title: String,
         useBrowser: Boolean,
         refetchAfterSuccess: Boolean = true,
-        html: String? = null
+        html: String? = null,
+        fallbackHtml: String? = null,
+        fallbackReviewResourceBook: Book? = null,
     ): Pair<String, String> {
         source
             ?: throw NoStackTraceException("getVerificationResult parameter source cannot be null")
@@ -54,7 +57,16 @@ object SourceVerificationHelp {
                 IntentData.put(getVerificationResultKey(source), Thread.currentThread())
             }
         } else {
-            startBrowser(source, url, title, true, refetchAfterSuccess, html)
+            startBrowser(
+                source,
+                url,
+                title,
+                true,
+                refetchAfterSuccess,
+                html,
+                fallbackHtml,
+                fallbackReviewResourceBook,
+            )
         }
 
         var waitUserInput = false
@@ -81,7 +93,9 @@ object SourceVerificationHelp {
         title: String,
         saveResult: Boolean? = false,
         refetchAfterSuccess: Boolean? = true,
-        html: String? = null
+        html: String? = null,
+        fallbackHtml: String? = null,
+        fallbackReviewResourceBook: Book? = null,
     ) {
         source ?: throw NoStackTraceException("startBrowser parameter source cannot be null")
         require(url.length < 64 * 1024) { "startBrowser parameter url too long" }
@@ -94,6 +108,8 @@ object SourceVerificationHelp {
             putExtra("sourceVerificationEnable", saveResult)
             putExtra("refetchAfterSuccess", refetchAfterSuccess)
             putExtra("html", html)
+            putExtra("fallbackHtml", fallbackHtml)
+            putExtra("fallbackReviewResourceBook", fallbackReviewResourceBook)
             IntentData.put(getVerificationResultKey(source), Thread.currentThread())
         }
     }

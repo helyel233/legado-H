@@ -119,6 +119,131 @@ class OtherConfigFragment : ComposeSettingFragment() {
                     title = getString(R.string.other_setting),
                     items = otherSettingItems()
                 )
+            ) + reviewDownloadSections()
+        )
+    }
+
+    /** legadoC 评论体系：评论下载各阶段并发/超时/完整性配置，定义集中在 ReviewDownloadConfig。 */
+    private fun reviewDownloadSections(): List<SettingSectionSpec> {
+        val cfg = io.legado.app.help.review.ReviewDownloadConfig
+        fun numberSpec(setting: io.legado.app.help.review.ReviewDownloadConfig.Number, help: String) =
+            numberAction(
+                key = setting.key,
+                title = getString(setting.title),
+                summary = getString(
+                    R.string.review_download_numeric_summary,
+                    setting.value, setting.default, help
+                ),
+                min = setting.minimum,
+                max = Int.MAX_VALUE,
+                value = setting.value,
+                onSelected = { setting.value = it }
+            )
+        return listOf(
+            SettingSectionSpec(
+                title = "评论下载 · 抓取引擎",
+                items = listOf(
+                    choice(
+                        key = cfg.ENGINE,
+                        title = getString(R.string.review_download_engine),
+                        entriesRes = R.array.review_download_engine_entries,
+                        valuesRes = R.array.review_download_engine_values,
+                        defaultValue = "auto",
+                        summary = getString(R.string.review_download_engine_summary)
+                    )
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 评论数据",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.DATA, "数据协议请求使用此配额，与回复、资源、网页分开；当前支持 idea_comment 段评，章评、书评走网页。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.PAGE_SIZE, "单次请求的条数参数；仍按服务端游标取完全部页面。服务端实际返回数量会记录。")
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 楼中楼",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.REPLIES, "所有楼中楼数据请求共享此配额，不占用评论数据请求配额。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.REPLY_SIZE, "回复单页请求条数；不限制回复总量。"),
+                    switch(
+                        key = cfg.REUSE_REPLIES,
+                        title = getString(R.string.review_download_reuse_replies),
+                        summary = "接口内嵌回复已完整时直接保存；关闭后从回复接口重新取全。",
+                        defaultValue = true
+                    )
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 网页快照",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.PAGES, "同时加载、展开的传统网页数量；结构化数据不占用此阶段。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.STABLE_INTERVAL, "只作用于传统网页展开和稳定检测；0 表示不主动等待。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.STABLE_ROUNDS, "传统网页连续多少轮内容稳定才结束；数据接口按明确完成状态结束。")
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 离线资源",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.RESOURCES, "全局资源请求并发，含头像、评论图片、样式表和字体；不再按每个页面分别建配额。"),
+                    switch(
+                        key = cfg.REUSE_RESOURCES,
+                        title = getString(R.string.review_download_reuse_resources),
+                        summary = "按准确 URL 和图片处理要求复用资源；关闭后重新下载。失败不会当作缓存命中。",
+                        defaultValue = true
+                    )
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 重处理",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.HEAVY, "资源改写、图片压缩、HTML 序列化与快照提交；网络等待不占用此配额。")
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 超时与重试",
+                items = listOf(
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.PAGE_TIMEOUT, "传统网页加载和展开的总时间；0 表示不设超时。网页失败直接报告，不自动换引擎。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.DATA_TIMEOUT, "一次数据请求（含正文读取）的总时间；0 表示不设超时。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.RESOURCE_TIMEOUT, "一次资源请求（含文件传输）的总时间；0 表示不设超时。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.RETRIES, "数据及资源 HTTP 请求初次失败后额外重试次数；0 不重试。每次失败、重试均记录，取消不重试。"),
+                    numberSpec(io.legado.app.help.review.ReviewDownloadConfig.Number.RETRY_INTERVAL, "基础等待时间；0 不主动等待。"),
+                    choice(
+                        key = cfg.BACKOFF,
+                        title = getString(R.string.review_download_backoff),
+                        entriesRes = R.array.review_download_backoff_entries,
+                        valuesRes = R.array.review_download_backoff_values,
+                        defaultValue = "fixed"
+                    )
+                )
+            ),
+            SettingSectionSpec(
+                title = "评论下载 · 完整性判定",
+                items = listOf(
+                    switch(
+                        key = cfg.REQUIRE_AVATARS,
+                        title = getString(R.string.review_download_require_avatars),
+                        summary = getString(R.string.review_download_requirement_summary),
+                        defaultValue = true
+                    ),
+                    switch(
+                        key = cfg.REQUIRE_IMAGES,
+                        title = getString(R.string.review_download_require_images),
+                        summary = getString(R.string.review_download_requirement_summary),
+                        defaultValue = true
+                    ),
+                    switch(
+                        key = cfg.REQUIRE_CSS,
+                        title = getString(R.string.review_download_require_css),
+                        summary = getString(R.string.review_download_requirement_summary),
+                        defaultValue = true
+                    ),
+                    switch(
+                        key = cfg.REQUIRE_FONTS,
+                        title = getString(R.string.review_download_require_fonts),
+                        summary = "同一字体按 CSS 候选关系取可用格式；全部候选失败才触发此项。${getString(R.string.review_download_requirement_summary)}",
+                        defaultValue = true
+                    )
+                )
             )
         )
     }

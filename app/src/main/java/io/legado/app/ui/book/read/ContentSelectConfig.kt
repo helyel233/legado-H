@@ -19,6 +19,7 @@ object ContentSelectConfig {
     const val ACTION_ASK_AI = "ask_ai"
     const val ACTION_GENERATE_IMAGE = "generate_image"
     const val ACTION_SHARE_IMAGE = "share_image"
+    const val ACTION_REVIEW = "review"
 
     private val legacyDefaultActions = setOf(
         ACTION_REPLACE,
@@ -50,7 +51,8 @@ object ContentSelectConfig {
         ACTION_DICT,
         ACTION_ASK_AI,
         ACTION_GENERATE_IMAGE,
-        ACTION_SHARE_IMAGE
+        ACTION_SHARE_IMAGE,
+        ACTION_REVIEW
     )
 
     val defaultOpenValues = listOf("", ACTION_WEB_SEARCH, ACTION_DICT, ACTION_ASK_AI)
