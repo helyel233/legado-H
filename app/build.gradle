@@ -235,7 +235,6 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.reorderable)
-    implementation(libs.lazycolumnscrollbar)
     implementation(libs.miuix.android)
 
     //google

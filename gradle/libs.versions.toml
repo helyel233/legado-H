@@ -42,7 +42,6 @@ composeBom = "2025.10.00"
 composeMaterial3 = "1.4.0"
 miuix = "0.8.8"
 reorderable = "3.1.0"
-lazyColumnScrollbar = "2.2.0"
 
 zxingLite = "3.3.0"
 
@@ -193,7 +192,6 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 miuix-android = { module = "top.yukonga.miuix.kmp:miuix-android", version.ref = "miuix" }
-lazycolumnscrollbar = { module = "com.github.nanihadesuka:LazyColumnScrollbar", version.ref = "lazyColumnScrollbar" }
 colorpicker = { module = "com.jaredrummler:colorpicker", version.ref = "colorpicker" }
 commons-text = { module = "org.apache.commons:commons-text", version.ref = "commonsText" }
 desugar = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugar" }
