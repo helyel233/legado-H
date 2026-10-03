@@ -52,6 +52,7 @@ import io.legado.app.help.http.ObsoleteUrlFactory
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.ReaderDataRepair
 import io.legado.app.help.storage.RestoreJournal
@@ -131,6 +132,7 @@ class App : Application() {
             RuleBigDataHelp.clearInvalid()
             BookHelp.clearInvalidCache()
             Backup.clearCache()
+            SourceRecycleBinHelp.cleanupExpired()
             ReadBookConfig.clearBgAndCache()
 //            ThemeConfig.clearBg() //每次手动切换主题时清理多余图片
             //初始化简繁转换引擎

@@ -2438,4 +2438,26 @@ bookUrl：%7$s
     <string name="debug_log">调试日志</string>
     <string name="debug_log_export">导出</string>
     <string name="debug_log_empty">暂无日志</string>
+    <string name="source_recycle_bin">规则回收站</string>
+    <string name="source_recycle_bin_summary">临时存放已删除的书源与规则，默认保留 7 天</string>
+    <string name="source_recycle_bin_empty">回收站为空</string>
+    <string name="source_recycle_bin_restored">已恢复</string>
+    <string name="source_recycle_bin_deleted">已彻底删除</string>
+    <string name="source_recycle_bin_cleared">回收站已清空</string>
+    <string name="source_recycle_bin_restore_msg">恢复“%1$s”？</string>
+    <string name="source_recycle_bin_batch_restore_msg">恢复选中的 %1$d 项？</string>
+    <string name="source_recycle_bin_conflict_title">条目已存在</string>
+    <string name="source_recycle_bin_conflict_msg">“%1$s”已存在同名条目，是否覆盖？</string>
+    <string name="source_recycle_bin_batch_conflict_msg">选中的 %1$d 项中包含同名条目，是否覆盖冲突项并恢复？</string>
+    <string name="source_recycle_bin_delete_msg">彻底删除“%1$s”？此操作不可恢复。</string>
+    <string name="source_recycle_bin_batch_delete_msg">彻底删除选中的 %1$d 项？此操作不可恢复。</string>
+    <string name="source_recycle_bin_clear_title">清空回收站</string>
+    <string name="source_recycle_bin_clear_msg">彻底删除回收站内全部条目？此操作不可恢复。</string>
+    <string name="source_recycle_bin_time_left">删除于 %1$s · 剩余 %2$d 天</string>
+    <string name="enable_source_recycle_bin">开启回收模式</string>
+    <string name="disable_source_recycle_bin">关闭回收模式</string>
+    <string name="source_recycle_bin_enabled">回收模式已开启</string>
+    <string name="source_recycle_bin_disabled">回收模式已关闭</string>
+    <string name="overwrite">覆盖</string>
+    <string name="delete_forever">彻底删除</string>
 </resources>

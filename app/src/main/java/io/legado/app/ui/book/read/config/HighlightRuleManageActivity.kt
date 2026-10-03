@@ -26,6 +26,7 @@ import io.legado.app.help.book.highlight.HighlightMatcher
 import io.legado.app.help.book.highlight.HighlightRule
 import io.legado.app.help.book.highlight.HighlightRuleSearch
 import io.legado.app.help.book.highlight.HighlightRules
+import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
@@ -239,7 +240,14 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
                         getString(R.string.highlight_rule_render_hint)).joinToString("\n\n"),
                     positiveText = getString(R.string.ok), showNegative = false, onPositive = {})
                 4 -> showComposeConfirmDialog(getString(R.string.delete), getString(R.string.sure_del) + "\n" + rule.displayName(),
-                    onPositive = { work { withContext(Dispatchers.IO) { HighlightRules.store.delete(rule.id) } } })
+                    onPositive = {
+                        work {
+                            withContext(Dispatchers.IO) {
+                                SourceRecycleBinHelp.recycleHighlightRules(listOf(rule))
+                                HighlightRules.store.delete(rule.id)
+                            }
+                        }
+                    })
             }
         }
     }

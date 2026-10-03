@@ -34,6 +34,7 @@ import io.legado.app.ui.config.AppearanceKitActivity
 import io.legado.app.ui.config.RelaySettingsActivity
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
+import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
@@ -335,6 +336,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             "publicWebRelay" -> startActivity<RelaySettingsActivity>()
 
             "cacheManage" -> startActivity<CacheManageActivity>()
+            "sourceRecycleBin" -> startActivity<SourceRecycleBinActivity>()
             "theme_setting" -> startActivity<ConfigActivity> {
                 putExtra("configTag", ConfigTag.THEME_CONFIG)
             }
@@ -387,6 +389,11 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 rows = listOf(
                     actionRow("web_dav_setting", R.string.backup_restore, R.string.web_dav_set_import_old),
                     actionRow("cacheManage", R.string.cache_manage_title, R.string.cache_manage_summary),
+                    actionRow(
+                        "sourceRecycleBin",
+                        R.string.source_recycle_bin,
+                        R.string.source_recycle_bin_summary
+                    ),
                     actionRow(
                         "publicWebRelay",
                         R.string.public_web_relay,

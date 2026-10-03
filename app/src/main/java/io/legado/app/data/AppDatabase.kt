@@ -44,6 +44,7 @@ import io.legado.app.data.dao.RuleSubDao
 import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
+import io.legado.app.data.dao.SourceRecycleBinDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.AiAgentJob
 import io.legado.app.data.entities.AiAgentSession
@@ -91,6 +92,7 @@ import io.legado.app.data.entities.RuleSub
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.data.entities.Server
+import io.legado.app.data.entities.SourceRecycleBin
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.DefaultData
 import io.legado.app.model.AutoTaskRule
@@ -108,7 +110,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 113,
+    version = 114,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -126,7 +128,7 @@ val appDb by lazy {
         AiReadAloudUsageRecord::class,
         AiAgentSession::class, AiAgentJob::class, AiAgentTrace::class,
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
-        AutoTaskRule::class],
+        AutoTaskRule::class, SourceRecycleBin::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -217,6 +219,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val aiAgentDao: AiAgentDao
     abstract val aiMemoryDao: AiMemoryDao
     abstract val autoTaskRuleDao: AutoTaskRuleDao
+    abstract val sourceRecycleBinDao: SourceRecycleBinDao
 
     companion object {
 

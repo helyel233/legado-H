@@ -1262,4 +1262,26 @@
     <string name="debug_log">除錯日誌</string>
     <string name="debug_log_export">匯出</string>
     <string name="debug_log_empty">暫無日誌</string>
+    <string name="source_recycle_bin">規則回收站</string>
+    <string name="source_recycle_bin_summary">暫存已刪除嘅書源同規則，預設保留 7 日</string>
+    <string name="source_recycle_bin_empty">回收站係空</string>
+    <string name="source_recycle_bin_restored">已還原</string>
+    <string name="source_recycle_bin_deleted">已徹底刪除</string>
+    <string name="source_recycle_bin_cleared">回收站已清空</string>
+    <string name="source_recycle_bin_restore_msg">還原「%1$s」？</string>
+    <string name="source_recycle_bin_batch_restore_msg">還原揀選嘅 %1$d 項？</string>
+    <string name="source_recycle_bin_conflict_title">項目已存在</string>
+    <string name="source_recycle_bin_conflict_msg">「%1$s」已存在同名項目，係咪覆蓋？</string>
+    <string name="source_recycle_bin_batch_conflict_msg">揀選嘅 %1$d 項入面有同名項目，係咪覆蓋衝突項並還原？</string>
+    <string name="source_recycle_bin_delete_msg">徹底刪除「%1$s」？此操作無法復原。</string>
+    <string name="source_recycle_bin_batch_delete_msg">徹底刪除揀選嘅 %1$d 項？此操作無法復原。</string>
+    <string name="source_recycle_bin_clear_title">清空回收站</string>
+    <string name="source_recycle_bin_clear_msg">徹底刪除回收站入面全部項目？此操作無法復原。</string>
+    <string name="source_recycle_bin_time_left">刪除於 %1$s · 剩餘 %2$d 日</string>
+    <string name="enable_source_recycle_bin">開啟回收模式</string>
+    <string name="disable_source_recycle_bin">關閉回收模式</string>
+    <string name="source_recycle_bin_enabled">回收模式已開啟</string>
+    <string name="source_recycle_bin_disabled">回收模式已關閉</string>
+    <string name="overwrite">覆蓋</string>
+    <string name="delete_forever">徹底刪除</string>
 </resources>

@@ -25,8 +25,36 @@ object DatabaseMigrations {
             migration_99_100, migration_100_101, migration_101_102, migration_102_103,
             migration_103_104, migration_104_105, migration_105_106,
             migration_106_107, migration_107_108, migration_108_109, migration_109_110,
-            migration_110_111, migration_111_112, MIGRATION_112_113,
+            migration_110_111, migration_111_112, MIGRATION_112_113, MIGRATION_113_114,
         )
+    }
+
+    val MIGRATION_113_114 = object : Migration(113, 114) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `source_recycle_bin` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `type` TEXT NOT NULL,
+                    `key` TEXT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `groupName` TEXT,
+                    `payload` TEXT NOT NULL,
+                    `deletedAt` INTEGER NOT NULL,
+                    `expireAt` INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_source_recycle_bin_type` ON `source_recycle_bin` (`type`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_source_recycle_bin_key` ON `source_recycle_bin` (`key`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_source_recycle_bin_expireAt` ON `source_recycle_bin` (`expireAt`)"
+            )
+        }
     }
 
     val MIGRATION_112_113 = object : Migration(112, 113) {

@@ -76,6 +76,10 @@ object SourceHelp {
 
     fun deleteBookSourceParts(sources: List<BookSourcePart>) {
         appDb.runInTransaction {
+            val fullSources = sources.mapNotNull {
+                appDb.bookSourceDao.getBookSource(it.bookSourceUrl)
+            }
+            SourceRecycleBinHelp.recycleBookSources(fullSources)
             sources.forEach {
                 deleteBookSourceInternal(it.bookSourceUrl)
             }
@@ -85,6 +89,7 @@ object SourceHelp {
 
     fun deleteBookSources(sources: List<BookSource>) {
         appDb.runInTransaction {
+            SourceRecycleBinHelp.recycleBookSources(sources)
             sources.forEach {
                 deleteBookSourceInternal(it.bookSourceUrl)
             }
@@ -99,12 +104,18 @@ object SourceHelp {
     }
 
     fun deleteBookSource(key: String) {
-        deleteBookSourceInternal(key)
+        appDb.runInTransaction {
+            appDb.bookSourceDao.getBookSource(key)?.let {
+                SourceRecycleBinHelp.recycleBookSources(listOf(it))
+            }
+            deleteBookSourceInternal(key)
+        }
         AppCacheManager.clearSourceVariables()
     }
 
     fun deleteRssSources(sources: List<RssSource>) {
         appDb.runInTransaction {
+            SourceRecycleBinHelp.recycleRssSources(sources)
             sources.forEach {
                 deleteRssSourceInternal(it.sourceUrl)
             }
@@ -119,7 +130,12 @@ object SourceHelp {
     }
 
     fun deleteRssSource(key: String) {
-        deleteRssSourceInternal(key)
+        appDb.runInTransaction {
+            appDb.rssSourceDao.getByKey(key)?.let {
+                SourceRecycleBinHelp.recycleRssSources(listOf(it))
+            }
+            deleteRssSourceInternal(key)
+        }
         AppCacheManager.clearSourceVariables()
     }
 

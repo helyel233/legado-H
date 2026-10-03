@@ -2820,4 +2820,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     val autoUpdateVariant get() = appCtx.getPrefBoolean("autoUpdateVariant", true)
+
+    /** 规则回收站开关（移植自 Legado_Max，默认开启，页内可关闭） */
+    var sourceRecycleBinEnabled: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.sourceRecycleBinEnabled, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.sourceRecycleBinEnabled, value)
+        }
 }

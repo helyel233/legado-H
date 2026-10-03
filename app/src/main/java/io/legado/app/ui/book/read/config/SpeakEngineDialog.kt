@@ -59,6 +59,7 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.readaloud.speech.SpeechRoute
 import io.legado.app.help.readaloud.speech.SpeechRouteSanitizer
+import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.help.readaloud.speech.SpeechVoiceCatalogRepository
 import io.legado.app.help.readaloud.speech.SpeechVoiceEngineGroup
 import io.legado.app.help.readaloud.speech.SpeechVoiceOption
@@ -213,7 +214,10 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
             onPositive = {
                 val appContext = requireContext().applicationContext
                 lifecycleScope.launch(IO) {
-                    appDb.httpTTSDao.delete(httpTTS)
+                    appDb.runInTransaction {
+                        SourceRecycleBinHelp.recycleHttpTtsRules(listOf(httpTTS))
+                        appDb.httpTTSDao.delete(httpTTS)
+                    }
                     val result = SpeechRouteSanitizer.cleanDeletedHttpTts(httpTTS)
                     if (result.changed) {
                         val message = buildList {

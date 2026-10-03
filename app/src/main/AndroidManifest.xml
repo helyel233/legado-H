@@ -243,6 +243,12 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- 规则回收站 -->
+        <activity
+            android:name=".ui.source.recycle.SourceRecycleBinActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 配置界面 -->
         <activity
             android:name=".ui.config.ConfigActivity"
