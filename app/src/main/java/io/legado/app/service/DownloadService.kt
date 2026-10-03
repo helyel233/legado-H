@@ -1,15 +1,12 @@
 package io.legado.app.service
 
-import android.annotation.SuppressLint
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
+import android.content.ContentValues
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseService
@@ -17,47 +14,58 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
+import io.legado.app.help.http.await
+import io.legado.app.help.http.okHttpClient
 import io.legado.app.utils.IntentType
 import io.legado.app.utils.openFileUri
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import okhttp3.Request
 import splitties.init.appCtx
-import splitties.systemservices.downloadManager
 import splitties.systemservices.notificationManager
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.min
 
 /**
  * 下载文件
+ *
+ * 使用应用内 OkHttp 网络栈下载，避免系统 DownloadManager 直连
+ * 下载源失败时长时间无进度并静默转入暂停状态。
+ * 支持断点续传、失败自动重试，并将真实进度与错误反馈到通知。
  */
 class DownloadService : BaseService() {
     private val groupKey = "${appCtx.packageName}.download"
-    private val downloads = hashMapOf<Long, DownloadInfo>()
-    private val completeDownloads = hashSetOf<Long>()
-    private var upStateJob: Job? = null
-    private val downloadReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            queryState()
-        }
+    private val downloads = ConcurrentHashMap<Long, DownloadInfo>()
+    private val completedDownloads = ConcurrentHashMap<Long, CompletedInfo>()
+    private val idGenerator = AtomicLong(0)
+
+    /**
+     * 共享 okHttpClient 带 60s callTimeout，无法完成大文件下载，
+     * 派生一个无整段超时、读超时适中的客户端用于下载。
+     */
+    private val downloadClient by lazy {
+        okHttpClient.newBuilder()
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(0, TimeUnit.SECONDS)
+            .build()
     }
 
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    override fun onCreate() {
-        super.onCreate()
-        ContextCompat.registerReceiver(
-            this,
-            downloadReceiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        unregisterReceiver(downloadReceiver)
-    }
+    private val progressTempDir: File
+        get() = File(cacheDir, "download").apply { mkdirs() }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -69,8 +77,9 @@ class DownloadService : BaseService() {
 
             IntentAction.play -> {
                 val id = intent.getLongExtra("downloadId", 0)
-                if (completeDownloads.contains(id)) {
-                    openDownload(id, downloads[id]?.fileName)
+                val uri = completedDownloads[id]
+                if (uri != null) {
+                    openFileUri(uri.uri, IntentType.from(uri.fileName))
                 } else {
                     toastOnUi("未完成,下载的文件夹Download")
                 }
@@ -112,35 +121,201 @@ class DownloadService : BaseService() {
             toastOnUi("已在下载列表")
             return
         }
-        kotlin.runCatching {
-            // 指定下载地址
-            val request = DownloadManager.Request(Uri.parse(url))
-            headers.forEach { (name, value) ->
-                if (name.isNotBlank() && value.isNotBlank()) {
-                    request.addRequestHeader(name, value)
+        val id = idGenerator.incrementAndGet()
+        val info = DownloadInfo(
+            id = id,
+            url = url,
+            fileName = fileName,
+            notificationId = NotificationId.Download + id.toInt(),
+            headers = headers
+        )
+        downloads[id] = info
+        upDownloadNotification(info, getString(R.string.wait_download), 0, 0)
+        info.job = launchDownload(info)
+    }
+
+    private fun launchDownload(info: DownloadInfo): Job {
+        return lifecycleScope.launch(Dispatchers.IO) {
+            val tempFile = File(progressTempDir, "${info.fileName}.part")
+            try {
+                var attempt = 0
+                while (true) {
+                    attempt++
+                    try {
+                        performDownload(info, tempFile)
+                        break
+                    } catch (e: Exception) {
+                        if (e is CancellationException) {
+                            throw e
+                        }
+                        AppLog.put("下载${info.fileName}出错", e)
+                        if (attempt >= MAX_RETRY || !lifecycleScope.isActive) {
+                            throw e
+                        }
+                        upDownloadNotification(
+                            info,
+                            "${getString(R.string.download_error)}，${RETRY_DELAY_SECONDS * attempt}s后重试($attempt/$MAX_RETRY)",
+                            0,
+                            0
+                        )
+                        delay(min(30_000L, RETRY_DELAY_SECONDS * attempt * 1000L))
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onDownloadError(info, e)
+            }
+        }
+    }
+
+    private suspend fun performDownload(info: DownloadInfo, tempFile: File) {
+        val downloaded = tempFile.length()
+        val builder = Request.Builder().url(info.url)
+        info.headers.forEach { (name, value) ->
+            builder.header(name, value)
+        }
+        if (downloaded > 0) {
+            builder.header("Range", "bytes=$downloaded-")
+        }
+        val response = downloadClient.newCall(builder.build()).await()
+        response.use { resp ->
+            if (!resp.isSuccessful) {
+                throw IOException("服务器返回错误(${resp.code})")
+            }
+            val body = resp.body ?: throw IOException("服务器返回空数据")
+            var offset = downloaded
+            if (!(resp.code == 206 && downloaded > 0)) {
+                // 服务器不支持续传，从头下载
+                offset = 0
+                tempFile.parentFile?.mkdirs()
+                tempFile.delete()
+                tempFile.createNewFile()
+            }
+            val total = body.contentLength().let { if (it >= 0) it + offset else -1L }
+            body.byteStream().use { input ->
+                FileOutputStream(tempFile, offset > 0).use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 8)
+                    var lastNotify = 0L
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        offset += read
+                        val now = System.currentTimeMillis()
+                        if (now - lastNotify > 800) {
+                            lastNotify = now
+                            upDownloadNotification(
+                                info,
+                                "${getString(R.string.downloading)} ${formatBytes(offset, total)}",
+                                if (total > 0) 100 else 0,
+                                if (total > 0) (offset * 100 / total).toInt() else 0
+                            )
+                        }
+                    }
                 }
             }
-            // 设置通知
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-            // 设置下载文件保存的路径和文件名
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-            // 添加一个下载任务
-            val downloadId = downloadManager.enqueue(request)
-            downloads[downloadId] =
-                DownloadInfo(url, fileName, NotificationId.Download + downloads.size)
-            queryState()
-            if (upStateJob == null) {
-                checkDownloadState()
-            }
-        }.onFailure {
-            it.printStackTrace()
-            val msg = when (it) {
-                is SecurityException -> "下载出错,没有存储权限"
-                else -> "下载出错,${it.localizedMessage}"
-            }
-            toastOnUi(msg)
-            AppLog.put(msg, it)
+            val uri = publishFile(tempFile, info.fileName)
+            successDownload(info, uri)
         }
+    }
+
+    /**
+     * 下载完成，保存到公共下载目录
+     */
+    private fun publishFile(tempFile: File, fileName: String): Uri {
+        try {
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                insertViaMediaStore(tempFile, fileName)
+            } else {
+                copyToPublicDownloads(tempFile, fileName)
+            }
+            if (uri != null) {
+                return uri
+            }
+        } catch (e: Exception) {
+            AppLog.put("保存${fileName}到公共下载目录失败", e)
+        }
+        // 兜底：保存到应用专属下载目录
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: File(cacheDir, "downloads").apply { mkdirs() }
+        val dest = uniqueFile(File(dir, fileName))
+        tempFile.copyTo(dest, overwrite = true)
+        return Uri.fromFile(dest)
+    }
+
+    private fun insertViaMediaStore(tempFile: File, fileName: String): Uri? {
+        val mimeType = IntentType.from(fileName)
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: return null
+        contentResolver.openOutputStream(uri)?.use { output ->
+            tempFile.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        } ?: run {
+            contentResolver.delete(uri, null, null)
+            return null
+        }
+        return uri
+    }
+
+    @Suppress("DEPRECATION")
+    private fun copyToPublicDownloads(tempFile: File, fileName: String): Uri? {
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!dir.canWrite()) {
+            return null
+        }
+        dir.mkdirs()
+        val dest = uniqueFile(File(dir, fileName))
+        tempFile.copyTo(dest, overwrite = true)
+        return Uri.fromFile(dest)
+    }
+
+    private fun uniqueFile(file: File): File {
+        if (!file.exists()) {
+            return file
+        }
+        val name = file.nameWithoutExtension
+        val ext = file.extension
+        var index = 1
+        while (true) {
+            val candidate = File(file.parentFile, "$name($index).$ext")
+            if (!candidate.exists()) {
+                return candidate
+            }
+            index++
+        }
+    }
+
+    /**
+     * 下载成功
+     */
+    @Synchronized
+    private fun successDownload(info: DownloadInfo, uri: Uri) {
+        downloads.remove(info.id)
+        completedDownloads[info.id] = CompletedInfo(uri, info.fileName)
+        File(progressTempDir, "${info.fileName}.part").delete()
+        upDownloadNotification(info, getString(R.string.download_success), 100, 100)
+        openDownload(info, uri)
+        checkStopSelf()
+    }
+
+    private fun onDownloadError(info: DownloadInfo, error: Throwable) {
+        downloads.remove(info.id)
+        File(progressTempDir, "${info.fileName}.part").delete()
+        upDownloadNotification(
+            info,
+            "${getString(R.string.download_error)}: ${error.localizedMessage ?: error.message ?: "网络异常"}",
+            0,
+            0
+        )
+        checkStopSelf()
     }
 
     /**
@@ -148,97 +323,32 @@ class DownloadService : BaseService() {
      */
     @Synchronized
     private fun removeDownload(downloadId: Long) {
-        if (!completeDownloads.contains(downloadId)) {
-            downloadManager.remove(downloadId)
+        val info = downloads.remove(downloadId)
+        info?.job?.cancel()
+        if (info != null) {
+            File(progressTempDir, "${info.fileName}.part").delete()
+            notificationManager.cancel(info.notificationId)
+        } else {
+            notificationManager.cancel(NotificationId.Download + downloadId.toInt())
         }
-        downloads.remove(downloadId)
-        completeDownloads.remove(downloadId)
-        notificationManager.cancel(downloadId.toInt())
+        completedDownloads.remove(downloadId)
+        checkStopSelf()
     }
 
-    /**
-     * 下载成功
-     */
-    @Synchronized
-    private fun successDownload(downloadId: Long) {
-        if (!completeDownloads.contains(downloadId)) {
-            completeDownloads.add(downloadId)
-            val fileName = downloads[downloadId]?.fileName
-            openDownload(downloadId, fileName)
-        }
-    }
-
-    private fun checkDownloadState() {
-        upStateJob?.cancel()
-        upStateJob = lifecycleScope.launch {
-            while (isActive) {
-                queryState()
-                delay(1000)
-            }
-        }
-    }
-
-    /**
-     * 查询下载进度
-     */
-    @Synchronized
-    private fun queryState() {
+    private fun checkStopSelf() {
         if (downloads.isEmpty()) {
             stopSelf()
-            return
-        }
-        val ids = downloads.keys
-        val query = DownloadManager.Query()
-        query.setFilterById(*ids.toLongArray())
-        downloadManager.query(query).use { cursor ->
-            if (cursor.moveToFirst()) {
-                val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
-                val progressIndex =
-                    cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                val fileSizeIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                do {
-                    val id = cursor.getLong(idIndex)
-                    val progress = cursor.getInt(progressIndex)
-                    val max = cursor.getInt(fileSizeIndex)
-                    val status = when (cursor.getInt(statusIndex)) {
-                        DownloadManager.STATUS_PAUSED -> getString(R.string.pause)
-                        DownloadManager.STATUS_PENDING -> getString(R.string.wait_download)
-                        DownloadManager.STATUS_RUNNING -> getString(R.string.downloading)
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            successDownload(id)
-                            getString(R.string.download_success)
-                        }
-
-                        DownloadManager.STATUS_FAILED -> getString(R.string.download_error)
-                        else -> getString(R.string.unknown_state)
-                    }
-                    downloads[id]?.let { downloadInfo ->
-                        upDownloadNotification(
-                            id,
-                            downloadInfo.notificationId,
-                            "${downloadInfo.fileName} $status",
-                            max,
-                            progress,
-                            downloadInfo.startTime
-                        )
-                    }
-                } while (cursor.moveToNext())
-            }
         }
     }
 
     /**
      * 打开下载文件
      */
-    private fun openDownload(downloadId: Long, fileName: String?) {
+    private fun openDownload(info: DownloadInfo, uri: Uri) {
         kotlin.runCatching {
-            downloadManager.getUriForDownloadedFile(downloadId)?.let { uri ->
-                val type = IntentType.from(fileName)
-                openFileUri(uri, type)
-            }
+            openFileUri(uri, IntentType.from(info.fileName))
         }.onFailure {
-            AppLog.put("打开下载文件${fileName}出错", it)
+            AppLog.put("打开下载文件${info.fileName}出错", it)
         }
     }
 
@@ -257,42 +367,69 @@ class DownloadService : BaseService() {
      * 更新通知
      */
     private fun upDownloadNotification(
-        downloadId: Long,
-        notificationId: Int,
+        info: DownloadInfo,
         content: String,
-        max: Int,
         progress: Int,
-        startTime: Long
+        progressMax: Int
     ) {
         val notificationBuilder = NotificationCompat.Builder(this, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_download)
             .setSubText(getString(R.string.action_download))
-            .setContentTitle(content)
+            .setContentTitle("${info.fileName} $content")
             .setOnlyAlertOnce(true)
             .setContentIntent(
-                servicePendingIntent<DownloadService>(IntentAction.play, downloadId.toInt()) {
-                    putExtra("downloadId", downloadId)
+                servicePendingIntent<DownloadService>(IntentAction.play, info.notificationId) {
+                    putExtra("downloadId", info.id)
                 }
             )
             .setDeleteIntent(
-                servicePendingIntent<DownloadService>(IntentAction.stop, downloadId.toInt()) {
-                    putExtra("downloadId", downloadId)
+                servicePendingIntent<DownloadService>(IntentAction.stop, info.notificationId) {
+                    putExtra("downloadId", info.id)
                 }
             )
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setGroup(groupKey)
-            .setWhen(startTime)
-        if (progress < max) {
-            notificationBuilder.setProgress(max, progress, false)
+            .setWhen(info.startTime)
+        if (progressMax > 0) {
+            notificationBuilder.setProgress(100, progress, false)
+        } else {
+            notificationBuilder.setProgress(0, 0, true)
         }
-        notificationManager.notify(notificationId, notificationBuilder.build())
+        notificationManager.notify(info.notificationId, notificationBuilder.build())
     }
 
+    private fun formatBytes(downloaded: Long, total: Long): String {
+        return if (total > 0) {
+            String.format(
+                Locale.ROOT,
+                "%.1fMB/%.1fMB",
+                downloaded / BYTES_PER_MB,
+                total / BYTES_PER_MB
+            )
+        } else {
+            String.format(Locale.ROOT, "%.1fMB", downloaded / BYTES_PER_MB)
+        }
+    }
+
+    private data class CompletedInfo(
+        val uri: Uri,
+        val fileName: String
+    )
+
     private data class DownloadInfo(
+        val id: Long,
         val url: String,
         val fileName: String,
         val notificationId: Int,
-        val startTime: Long = System.currentTimeMillis()
+        val headers: Map<String, String> = emptyMap(),
+        val startTime: Long = System.currentTimeMillis(),
+        var job: Job? = null
     )
+
+    companion object {
+        private const val MAX_RETRY = 3
+        private const val RETRY_DELAY_SECONDS = 3L
+        private const val BYTES_PER_MB = 1048576.0
+    }
 
 }

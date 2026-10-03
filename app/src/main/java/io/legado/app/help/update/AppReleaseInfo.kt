@@ -14,10 +14,9 @@ data class AppReleaseInfo(
     val downloadUrl: String,
     val assetUrl: String
 ) {
-    private val apkNameRegex = Regex("""^.+?_.+?_([^_]+)(?:_(\d+))?\.apk$""")
-    private val match = apkNameRegex.matchEntire(name)
-    val versionName: String = match?.groupValues?.getOrNull(1).orEmpty()
-    val versionCode: Long = match?.groupValues?.getOrNull(2)?.toLongOrNull() ?: 0L
+    private val versionInfo = AppUpdate.versionInfoFromFileName(name)
+    val versionName: String = versionInfo?.first.orEmpty()
+    val versionCode: Long = versionInfo?.second ?: 0L
     val abi: String? = when {
         name.contains("arm64-v8a", ignoreCase = true) -> "arm64-v8a"
         name.contains("armeabi-v7a", ignoreCase = true) -> "armeabi-v7a"

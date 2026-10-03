@@ -89,10 +89,7 @@ object AppUpdateInternal {
     }
 
     private fun versionNameFromFileName(fileName: String): String? {
-        return Regex("""^.+?_.+?_([^_]+)(?:_(\d+))?\.apk$""")
-            .matchEntire(fileName)
-            ?.groupValues
-            ?.getOrNull(1)
+        return AppUpdate.versionInfoFromFileName(fileName)?.first
             ?.takeIf { it.isNotBlank() }
     }
 

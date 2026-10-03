@@ -68,7 +68,8 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
                 if (it.versionCode > 0L) {
                     it.versionCode > AppConst.appInfo.versionCode
                 } else {
-                    it.versionName > AppConst.appInfo.versionName
+                    AppUpdate.isComparableVersionName(it.versionName) &&
+                        it.versionName > AppConst.appInfo.versionName
                 }
             }
             ?.let {

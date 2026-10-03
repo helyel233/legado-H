@@ -45,13 +45,31 @@ object AppUpdate {
         return NoStackTraceException("已是最新版本")
     }
 
+    /**
+     * 从 APK 文件名解析 versionName 与 versionCode。
+     * 兼容以下命名：
+     * legado_app_3.26.10021031_29848471.apk
+     * legado_app_3.26.10030000_29849280_LegadoH_arm64.apk
+     */
+    private val versionPairRegex = Regex("""(\d+(?:\.\d+)+)_(\d+)""")
+
+    fun versionInfoFromFileName(fileName: String): Pair<String, Long>? {
+        return versionPairRegex.find(fileName)?.let {
+            it.groupValues[1] to (it.groupValues[2].toLongOrNull() ?: 0L)
+        }
+    }
+
     fun versionCodeFromFileName(fileName: String): Long {
-        return Regex("""^.+?_.+?_([^_]+)(?:_(\d+))?\.apk$""")
-            .matchEntire(fileName)
-            ?.groupValues
-            ?.getOrNull(2)
-            ?.toLongOrNull()
-            ?: 0L
+        return versionInfoFromFileName(fileName)?.second ?: 0L
+    }
+
+    /**
+     * versionCode 缺失时按 versionName 字符串比较，
+     * 仅当其形如版本号（以数字开头）时才参与比较，
+     * 避免把 ABI 等尾段误当作版本号造成误报更新。
+     */
+    fun isComparableVersionName(versionName: String): Boolean {
+        return versionName.isNotEmpty() && versionName.first().isDigit()
     }
 
     fun isNewerThanCurrent(updateInfo: UpdateInfo): Boolean {
