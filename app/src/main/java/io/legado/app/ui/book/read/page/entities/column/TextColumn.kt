@@ -58,13 +58,15 @@ data class TextColumn(
             textPaint.color = textColor
         }
         val y = textLine.lineBase - textLine.lineTop
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        val x = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             val letterSpacing = textPaint.letterSpacing * textPaint.textSize
-            val letterSpacingHalf = letterSpacing * 0.5f
-            view.drawTextWithPaperInk(canvas, charData, start + letterSpacingHalf, y, textPaint, enablePaperInk)
+            start + letterSpacing * 0.5f
         } else {
-            view.drawTextWithPaperInk(canvas, charData, start, y, textPaint, enablePaperInk)
+            start
         }
+        view.drawTextWithPaperInk(canvas, charData, x, y, textPaint, enablePaperInk)
+        // 字重<字体基准字面时：用背景色描边擦掉字心边缘；drawThinStroke 内部会还原共享画笔
+        ChapterProvider.drawThinStroke(canvas, textPaint, textLine.isTitle, charData, 0, charData.length, x, y)
         if (selected) {
             view.drawSelectedRect(canvas, start, 0f, end, textLine.height)
         }

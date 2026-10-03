@@ -115,9 +115,12 @@ data class TextHtmlColumn(
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             val letterSpacing = textPaint.letterSpacing * textPaint.textSize
             val letterSpacingHalf = letterSpacing * 0.5f
-            view.drawTextWithPaperInk(canvas, charData, start + letterSpacingHalf, y, textPaint, enablePaperInk)
+            val x = start + letterSpacingHalf
+            view.drawTextWithPaperInk(canvas, charData, x, y, textPaint, enablePaperInk)
+            ChapterProvider.drawThinStroke(canvas, textPaint, textLine.isTitle, charData, 0, charData.length, x, y)
         } else {
             view.drawTextWithPaperInk(canvas, charData, start, y, textPaint, enablePaperInk)
+            ChapterProvider.drawThinStroke(canvas, textPaint, textLine.isTitle, charData, 0, charData.length, start, y)
         }
         if (selected) {
             view.drawSelectedRect(canvas, start, 0f, end, textLine.height)
