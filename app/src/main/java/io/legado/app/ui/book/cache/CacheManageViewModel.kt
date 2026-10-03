@@ -25,6 +25,7 @@ import io.legado.app.help.book.cacheRemoteKey
 import io.legado.app.help.book.cacheSourceKey
 import io.legado.app.help.book.cacheSourceName
 import io.legado.app.help.book.getBookSource
+import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
@@ -1007,6 +1008,10 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
         if (chapters.isEmpty()) {
             CacheManifestHelper.delete(book)
             return null
+        }
+        // 音视频书走探测式刷新：清单记的是"缓存时的地址"，地址被新解析覆盖后仍能找回缓存
+        if (book.isAudio || book.isVideo) {
+            return CacheManifestHelper.refresh(book, chapters)
         }
         val cacheNames = getCacheFileNames(book)
         return CacheManifestHelper.write(book, chapters) {

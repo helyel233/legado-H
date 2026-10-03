@@ -1,16 +1,16 @@
 package io.legado.app.ui.book.cache
 
 import android.os.Bundle
-import android.graphics.Color
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.activity.viewModels
 import androidx.appcompat.R as AppCompatR
 import androidx.appcompat.widget.SearchView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.SimpleItemAnimator
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.appDb
@@ -22,11 +22,7 @@ import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.utils.gone
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.applyTint
@@ -34,7 +30,6 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -44,7 +39,6 @@ import kotlinx.coroutines.withContext
 
 class CacheManageActivity :
     VMBaseActivity<ActivityCacheManageBinding, CacheManageViewModel>(),
-    CacheManageAdapter.Callback,
     CacheChapterDialog.Callback {
 
     companion object {
@@ -54,7 +48,6 @@ class CacheManageActivity :
     override val binding by viewBinding(ActivityCacheManageBinding::inflate)
     override val viewModel by viewModels<CacheManageViewModel>()
 
-    private val adapter by lazy { CacheManageAdapter(this, this) }
     private var audioTaskReloadJob: Job? = null
     private var lastMissingTaskReloadAt = 0L
     private val handledTerminalTaskReloads = hashSetOf<String>()
@@ -65,6 +58,13 @@ class CacheManageActivity :
     private var rawItems: List<CacheBookItem> = emptyList()
     private var searchKey: String = ""
     private var sortMode: CacheManageSortMode = CacheManageSortMode.RECENT
+
+    private var screenMode by mutableStateOf(CacheManageMode.BOOK)
+    private var screenItems by mutableStateOf<List<CacheBookItem>>(emptyList())
+    private var screenSummary by mutableStateOf<CacheSummary?>(null)
+    private var screenLoading by mutableStateOf(false)
+    private var audioTaskStateMap by mutableStateOf<Map<String, AudioCacheTaskState>>(emptyMap())
+    private var webDavTaskStateMap by mutableStateOf<Map<String, WebDavTaskState>>(emptyMap())
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
@@ -83,26 +83,27 @@ class CacheManageActivity :
     }
 
     private fun initView() = binding.run {
-        tabBar.background = UiCorner.opaqueRounded(
-            themeMutedColorOrDefault(),
-            UiCorner.panelRadius(this@CacheManageActivity)
-        )
-        listOf(btnBooks, btnAudio, btnManga).forEach {
-            it.background = UiCorner.actionSelector(
-                Color.TRANSPARENT,
-                themeCardColorOrDefault(),
-                UiCorner.actionRadius(this@CacheManageActivity)
+        composeView.setContent {
+            CacheManageScreen(
+                mode = screenMode,
+                items = screenItems,
+                summary = screenSummary,
+                loading = screenLoading,
+                audioTaskStates = audioTaskStateMap,
+                webDavTaskStates = webDavTaskStateMap,
+                onModeChange = ::switchMode,
+                onOpenChapters = ::openChapters,
+                onUpload = ::upload,
+                onRestore = ::restoreToBookshelf,
+                onDelete = ::deleteBookCache,
+                onStopAudio = ::stopAudioCache,
+                onSelectSource = ::selectSource,
+                onDownload = ::download,
+                onSelectSyncAction = ::selectSyncAction,
+                onUploadAll = ::uploadAll,
+                onDeleteAll = ::deleteAll
             )
         }
-        recyclerView.layoutManager = LinearLayoutManager(this@CacheManageActivity)
-        recyclerView.adapter = adapter
-        (recyclerView.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
-        btnBooks.setOnClickListener { switchMode(CacheManageMode.BOOK) }
-        btnAudio.setOnClickListener { switchMode(CacheManageMode.AUDIO) }
-        btnManga.setOnClickListener { switchMode(CacheManageMode.MANGA) }
-        btnUploadAll.setOnClickListener { uploadAll() }
-        btnDeleteAll.setOnClickListener { deleteAll() }
-        updateTabs(CacheManageMode.BOOK)
         updateSortButton()
     }
 
@@ -217,14 +218,10 @@ class CacheManageActivity :
             applyFilters()
         }
         viewModel.summaryLiveData.observe(this) { summary ->
-            binding.tvSummary.text = getString(
-                R.string.cache_manage_summary_state,
-                summary.bookCount,
-                summary.cachedChapterCount
-            )
+            screenSummary = summary
         }
         viewModel.loadingLiveData.observe(this) { loading ->
-            if (loading) binding.rotateLoading.visible() else binding.rotateLoading.gone()
+            screenLoading = loading
         }
     }
 
@@ -251,26 +248,17 @@ class CacheManageActivity :
     }
 
     private fun applyFilters() {
-        val items = rawItems
+        screenItems = rawItems
             .asSequence()
             .filter { it.matchesSearch(searchKey) }
             .sortedWith(sortMode.comparator())
             .toList()
-        adapter.setItems(items)
-        binding.tvEmpty.run {
-            if (items.isEmpty()) {
-                text = getString(R.string.cache_manage_empty, getString(viewModel.mode.titleRes))
-                visible()
-            } else {
-                gone()
-            }
-        }
     }
 
     private fun observeTasks() {
         lifecycleScope.launch {
             AudioCacheTaskManager.states.collectLatest { states ->
-                adapter.updateTaskStates(states)
+                audioTaskStateMap = states
                 if (viewModel.mode == CacheManageMode.AUDIO) {
                     reloadAudioItemsWhenNeeded(states)
                 }
@@ -278,7 +266,7 @@ class CacheManageActivity :
         }
         lifecycleScope.launch {
             WebDavTaskManager.states.collectLatest { states ->
-                adapter.updateWebDavTaskStates(states)
+                webDavTaskStateMap = states
                 reloadItemsWhenWebDavTaskFinished(states)
             }
         }
@@ -302,7 +290,7 @@ class CacheManageActivity :
             .mapTo(hashSetOf<String>()) { it.bookUrl }
         if (activeTaskBookUrls.isNotEmpty()) {
             val visibleBookUrls = hashSetOf<String>()
-            adapter.getItems().forEach { item ->
+            screenItems.forEach { item ->
                 if (item.sourceVariants.isEmpty()) {
                     visibleBookUrls.add(item.book.bookUrl)
                 } else {
@@ -340,22 +328,13 @@ class CacheManageActivity :
 
     private fun switchMode(mode: CacheManageMode) {
         if (viewModel.mode == mode) return
-        updateTabs(mode)
+        screenMode = mode
         rawItems = emptyList()
         applyFilters()
         viewModel.load(mode)
     }
 
-    private fun updateTabs(mode: CacheManageMode) = binding.run {
-        btnBooks.isSelected = mode == CacheManageMode.BOOK
-        btnAudio.isSelected = mode == CacheManageMode.AUDIO
-        btnManga.isSelected = mode == CacheManageMode.MANGA
-        btnBooks.setTextColor(if (mode == CacheManageMode.BOOK) accentColor else primaryTextColor)
-        btnAudio.setTextColor(if (mode == CacheManageMode.AUDIO) accentColor else primaryTextColor)
-        btnManga.setTextColor(if (mode == CacheManageMode.MANGA) accentColor else primaryTextColor)
-    }
-
-    override fun openChapters(item: CacheBookItem) {
+    private fun openChapters(item: CacheBookItem) {
         if (item.localCachedCount <= 0) {
             toastOnUi(R.string.cache_manage_download_first)
             return
@@ -363,7 +342,7 @@ class CacheManageActivity :
         showDialogFragment(CacheChapterDialog.newInstance(item.book))
     }
 
-    override fun upload(item: CacheBookItem) {
+    private fun upload(item: CacheBookItem) {
         selectSyncStrategy(R.string.cache_manage_upload_strategy_title) { strategy ->
             val queued = WebDavTaskManager.enqueueCacheUpload(item) {
                 viewModel.uploadCacheItem(item, strategy)
@@ -372,7 +351,7 @@ class CacheManageActivity :
         }
     }
 
-    override fun download(item: CacheBookItem) {
+    private fun download(item: CacheBookItem) {
         selectSyncStrategy(R.string.cache_manage_download_strategy_title) { strategy ->
             val queued = WebDavTaskManager.enqueueCacheDownload(item) {
                 viewModel.downloadRemoteCache(item, strategy)
@@ -381,7 +360,7 @@ class CacheManageActivity :
         }
     }
 
-    override fun selectSyncAction(item: CacheBookItem) {
+    private fun selectSyncAction(item: CacheBookItem) {
         val actions = listOf(
             R.string.cache_manage_upload to { upload(item) },
             R.string.action_download to { download(item) }
@@ -391,7 +370,7 @@ class CacheManageActivity :
         }
     }
 
-    override fun restoreToBookshelf(item: CacheBookItem) {
+    private fun restoreToBookshelf(item: CacheBookItem) {
         lifecycleScope.launch {
             kotlin.runCatching {
                 viewModel.restoreCacheToBookshelf(item)
@@ -411,7 +390,7 @@ class CacheManageActivity :
         }
     }
 
-    override fun deleteBookCache(item: CacheBookItem) {
+    private fun deleteBookCache(item: CacheBookItem) {
         selectDeleteTarget(
             item = item,
             localAvailable = item.localCachedCount > 0,
@@ -425,11 +404,11 @@ class CacheManageActivity :
         }
     }
 
-    override fun stopAudioCache(item: CacheBookItem) {
+    private fun stopAudioCache(item: CacheBookItem) {
         AudioCacheTaskManager.togglePause(item.book.bookUrl)
     }
 
-    override fun selectSource(item: CacheBookItem) {
+    private fun selectSource(item: CacheBookItem) {
         val variants = item.sourceVariants
         if (variants.size <= 1) return
         val labels: List<CharSequence> = variants.map { variant ->
@@ -452,7 +431,7 @@ class CacheManageActivity :
     }
 
     private fun uploadAll() {
-        val items = adapter.getItems().filter { it.cachedCount > 0 && !it.hasLockedCacheTask() }
+        val items = screenItems.filter { it.cachedCount > 0 && !it.hasLockedCacheTask() }
         if (items.isEmpty()) {
             toastOnUi(R.string.cache_manage_batch_empty)
             return
@@ -466,7 +445,7 @@ class CacheManageActivity :
     }
 
     private fun deleteAll() {
-        val items = adapter.getItems().filter {
+        val items = screenItems.filter {
             !it.hasLockedCacheTask() && (it.localCachedCount > 0 || it.hasRemoteCache())
         }
         if (items.isEmpty()) {
