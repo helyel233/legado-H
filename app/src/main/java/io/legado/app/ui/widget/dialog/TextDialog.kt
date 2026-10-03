@@ -50,6 +50,7 @@ import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivity
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
@@ -145,6 +146,18 @@ class TextDialog() : ComposeDialogFragment() {
                         )
                     },
                     actions = {
+                        // 复制全文（如崩溃日志），方便用户直接粘贴反馈
+                        if (mode == Mode.TEXT.name && canClose) {
+                            LegadoMiuixActionButton(
+                                text = stringResource(R.string.copy_text),
+                                palette = palette,
+                                onClick = {
+                                    requireContext().sendToClip(content)
+                                },
+                                cornerRadius = style.actionRadius
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         if (countdownSeconds > 0) {
                             Text(
                                 text = "${countdownSeconds}s",

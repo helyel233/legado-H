@@ -1,9 +1,15 @@
 package io.legado.app.constant
 
 import android.util.Log
+import io.legado.app.data.repository.debug.DebugEventCenter
 import io.legado.app.help.config.AppConfig
+import io.legado.app.model.debug.DebugCategory
+import io.legado.app.model.debug.DebugEvent
+import io.legado.app.model.debug.DebugLevel
+import io.legado.app.model.debug.DebugLogScope
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.launch
 import splitties.init.appCtx
 
 object AppLog {
@@ -31,6 +37,7 @@ object AppLog {
             val stackTrace = Thread.currentThread().stackTrace
             Log.e(stackTrace[3].className, message, throwable)
         }
+        emitToDebugCenter(message, throwable)
     }
 
     @Synchronized
@@ -47,6 +54,7 @@ object AppLog {
             val stackTrace = Thread.currentThread().stackTrace
             Log.e(stackTrace[3].className, message, throwable)
         }
+        emitToDebugCenter(message, throwable)
     }
 
     @Synchronized
@@ -57,6 +65,27 @@ object AppLog {
     fun putDebug(message: String?, throwable: Throwable? = null) {
         if (AppConfig.recordLog) {
             put(message, throwable)
+        } else {
+            // 不落盘也要进调试日志中心，便于调试日志页实时排查
+            emitToDebugCenter(message, throwable)
+        }
+    }
+
+    /** 转发到调试事件中心（分类：应用） */
+    private fun emitToDebugCenter(message: String?, throwable: Throwable?) {
+        message ?: return
+        DebugLogScope.launch {
+            runCatching {
+                DebugEventCenter.emit(
+                    DebugEvent(
+                        level = if (throwable != null) DebugLevel.ERROR else DebugLevel.INFO,
+                        category = DebugCategory.APP,
+                        message = message,
+                        detail = throwable?.stackTraceToString(),
+                        throwable = throwable
+                    )
+                )
+            }
         }
     }
 

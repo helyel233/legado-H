@@ -2435,4 +2435,7 @@ bookUrl：%7$s
     <string name="replace_preview">替换预览</string>
     <string name="pattern_empty">正则表达式为空</string>
     <string name="input_is_empty">待测试文本为空</string>
+    <string name="debug_log">调试日志</string>
+    <string name="debug_log_export">导出</string>
+    <string name="debug_log_empty">暂无日志</string>
 </resources>

@@ -9,11 +9,17 @@ import android.os.Looper
 import android.webkit.WebSettings
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
+import io.legado.app.data.repository.debug.DebugEventCenter
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.storage.RestoreJournal
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.debug.DebugCategory
+import io.legado.app.model.debug.DebugEvent
+import io.legado.app.model.debug.DebugLevel
+import io.legado.app.model.debug.DebugLogScope
+import kotlinx.coroutines.launch
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.createFileIfNotExist
@@ -78,6 +84,20 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         if (ex == null) return
         LocalConfig.appCrash = true
         RestoreJournal.markCrash()
+        //记录到调试事件中心（分类：崩溃），便于下次启动后在调试日志页回看
+        DebugLogScope.launch {
+            runCatching {
+                DebugEventCenter.emit(
+                    DebugEvent(
+                        level = DebugLevel.ERROR,
+                        category = DebugCategory.CRASH,
+                        message = ex.localizedMessage ?: ex.toString(),
+                        detail = ex.stackTraceToString(),
+                        throwable = ex
+                    )
+                )
+            }
+        }
         //保存日志文件
         saveCrashInfo2File(ex)
         if ((ex is OutOfMemoryError || ex.cause is OutOfMemoryError) && AppConfig.recordHeapDump) {

@@ -7,10 +7,16 @@ import android.content.Context
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import io.legado.app.BuildConfig
+import io.legado.app.data.repository.debug.DebugEventCenter
 import io.legado.app.databinding.ViewToastBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.model.debug.DebugCategory
+import io.legado.app.model.debug.DebugEvent
+import io.legado.app.model.debug.DebugLevel
+import io.legado.app.model.debug.DebugLogScope
+import kotlinx.coroutines.launch
 import splitties.systemservices.layoutInflater
 
 private var toast: Toast? = null
@@ -24,6 +30,19 @@ fun Context.toastOnUi(message: Int, duration: Int = Toast.LENGTH_SHORT) {
 @SuppressLint("InflateParams")
 @Suppress("DEPRECATION")
 fun Context.toastOnUi(message: CharSequence?, duration: Int = Toast.LENGTH_SHORT) {
+    message?.let {
+        DebugLogScope.launch {
+            runCatching {
+                DebugEventCenter.emit(
+                    DebugEvent(
+                        level = DebugLevel.INFO,
+                        category = DebugCategory.TOAST,
+                        message = it.toString()
+                    )
+                )
+            }
+        }
+    }
     runOnUI {
         kotlin.runCatching {
             toast?.cancel()

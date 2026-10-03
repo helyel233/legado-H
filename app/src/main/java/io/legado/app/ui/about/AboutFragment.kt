@@ -98,6 +98,12 @@ class AboutFragment : ComposeSettingFragment() {
                             showDialogFragment<CrashLogsDialog>()
                         },
                         action(
+                            key = KEY_DEBUG_LOG,
+                            title = getString(R.string.debug_log)
+                        ) {
+                            showDialogFragment<DebugLogDialog>()
+                        },
+                        action(
                             key = KEY_SAVE_LOG,
                             title = getString(R.string.save_log)
                         ) {
@@ -355,6 +361,7 @@ class AboutFragment : ComposeSettingFragment() {
         private const val KEY_PRIVACY_POLICY = "privacyPolicy"
         private const val KEY_CRASH_LOG = "crashLog"
         private const val KEY_SAVE_LOG = "saveLog"
+        private const val KEY_DEBUG_LOG = "debugLog"
         private const val KEY_CREATE_HEAP_DUMP = "createHeapDump"
     }
 

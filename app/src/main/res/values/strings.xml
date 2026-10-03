@@ -2621,4 +2621,7 @@ Selected text or question:
     <string name="replace_preview">Replace Preview</string>
     <string name="pattern_empty">Pattern is empty</string>
     <string name="input_is_empty">Test text is empty</string>
+    <string name="debug_log">Debug Log</string>
+    <string name="debug_log_export">Export</string>
+    <string name="debug_log_empty">No logs yet</string>
 </resources>
