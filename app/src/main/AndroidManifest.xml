@@ -237,6 +237,12 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- 正则测试 -->
+        <activity
+            android:name=".ui.debug.RegexTestActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 配置界面 -->
         <activity
             android:name=".ui.config.ConfigActivity"

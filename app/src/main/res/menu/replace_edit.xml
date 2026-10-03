@@ -26,4 +26,9 @@
         android:title="@string/paste_rule"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/menu_regex_test"
+        android:title="@string/regex_test"
+        app:showAsAction="never" />
+
 </menu>

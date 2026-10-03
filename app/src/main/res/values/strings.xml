@@ -2601,4 +2601,24 @@ Selected text or question:
     <string name="tip_custom_template_edit">Edit template: %1$s</string>
     <string name="tip_custom_template_hint">e.g. {书名} · {章节名}</string>
     <string name="tip_custom_template_help">Available placeholders: {书名} {章节名} {时间} {电量} {电量百分比} {页码} {总页数} {进度}</string>
+    <string name="regex_test">Regex Test</string>
+    <string name="regex_test_pattern">Pattern</string>
+    <string name="regex_test_input">Text to Test</string>
+    <string name="regex_test_input_hint">Enter the text to test</string>
+    <string name="regex_test_run">Test</string>
+    <string name="realtime_preview">Realtime Preview</string>
+    <string name="ignore_case">Ignore Case</string>
+    <string name="multiline_mode">Multiline</string>
+    <string name="dot_matches_newline">Dot Matches Newline</string>
+    <string name="regex_syntax_error">Invalid regex: %1$s</string>
+    <string name="regex_match_success">Match success</string>
+    <string name="no_match_found">No match found</string>
+    <string name="match_count_format">%1$d matches</string>
+    <string name="match_position">Match %1$d: [%2$d, %3$d)</string>
+    <string name="more_matches">%1$d more not shown</string>
+    <string name="match_detail">Match Details</string>
+    <string name="regex_highlight">Matched Text</string>
+    <string name="replace_preview">Replace Preview</string>
+    <string name="pattern_empty">Pattern is empty</string>
+    <string name="input_is_empty">Test text is empty</string>
 </resources>

@@ -2415,4 +2415,24 @@ bookUrl：%7$s
     <string name="tip_custom_template_edit">编辑模板：%1$s</string>
     <string name="tip_custom_template_hint">例如：{书名} · {章节名}</string>
     <string name="tip_custom_template_help">可用占位符：{书名} {章节名} {时间} {电量} {电量百分比} {页码} {总页数} {进度}</string>
+    <string name="regex_test">正则测试</string>
+    <string name="regex_test_pattern">正则表达式</string>
+    <string name="regex_test_input">待测试文本</string>
+    <string name="regex_test_input_hint">输入要测试的文本</string>
+    <string name="regex_test_run">测试</string>
+    <string name="realtime_preview">实时预览</string>
+    <string name="ignore_case">忽略大小写</string>
+    <string name="multiline_mode">多行模式</string>
+    <string name="dot_matches_newline">点号匹配换行</string>
+    <string name="regex_syntax_error">正则语法错误：%1$s</string>
+    <string name="regex_match_success">匹配成功</string>
+    <string name="no_match_found">未找到匹配</string>
+    <string name="match_count_format">共 %1$d 处匹配</string>
+    <string name="match_position">第 %1$d 处 [%2$d, %3$d)</string>
+    <string name="more_matches">其余 %1$d 处未显示</string>
+    <string name="match_detail">匹配详情</string>
+    <string name="regex_highlight">匹配高亮</string>
+    <string name="replace_preview">替换预览</string>
+    <string name="pattern_empty">正则表达式为空</string>
+    <string name="input_is_empty">待测试文本为空</string>
 </resources>

@@ -17,6 +17,7 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.databinding.ActivityReplaceEditBinding
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.debug.RegexTestActivity
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.utils.GSON
 import io.legado.app.utils.imeHeight
@@ -116,6 +117,15 @@ class ReplaceEditActivity :
             R.id.menu_paste_rule -> viewModel.pasteRule {
                 upReplaceView(it)
             }
+
+            R.id.menu_regex_test -> startActivity(
+                RegexTestActivity.startIntent(
+                    this,
+                    pattern = binding.etReplaceRule.text.toString(),
+                    replacement = binding.etReplaceTo.text.toString(),
+                    isRegex = binding.cbUseRegex.isChecked
+                )
+            )
         }
         return true
     }

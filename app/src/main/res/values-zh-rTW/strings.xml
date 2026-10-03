@@ -1240,4 +1240,24 @@
     <string name="bottom_bar_items_manage">底欄按鈕管理</string>
     <string name="bottom_bar_item_locked">始終顯示</string>
     <string name="bottom_bar_item_hidden">已隱藏</string>
+    <string name="regex_test">正則測試</string>
+    <string name="regex_test_pattern">正則表達式</string>
+    <string name="regex_test_input">待測試文本</string>
+    <string name="regex_test_input_hint">輸入要測試的文本</string>
+    <string name="regex_test_run">測試</string>
+    <string name="realtime_preview">即時預覽</string>
+    <string name="ignore_case">忽略大小寫</string>
+    <string name="multiline_mode">多行模式</string>
+    <string name="dot_matches_newline">點號匹配換行</string>
+    <string name="regex_syntax_error">正則語法錯誤：%1$s</string>
+    <string name="regex_match_success">匹配成功</string>
+    <string name="no_match_found">未找到匹配</string>
+    <string name="match_count_format">共 %1$d 處匹配</string>
+    <string name="match_position">第 %1$d 處 [%2$d, %3$d)</string>
+    <string name="more_matches">其餘 %1$d 處未顯示</string>
+    <string name="match_detail">匹配詳情</string>
+    <string name="regex_highlight">匹配高亮</string>
+    <string name="replace_preview">替換預覽</string>
+    <string name="pattern_empty">正則表達式為空</string>
+    <string name="input_is_empty">待測試文本為空</string>
 </resources>
