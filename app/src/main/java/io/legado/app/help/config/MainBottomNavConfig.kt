@@ -10,7 +10,9 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import splitties.init.appCtx
 
@@ -22,6 +24,9 @@ object MainBottomNavConfig {
     const val KEY_RSS = "rss"
     const val KEY_READ_RECORD = "readRecord"
     const val KEY_MY = "my"
+
+    /** 首页入口固定到最左侧第一位的迁移版本 */
+    private const val NAV_ORDER_HOMEPAGE_FIRST = 1
 
     @Keep
     data class ItemState(
@@ -39,8 +44,8 @@ object MainBottomNavConfig {
     )
 
     val specs = listOf(
-        ItemSpec(KEY_BOOKSHELF, R.string.bookshelf, R.id.menu_bookshelf, R.drawable.ic_bottom_books, 0, true),
         ItemSpec(KEY_HOMEPAGE, R.string.homepage, R.id.menu_homepage, R.drawable.ic_bottom_home, 5),
+        ItemSpec(KEY_BOOKSHELF, R.string.bookshelf, R.id.menu_bookshelf, R.drawable.ic_bottom_books, 0, true),
         ItemSpec(KEY_DISCOVERY, R.string.discovery, R.id.menu_discovery, R.drawable.ic_bottom_explore, 1),
         ItemSpec(KEY_RSS, R.string.rss, R.id.menu_rss, R.drawable.ic_bottom_rss_feed, 2),
         ItemSpec(KEY_READ_RECORD, R.string.side_nav_stats, R.id.menu_read_record, R.drawable.ic_bottom_read_record, 3),
@@ -58,8 +63,17 @@ object MainBottomNavConfig {
         } else {
             GSON.fromJsonArray<ItemState>(stored).getOrDefault(defaultItems)
         }
-        val normalized = normalize(raw)
-        if (stored.isNullOrBlank() || normalized != raw) {
+        var normalized = normalize(raw)
+        // 一次性迁移：把首页入口移动到最左侧第一位
+        val needHomepageFirst =
+            appCtx.getPrefInt(PreferKey.mainBottomNavOrderVersion, 0) < NAV_ORDER_HOMEPAGE_FIRST
+        if (needHomepageFirst && normalized.firstOrNull()?.key != KEY_HOMEPAGE) {
+            normalized.firstOrNull { it.key == KEY_HOMEPAGE }?.let { homepage ->
+                normalized = listOf(homepage) + normalized.filterNot { it.key == KEY_HOMEPAGE }
+            }
+        }
+        if (needHomepageFirst || stored.isNullOrBlank() || normalized != raw) {
+            appCtx.putPrefInt(PreferKey.mainBottomNavOrderVersion, NAV_ORDER_HOMEPAGE_FIRST)
             save(normalized)
         } else if (!prefs.contains(PreferKey.mainBottomNavItems)) {
             save(normalized)
@@ -75,6 +89,13 @@ object MainBottomNavConfig {
 
     fun save(items: List<ItemState>) {
         appCtx.putPrefString(PreferKey.mainBottomNavItems, GSON.toJson(normalize(items)))
+    }
+
+    /** 单独设置某项的可见性（界面设置中的首页开关等使用） */
+    fun setVisible(key: String, visible: Boolean) {
+        save(items().map { item ->
+            if (item.key == key) item.copy(visible = visible) else item
+        })
     }
 
     fun spec(key: String): ItemSpec? {
@@ -129,8 +150,8 @@ object MainBottomNavConfig {
             }
         }
         return listOf(
-            ItemState(KEY_BOOKSHELF, true),
             ItemState(KEY_HOMEPAGE, true),
+            ItemState(KEY_BOOKSHELF, true),
             ItemState(KEY_DISCOVERY, legacyVisible(PreferKey.showDiscovery, true)),
             ItemState(KEY_RSS, legacyVisible(PreferKey.showRss, true)),
             ItemState(KEY_READ_RECORD, legacyVisible(PreferKey.showReadRecord, true)),

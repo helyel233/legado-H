@@ -190,7 +190,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = MainBottomNavConfig.visibleItems().size
     private val EXIT_INTERVAL = 2000L
-    private val realPositions = arrayOf(idBookshelf, idHomepage, idExplore, idRss, idReadRecord, idMy)
+    private val realPositions = arrayOf(idHomepage, idBookshelf, idExplore, idRss, idReadRecord, idMy)
     private val adapter by lazy {
         TabFragmentPageAdapter(supportFragmentManager)
     }

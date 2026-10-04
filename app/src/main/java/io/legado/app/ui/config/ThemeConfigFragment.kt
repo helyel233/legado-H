@@ -13,6 +13,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.EpubLoadingTemplateStore
+import io.legado.app.help.config.MainBottomNavConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
@@ -66,6 +67,17 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             onCheckedChange = {
                                 updateBooleanSetting(PreferKey.immersiveManageBar, it)
                             }
+                        ),
+                        SettingSwitchSpec(
+                            key = KEY_HOMEPAGE_VISIBLE,
+                            title = getString(R.string.homepage),
+                            summary = getString(R.string.homepage_switch_summary),
+                            checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_HOMEPAGE),
+                            onCheckedChange = { checked ->
+                                MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_HOMEPAGE, checked)
+                                postEvent(EventBus.NOTIFY_MAIN, true)
+                            },
+                            searchKeys = listOf("首页", "homepage", "底部导航", "底部导航栏")
                         ),
                         SettingActionSpec(
                             key = KEY_THEME_MANAGE,
@@ -200,6 +212,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
     companion object {
         private const val DEFAULT_LAUNCHER_ICON = "ic_launcher"
         private const val KEY_THEME_MANAGE = "theme_manage"
+        private const val KEY_HOMEPAGE_VISIBLE = "homepage_visible"
         private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
         private const val KEY_DISCOVERY_SUBSCRIPTION_SETTINGS = "discoverySubscriptionSettings"
         private const val KEY_TOP_BAR_MANAGE = "top_bar_manage"

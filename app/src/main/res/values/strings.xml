@@ -2775,6 +2775,7 @@ Selected text or question:
     <string name="homepage_view_info">View details</string>
     <string name="select_all_books_collections">Select all(%1$d,%2$d)</string>
     <string name="homepage_preload">Preload adjacent tabs</string>
+    <string name="homepage_switch_summary">Show the homepage entry in the bottom navigation</string>
 
     <string name="illustration_note_empty">No note – tap to input</string>
     <string name="illustration_audio_volume_key">配图音频播放时音量键调音量</string>
