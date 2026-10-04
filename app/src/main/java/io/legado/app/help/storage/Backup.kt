@@ -56,6 +56,8 @@ import splitties.init.appCtx
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -84,6 +86,9 @@ object Backup {
     private const val AT_FONT_PREFIX = "@font:"
 
     private const val TAG = "Backup"
+
+    private const val COPY_BUFFER_SIZE = 64 * 1024
+    private const val PROGRESS_REPORT_INTERVAL_MS = 80L
 
     private val mutex = Mutex()
 
@@ -164,11 +169,12 @@ object Backup {
         context: Context,
         path: String?,
         uploadCloud: Boolean = true,
-        uploadWebDavFallback: Boolean = false
+        uploadWebDavFallback: Boolean = false,
+        onProgress: ((BackupProgress) -> Unit)? = null
     ) {
         mutex.withLock {
             withContext(IO) {
-                backup(context, path, uploadCloud, uploadWebDavFallback)
+                backup(context, path, uploadCloud, uploadWebDavFallback, onProgress)
             }
         }
     }
@@ -177,9 +183,12 @@ object Backup {
         context: Context,
         path: String?,
         uploadCloud: Boolean = true,
-        uploadWebDavFallback: Boolean = false
+        uploadWebDavFallback: Boolean = false,
+        onProgress: ((BackupProgress) -> Unit)? = null
     ) {
         LogUtils.d(TAG, "开始备份 path:$path")
+        val reporter = BackupProgressReporter(onProgress)
+        reporter.report(BackupProgress(BackupStage.PREPARING), force = true)
         val aes = BackupAES()
         FileUtils.delete(backupPath)
         writeBookshelfToJson(backupPath)
@@ -202,11 +211,7 @@ object Backup {
             FileUtils.createFileIfNotExist(backupPath + File.separator + "autoTask.json")
                 .writeText(AutoTaskImport.exportJson(rules), Charsets.UTF_8)
         }
-        exportBookCharacterAvatars()
         exportVisualResourcePackages()
-        exportReaderFonts()
-        exportBackgroundAssets()
-        exportBookFiles()
         GSON.toJson(appDb.serverDao.all).let { json ->
             aes.runCatching {
                 encryptBase64(json)
@@ -285,22 +290,23 @@ object Backup {
         }
         currentCoroutineContext().ensureActive()
         val zipFileName = getNowZipFileName()
-        val paths = arrayListOf(*backupFileNames)
-        for (i in 0 until paths.size) {
-            paths[i] = backupPath + File.separator + paths[i]
+        val zipSources = arrayListOf<ZipUtils.ZipSource>()
+        backupFileNames.forEach { name ->
+            zipSources.add(ZipUtils.ZipSource(File(backupPath, name)))
         }
-        File(backupPath, bookCharacterAvatarsDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
-        File(backupPath, fontsDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
-        File(backupPath, advancedTitlePackagesDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
-        File(backupPath, bubblePackagesDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
-        Restore.backgroundAssetDirNames.forEach { dir ->
-            File(backupPath, dir).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
-        }
-        File(backupPath, bookCacheBackupDirName).takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+        File(backupPath, advancedTitlePackagesDirName).takeIf { it.exists() }
+            ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
+        File(backupPath, bubblePackagesDirName).takeIf { it.exists() }
+            ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
         File(backupPath, io.legado.app.help.book.highlight.HighlightRules.BACKUP_DIR)
-            .takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+            .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
         File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
-            .takeIf { it.exists() }?.let { paths.add(it.absolutePath) }
+            .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
+        // 大体积资源直接从源目录压入 zip（entry 前缀与恢复端约定一致），跳过复制到 backupPath 的中间环节
+        collectBookCharacterAvatarSource()?.let(zipSources::add)
+        zipSources.addAll(collectReaderFontSources())
+        zipSources.addAll(collectBackgroundAssetSources())
+        zipSources.addAll(collectBookFileSources())
         FileUtils.delete(zipFilePath)
         FileUtils.delete(zipFilePath.replace("tmp_", ""))
         val backupFileName = if (AppConfig.onlyLatestBackup) {
@@ -309,23 +315,34 @@ object Backup {
             zipFileName
         }
         var backupSuccess = false
-        if (ZipUtils.zipFiles(paths, zipFilePath)) {
+        reporter.report(BackupProgress(BackupStage.PACKING), force = true)
+        if (ZipUtils.zipFiles(zipSources, zipFilePath) { processed, total ->
+                reporter.report(BackupProgress(BackupStage.PACKING, processed, total))
+            }) {
+            reporter.report(BackupProgress(BackupStage.SAVING), force = true)
             when {
                 path.isNullOrBlank() -> {
-                    copyBackup(context.getExternalFilesDir(null)!!, backupFileName)
+                    copyBackup(context.getExternalFilesDir(null)!!, backupFileName) { processed, total ->
+                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                    }
                 }
 
                 path.isContentScheme() -> {
-                    copyBackup(context, path.toUri(), backupFileName)
+                    copyBackup(context, path.toUri(), backupFileName) { processed, total ->
+                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                    }
                 }
 
                 else -> {
-                    copyBackup(File(path), backupFileName)
+                    copyBackup(File(path), backupFileName) { processed, total ->
+                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                    }
                 }
             }
             if (uploadCloud) {
                 val cloudType = if (uploadWebDavFallback) CloudStorageType.WEBDAV else AppCloudStorage.type
                 AppLog.put("Upload cloud backup: ${cloudType.name} $zipFileName")
+                reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
                 if (uploadWebDavFallback) {
                     AppCloudStorage.backupToWebDav(zipFileName)
                 } else {
@@ -345,6 +362,7 @@ object Backup {
         FileUtils.delete(backupPath)
         FileUtils.delete(zipFilePath)
         currentCoroutineContext().ensureActive()
+        reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
         ReadBookConfig.getAllPicBgStr().map {
             if (it.contains(File.separator)) {
                 File(it)
@@ -354,6 +372,7 @@ object Backup {
         }.let {
             AppCloudStorage.upBgs(it.toTypedArray())
         }
+        reporter.report(BackupProgress(BackupStage.FINISHED), force = true)
     }
 
     private fun exportSourceRuntime() {
@@ -405,18 +424,16 @@ object Backup {
         )
     }
 
-    private fun exportBookCharacterAvatars() {
+    /** 角色头像：直接从源目录压入 zip，entry 前缀与恢复目标目录一致 */
+    private fun collectBookCharacterAvatarSource(): ZipUtils.ZipSource? {
         val sourceDir = appCtx.externalFiles.getFile("bookCharacters", "avatars")
-        if (!sourceDir.exists() || !sourceDir.isDirectory) {
-            return
+        if (!sourceDir.isDirectory) {
+            return null
         }
-        val targetDir = File(backupPath, bookCharacterAvatarsDirName)
-        sourceDir.listFiles()?.takeIf { it.isNotEmpty() } ?: return
-        kotlin.runCatching {
-            copyDir(sourceDir, targetDir)
-        }.onFailure {
-            AppLog.put("备份角色头像出错\n${it.localizedMessage}", it)
+        if (sourceDir.listFiles().isNullOrEmpty()) {
+            return null
         }
+        return ZipUtils.ZipSource(sourceDir, bookCharacterAvatarsDirName)
     }
 
     private fun exportVisualResourcePackages() {
@@ -436,11 +453,11 @@ object Backup {
     }
 
     /**
-     * 备份阅读界面选择的字体文件：readConfig 各样式的 textFont 引用的字体本体
-     * 复制到备份 fonts/ 目录（@font:名 与绝对路径均支持），
+     * 收集阅读界面选择的字体文件：readConfig 各样式的 textFont 引用的字体本体
+     * （@font:名 与绝对路径均支持），直接以 fonts/ 前缀压入 zip，
      * 恢复端将文件还原到应用私有 font 目录后引用即可命中。
      */
-    private fun exportReaderFonts() {
+    private fun collectReaderFontSources(): List<ZipUtils.ZipSource> {
         val refs = linkedSetOf<String>()
         ReadBookConfig.allLayoutConfigs().forEach { config ->
             config.textFont.takeIf { it.isNotBlank() }?.let(refs::add)
@@ -454,26 +471,13 @@ object Backup {
         ).forEach { key ->
             appCtx.getPrefString(key)?.takeIf { it.isNotBlank() }?.let(refs::add)
         }
-        if (refs.isEmpty()) return
-        val targetDir = File(backupPath, fontsDirName)
-        var exported = 0
-        refs.forEach { ref ->
-            resolveReaderFontFile(ref)?.let { file ->
-                runCatching {
-                    val target = File(targetDir, file.name)
-                    if (file.absolutePath != target.absolutePath) {
-                        if (!targetDir.exists()) targetDir.mkdirs()
-                        file.copyTo(target, overwrite = true)
-                    }
-                    exported++
-                }.onFailure {
-                    AppLog.put("备份阅读字体出错 ${file.name}\n${it.localizedMessage}", it)
-                }
-            }
+        if (refs.isEmpty()) return emptyList()
+        val files = refs.mapNotNull { resolveReaderFontFile(it) }
+            .distinctBy { it.absolutePath }
+        if (files.isNotEmpty()) {
+            AppLog.put("备份阅读字体 ${files.size} 个")
         }
-        if (exported > 0) {
-            AppLog.put("备份阅读字体 $exported 个")
-        }
+        return files.map { ZipUtils.ZipSource(it, fontsDirName) }
     }
 
     private fun resolveReaderFontFile(ref: String): File? {
@@ -498,45 +502,32 @@ object Backup {
     }
 
     /**
-     * 备份主题背景图本体：主界面/书籍详情页/面板背景引用的本地图片文件，
-     * 按 Restore.backgroundAssetDirNames 的目录名存放；
-     * 恢复端 restoreBackgroundAssets + normalizeBackgroundPrefs 已有完整管线，
-     * 修复此前只恢复不导出的半成品闭环。
+     * 收集主题背景图本体：主界面/书籍详情页/面板背景引用的本地图片文件，
+     * 直接以 Restore.backgroundAssetDirNames 对应的目录前缀压入 zip；
+     * 恢复端 restoreBackgroundAssets + normalizeBackgroundPrefs 已有完整管线。
      */
-    private fun exportBackgroundAssets() {
+    private fun collectBackgroundAssetSources(): List<ZipUtils.ZipSource> {
+        val sources = arrayListOf<ZipUtils.ZipSource>()
         Restore.backgroundAssetDirNames.forEach { key ->
             val path = appCtx.getPrefString(key)?.trim().orEmpty()
             if (path.isEmpty() || !path.startsWith("/")) return@forEach
             val file = File(path)
             if (!file.isFile) return@forEach
-            runCatching {
-                val targetDir = File(backupPath, key)
-                val target = File(targetDir, file.name)
-                if (file.absolutePath != target.absolutePath) {
-                    if (!targetDir.exists()) targetDir.mkdirs()
-                    file.copyTo(target, overwrite = true)
-                }
-            }.onFailure {
-                AppLog.put("备份背景图出错 ${file.name}\n${it.localizedMessage}", it)
-            }
+            sources.add(ZipUtils.ZipSource(file, key))
         }
+        return sources
     }
 
     /**
-     * 备份书籍文件（已下载书籍本体与正文缓存），体积较大，
-     * 由「备份书籍文件」开关控制（默认关闭）。
+     * 收集书籍文件（已下载书籍本体与正文缓存）的来源，体积较大，
+     * 由「备份书籍文件」开关控制（默认关闭），直接从源目录压入 zip。
      */
-    private fun exportBookFiles() {
-        if (!AppConfig.backupBookFiles) return
+    private fun collectBookFileSources(): List<ZipUtils.ZipSource> {
+        if (!AppConfig.backupBookFiles) return emptyList()
         val sourceDir = File(BookHelp.cachePath)
-        if (!sourceDir.isDirectory) return
-        val targetDir = File(backupPath, bookCacheBackupDirName)
-        runCatching {
-            copyDir(sourceDir, targetDir)
-            AppLog.put("备份书籍文件完成")
-        }.onFailure {
-            AppLog.put("备份书籍文件出错\n${it.localizedMessage}", it)
-        }
+        if (!sourceDir.isDirectory) return emptyList()
+        AppLog.put("备份书籍文件：直接从缓存目录打包")
+        return listOf(ZipUtils.ZipSource(sourceDir, bookCacheBackupDirName))
     }
 
     private fun copyPackageDirectories(
@@ -611,7 +602,12 @@ object Backup {
 
     @Throws(Exception::class)
     @Suppress("SameParameterValue")
-    private fun copyBackup(context: Context, uri: Uri, fileName: String) {
+    private fun copyBackup(
+        context: Context,
+        uri: Uri,
+        fileName: String,
+        onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
+    ) {
         val treeDoc = DocumentFile.fromTreeUri(context, uri)!!
         treeDoc.findFile(fileName)?.delete()
         val fileDoc = treeDoc.createFile("", fileName)
@@ -620,24 +616,60 @@ object Backup {
             ?: throw NoStackTraceException("打开OutputStream失败")
         outputS.use {
             FileInputStream(zipFilePath).use { inputS ->
-                inputS.copyTo(outputS)
+                copyStreamWithProgress(inputS, outputS, onProgress)
             }
         }
     }
 
     @Throws(Exception::class)
     @Suppress("SameParameterValue")
-    private fun copyBackup(rootFile: File, fileName: String) {
+    private fun copyBackup(
+        rootFile: File,
+        fileName: String,
+        onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
+    ) {
         FileInputStream(File(zipFilePath)).use { inputS ->
             val file = FileUtils.createFileIfNotExist(rootFile, fileName)
             FileOutputStream(file).use { outputS ->
-                inputS.copyTo(outputS)
+                copyStreamWithProgress(inputS, outputS, onProgress)
             }
+        }
+    }
+
+    private fun copyStreamWithProgress(
+        inputS: InputStream,
+        outputS: OutputStream,
+        onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)?
+    ) {
+        val totalBytes = File(zipFilePath).length()
+        val buffer = ByteArray(COPY_BUFFER_SIZE)
+        var copied = 0L
+        while (true) {
+            val read = inputS.read(buffer)
+            if (read < 0) break
+            outputS.write(buffer, 0, read)
+            copied += read
+            onProgress?.invoke(copied, totalBytes)
         }
     }
 
     fun clearCache() {
         FileUtils.delete(backupPath)
         FileUtils.delete(zipFilePath)
+    }
+
+    /** 备份进度上报：按时间节流，避免高频刷新界面 */
+    private class BackupProgressReporter(
+        private val onProgress: ((BackupProgress) -> Unit)?
+    ) {
+        private var lastReportTime = 0L
+
+        fun report(progress: BackupProgress, force: Boolean = false) {
+            val callback = onProgress ?: return
+            val now = System.currentTimeMillis()
+            if (!force && now - lastReportTime < PROGRESS_REPORT_INTERVAL_MS) return
+            lastReportTime = now
+            callback(progress)
+        }
     }
 }
