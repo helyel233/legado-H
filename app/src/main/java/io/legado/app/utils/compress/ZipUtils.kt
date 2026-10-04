@@ -193,7 +193,11 @@ object ZipUtils {
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile), BUFFER_SIZE)).use { zos ->
             zos.setLevel(Deflater.BEST_SPEED)
             for (source in sources) {
-                val entryPath = source.entryRoot.ifBlank { source.file.name }
+                val entryPath = when {
+                    source.entryRoot.isBlank() -> source.file.name
+                    source.file.isFile -> "${source.entryRoot}/${source.file.name}"
+                    else -> source.entryRoot
+                }
                 if (!zipFile(source.file, entryPath, zos, comment, progress)) return false
             }
             progress.reportCompleted()
