@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
+import io.legado.app.constant.AppLog
 import io.legado.app.databinding.DialogReviewSnapshotStatusBinding
 import io.legado.app.data.entities.Book
 import io.legado.app.help.book.isAudio
@@ -68,8 +69,18 @@ class ReviewSnapshotStatusDialog :
         if (items.isEmpty()) return
         viewLifecycleOwner.lifecycleScope.launch {
             val retryStartedAt = System.currentTimeMillis()
-            val count = withContext(Dispatchers.IO) {
-                CacheCoordinator.retryReviewSnapshots(book, items.map { it.chapter })
+            val count = try {
+                withContext(Dispatchers.IO) {
+                    CacheCoordinator.retryReviewSnapshots(book, items.map { it.chapter })
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                // Prerequisite validation can reject a retry while the chapter artifact is
+                // incomplete; surface the failure instead of crashing the dialog.
+                AppLog.put("评论快照重试失败: ${book.bookUrl}", error)
+                toastOnUi(R.string.cache_manage_review_retry_failed)
+                return@launch
             }
             if (count == 0) {
                 toastOnUi(R.string.cache_manage_review_retry_unavailable)

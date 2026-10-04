@@ -338,7 +338,7 @@ object CacheCoordinator : CacheUiPort {
         return retryReviewSnapshots(book, listOf(chapter)) == 1
     }
 
-    /** Retries recorded failed buttons, or sends status-less chapters through the normal cache path. */
+    /** Retries recorded failed buttons, or sends status-less/incomplete chapters through the normal cache path. */
     fun retryReviewSnapshots(book: Book, chapters: List<BookChapter>): Int {
         if (!AppConfig.syncCacheReview || book.isLocal || book.isVideo) return 0
         val reviewKind = if (book.isAudio) CacheKind.AUDIO else CacheKind.TEXT
@@ -350,21 +350,25 @@ object CacheCoordinator : CacheUiPort {
         if (requested.isEmpty()) return 0
         val statusesByChapterUrl = ReviewSnapshotStore.chapterStatuses(book)
             .associateBy { it.chapterUrl.trim() }
-        val statuslessChapters = requested.filter { chapter ->
-            chapter.url.trim() !in statusesByChapterUrl
+        // A chapter takes the ordinary BODY refresh path when it has no sidecar status
+        // (no safe failed-button identities) or when its primary artifact is incomplete:
+        // a READER REVIEW submission for it would be rejected by the prerequisite
+        // validation, so the artifact must be refreshed first.
+        val (refreshChapters, retryChapters) = requested.partition { chapter ->
+            chapter.url.trim() !in statusesByChapterUrl ||
+                !isPrimaryArtifactComplete(book, chapter, reviewKind)
         }
-        if (statuslessChapters.isNotEmpty()) {
-            // A missing sidecar has no safe failed-button identities. Reuse the ordinary
-            // one-chapter BODY -> REVIEW path so the existing snapshot is retained and a
-            // fresh chapter status is written by the normal review worker.
+        if (refreshChapters.isNotEmpty()) {
+            // Reuse the ordinary one-chapter BODY -> REVIEW path so the existing snapshot is
+            // retained and a fresh chapter status is written by the normal review worker.
             submitBookDownload(
                 book = book,
-                chapterIndexes = statuslessChapters.map { it.index },
+                chapterIndexes = refreshChapters.map { it.index },
                 source = CacheRequestSource.CACHE_MANAGE,
                 reviewEnabled = true,
             )
         }
-        val retryTargets = requested.mapNotNull { chapter ->
+        val retryTargets = retryChapters.mapNotNull { chapter ->
             val failedButtonSources = statusesByChapterUrl[chapter.url.trim()]
                 ?.failedButtonSourcesForRetry()
                 ?: return@mapNotNull null
@@ -373,7 +377,7 @@ object CacheCoordinator : CacheUiPort {
                 buttonSources = failedButtonSources,
             )
         }
-        if (retryTargets.isEmpty()) return statuslessChapters.size
+        if (retryTargets.isEmpty()) return refreshChapters.size
         synchronized(reviewTaskLock) {
             val activeIndexes = snapshot.value.sessions.asSequence()
                 .flatMap { it.tasks.asSequence() }
@@ -402,7 +406,16 @@ object CacheCoordinator : CacheUiPort {
                     )
                 )
             }
-            return statuslessChapters.size + unownedTargets.size
+            return refreshChapters.size + unownedTargets.size
+        }
+    }
+
+    /** REVIEW targets require the complete primary artifact; incomplete ones refresh first. */
+    private fun isPrimaryArtifactComplete(book: Book, chapter: BookChapter, kind: CacheKind): Boolean {
+        return when (kind) {
+            CacheKind.TEXT -> BodyOfflineState.isComplete(book, chapter)
+            CacheKind.AUDIO -> AudioOfflineState.isComplete(book, chapter)
+            else -> true
         }
     }
 
