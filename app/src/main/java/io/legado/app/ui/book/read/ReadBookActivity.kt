@@ -59,6 +59,7 @@ import io.legado.app.constant.Status
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookIllustration
 import io.legado.app.data.entities.BookParagraphRule
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.data.entities.BookSource
@@ -100,6 +101,8 @@ import io.legado.app.help.book.removeType
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.illustration.AudioBlockPlayer
+import io.legado.app.help.illustration.IllustrationAnchor
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
@@ -171,6 +174,7 @@ import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.TEXT_COLOR
 import io.legado.app.ui.book.read.config.MoreConfigDialog
 import io.legado.app.ui.book.read.config.ParagraphRuleManageActivity
 import io.legado.app.ui.book.read.config.HighlightRuleManageActivity
+import io.legado.app.ui.book.read.config.IllustrationEditDialog
 import io.legado.app.help.book.highlight.HighlightRules
 import io.legado.app.ui.book.read.config.ParagraphRuleQuickDialog
 import io.legado.app.ui.book.read.config.ReadMenuCustomButtonEditActivity
@@ -428,6 +432,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var commentBrowserShowing = false
     private var selectedReviewButton: ReviewButton? = null
     private var selectedSyntheticPara: SyntheticParaContent? = null
+    private var illustrationAnchor: IllustrationAnchor? = null
     val textActionMenu: TextActionMenu by lazy {
         TextActionMenu(this, this)
     }
@@ -1673,6 +1678,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 显示文本操作菜单
      */
     override fun showTextActionMenu() {
+        illustrationAnchor = computeIllustrationAnchor()
         val reviewEntry = findSelectedReviewEntry()
         selectedReviewButton = reviewEntry?.button
         selectedSyntheticPara = reviewEntry?.syntheticPara
@@ -1713,6 +1719,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     ) = binding.run {
         selectedReviewButton = null
         selectedSyntheticPara = null
+        illustrationAnchor = null
         val navigationBarHeight =
             if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
                 binding.navigationBar.height else 0
@@ -1807,6 +1814,44 @@ class ReadBookActivity : BaseReadBookActivity(),
             binding.readView.getSelectText()
         }
 
+    private fun computeIllustrationAnchor(): IllustrationAnchor? {
+        val book = ReadBook.book ?: return null
+        val chapter = ReadBook.curTextChapter ?: return null
+        val pageView = binding.readView.curPage
+        val startPos = pageView.selectStartPos
+        val endPos = pageView.selectEndPos
+        if (!startPos.isSelected() || !endPos.isSelected()) return null
+        val startPage = pageView.relativePage(startPos.relativePagePos)
+        val endPage = pageView.relativePage(endPos.relativePagePos)
+        val startParaNum = startPage.getLine(startPos.lineIndex).paragraphNum
+        val endParaNum = endPage.getLine(endPos.lineIndex).paragraphNum
+        if (startParaNum <= 0 || endParaNum <= 0) return null
+        val chapterParagraphs = chapter.paragraphs
+        val lastParaNum = chapterParagraphs.lastOrNull()?.num ?: return null
+        val frontNum = minOf(startParaNum, endParaNum)
+        if (frontNum == lastParaNum) {
+            // 第一段已是章末：插入该章末尾
+            val paragraph = chapterParagraphs.getOrNull(frontNum - 1) ?: return null
+            return IllustrationAnchor(
+                anchorType = BookIllustration.ANCHOR_CHAPTER_END,
+                anchorPos = -1,
+                frontParagraph = paragraph.text,
+                backParagraph = ""
+            )
+        }
+        val frontParagraph = chapterParagraphs.getOrNull(frontNum - 1) ?: return null
+        val backParagraph = chapterParagraphs.getOrNull(frontNum) ?: return null
+        val anchorPos = frontParagraph.lastLine.chapterPosition +
+            frontParagraph.lastLine.charSize +
+            if (frontParagraph.isParagraphEnd) 1 else 0
+        return IllustrationAnchor(
+            anchorType = BookIllustration.ANCHOR_BETWEEN_PARAGRAPHS,
+            anchorPos = anchorPos,
+            frontParagraph = frontParagraph.text,
+            backParagraph = backParagraph.text
+        )
+    }
+
     /**
      * 文本选择菜单操作
      */
@@ -1819,6 +1864,17 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_aloud -> {
                 handleSelectedTextReadAloud()
+                return true
+            }
+
+            R.id.menu_illustration -> {
+                illustrationAnchor?.let { anchor ->
+                    val dialog = IllustrationEditDialog(anchor)
+                    dialog.setOnInserted {
+                        ReadBook.loadContent(resetPageOffset = true)
+                    }
+                    showDialogFragment(dialog)
+                }
                 return true
             }
 
@@ -2342,6 +2398,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             return false
         }
         if (!AppConfig.volumeKeyPageOnPlay && BaseReadAloudService.isPlay()) {
+            return false
+        }
+        // 内嵌音频块播放时，按设置决定音量键是否让位给系统调音量（像听书一样）
+        if (AppConfig.illustrationAudioVolumeKey && AudioBlockPlayer.isPlaying) {
             return false
         }
         handleKeyPage(direction, longPress)
@@ -5905,6 +5965,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     } == true
 
     override fun supportsReview(): Boolean = selectedReviewButton != null
+
+    override fun supportsIllustration(): Boolean = illustrationAnchor != null
 
     override fun epubCoreChapterTitle(): String? {
         val book = ReadBook.book?.takeIf { it.usesDirectReader } ?: return null

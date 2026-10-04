@@ -41,6 +41,7 @@ import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.entities.TextPos
+import io.legado.app.ui.book.read.page.entities.column.ImageColumn
 import io.legado.app.ui.book.read.page.entities.column.TextBaseColumn
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
@@ -89,6 +90,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
     private var pressDown = false
     private var isMove = false
     private var ignoreMandatoryGestureTouch = false
+    private var audioDragging = false
 
     //起始点
     var startX: Float = 0f
@@ -360,6 +362,17 @@ class ReadView(context: Context, attrs: AttributeSet) :
         }
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                // 音频块进度条拖动/点击优先级最高：按下即 seek，不触发翻页/选区；
+                // 长按计时照常启动：音频块长按需要弹出菜单（如查看备注），拖动或抬手时再取消。
+                // setStartPoint 必须调用：长按回调按 startX/startY 定位，否则会命中上一次手势的旧位置
+                val trackHit = curPage.hitAudioTrack(event.x, event.y)
+                if (trackHit != null) {
+                    audioDragging = true
+                    curPage.audioTrackSeek(trackHit, event.x)
+                    setStartPoint(event.x, event.y, false)
+                    postDelayed(longPressRunnable, longPressTimeout)
+                    return true
+                }
                 callBack.screenOffTimerStart()
                 if (isTextSelected) {
                     curPage.cancelSelect()
@@ -381,6 +394,14 @@ class ReadView(context: Context, attrs: AttributeSet) :
             }
 
             MotionEvent.ACTION_MOVE -> {
+                if (audioDragging) {
+                    // 拖动即取消长按：音频块长按只在按住不动时生效
+                    removeCallbacks(longPressRunnable)
+                    curPage.hitAudioTrack(event.x, event.y)?.let {
+                        curPage.audioTrackSeek(it, event.x)
+                    }
+                    return true
+                }
                 if (!pressDown) return true
                 val absX = abs(startX - event.x)
                 val absY = abs(startY - event.y)
@@ -402,6 +423,14 @@ class ReadView(context: Context, attrs: AttributeSet) :
             MotionEvent.ACTION_UP -> {
                 selectionAutoPager.cancel()
                 dismissSelectionMagnifier()
+                if (audioDragging) {
+                    audioDragging = false
+                    removeCallbacks(longPressRunnable)
+                    curPage.hitAudioTrack(event.x, event.y)?.let {
+                        curPage.audioTrackSeek(it, event.x)
+                    }
+                    return true
+                }
                 callBack.screenOffTimerStart()
                 removeCallbacks(longPressRunnable)
                 if (!pressDown) return true
@@ -429,6 +458,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
             MotionEvent.ACTION_CANCEL -> {
                 selectionAutoPager.cancel()
                 dismissSelectionMagnifier()
+                audioDragging = false
                 removeCallbacks(longPressRunnable)
                 if (!pressDown) return true
                 pressDown = false

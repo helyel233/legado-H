@@ -27,6 +27,10 @@
         android:title="@string/review" />
 
     <item
+        android:id="@+id/menu_illustration"
+        android:title="@string/menu_illustration" />
+
+    <item
         android:id="@+id/menu_dict"
         android:title="@string/dict" />
 

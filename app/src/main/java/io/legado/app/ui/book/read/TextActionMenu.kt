@@ -165,6 +165,7 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
         R.id.menu_generate_image -> ContentSelectConfig.ACTION_GENERATE_IMAGE
         R.id.menu_share_image -> ContentSelectConfig.ACTION_SHARE_IMAGE
         R.id.menu_review -> ContentSelectConfig.ACTION_REVIEW
+        R.id.menu_illustration -> ContentSelectConfig.ACTION_ILLUSTRATION
         else -> null
     }
 
@@ -176,6 +177,9 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
                 return@mapNotNull null
             }
             if (actionId == ContentSelectConfig.ACTION_REVIEW && !callBack.supportsReview()) {
+                return@mapNotNull null
+            }
+            if (actionId == ContentSelectConfig.ACTION_ILLUSTRATION && !callBack.supportsIllustration()) {
                 return@mapNotNull null
             }
             TextMenuAction(
@@ -416,6 +420,9 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
 
         /** 选区对应段落存在段评入口时返回 true，用于控制“段评”菜单项可见性 */
         fun supportsReview(): Boolean = false
+
+        /** 选区处于可插入配图的段落边界时返回 true，用于控制“插入”菜单项可见性 */
+        fun supportsIllustration(): Boolean = false
 
         fun onMenuItemSelected(itemId: Int): Boolean
 

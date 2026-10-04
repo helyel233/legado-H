@@ -12,10 +12,17 @@ import android.view.View
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookIllustration
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.appDb
 import io.legado.app.help.PaperInkHelper
 import io.legado.app.help.book.isOnLineTxt
+import io.legado.app.help.book.isPdf
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.illustration.AudioBlockPlayer
+import io.legado.app.help.illustration.IllustrationHelp
+import io.legado.app.help.illustration.imageSrcsFromJson
+import io.legado.app.help.illustration.pdfRectsFromJson
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.EpubFile
@@ -125,8 +132,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
     }
 
+    private val audioBlockStateListener = { postInvalidate() }
+
     init {
         callBack = activity as CallBack
+        // 音频块播放状态/进度变化时重绘，保证进度条跟随（多页实例各自监听）
+        AudioBlockPlayer.addStateChangeListener(audioBlockStateListener)
     }
 
     /**
@@ -278,6 +289,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         // before detaching so queued work cannot post a stale reader update.
         renderGeneration.incrementAndGet()
         pendingRenderSnapshot.set(null)
+        AudioBlockPlayer.removeStateChangeListener(audioBlockStateListener)
         super.onDetachedFromWindow()
     }
 
@@ -470,13 +482,16 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         var handled = false
         touch(x, y) { _, textPos, _, textLine, column ->
             when (column) {
-                is ImageColumn -> callBack.onImageLongPress(
-                    x = x,
-                    y = y,
-                    src = column.src,
-                    paragraphNum = textLine.paragraphNum,
-                    imageIndexInParagraph = imageIndexInParagraph(textLine, column)
-                )
+                is ImageColumn -> {
+                    val pdfHit = hitPdfIllustration(x, y, textLine, column)
+                    callBack.onImageLongPress(
+                        x = x,
+                        y = y,
+                        src = pdfHit?.second ?: column.src,
+                        paragraphNum = textLine.paragraphNum,
+                        imageIndexInParagraph = imageIndexInParagraph(textLine, column)
+                    )
+                }
                 is TextColumn -> {
                     if (!selectAble) return@touch
                     column.selected = true
@@ -540,45 +555,89 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                     handled = true
                 }
 
-                is ImageColumn -> when (AppConfig.clickImgWay) {
-                    "1" -> { //预览图片
-                        activity?.showDialogFragment(PhotoDialog(column.src, isBook = true))
-                        handled = true
-                    }
-                    "2" -> { //兼容处理
-                        if (!debounceClick) {
-                            if (ReadBook.book?.isOnLineTxt == true) {
-                                val click = column.click
-                                val src = column.src
-                                if (!click.isNullOrBlank()) {
-                                    callBack.clickImg(click, src)
-                                    handled = true
+                is ImageColumn -> {
+                    if (column.mediaType == "audio") {
+                        // 音频块：点进度条跳转，点播放键播放/暂停（不放大、不弹窗）
+                        if (column.src.startsWith(IllustrationHelp.SRC_PREFIX)) {
+                            val book = ReadBook.book
+                            if (book != null) {
+                                if (column.audioTrackHit(x)) {
+                                    audioTrackSeek(column, x)
                                 } else {
-                                    handled = callBack.oldClickImg(src)
+                                    AudioBlockPlayer.toggle(context, book, column.src)
                                 }
-                            }
-                        }
-                    }
-                    "3" -> { //关闭
-                        handled = false
-                    }
-                    "4" -> { //双击
-                        if (doubleClick) {
-                            val click = column.click
-                            if (!click.isNullOrBlank()) {
-                                callBack.clickImg(click, column.src)
                                 handled = true
                             }
-                        } else {
+                        }
+                    } else if (column.mediaType == "video") {
+                        // 视频：点击全屏播放，同组多图可左右滑动
+                        if (column.src.startsWith(IllustrationHelp.SRC_PREFIX)) {
+                            val groupSrcs = illustrationGroupSrcs(column.src)
+                            val groupPos = groupSrcs.indexOf(column.src).coerceAtLeast(0)
+                            activity?.showDialogFragment(
+                                PhotoDialog(groupSrcs, groupPos, isBook = true)
+                            )
                             handled = true
                         }
-                    }
-                    else -> { //默认点击
-                        if (!debounceClick) {
-                            val click = column.click
-                            if (!click.isNullOrBlank()) {
-                                callBack.clickImg(click, column.src)
+                    } else {
+                        val pdfHit = hitPdfIllustration(x, y, textLine, column)
+                        if (pdfHit != null) {
+                            // PDF 页内配图热区：点击全屏查看，同组多图可左右滑动
+                            val pdfSrcs = pdfHit.first.imageSrcsFromJson()
+                            val pdfPos = pdfSrcs.indexOf(pdfHit.second).coerceAtLeast(0)
+                            activity?.showDialogFragment(
+                                PhotoDialog(pdfSrcs, pdfPos, isBook = true)
+                            )
+                            handled = true
+                        } else if (column.src.startsWith(IllustrationHelp.SRC_PREFIX)) {
+                            // 配图：点击直接全屏查看，同组多图可左右滑动
+                            val groupSrcs = illustrationGroupSrcs(column.src)
+                            val groupPos = groupSrcs.indexOf(column.src).coerceAtLeast(0)
+                            activity?.showDialogFragment(
+                                PhotoDialog(groupSrcs, groupPos, isBook = true)
+                            )
+                            handled = true
+                        } else when (AppConfig.clickImgWay) {
+                            "1" -> { //预览图片
+                                activity?.showDialogFragment(PhotoDialog(column.src, isBook = true))
                                 handled = true
+                            }
+                            "2" -> { //兼容处理
+                                if (!debounceClick) {
+                                    if (ReadBook.book?.isOnLineTxt == true) {
+                                        val click = column.click
+                                        val src = column.src
+                                        if (!click.isNullOrBlank()) {
+                                            callBack.clickImg(click, src)
+                                            handled = true
+                                        } else {
+                                            handled = callBack.oldClickImg(src)
+                                        }
+                                    }
+                                }
+                            }
+                            "3" -> { //关闭
+                                handled = false
+                            }
+                            "4" -> { //双击
+                                if (doubleClick) {
+                                    val click = column.click
+                                    if (!click.isNullOrBlank()) {
+                                        callBack.clickImg(click, column.src)
+                                        handled = true
+                                    }
+                                } else {
+                                    handled = true
+                                }
+                            }
+                            else -> { //默认点击
+                                if (!debounceClick) {
+                                    val click = column.click
+                                    if (!click.isNullOrBlank()) {
+                                        callBack.clickImg(click, column.src)
+                                        handled = true
+                                    }
+                                }
                             }
                         }
                     }
@@ -598,6 +657,73 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             }
         }
         return handled
+    }
+
+    /**
+     * 命中音频块进度条：返回对应列（用于拖动/点击跳转），未命中返回 null。
+     * 进度条触摸优先级最高，阅读页在按下时先走这里。
+     */
+    fun hitAudioTrack(x: Float, y: Float): ImageColumn? {
+        var hit: ImageColumn? = null
+        touch(x, y) { _, _, _, _, column ->
+            if (column is ImageColumn && column.mediaType == "audio" && column.audioTrackHit(x)) {
+                hit = column
+            }
+        }
+        return hit
+    }
+
+    /** 按触摸 x 对音频块进度条跳转 */
+    fun audioTrackSeek(column: ImageColumn, x: Float) {
+        val track = column.audioTrackRectF() ?: return
+        val ratio = ((x - track.left) / track.width()).coerceIn(0f, 1f)
+        AudioBlockPlayer.seekTo((AudioBlockPlayer.durationMs * ratio).toLong())
+    }
+
+    /**
+     * PDF 阅读页热区命中：整页位图内按归一化坐标匹配配图记录，
+     * 返回 (配图记录, 命中的配图 src)。
+     */
+    private fun hitPdfIllustration(
+        x: Float,
+        y: Float,
+        textLine: TextLine,
+        column: ImageColumn
+    ): Pair<BookIllustration, String>? {
+        val book = ReadBook.book ?: return null
+        if (!book.isPdf) return null
+        val page = column.src.toIntOrNull() ?: return null
+        val width = (column.end - column.start).coerceAtLeast(1f)
+        val height = (textLine.lineBottom - textLine.lineTop).coerceAtLeast(1f)
+        val relX = (x - column.start) / width
+        val relY = (y - textLine.lineTop) / height
+        val records = appDb.bookIllustrationDao.getByBook(book.bookUrl)
+            .filter { it.pdfPage == page }
+        records.forEach { record ->
+            val rects = record.pdfRectsFromJson()
+            val srcs = record.imageSrcsFromJson()
+            rects.forEachIndexed { index, rect ->
+                val parts = rect.split(",").mapNotNull { it.trim().toFloatOrNull() }
+                if (parts.size == 4) {
+                    val (rx, ry, rw, rh) = parts
+                    if (relX >= rx && relX <= rx + rw && relY >= ry && relY <= ry + rh) {
+                        val src = srcs.getOrNull(index) ?: srcs.firstOrNull()
+                        if (src != null) return record to src
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    /** 配图所属记录的全部图片 src（同组多图全屏可左右滑动），找不到时退回单图 */
+    private fun illustrationGroupSrcs(src: String): List<String> {
+        val book = ReadBook.book ?: return listOf(src)
+        return appDb.bookIllustrationDao.getByBook(book.bookUrl)
+            .firstOrNull { it.imageSrcsFromJson().contains(src) }
+            ?.imageSrcsFromJson()
+            ?.takeIf { it.isNotEmpty() }
+            ?: listOf(src)
     }
 
     private fun handleEpubNoteClick(x: Float, y: Float): Boolean? {

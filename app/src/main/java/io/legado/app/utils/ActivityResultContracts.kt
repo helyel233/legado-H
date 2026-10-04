@@ -54,6 +54,42 @@ class SelectImageContract : ActivityResultContract<Int?, SelectImageContract.Res
 
 }
 
+class SelectImagesContract : ActivityResultContract<Int?, SelectImagesContract.Result>() {
+
+    private var requestCode: Int? = null
+
+    override fun createIntent(context: Context, input: Int?): Intent {
+        requestCode = input
+        // 统一文件选择器：图片/视频/音频一次多选（系统相册选择器不支持音频）
+        // 只设 */* 不设 EXTRA_MIME_TYPES：部分 ROM 会把 MIME 过滤组合解析成"仅图片/视频"，
+        // 导致音频选不到；放开 */* 后所有媒体文件都能访问
+        return Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Result {
+        val uris = if (resultCode == RESULT_OK && intent != null) {
+            val clipData = intent.clipData
+            if (clipData != null) {
+                (0 until clipData.itemCount).map { clipData.getItemAt(it).uri }
+            } else {
+                intent.data?.let { listOf(it) }.orEmpty()
+            }
+        } else {
+            emptyList()
+        }
+        return Result(requestCode, uris)
+    }
+
+    data class Result(
+        val requestCode: Int?,
+        val uris: List<Uri> = emptyList()
+    )
+
+}
+
 class StartActivityContract(private val cls: Class<*>) :
     ActivityResultContract<(Intent.() -> Unit)?, ActivityResult>() {
 

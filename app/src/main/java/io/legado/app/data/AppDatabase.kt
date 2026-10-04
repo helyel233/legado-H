@@ -48,6 +48,7 @@ import io.legado.app.data.dao.SourceRecycleBinDao
 import io.legado.app.data.dao.PendingReviewCommentDao
 import io.legado.app.data.dao.BookCollectionDao
 import io.legado.app.data.dao.HomepageCustomSetDao
+import io.legado.app.data.dao.BookIllustrationDao
 import io.legado.app.data.dao.HomepageModuleDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.AiAgentJob
@@ -83,6 +84,7 @@ import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookCollectionChild
 import io.legado.app.data.entities.BookCollectionItem
 import io.legado.app.data.entities.HomepageCustomSet
+import io.legado.app.data.entities.BookIllustration
 import io.legado.app.data.entities.HomepageModule
 import io.legado.app.data.entities.ReadAloudBgmAssignmentCache
 import io.legado.app.data.entities.ReadAloudBgmGroup
@@ -120,7 +122,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 116,
+    version = 117,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -140,7 +142,7 @@ val appDb by lazy {
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
         AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class,
         BookCollection::class, BookCollectionItem::class, BookCollectionChild::class,
-        HomepageModule::class, HomepageCustomSet::class],
+        HomepageModule::class, HomepageCustomSet::class, BookIllustration::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -235,6 +237,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val pendingReviewCommentDao: PendingReviewCommentDao
 
     abstract val bookCollectionDao: BookCollectionDao
+    abstract val bookIllustrationDao: BookIllustrationDao
 
     abstract val homepageModuleDao: HomepageModuleDao
 

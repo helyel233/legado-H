@@ -1,8 +1,10 @@
 package io.legado.app.ui.book.toc
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +25,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,10 +61,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookIllustration
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
@@ -69,6 +82,11 @@ import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.exoplayer.ExoPlayerHelper
+import io.legado.app.help.glide.ImageLoader
+import io.legado.app.help.illustration.IllustrationHelp
+import io.legado.app.help.illustration.imageSrcsFromJson
+import io.legado.app.model.ImageProvider
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.model.localBook.epubcore.facade.EpubChapterMetadata
 import io.legado.app.ui.widget.compose.AppManagementCard
@@ -80,6 +98,7 @@ import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.book.read.epub.EpubTocNavigationPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -88,7 +107,8 @@ import kotlinx.coroutines.withContext
 
 private enum class TocPage {
     Chapters,
-    Bookmarks
+    Bookmarks,
+    Illustrations
 }
 
 @Composable
@@ -122,6 +142,10 @@ fun TocComposeScreen(
         var chapterList by remember { mutableStateOf<List<BookChapter>>(emptyList()) }
         var visibleChapters by remember { mutableStateOf<List<BookChapter>>(emptyList()) }
         var bookmarks by remember { mutableStateOf<List<Bookmark>>(emptyList()) }
+        var illustrations by remember { mutableStateOf<List<BookIllustration>>(emptyList()) }
+        var illustrationsLoaded by remember { mutableStateOf(false) }
+        // 0 为列表模式，>0 为宫格列数
+        var illustrationGridSpan by remember { mutableIntStateOf(0) }
         var titleContext by remember { mutableStateOf<TocTitleContext?>(null) }
         var chapterTitleMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         var cacheFileNames by remember { mutableStateOf<Set<String>?>(null) }
@@ -293,6 +317,15 @@ fun TocComposeScreen(
             }
         }
 
+        LaunchedEffect(bookUrl, selectedPage) {
+            if (selectedPage != TocPage.Illustrations) return@LaunchedEffect
+            illustrationsLoaded = false
+            appDb.bookIllustrationDao.flowByBook(bookUrl).collect {
+                illustrations = it
+                illustrationsLoaded = true
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -341,6 +374,19 @@ fun TocComposeScreen(
                         AppManagementMenuAction(text = exportText, onClick = onExportBookmark),
                         AppManagementMenuAction(text = exportMdText, onClick = onExportBookmarkMd),
                         AppManagementMenuAction(text = logText, onClick = onShowLog)
+                    )
+                },
+                illustrationActions = {
+                    listOf(
+                        AppManagementMenuAction(
+                            text = stringResource(
+                                if (illustrationGridSpan == 0) R.string.illustration_grid_mode
+                                else R.string.illustration_list_mode
+                            ),
+                            onClick = {
+                                illustrationGridSpan = if (illustrationGridSpan == 0) 2 else 0
+                            }
+                        )
                     )
                 }
             )
@@ -413,6 +459,83 @@ fun TocComposeScreen(
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
+
+                    TocPage.Illustrations -> {
+                        when {
+                            illustrations.isNotEmpty() -> {
+                                TocIllustrationList(
+                                    book = book,
+                                    illustrations = illustrations,
+                                    gridSpan = illustrationGridSpan,
+                                    onClick = { record ->
+                                        (context as? android.app.Activity)?.run {
+                                            setResult(
+                                                android.app.Activity.RESULT_OK,
+                                                android.content.Intent()
+                                                    .putExtra("index", record.chapterIndex)
+                                                    .putExtra(
+                                                        "chapterPos",
+                                                        if (record.anchorType == BookIllustration.ANCHOR_CHAPTER_END)
+                                                            Int.MAX_VALUE
+                                                        else record.anchorPos
+                                                    )
+                                            )
+                                            finish()
+                                        }
+                                    },
+                                    onLongClick = { record ->
+                                        val srcs = record.imageSrcsFromJson()
+                                        (context as? android.app.Activity)?.run {
+                                            val activity = this
+                                            selector(
+                                                title = record.chapterName.ifBlank {
+                                                    getString(R.string.menu_illustration)
+                                                },
+                                                items = listOf(
+                                                    getString(R.string.illustration_save_to_album),
+                                                    getString(R.string.illustration_save_all),
+                                                    getString(R.string.illustration_delete)
+                                                )
+                                            ) { _, which ->
+                                                when (which) {
+                                                    0 -> scope.launch(Dispatchers.IO) {
+                                                        val currentBook = book ?: return@launch
+                                                        val src = srcs.firstOrNull() ?: return@launch
+                                                        if (IllustrationHelp.saveToAlbum(activity, currentBook, src)) {
+                                                            activity.toastOnUi(R.string.illustration_saved_to_album)
+                                                        } else {
+                                                            activity.toastOnUi(R.string.illustration_save_failed)
+                                                        }
+                                                    }
+                                                    1 -> scope.launch(Dispatchers.IO) {
+                                                        val currentBook = book ?: return@launch
+                                                        var saved = 0
+                                                        srcs.forEach { src ->
+                                                            if (IllustrationHelp.saveToAlbum(activity, currentBook, src)) saved++
+                                                        }
+                                                        if (saved > 0) {
+                                                            activity.toastOnUi(R.string.illustration_saved_to_album)
+                                                        } else {
+                                                            activity.toastOnUi(R.string.illustration_save_failed)
+                                                        }
+                                                    }
+                                                    2 -> scope.launch(Dispatchers.IO) {
+                                                        val currentBook = book ?: return@launch
+                                                        appDb.bookIllustrationDao.delete(record)
+                                                        IllustrationHelp.deleteImages(currentBook, srcs)
+                                                        activity.toastOnUi(R.string.illustration_deleted)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            bookLoaded && book == null -> TocEmptyState(text = stringResource(R.string.empty))
+                            illustrationsLoaded -> TocEmptyState(text = stringResource(R.string.illustration_empty))
+                            else -> Box(modifier = Modifier.fillMaxSize())
+                        }
+                    }
                 }
             }
 
@@ -479,13 +602,14 @@ private fun TocTopBar(
     onBack: () -> Unit,
     onSelectPage: (TocPage) -> Unit,
     chapterActions: @Composable () -> List<AppManagementMenuAction>,
-    bookmarkActions: @Composable () -> List<AppManagementMenuAction>
+    bookmarkActions: @Composable () -> List<AppManagementMenuAction>,
+    illustrationActions: @Composable () -> List<AppManagementMenuAction>
 ) {
     val palette = rememberAppManagementPalette()
-    val moreActions = if (selectedPage == TocPage.Bookmarks) {
-        bookmarkActions()
-    } else {
-        chapterActions()
+    val moreActions = when (selectedPage) {
+        TocPage.Bookmarks -> bookmarkActions()
+        TocPage.Illustrations -> illustrationActions()
+        else -> chapterActions()
     }
     Column(
         modifier = Modifier
@@ -505,7 +629,11 @@ private fun TocTopBar(
             )
             Text(
                 text = stringResource(
-                    if (selectedPage == TocPage.Bookmarks) R.string.bookmark else R.string.chapter_list
+                    when (selectedPage) {
+                        TocPage.Bookmarks -> R.string.bookmark
+                        TocPage.Illustrations -> R.string.menu_illustration
+                        else -> R.string.chapter_list
+                    }
                 ),
                 color = palette.settings.primaryText,
                 fontSize = 17.sp,
@@ -524,11 +652,13 @@ private fun TocTopBar(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        TocSearchField(
-            query = searchQuery,
-            onQueryChange = onSearchQueryChange
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        if (selectedPage != TocPage.Illustrations) {
+            TocSearchField(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         TocTabs(
             selectedPage = selectedPage,
             onSelectPage = onSelectPage,
@@ -610,6 +740,12 @@ private fun TocTabs(
             text = stringResource(R.string.bookmark),
             selected = selectedPage == TocPage.Bookmarks,
             onClick = { onSelectPage(TocPage.Bookmarks) },
+            modifier = Modifier.weight(1f)
+        )
+        TocTabButton(
+            text = stringResource(R.string.menu_illustration),
+            selected = selectedPage == TocPage.Illustrations,
+            onClick = { onSelectPage(TocPage.Illustrations) },
             modifier = Modifier.weight(1f)
         )
     }
@@ -1163,4 +1299,149 @@ private fun isChapterCached(
             } else {
                 BookHelp.getChapterCacheFileNames(book, chapter).any(cacheFileNames::contains)
             }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TocIllustrationList(
+    book: Book?,
+    illustrations: List<BookIllustration>,
+    gridSpan: Int,
+    onClick: (BookIllustration) -> Unit,
+    onLongClick: (BookIllustration) -> Unit
+) {
+    if (gridSpan > 0) {
+        LazyVerticalGrid(
+            state = rememberLazyGridState(),
+            columns = GridCells.Fixed(gridSpan),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(illustrations, key = { it.id }) { record ->
+                TocIllustrationImage(
+                    book = book,
+                    record = record,
+                    onClick = { onClick(record) },
+                    onLongClick = { onLongClick(record) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                )
+            }
+        }
+    } else {
+        val palette = rememberAppManagementPalette()
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            itemsIndexed(
+                items = illustrations,
+                key = { _, record -> record.id }
+            ) { _, record ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = { onClick(record) },
+                            onLongClick = { onLongClick(record) }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TocIllustrationImage(
+                        book = book,
+                        record = record,
+                        onClick = null,
+                        onLongClick = null,
+                        modifier = Modifier.size(56.dp)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            text = record.chapterName.ifBlank {
+                                stringResource(R.string.menu_illustration)
+                            },
+                            color = palette.settings.primaryText,
+                            fontSize = 15.sp,
+                            fontFamily = palette.settings.bodyFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (record.note.isNotBlank()) {
+                            Text(
+                                text = record.note,
+                                color = palette.settings.secondaryText,
+                                fontSize = 12.sp,
+                                fontFamily = palette.settings.bodyFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TocIllustrationImage(
+    book: Book?,
+    record: BookIllustration,
+    onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val palette = rememberAppManagementPalette()
+    val context = LocalContext.current
+    var bitmap by remember(record.id) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(book?.bookUrl, record.id, record.imageSrcs) {
+        bitmap = withContext(Dispatchers.IO) {
+            val currentBook = book ?: return@withContext null
+            val src = record.imageSrcsFromJson().firstOrNull()
+                ?: return@withContext null
+            try {
+                if (src.startsWith(IllustrationHelp.SRC_PREFIX)) {
+                    val file = IllustrationHelp.getImageFile(currentBook, src)
+                    ImageLoader.loadBitmap(context, file.absolutePath).submit().get()
+                } else {
+                    ImageLoader.loadBitmap(context, src).submit().get()
+                }
+            } catch (e: Exception) {
+                ImageProvider.loadingBitmap
+            }
+        }
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(palette.settings.row))
+            .then(
+                if (onClick != null || onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = { onClick?.invoke() },
+                        onLongClick = { onLongClick?.invoke() }
+                    )
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        bitmap?.asImageBitmap()?.let { image ->
+            Image(
+                bitmap = image,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
 }

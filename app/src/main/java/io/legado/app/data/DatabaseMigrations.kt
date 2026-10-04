@@ -26,7 +26,7 @@ object DatabaseMigrations {
             migration_103_104, migration_104_105, migration_105_106,
             migration_106_107, migration_107_108, migration_108_109, migration_109_110,
             migration_110_111, migration_111_112, MIGRATION_112_113, MIGRATION_113_114,
-            MIGRATION_114_115,
+            MIGRATION_114_115, MIGRATION_115_116, MIGRATION_116_117,
         )
     }
 
@@ -148,6 +148,45 @@ object DatabaseMigrations {
             if (!hasHomepageModules) {
                 db.execSQL("ALTER TABLE book_sources ADD COLUMN homepageModules TEXT DEFAULT ''")
             }
+        }
+    }
+
+    val MIGRATION_116_117 = object : Migration(116, 117) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 正文插图：段间/章末锚点 + 多图布局 + 音频块 + 每图备注
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_illustrations` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `bookUrl` TEXT NOT NULL,
+                    `chapterIndex` INTEGER NOT NULL,
+                    `chapterUrl` TEXT NOT NULL,
+                    `chapterName` TEXT NOT NULL,
+                    `anchorType` TEXT NOT NULL,
+                    `anchorPos` INTEGER NOT NULL,
+                    `frontParagraphText` TEXT NOT NULL,
+                    `backParagraphText` TEXT NOT NULL,
+                    `frontFingerprint` TEXT NOT NULL,
+                    `backFingerprint` TEXT NOT NULL,
+                    `imageSrcs` TEXT NOT NULL,
+                    `layoutType` TEXT NOT NULL,
+                    `displayHeight` INTEGER NOT NULL,
+                    `pageBreak` INTEGER NOT NULL,
+                    `sortOrder` INTEGER NOT NULL,
+                    `pdfPage` INTEGER NOT NULL,
+                    `pdfRect` TEXT NOT NULL,
+                    `note` TEXT NOT NULL,
+                    `srcNotes` TEXT NOT NULL,
+                    FOREIGN KEY(`bookUrl`) REFERENCES `books`(`bookUrl`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_book_illustrations_bookUrl` ON `book_illustrations` (`bookUrl`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_book_illustrations_bookUrl_chapterIndex` ON `book_illustrations` (`bookUrl`, `chapterIndex`)"
+            )
         }
     }
 

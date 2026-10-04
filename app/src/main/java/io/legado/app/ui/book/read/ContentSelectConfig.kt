@@ -20,6 +20,7 @@ object ContentSelectConfig {
     const val ACTION_GENERATE_IMAGE = "generate_image"
     const val ACTION_SHARE_IMAGE = "share_image"
     const val ACTION_REVIEW = "review"
+    const val ACTION_ILLUSTRATION = "illustration"
 
     private val legacyDefaultActions = setOf(
         ACTION_REPLACE,
@@ -52,8 +53,12 @@ object ContentSelectConfig {
         ACTION_ASK_AI,
         ACTION_GENERATE_IMAGE,
         ACTION_SHARE_IMAGE,
-        ACTION_REVIEW
+        ACTION_REVIEW,
+        ACTION_ILLUSTRATION
     )
+
+    /** 增量升级用：加入插图动作前的默认集合，用户未自定义过时自动补上新动作 */
+    private val defaultActionsBeforeIllustration = defaultActions - ACTION_ILLUSTRATION
 
     val defaultOpenValues = listOf("", ACTION_WEB_SEARCH, ACTION_DICT, ACTION_ASK_AI)
     private val removedActionIds = emptySet<String>()
@@ -139,7 +144,9 @@ object ContentSelectConfig {
             ?.filterNot { it in removedActionIds }
             ?.toSet()
             ?: return defaultActions
-        return if (saved == legacyDefaultActions || saved == defaultActionsBeforeShare) {
+        return if (saved == legacyDefaultActions || saved == defaultActionsBeforeShare ||
+            saved == defaultActionsBeforeIllustration
+        ) {
             defaultActions
         } else {
             saved
