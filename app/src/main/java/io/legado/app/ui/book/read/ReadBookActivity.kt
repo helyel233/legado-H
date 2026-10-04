@@ -6376,6 +6376,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         shareNotePreviewOverlay?.dismiss()
         shareNotePreviewOverlay = null
         binding.readView.onDestroy()
+        // 退出阅读时停止音频块播放并释放 ExoPlayer
+        AudioBlockPlayer.stop()
         commentWebViewSession?.destroy()
         commentWebViewSession = null
         commentBrowserOpening = false
