@@ -28,12 +28,14 @@ import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.image.ImageCropContract
+import io.legado.app.ui.main.readrecord.YearlyReportActivity
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.ImageCropHelper
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.registerForActivityResult
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -132,6 +134,11 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             R.id.menu_enable_record -> {
                 AppConfig.enableReadRecord = !item.isChecked
                 invalidateOptionsMenu()
+                return true
+            }
+
+            R.id.menu_yearly_report -> {
+                startActivity<YearlyReportActivity>()
                 return true
             }
 

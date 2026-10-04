@@ -1429,4 +1429,15 @@
     <string name="library_search_index_count">已索引 %d 個章節</string>
     <string name="library_search_rebuild_done">索引完成，共 %d 章</string>
 
+    <string name="yearly_report">年度報告</string>
+    <string name="yearly_report_active_days">活躍天數</string>
+    <string name="yearly_report_books">讀書冊數</string>
+    <string name="yearly_report_days_unit">%d 天</string>
+    <string name="yearly_report_monthly">月度閱讀分佈</string>
+    <string name="yearly_report_share_failed">分享失敗</string>
+    <string name="yearly_report_streak">最長連續</string>
+    <string name="yearly_report_title">%d 閱讀報告</string>
+    <string name="yearly_report_top_books">本年閱讀的書</string>
+    <string name="yearly_report_total">累計時長</string>
+
 </resources>

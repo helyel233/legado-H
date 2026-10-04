@@ -2831,4 +2831,15 @@ Selected text or question:
     <string name="library_search_index_count">%d chapters indexed</string>
     <string name="library_search_rebuild_done">Index rebuilt: %d chapters</string>
 
+    <string name="yearly_report">Yearly report</string>
+    <string name="yearly_report_active_days">Active days</string>
+    <string name="yearly_report_books">Books</string>
+    <string name="yearly_report_days_unit">%d days</string>
+    <string name="yearly_report_monthly">Monthly reading</string>
+    <string name="yearly_report_share_failed">Share failed</string>
+    <string name="yearly_report_streak">Best streak</string>
+    <string name="yearly_report_title">%d Reading Report</string>
+    <string name="yearly_report_top_books">Books read this year</string>
+    <string name="yearly_report_total">Total time</string>
+
 </resources>

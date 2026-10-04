@@ -2649,4 +2649,15 @@ bookUrl：%7$s
     <string name="library_search_index_count">已索引 %d 个章节</string>
     <string name="library_search_rebuild_done">索引完成，共 %d 章</string>
 
+    <string name="yearly_report">年度报告</string>
+    <string name="yearly_report_active_days">活跃天数</string>
+    <string name="yearly_report_books">读书册数</string>
+    <string name="yearly_report_days_unit">%d 天</string>
+    <string name="yearly_report_monthly">月度阅读分布</string>
+    <string name="yearly_report_share_failed">分享失败</string>
+    <string name="yearly_report_streak">最长连续</string>
+    <string name="yearly_report_title">%d 阅读报告</string>
+    <string name="yearly_report_top_books">本年阅读的书</string>
+    <string name="yearly_report_total">累计时长</string>
+
 </resources>

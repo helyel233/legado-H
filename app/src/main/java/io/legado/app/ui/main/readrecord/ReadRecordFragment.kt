@@ -66,6 +66,7 @@ import io.legado.app.utils.applyStatusBarPadding
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.registerForActivityResult
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -324,6 +325,8 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
                 supportToolbar?.menu?.findItem(R.id.menu_enable_record)?.isChecked =
                     AppConfig.enableReadRecord
             }
+
+            R.id.menu_yearly_report -> startActivity<YearlyReportActivity>()
 
             R.id.menu_clear_record -> {
                 alert(R.string.delete, R.string.sure_del) {

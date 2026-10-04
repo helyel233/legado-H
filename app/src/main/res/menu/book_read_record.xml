@@ -10,6 +10,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_yearly_report"
+        android:title="@string/yearly_report"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_clear_record"
         android:title="@string/read_record_clear_all"
         app:showAsAction="never" />
