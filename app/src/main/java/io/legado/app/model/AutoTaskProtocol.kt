@@ -11,6 +11,10 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isVideo
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CacheRequestSource
+import io.legado.app.ui.book.cache.activeTasksFor
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -112,7 +116,7 @@ object AutoTaskProtocol {
                 )
             }
             val queued = if (cacheEnabled && diff.newCount > 0 && !book.isLocal) {
-                queueNewChapterRanges(context, book, diff.added.map { it.index })
+                queueNewChapterRanges(book, diff.added.map { it.index })
             } else {
                 0
             }
@@ -120,32 +124,30 @@ object AutoTaskProtocol {
         }
     }
 
+    /** 提交新增章节缓存任务；已有活跃任务时跳过，返回实际提交的章节数。 */
     private fun queueNewChapterRanges(
-        context: Context,
         book: Book,
         indexes: List<Int>
     ): Int {
         if (indexes.isEmpty()) return 0
-        val sorted = indexes.distinct().sorted()
-        var start = sorted.first()
-        var previous = start
-        var queued = 0
-        fun enqueue(rangeStart: Int, rangeEnd: Int) {
-            if (rangeStart > rangeEnd) return
-            CacheBook.start(context, book, rangeStart, rangeEnd)
-            queued += rangeEnd - rangeStart + 1
-        }
-        sorted.drop(1).forEach { index ->
-            if (index == previous + 1) {
-                previous = index
+        if (CacheCoordinator.snapshot.value.activeTasksFor(book.bookUrl).isNotEmpty()) return 0
+        val chapterCount = indexes.distinct().size
+        return runCatching {
+            if (book.isVideo) {
+                CacheCoordinator.submitMediaDownload(
+                    book = book,
+                    chapterIndexes = indexes,
+                    source = CacheRequestSource.SYSTEM,
+                )
+                chapterCount
             } else {
-                enqueue(start, previous)
-                start = index
-                previous = index
+                CacheCoordinator.submitAutomaticBookDownload(
+                    book = book,
+                    chapterIndexes = indexes,
+                    source = CacheRequestSource.SYSTEM,
+                )?.let { chapterCount } ?: 0
             }
-        }
-        enqueue(start, previous)
-        return queued
+        }.getOrElse { 0 }
     }
 
     private fun handleNotify(

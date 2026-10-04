@@ -91,7 +91,7 @@ object CacheBook {
         }
     }
 
-    fun start(
+    internal fun start(
         context: Context,
         book: Book,
         start: Int,
@@ -113,13 +113,6 @@ object CacheBook {
         }
     }
 
-    fun remove(context: Context, bookUrl: String) {
-        context.startService<CacheBookService> {
-            action = IntentAction.remove
-            putExtra("bookUrl", bookUrl)
-        }
-    }
-
     /** Stop one coordinator-owned book without touching other cache books. */
     fun stop(bookUrl: String) {
         cacheBookMap[bookUrl]?.let { model ->
@@ -130,14 +123,6 @@ object CacheBook {
 
     internal fun hasActiveBook(bookUrl: String): Boolean {
         return cacheBookMap[bookUrl]?.isRun() == true
-    }
-
-    fun stop(context: Context) {
-        if (CacheBookService.isRun) {
-            context.startService<CacheBookService> {
-                action = IntentAction.stop
-            }
-        }
     }
 
     fun close() {
@@ -181,11 +166,6 @@ object CacheBook {
     }
 
 
-    val downloadSummary: String
-        get() {
-            return "正在下载:${onDownloadCount}|等待中:${waitCount}|失败:${errorDownloadMap.count()}|成功:${successDownloadSet.size}"
-        }
-
     val isRun: Boolean
         get() {
             cacheBookMap.forEach {
@@ -194,24 +174,6 @@ object CacheBook {
                 }
             }
             return false
-        }
-
-    private val waitCount: Int
-        get() {
-            var count = 0
-            cacheBookMap.forEach {
-                count += it.value.waitCount
-            }
-            return count
-        }
-
-    val onDownloadCount: Int
-        get() {
-            var count = 0
-            cacheBookMap.forEach {
-                count += it.value.onDownloadCount
-            }
-            return count
         }
 
     val successDownloadSet = linkedSetOf<String>()

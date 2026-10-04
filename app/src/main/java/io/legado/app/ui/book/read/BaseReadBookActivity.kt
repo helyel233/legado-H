@@ -25,12 +25,13 @@ import io.legado.app.databinding.DialogSimulatedReadingBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CacheRequestSource
 import io.legado.app.help.storage.ReaderDataRepair
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.model.CacheBook
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
 import io.legado.app.ui.book.read.config.BgTextConfigDialog
@@ -50,6 +51,7 @@ import io.legado.app.utils.setLightStatusBar
 import io.legado.app.utils.setNavigationBarColorAuto
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -298,7 +300,16 @@ abstract class BaseReadBookActivity :
                         val end = editEnd.text!!.toString().let {
                             if (it.isEmpty()) book.totalChapterNum else it.toInt()
                         }
-                        CacheBook.start(this@BaseReadBookActivity, book, start - 1, end - 1)
+                        runCatching {
+                            CacheCoordinator.submitBookDownload(
+                                book = book,
+                                chapterIndexes = (start - 1)..(end - 1),
+                                source = CacheRequestSource.READER,
+                                reviewIncremental = true,
+                            )
+                        }.onFailure {
+                            toastOnUi(R.string.error)
+                        }
                     }
                 }
                 cancelButton()

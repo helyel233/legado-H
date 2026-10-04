@@ -26,12 +26,15 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogSelectSectionExportBinding
 import io.legado.app.help.book.getExportFileName
 import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.tryParesExportFileName
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CacheRequestSource
+import io.legado.app.help.cache.CacheSubmission
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.model.CacheBook
 import io.legado.app.service.ExportBookService
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.file.HandleFileContract
@@ -121,6 +124,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         initRecyclerView()
         initGroupData()
         initBookData()
+        observeCoordinatorState()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -139,6 +143,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         this.menu = menu
         upMenu()
+        updateDownloadMenuState()
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -173,32 +178,22 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         when (item.itemId) {
             R.id.menu_download,
             R.id.menu_download_after -> {
-                if (!CacheBook.isRun) sureCacheBook {
+                if (!CacheCoordinator.snapshot.value.hasActiveTasks()) sureCacheBook {
                     adapter.getItems().forEach { book ->
-                        CacheBook.start(
-                            this@CacheActivity,
-                            book,
-                            book.durChapterIndex,
-                            book.lastChapterIndex
-                        )
+                        submitBookDownload(book, book.durChapterIndex, book.lastChapterIndex)
                     }
                 } else {
-                    CacheBook.stop(this@CacheActivity)
+                    CacheCoordinator.cancelAll()
                 }
             }
 
             R.id.menu_download_all -> {
-                if (!CacheBook.isRun) sureCacheBook {
+                if (!CacheCoordinator.snapshot.value.hasActiveTasks()) sureCacheBook {
                     adapter.getItems().forEach { book ->
-                        CacheBook.start(
-                            this@CacheActivity,
-                            book,
-                            0,
-                            book.lastChapterIndex
-                        )
+                        submitBookDownload(book, 0, book.lastChapterIndex)
                     }
                 } else {
-                    CacheBook.stop(this@CacheActivity)
+                    CacheCoordinator.cancelAll()
                 }
             }
 
@@ -293,6 +288,49 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         }
     }
 
+    /** 协调器快照驱动菜单与卡片状态，替代对旧引擎事件的隐式依赖。 */
+    private fun observeCoordinatorState() {
+        lifecycleScope.launch {
+            CacheCoordinator.snapshot.collect {
+                updateDownloadMenuState()
+                notifyAdapterStateChanged()
+            }
+        }
+    }
+
+    private fun updateDownloadMenuState() {
+        val running = CacheCoordinator.snapshot.value.hasActiveTasks()
+        menu?.findItem(R.id.menu_download)?.let { item ->
+            if (running) {
+                item.setIconCompat(R.drawable.ic_stop_black_24dp)
+                item.setTitle(R.string.stop)
+            } else {
+                item.setIconCompat(R.drawable.ic_play_24dp)
+                item.setTitle(R.string.download_start)
+            }
+        }
+        menu?.applyTint(this)
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun notifyAdapterStateChanged() {
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun submitBookDownload(book: Book, start: Int, end: Int) {
+        if (book.isLocal) return
+        kotlin.runCatching {
+            CacheCoordinator.submitBookDownload(
+                book = book,
+                chapterIndexes = start..end,
+                source = CacheRequestSource.CACHE_ACTIVITY,
+                reviewIncremental = true,
+            )
+        }.onFailure {
+            AppLog.put("提交缓存任务失败：${it.localizedMessage}", it)
+        }
+    }
+
     override fun observeLiveBus() {
         viewModel.upAdapterLiveData.observe(this) {
             notifyItemChanged(it)
@@ -304,19 +342,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             notifyItemChanged(it)
         }
         observeEvent<String>(EventBus.UP_DOWNLOAD_STATE) {
-            if (!CacheBook.isRun) {
-                menu?.findItem(R.id.menu_download)?.let { item ->
-                    item.setIconCompat(R.drawable.ic_play_24dp)
-                    item.setTitle(R.string.download_start)
-                }
-                menu?.applyTint(this)
-            } else {
-                menu?.findItem(R.id.menu_download)?.let { item ->
-                    item.setIconCompat(R.drawable.ic_stop_black_24dp)
-                    item.setTitle(R.string.stop)
-                }
-                menu?.applyTint(this)
-            }
+            updateDownloadMenuState()
         }
         observeEvent<Pair<Book, BookChapter>>(EventBus.SAVE_CONTENT) { (book, chapter) ->
             viewModel.cacheChapters[book.bookUrl]?.add(chapter.url)
@@ -577,6 +603,21 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     override fun exportMsg(bookUrl: String): String? {
         return ExportBookService.exportMsg[bookUrl]
+    }
+
+    override fun isBookDownloading(bookUrl: String): Boolean {
+        return CacheCoordinator.snapshot.value.activeTasksFor(bookUrl).isNotEmpty()
+    }
+
+    override fun toggleBookDownload(book: Book) {
+        val active = CacheCoordinator.snapshot.value.activeTasksFor(book.bookUrl)
+        if (active.isNotEmpty()) {
+            active.forEach { task ->
+                CacheCoordinator.cancel(CacheSubmission(task.sessionId, task.taskId))
+            }
+        } else {
+            submitBookDownload(book, 0, book.lastChapterIndex)
+        }
     }
 
 }

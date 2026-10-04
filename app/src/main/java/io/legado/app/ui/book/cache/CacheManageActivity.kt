@@ -18,6 +18,10 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ActivityCacheManageBinding
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CacheLifecycle
+import io.legado.app.help.cache.CachePhase
+import io.legado.app.help.cache.CacheSubmission
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
@@ -264,7 +268,7 @@ class CacheManageActivity :
 
     private fun observeTasks() {
         lifecycleScope.launch {
-            AudioCacheTaskManager.states.collectLatest { states ->
+            viewModel.audioTaskStateFlow.collectLatest { states ->
                 audioTaskStateMap = states
                 if (viewModel.mode == CacheManageMode.AUDIO) {
                     reloadAudioItemsWhenNeeded(states)
@@ -412,7 +416,26 @@ class CacheManageActivity :
     }
 
     private fun stopAudioCache(item: CacheBookItem) {
-        AudioCacheTaskManager.togglePause(item.book.bookUrl)
+        val bookUrls = buildList {
+            add(item.book.bookUrl)
+            item.sourceVariants.forEach { add(it.book.bookUrl) }
+        }
+        val task = bookUrls.firstNotNullOfOrNull { bookUrl ->
+            CacheCoordinator.snapshot.value.activeTasksFor(bookUrl)
+                .firstOrNull { it.phase == CachePhase.MEDIA }
+        } ?: return
+        val submission = CacheSubmission(task.sessionId, task.taskId)
+        when (task.status) {
+            CacheLifecycle.RUNNING -> {
+                if (!CacheCoordinator.pause(submission)) toastOnUi(R.string.error)
+            }
+
+            CacheLifecycle.PAUSED -> {
+                if (!CacheCoordinator.resume(submission)) toastOnUi(R.string.error)
+            }
+
+            else -> Unit
+        }
     }
 
     private fun openReviewSnapshots(item: CacheBookItem) {
@@ -442,7 +465,9 @@ class CacheManageActivity :
     }
 
     private fun uploadAll() {
-        val items = screenItems.filter { it.cachedCount > 0 && !it.hasLockedCacheTask() }
+        val items = screenItems.filter {
+            it.cachedCount > 0 && !it.hasLockedCacheTask(audioTaskStateMap)
+        }
         if (items.isEmpty()) {
             toastOnUi(R.string.cache_manage_batch_empty)
             return
@@ -457,7 +482,8 @@ class CacheManageActivity :
 
     private fun deleteAll() {
         val items = screenItems.filter {
-            !it.hasLockedCacheTask() && (it.localCachedCount > 0 || it.hasRemoteCache())
+            !it.hasLockedCacheTask(audioTaskStateMap) &&
+                (it.localCachedCount > 0 || it.hasRemoteCache())
         }
         if (items.isEmpty()) {
             toastOnUi(R.string.cache_manage_batch_empty)
@@ -638,11 +664,13 @@ private fun CacheBookItem.lastReadAt(): Long {
     return maxOf(itemTime, variantTime)
 }
 
-private fun CacheBookItem.hasLockedCacheTask(): Boolean {
-    if (AudioCacheTaskManager.snapshot(book.bookUrl).locksCacheActions()) return true
+private fun CacheBookItem.hasLockedCacheTask(
+    taskStates: Map<String, AudioCacheTaskState>
+): Boolean {
+    if (taskStates[book.bookUrl].locksCacheActions()) return true
     if (WebDavTaskManager.snapshot(cacheKey)?.active == true) return true
     return sourceVariants.any {
-        AudioCacheTaskManager.snapshot(it.book.bookUrl).locksCacheActions() ||
+        taskStates[it.book.bookUrl].locksCacheActions() ||
             WebDavTaskManager.snapshot(it.cacheKey)?.active == true
     }
 }

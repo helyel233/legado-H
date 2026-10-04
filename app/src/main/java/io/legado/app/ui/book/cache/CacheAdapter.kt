@@ -12,7 +12,6 @@ import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ItemDownloadBinding
 import io.legado.app.help.book.isLocal
-import io.legado.app.model.CacheBook
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
 
@@ -79,15 +78,7 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
         binding.run {
             ivDownload.setOnClickListener {
                 getItem(holder.layoutPosition)?.let { book ->
-                    CacheBook.cacheBookMap[book.bookUrl]?.let {
-                        if (!it.isStop()) {
-                            CacheBook.remove(context, book.bookUrl)
-                        } else {
-                            CacheBook.start(context, book, 0, book.lastChapterIndex)
-                        }
-                    } ?: let {
-                        CacheBook.start(context, book, 0, book.lastChapterIndex)
-                    }
+                    callBack.toggleBookDownload(book)
                 }
             }
             tvExport.setOnClickListener {
@@ -101,13 +92,9 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
             iv.gone()
         } else {
             iv.visible()
-            CacheBook.cacheBookMap[book.bookUrl]?.let {
-                if (!it.isStop()) {
-                    iv.setImageResource(R.drawable.ic_stop_black_24dp)
-                } else {
-                    iv.setImageResource(R.drawable.ic_play_24dp)
-                }
-            } ?: let {
+            if (callBack.isBookDownloading(book.bookUrl)) {
+                iv.setImageResource(R.drawable.ic_stop_black_24dp)
+            } else {
                 iv.setImageResource(R.drawable.ic_play_24dp)
             }
         }
@@ -134,6 +121,8 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
 
     interface CallBack {
         val cacheChapters: HashMap<String, HashSet<String>>
+        fun isBookDownloading(bookUrl: String): Boolean
+        fun toggleBookDownload(book: Book)
         fun export(position: Int)
         fun exportProgress(bookUrl: String): Int?
         fun exportMsg(bookUrl: String): String?

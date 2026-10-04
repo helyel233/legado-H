@@ -8,7 +8,6 @@ object NotificationId {
 
     const val ReadAloudService = 101
     const val AudioPlayService = 102
-    const val CacheBookService = 103
     const val CacheCoordinator = 203
     const val ExportBookService = 104
     const val WebService = 105
@@ -23,6 +22,5 @@ object NotificationId {
     const val AutoTaskNotifyBase = 24000
     const val Download = 10000
     const val ExportBook = 201
-    const val AudioCache = 202
 
 }

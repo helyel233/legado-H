@@ -1,6 +1,5 @@
 package io.legado.app.ui.book.cache
 
-import io.legado.app.help.http.dns.DnsScope
 import android.app.Application
 import androidx.annotation.StringRes
 import androidx.lifecycle.MutableLiveData
@@ -31,10 +30,10 @@ import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
-import io.legado.app.model.CacheBook
-import io.legado.app.model.analyzeRule.AnalyzeUrl
-import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.getMediaRequest
-import io.legado.app.model.webBook.WebBook
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CachePhase
+import io.legado.app.help.cache.CacheRequestSource
+import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.externalCache
 import io.legado.app.utils.NetworkUtils
@@ -44,13 +43,15 @@ import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.compress.SafeZipExtractor
 import io.legado.app.utils.compress.SafeZipLimits
 import io.legado.app.utils.compress.readTextLimited
-import io.legado.app.utils.isJsonArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
@@ -102,6 +103,44 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
     val itemsLiveData = MutableLiveData<List<CacheBookItem>>()
     val summaryLiveData = MutableLiveData<CacheSummary>()
     val loadingLiveData = MutableLiveData<Boolean>()
+
+    /** 缓存管理页音频任务展示状态：由缓存协调器快照与进度投影得到。 */
+    val audioTaskStateFlow: StateFlow<Map<String, AudioCacheTaskState>> =
+        combine(CacheCoordinator.snapshot, CacheCoordinator.progress) { snapshot, progress ->
+            AudioTaskProjection.project(snapshot, progress, ::audioTaskMessage)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    private fun audioTaskMessage(facts: AudioTaskMessageFacts): String {
+        return when (facts.status) {
+            CacheTaskStatus.PENDING -> appCtx.getString(R.string.data_loading)
+            CacheTaskStatus.RESOLVING -> appCtx.getString(
+                R.string.cache_manage_resolving_chapter,
+                facts.currentChapterIndex,
+                facts.totalChapters,
+            )
+
+            CacheTaskStatus.CACHING -> buildAudioTaskProgressMessage(facts)
+            CacheTaskStatus.PAUSED -> appCtx.getString(R.string.cache_manage_task_paused)
+            CacheTaskStatus.COMPLETED ->
+                appCtx.getString(R.string.cache_manage_task_done, facts.completedChapters)
+
+            CacheTaskStatus.CANCELLED -> appCtx.getString(R.string.cache_manage_task_cancelled)
+            CacheTaskStatus.FAILED -> facts.error ?: appCtx.getString(R.string.error)
+        }
+    }
+
+    private fun buildAudioTaskProgressMessage(facts: AudioTaskMessageFacts): String {
+        val downloadedText = ConvertUtils.formatFileSize(facts.downloadedBytes)
+        val totalText = facts.totalBytes?.let(ConvertUtils::formatFileSize) ?: "?"
+        return appCtx.getString(
+            R.string.cache_manage_task_progress,
+            facts.completedChapters,
+            facts.totalChapters,
+            downloadedText,
+            totalText,
+            "--",
+        )
+    }
 
     private var loadJob: Job? = null
     private val selectedSourceKeys = loadSelectedSourceKeys()
@@ -494,18 +533,26 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             .sorted()
             .toList()
         if (indexes.isEmpty()) return 0
-        indexes.toRanges().forEach { (start, end) ->
-            CacheBook.start(appCtx, book, start, end)
-        }
+        CacheCoordinator.submitTextDownload(
+            book = book,
+            chapterIndexes = indexes,
+            source = CacheRequestSource.CACHE_MANAGE,
+            reviewIncremental = true,
+        )
         return indexes.size
     }
 
     suspend fun cacheAudioChapters(
         book: Book,
-        chapters: List<BookChapter>,
-        reloadOnFinished: Boolean = true
+        chapters: List<BookChapter>
     ): Int {
         if (!book.isAudio) return 0
+        // 同一本书已有进行中的媒体任务时按旧行为拒绝重复提交（返回 0）。
+        if (CacheCoordinator.snapshot.value.activeTasksFor(book.bookUrl)
+                .any { it.phase == CachePhase.MEDIA }
+        ) {
+            return 0
+        }
         val targets = withContext(Dispatchers.IO) {
             val realChapters = chapters
                 .asSequence()
@@ -520,27 +567,16 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
                 .toList()
         }
         if (targets.isEmpty()) return 0
-        val started = AudioCacheTaskManager.start(
+        CacheCoordinator.submitMediaDownload(
             book = book,
-            chapters = targets,
-            resolver = ::resolveAudioMediaRequest,
-            onChapterResolved = { chapter, request ->
-                if (chapter.resourceUrl != request.url) {
-                    chapter.resourceUrl = request.url
-                    appDb.bookChapterDao.update(chapter)
-                }
-            },
-            onFinished = {
-                refreshManifest(book)
-                if (reloadOnFinished && mode == CacheManageMode.AUDIO) {
-                    load(mode)
-                }
-            }
+            chapterIndexes = targets.map { it.index },
+            source = CacheRequestSource.CACHE_MANAGE,
+            reviewIncremental = true,
         )
-        if (started && mode == CacheManageMode.AUDIO) {
+        if (mode == CacheManageMode.AUDIO) {
             load(mode)
         }
-        return if (started) targets.size else 0
+        return targets.size
     }
 
     suspend fun restoreCacheToBookshelf(item: CacheBookItem): Boolean {
@@ -836,7 +872,7 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
         knownManifest: CacheBookManifest? = null,
         cacheDirNames: Set<String> = emptySet()
     ): CacheBookItem? {
-        val taskState = AudioCacheTaskManager.snapshot(book.bookUrl)
+        val taskState = audioTaskStateFlow.value[book.bookUrl]
         if (mode == CacheManageMode.AUDIO) {
             return buildAudioCacheBookItem(book, knownManifest, taskState)
         }
@@ -1060,46 +1096,6 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
         return CacheManifestHelper.write(book, chapters) {
             isChapterCached(book, it, cacheNames, validateImageContent = false)
         }
-    }
-
-    private suspend fun resolveAudioMediaRequest(
-        book: Book,
-        chapter: BookChapter
-    ): ExoPlayerHelper.MediaRequest {
-        chapter.resourceUrl
-            ?.takeIf { it.isNotBlank() }
-            ?.let { return ExoPlayerHelper.MediaRequest(it) }
-        val source = book.getBookSource()
-            ?: throw IllegalStateException(context.getString(R.string.book_source_not_found))
-        val candidates = linkedSetOf<String>()
-        BookHelp.getContent(book, chapter)
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.let(candidates::add)
-        WebBook.getContentAwait(source, book, chapter, needSave = true)
-            .trim()
-            .takeIf { it.isNotBlank() }
-            ?.let(candidates::add)
-        var lastError: Throwable? = null
-        for (content in candidates) {
-            try {
-                if (content.isJsonArray()) {
-                    return ExoPlayerHelper.MediaRequest(content)
-                }
-                return AnalyzeUrl(
-                    content, dnsScope = DnsScope.MEDIA,
-                    source = source,
-                    ruleData = book,
-                    chapter = chapter,
-                    coroutineContext = currentCoroutineContext()
-                ).getMediaRequest()
-            } catch (e: Exception) {
-                lastError = e
-            }
-        }
-        throw IllegalStateException(
-            lastError?.localizedMessage ?: context.getString(R.string.cache_manage_audio_url_empty)
-        )
     }
 
     private suspend fun createMergedUploadPackage(item: CacheBookItem): File {

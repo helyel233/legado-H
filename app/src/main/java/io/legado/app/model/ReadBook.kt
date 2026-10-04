@@ -26,6 +26,8 @@ import io.legado.app.help.book.isSameNameAuthor
 import io.legado.app.help.book.readSimulating
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.book.update
+import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.help.cache.CacheRequestSource
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
@@ -135,7 +137,6 @@ object ReadBook : CoroutineScope by MainScope() {
     val downloadFailChapters = hashMapOf<Int, Int>()
     var contentProcessor: ContentProcessor? = null
     val downloadScope = CoroutineScope(SupervisorJob() + IO)
-    val preDownloadSemaphore = Semaphore(2)
     val executor = globalExecutor
 
     private fun markReadAloudUserNavigation(fromReadAloud: Boolean) {
@@ -1054,37 +1055,6 @@ object ReadBook : CoroutineScope by MainScope() {
     /**
      * 下载正文
      */
-    private suspend fun downloadIndex(index: Int) {
-        if (index < 0) return
-        if (index > chapterSize - 1) {
-            upToc()
-            return
-        }
-        val book = book ?: return
-        val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return
-        if (BookHelp.hasContent(book, chapter)) {
-            downloadedChapters.add(chapter.index)
-        } else {
-            delay(1000)
-            if (this@ReadBook.book?.bookUrl != book.bookUrl || chapter.bookUrl != book.bookUrl) return
-            val generation = beginChapterLoad(index, currentChapterLayoutKey())
-            if (generation != null) {
-                download(
-                    downloadScope,
-                    book,
-                    chapter,
-                    false,
-                    preDownloadSemaphore,
-                    requestGeneration = generation,
-                    upContent = false
-                )
-            }
-        }
-    }
-
-    /**
-     * 下载正文
-     */
     private fun download(
         scope: CoroutineScope,
         expectedBook: Book,
@@ -1940,23 +1910,32 @@ object ReadBook : CoroutineScope by MainScope() {
             }
             preDownloadTask?.cancel()
             preDownloadTask = launch(IO) {
+                val cacheBook = book ?: return@launch
+                val indexes = linkedSetOf<Int>()
                 //预下载
-                launch {
-                    val maxChapterIndex =
-                        min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
-                    for (i in durChapterIndex.plus(2)..maxChapterIndex) {
-                        if (downloadedChapters.contains(i)) continue
-                        if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                        downloadIndex(i)
-                    }
+                val maxChapterIndex =
+                    min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
+                for (i in durChapterIndex.plus(2)..maxChapterIndex) {
+                    if (downloadedChapters.contains(i)) continue
+                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
+                    indexes.add(i)
                 }
-                launch {
-                    val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
-                    for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
-                        if (downloadedChapters.contains(i)) continue
-                        if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                        downloadIndex(i)
-                    }
+                val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
+                for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
+                    if (downloadedChapters.contains(i)) continue
+                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
+                    indexes.add(i)
+                }
+                if (indexes.isEmpty()) return@launch
+                if (ReadBook.book?.bookUrl != cacheBook.bookUrl) return@launch
+                runCatching {
+                    CacheCoordinator.submitAutomaticBookDownload(
+                        book = cacheBook,
+                        chapterIndexes = indexes,
+                        source = CacheRequestSource.AUTO_PRECACHE,
+                    )
+                }.onFailure {
+                    AppLog.put("自动预缓存提交失败\n${it.localizedMessage}", it)
                 }
             }
         }
