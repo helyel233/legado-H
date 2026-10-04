@@ -389,7 +389,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         observeEvent<String>(EventBus.BOOKSHELF_STRUCTURE_CHANGED) {
             rebuildBookshelfContent()
         }
-        observeEvent<String>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
+        observeEvent<Boolean>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
             rebuildBookshelfContent()
         }
     }
