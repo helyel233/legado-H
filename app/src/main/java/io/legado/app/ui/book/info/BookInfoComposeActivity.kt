@@ -115,6 +115,7 @@ class BookInfoComposeActivity :
 
     private val waitDialog by lazy { WaitDialog(this) }
     private var chapterChanged = false
+    private var pendingTocJump = false
     private var uiState by mutableStateOf(BookInfoUiState(loading = true))
     private var readTimeText = ""
     private var groupText = ""
@@ -213,8 +214,12 @@ class BookInfoComposeActivity :
         viewModel.chapterListData.observe(this) {
             chapterPreviewCache.invalidate()
             updateUiState()
+            maybeOpenPendingTocJump()
         }
-        viewModel.tocLoadStateData.observe(this) { updateUiState() }
+        viewModel.tocLoadStateData.observe(this) {
+            updateUiState()
+            maybeOpenPendingTocJump()
+        }
         viewModel.waitDialogData.observe(this) {
             upWaitDialogStatus(it)
         }
@@ -224,6 +229,12 @@ class BookInfoComposeActivity :
     override fun onResume() {
         super.onResume()
         viewModel.getBook(false)?.let { updateAiImages(it, forceRefresh = true) }
+    }
+
+    override fun onStop() {
+        // 离开页面后不再兑现「查看目录」的等待跳转，避免返回详情页时弹跳
+        pendingTocJump = false
+        super.onStop()
     }
 
     override fun observeLiveBus() {
@@ -731,14 +742,62 @@ class BookInfoComposeActivity :
     }
 
     private fun openChapterListSafely() {
-        if (viewModel.chapterListData.value.isNullOrEmpty()) {
-            toastOnUi(uiState.tocLoadPhase.emptyMessageRes)
+        val book = viewModel.getBook() ?: return
+        val chapters = viewModel.chapterListData.value
+        if (!chapters.isNullOrEmpty()) {
+            launchTocList(book)
             return
         }
-        viewModel.getBook()?.let { book ->
-            viewModel.prepareBookForEntry(book) { targetBook ->
-                tocActivityResult.launch(targetBook.bookUrl)
+        when (viewModel.tocLoadPhase(book.bookUrl)) {
+            BookInfoTocPhase.LOADING -> {
+                // 首次进入详情页时目录可能仍在后台加载：等待结果并自动打开目录页
+                pendingTocJump = true
+                toastOnUi(R.string.loading)
             }
+            BookInfoTocPhase.NOT_LOADED, BookInfoTocPhase.ERROR -> {
+                // 尚未加载或上次加载失败：点击视为重新拉取，完成后自动打开目录页
+                pendingTocJump = true
+                toastOnUi(R.string.loading)
+                refreshToc()
+            }
+            BookInfoTocPhase.READY -> {
+                if (chapters == null) {
+                    // 极端竞态：目录已就绪但章节观察值尚未派发，按加载中处理
+                    pendingTocJump = true
+                    toastOnUi(R.string.loading)
+                } else {
+                    toastOnUi(R.string.chapter_list_empty)
+                }
+            }
+            BookInfoTocPhase.EMPTY -> toastOnUi(R.string.chapter_list_empty)
+        }
+    }
+
+    /** 目录加载完成后兑现「查看目录」的等待跳转；加载失败或为空时提示。 */
+    private fun maybeOpenPendingTocJump() {
+        if (!pendingTocJump) return
+        val book = viewModel.getBook() ?: return
+        if (!viewModel.chapterListData.value.isNullOrEmpty()) {
+            pendingTocJump = false
+            launchTocList(book)
+            return
+        }
+        when (viewModel.tocLoadPhase(book.bookUrl)) {
+            BookInfoTocPhase.ERROR -> {
+                pendingTocJump = false
+                toastOnUi(R.string.error_load_toc)
+            }
+            BookInfoTocPhase.EMPTY -> {
+                pendingTocJump = false
+                toastOnUi(R.string.chapter_list_empty)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun launchTocList(book: Book) {
+        viewModel.prepareBookForEntry(book) { targetBook ->
+            tocActivityResult.launch(targetBook.bookUrl)
         }
     }
 
