@@ -27,6 +27,7 @@ import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.stackTraceStr
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -473,6 +474,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                 }.onSuccess { kinds ->
                     _moduleContentStates.update { it + (module.id to ModuleLoadState.Buttons(kinds)) }
                 }.onFailure { e ->
+                    if (e is CancellationException) throw e
                     _moduleContentStates.update { it + (module.id to ModuleLoadState.Error(e.stackTraceStr)) }
                 }
             }.also { it.invokeOnCompletion { loadJobs.remove(module.id) } }
@@ -555,6 +557,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     ))
                 }
             }.onFailure { e ->
+                if (e is CancellationException) throw e
                 _moduleContentStates.update { it + (module.id to ModuleLoadState.Error(e.stackTraceStr)) }
             }
         }.also { it.invokeOnCompletion { loadJobs.remove(module.id) } }
@@ -608,6 +611,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     ))
                 }
             }.onFailure { e ->
+                if (e is CancellationException) throw e
                 _moduleContentStates.update { states ->
                     val lastState = states[globalId] as? ModuleLoadState.Loaded ?: return@update states
                     states + (globalId to lastState.copy(isLoadingMore = false))
@@ -714,6 +718,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     states + (moduleId to current.copy(tabs = updatedTabs))
                 }
             }.onFailure { e ->
+                if (e is CancellationException) throw e
                 _moduleContentStates.update { states ->
                     val current = states[moduleId] as? ModuleLoadState.RankingTabs
                         ?: return@update states
