@@ -20,6 +20,8 @@ import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.CacheBookManifest
 import io.legado.app.help.book.CacheManifestHelper
+import io.legado.app.help.review.ReviewSnapshotStore
+import kotlinx.coroutines.ensureActive
 import io.legado.app.help.book.cacheGroupKey
 import io.legado.app.help.book.cacheRemoteKey
 import io.legado.app.help.book.cacheSourceKey
@@ -55,6 +57,47 @@ import splitties.init.appCtx
 import java.io.File
 
 class CacheManageViewModel(application: Application) : BaseViewModel(application) {
+
+    suspend fun getReviewSnapshotItems(book: Book): List<ReviewSnapshotChapterItem> {
+        return withContext(Dispatchers.IO) {
+            val dbChapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+            val chapters = dbChapters.takeIf { it.isNotEmpty() }
+                ?: CacheManifestHelper.toChapters(CacheManifestHelper.read(book)
+                    ?: return@withContext emptyList())
+            val (counts, statuses) = ReviewSnapshotStore.managementState(book) { ensureActive() }
+            val statusesByUrl = statuses.associateBy { it.chapterUrl.trim() }
+            chapters.asSequence()
+                .filterNot { it.isVolume }
+                .mapNotNull { chapter ->
+                    val cachedSnapshots = counts.forChapter(chapter)
+                    val status = statusesByUrl[chapter.url.trim()]
+                    if (status == null) {
+                        if (cachedSnapshots == 0) {
+                            return@mapNotNull null
+                        }
+                        return@mapNotNull ReviewSnapshotChapterItem(
+                            chapter = chapter,
+                            processedSnapshots = 0,
+                            successfulSnapshots = 0,
+                            totalSnapshots = cachedSnapshots,
+                            failedSnapshots = 0,
+                            failedButtonSources = emptyList(),
+                            statusMissing = true,
+                        )
+                    }
+                    ReviewSnapshotChapterItem(
+                        chapter = chapter,
+                        processedSnapshots = status.totalSnapshots,
+                        successfulSnapshots = cachedSnapshots,
+                        totalSnapshots = status.totalSnapshots,
+                        failedSnapshots = status.failedSnapshots,
+                        failedButtonSources = status.failedButtonSourcesForRetry().orEmpty(),
+                    )
+                }
+                .toList()
+        }
+    }
+
 
     val itemsLiveData = MutableLiveData<List<CacheBookItem>>()
     val summaryLiveData = MutableLiveData<CacheSummary>()
@@ -1768,3 +1811,27 @@ private fun List<Int>.toRanges(): List<Pair<Int, Int>> {
     ranges.add(start to previous)
     return ranges
 }
+
+/**
+ * 评论快照章节状态行（从 legadoC CacheManageViewModel 移植）。
+ */
+data class ReviewSnapshotChapterItem(
+    val chapter: BookChapter,
+    /** Buttons that have reached either a success or failure result. */
+    val processedSnapshots: Int,
+    /** Successfully persisted snapshot files, retained separately from progress. */
+    val successfulSnapshots: Int,
+    val totalSnapshots: Int,
+    val failedSnapshots: Int,
+    /** Empty only when an old status recorded a count without safe button identities. */
+    val failedButtonSources: List<String>,
+    /** Existing snapshots have no durable chapter status; retry through the normal chapter path. */
+    val statusMissing: Boolean = false,
+) {
+    val canRetryFailedSnapshots: Boolean
+        get() = failedSnapshots > 0 && failedButtonSources.size == failedSnapshots
+
+    val canRetryChapter: Boolean
+        get() = statusMissing || canRetryFailedSnapshots
+}
+

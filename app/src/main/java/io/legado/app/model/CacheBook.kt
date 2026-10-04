@@ -11,6 +11,8 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.CacheManifestHelper
+import io.legado.app.help.cache.CacheBodyWorkerRegistry
+import io.legado.app.help.cache.CacheWorkerLease
 import io.legado.app.help.book.library.LibraryCloudSync
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
@@ -89,13 +91,24 @@ object CacheBook {
         }
     }
 
-    fun start(context: Context, book: Book, start: Int, end: Int) {
+    fun start(
+        context: Context,
+        book: Book,
+        start: Int,
+        end: Int,
+        coordinatorSessionId: String? = null,
+        coordinatorTaskId: String? = null,
+        coordinatorGeneration: Long? = null,
+    ) {
         if (!book.isLocal) {
             context.startService<CacheBookService> {
                 action = IntentAction.start
                 putExtra("bookUrl", book.bookUrl)
                 putExtra("start", start)
                 putExtra("end", end)
+                coordinatorSessionId?.let { putExtra("coordinatorSessionId", it) }
+                coordinatorTaskId?.let { putExtra("coordinatorTaskId", it) }
+                coordinatorGeneration?.let { putExtra("coordinatorGeneration", it) }
             }
         }
     }
@@ -105,6 +118,18 @@ object CacheBook {
             action = IntentAction.remove
             putExtra("bookUrl", bookUrl)
         }
+    }
+
+    /** Stop one coordinator-owned book without touching other cache books. */
+    fun stop(bookUrl: String) {
+        cacheBookMap[bookUrl]?.let { model ->
+            model.stop()
+            cacheBookMap.remove(bookUrl, model)
+        }
+    }
+
+    internal fun hasActiveBook(bookUrl: String): Boolean {
+        return cacheBookMap[bookUrl]?.isRun() == true
     }
 
     fun stop(context: Context) {
@@ -200,6 +225,7 @@ object CacheBook {
         private val tasks = CompositeCoroutine()
         private var isStopped = false
         private var waitingRetry = false
+        private var coordinatorLease: CacheWorkerLease? = null
         private var isLoading = false
 
         val waitCount get() = waitDownloadSet.size
@@ -231,6 +257,10 @@ object CacheBook {
 
         @Synchronized
         fun stop() {
+            coordinatorLease?.let {
+                CacheBodyWorkerRegistry.onWorkerFinished(it, "cache book stopped")
+                coordinatorLease = null
+            }
             waitDownloadSet.clear()
             tasks.clear()
             val canceledReaderRequests = readerRequests.toMap()
@@ -244,7 +274,12 @@ object CacheBook {
         }
 
         @Synchronized
-        fun addDownload(start: Int, end: Int) {
+        internal fun addDownload(
+            start: Int,
+            end: Int,
+            executionLease: CacheWorkerLease? = null,
+        ) {
+            coordinatorLease = executionLease
             isStopped = false
             for (i in start..end) {
                 if (!onDownloadSet.contains(i)) {
@@ -261,6 +296,9 @@ object CacheBook {
             onDownloadSet.remove(chapter.index)
             successDownloadSet.add(chapter.primaryStr())
             errorDownloadMap.remove(chapter.primaryStr())
+            coordinatorLease?.let {
+                CacheBodyWorkerRegistry.onChapterSuccess(it, chapter.index)
+            }
         }
 
         @Synchronized
@@ -279,6 +317,11 @@ object CacheBook {
             if ((errorDownloadMap[chapter.primaryStr()] ?: 0) < 3 && !isStopped) {
                 waitDownloadSet.add(chapter.index)
             } else {
+                coordinatorLease?.let {
+                    CacheBodyWorkerRegistry.onChapterFailed(
+                        it, chapter.index, error.localizedMessage
+                    )
+                }
                 AppLog.put(
                     "下载${book.name}-${chapter.title}失败\n${error.localizedMessage}",
                     error

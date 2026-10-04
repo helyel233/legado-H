@@ -596,6 +596,11 @@ object BookHelp {
         }
     }
 
+    internal fun readStoredContent(book: Book, chapter: BookChapter): String? {
+        val file = getContentFileCandidates(book, chapter).firstOrNull { it.isFile } ?: return null
+        return file.readText().takeIf { it.isNotEmpty() }
+    }
+
     private fun getContentFileCandidates(book: Book, chapter: BookChapter, suffix: String = "nb"): List<File> {
         val files = linkedSetOf<File>()
         getPrimaryContentFile(book, chapter, suffix).let(files::add)

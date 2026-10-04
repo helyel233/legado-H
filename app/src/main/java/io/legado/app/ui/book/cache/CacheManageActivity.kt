@@ -98,6 +98,7 @@ class CacheManageActivity :
                 onRestore = ::restoreToBookshelf,
                 onDelete = ::deleteBookCache,
                 onStopAudio = ::stopAudioCache,
+                onOpenReviews = ::openReviewSnapshots,
                 onSelectSource = ::selectSource,
                 onDownload = ::download,
                 onSelectSyncAction = ::selectSyncAction,
@@ -412,6 +413,10 @@ class CacheManageActivity :
 
     private fun stopAudioCache(item: CacheBookItem) {
         AudioCacheTaskManager.togglePause(item.book.bookUrl)
+    }
+
+    private fun openReviewSnapshots(item: CacheBookItem) {
+        showDialogFragment(ReviewSnapshotStatusDialog.newInstance(item.book))
     }
 
     private fun selectSource(item: CacheBookItem) {

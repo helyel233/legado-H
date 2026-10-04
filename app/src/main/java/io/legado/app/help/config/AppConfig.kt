@@ -2069,6 +2069,26 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
 
+    /** Minimum spacing between starts of Coordinator-owned primary chapter downloads. */
+    var downloadChapterIntervalMillis: Long
+        get() = appCtx.getPrefLong(PreferKey.downloadChapterIntervalMillis, 0L).also {
+            require(it >= 0L) { "download chapter interval must not be negative: $it" }
+        }
+        set(value) {
+            require(value >= 0L) { "download chapter interval must not be negative: $value" }
+            appCtx.putPrefLong(PreferKey.downloadChapterIntervalMillis, value)
+        }
+
+    /** Extra attempts after a primary chapter download failure. */
+    var downloadChapterRetryCount: Int
+        get() = appCtx.getPrefInt(PreferKey.downloadChapterRetryCount, 2).also {
+            require(it >= 0) { "download chapter retry count must not be negative: $it" }
+        }
+        set(value) {
+            require(value >= 0) { "download chapter retry count must not be negative: $value" }
+            appCtx.putPrefInt(PreferKey.downloadChapterRetryCount, value)
+        }
+
     var remoteServerId: Long
         get() = appCtx.getPrefLong(PreferKey.remoteServerId)
         set(value) {

@@ -48,6 +48,7 @@ internal fun CacheBookCard(
     onRestore: (CacheBookItem) -> Unit,
     onDelete: (CacheBookItem) -> Unit,
     onStopAudio: (CacheBookItem) -> Unit,
+    onOpenReviews: (CacheBookItem) -> Unit,
     onSelectSource: (CacheBookItem) -> Unit,
     onDownload: (CacheBookItem) -> Unit,
     onSelectSyncAction: (CacheBookItem) -> Unit
@@ -192,6 +193,13 @@ internal fun CacheBookCard(
                         else -> onUpload(item)
                     }
                 }
+            )
+            CacheActionButton(
+                text = stringResource(R.string.cache_manage_review_snapshots),
+                palette = palette,
+                actionRadius = actionRadius,
+                modifier = Modifier.weight(1f),
+                onClick = { onOpenReviews(item) }
             )
             if (item.manifest != null && hasLocalCache) {
                 CacheActionButton(

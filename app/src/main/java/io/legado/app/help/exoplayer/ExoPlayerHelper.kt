@@ -406,6 +406,38 @@ object ExoPlayerHelper {
         return listOf(url)
     }
 
+    fun isLocalMediaContent(url: String): Boolean {
+        val urls = getMediaUrls(url)
+        return urls.isNotEmpty() && urls.all(::isLocalMediaUrl)
+    }
+
+    /** Local imported media is complete by durable availability, not by ExoPlayer cache. */
+    fun isLocalMediaAvailable(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val urls = getMediaUrls(url)
+        if (urls.isEmpty()) return false
+        return urls.all { mediaUrl ->
+            val uri = Uri.parse(mediaUrl)
+            when (uri.scheme?.lowercase()) {
+                "file" -> uri.path
+                    ?.let { File(it) }
+                    ?.let { it.isFile && it.length() > 0L }
+                    ?: false
+                "content" -> runCatching {
+                    appCtx.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                        it.length != 0L
+                    } == true
+                }.getOrDefault(false)
+                else -> false
+            }
+        }
+    }
+
+    private fun isLocalMediaUrl(url: String): Boolean {
+        val scheme = Uri.parse(url).scheme
+        return scheme.equals("file", true) || scheme.equals("content", true)
+    }
+
     /** 带请求头的 OkHttp 数据源工厂（书级媒体缓存/播放用） */
     private fun httpDataFactory(headers: Map<String, String>): OkHttpDataSource.Factory {
         val client = okHttpClient.newBuilder()

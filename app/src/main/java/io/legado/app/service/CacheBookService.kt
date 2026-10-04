@@ -12,6 +12,7 @@ import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
 import io.legado.app.data.appDb
 import io.legado.app.help.book.update
+import io.legado.app.help.cache.CacheWorkerLease
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.CacheBook
 import io.legado.app.model.webBook.WebBook
@@ -81,7 +82,10 @@ class CacheBookService : BaseService() {
                 IntentAction.start -> addDownloadData(
                     intent.getStringExtra("bookUrl"),
                     intent.getIntExtra("start", 0),
-                    intent.getIntExtra("end", 0)
+                    intent.getIntExtra("end", 0),
+                    intent.getStringExtra("coordinatorSessionId"),
+                    intent.getStringExtra("coordinatorTaskId"),
+                    intent.getLongExtra("coordinatorGeneration", -1L).takeIf { it >= 0 },
                 )
 
                 IntentAction.remove -> removeDownload(intent.getStringExtra("bookUrl"))
@@ -99,7 +103,14 @@ class CacheBookService : BaseService() {
         postEvent(EventBus.UP_DOWNLOAD, "")
     }
 
-    private fun addDownloadData(bookUrl: String?, start: Int, end: Int) {
+    private fun addDownloadData(
+        bookUrl: String?,
+        start: Int,
+        end: Int,
+        coordinatorSessionId: String? = null,
+        coordinatorTaskId: String? = null,
+        coordinatorGeneration: Long? = null,
+    ) {
         bookUrl ?: return
         execute {
             val cacheBook = CacheBook.getOrCreate(bookUrl) ?: return@execute
@@ -139,7 +150,15 @@ class CacheBookService : BaseService() {
             } else {
                 min(end, book.lastChapterIndex)
             }
-            cacheBook.addDownload(start, end2)
+            cacheBook.addDownload(
+                start,
+                end2,
+                if (coordinatorSessionId != null && coordinatorTaskId != null &&
+                    coordinatorGeneration != null
+                ) {
+                    CacheWorkerLease(coordinatorSessionId, coordinatorTaskId, coordinatorGeneration)
+                } else null
+            )
             notificationContent = CacheBook.downloadSummary
             upCacheBookNotification()
         }.onFinally {

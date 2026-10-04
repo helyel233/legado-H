@@ -58,6 +58,7 @@ fun CacheManageScreen(
     onRestore: (CacheBookItem) -> Unit,
     onDelete: (CacheBookItem) -> Unit,
     onStopAudio: (CacheBookItem) -> Unit,
+    onOpenReviews: (CacheBookItem) -> Unit,
     onSelectSource: (CacheBookItem) -> Unit,
     onDownload: (CacheBookItem) -> Unit,
     onSelectSyncAction: (CacheBookItem) -> Unit,
@@ -133,6 +134,7 @@ fun CacheManageScreen(
                             onRestore = onRestore,
                             onDelete = onDelete,
                             onStopAudio = onStopAudio,
+                            onOpenReviews = onOpenReviews,
                             onSelectSource = onSelectSource,
                             onDownload = onDownload,
                             onSelectSyncAction = onSelectSyncAction

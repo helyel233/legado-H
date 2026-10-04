@@ -30,6 +30,30 @@ import java.io.File
 
 object UiCorner {
 
+    /** 评论快照等轻量操作按钮的软选择背景（legadoC 移植简化版）。 */
+    fun softActionSelector(defaultColor: Int, pressedColor: Int, radius: Float): android.graphics.drawable.StateListDrawable {
+        fun rounded(color: Int): android.graphics.drawable.GradientDrawable {
+            return android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = radius
+                setColor(color)
+            }
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), rounded(pressedColor))
+            addState(intArrayOf(android.R.attr.state_selected), rounded(pressedColor))
+            addState(intArrayOf(), rounded(defaultColor))
+        }
+    }
+
+    fun themeSurfaceCardColor(context: android.content.Context): Int {
+        return androidx.core.content.ContextCompat.getColor(context, R.color.background_card)
+    }
+
+    fun themeSurfaceMutedColor(context: android.content.Context): Int {
+        return androidx.core.content.ContextCompat.getColor(context, R.color.background_menu)
+    }
+
     private var panelBitmapKey: String? = null
     private var panelBitmap: Bitmap? = null
 
