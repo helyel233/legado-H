@@ -116,7 +116,9 @@ class PhotoDialog() : BaseDialogFragment(R.layout.dialog_photo_view) {
     private fun saveToAlbum(src: String) {
         val book = ReadBook.book ?: return
         lifecycleScope.launch(Dispatchers.IO) {
-            val ok = IllustrationHelp.saveToAlbum(requireContext(), book, src)
+            val ok = runCatching {
+                IllustrationHelp.saveToAlbum(requireContext(), book, src)
+            }.getOrDefault(false)
             withContext(Dispatchers.Main) {
                 toastOnUi(
                     if (ok) R.string.illustration_saved_to_album else R.string.illustration_save_failed
@@ -163,6 +165,8 @@ class PhotoDialog() : BaseDialogFragment(R.layout.dialog_photo_view) {
                     holder.pagePosition = position
                     val file = IllustrationHelp.getImageFile(ReadBook.book ?: return, src)
                     if (file.exists()) {
+                        // 防止 rebind 时旧 player 泄漏
+                        players.remove(position)?.release()
                         val player = ExoPlayer.Builder(requireContext()).build().apply {
                             setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
                             prepare()

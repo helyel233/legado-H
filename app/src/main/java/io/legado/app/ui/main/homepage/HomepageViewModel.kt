@@ -870,7 +870,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     }
 
     fun onBookClick(book: SearchBook) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             // RSS 订阅源文章不保存搜索历史（searchBooks 表对书源有外键约束语义）
             if (!appDb.rssSourceDao.has(book.origin)) {
                 appDb.searchBookDao.insert(book)
