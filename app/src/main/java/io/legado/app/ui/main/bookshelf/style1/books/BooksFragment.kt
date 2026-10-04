@@ -161,6 +161,11 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                 scrollBookshelfToTop(immediate = true)
             }
         }
+        // 主题切换后 Fragment 重建时，数据 flow 可能没有正确启动
+        // 检查 composeItems 是否为空，如果为空且 flow 不活跃，则重新加载数据
+        if (composeItems.isEmpty() && booksFlowJob?.isActive != true) {
+            initBooksData()
+        }
     }
 
     private fun initRecyclerView() {
