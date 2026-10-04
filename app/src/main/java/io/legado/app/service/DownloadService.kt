@@ -209,8 +209,8 @@ class DownloadService : BaseService() {
                             upDownloadNotification(
                                 info,
                                 "${getString(R.string.downloading)} ${formatBytes(offset, total)}",
-                                if (total > 0) 100 else 0,
-                                if (total > 0) (offset * 100 / total).toInt() else 0
+                                if (total > 0) (offset * 100 / total).toInt() else 0,
+                                if (total > 0) 100 else 0
                             )
                         }
                     }
