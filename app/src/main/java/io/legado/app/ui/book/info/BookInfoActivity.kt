@@ -72,6 +72,7 @@ import io.legado.app.help.book.addType
 import io.legado.app.help.book.getRemoteUrl
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
+import io.legado.app.help.export.BookmarkMarkdownExporter
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isVideo
@@ -157,6 +158,9 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -233,6 +237,7 @@ class BookInfoActivity :
             AppConfig.defaultBookTreeUri = treeUri.toString()
         }
     }
+    private val exportNotesResult = registerForActivityResult(HandleFileContract()) {}
     private val readBookResult = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -1633,6 +1638,8 @@ class BookInfoActivity :
                 refreshBook()
             }
 
+            R.id.menu_export_notes -> exportNotes()
+
             R.id.menu_auto_task_book_update -> {
                 viewModel.getBook(false)?.let { book ->
                     showBookAutoTaskDialog(book)
@@ -1719,6 +1726,28 @@ class BookInfoActivity :
             }
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun exportNotes() {
+        val book = viewModel.getBook() ?: return
+        lifecycleScope.launch {
+            val data = withContext(IO) {
+                runCatching { BookmarkMarkdownExporter.export(book) }.getOrNull()
+            }
+            if (data == null) {
+                toastOnUi(R.string.note_export_empty)
+                return@launch
+            }
+            val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+            exportNotesResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = HandleFileContract.FileData(
+                    "${book.name}_notes_$date.md",
+                    data,
+                    "text/markdown"
+                )
+            }
+        }
     }
 
     private fun showBookCloudEntryModeSelector() {

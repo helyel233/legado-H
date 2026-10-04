@@ -2660,4 +2660,41 @@ bookUrl：%7$s
     <string name="yearly_report_top_books">本年阅读的书</string>
     <string name="yearly_report_total">累计时长</string>
 
+    <string name="note_export">导出笔记</string>
+    <string name="note_export_empty">本书暂无笔记</string>
+    <string name="smart_group">智能分组</string>
+    <string name="smart_group_add_condition">+ 添加条件</string>
+    <string name="smart_group_add_rule">新建规则</string>
+    <string name="smart_group_apply_done">分组完成：%1$d 本书有变动</string>
+    <string name="smart_group_auto_run">书架刷新时自动执行</string>
+    <string name="smart_group_condition_name">书名含：%1$s</string>
+    <string name="smart_group_condition_recent">%1$d 天内读过</string>
+    <string name="smart_group_condition_source">书源：%1$s</string>
+    <string name="smart_group_condition_tag">标签：%1$s</string>
+    <string name="smart_group_condition_value">关键字</string>
+    <string name="smart_group_conditions">条件（同时满足）</string>
+    <string name="smart_group_days">天数</string>
+    <string name="smart_group_delete">删除</string>
+    <string name="smart_group_disabled">停用</string>
+    <string name="smart_group_edit">编辑</string>
+    <string name="smart_group_edit_rule">编辑规则</string>
+    <string name="smart_group_empty">暂无规则，点击「新建规则」添加</string>
+    <string name="smart_group_enabled">启用</string>
+    <string name="smart_group_no_groups">暂无分组，请先在分组管理中创建</string>
+    <string name="smart_group_priority">优先级</string>
+    <string name="smart_group_rule_name">规则名称</string>
+    <string name="smart_group_run_now">立即执行</string>
+    <string name="smart_group_running">执行中…</string>
+    <string name="smart_group_select_group">选择分组</string>
+    <string name="smart_group_target_group">目标分组</string>
+    <string name="smart_group_type_name">书名</string>
+    <string name="smart_group_type_recent">最近</string>
+    <string name="smart_group_type_source">书源</string>
+    <string name="smart_group_type_tag">标签</string>
+    <string name="text_to_book">存为本地书籍</string>
+    <string name="text_to_book_confirm">存书</string>
+    <string name="text_to_book_done">已存为本地书籍</string>
+    <string name="text_to_book_failed">存书失败</string>
+    <string name="text_to_book_message">正文 %1$d 字，将存为本地书籍：\n%2$s</string>
+
 </resources>

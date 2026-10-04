@@ -2842,4 +2842,41 @@ Selected text or question:
     <string name="yearly_report_top_books">Books read this year</string>
     <string name="yearly_report_total">Total time</string>
 
+    <string name="note_export">Export notes</string>
+    <string name="note_export_empty">No notes in this book</string>
+    <string name="smart_group">Smart groups</string>
+    <string name="smart_group_add_condition">+ Add condition</string>
+    <string name="smart_group_add_rule">Add rule</string>
+    <string name="smart_group_apply_done">Grouping done: %1$d books updated</string>
+    <string name="smart_group_auto_run">Auto-run on shelf refresh</string>
+    <string name="smart_group_condition_name">Name contains: %1$s</string>
+    <string name="smart_group_condition_recent">Read within %1$d days</string>
+    <string name="smart_group_condition_source">Source: %1$s</string>
+    <string name="smart_group_condition_tag">Tag: %1$s</string>
+    <string name="smart_group_condition_value">Keyword</string>
+    <string name="smart_group_conditions">Conditions (all must match)</string>
+    <string name="smart_group_days">Days</string>
+    <string name="smart_group_delete">Delete</string>
+    <string name="smart_group_disabled">Disabled</string>
+    <string name="smart_group_edit">Edit</string>
+    <string name="smart_group_edit_rule">Edit rule</string>
+    <string name="smart_group_empty">No rules yet. Tap “Add rule” to create one</string>
+    <string name="smart_group_enabled">Enabled</string>
+    <string name="smart_group_no_groups">No groups yet. Create one in group management first</string>
+    <string name="smart_group_priority">Priority</string>
+    <string name="smart_group_rule_name">Rule name</string>
+    <string name="smart_group_run_now">Run now</string>
+    <string name="smart_group_running">Running…</string>
+    <string name="smart_group_select_group">Select group</string>
+    <string name="smart_group_target_group">Target group</string>
+    <string name="smart_group_type_name">Name</string>
+    <string name="smart_group_type_recent">Recent</string>
+    <string name="smart_group_type_source">Source</string>
+    <string name="smart_group_type_tag">Tag</string>
+    <string name="text_to_book">Save as book</string>
+    <string name="text_to_book_confirm">Save</string>
+    <string name="text_to_book_done">Saved to bookshelf</string>
+    <string name="text_to_book_failed">Failed to save</string>
+    <string name="text_to_book_message">%1$d characters of text, will be saved as a local book:\n%2$s</string>
+
 </resources>

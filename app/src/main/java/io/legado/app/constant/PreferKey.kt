@@ -20,6 +20,8 @@ object PreferKey {
     const val bookGroupStyle = "bookGroupStyle"
     const val bookshelfHiddenTags = "bookshelfHiddenTags"
     const val bookshelfGroupTags = "bookshelfGroupTags"
+    const val smartGroupRules = "smartGroupRules"
+    const val smartGroupAutoRun = "smartGroupAutoRun"
     const val useDefaultCover = "useDefaultCover"
     const val loadCoverOnlyWifi = "loadCoverOnlyWifi"
     const val loadCoverHighQuality = "loadCoverHighQuality"

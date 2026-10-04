@@ -50,6 +50,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBooksBinding
 import io.legado.app.help.book.BookTagHelper
+import io.legado.app.help.book.SmartGroupEngine
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -854,6 +855,9 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
             updateComposeItems(shelfDisplays)
             startLastUpdateTimeJob()
             upFastScrollerBar()
+            lifecycleScope.launch(IO) {
+                SmartGroupEngine.autoRunIfNeeded()
+            }
         }
     }
 
