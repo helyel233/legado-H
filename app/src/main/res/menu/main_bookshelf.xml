@@ -77,6 +77,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_library_search"
+        android:icon="@drawable/ic_search"
+        android:title="@string/library_search"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_log"
         android:icon="@drawable/ic_cfg_about"
         android:title="@string/log"

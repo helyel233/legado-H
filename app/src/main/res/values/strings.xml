@@ -2824,4 +2824,11 @@ Selected text or question:
     <string name="illustration_list_mode">列表</string>
     <string name="illustration_grid_mode">宫格</string>
     <string name="illustration_export_name">配图书籍</string>
+
+    <string name="library_search">Library search</string>
+    <string name="library_search_hint">Search all cached book content</string>
+    <string name="library_search_empty">No results found (only cached chapters are searchable)</string>
+    <string name="library_search_index_count">%d chapters indexed</string>
+    <string name="library_search_rebuild_done">Index rebuilt: %d chapters</string>
+
 </resources>

@@ -28,6 +28,7 @@ import io.legado.app.data.dao.CookieDao
 import io.legado.app.data.dao.DictRuleDao
 import io.legado.app.data.dao.HttpTTSDao
 import io.legado.app.data.dao.KeyboardAssistsDao
+import io.legado.app.data.dao.LibraryContentFtsDao
 import io.legado.app.data.dao.ParagraphRuleDao
 import io.legado.app.data.dao.ReadAloudBgmDao
 import io.legado.app.data.dao.ReadAloudSpeakerGroupDao
@@ -60,6 +61,7 @@ import io.legado.app.data.entities.AiMemoryFragment
 import io.legado.app.data.entities.AiMemoryFragmentFts
 import io.legado.app.data.entities.AiMemoryItem
 import io.legado.app.data.entities.AiMemoryItemFts
+import io.legado.app.data.entities.LibraryContentFts
 import io.legado.app.data.entities.AiReadAloudRoleCache
 import io.legado.app.data.entities.AiReadAloudUsageRecord
 import io.legado.app.data.entities.Book
@@ -122,7 +124,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 117,
+    version = 118,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -140,6 +142,7 @@ val appDb by lazy {
         AiReadAloudUsageRecord::class,
         AiAgentSession::class, AiAgentJob::class, AiAgentTrace::class,
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
+        LibraryContentFts::class,
         AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class,
         BookCollection::class, BookCollectionItem::class, BookCollectionChild::class,
         HomepageModule::class, HomepageCustomSet::class, BookIllustration::class],
@@ -242,6 +245,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val homepageModuleDao: HomepageModuleDao
 
     abstract val homepageCustomSetDao: HomepageCustomSetDao
+
+    abstract val libraryContentFtsDao: LibraryContentFtsDao
 
     companion object {
 

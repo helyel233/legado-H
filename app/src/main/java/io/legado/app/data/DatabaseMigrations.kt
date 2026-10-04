@@ -26,7 +26,7 @@ object DatabaseMigrations {
             migration_103_104, migration_104_105, migration_105_106,
             migration_106_107, migration_107_108, migration_108_109, migration_109_110,
             migration_110_111, migration_111_112, MIGRATION_112_113, MIGRATION_113_114,
-            MIGRATION_114_115, MIGRATION_115_116, MIGRATION_116_117,
+            MIGRATION_114_115, MIGRATION_115_116, MIGRATION_116_117, MIGRATION_117_118,
         )
     }
 
@@ -186,6 +186,23 @@ object DatabaseMigrations {
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS `index_book_illustrations_bookUrl_chapterIndex` ON `book_illustrations` (`bookUrl`, `chapterIndex`)"
+            )
+        }
+    }
+
+    val MIGRATION_117_118 = object : Migration(117, 118) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 全库全文搜索：standalone FTS4 表（unicode61 tokenizer，content 经 CJK 分词预处理），手动维护
+            db.execSQL(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS `libraryContentFts` USING FTS4(
+                    `bookUrl` TEXT NOT NULL,
+                    `chapterIndex` INTEGER NOT NULL,
+                    `chapterTitle` TEXT NOT NULL,
+                    `content` TEXT NOT NULL,
+                    tokenize=unicode61
+                )
+                """.trimIndent()
             )
         }
     }

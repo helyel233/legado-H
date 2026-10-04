@@ -1422,4 +1422,11 @@
     <string name="cache_manage_task_done">快取完成：%1$d 章</string>
     <string name="cache_manage_task_cancelled">快取已停止</string>
     <string name="cache_manage_task_paused">快取已暫停</string>
+
+    <string name="library_search">全庫搜尋</string>
+    <string name="library_search_hint">搜尋全部書籍正文</string>
+    <string name="library_search_empty">未找到結果（僅已快取章節可被搜尋）</string>
+    <string name="library_search_index_count">已索引 %d 個章節</string>
+    <string name="library_search_rebuild_done">索引完成，共 %d 章</string>
+
 </resources>

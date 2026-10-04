@@ -14,6 +14,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.book.library.LibraryCloudSync
+import io.legado.app.help.search.LibrarySearchIndexer
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
@@ -78,6 +79,7 @@ object BookHelp {
 
     fun clearCache(book: Book) {
         io.legado.app.model.ReadBook.invalidateDirectTextContent(book.bookUrl)
+        LibrarySearchIndexer.deleteBookAsync(book.bookUrl)
         val filePath = FileUtils.getPath(downloadDir, cacheFolderName, book.getFolderName())
         // 先释放书级媒体缓存的 SimpleCache 实例，否则 media3 会持有目录锁导致删除失败
         io.legado.app.help.exoplayer.ExoPlayerHelper.releaseBookMediaCacheOf(File(filePath))
@@ -211,6 +213,8 @@ object BookHelp {
         }
         //保存文本
         getPrimaryContentFile(book, bookChapter).createFileIfNotExist().writeText(content)
+        // 同步全库搜索索引（异步，不影响保存路径）
+        LibrarySearchIndexer.indexChapterAsync(book, bookChapter, content)
         // 清理旧的 index 型文件，避免重复占用和命中过期缓存
         getLegacyContentFile(book, bookChapter)
             ?.takeIf { it.absolutePath != getPrimaryContentFile(book, bookChapter).absolutePath }
@@ -513,6 +517,7 @@ object BookHelp {
      */
     fun delContent(book: Book, bookChapter: BookChapter) {
         io.legado.app.model.ReadBook.invalidateDirectTextContent(book.bookUrl)
+        LibrarySearchIndexer.deleteChapterAsync(book.bookUrl, bookChapter.index)
         getContentFileCandidates(book, bookChapter).forEach {
             if (it.exists()) it.delete()
         }

@@ -31,6 +31,7 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
+import io.legado.app.ui.main.librarysearch.LibrarySearchActivity
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.ComposeMultiChoiceDialog
 import io.legado.app.ui.widget.compose.ComposeTextInputDialog
@@ -140,6 +141,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 putExtra("groupId", groupId)
             }
             R.id.menu_add_local -> startActivity<ImportBookActivity>()
+            R.id.menu_library_search -> startActivity<LibrarySearchActivity>()
             R.id.menu_add_url -> showAddBookByUrlAlert()
             R.id.menu_bookshelf_manage -> startActivity<BookshelfManageActivity> {
                 putExtra("groupId", groupId)
