@@ -20,8 +20,17 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.max
 import kotlin.math.min
 
+data class ShelfKey(
+    val bookUrl: String,
+    val name: String,
+    val author: String?
+)
+
 @Dao
 interface BookDao {
+
+    @Query("SELECT bookUrl, name, author FROM books")
+    fun flowShelfKeys(): Flow<List<ShelfKey>>
 
     fun flowByGroup(groupId: Long): Flow<List<Book>> {
         return when (groupId) {

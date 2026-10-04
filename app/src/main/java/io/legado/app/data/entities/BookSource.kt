@@ -51,6 +51,7 @@ data class BookSource(
     // 启用发现
     @ColumnInfo(defaultValue = "1")
     var enabledExplore: Boolean = true,
+    var homepageModules: String? = null,
     // js库
     override var jsLib: String? = null,
     // 启用okhttp CookieJAr 自动保存每次请求的cookie

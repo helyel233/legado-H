@@ -95,6 +95,7 @@ import io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1
 import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
 import io.legado.app.ui.main.ai.AiChatActivity
 import io.legado.app.ui.main.explore.ExploreFragment
+import io.legado.app.ui.main.homepage.HomepageFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.readrecord.ReadRecordFragment
 import io.legado.app.ui.main.rss.RssFragment
@@ -156,6 +157,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val idRss = 2
     private val idReadRecord = 3
     private val idMy = 4
+    private val idHomepage = 5
     private var exitTime: Long = 0
     private var clipboardImportEnabled = false
     private var rejectedShibbolethHash: Int? = null
@@ -188,7 +190,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = MainBottomNavConfig.visibleItems().size
     private val EXIT_INTERVAL = 2000L
-    private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idReadRecord, idMy)
+    private val realPositions = arrayOf(idBookshelf, idHomepage, idExplore, idRss, idReadRecord, idMy)
     private val adapter by lazy {
         TabFragmentPageAdapter(supportFragmentManager)
     }
@@ -445,6 +447,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         when (item.itemId) {
             R.id.menu_bookshelf ->
                 selectFragmentId(idBookshelf, false)
+
+            R.id.menu_homepage ->
+                selectFragmentId(idHomepage, false)
 
             R.id.menu_discovery ->
                 selectFragmentId(resolveDiscoveryNavTarget(), true)
@@ -2078,6 +2083,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private fun getBottomNavigationItemId(position: Int): Int {
         return when (realPositions[position]) {
             idBookshelf -> R.id.menu_bookshelf
+            idHomepage -> R.id.menu_homepage
             idExplore -> R.id.menu_discovery
             idRss -> if (isDiscoveryRssMerged()) {
                 R.id.menu_discovery
@@ -2451,6 +2457,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             val fragmentId = getId(position)
             if ((fragmentId == idBookshelf1 && any is BookshelfFragment1)
                 || (fragmentId == idBookshelf2 && any is BookshelfFragment2)
+                || (fragmentId == idHomepage && any is HomepageFragment)
                 || (fragmentId == idExplore && any is ExploreFragment)
                 || (fragmentId == idRss && any is RssFragment)
                 || (fragmentId == idReadRecord && any is ReadRecordFragment)
@@ -2465,6 +2472,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             return when (getId(position)) {
                 idBookshelf1 -> BookshelfFragment1(position)
                 idBookshelf2 -> BookshelfFragment2(position)
+                idHomepage -> HomepageFragment(position)
                 idExplore -> ExploreFragment(position)
                 idRss -> RssFragment(position)
                 idReadRecord -> ReadRecordFragment(position)

@@ -61,6 +61,96 @@ object DatabaseMigrations {
         }
     }
 
+
+    val MIGRATION_115_116 = object : Migration(115, 116) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 书架合集：集合表 + 集内书目 + 集合嵌套
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_collections` (
+                    `collectionId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `name` TEXT NOT NULL DEFAULT '',
+                    `order` INTEGER NOT NULL DEFAULT 0,
+                    `createdTime` INTEGER NOT NULL DEFAULT 0,
+                    `updatedTime` INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_collection_items` (
+                    `collectionId` INTEGER NOT NULL,
+                    `bookUrl` TEXT NOT NULL,
+                    `order` INTEGER NOT NULL DEFAULT 0,
+                    `addedTime` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`collectionId`, `bookUrl`),
+                    FOREIGN KEY(`collectionId`) REFERENCES `book_collections`(`collectionId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`bookUrl`) REFERENCES `books`(`bookUrl`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_collection_items_collectionId` ON `book_collection_items` (`collectionId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_collection_items_bookUrl` ON `book_collection_items` (`bookUrl`)")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `book_collection_children` (
+                    `parentCollectionId` INTEGER NOT NULL,
+                    `childCollectionId` INTEGER NOT NULL,
+                    `order` INTEGER NOT NULL DEFAULT 0,
+                    `addedTime` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`parentCollectionId`, `childCollectionId`),
+                    FOREIGN KEY(`parentCollectionId`) REFERENCES `book_collections`(`collectionId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`childCollectionId`) REFERENCES `book_collections`(`collectionId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_collection_children_parentCollectionId` ON `book_collection_children` (`parentCollectionId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_collection_children_childCollectionId` ON `book_collection_children` (`childCollectionId`)")
+            // 聚合主页：模块配置表 + 集（分组）表 + 书源表新增 homepageModules 列
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `homepage_modules` (
+                    `id` TEXT NOT NULL PRIMARY KEY,
+                    `sourceUrl` TEXT NOT NULL,
+                    `moduleKey` TEXT NOT NULL,
+                    `type` TEXT NOT NULL,
+                    `title` TEXT NOT NULL,
+                    `args` TEXT,
+                    `layoutConfig` TEXT,
+                    `url` TEXT,
+                    `isEnabled` INTEGER NOT NULL DEFAULT 1,
+                    `sortOrder` INTEGER NOT NULL DEFAULT 0,
+                    `customSetId` TEXT,
+                    `isUserCreated` INTEGER NOT NULL DEFAULT 0,
+                    `customTitle` TEXT,
+                    `customSetTitle` TEXT,
+                    `sourceJsonHash` TEXT,
+                    `syncedAt` INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `homepage_custom_sets` (
+                    `id` TEXT NOT NULL PRIMARY KEY,
+                    `name` TEXT NOT NULL,
+                    `sortOrder` INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            var hasHomepageModules = false
+            try {
+                db.query("SELECT name FROM pragma_table_info('book_sources') WHERE name='homepageModules'").use { cursor ->
+                    hasHomepageModules = cursor.moveToFirst()
+                }
+            } catch (_: Exception) {
+            }
+            if (!hasHomepageModules) {
+                db.execSQL("ALTER TABLE book_sources ADD COLUMN homepageModules TEXT DEFAULT ''")
+            }
+        }
+    }
+
     val MIGRATION_113_114 = object : Migration(113, 114) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(

@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.data.dao.BookShelfDisplay
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
@@ -48,6 +50,15 @@ data class BookshelfFolderItemUi(
 ) : BookshelfItemUi {
     override val key: String = "folder:${group.groupId}"
     override val contentType: String = "folder"
+}
+
+data class BookshelfCollectionItemUi(
+    val collection: BookCollection,
+    val bookCount: Int,
+    val previewBooks: List<Book>
+) : BookshelfItemUi {
+    override val key: String = "collection:${collection.collectionId}"
+    override val contentType: String = "collection"
 }
 
 data class BookshelfBookItemUi(
@@ -260,4 +271,5 @@ private val BookshelfItemUi.displayName: String
     get() = when (this) {
         is BookshelfBookItemUi -> display.name
         is BookshelfFolderItemUi -> group.groupName
+        is BookshelfCollectionItemUi -> collection.name
     }

@@ -1300,4 +1300,5 @@
     <string name="book_cache_import_restoring_shelf">正在還原書架...</string>
     <string name="book_cache_import_restoring_toc">正在還原章節目錄...</string>
     <string name="book_cache_import_restoring_files">正在還原快取檔案...</string>
+    <string name="homepage">首頁</string>
 </resources>

@@ -465,4 +465,8 @@ object PreferKey {
     const val offlineReviewMode = "offlineReviewMode"
     const val downloadChapterIntervalMillis = "downloadChapterIntervalMillis"
     const val downloadChapterRetryCount = "downloadChapterRetryCount"
+    const val homepageSourceHidden = "homepageSourceHidden"
+    const val homepageLayoutMode = "homepageLayoutMode"
+    const val homepagePreload = "homepagePreload"
+    const val showLocalBookIcon = "showLocalBookIcon"
 }

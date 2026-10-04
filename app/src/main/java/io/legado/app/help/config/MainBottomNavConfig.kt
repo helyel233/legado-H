@@ -17,6 +17,7 @@ import splitties.init.appCtx
 object MainBottomNavConfig {
 
     const val KEY_BOOKSHELF = "bookshelf"
+    const val KEY_HOMEPAGE = "homepage"
     const val KEY_DISCOVERY = "discovery"
     const val KEY_RSS = "rss"
     const val KEY_READ_RECORD = "readRecord"
@@ -39,6 +40,7 @@ object MainBottomNavConfig {
 
     val specs = listOf(
         ItemSpec(KEY_BOOKSHELF, R.string.bookshelf, R.id.menu_bookshelf, R.drawable.ic_bottom_books, 0, true),
+        ItemSpec(KEY_HOMEPAGE, R.string.homepage, R.id.menu_homepage, R.drawable.ic_bottom_home, 5),
         ItemSpec(KEY_DISCOVERY, R.string.discovery, R.id.menu_discovery, R.drawable.ic_bottom_explore, 1),
         ItemSpec(KEY_RSS, R.string.rss, R.id.menu_rss, R.drawable.ic_bottom_rss_feed, 2),
         ItemSpec(KEY_READ_RECORD, R.string.side_nav_stats, R.id.menu_read_record, R.drawable.ic_bottom_read_record, 3),
@@ -128,6 +130,7 @@ object MainBottomNavConfig {
         }
         return listOf(
             ItemState(KEY_BOOKSHELF, true),
+            ItemState(KEY_HOMEPAGE, true),
             ItemState(KEY_DISCOVERY, legacyVisible(PreferKey.showDiscovery, true)),
             ItemState(KEY_RSS, legacyVisible(PreferKey.showRss, true)),
             ItemState(KEY_READ_RECORD, legacyVisible(PreferKey.showReadRecord, true)),

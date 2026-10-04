@@ -54,6 +54,14 @@ object UiCorner {
         return androidx.core.content.ContextCompat.getColor(context, R.color.background_menu)
     }
 
+    /** legado-H 简化版：无弹窗透明度配置，恒为不透明 */
+    fun dialogSurfaceAlpha(): Float = 1f
+
+    /** legado-H 简化版：书架合集拼贴封面不做透明处理 */
+    fun bookshelfCoverAlpha(): Float = 1f
+
+    fun bookshelfCoverSurfaceColor(color: Int): Int = color
+
     private var panelBitmapKey: String? = null
     private var panelBitmap: Bitmap? = null
 

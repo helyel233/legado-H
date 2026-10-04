@@ -389,6 +389,15 @@ private fun BookshelfListTextContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            is BookshelfCollectionItemUi -> Text(
+                text = stringResource(R.string.book_collection),
+                color = palette.secondaryText,
+                fontSize = 13.sp,
+                fontFamily = palette.bodyFontFamily,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -563,4 +572,5 @@ private val BookshelfItemUi.displayName: String
     get() = when (this) {
         is BookshelfBookItemUi -> display.name
         is BookshelfFolderItemUi -> group.groupName
+        is BookshelfCollectionItemUi -> collection.name
     }

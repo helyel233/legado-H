@@ -46,6 +46,9 @@ import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.SourceRecycleBinDao
 import io.legado.app.data.dao.PendingReviewCommentDao
+import io.legado.app.data.dao.BookCollectionDao
+import io.legado.app.data.dao.HomepageCustomSetDao
+import io.legado.app.data.dao.HomepageModuleDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.AiAgentJob
 import io.legado.app.data.entities.AiAgentSession
@@ -76,6 +79,11 @@ import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ParagraphRule
 import io.legado.app.data.entities.ParagraphRuleVar
 import io.legado.app.data.entities.PendingReviewComment
+import io.legado.app.data.entities.BookCollection
+import io.legado.app.data.entities.BookCollectionChild
+import io.legado.app.data.entities.BookCollectionItem
+import io.legado.app.data.entities.HomepageCustomSet
+import io.legado.app.data.entities.HomepageModule
 import io.legado.app.data.entities.ReadAloudBgmAssignmentCache
 import io.legado.app.data.entities.ReadAloudBgmGroup
 import io.legado.app.data.entities.ReadAloudBgmTrack
@@ -112,7 +120,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 115,
+    version = 116,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -130,7 +138,9 @@ val appDb by lazy {
         AiReadAloudUsageRecord::class,
         AiAgentSession::class, AiAgentJob::class, AiAgentTrace::class,
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
-        AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class],
+        AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class,
+        BookCollection::class, BookCollectionItem::class, BookCollectionChild::class,
+        HomepageModule::class, HomepageCustomSet::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -223,6 +233,12 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val autoTaskRuleDao: AutoTaskRuleDao
     abstract val sourceRecycleBinDao: SourceRecycleBinDao
     abstract val pendingReviewCommentDao: PendingReviewCommentDao
+
+    abstract val bookCollectionDao: BookCollectionDao
+
+    abstract val homepageModuleDao: HomepageModuleDao
+
+    abstract val homepageCustomSetDao: HomepageCustomSetDao
 
     companion object {
 

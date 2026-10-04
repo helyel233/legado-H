@@ -130,4 +130,5 @@
     <dimen name="manga_control_button_text_size">13sp</dimen>
     <dimen name="manga_control_seek_height">28dp</dimen>
     <dimen name="manga_control_seek_margin_horizontal">8dp</dimen>
+    <dimen name="book_collection_cover_corner_radius">4dp</dimen>
 </resources>

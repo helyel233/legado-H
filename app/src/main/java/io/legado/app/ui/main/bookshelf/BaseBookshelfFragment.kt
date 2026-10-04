@@ -145,6 +145,8 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 putExtra("groupId", groupId)
             }
 
+            R.id.menu_book_collection -> showDialogFragment(BookCollectionSelectDialog())
+
             R.id.menu_download -> startActivity<CacheActivity> {
                 putExtra("groupId", groupId)
             }

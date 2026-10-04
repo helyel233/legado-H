@@ -2,6 +2,8 @@ package io.legado.app.ui.main.bookshelf.compose
 
 import com.google.gson.reflect.TypeToken
 import io.legado.app.data.dao.BookShelfDisplay
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.GSON
@@ -114,6 +116,12 @@ object BookshelfSnapshotStore {
                         type = SnapshotItem.TYPE_FOLDER,
                         group = item.group
                     )
+                    is BookshelfCollectionItemUi -> SnapshotItem(
+                        type = SnapshotItem.TYPE_COLLECTION,
+                        collection = item.collection,
+                        bookCount = item.bookCount,
+                        previewBooks = item.previewBooks
+                    )
                 }
             }
         )
@@ -183,6 +191,13 @@ object BookshelfSnapshotStore {
                     )
                 }
                 SnapshotItem.TYPE_FOLDER -> item.group?.let(::BookshelfFolderItemUi)
+                SnapshotItem.TYPE_COLLECTION -> item.collection?.let { collection ->
+                    BookshelfCollectionItemUi(
+                        collection = collection,
+                        bookCount = item.bookCount,
+                        previewBooks = item.previewBooks.orEmpty()
+                    )
+                }
                 else -> null
             }
         }
@@ -199,6 +214,9 @@ object BookshelfSnapshotStore {
         val type: String = "",
         val group: BookGroup? = null,
         val display: BookShelfDisplay? = null,
+        val collection: BookCollection? = null,
+        val bookCount: Int = 0,
+        val previewBooks: List<Book>? = null,
         val unreadCount: Int = 0,
         val hasNewChapter: Boolean = false,
         val tags: List<String>? = null,
@@ -207,6 +225,7 @@ object BookshelfSnapshotStore {
         companion object {
             const val TYPE_BOOK = "book"
             const val TYPE_FOLDER = "folder"
+            const val TYPE_COLLECTION = "collection"
         }
     }
 }

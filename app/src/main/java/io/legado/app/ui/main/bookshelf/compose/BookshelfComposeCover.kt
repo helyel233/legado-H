@@ -1,11 +1,17 @@
 package io.legado.app.ui.main.bookshelf.compose
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.data.dao.BookShelfDisplay
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
@@ -22,6 +28,16 @@ fun BookshelfComposeCover(
     fillBounds: Boolean = false,
     style: CoverImageView.CoverStyle = CoverImageView.CoverStyle.GRID
 ) {
+    if (item is BookshelfCollectionItemUi) {
+        BookshelfCollectionMosaicCover(
+            books = item.previewBooks,
+            fallbackName = item.collection.name,
+            modifier = modifier,
+            fragment = fragment,
+            lifecycle = lifecycle
+        )
+        return
+    }
     val coverRequest = remember(item.coverIdentityKey()) {
         item.toCoverRequest()
     }
@@ -55,6 +71,49 @@ private fun BookshelfItemUi.toCoverRequest(): BookshelfCoverRequest {
     return when (this) {
         is BookshelfBookItemUi -> display.toCoverRequest()
         is BookshelfFolderItemUi -> group.toCoverRequest()
+        else -> throw IllegalStateException()
+    }
+}
+
+@Composable
+private fun BookshelfCollectionMosaicCover(
+    books: List<Book>,
+    fallbackName: String,
+    modifier: Modifier,
+    fragment: Fragment?,
+    lifecycle: Lifecycle?
+) {
+    val previews = books.take(4)
+    if (previews.isEmpty()) {
+        BookCoverImage(
+            book = Book(name = fallbackName),
+            modifier = modifier,
+            fragment = fragment,
+            lifecycle = lifecycle,
+            fillBounds = true
+        )
+        return
+    }
+    Column(modifier = modifier) {
+        previews.chunked(2).forEach { rowBooks ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                rowBooks.forEach { preview ->
+                    BookCoverImage(
+                        book = preview,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(0.75f),
+                        style = CoverImageView.CoverStyle.GRID,
+                        fragment = fragment,
+                        lifecycle = lifecycle,
+                        fillBounds = true
+                    )
+                }
+                if (rowBooks.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
     }
 }
 
@@ -122,5 +181,6 @@ private fun BookshelfItemUi.coverIdentityKey(): String {
     return when (this) {
         is BookshelfBookItemUi -> "$configKey|book|${display.bookUrl}|${display.getDisplayCover()}|${display.name}|${display.author}"
         is BookshelfFolderItemUi -> "$configKey|folder|${group.groupId}|${group.cover}|${group.groupName}"
+        else -> "$configKey|collection"
     }
 }

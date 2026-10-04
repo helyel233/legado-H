@@ -50,7 +50,9 @@ import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
+import io.legado.app.ui.main.bookshelf.BookCollectionActivity
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItemUi
+import io.legado.app.ui.main.bookshelf.compose.BookshelfCollectionItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfFolderItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfItemUi
@@ -76,7 +78,9 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -113,6 +117,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     private data class ComposeScrollPosition(val index: Int, val offset: Int)
     private val composeScrollPositions = mutableMapOf<Long, ComposeScrollPosition>()
     private var composeItems by mutableStateOf<List<BookshelfItemUi>>(emptyList())
+    private var collectionItems by mutableStateOf<List<BookshelfCollectionItemUi>>(emptyList())
     private var composeGroupId by mutableStateOf(BookGroup.IdRoot)
     private var composeDataVersion by mutableStateOf(0)
     private var composeCanScrollBackward by mutableStateOf(false)
@@ -387,9 +392,27 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             if (useComposeBookshelf) {
                 val snapshotKey = currentComposeSnapshotKey()
                 restoreComposeSnapshot(snapshotKey)
-                appDb.bookDao.flowShelfByGroup(groupId).map { list ->
+                val collectionsFlow = if (groupId == BookGroup.IdRoot) {
+                    appDb.bookCollectionDao.flowRootCollections()
+                } else {
+                    flowOf(emptyList())
+                }
+                combine(
+                    appDb.bookDao.flowShelfByGroup(groupId),
+                    collectionsFlow
+                ) { list, collections ->
                     val sortedList = sortShelfDisplays(list, AppConfig.getBookSortByGroupId(groupId))
-                    val items = buildBookshelfItems(
+                    val collectionUiItems = collections.map { withItems ->
+                        BookshelfCollectionItemUi(
+                            collection = withItems.collection,
+                            bookCount = withItems.books.size + withItems.childCollections.size,
+                            previewBooks = appDb.bookCollectionDao.previewBooksInCollection(
+                                withItems.collection.collectionId,
+                                4
+                            )
+                        )
+                    }
+                    val items = collectionUiItems + buildBookshelfItems(
                         groups = bookGroups,
                         books = sortedList,
                         isRootGroup = groupId == BookGroup.IdRoot,
@@ -406,6 +429,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                 }.conflate().flowOn(Dispatchers.Default).collect { (list, items) ->
                     shelfDisplays = list
                     books = list.map { it.toMinimalBook() }
+                    collectionItems = items.filterIsInstance<BookshelfCollectionItemUi>()
                     composeItems = items
                     composeDataVersion++
                     itemCount = getItemCount()
@@ -494,7 +518,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     }
 
     private fun updateComposeItems(list: List<BookShelfDisplay>) {
-        composeItems = buildBookshelfItems(
+        val collectionUiItems = if (groupId == BookGroup.IdRoot) collectionItems else emptyList()
+        composeItems = collectionUiItems + buildBookshelfItems(
             groups = bookGroups,
             books = list,
             isRootGroup = groupId == BookGroup.IdRoot,
@@ -558,6 +583,9 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     private fun onComposeItemClick(item: BookshelfItemUi) {
         when (item) {
             is BookshelfBookItemUi -> startActivityForBook(item.display.toMinimalBook())
+            is BookshelfCollectionItemUi -> startActivity<BookCollectionActivity> {
+                putExtra("collectionId", item.collection.collectionId)
+            }
             is BookshelfFolderItemUi -> {
                 switchGroup(item.group.groupId)
             }
@@ -585,6 +613,9 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             is BookshelfBookItemUi -> lifecycleScope.launch {
                 val book = withContext(IO) { appDb.bookDao.getBook(item.display.bookUrl) } ?: return@launch
                 BookInfoNavigator.open(requireContext(), book)
+            }
+            is BookshelfCollectionItemUi -> startActivity<BookCollectionActivity> {
+                putExtra("collectionId", item.collection.collectionId)
             }
             is BookshelfFolderItemUi -> showDialogFragment(GroupEditDialog(item.group))
         }

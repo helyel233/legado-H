@@ -2089,6 +2089,25 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.downloadChapterRetryCount, value)
         }
 
+    /** 聚合主页中隐藏的集 URL 列表（GSON 序列化的 Set<String>） */
+    var homepageSourceHidden: String
+        get() = appCtx.getPrefString(PreferKey.homepageSourceHidden, "") ?: ""
+        set(value) = appCtx.putPrefString(PreferKey.homepageSourceHidden, value)
+
+    /** 首页模块布局模式：0 默认列表，1 紧凑 */
+    var homepageLayoutMode: Int
+        get() = appCtx.getPrefInt(PreferKey.homepageLayoutMode, 0)
+        set(value) = appCtx.putPrefInt(PreferKey.homepageLayoutMode, value)
+
+    /** 书架封面显示本地书籍角标（自 legadoC 移植） */
+    val showLocalBookIcon: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.showLocalBookIcon, false)
+
+    /** 首页分页预加载页数 */
+    var homepagePreload: Int
+        get() = appCtx.getPrefInt(PreferKey.homepagePreload, 0)
+        set(value) = appCtx.putPrefInt(PreferKey.homepagePreload, value)
+
     var remoteServerId: Long
         get() = appCtx.getPrefLong(PreferKey.remoteServerId)
         set(value) {
