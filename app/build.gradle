@@ -103,8 +103,8 @@ android {
                 manifestPlaceholders.put("app_name", "@string/app_launcher_name")
             }
 
-            minifyEnabled false
-            shrinkResources = false
+            minifyEnabled true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'cronet-proguard-rules.pro'
         }
         debug {
@@ -165,6 +165,9 @@ android {
     }
     packaging {
         resources.excludes.add('META-INF/*')
+        resources.excludes.add('kotlin-tooling-metadata.json')
+        // so 压缩存储（配合 AndroidManifest 的 extractNativeLibs）
+        jniLibs.useLegacyPackaging = true
     }
 
     sourceSets {

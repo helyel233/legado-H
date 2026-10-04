@@ -170,3 +170,45 @@ cn.hutool.core.util.**{*;}
     public <init>(android.content.Context, android.util.AttributeSet);
     public <init>(android.content.Context, android.util.AttributeSet, int);
 }
+
+#############################################
+# R8 混淆兼容规则（release 启用 minify/shrinkResources 后必须遵守）
+#############################################
+
+# 尊重 @Keep 标注：类与其全部成员保持原名（JS 可达类如 JsExtensions/JsURL/TextFile.JsExtensions 等）
+-keep @androidx.annotation.Keep class * { *; }
+
+# WebView addJavascriptInterface 注入对象：注解方法由系统反射调用，方法名不可混淆
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# JS 加解密接口默认实现（java.md5Encode / java.createSymmetricCrypto / java.createSign 等）
+-keep class io.legado.app.help.JsEncodeUtils { *; }
+# 替换规则 JS 作用域对象（替换结果 JS 中可直接调用其方法）
+-keep class io.legado.app.help.RegexJsExtensions { *; }
+# JS 可达的加解密实现类（createAsymmetricCrypto / createSign 返回类型）
+-keep class io.legado.app.help.crypto.** { *; }
+# java.queryTTF / queryBase64TTF 返回类型
+-keep class io.legado.app.model.analyzeRule.QueryTTF { *; }
+
+# 持久化兼容：保留 app 内全部字段名
+# （Gson 键名即字段名，涉及用户配置、备份 zip、WebDAV 同步、书源导出数据的兼容性）
+-keepclassmembers class io.legado.app.** { <fields>; }
+
+# 类名保留：
+# 1) RhinoClassShutter 按类名字符串做 JS 安全黑名单，类名改变会导致黑名单失效
+# 2) 书源 JS 可通过 Packages 按类名访问（含崩溃栈可读性）
+-keepnames class io.legado.app.**
+-keepnames class androidx.room.**
+-keepnames class androidx.sqlite.db.**
+-keepnames class com.script.**
+-keepnames class org.mozilla.**
+-keepnames class cn.hutool.**
+-keepnames class splitties.init.AppCtxKt
+
+# okio 子包同样被 Rhino 黑名单引用（okio 直属类已有 -keep class okio.* 规则）
+-keepnames class okio.**
+
+# Glide 5 通过 Class.forName 反射查找 KSP 生成的模块实现类
+-keep class com.bumptech.glide.GeneratedAppGlideModuleImpl { *; }
