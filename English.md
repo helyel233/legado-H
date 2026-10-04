@@ -18,6 +18,8 @@ LegadoH ships with no books and no book sources. Add your own online sources in 
 - **AI-assisted reading**: configurable AI services for source search, book and chapter reading, reading-record queries and web-connected tools.
 - **Modernized UI**: Compose bookshelf and explore pages, adaptive launcher icon with a monochrome themed layer, frosted-glass top and bottom bars.
 
+Ongoing improvements from sibling forks are also ported in — such as [legadoC](https://github.com/CCSSNE/legadoC)'s review-snapshot and offline-comment system, cache download coordinator, bookshelf collections with homepage modules and inline illustrations with audio blocks, and [Legado_Max](https://github.com/Suml-1/Legado_Max)'s interaction and tooling features.
+
 ## Download
 
 Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/releases) (tag prefix `legadoh-`); the in-app "Me → About → Check for updates" entry points to the same Releases page.
@@ -77,7 +79,7 @@ JDK 17 and Android SDK 36 are required. The release signing key is kept locally 
 
 ## Credits
 
-Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements LegadoH builds on. Thanks to Mingyue for the scheduled task contribution.
+Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC) ("Reading Color") — the review-snapshot and offline-comment system, the cache download coordinator, bookshelf collections with homepage modules and inline illustrations with audio blocks are ported from it, with source notes kept in the code; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements LegadoH builds on. Thanks to Mingyue for the scheduled task contribution.
 
 Rhino, Jsoup, OkHttp, Glide, Miuix, Paged.js and other open-source components are used by this project; each keeps its own license. See the [third-party license notices](app/src/main/assets/LICENSE.md).
 

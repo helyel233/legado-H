@@ -21,7 +21,7 @@ gedoor/legado（阅读 3.0）
 
 - **继承自阅读 Archive**：独立 EPUB 排版引擎、页面/加载模板体系、Reeden 高亮规则（`.red`）、统一阅读素材库、高级标题与视觉资源包、网络与 DNS 分流等核心能力，均来自「阅读 Archive」时期的积累，LegadoH 在其代码基线上继续开发。
 - **继承自上游 Legado**：自定义书源、替换净化、TTS 听书、RSS 订阅、Web 服务、WebDAV 备份等基础能力，源自 Legado（阅读 3.0）及其社区分支。
-- **LegadoH 的增量**：品牌与发布独立（helyel233/legado-H）、包名与签名体系独立（`io.legado.app.LegadoH`）、功能上持续移植社区优秀改进（如 Legado_Max 的交互与工具特性）并按自身方向深化排版、主题与数据安全。
+- **LegadoH 的增量**：品牌与发布独立（helyel233/legado-H）、包名与签名体系独立（`io.legado.app.LegadoH`）、功能上持续移植社区分支的优秀改进——如完整移植了 [legadoC](https://github.com/CCSSNE/legadoC)（「阅读Color」）的段评快照评论体系、缓存下载协调器、书架合集与首页自定义模块、正文插图与音频块播放，以及 [Legado_Max](https://github.com/Suml-1/Legado_Max) 的交互与工具特性——并按自身方向深化排版、主题与数据安全。
 
 ## 简介
 
@@ -95,7 +95,7 @@ cd legado-H
 
 ## 开源与致谢
 
-感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Rimchars/legado](https://github.com/Rimchars/legado)（「阅读 Archive」）——本项目直接继承自它的代码基线；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进。定时任务功能感谢明月的贡献与支持。
+感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Rimchars/legado](https://github.com/Rimchars/legado)（「阅读 Archive」）——本项目直接继承自它的代码基线；感谢 [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC)（「阅读Color」）——本项目的段评快照评论体系与离线评论、缓存下载协调器、书架合集与首页自定义模块、正文插图与音频块播放均整体移植自该项目，相关代码中保留了来源注释；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进。定时任务功能感谢明月的贡献与支持。
 
 项目使用了 Rhino、Jsoup、OkHttp、Glide、Miuix、Paged.js 等开源组件；各组件保留各自许可。应用内使用的组件说明见 [开源许可](app/src/main/assets/LICENSE.md)。
 
