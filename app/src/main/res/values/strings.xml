@@ -133,6 +133,13 @@
     <string name="restore_message">Restoring the bookshelf data will overwrite the current Bookshelf.</string>
     <string name="backup_success">Backup succeed</string>
     <string name="backup_fail">Backup failed\n%s</string>
+    <string name="backup_stage_preparing">Preparing backup data…</string>
+    <string name="backup_stage_packing">Packing files…</string>
+    <string name="backup_stage_packing_progress">Packing files… %1$d%%</string>
+    <string name="backup_stage_saving">Saving backup file…</string>
+    <string name="backup_stage_uploading">Uploading to cloud…</string>
+    <string name="backup_stage_finished">Backup finished</string>
+    <string name="backup_continue_background">Continue in background</string>
     <string name="on_restore">Restoring</string>
     <string name="restore_success">Restore succeed</string>
     <string name="restore_fail">Backup failed</string>
@@ -2442,7 +2449,7 @@ Selected text or question:
     <string name="online_import_private_network_title">Private network import</string>
     <string name="online_import_private_network_message">This address points to a private network. Continue only if you trust the link and the device providing it.</string>
     <string name="online_import_confirm_title">Confirm online import</string>
-    <string name="online_import_preview_message">Type: %1$s\nSource: %2$s\nFinal address: %3$s\nSize: %4$s\nPrivate network: %5$s</string>
+    <string name="online_import_preview_message">Type: %1$s&#10;Source: %2$s&#10;Final address: %3$s&#10;Size: %4$s&#10;Private network: %5$s</string>
     <string name="online_import_paragraph_script_warning">Warning: Paragraph rules may contain JavaScript or login scripts. Import only from a trusted source.</string>
     <string name="paragraph_import_title">Import paragraph rules</string>
     <string name="paragraph_import_summary">Rules: %1$d\nNew names: %2$d\nSame-name conflicts: %3$d</string>

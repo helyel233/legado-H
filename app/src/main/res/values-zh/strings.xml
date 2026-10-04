@@ -131,6 +131,13 @@
     <string name="restore_confirmation">确认恢复吗？</string>
     <string name="restore_message">恢复书架会覆盖现有书架。</string>
     <string name="backup_success">备份成功</string>
+    <string name="backup_stage_preparing">正在整理备份数据…</string>
+    <string name="backup_stage_packing">正在压缩文件…</string>
+    <string name="backup_stage_packing_progress">正在压缩文件… %1$d%%</string>
+    <string name="backup_stage_saving">正在保存备份文件…</string>
+    <string name="backup_stage_uploading">正在上传云端…</string>
+    <string name="backup_stage_finished">备份完成</string>
+    <string name="backup_continue_background">后台继续</string>
     <string name="backup_fail">备份失败\n%s</string>
     <string name="on_restore">正在恢复</string>
     <string name="restore_success">恢复成功</string>
@@ -2305,7 +2312,7 @@ bookUrl：%7$s
     <string name="online_import_private_network_title">私有网络导入</string>
     <string name="online_import_private_network_message">该地址指向私有网络。仅在你信任此链接及提供文件的设备时继续。</string>
     <string name="online_import_confirm_title">确认在线导入</string>
-    <string name="online_import_preview_message">类型：%1$s\n原始来源：%2$s\n最终地址：%3$s\n大小：%4$s\n私有网络：%5$s</string>
+    <string name="online_import_preview_message">类型：%1$s&#10;原始来源：%2$s&#10;最终地址：%3$s&#10;大小：%4$s&#10;私有网络：%5$s</string>
     <string name="online_import_paragraph_script_warning">警告：段落规则可能包含 JavaScript 或登录脚本。请仅导入可信来源的规则。</string>
     <string name="paragraph_import_title">导入段落规则</string>
     <string name="paragraph_import_summary">规则总数：%1$d\n新增名称：%2$d\n同名冲突：%3$d</string>

@@ -22,6 +22,9 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.BackupConfig
+import io.legado.app.help.storage.BackupProgress
+import io.legado.app.help.storage.BackupProgressHolder
+import io.legado.app.help.storage.BackupStage
 import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.permission.Permissions
@@ -35,6 +38,7 @@ import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.dialog.BackupProgressDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
@@ -74,7 +78,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private val viewModel by activityViewModels<ConfigViewModel>()
     private val waitDialog by lazy { WaitDialog(requireContext()) }
-    private var backupJob: Job? = null
+    private val backupProgressDialog by lazy { BackupProgressDialog(requireContext()) }
     private var restoreJob: Job? = null
     private var activeBackupPath: String? = null
     private var pendingS3FullBackupPath: String? = null
@@ -564,43 +568,51 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             showS3FullWebDavFallbackDialog(backupPath)
             return
         }
-        waitDialog.setText(R.string.backup)
-        waitDialog.setOnCancelListener {
-            backupJob?.cancel()
+        if (BackupProgressHolder.isRunning) {
+            // 已有备份任务在后台进行，仅重新打开进度界面
+            showBackupProgressDialog()
+            return
         }
-        waitDialog.show()
-        backupJob?.cancel()
-        backupJob = lifecycleScope.launch {
-            try {
-                activeBackupPath = backupPath
-                Backup.backupLocked(requireContext(), backupPath, uploadCloud, uploadWebDavFallback)
-                appCtx.toastOnUi(R.string.backup_success)
-            } catch (e: S3CapacityFullException) {
-                ensureActive()
-                if (showS3FullFallbackAfterFailure(backupPath)) {
-                    return@launch
-                }
-                AppLog.put("备份出错\n${e.localizedMessage}", e)
-                appCtx.toastOnUi(
-                    appCtx.getString(
-                        R.string.backup_fail,
-                        e.localizedMessage
-                    )
-                )
-            } catch (e: Throwable) {
-                ensureActive()
-                AppLog.put("备份出错\n${e.localizedMessage}", e)
-                appCtx.toastOnUi(
-                    appCtx.getString(
-                        R.string.backup_fail,
-                        e.localizedMessage
-                    )
-                )
-            } finally {
-                activeBackupPath = null
-                ensureActive()
-                waitDialog.dismiss()
+        activeBackupPath = backupPath
+        BackupProgressHolder.update(BackupProgress(BackupStage.PREPARING))
+        showBackupProgressDialog()
+        val appContext = requireContext().applicationContext
+        // 使用全局协程：点「后台继续」或离开页面不会中断备份
+        Coroutine.async {
+            Backup.backupLocked(appContext, backupPath, uploadCloud, uploadWebDavFallback) { progress ->
+                BackupProgressHolder.update(progress)
             }
+        }.onSuccess {
+            BackupProgressHolder.update(null)
+            dismissBackupProgressDialog()
+            appCtx.toastOnUi(R.string.backup_success)
+        }.onError { e ->
+            BackupProgressHolder.update(null)
+            dismissBackupProgressDialog()
+            if (e is S3CapacityFullException && isAdded && showS3FullFallbackAfterFailure(backupPath)) {
+                return@onError
+            }
+            AppLog.put("备份出错\n${e.localizedMessage}", e)
+            appCtx.toastOnUi(
+                appCtx.getString(
+                    R.string.backup_fail,
+                    e.localizedMessage
+                )
+            )
+        }.onFinally {
+            activeBackupPath = null
+        }
+    }
+
+    private fun showBackupProgressDialog() {
+        if (!backupProgressDialog.isShowing) {
+            backupProgressDialog.show()
+        }
+    }
+
+    private fun dismissBackupProgressDialog() {
+        if (backupProgressDialog.isShowing) {
+            backupProgressDialog.dismiss()
         }
     }
 
@@ -796,6 +808,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     override fun onDestroyView() {
         super.onDestroyView()
         waitDialog.dismiss()
+        backupProgressDialog.dismiss()
     }
 
 }
