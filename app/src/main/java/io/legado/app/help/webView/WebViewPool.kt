@@ -33,7 +33,12 @@ object WebViewPool {
     enum class Scope {
         GLOBAL,
         DISCOVERY,
-        RSS
+        RSS,
+        /**
+         * 即用即毁：实例不回池、不复用，专供无法容忍前次会话残留的页面。
+         * 实现上靠 `maxCached = 0`：release 时池满分支直接销毁，永不进闲置队列。
+         */
+        INLINE
     }
 
     private class ScopePool(
@@ -66,6 +71,12 @@ object WebViewPool {
                 Scope.DISCOVERY, Scope.RSS -> ScopePool(
                     scope,
                     SCOPED_WEB_VIEW_MAX_NUM,
+                    SCOPED_IDLE_TIME_OUT,
+                    SCOPED_IDLE_TIME_OUT
+                )
+                Scope.INLINE -> ScopePool(
+                    scope,
+                    0,
                     SCOPED_IDLE_TIME_OUT,
                     SCOPED_IDLE_TIME_OUT
                 )
@@ -271,7 +282,8 @@ object WebViewPool {
         val pageName = when (scope) {
             Scope.DISCOVERY -> "发现页"
             Scope.RSS -> "订阅页"
-            Scope.GLOBAL -> return
+            // GLOBAL 随进程生命周期；INLINE 即用即毁，不存在 scope 级销毁动作。
+            Scope.GLOBAL, Scope.INLINE -> return
         }
         val countText = count?.let { ", count=$it" }.orEmpty()
         AppLog.put("$pageName WebView $action: scope=${scope.name}$countText")

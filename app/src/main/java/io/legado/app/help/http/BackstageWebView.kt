@@ -432,7 +432,8 @@ class BackstageWebView(
             return when (scope) {
                 WebViewPool.Scope.DISCOVERY -> discoverySemaphore
                 WebViewPool.Scope.RSS -> rssSemaphore
-                WebViewPool.Scope.GLOBAL -> null
+                // GLOBAL 全局并发；INLINE 即用即毁、不进池，无需限流。
+                WebViewPool.Scope.GLOBAL, WebViewPool.Scope.INLINE -> null
             }
         }
     }

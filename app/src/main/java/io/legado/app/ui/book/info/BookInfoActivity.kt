@@ -2182,8 +2182,10 @@ class BookInfoActivity :
                 return
             }
             val html = intro.substring(8, lastIndex)
+            // 简介页 WebView 用独立 INLINE 池（即用即毁）：useWeb 简介的 JS 环境
+            // 与浏览器/搜索等 GLOBAL 池消费者完全隔离，避免复用实例时残留旧回调。
             val pooledWebView = this.pooledWebView ?: let{
-                val pooledWebView = WebViewPool.acquire(this)
+                val pooledWebView = WebViewPool.acquire(this, WebViewPool.Scope.INLINE)
                 val webView = pooledWebView.realWebView
                 webView.onResume()
                 webView.webViewClient = CustomWebViewClient()
