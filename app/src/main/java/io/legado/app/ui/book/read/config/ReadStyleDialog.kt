@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -73,6 +74,7 @@ import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
 import kotlin.math.roundToInt
 
 class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
@@ -458,6 +460,8 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
     ) {
         var selectedIndex by rememberSaveable { mutableIntStateOf(ReadBookConfig.styleSelect) }
         var version by rememberSaveable { mutableIntStateOf(0) }
+        var onlyThisBook by rememberSaveable { mutableStateOf(ReadBookConfig.onlyThisBook) }
+        val context = LocalContext.current
         val configs = remember(version) { ReadBookConfig.configList.toList() }
         ReaderSectionCard(style = style, title = null) {
             Row(
@@ -484,9 +488,27 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                     )
                 }
                 AddStyleItem(style = style) {
+                    if (onlyThisBook) {
+                        context.toastOnUi(R.string.read_style_only_this_book_add_forbidden)
+                        return@AddStyleItem
+                    }
                     ReadBookConfig.configList.add(ReadBookConfig.Config())
                     showBgTextConfig(ReadBookConfig.configList.lastIndex)
                 }
+            }
+            ReaderSwitchRow(
+                title = stringResource(R.string.read_style_only_this_book),
+                summary = stringResource(R.string.read_style_only_this_book_summary),
+                checked = onlyThisBook,
+                enabled = ReadBookConfig.canUseBookStyle,
+                style = style
+            ) { enabled ->
+                ReadBookConfig.setOnlyThisBook(enabled)
+                onlyThisBook = enabled
+                selectedIndex = ReadBookConfig.styleSelect
+                onThemeApplied()
+                version++
+                postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
             }
         }
     }
@@ -599,6 +621,17 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
     }
 
     private fun changeBgTextConfig(index: Int) {
+        if (ReadBookConfig.onlyThisBook) {
+            // 仅本书预设：套用全局样式库中的预设为本书独立样式，不改动全局选中项。
+            ReadBook.book?.setPageAnim(-1)
+            ReadBookConfig.useStyleForBook(index)
+            callBack?.upPageAnim()
+            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            if (AppConfig.readBarStyleFollowPage) {
+                postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
+            }
+            return
+        }
         val oldIndex = ReadBookConfig.styleSelect
         if (index != oldIndex) {
             ReadBook.book?.setPageAnim(-1)

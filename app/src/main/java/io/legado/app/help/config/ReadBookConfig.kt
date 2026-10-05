@@ -12,6 +12,8 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.PageAnim
 import io.legado.app.constant.PageAnimationSpeed
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.Book
 import io.legado.app.help.DefaultData
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.utils.BitmapUtils
@@ -70,6 +72,12 @@ object ReadBookConfig {
         private set
 
     val configList: ArrayList<Config> get() = if (usingEpubLayout) epubConfigs else nativeConfigs
+
+    /** 当前书籍的独立预设会话（详见 [BookReadStyleSession]）。 */
+    private val bookStyle = BookReadStyleSession { bookUrl, style ->
+        runCatching { appDb.bookDao.saveIndependentReadStyle(bookUrl, style) }
+            .onFailure { AppLog.put("保存本书预设失败\n${it.localizedMessage}", it) }
+    }
     var shareConfig: Config
         get() = if (usingEpubLayout) epubSharedConfig else nativeSharedConfig
         set(value) {
@@ -91,9 +99,13 @@ object ReadBookConfig {
         val shareConfigChanged: Boolean
     )
     var durConfig
-        get() = getConfig(styleSelect)
+        get() = bookStyle.config ?: getConfig(styleSelect)
         set(value) {
             value.normalizeUnderlineStyle()
+            if (onlyThisBook) {
+                bookStyle.use(value)
+                return
+            }
             configList[styleSelect] = value
             if (shareLayout) {
                 shareConfig = value
@@ -553,7 +565,36 @@ object ReadBookConfig {
     var hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)
     var useZhLayout = appCtx.getPrefBoolean(PreferKey.useZhLayout)
 
-    val config get() = if (shareLayout) shareConfig else durConfig
+    val config get() = bookStyle.config ?: if (shareLayout) shareConfig else durConfig
+
+    /** 本书是否启用了独立预设。 */
+    val onlyThisBook: Boolean get() = bookStyle.config != null
+
+    /** 是否已绑定正在阅读的书籍（只有阅读中才能启用仅本书预设）。 */
+    val canUseBookStyle: Boolean get() = bookStyle.isBound
+
+    /** 绑定正在阅读的书籍；返回 true 表示独立预设状态变化，需要刷新阅读界面。 */
+    fun bindBook(book: Book): Boolean = bookStyle.bind(book)
+
+    /** 把本书独立预设的内存改动落库（由阅读界面的保存点调用）。 */
+    fun saveBookStyle(book: Book) = bookStyle.saveFor(book)
+
+    /** 把预设 [index] 应用为本书独立预设（不影响全局预设）。 */
+    fun useStyleForBook(index: Int) {
+        if (!canUseBookStyle) return
+        bookStyle.use(getConfig(index).copy())
+    }
+
+    /** 开关「仅本书」预设：开启时以当前生效样式为底本，关闭时恢复跟随全局。 */
+    fun setOnlyThisBook(enabled: Boolean) {
+        if (enabled == onlyThisBook || !canUseBookStyle) return
+        if (enabled) {
+            save()
+            bookStyle.use(durConfig.copy())
+        } else {
+            bookStyle.followGlobal()
+        }
+    }
 
     var bgAlpha: Int
         get() = config.bgAlpha

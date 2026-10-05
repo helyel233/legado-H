@@ -8,6 +8,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import com.google.gson.annotations.SerializedName
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.constant.PageAnim
@@ -534,7 +535,11 @@ data class Book(
         var mangaDisableClickScroll: Boolean? = null,
         var mangaDisableScale: Boolean? = null,
         var mangaAutoPageSpeed: Int? = null,
-        var mangaPageAnim: Int? = null
+        var mangaPageAnim: Int? = null,
+        /** 每书独立阅读预设（JSON 序列化的 ReadBookConfig.Config 副本）；
+         *  null 表示跟随全局样式。存于 readConfig JSON 列内，无需数据库迁移。 */
+        @SerializedName("independentReadStyle")
+        var independentReadStyle: String? = null
     ) : Parcelable
 
     class Converters {

@@ -282,6 +282,19 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun getBook(bookUrl: String): Book?
 
+    @Query("UPDATE books SET readConfig = :config WHERE bookUrl = :bookUrl")
+    @TypeConverters(Book.Converters::class)
+    fun updateReadStyleConfig(bookUrl: String, config: Book.ReadConfig)
+
+    /** 只回写 readConfig 中的独立预设字段，不触碰书籍其它字段。 */
+    @Transaction
+    fun saveIndependentReadStyle(bookUrl: String, style: String?) {
+        val book = getBook(bookUrl) ?: return
+        val config = book.readConfig ?: Book.ReadConfig()
+        config.independentReadStyle = style
+        updateReadStyleConfig(bookUrl, config)
+    }
+
     @Query("SELECT * FROM books WHERE bookUrl IN (:bookUrls)")
     fun getBooks(bookUrls: List<String>): List<Book>
 

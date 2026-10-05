@@ -2,6 +2,7 @@ package io.legado.app.help.storage
 
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
+import io.legado.app.help.config.ReadPresetPreferences
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -90,6 +91,10 @@ object BackupConfig {
         PreferKey.clickActionBR
     )
 
+    /** 阅读偏好打包范围并入独立预设白名单（与 NG 语义一致，避免预设项漏备份）。 */
+    private val readPreferenceKeys: Set<String> =
+        readPrefKeys.toSet() + ReadPresetPreferences.preferenceKeys
+
     private val themePrefKeys = arrayOf(
         PreferKey.cPrimary,
         PreferKey.cAccent,
@@ -167,7 +172,7 @@ object BackupConfig {
     fun keyIsNotIgnore(key: String): Boolean {
         return when {
             ignorePrefKeys.contains(key) -> false
-            ignoreReadConfig && readPrefKeys.contains(key) -> false
+            ignoreReadConfig && readPreferenceKeys.contains(key) -> false
             ignoreThemeConfig && themePrefKeys.contains(key) -> false
             ignoreCoverConfig && coverPrefKeys.contains(key) -> false
             PreferKey.themeMode == key && ignoreThemeMode -> false

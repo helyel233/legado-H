@@ -298,8 +298,9 @@ object ReadBook : CoroutineScope by MainScope() {
 
     fun upReadBookConfig(book: Book) {
         val oldIndex = ReadBookConfig.styleSelect
+        val bookStyleChanged = ReadBookConfig.bindBook(book)
         ReadBookConfig.isComic = book.isImage
-        if (oldIndex != ReadBookConfig.styleSelect) {
+        if (oldIndex != ReadBookConfig.styleSelect || bookStyleChanged) {
             postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
             if (AppConfig.readBarStyleFollowPage) {
                 postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
@@ -1837,6 +1838,10 @@ object ReadBook : CoroutineScope by MainScope() {
         val targetBookSource = bookSource
         val durTime = System.currentTimeMillis()
         val chapterChanged = targetBook.durChapterIndex != targetChapterIndex
+        // 独立预设的内存改动随保存点落库（翻页触发的保存不重复写）
+        if (!pageChanged) {
+            ReadBookConfig.saveBookStyle(targetBook)
+        }
         targetBook.lastCheckCount = 0
         targetBook.durChapterIndex = targetChapterIndex
         targetBook.durChapterPos = targetChapterPos

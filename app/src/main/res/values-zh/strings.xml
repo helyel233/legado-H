@@ -2451,6 +2451,10 @@ bookUrl：%7$s
     <string name="debug_log">调试日志</string>
     <string name="debug_floating_ball">调试悬浮球</string>
     <string name="debug_floating_ball_summary">显示可拖拽的悬浮球，随时打开调试日志</string>
+
+    <string name="read_style_only_this_book">仅本书预设</string>
+    <string name="read_style_only_this_book_summary">将阅读样式仅应用于当前书籍，不影响全局预设</string>
+    <string name="read_style_only_this_book_add_forbidden">请先关闭仅本书预设再新增样式</string>
     <string name="debug_log_export">导出</string>
     <string name="debug_log_empty">暂无日志</string>
     <string name="source_recycle_bin">规则回收站</string>
