@@ -22,21 +22,11 @@ object AppUpdateConfig {
 
     private const val URL_PLACEHOLDER = "\${url}"
 
+    // Gitee 通道已隐藏：历史偏好中的 Gitee 策略读取时归一化为 GitHub，仅保留 GitHub 通道
     var strategy: String
-        get() = when (appCtx.getPrefString(PreferKey.updateSourceStrategy, STRATEGY_GITHUB_ONLY)) {
-            STRATEGY_GITEE_ONLY -> STRATEGY_GITEE_ONLY
-            STRATEGY_GITHUB_ONLY -> STRATEGY_GITHUB_ONLY
-            else -> STRATEGY_GITEE_THEN_GITHUB
-        }
+        get() = STRATEGY_GITHUB_ONLY
         set(value) {
-            appCtx.putPrefString(
-                PreferKey.updateSourceStrategy,
-                when (value) {
-                    STRATEGY_GITEE_ONLY -> STRATEGY_GITEE_ONLY
-                    STRATEGY_GITHUB_ONLY -> STRATEGY_GITHUB_ONLY
-                    else -> STRATEGY_GITEE_THEN_GITHUB
-                }
-            )
+            appCtx.putPrefString(PreferKey.updateSourceStrategy, STRATEGY_GITHUB_ONLY)
         }
 
     var githubProxyTemplates: List<String>
@@ -114,11 +104,7 @@ object AppUpdateConfig {
     }
 
     fun strategyLabel(context: Context): String {
-        return when (strategy) {
-            STRATEGY_GITEE_ONLY -> "只使用 Gitee（旧版渠道）"
-            STRATEGY_GITEE_THEN_GITHUB -> "Gitee 优先，失败后 GitHub"
-            else -> "只使用 GitHub"
-        }
+        return "只使用 GitHub"
     }
 
     fun summary(context: Context): String {
