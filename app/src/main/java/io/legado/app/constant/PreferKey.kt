@@ -145,6 +145,7 @@ object PreferKey {
     const val aiModelList = "aiModelList"
     const val enableReview = "enableReview"
     const val showRss = "showRss"
+    const val rssSourceLayout = "rssSourceLayout"
     const val bookshelfLayout = "bookshelfLayout"
     const val bookshelfSort = "bookshelfSort"
     const val bookExportFileName = "bookExportFileName"

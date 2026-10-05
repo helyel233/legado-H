@@ -2572,6 +2572,7 @@ bookUrl：%7$s
     <!-- legadoC 首页模块与书架合集（C3 移植） -->
     <string name="homepage_switch_summary">在底部导航栏显示首页入口</string>
     <string name="stats_switch_summary">在底部导航栏显示统计入口</string>
+    <string name="rss_layout_column_toast">已切换为 %1$d 列</string>
     <string name="add_to_collection">加入合集</string>
     <string name="book_collection">合集</string>
     <string name="book_collection_empty">合集中暂无书籍</string>

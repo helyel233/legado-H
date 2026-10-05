@@ -349,6 +349,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.bookshelfLayout, value)
         }
 
+    var rssSourceLayout: Int
+        get() = appCtx.getPrefInt(PreferKey.rssSourceLayout, 1).let { if (it in 1..3) it else 1 }
+        set(value) {
+            appCtx.putPrefInt(PreferKey.rssSourceLayout, if (value in 1..3) value else 1)
+        }
+
     var saveTabPosition: Int
         get() = appCtx.getPrefInt(PreferKey.saveTabPosition, 0)
         set(value) {

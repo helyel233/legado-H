@@ -10,6 +10,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/menu_layout_switch"
+        android:icon="@drawable/ic_view_column"
+        android:title="@string/switchLayout"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/menu_rss_star"
         android:title="@string/favorite"
         android:icon="@drawable/ic_star"

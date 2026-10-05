@@ -11,6 +11,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.widget.SearchView
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.core.view.doOnLayout
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -138,6 +139,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
         menu.findItem(R.id.menu_rss_star)?.isVisible = !usingModernRss
         menu.findItem(R.id.menu_rss_config)?.isVisible = !usingModernRss
+        menu.findItem(R.id.menu_layout_switch)?.isVisible = !usingModernRss
         upGroupsMenu()
     }
 
@@ -147,6 +149,12 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             R.id.menu_read_record -> showDialogFragment<ReadRecordDialog>()
             R.id.menu_rss_config -> startActivity<RssSourceActivity>()
             R.id.menu_rss_star -> startActivity<RssFavoritesActivity>()
+            R.id.menu_layout_switch -> {
+                val next = AppConfig.rssSourceLayout % 3 + 1
+                AppConfig.rssSourceLayout = next
+                applyRssSourceLayout()
+                toastOnUi(getString(R.string.rss_layout_column_toast, next))
+            }
             else -> if (!usingModernRss && item.groupId == R.id.menu_group_text) {
                 searchView.setQuery("group:${item.title}", true)
             }
@@ -225,6 +233,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.clipToPadding = false
         binding.recyclerView.applyMainBottomBarPadding(withInitialPadding = true)
+        applyRssSourceLayout()
         if (binding.recyclerView.adapter !== adapter) {
             binding.recyclerView.adapter = adapter
         }
@@ -236,6 +245,11 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
             currentRssScrollTarget()?.canScrollVertically(-1) == true
         }
+    }
+
+    private fun applyRssSourceLayout() {
+        (binding.recyclerView.layoutManager as? GridLayoutManager)?.spanCount =
+            AppConfig.rssSourceLayout
     }
 
     private fun initModernRssView() {
