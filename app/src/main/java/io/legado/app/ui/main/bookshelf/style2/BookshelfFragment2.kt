@@ -355,10 +355,12 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             bookGroups = data
             if (shelfDisplays.isEmpty() && composeItems.isEmpty()) {
                 restoreComposeSnapshot(currentComposeSnapshotKey())
-                // 快照恢复失败时兜底：强制用当前数据渲染分组，避免书架整页空白
+                // 快照恢复失败时兜底：强制用当前数据渲染分组，避免书架整页空白。
+                // 记录 launch 时的 groupId，恢复后已切换分组则跳过，避免用旧分组数据渲染
+                val launchGroupId = groupId
                 viewLifecycleOwner.lifecycleScope.launch {
                     delay(600)
-                    if (isAdded && composeItems.isEmpty()) {
+                    if (isAdded && groupId == launchGroupId && composeItems.isEmpty()) {
                         updateComposeItems(shelfDisplays)
                         itemCount = getItemCount()
                         binding.tvEmptyMsg.isGone = itemCount > 0
