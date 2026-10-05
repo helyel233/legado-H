@@ -24,6 +24,7 @@ import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.utils.toastOnUi
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
@@ -42,6 +43,18 @@ class UpdateDialog() : ComposeDialogFragment() {
             putString("name", updateInfo.fileName)
             putStringArrayList("headerNames", ArrayList(updateInfo.requestHeaders.keys))
             putStringArrayList("headerValues", ArrayList(updateInfo.requestHeaders.values))
+            putStringArrayList(
+                "candidateNames",
+                ArrayList(updateInfo.downloadCandidates.map { it.fileName })
+            )
+            putStringArrayList(
+                "candidateUrls",
+                ArrayList(updateInfo.downloadCandidates.map { it.url })
+            )
+            putIntegerArrayList(
+                "candidateIsDebug",
+                ArrayList(updateInfo.downloadCandidates.map { if (it.isDebug) 1 else 0 })
+            )
         }
     }
 
@@ -60,6 +73,17 @@ class UpdateDialog() : ComposeDialogFragment() {
                 val name = arguments?.getString("name")
                 val headerNames = arguments?.getStringArrayList("headerNames").orEmpty()
                 val headerValues = arguments?.getStringArrayList("headerValues").orEmpty()
+                val candidateNames = arguments?.getStringArrayList("candidateNames").orEmpty()
+                val candidateUrls = arguments?.getStringArrayList("candidateUrls").orEmpty()
+                val candidateIsDebug = arguments?.getIntegerArrayList("candidateIsDebug").orEmpty()
+                val downloadCandidates = candidateNames.mapIndexedNotNull { index, fileName ->
+                    val candidateUrl = candidateUrls.getOrNull(index) ?: return@mapIndexedNotNull null
+                    AppUpdate.DownloadCandidate(
+                        url = candidateUrl,
+                        fileName = fileName,
+                        isDebug = candidateIsDebug.getOrNull(index) == 1
+                    )
+                }
 
                 if (updateBody == null) {
                     toastOnUi("没有数据")
@@ -106,17 +130,16 @@ class UpdateDialog() : ComposeDialogFragment() {
                             text = stringResource(R.string.action_download),
                             palette = palette,
                             onClick = {
-                                if (url != null && name != null) {
-                                    val headers = headerNames.mapIndexedNotNull { index, headerName ->
-                                        val headerValue = headerValues.getOrNull(index)
-                                        if (headerName.isBlank() || headerValue.isNullOrBlank()) {
-                                            null
-                                        } else {
-                                            headerName to headerValue
-                                        }
-                                    }.toMap()
-                                    Download.start(requireContext(), url, name, headers)
-                                    toastOnUi(R.string.download_start)
+                                when {
+                                    downloadCandidates.size >= 2 -> showPackageSelectDialog(
+                                        downloadCandidates
+                                    )
+                                    downloadCandidates.size == 1 -> downloadCandidate(
+                                        downloadCandidates.first()
+                                    )
+                                    url != null && name != null -> downloadCandidate(
+                                        AppUpdate.DownloadCandidate(url, name, isDebug = false)
+                                    )
                                 }
                             },
                             primary = true,
@@ -126,6 +149,38 @@ class UpdateDialog() : ComposeDialogFragment() {
                 )
             }
         }
+    }
+
+    private fun downloadCandidate(candidate: AppUpdate.DownloadCandidate) {
+        val headerNames = arguments?.getStringArrayList("headerNames").orEmpty()
+        val headerValues = arguments?.getStringArrayList("headerValues").orEmpty()
+        val headers = headerNames.mapIndexedNotNull { index, headerName ->
+            val headerValue = headerValues.getOrNull(index)
+            if (headerName.isBlank() || headerValue.isNullOrBlank()) {
+                null
+            } else {
+                headerName to headerValue
+            }
+        }.toMap()
+        Download.start(requireContext(), candidate.url, candidate.fileName, headers)
+        toastOnUi(R.string.download_start)
+    }
+
+    private fun showPackageSelectDialog(candidates: List<AppUpdate.DownloadCandidate>) {
+        showComposeActionListDialog(
+            title = getString(R.string.update_select_package_title),
+            labels = candidates.map {
+                if (it.isDebug) {
+                    getString(R.string.update_package_debug)
+                } else {
+                    getString(R.string.update_package_official)
+                }
+            },
+            descriptions = candidates.map { it.fileName },
+            onSelected = { index ->
+                candidates.getOrNull(index)?.let(::downloadCandidate)
+            }
+        )
     }
 
 }

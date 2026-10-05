@@ -2784,6 +2784,9 @@ Selected text or question:
     <string name="homepage_preload">Preload adjacent tabs</string>
     <string name="homepage_switch_summary">Show the homepage entry in the bottom navigation</string>
     <string name="stats_switch_summary">Show the stats entry in the bottom navigation</string>
+    <string name="update_select_package_title">Select Download Package</string>
+    <string name="update_package_official">Official (arm64-v8a)</string>
+    <string name="update_package_debug">Debug (all ABIs)</string>
     <string name="rss_layout_column_toast">Switched to %1$d column(s)</string>
 
     <string name="illustration_note_empty">No note – tap to input</string>

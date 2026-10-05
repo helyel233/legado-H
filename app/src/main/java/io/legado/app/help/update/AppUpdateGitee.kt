@@ -61,28 +61,12 @@ object AppUpdateGitee : AppUpdate.AppUpdateInterface {
     }
 
     suspend fun checkNow(): AppUpdate.UpdateInfo {
-        return getLatestRelease()
-            .filter {
-                it.appVariant == checkVariant
-            }
-            .filter { it.supportsDeviceAbi() }
-            .firstOrNull {
-                if (it.versionCode > 0L) {
-                    it.versionCode > AppConst.appInfo.versionCode
-                } else {
-                    AppUpdate.isComparableVersionName(it.versionName) &&
-                        it.versionName > AppConst.appInfo.versionName
+        return AppUpdate.resolveUpdateInfo(
+            getLatestRelease()
+                .filter {
+                    it.appVariant == checkVariant
                 }
-            }
-            ?.let {
-                AppUpdate.UpdateInfo(
-                    tagName = it.versionName,
-                    updateLog = it.note,
-                    downloadUrl = it.downloadUrl,
-                    fileName = it.name,
-                    versionCode = it.versionCode
-                )
-            }
-            ?: throw AppUpdate.latestVersionError()
+                .filter { it.supportsDeviceAbi() }
+        ) ?: throw AppUpdate.latestVersionError()
     }
 }

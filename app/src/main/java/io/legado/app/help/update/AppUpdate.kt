@@ -26,8 +26,56 @@ object AppUpdate {
         val downloadUrl: String,
         val fileName: String,
         val versionCode: Long = versionCodeFromFileName(fileName),
-        val requestHeaders: Map<String, String> = emptyMap()
+        val requestHeaders: Map<String, String> = emptyMap(),
+        val downloadCandidates: List<DownloadCandidate> = emptyList()
     )
+
+    /**
+     * 同一 Release 中的可下载包：正式包与 debug 包。
+     */
+    data class DownloadCandidate(
+        val url: String,
+        val fileName: String,
+        val isDebug: Boolean
+    )
+
+    /**
+     * 从已过滤、按时间降序的资源列表中定位最新版本；
+     * 同一 Release 内的正式包与 debug 包均作为下载候选，
+     * 默认下载链接指向正式包（无正式包时退回首个资源）。
+     */
+    fun resolveUpdateInfo(assets: List<AppReleaseInfo>): UpdateInfo? {
+        val newest = assets.firstOrNull {
+            if (it.versionCode > 0L) {
+                it.versionCode > AppConst.appInfo.versionCode
+            } else {
+                isComparableVersionName(it.versionName) &&
+                    it.versionName > AppConst.appInfo.versionName
+            }
+        } ?: return null
+        val sameRelease = assets.filter {
+            it.versionCode == newest.versionCode && it.versionName == newest.versionName
+        }
+        val official = sameRelease.firstOrNull {
+            !it.name.contains("debug", ignoreCase = true)
+        }
+        val debug = sameRelease.firstOrNull {
+            it.name.contains("debug", ignoreCase = true)
+        }
+        val preferred = official ?: newest
+        val candidates = buildList {
+            official?.let { add(DownloadCandidate(it.downloadUrl, it.name, isDebug = false)) }
+            debug?.let { add(DownloadCandidate(it.downloadUrl, it.name, isDebug = true)) }
+        }
+        return UpdateInfo(
+            tagName = preferred.versionName,
+            updateLog = preferred.note,
+            downloadUrl = preferred.downloadUrl,
+            fileName = preferred.name,
+            versionCode = preferred.versionCode,
+            downloadCandidates = candidates
+        )
+    }
 
     interface AppUpdateInterface {
 

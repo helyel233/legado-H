@@ -61,26 +61,16 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
     }
 
     suspend fun checkNow(): AppUpdate.UpdateInfo {
-        return getLatestRelease()
-            .filter { it.appVariant == checkVariant }
-            .filter { it.supportsDeviceAbi() }
-            .firstOrNull {
-                if (it.versionCode > 0L) {
-                    it.versionCode > AppConst.appInfo.versionCode
-                } else {
-                    AppUpdate.isComparableVersionName(it.versionName) &&
-                        it.versionName > AppConst.appInfo.versionName
-                }
+        val info = AppUpdate.resolveUpdateInfo(
+            getLatestRelease()
+                .filter { it.appVariant == checkVariant }
+                .filter { it.supportsDeviceAbi() }
+        ) ?: throw AppUpdate.latestVersionError()
+        return info.copy(
+            downloadUrl = AppUpdateConfig.applyGithubProxy(info.downloadUrl),
+            downloadCandidates = info.downloadCandidates.map {
+                it.copy(url = AppUpdateConfig.applyGithubProxy(it.url))
             }
-            ?.let {
-                AppUpdate.UpdateInfo(
-                    tagName = it.versionName,
-                    updateLog = it.note,
-                    downloadUrl = AppUpdateConfig.applyGithubProxy(it.downloadUrl),
-                    fileName = it.name,
-                    versionCode = it.versionCode
-                )
-            }
-            ?: throw AppUpdate.latestVersionError()
+        )
     }
 }
