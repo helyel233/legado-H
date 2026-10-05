@@ -37,6 +37,9 @@ cloudflare/**/.wrangler/
 /replay_pid*.log
 /temp*.txt
 
+# JVM heap dumps (killed Gradle daemon)
+*.hprof
+
 # local build logs (Claude)
 /rb*.log
 /release-build*.log
