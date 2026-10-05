@@ -91,12 +91,14 @@ object Backup {
     private const val COPY_BUFFER_SIZE = 64 * 1024
     private const val PROGRESS_REPORT_INTERVAL_MS = 80L
 
-    private val mutex = Mutex()
+    /** 与 [Restore] 共享的互斥锁：备份会删建备份目录，恢复会解压到同一目录，必须互斥。 */
+    internal val mutex = Mutex()
 
     /**
      * 「书架变动自动备份」的去抖任务。
      * 连续触发时取消上一个重开计时，而不是叠加多个备份任务。
      */
+    @Volatile
     private var pendingShelfChangeJob: Coroutine<Unit>? = null
 
     /** 书架变动后的去抖时长：等连续增删（批量导入/删除）停下来再备份。 */
@@ -206,11 +208,17 @@ object Backup {
         pendingShelfChangeJob = Coroutine.async {
             // 去抖：连续的增删（如批量导入、批量删除）只触发一次。
             delay(SHELF_CHANGE_DEBOUNCE_MS)
-            // 去抖期间可能又进了恢复，这里复查一次。
-            if (Restore.isRestoring) {
+            // 去抖期间开关可能被关闭或进了恢复，这里复查一次。
+            if (!AppConfig.autoBackupOnShelfChange || Restore.isRestoring) {
                 return@async
             }
+            // 持锁后再复查：恢复流程（restoreLocked）持同一把锁，锁内复查可保证
+            // 备份删建 backupPath 与恢复解压到 backupPath 互斥。
             mutex.withLock {
+                if (Restore.isRestoring) {
+                    AppLog.put("书架变动自动备份已跳过：恢复流程进行中")
+                    return@withLock
+                }
                 val backupPath = AppConfig.backupPath
                 if (backupPath.isNullOrBlank()) {
                     // 未配置备份路径：跳过并记日志，不弹 UI（自动行为不该打断用户）。

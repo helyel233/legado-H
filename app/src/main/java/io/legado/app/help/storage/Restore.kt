@@ -79,7 +79,6 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
@@ -92,8 +91,6 @@ import java.util.UUID
  * 恢复
  */
 object Restore {
-
-    private val mutex = Mutex()
 
     /**
      * 恢复流程进行中标记。供「书架变动自动备份」作 P0 守卫：
@@ -161,7 +158,8 @@ object Restore {
     }
 
     suspend fun restoreLocked(path: String) {
-        mutex.withLock {
+        // 与 Backup 共用同一把锁：备份的删建与恢复的解压操作同一目录，必须互斥。
+        Backup.mutex.withLock {
             val journalGeneration = RestoreJournal.begin(RestoreJournal.buildSnapshotTargets(path))
             isRestoring = true
             try {
