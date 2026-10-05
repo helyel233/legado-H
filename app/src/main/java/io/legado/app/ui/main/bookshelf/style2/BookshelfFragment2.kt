@@ -355,6 +355,16 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             bookGroups = data
             if (shelfDisplays.isEmpty() && composeItems.isEmpty()) {
                 restoreComposeSnapshot(currentComposeSnapshotKey())
+                // 快照恢复失败时兜底：强制用当前数据渲染分组，避免书架整页空白
+                viewLifecycleOwner.lifecycleScope.launch {
+                    delay(600)
+                    if (isAdded && composeItems.isEmpty()) {
+                        updateComposeItems(shelfDisplays)
+                        itemCount = getItemCount()
+                        binding.tvEmptyMsg.isGone = itemCount > 0
+                        binding.refreshLayout.isEnabled = enableRefresh && itemCount > 0
+                    }
+                }
             } else {
                 updateComposeItems(shelfDisplays)
                 saveComposeSnapshot(currentComposeSnapshotKey(), composeItems)
@@ -435,7 +445,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     itemCount = getItemCount()
                     binding.tvEmptyMsg.isGone = itemCount > 0
                     binding.refreshLayout.isEnabled = enableRefresh && itemCount > 0
-                    saveComposeSnapshot(snapshotKey, items)
+                    saveComposeSnapshot(currentComposeSnapshotKey(), items)
                     delay(100)
                 }
                 return@launch
@@ -511,9 +521,9 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
 
     override fun onResume() {
         super.onResume()
-        // 主题切换后 Fragment 重建时，数据 flow 可能没有正确启动
-        // 检查 composeItems 是否为空，如果为空且 flow 不活跃，则重新加载数据
-        if (composeItems.isEmpty() && booksFlowJob?.isActive != true) {
+        // 数据流可能已死亡或被门控挂起且永不投递：只要书架仍为空就重启数据流。
+        // 仅检查 booksFlowJob.isActive 不够（门控挂起的 job 永远 active）
+        if (composeItems.isEmpty()) {
             initBooksData()
         }
     }
