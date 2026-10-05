@@ -1344,6 +1344,7 @@
 
     <!-- legadoC 首頁模組與書架合集（C3 移植） -->
     <string name="homepage_switch_summary">在底部導覽列顯示首頁入口</string>
+    <string name="stats_switch_summary">在底部導覽列顯示統計入口</string>
     <string name="add_to_collection">加入合集</string>
     <string name="book_collection">合集</string>
     <string name="book_collection_empty">合集中暫無書籍</string>
