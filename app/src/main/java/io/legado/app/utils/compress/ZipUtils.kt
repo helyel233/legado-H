@@ -13,6 +13,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.Locale
+import java.util.zip.CRC32
 import java.util.zip.Deflater
 import java.util.zip.GZIPOutputStream
 import java.util.zip.ZipEntry
@@ -191,7 +193,9 @@ object ZipUtils {
         val totalBytes = sources.sumOf { fileSizeOf(it.file) }
         val progress = ZipProgress(totalBytes, onProgress)
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile), BUFFER_SIZE)).use { zos ->
-            zos.setLevel(Deflater.BEST_SPEED)
+            // 文本类条目（JSON/章节 txt）压得更多以减小上传体积；
+            // 已压缩格式走 STORED 跳过 deflate，省出的 CPU 补贴这里
+            zos.setLevel(Deflater.DEFAULT_COMPRESSION)
             for (source in sources) {
                 val entryPath = when {
                     source.entryRoot.isBlank() -> source.file.name
@@ -228,8 +232,11 @@ object ZipUtils {
             }
         } else {
             BufferedInputStream(FileInputStream(srcFile)).use {
-                val entry = ZipEntry(entryPath)
-                entry.comment = comment
+                val entry = storedEntry(srcFile, entryPath, comment)
+                    // 预读后文件若被并发修改，STORED 的 size/CRC 将失配导致整包失败，回退 DEFLATED
+                    ?.takeIf { srcFile.lastModified() == it.lastModified }
+                    ?.entry
+                    ?: ZipEntry(entryPath).also { e -> e.comment = comment }
                 zos.putNextEntry(entry)
                 it.copyTo(zos, BUFFER_SIZE)
                 zos.closeEntry()
@@ -238,6 +245,37 @@ object ZipUtils {
         }
         return true
     }
+
+    /**
+     * 已压缩格式（图片/epub/音视频等）deflate 几乎无收益，预计算 CRC/size 后
+     * 以 STORED 直存，避免白耗 CPU；返回 null 表示按默认 DEFLATED 压缩。
+     * lastModified 为预读完成时的文件时间，供写入前复核是否被并发修改。
+     */
+    @Throws(IOException::class)
+    private fun storedEntry(srcFile: File, entryPath: String, comment: String?): StoredCandidate? {
+        if (srcFile.extension.lowercase(Locale.ROOT) !in STORED_EXTENSIONS) return null
+        val crc32 = CRC32()
+        var size = 0L
+        BufferedInputStream(FileInputStream(srcFile)).use { input ->
+            val buffer = ByteArray(BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                crc32.update(buffer, 0, read)
+                size += read
+            }
+        }
+        val entry = ZipEntry(entryPath).also { entry ->
+            entry.comment = comment
+            entry.method = ZipEntry.STORED
+            entry.size = size
+            entry.compressedSize = size
+            entry.crc = crc32.value
+        }
+        return StoredCandidate(entry, srcFile.lastModified())
+    }
+
+    private class StoredCandidate(val entry: ZipEntry, val lastModified: Long)
 
     private fun fileSizeOf(file: File): Long {
         if (!file.exists()) return 0L
@@ -255,7 +293,8 @@ object ZipUtils {
         private var lastReportTime = 0L
 
         fun advance(bytes: Long) {
-            processedBytes += bytes
+            // 源文件可能在预统计后增长，兜底避免 processed 超过 total 导致进度回溢
+            processedBytes = (processedBytes + bytes).coerceAtMost(totalBytes)
             val callback = onProgress ?: return
             val now = System.currentTimeMillis()
             if (now - lastReportTime < PROGRESS_INTERVAL_MS) return
@@ -270,6 +309,14 @@ object ZipUtils {
 
     private const val BUFFER_SIZE = 64 * 1024
     private const val PROGRESS_INTERVAL_MS = 100L
+
+    /** deflate 无收益、以 STORED 直存的已压缩格式扩展名 */
+    private val STORED_EXTENSIONS = setOf(
+        "jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "avif",
+        "epub", "zip", "apk", "jar", "7z", "gz", "tgz", "bz2", "xz", "zst",
+        "mp3", "m4a", "aac", "ogg", "opus", "flac",
+        "mp4", "mkv", "webm", "woff", "woff2", "pdf"
+    )
 
     @Throws(SecurityException::class)
     fun unZipToPath(file: File, path: String, filter: ((String) -> Boolean)? = null): List<File> {
