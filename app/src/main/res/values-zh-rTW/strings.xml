@@ -895,6 +895,7 @@
     <string name="download_url_rule">下载URL规则(downloadUrls)</string>
     <string name="sort_by_respondTime">反應時間排序</string>
     <string name="respondTime">反應時間：%1$d ms</string>
+    <string name="change_source_current_in_use">當前已在使用該書源</string>
     <string name="export_success">匯出成功</string>
     <string name="path">路徑</string>
     <string name="direct_link_upload_rule">直鏈上傳規則</string>

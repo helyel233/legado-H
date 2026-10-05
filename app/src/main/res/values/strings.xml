@@ -1675,6 +1675,7 @@ function login() {
     <string name="webdav_backup_cover_s">Upload locally stored cover files of shelf books to the WebDAV covers directory and download them back when restoring</string>
     <string name="webdav_application_authorization_error">Fail to authorize WebDav application</string>
     <string name="respondTime">respondTime: %1$d ms</string>
+    <string name="change_source_current_in_use">This book source is already in use</string>
     <string name="load_word_count">Load word count</string>
     <string name="replace_exclude_scope">Exclude range, optional title or source URL</string>
     <string name="format_js_rule">格式化规则(formatJs)</string>
