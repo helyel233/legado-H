@@ -1261,6 +1261,8 @@
     <string name="pattern_empty">正則表達式為空</string>
     <string name="input_is_empty">待測試文本為空</string>
     <string name="debug_log">除錯日誌</string>
+    <string name="debug_floating_ball">除錯懸浮球</string>
+    <string name="debug_floating_ball_summary">顯示可拖曳的懸浮球，隨時開啟除錯日誌</string>
     <string name="debug_log_export">匯出</string>
     <string name="debug_log_empty">暫無日誌</string>
     <string name="source_recycle_bin">規則回收站</string>

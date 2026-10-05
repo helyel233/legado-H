@@ -2630,6 +2630,8 @@ Selected text or question:
     <string name="pattern_empty">Pattern is empty</string>
     <string name="input_is_empty">Test text is empty</string>
     <string name="debug_log">Debug Log</string>
+    <string name="debug_floating_ball">Debug Floating Ball</string>
+    <string name="debug_floating_ball_summary">Show a draggable floating ball to open debug log anywhere</string>
     <string name="debug_log_export">Export</string>
     <string name="debug_log_empty">No logs yet</string>
     <string name="source_recycle_bin">Source Recycle Bin</string>

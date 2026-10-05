@@ -369,6 +369,12 @@ object PreferKey {
     const val bookshelfReturnToTopAfterRead = "bookshelfReturnToTopAfterRead"
     const val clearWebViewData = "clearWebViewData"
     const val onlyLatestBackup = "onlyLatestBackup"
+
+    /** 书架增删时自动备份。默认**关**：自动备份会联网上传并写盘，属侵入性行为。 */
+    const val autoBackupOnShelfChange = "autoBackupOnShelfChange"
+
+    /** 恢复时按备份覆盖书架。默认**关**：删书不可回滚，不能替用户默认打开。 */
+    const val overwriteShelfOnRestore = "overwriteShelfOnRestore"
     const val backupBookFiles = "backupBookFiles"
     const val webDavDeleteOldBackup = "webDavDeleteOldBackup"
     const val webDavBackupCover = "webDavBackupCover"

@@ -36,6 +36,26 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             putLong("lastBackup", value)
         }
 
+    /**
+     * 上次记账时书架的**在线书身份键集合**（「书架变动时自动备份」的增删判据）。
+     *
+     * ⚠️ 必须放在 `LocalConfig`（独立的 "local" pref 文件），不能放进 `AppConfig`：
+     * `AppConfig` 走 `defaultSharedPreferences`，会被 `Backup` 全量写进 config.xml
+     * 并在恢复时带回本机——那会把本机的判据基线"校准"成另一台设备的状态，
+     * 使自动备份的增删判定静默失准。这是本机运行态，不是用户配置。
+     *
+     * ⚠️ 写入时点必须在**备份成功之后**（见 `Backup.autoBackupOnShelfChangeIfNeeded`）。
+     */
+    var lastShelfKeys: String?
+        get() = getString("lastShelfKeys", null)
+        set(value) {
+            if (value != null) {
+                putString("lastShelfKeys", value)
+            } else {
+                remove("lastShelfKeys")
+            }
+        }
+
     var privacyPolicyOk: Boolean
         get() = getBoolean("privacyPolicyOk")
         set(value) {

@@ -17,12 +17,15 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.getFolderNameNoCache
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isImage
+import io.legado.app.help.book.isType
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.storage.Backup
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import splitties.init.appCtx
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 import java.nio.charset.Charset
@@ -439,6 +442,7 @@ data class Book(
         } else {
             appDb.bookDao.insert(this)
         }
+        notifyShelfChanged()
     }
 
     fun sanitizeForStorage() {
@@ -481,6 +485,17 @@ data class Book(
             ReadBook.book = null
         }
         appDb.bookDao.delete(this)
+        notifyShelfChanged()
+    }
+
+    /**
+     * 书架书增删时通知「书架变动自动备份」（内部有开关与去抖，开销可忽略）。
+     * 非书架书（`BookType.notShelf`）的增删不算变动。
+     */
+    private fun notifyShelfChanged() {
+        if (!isType(BookType.notShelf)) {
+            Backup.autoBackupOnShelfChangeIfNeeded(appCtx)
+        }
     }
 
     @Suppress("ConstPropertyName")

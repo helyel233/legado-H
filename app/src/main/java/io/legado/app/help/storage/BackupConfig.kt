@@ -5,6 +5,8 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.putPrefBoolean
 import splitties.init.appCtx
 
 /**
@@ -194,6 +196,18 @@ object BackupConfig {
         get() = ignoreConfig[localBookKey] == true
     val ignoreSourceRuntime: Boolean
         get() = ignoreConfig[sourceRuntimeKey] == true
+
+    /**
+     * 「恢复时按备份覆盖书架」。
+     *
+     * 开启后，恢复书架时会把**本机比备份多出来的在线书删除**
+     * （默认关闭 = 维持既有的增量合并）。
+     *
+     * ⚠️ 默认必须是关：删书**不可回滚**，不能把不可逆删除强加给只想做增量恢复的用户。
+     */
+    var overwriteShelfOnRestore: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.overwriteShelfOnRestore, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.overwriteShelfOnRestore, value)
 
     fun saveIgnoreConfig() {
         val json = GSON.toJson(ignoreConfig)

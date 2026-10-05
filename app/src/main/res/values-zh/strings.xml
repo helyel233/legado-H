@@ -2444,6 +2444,8 @@ bookUrl：%7$s
     <string name="pattern_empty">正则表达式为空</string>
     <string name="input_is_empty">待测试文本为空</string>
     <string name="debug_log">调试日志</string>
+    <string name="debug_floating_ball">调试悬浮球</string>
+    <string name="debug_floating_ball_summary">显示可拖拽的悬浮球，随时打开调试日志</string>
     <string name="debug_log_export">导出</string>
     <string name="debug_log_empty">暂无日志</string>
     <string name="source_recycle_bin">规则回收站</string>

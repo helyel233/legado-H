@@ -16,6 +16,7 @@ import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ShelfIdentity
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.LocalConfig
@@ -92,6 +93,15 @@ object Backup {
 
     private val mutex = Mutex()
 
+    /**
+     * 「书架变动自动备份」的去抖任务。
+     * 连续触发时取消上一个重开计时，而不是叠加多个备份任务。
+     */
+    private var pendingShelfChangeJob: Coroutine<Unit>? = null
+
+    /** 书架变动后的去抖时长：等连续增删（批量导入/删除）停下来再备份。 */
+    private const val SHELF_CHANGE_DEBOUNCE_MS = 8_000L
+
     private val backupFileNames by lazy {
         arrayOf(
             "bookshelf.json",
@@ -164,6 +174,71 @@ object Backup {
             AppLog.put("自动备份失败\n${it.localizedMessage}", it)
         }
     }
+
+    /**
+     * 「书架变动时自动备份」。
+     *
+     * 与 [autoBack] 的区别（**两者不可互相替代**）：
+     * - [autoBack] 是「**一天一次**」的定时兑底（`shouldBackup()` 闸门）；
+     * - 本方法由书架**增删**触发，且**刻意绕开** `shouldBackup()` 闸门——
+     *   否则「变动即备份」会被一天一次的闸门吞掉。
+     *
+     * ## 判据
+     *
+     * 比对**在线书身份键集合**（[ShelfIdentity.keysOf]）与本机上次记账的集合：
+     * - 换源（`bookUrl` 变、身份键不变）**不算变动**；
+     * - 阅读进度/封面等只改字段的动作**不算变动**；
+     * - 离线书的增删**不算变动**；
+     * - 只有在线书的**增删**才算。
+     */
+    fun autoBackupOnShelfChangeIfNeeded(context: Context) {
+        if (!AppConfig.autoBackupOnShelfChange) {
+            return
+        }
+        // P0 守卫：恢复流程进行中一律不备份。
+        // 恢复正把备份解压到 `backupPath`，而 `backup()` 开头会 `FileUtils.delete(backupPath)`
+        // —— 中途备份会把正在被读取的备份目录删掉，使恢复读到空/半截内容。
+        if (Restore.isRestoring) {
+            AppLog.put("书架变动自动备份已跳过：恢复流程进行中")
+            return
+        }
+        pendingShelfChangeJob?.cancel()
+        pendingShelfChangeJob = Coroutine.async {
+            // 去抖：连续的增删（如批量导入、批量删除）只触发一次。
+            delay(SHELF_CHANGE_DEBOUNCE_MS)
+            // 去抖期间可能又进了恢复，这里复查一次。
+            if (Restore.isRestoring) {
+                return@async
+            }
+            mutex.withLock {
+                val backupPath = AppConfig.backupPath
+                if (backupPath.isNullOrBlank()) {
+                    // 未配置备份路径：跳过并记日志，不弹 UI（自动行为不该打断用户）。
+                    AppLog.put("书架变动自动备份已跳过：未配置备份路径")
+                    return@withLock
+                }
+                val currentKeys = ShelfIdentity.keysOf(appDb.bookDao.all)
+                if (encodeKeys(currentKeys) == LocalConfig.lastShelfKeys) {
+                    // 补跳过日志：消除「开关开着但从不备份」时的静默出口，便于排查。
+                    AppLog.put("书架变动自动备份已跳过：身份键集合未变化")
+                    return@withLock
+                }
+                backup(context, backupPath)
+                // ⚠️ 记账必须放在**备份成功之后**：放在开头的话，备份中途被取消/进程被杀
+                // 会留下「标记已更新但备份没做成」，该次变动此后永不补备份。
+                LocalConfig.lastShelfKeys = encodeKeys(currentKeys)
+                AppLog.put("书架变动自动备份完成：${currentKeys.size} 本在线书")
+            }
+        }.onError {
+            AppLog.put("书架变动自动备份失败\n${it.localizedMessage}", it)
+        }
+    }
+
+    /** 身份键集合 → 持久化字符串。 */
+    internal fun encodeKeys(keys: Set<ShelfIdentity.Key>): String =
+        keys.map { "${it.type}\u0001${it.name}\u0001${it.author}" }
+            .sorted()
+            .joinToString("\n")
 
     suspend fun backupLocked(
         context: Context,

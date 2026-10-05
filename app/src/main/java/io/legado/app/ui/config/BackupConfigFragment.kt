@@ -329,6 +329,18 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                             title = getString(R.string.auto_check_new_backup_t),
                             summary = getString(R.string.auto_check_new_backup_s),
                             defaultValue = true
+                        ),
+                        switch(
+                            key = PreferKey.autoBackupOnShelfChange,
+                            title = getString(R.string.auto_backup_on_shelf_change_t),
+                            summary = getString(R.string.auto_backup_on_shelf_change_s),
+                            defaultValue = false
+                        ),
+                        switch(
+                            key = PreferKey.overwriteShelfOnRestore,
+                            title = getString(R.string.restore_overwrite_shelf_t),
+                            summary = getString(R.string.restore_overwrite_shelf_s),
+                            defaultValue = false
                         )
                     )
                 )

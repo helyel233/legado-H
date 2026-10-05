@@ -39,6 +39,7 @@ import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ShelfIdentity
 import io.legado.app.help.book.upType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AdvancedTitleDirectoryRestorer
@@ -94,6 +95,22 @@ object Restore {
 
     private val mutex = Mutex()
 
+    /**
+     * 恢复流程进行中标记。供「书架变动自动备份」作 P0 守卫：
+     * 恢复正把备份解压到 `Backup.backupPath`，中途备份会把该目录清空重建。
+     */
+    @Volatile
+    var isRestoring = false
+        private set
+
+    /**
+     * 「按备份覆盖」用的**本机在线书身份键快照**，在 DB 段合并之前取。
+     *
+     * 必须是实例字段：取值点在 `restoreBooks` 之前，消费点在 `restore()` 末尾，
+     * 中间隔着整个恢复流程。关闭开关时为 null（不取快照、也不删除）。
+     */
+    private var localKeysBeforeMerge: Set<ShelfIdentity.Key>? = null
+
     private const val TAG = "Restore"
     private const val RESTORE_INSERT_BATCH_SIZE = 500
 
@@ -146,6 +163,7 @@ object Restore {
     suspend fun restoreLocked(path: String) {
         mutex.withLock {
             val journalGeneration = RestoreJournal.begin(RestoreJournal.buildSnapshotTargets(path))
+            isRestoring = true
             try {
                 restore(path)
                 RestoreJournal.markPendingValidation(journalGeneration)
@@ -155,12 +173,22 @@ object Restore {
                     journalGeneration
                 )
                 throw e
+            } finally {
+                isRestoring = false
             }
         }
     }
 
     private suspend fun restore(path: String) {
         val aes = BackupAES()
+        // 「按备份覆盖」的本机快照必须在合并之前取：合并会把备份书并入本机记录、
+        // 并可能插入新行，之后取会把新行算进来，导致本该删掉的本机旧记录被新行
+        // 的身份键"顶替"而漏判。每次恢复都重置，避免上一次的残留被本次误用。
+        localKeysBeforeMerge = if (BackupConfig.overwriteShelfOnRestore) {
+            ShelfIdentity.keysOf(appDb.bookDao.all)
+        } else {
+            null
+        }
         restoreBooks(path)
         fileToListT<Bookmark>(path, "bookmark.json")?.let {
             insertRestored(it) { items -> appDb.bookmarkDao.insert(*items) }
@@ -362,6 +390,9 @@ object Restore {
             }
         }
         AutoTask.refreshSchedule()
+        // ⚠️ 「按备份覆盖」的删书放在所有可能失败的步骤之后：若在前面执行，
+        // 后续步骤失败触发回滚时书已被永久删除——「看起来恢复失败，书其实已经没了」。
+        overwriteShelfIfNeeded(path)
         bookshelfRebuildPending = true
         appCtx.toastOnUi(R.string.restore_success)
         withContext(Main) {
@@ -371,6 +402,78 @@ object Restore {
             }
             ThemeConfig.applyDayNight(appCtx)
         }
+    }
+
+    /**
+     * 「恢复时按备份覆盖书架」：把本机比备份多出来的**在线书**删掉。
+     *
+     * 默认关闭（[BackupConfig.overwriteShelfOnRestore]）；关闭时本方法直接返回，
+     * 恢复维持既有的**增量合并**语义（只加不删）。
+     *
+     * ## 三道守卫（缺一即可能删光书架）
+     *
+     * ⚠️ **① `bookshelf.json` 不存在 ⇒ 拒绝删除。**
+     * 用户未勾选「书架」恢复（或备份本身不含书架）时，把「备份在线书集合」
+     * 当成空集会导致 `全部 − 空 = 全部` ⇒ **删光在线书架**。
+     *
+     * ⚠️ **② 解析结果为空 ⇒ 拒绝删除。**
+     * 读不出来不等于「备份里没有」。
+     *
+     * ⚠️ **③ 两侧集合都用 [ShelfIdentity] 过滤离线书**，离线书恒不在删除集合内。
+     * 尤其是本地书——`Book.delete()` 对本地书会连带处理本地文件。
+     */
+    private suspend fun overwriteShelfIfNeeded(path: String) {
+        if (!BackupConfig.overwriteShelfOnRestore) {
+            return
+        }
+        val localKeys = localKeysBeforeMerge ?: return
+        // 守卫①：文件不存在（用户未勾选「书架」恢复，或备份本身不含书架）
+        val shelfFile = File(path, "bookshelf.json")
+        if (!shelfFile.exists()) {
+            AppLog.put("按备份覆盖已跳过：备份中没有 bookshelf.json，未删除任何书籍")
+            return
+        }
+        // 守卫②：解析不出任何书（读不出来不等于「备份里没有」）
+        val backupBooks = buildList {
+            Restore.forEachBookBackup(shelfFile) { _, book -> add(book) }
+        }
+        if (backupBooks.isEmpty()) {
+            AppLog.put("按备份覆盖已跳过：bookshelf.json 未解析出任何书籍，未删除任何书籍")
+            return
+        }
+        val backupKeys = ShelfIdentity.keysOf(backupBooks)
+        val toDelete = appDb.bookDao.all.filter { book ->
+            // 守卫③：离线书一律排除（keyOf 为 null），绝不进入删除集合
+            val key = ShelfIdentity.keyOf(book) ?: return@filter false
+            key in localKeys && key !in backupKeys
+        }
+        if (toDelete.isEmpty()) {
+            return
+        }
+        // 删除不可撤销，先把将被删项落盘：把「完全不可逆」降级为「可手工找回」。
+        writeOverwriteManifest(toDelete)
+        toDelete.forEach { book ->
+            appDb.bookDao.getBook(book.bookUrl)?.delete()
+        }
+        AppLog.put("按备份覆盖：已删除 ${toDelete.size} 本备份中不存在的在线书籍")
+        appCtx.toastOnUi(appCtx.getString(R.string.restore_overwrite_done, toDelete.size))
+    }
+
+    /**
+     * 落一份将被删书籍的清单（完整 `Book` JSON，含 bookUrl/origin/进度等可重建字段），
+     * 返回路径；失败不阻断删除但会记日志。
+     *
+     * ⚠️ 落点 `filesDir/` **本身**、不在 `backupPath` 内，
+     * 故 `Backup` 的 `FileUtils.delete(backupPath)` 删不到它。
+     */
+    private fun writeOverwriteManifest(books: List<Book>): String? {
+        return runCatching {
+            val file = File(appCtx.filesDir, "deleted-books-${System.currentTimeMillis()}.json")
+            file.writeText(GSON.toJson(books))
+            file.absolutePath
+        }.onFailure {
+            AppLog.put("按备份覆盖清单落盘失败\n${it.localizedMessage}", it)
+        }.getOrNull()
     }
 
     private fun restoreBookCharacters(path: String) {
