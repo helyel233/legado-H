@@ -39,7 +39,7 @@ object AiSettingsTool {
             )
         ),
         SettingDef(PreferKey.modernRssPage, "boolean"),
-        SettingDef(PreferKey.defaultHomePage, "string", values = setOf("bookshelf", "explore", "rss", "my")),
+        SettingDef(PreferKey.defaultHomePage, "string", values = setOf("homepage", "bookshelf", "explore", "rss", "my")),
         SettingDef(PreferKey.aiAssistantEnabled, "boolean"),
         SettingDef(PreferKey.aiEnterToSend, "boolean"),
         SettingDef(PreferKey.aiTavilyEnabled, "boolean"),

@@ -2413,6 +2413,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val visiblePositions = realPositions.take(bottomMenuCount)
         val fallback = bookshelfPosition()
         val target = when (AppConfig.defaultHomePage) {
+            "homepage" -> visiblePositions.indexOf(idHomepage).takeIf { it >= 0 }
             "explore" -> visiblePositions.indexOf(idExplore).takeIf { it >= 0 }
                 ?: visiblePositions.indexOf(resolveDiscoveryNavTarget()).takeIf { it >= 0 }
             "rss" -> visiblePositions.indexOf(idRss).takeIf { it >= 0 }
