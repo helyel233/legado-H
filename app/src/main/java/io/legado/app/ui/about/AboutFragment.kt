@@ -7,6 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -16,6 +17,8 @@ import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
+import io.legado.app.ui.config.compose.SettingSwitchSpec
+import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
@@ -30,6 +33,7 @@ import io.legado.app.utils.list
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.openOutputStream
 import io.legado.app.utils.openUrl
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.delay
@@ -103,6 +107,18 @@ class AboutFragment : ComposeSettingFragment() {
                         ) {
                             showDialogFragment<DebugLogDialog>()
                         },
+                        SettingSwitchSpec(
+                            key = PreferKey.debugLogFloatingBall,
+                            title = getString(R.string.debug_floating_ball),
+                            summary = getString(R.string.debug_floating_ball_summary),
+                            checked = AppConfig.debugLogFloatingBall,
+                            onCheckedChange = { checked ->
+                                requireContext().putPrefBoolean(
+                                    PreferKey.debugLogFloatingBall, checked
+                                )
+                                DebugFloatingBallManager.updateFloatingBallState(checked)
+                            }
+                        ),
                         action(
                             key = KEY_SAVE_LOG,
                             title = getString(R.string.save_log)

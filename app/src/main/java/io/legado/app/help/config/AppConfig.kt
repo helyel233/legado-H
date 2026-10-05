@@ -2567,6 +2567,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val recordHeapDump get() = appCtx.getPrefBoolean(PreferKey.recordHeapDump, false)
 
+    /** 调试悬浮球：常驻 debug 日志入口（辞晨版移植，默认关）。 */
+    val debugLogFloatingBall get() = appCtx.getPrefBoolean(PreferKey.debugLogFloatingBall, false)
+
     val loadCoverOnlyWifi get() = appCtx.getPrefBoolean(PreferKey.loadCoverOnlyWifi, false)
 
     val showAddToShelfAlert get() = appCtx.getPrefBoolean(PreferKey.showAddToShelfAlert, true)

@@ -36,6 +36,7 @@ import io.legado.app.help.AppFreezeMonitor
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.DefaultData
+import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
@@ -100,6 +101,7 @@ class App : Application() {
         oldConfig = Configuration(resources.configuration)
         applyDayNightInit(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
+        DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         Coroutine.async {
             RestoreJournal.recoverIfNeeded("应用启动检测到上次恢复未完成")
