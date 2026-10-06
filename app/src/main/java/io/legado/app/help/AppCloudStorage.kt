@@ -133,11 +133,25 @@ object AppCloudStorage {
     /**
      * 上传「资源文件单独备份」包（字体/背景图/头像）。
      * 不做旧备份清理：资源包用稳定文件名覆盖上传，
-     * 且主备份的清理逻辑会跳过 _assets 包。
+     * 且主备份的清理逻辑会跳过 backup_assets 包。
      */
     suspend fun backupAssets(fileName: String, file: File) {
         ensureNetwork()
         storage(S3ContainerScope.MAIN_BACKUP).upload(fileName, file)
+    }
+
+    /**
+     * 资源包是否仍存在于云端。哈希未变化准备跳过上传前调用；
+     * 若用户手动删除了云端资源包可自愈补传。
+     * 仅 WebDAV 支持廉价的存在性检查，其余类型保守返回 true。
+     * 查询失败时也保守返回 true，避免网络抖动导致每次备份都重传大包。
+     */
+    suspend fun assetsBackupExists(fileName: String): Boolean {
+        if (type != CloudStorageType.WEBDAV) return true
+        return runCatching {
+            webDavBackend.listFiles("")
+                .any { !it.isDir && it.displayName == fileName }
+        }.getOrDefault(true)
     }
 
     /**
@@ -149,7 +163,7 @@ object AppCloudStorage {
         runCatching {
             webDavBackend.listFiles("")
                 .filter { !it.isDir && it.displayName.startsWith("backup") }
-                .filter { !it.displayName.endsWith("_assets.zip", ignoreCase = true) }
+                .filter { !it.displayName.startsWith("backup_assets", ignoreCase = true) }
                 .filter { it.displayName != fileName && it.displayName.endsWith(".zip", ignoreCase = true) }
                 .forEach { file ->
                     runCatching {

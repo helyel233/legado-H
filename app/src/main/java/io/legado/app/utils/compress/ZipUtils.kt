@@ -221,8 +221,10 @@ object ZipUtils {
         if (srcFile.isDirectory) {
             val fileList = srcFile.listFiles()
             if (fileList == null || fileList.isEmpty()) {
-                val entry = ZipEntry("$entryPath/")
-                entry.comment = comment
+                val entry = ZipEntry("$entryPath/").also { e ->
+                    e.comment = comment
+                    e.time = srcFile.lastModified()
+                }
                 zos.putNextEntry(entry)
                 zos.closeEntry()
             } else {
@@ -236,7 +238,12 @@ object ZipUtils {
                     // 预读后文件若被并发修改，STORED 的 size/CRC 将失配导致整包失败，回退 DEFLATED
                     ?.takeIf { srcFile.lastModified() == it.lastModified }
                     ?.entry
-                    ?: ZipEntry(entryPath).also { e -> e.comment = comment }
+                    ?: ZipEntry(entryPath).also { e ->
+                        e.comment = comment
+                        // 条目时间取源文件 mtime 而非打包时刻：相同输入产出字节相同的 zip，
+                        // 资源包内容哈希比对（跳过重复上传）依赖此确定性
+                        e.time = srcFile.lastModified()
+                    }
                 zos.putNextEntry(entry)
                 it.copyTo(zos, BUFFER_SIZE)
                 zos.closeEntry()
@@ -271,6 +278,7 @@ object ZipUtils {
             entry.size = size
             entry.compressedSize = size
             entry.crc = crc32.value
+            entry.time = srcFile.lastModified()
         }
         return StoredCandidate(entry, srcFile.lastModified())
     }

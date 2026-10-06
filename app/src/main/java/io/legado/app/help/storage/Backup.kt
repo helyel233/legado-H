@@ -670,7 +670,9 @@ object Backup {
                     copyBackup(File(path), assetsZipName)
             }
             if (uploadCloud) {
-                if (hash == LocalConfig.lastAssetsZipHash && target == LocalConfig.lastAssetsZipTarget) {
+                if (hash == LocalConfig.lastAssetsZipHash && target == LocalConfig.lastAssetsZipTarget &&
+                    AppCloudStorage.assetsBackupExists(assetsZipName)
+                ) {
                     AppLog.put("资源包未变化，跳过上传：$assetsZipName")
                 } else {
                     reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
