@@ -1668,6 +1668,8 @@ function login() {
     <string name="only_latest_backup_s">Local backup keeps only the latest backup file</string>
     <string name="backup_book_files_t">Backup book files</string>
     <string name="backup_book_files_s">Include downloaded book files and chapter cache in backups. Large size, disabled by default.</string>
+    <string name="backup_assets_separately_t">Back up assets separately</string>
+    <string name="backup_assets_separately_s">Split fonts, background images and character avatars into a standalone backup_assets.zip. Uploads are skipped when unchanged, keeping the main backup lightweight. Restore the main backup first, then the assets package as needed.</string>
     <string name="webdav_delete_old_backup_t">Delete old WebDAV backups</string>
     <string name="custom_group_add_suffix"> (add to group)</string>
     <string name="webdav_delete_old_backup_s">Automatically delete previous backup files in the WebDAV directory after uploading, keeping only the latest backup</string>

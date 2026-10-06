@@ -377,6 +377,7 @@ object PreferKey {
     /** 恢复时按备份覆盖书架。默认**关**：删书不可回滚，不能替用户默认打开。 */
     const val overwriteShelfOnRestore = "overwriteShelfOnRestore"
     const val backupBookFiles = "backupBookFiles"
+    const val backupAssetsSeparately = "backupAssetsSeparately"
     const val webDavDeleteOldBackup = "webDavDeleteOldBackup"
     const val webDavBackupCover = "webDavBackupCover"
     const val brightnessVwPos = "brightnessVwPos"

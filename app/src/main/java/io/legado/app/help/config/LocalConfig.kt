@@ -56,6 +56,28 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             }
         }
 
+    /** 上次成功上传的资源包内容 SHA-256（资源未变化时跳过重新上传） */
+    var lastAssetsZipHash: String?
+        get() = getString("lastAssetsZipHash", null)
+        set(value) {
+            if (value != null) {
+                putString("lastAssetsZipHash", value)
+            } else {
+                remove("lastAssetsZipHash")
+            }
+        }
+
+    /** 上次资源包上传目标（云类型+文件名），与哈希配套判定是否可跳过上传 */
+    var lastAssetsZipTarget: String?
+        get() = getString("lastAssetsZipTarget", null)
+        set(value) {
+            if (value != null) {
+                putString("lastAssetsZipTarget", value)
+            } else {
+                remove("lastAssetsZipTarget")
+            }
+        }
+
     var privacyPolicyOk: Boolean
         get() = getBoolean("privacyPolicyOk")
         set(value) {

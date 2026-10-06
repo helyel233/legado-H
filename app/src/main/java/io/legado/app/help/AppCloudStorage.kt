@@ -131,6 +131,16 @@ object AppCloudStorage {
     }
 
     /**
+     * 上传「资源文件单独备份」包（字体/背景图/头像）。
+     * 不做旧备份清理：资源包用稳定文件名覆盖上传，
+     * 且主备份的清理逻辑会跳过 _assets 包。
+     */
+    suspend fun backupAssets(fileName: String, file: File) {
+        ensureNetwork()
+        storage(S3ContainerScope.MAIN_BACKUP).upload(fileName, file)
+    }
+
+    /**
      * 自动删除 WebDAV 目录中之前的备份，只保留最新备份
      */
     private suspend fun deleteOldWebDavBackups(fileName: String) {
@@ -139,6 +149,7 @@ object AppCloudStorage {
         runCatching {
             webDavBackend.listFiles("")
                 .filter { !it.isDir && it.displayName.startsWith("backup") }
+                .filter { !it.displayName.endsWith("_assets.zip", ignoreCase = true) }
                 .filter { it.displayName != fileName && it.displayName.endsWith(".zip", ignoreCase = true) }
                 .forEach { file ->
                     runCatching {

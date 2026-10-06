@@ -319,6 +319,12 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                             defaultValue = false
                         ),
                         switch(
+                            key = PreferKey.backupAssetsSeparately,
+                            title = getString(R.string.backup_assets_separately_t),
+                            summary = getString(R.string.backup_assets_separately_s),
+                            defaultValue = false
+                        ),
+                        switch(
                             key = PreferKey.onlyLatestBackup,
                             title = getString(R.string.only_latest_backup_t),
                             summary = getString(R.string.only_latest_backup_s),

@@ -60,6 +60,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.OutputStreamWriter
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,6 +77,8 @@ object Backup {
         appCtx.filesDir.getFile("backup").createFolderIfNotExist().absolutePath
     }
     val zipFilePath = "${appCtx.externalFiles.absolutePath}${File.separator}tmp_backup.zip"
+    private val assetsZipFilePath =
+        "${appCtx.externalFiles.absolutePath}${File.separator}tmp_backup_assets.zip"
     internal const val bookCharactersFileName = "bookCharacters.json"
     internal const val bookCharacterRelationsFileName = "bookCharacterRelations.json"
     internal const val bookCharacterAvatarsDirName = "bookCharacterAvatars"
@@ -145,6 +148,16 @@ object Backup {
             "backup${backupDate}-${deviceName}.zip"
         } else {
             "backup${backupDate}.zip"
+        }.normalizeFileName()
+    }
+
+    private fun getAssetsZipFileName(): String {
+        // 资源包用稳定文件名：内容不变时跳过上传、不产生每日堆积
+        val deviceName = AppConfig.webDavDeviceName
+        return if (deviceName?.isNotBlank() == true) {
+            "backup_assets-${deviceName}.zip"
+        } else {
+            "backup_assets.zip"
         }.normalizeFileName()
     }
 
@@ -385,10 +398,17 @@ object Backup {
             .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
         File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
             .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        // 大体积资源直接从源目录压入 zip（entry 前缀与恢复端约定一致），跳过复制到 backupPath 的中间环节
-        collectBookCharacterAvatarSource()?.let(zipSources::add)
-        zipSources.addAll(collectReaderFontSources())
-        zipSources.addAll(collectBackgroundAssetSources())
+        // 大体积资源直接从源目录压入 zip（entry 前缀与恢复端约定一致），跳过复制到 backupPath 的中间环节。
+        // 开启「资源文件单独备份」时，字体/背景图/头像拆出主包，打包进独立资源包
+        val assetSources = arrayListOf<ZipUtils.ZipSource>()
+        collectBookCharacterAvatarSource()?.let(assetSources::add)
+        assetSources.addAll(collectReaderFontSources())
+        assetSources.addAll(collectBackgroundAssetSources())
+        if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
+            AppLog.put("资源单独备份：${assetSources.size} 项资源拆分为独立包")
+        } else {
+            zipSources.addAll(assetSources)
+        }
         zipSources.addAll(collectBookFileSources())
         FileUtils.delete(zipFilePath)
         FileUtils.delete(zipFilePath.replace("tmp_", ""))
@@ -435,6 +455,9 @@ object Backup {
                 AppCloudStorage.upBookCovers()
             }
             backupSuccess = true
+            if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
+                backupAssetsSeparately(context, path, assetSources, reporter, uploadCloud)
+            }
         } else {
             throw NoStackTraceException("创建备份压缩包失败")
         }
@@ -611,6 +634,70 @@ object Backup {
         if (!sourceDir.isDirectory) return emptyList()
         AppLog.put("备份书籍文件：直接从缓存目录打包")
         return listOf(ZipUtils.ZipSource(sourceDir, bookCacheBackupDirName))
+    }
+
+    /**
+     * 「资源文件单独备份」：字体/背景图/头像打包为独立 zip。
+     * - 本地备份目录始终同步一份（本地 IO 快）
+     * - 云端上传用稳定文件名，内容 SHA-256 未变化时跳过上传，避免每日重复传大包
+     * - 失败不影响主备份流程（资源是锦上添花，主包已成功）
+     */
+    private suspend fun backupAssetsSeparately(
+        context: Context,
+        path: String?,
+        assetSources: List<ZipUtils.ZipSource>,
+        reporter: BackupProgressReporter,
+        uploadCloud: Boolean
+    ) {
+        runCatching {
+            currentCoroutineContext().ensureActive()
+            FileUtils.delete(assetsZipFilePath)
+            reporter.report(BackupProgress(BackupStage.PACKING), force = true)
+            if (!ZipUtils.zipFiles(assetSources, assetsZipFilePath, null)) {
+                throw NoStackTraceException("创建资源备份压缩包失败")
+            }
+            val assetsZipFile = File(assetsZipFilePath)
+            val assetsZipName = getAssetsZipFileName()
+            val hash = fileSha256(assetsZipFile)
+            val target = "${AppCloudStorage.type}:$assetsZipName"
+            reporter.report(BackupProgress(BackupStage.SAVING), force = true)
+            when {
+                path.isNullOrBlank() ->
+                    copyBackup(context.getExternalFilesDir(null)!!, assetsZipName)
+                path.isContentScheme() ->
+                    copyBackup(context, path.toUri(), assetsZipName)
+                else ->
+                    copyBackup(File(path), assetsZipName)
+            }
+            if (uploadCloud) {
+                if (hash == LocalConfig.lastAssetsZipHash && target == LocalConfig.lastAssetsZipTarget) {
+                    AppLog.put("资源包未变化，跳过上传：$assetsZipName")
+                } else {
+                    reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
+                    AppLog.put("Upload cloud assets backup: $assetsZipName")
+                    AppCloudStorage.backupAssets(assetsZipName, assetsZipFile)
+                    LocalConfig.lastAssetsZipHash = hash
+                    LocalConfig.lastAssetsZipTarget = target
+                    AppLog.put("Cloud assets backup finished: $assetsZipName")
+                }
+            }
+            FileUtils.delete(assetsZipFilePath)
+        }.onFailure {
+            AppLog.put("资源包备份失败\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun fileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(COPY_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun copyPackageDirectories(
