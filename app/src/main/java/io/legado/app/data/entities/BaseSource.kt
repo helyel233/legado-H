@@ -23,6 +23,7 @@ import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.has
 import io.legado.app.utils.isMainThread
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.intellij.lang.annotations.Language
 
@@ -118,6 +119,9 @@ interface BaseSource : JsExtensions {
                     log("请求头规则 JSON 格式不规范，请改为规范格式")
                     putAll(map)
                 }
+            } catch (e: CancellationException) {
+                // 协程取消（界面退出/任务中断）是正常控制流，不作为错误记录
+                throw e
             } catch (e: Exception) {
                 AppLog.put("执行请求头规则出错\n$e", e)
             }
