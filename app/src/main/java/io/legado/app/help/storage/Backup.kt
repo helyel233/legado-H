@@ -42,6 +42,7 @@ import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.getSharedPreferences
 import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.openInputStream
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.openOutputStream
 import io.legado.app.utils.outputStream
@@ -85,6 +86,8 @@ object Backup {
     internal const val advancedTitlePackagesDirName = "advancedTitlePackages"
     internal const val bubblePackagesDirName = "bubblePackages"
     internal const val fontsDirName = "fonts"
+    private const val fontsCollectDirName = "fonts_collect"
+    private val fontFileRegex = Regex("(?i).*\\.[ot]tf")
     internal const val bookCacheBackupDirName = "book_cache"
 
     private const val AT_FONT_PREFIX = "@font:"
@@ -404,9 +407,13 @@ object Backup {
         collectBookCharacterAvatarSource()?.let(assetSources::add)
         assetSources.addAll(collectReaderFontSources())
         assetSources.addAll(collectBackgroundAssetSources())
+        assetSources.addAll(collectGroupCoverSources())
         if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
             AppLog.put("资源单独备份：${assetSources.size} 项资源拆分为独立包")
         } else {
+            if (AppConfig.backupAssetsSeparately && assetSources.isEmpty()) {
+                AppLog.put("资源分离已开启，但没有可拆分的资源（字体/背景图/头像）")
+            }
             zipSources.addAll(assetSources)
         }
         zipSources.addAll(collectBookFileSources())
@@ -467,6 +474,8 @@ object Backup {
         }
         FileUtils.delete(backupPath)
         FileUtils.delete(zipFilePath)
+        // fonts_collect 临时目录保留复用：SAF 字体复制件 mtime 稳定才能让源级指纹命中跳传；
+        // 仅 clearCache 时清理。
         currentCoroutineContext().ensureActive()
         reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
         ReadBookConfig.getAllPicBgStr().map {
@@ -567,8 +576,12 @@ object Backup {
         val sources = arrayListOf<ZipUtils.ZipSource>()
         // 字体库目录整个打包；字体选择列表（AppFont.list）即扫描此目录
         val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
+        // 已占用的 entry 名（目录条目展开为 fonts/<文件名>，文件条目同为 fonts/<文件名>），
+        // 私有目录版本优先，其余来源同名时跳过，避免 duplicate entry 炸整包
+        val usedEntryNames = hashSetOf<String>()
         if (fontDir.isDirectory && fontDir.listFiles()?.any { it.isFile } == true) {
             sources.add(ZipUtils.ZipSource(fontDir, fontsDirName))
+            fontDir.listFiles()?.filter { it.isFile }?.forEach { usedEntryNames.add(it.name) }
         }
         val refs = linkedSetOf<String>()
         ReadBookConfig.allLayoutConfigs().forEach { config ->
@@ -587,9 +600,85 @@ object Backup {
         val files = refs.mapNotNull { resolveReaderFontFile(it) }
             .filter { !it.absolutePath.startsWith(fontDir.absolutePath + File.separator) }
             .distinctBy { it.absolutePath }
-        files.forEach { sources.add(ZipUtils.ZipSource(it, fontsDirName)) }
+        files.forEach { file ->
+            if (!usedEntryNames.add(file.name)) return@forEach
+            sources.add(ZipUtils.ZipSource(file, fontsDirName))
+        }
+        // 引用的字体在用户字体库目录（fontFolder）时同样纳入备份：
+        // 字体选择列表包含该目录，缺失会导致恢复后字体引用失效
+        refs.filter { resolveReaderFontFile(it) == null }
+            .forEach { ref ->
+                collectFontFolderFile(ref)?.let { file ->
+                    if (!usedEntryNames.add(file.name)) return@forEach
+                    sources.add(ZipUtils.ZipSource(file, fontsDirName))
+                }
+            }
         if (sources.isNotEmpty()) {
             AppLog.put("备份阅读字体库 ${sources.size} 项")
+        }
+        return sources
+    }
+
+    /**
+     * 字体引用指向用户字体库目录（fontFolder）时，从该目录取字体文件。
+     * SAF 目录无法直接打包，先复制到临时目录；staging 目录跨备份保留
+     * 以保持 mtime 稳定（源级指纹跳传依赖），仅 clearCache 时清理。
+     */
+    private fun collectFontFolderFile(ref: String): File? {
+        val name = ref.trim().removePrefix(AT_FONT_PREFIX).trim()
+        if (name.isBlank() || name.contains(File.separator) || name.contains("://")) {
+            return null
+        }
+        if (!fontFileRegex.matches(name)) {
+            return null
+        }
+        val fontPath = appCtx.getPrefString(PreferKey.fontFolder)?.takeIf { it.isNotBlank() }
+            ?: return null
+        return runCatching {
+            if (fontPath.isContentScheme()) {
+                val tree = DocumentFile.fromTreeUri(appCtx, Uri.parse(fontPath))
+                    ?: return@runCatching null
+                val doc = tree.findFile(name) ?: return@runCatching null
+                val stagingDir = File(appCtx.cacheDir, fontsCollectDirName)
+                val target = File(stagingDir, name)
+                if (target.isFile && target.length() == doc.length()) {
+                    return@runCatching target
+                }
+                stagingDir.mkdirs()
+                target.outputStream().use { output ->
+                    doc.openInputStream()?.use { input ->
+                        input.copyTo(output)
+                    } ?: return@runCatching null
+                }
+                target.takeIf { it.isFile && it.length() > 0 }
+            } else {
+                File(fontPath, name).takeIf { it.isFile }
+            }
+        }.onFailure {
+            AppLog.put("从字体库目录收集字体失败：$name\n${it.localizedMessage}", it)
+        }.getOrNull()
+    }
+
+    /**
+     * 书架分组封面：GroupEditDialog 选图后复制到 externalFiles/covers/{md5+后缀}，
+     * book_groups.cover 存绝对路径。恢复端按 covers/ 前缀还原（restoreGroupCovers）。
+     */
+    private fun collectGroupCoverSources(): List<ZipUtils.ZipSource> {
+        val sources = arrayListOf<ZipUtils.ZipSource>()
+        val coversDir = appCtx.externalFiles.getFile("covers")
+        appDb.bookGroupDao.all.forEach { group ->
+            val cover = group.cover ?: return@forEach
+            if (cover.isBlank()
+                || cover.startsWith("http", true)
+                || cover.isContentScheme()
+            ) return@forEach
+            val file = File(cover)
+            if (file.isFile && file.parentFile?.absolutePath == coversDir.absolutePath) {
+                sources.add(ZipUtils.ZipSource(file, "covers"))
+            }
+        }
+        if (sources.isNotEmpty()) {
+            AppLog.put("备份书架分组封面 ${sources.size} 项")
         }
         return sources
     }
@@ -893,6 +982,7 @@ object Backup {
     fun clearCache() {
         FileUtils.delete(backupPath)
         FileUtils.delete(zipFilePath)
+        FileUtils.delete(File(appCtx.cacheDir, fontsCollectDirName).absolutePath)
     }
 
     /** 备份进度上报：按时间节流，避免高频刷新界面 */
