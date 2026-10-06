@@ -638,8 +638,8 @@ object Backup {
 
     /**
      * 「资源文件单独备份」：字体/背景图/头像打包为独立 zip。
-     * - 本地备份目录始终同步一份（本地 IO 快）
-     * - 云端上传用稳定文件名，内容 SHA-256 未变化时跳过上传，避免每日重复传大包
+     * - 先算源文件指纹（路径+大小+mtime），未变化时连打包都不做，本地/云端均沿用上次产物
+     * - 云端跳过前校验远端仍存在（手动删除后可自愈补传）
      * - 失败不影响主备份流程（资源是锦上添花，主包已成功）
      */
     private suspend fun backupAssetsSeparately(
@@ -651,37 +651,52 @@ object Backup {
     ) {
         runCatching {
             currentCoroutineContext().ensureActive()
+            val assetsZipName = getAssetsZipFileName()
+            val target = "${AppCloudStorage.type}:$assetsZipName"
+            // 源级指纹判定：zip 已确定性输出（条目时间取源 mtime），
+            // 指纹不变等价于包字节不变，无需打包后再算哈希
+            val fingerprint = assetsFingerprint(assetSources)
+            val fingerprintUnchanged = fingerprint == LocalConfig.lastAssetsFingerprint
+            // 云端无需重传：源指纹未变，且上次上传目标一致且远端资源包仍在（手动删除可自愈）
+            val cloudUnchanged = fingerprintUnchanged && (!uploadCloud || (
+                target == LocalConfig.lastAssetsTarget &&
+                    AppCloudStorage.assetsBackupExists(assetsZipName)
+                ))
+            // 本地备份目录已有资源包才可整体跳过；缺失时仍需打包补齐本地（云端未变则不重传）
+            val localUnchanged = localAssetsZipExists(context, path, assetsZipName)
+            if (cloudUnchanged && localUnchanged) {
+                AppLog.put("资源未变化，跳过打包与上传：$assetsZipName")
+                return@runCatching
+            }
+            if (cloudUnchanged) {
+                AppLog.put("资源未变化，仅补齐本地资源包：$assetsZipName")
+            }
             FileUtils.delete(assetsZipFilePath)
             reporter.report(BackupProgress(BackupStage.PACKING), force = true)
             if (!ZipUtils.zipFiles(assetSources, assetsZipFilePath, null)) {
                 throw NoStackTraceException("创建资源备份压缩包失败")
             }
             val assetsZipFile = File(assetsZipFilePath)
-            val assetsZipName = getAssetsZipFileName()
-            val hash = fileSha256(assetsZipFile)
-            val target = "${AppCloudStorage.type}:$assetsZipName"
             reporter.report(BackupProgress(BackupStage.SAVING), force = true)
             when {
                 path.isNullOrBlank() ->
-                    copyBackup(context.getExternalFilesDir(null)!!, assetsZipName)
+                    copyBackup(context.getExternalFilesDir(null)!!, assetsZipName, assetsZipFile)
                 path.isContentScheme() ->
-                    copyBackup(context, path.toUri(), assetsZipName)
+                    copyBackup(context, path.toUri(), assetsZipName, assetsZipFile)
                 else ->
-                    copyBackup(File(path), assetsZipName)
+                    copyBackup(File(path), assetsZipName, assetsZipFile)
             }
+            if (uploadCloud && !cloudUnchanged) {
+                reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
+                AppLog.put("Upload cloud assets backup: $assetsZipName")
+                AppCloudStorage.backupAssets(assetsZipName, assetsZipFile)
+                AppLog.put("Cloud assets backup finished: $assetsZipName")
+            }
+            // 指纹在成功落盘后记录；云端目标仅在确实执行了云上传时记录，
+            // 避免仅本地备份后误判云端已有资源包而跳过首次上传
+            LocalConfig.lastAssetsFingerprint = fingerprint
             if (uploadCloud) {
-                if (hash == LocalConfig.lastAssetsZipHash && target == LocalConfig.lastAssetsZipTarget &&
-                    AppCloudStorage.assetsBackupExists(assetsZipName)
-                ) {
-                    AppLog.put("资源包未变化，跳过上传：$assetsZipName")
-                } else {
-                    reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
-                    AppLog.put("Upload cloud assets backup: $assetsZipName")
-                    AppCloudStorage.backupAssets(assetsZipName, assetsZipFile)
-                    LocalConfig.lastAssetsZipHash = hash
-                    LocalConfig.lastAssetsZipTarget = target
-                    AppLog.put("Cloud assets backup finished: $assetsZipName")
-                }
+                LocalConfig.lastAssetsTarget = target
             }
             FileUtils.delete(assetsZipFilePath)
         }.onFailure {
@@ -689,17 +704,56 @@ object Backup {
         }
     }
 
-    private fun fileSha256(file: File): String {
+    /**
+     * 资源源文件指纹：条目路径 + 大小 + mtime 的 SHA-256。
+     * 与 ZipUtils 的确定性输出等价（条目时间取源 mtime），
+     * 但只需 stat 文件无需读取内容，未变化时可完全跳过打包。
+     */
+    private fun assetsFingerprint(sources: List<ZipUtils.ZipSource>): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        FileInputStream(file).use { input ->
-            val buffer = ByteArray(COPY_BUFFER_SIZE)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
+        val lines = sortedSetOf<String>()
+        fun walk(file: File, entryPath: String) {
+            if (file.isDirectory) {
+                file.listFiles()
+                    ?.sortedBy { it.name }
+                    ?.forEach { walk(it, "$entryPath/${it.name}") }
+            } else {
+                lines.add("$entryPath:${file.length()}:${file.lastModified()}")
             }
         }
+        sources.forEach { source ->
+            val rootPath = when {
+                source.entryRoot.isBlank() -> source.file.name
+                source.file.isFile -> "${source.entryRoot}/${source.file.name}"
+                else -> source.entryRoot
+            }
+            if (source.file.isFile) {
+                lines.add("$rootPath:${source.file.length()}:${source.file.lastModified()}")
+            } else if (source.file.isDirectory) {
+                // 目录本身的展开与 zipFile() 递归一致；空目录在 zip 中仅是时间戳条目，不影响内容
+                source.file.listFiles()
+                    ?.sortedBy { it.name }
+                    ?.forEach { walk(it, "$rootPath/${it.name}") }
+            }
+        }
+        lines.forEach { digest.update((it + "\n").toByteArray()) }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** 本地备份目录中资源包是否已存在；缺失时需打包补齐本地（云端未变则只做本地同步） */
+    private fun localAssetsZipExists(
+        context: Context,
+        path: String?,
+        assetsZipName: String
+    ): Boolean {
+        return when {
+            path.isNullOrBlank() ->
+                context.getExternalFilesDir(null)?.let { File(it, assetsZipName).exists() } ?: false
+            path.isContentScheme() -> runCatching {
+                DocumentFile.fromTreeUri(context, path.toUri())?.findFile(assetsZipName) != null
+            }.getOrDefault(false)
+            else -> File(path, assetsZipName).exists()
+        }
     }
 
     private fun copyPackageDirectories(
@@ -778,6 +832,7 @@ object Backup {
         context: Context,
         uri: Uri,
         fileName: String,
+        sourceFile: File = File(zipFilePath),
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
         val treeDoc = DocumentFile.fromTreeUri(context, uri)!!
@@ -787,8 +842,8 @@ object Backup {
         val outputS = fileDoc.openOutputStream()
             ?: throw NoStackTraceException("打开OutputStream失败")
         outputS.use {
-            FileInputStream(zipFilePath).use { inputS ->
-                copyStreamWithProgress(inputS, outputS, onProgress)
+            FileInputStream(sourceFile).use { inputS ->
+                copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
             }
         }
     }
@@ -798,12 +853,13 @@ object Backup {
     private fun copyBackup(
         rootFile: File,
         fileName: String,
+        sourceFile: File = File(zipFilePath),
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
-        FileInputStream(File(zipFilePath)).use { inputS ->
+        FileInputStream(sourceFile).use { inputS ->
             val file = FileUtils.createFileIfNotExist(rootFile, fileName)
             FileOutputStream(file).use { outputS ->
-                copyStreamWithProgress(inputS, outputS, onProgress)
+                copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
             }
         }
     }
@@ -811,9 +867,10 @@ object Backup {
     private fun copyStreamWithProgress(
         inputS: InputStream,
         outputS: OutputStream,
+        sourceFile: File,
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)?
     ) {
-        val totalBytes = File(zipFilePath).length()
+        val totalBytes = sourceFile.length()
         val buffer = ByteArray(COPY_BUFFER_SIZE)
         var copied = 0L
         while (true) {

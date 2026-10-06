@@ -56,25 +56,25 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             }
         }
 
-    /** 上次成功上传的资源包内容 SHA-256（资源未变化时跳过重新上传） */
-    var lastAssetsZipHash: String?
-        get() = getString("lastAssetsZipHash", null)
+    /** 上次成功备份的资源源文件指纹（路径+大小+mtime），未变化时跳过打包与上传 */
+    var lastAssetsFingerprint: String?
+        get() = getString("lastAssetsFingerprint", null)
         set(value) {
             if (value != null) {
-                putString("lastAssetsZipHash", value)
+                putString("lastAssetsFingerprint", value)
             } else {
-                remove("lastAssetsZipHash")
+                remove("lastAssetsFingerprint")
             }
         }
 
-    /** 上次资源包上传目标（云类型+文件名），与哈希配套判定是否可跳过上传 */
-    var lastAssetsZipTarget: String?
-        get() = getString("lastAssetsZipTarget", null)
+    /** 上次资源包备份目标（云类型+文件名），与指纹配套判定是否可跳过 */
+    var lastAssetsTarget: String?
+        get() = getString("lastAssetsTarget", null)
         set(value) {
             if (value != null) {
-                putString("lastAssetsZipTarget", value)
+                putString("lastAssetsTarget", value)
             } else {
-                remove("lastAssetsZipTarget")
+                remove("lastAssetsTarget")
             }
         }
 
