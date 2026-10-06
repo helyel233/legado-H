@@ -13,7 +13,6 @@ import io.legado.app.data.repository.debug.DebugEventCenter
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
-import io.legado.app.help.storage.RestoreJournal
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.debug.DebugCategory
 import io.legado.app.model.debug.DebugEvent
@@ -83,7 +82,6 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
     private fun handleException(ex: Throwable?) {
         if (ex == null) return
         LocalConfig.appCrash = true
-        RestoreJournal.markCrash()
         //记录到调试事件中心（分类：崩溃），便于下次启动后在调试日志页回看
         DebugLogScope.launch {
             runCatching {

@@ -128,28 +128,19 @@ object Restore {
         return bookshelfRebuildPending.also { bookshelfRebuildPending = false }
     }
 
-    suspend fun restore(context: Context, uri: Uri) {
+    suspend fun restore(context: Context, uri: Uri, assetsUris: List<Uri> = emptyList()) {
         LogUtils.d(TAG, "开始恢复备份 uri:$uri")
         kotlin.runCatching {
-            if (uri.isContentScheme()) {
-                val tempArchive = File(context.cacheDir, "restore_${UUID.randomUUID()}.zip")
-                try {
-                    DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use { input ->
-                        BackupArchiveExtractor.copyToTemporaryFile(input, tempArchive)
+            restoreLocked(Backup.backupPath) {
+                extractUriToBackupPath(context, uri).getOrThrow()
+                // 资源包（字体/背景图/头像）与主包解压到同一目录，恢复逻辑按条目前缀统一处理；
+                // 单个资源包失败不阻断主包恢复。
+                assetsUris.forEach { assetsUri ->
+                    runCatching { extractUriToBackupPath(context, assetsUri) }.onFailure {
+                        AppLog.put("恢复资源包出错\n${it.localizedMessage}", it)
                     }
-                    BackupArchiveExtractor.extract(tempArchive, File(Backup.backupPath))
-                } finally {
-                    tempArchive.delete()
                 }
-            } else {
-                BackupArchiveExtractor.extract(File(uri.path!!), File(Backup.backupPath))
             }
-        }.onFailure {
-            AppLog.put("复制解压文件出错\n${it.localizedMessage}", it)
-            return
-        }
-        kotlin.runCatching {
-            restoreLocked(Backup.backupPath)
             LocalConfig.lastBackup = System.currentTimeMillis()
         }.onFailure {
             appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
@@ -157,20 +148,41 @@ object Restore {
         }
     }
 
-    suspend fun restoreLocked(path: String) {
+    private fun extractUriToBackupPath(context: Context, uri: Uri): Result<Unit> = runCatching {
+        if (uri.isContentScheme()) {
+            val tempArchive = File(context.cacheDir, "restore_${UUID.randomUUID()}.zip")
+            try {
+                DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use { input ->
+                    BackupArchiveExtractor.copyToTemporaryFile(input, tempArchive)
+                }
+                BackupArchiveExtractor.extract(tempArchive, File(Backup.backupPath))
+            } finally {
+                tempArchive.delete()
+            }
+        } else {
+            BackupArchiveExtractor.extract(File(uri.path!!), File(Backup.backupPath))
+        }
+    }
+
+    suspend fun restoreLocked(path: String, prepare: (suspend () -> Unit)? = null) {
         // 与 Backup 共用同一把锁：备份的删建与恢复的解压操作同一目录，必须互斥。
+        // 主包与资源包的下载解压也在锁内执行（prepare），避免自动备份的删建
+        // 把已解压内容清掉。
         Backup.mutex.withLock {
-            val journalGeneration = RestoreJournal.begin(RestoreJournal.buildSnapshotTargets(path))
             isRestoring = true
             try {
-                restore(path)
-                RestoreJournal.markPendingValidation(journalGeneration)
-            } catch (e: Throwable) {
-                RestoreJournal.rollbackNow(
-                    "恢复过程异常: ${e.localizedMessage}",
-                    journalGeneration
-                )
-                throw e
+                prepare?.invoke()
+                // 简单快照兑底：恢复前把将被覆盖的目标复制到临时快照，
+                // 失败时尽力复制回去；无状态机、无原子发布。
+                val snapshot = RestoreSnapshot.create(path)
+                try {
+                    restore(path)
+                } catch (e: Throwable) {
+                    snapshot.rollback("恢复过程异常: ${e.localizedMessage}")
+                    throw e
+                } finally {
+                    snapshot.delete()
+                }
             } finally {
                 isRestoring = false
             }
@@ -247,6 +259,7 @@ object Restore {
             }
         }
         restoreBookCharacters(path)
+        restoreGroupCovers(path)
         File(path, "servers.json").takeIf {
             it.exists()
         }?.runCatching {
@@ -535,6 +548,39 @@ object Restore {
         }.onFailure {
             AppLog.put("恢复定时任务出错\n${it.localizedMessage}", it)
             appCtx.toastOnUi("恢复定时任务失败，已保留当前任务")
+        }
+    }
+
+    /**
+     * 恢复书架分组封面图片：备份 covers/ 条目（来源 collectGroupCoverSources）
+     * 复制到应用 covers 目录，并改写指向旧设备绝对路径的分组 cover 引用。
+     */
+    private fun restoreGroupCovers(path: String) {
+        val sourceDir = File(path, "covers")
+        if (!sourceDir.isDirectory) return
+        val coversDir = appCtx.externalFiles.getFile("covers")
+        runCatching {
+            copyDir(sourceDir, coversDir)
+        }.onFailure {
+            AppLog.put("恢复分组封面出错\n${it.localizedMessage}", it)
+            return
+        }
+        runCatching {
+            appDb.bookGroupDao.all.forEach { group ->
+                val cover = group.cover ?: return@forEach
+                if (cover.isBlank()
+                    || cover.startsWith("http", true)
+                    || cover.isContentScheme()
+                ) return@forEach
+                if (File(cover).exists()) return@forEach
+                val name = File(cover).name.takeIf { it.isNotBlank() } ?: return@forEach
+                val restored = File(coversDir, name)
+                if (restored.isFile) {
+                    appDb.bookGroupDao.update(group.copy(cover = restored.absolutePath))
+                }
+            }
+        }.onFailure {
+            AppLog.put("修正分组封面路径出错\n${it.localizedMessage}", it)
         }
     }
 

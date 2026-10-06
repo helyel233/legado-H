@@ -57,7 +57,7 @@ import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.ReaderDataRepair
-import io.legado.app.help.storage.RestoreJournal
+import io.legado.app.help.storage.RestoreSnapshot
 import io.legado.app.model.BookCover
 import io.legado.app.service.AutoTaskService
 import io.legado.app.utils.ChineseUtils
@@ -104,8 +104,7 @@ class App : Application() {
         DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         Coroutine.async {
-            RestoreJournal.recoverIfNeeded("应用启动检测到上次恢复未完成")
-            RestoreJournal.markStableIfPending()
+            RestoreSnapshot.cleanupOrphans()
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")
             LogUtils.logDeviceInfo()
