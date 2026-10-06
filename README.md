@@ -95,7 +95,14 @@ cd legado-H
 
 ## 开源与致谢
 
-感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Rimchars/legado](https://github.com/Rimchars/legado)（「阅读 Archive」）——本项目直接继承自它的代码基线；感谢 [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC)（「阅读Color」）——本项目的段评快照评论体系与离线评论、缓存下载协调器、书架合集与首页自定义模块、正文插图与音频块播放均整体移植自该项目，相关代码中保留了来源注释；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进。定时任务功能感谢明月的贡献与支持。
+感谢 [gedoor/legado](https://github.com/gedoor/legado)、[Luoyacheng/legado](https://github.com/Luoyacheng/legado) 及上游贡献者；感谢 [Rimchars/legado](https://github.com/Rimchars/legado)（「阅读 Archive」）——本项目直接继承自它的代码基线；感谢 [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) 社区分支的优秀改进。定时任务功能感谢明月的贡献与支持。
+
+以下功能的移植来自社区分支，特此引用致谢：
+
+- [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC)（「阅读 Color」）：段评快照评论体系与离线评论、缓存下载协调器、书架合集与首页自定义模块、正文插图与音频块播放均整体移植自该项目，相关代码中保留了来源注释。
+- [skxingyu/legado-sk](https://github.com/skxingyu/legado-sk)（「SK 版」）：书架变动自动备份、恢复时按备份覆盖书架、换源列表点击当前源行提示。
+- [joestar817/legado_NG](https://github.com/joestar817/legado_NG)（「NG 版」）：每书独立阅读预设。
+- [GEd520/legados](https://github.com/GEd520/legados)（「辞晨版」）：调试悬浮球、WebViewPool 即用即毁池隔离。
 
 项目使用了 Rhino、Jsoup、OkHttp、Glide、Miuix、Paged.js 等开源组件；各组件保留各自许可。应用内使用的组件说明见 [开源许可](app/src/main/assets/LICENSE.md)。
 

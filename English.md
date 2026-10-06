@@ -79,7 +79,14 @@ JDK 17 and Android SDK 36 are required. The release signing key is kept locally 
 
 ## Credits
 
-Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC) ("Reading Color") — the review-snapshot and offline-comment system, the cache download coordinator, bookshelf collections with homepage modules and inline illustrations with audio blocks are ported from it, with source notes kept in the code; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements LegadoH builds on. Thanks to Mingyue for the scheduled task contribution.
+Thanks to [gedoor/legado](https://github.com/gedoor/legado), [Luoyacheng/legado](https://github.com/Luoyacheng/legado) and their contributors; thanks to [Rimchars/legado](https://github.com/Rimchars/legado) ("Reading Archive") — this project is built directly on its codebase; thanks to [Suml-1/Legado_Max](https://github.com/Suml-1/Legado_Max) for the community improvements LegadoH builds on. Thanks to Mingyue for the scheduled task contribution.
+
+The following features are ported from community forks, with special thanks:
+
+- [CCSSNE/legadoC](https://github.com/CCSSNE/legadoC) ("Reading Color"): the review-snapshot and offline-comment system, the cache download coordinator, bookshelf collections with homepage modules, and inline illustrations with audio blocks are ported from it, with source notes kept in the code.
+- [skxingyu/legado-sk](https://github.com/skxingyu/legado-sk) ("SK"): automatic backup on shelf changes, restore-overwrites-shelf option, and the current-source hint in the change-source dialog.
+- [joestar817/legado_NG](https://github.com/joestar817/legado_NG) ("NG"): per-book independent reading presets.
+- [GEd520/legados](https://github.com/GEd520/legados) ("Cichen"): the debug floating ball, and the WebViewPool use-and-destroy scope isolation.
 
 Rhino, Jsoup, OkHttp, Glide, Miuix, Paged.js and other open-source components are used by this project; each keeps its own license. See the [third-party license notices](app/src/main/assets/LICENSE.md).
 
