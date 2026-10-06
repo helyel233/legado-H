@@ -17,6 +17,8 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3CapacityFullException
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -110,9 +112,13 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             waitDialog.setText(R.string.restore)
             waitDialog.show()
             val task = Coroutine.async {
-                Restore.restore(appCtx, uri)
-            }.onFinally {
+                findLocalAssetsUris()
+            }.onSuccess { assetsUris ->
                 waitDialog.dismiss()
+                askLocalRestore(uri, assetsUris)
+            }.onError {
+                waitDialog.dismiss()
+                askLocalRestore(uri, emptyList())
             }
             waitDialog.setOnCancelListener {
                 task.cancel()
@@ -800,10 +806,31 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun restoreWebDav(name: String) {
+        Coroutine.async {
+            AppCloudStorage.listAssetsBackupNames()
+        }.onError {
+            startCloudRestore(name, emptyList())
+        }.onSuccess { assetsNames ->
+            if (assetsNames.isEmpty()) {
+                startCloudRestore(name, emptyList())
+            } else {
+                view?.post {
+                    showComposeConfirmDialog(
+                        title = getString(R.string.restore),
+                        message = "检测到资源文件包\n${assetsNames.joinToString("\n")}\n是否一并恢复字体、背景图等资源？",
+                        onPositive = { startCloudRestore(name, assetsNames) },
+                        onNegative = { startCloudRestore(name, emptyList()) }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun startCloudRestore(name: String, assetsFileNames: List<String>) {
         waitDialog.setText(R.string.restore)
         waitDialog.show()
         val task = Coroutine.async {
-            AppCloudStorage.restore(name)
+            AppCloudStorage.restore(name, assetsFileNames)
         }.onError {
             AppLog.put("云端恢复出错\n${it.localizedMessage}", it)
             appCtx.toastOnUi("云端恢复出错\n${it.localizedMessage}")
@@ -820,6 +847,57 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             title = getString(R.string.select_restore_file)
             mode = HandleFileContract.FILE
             allowExtensions = arrayOf("zip")
+        }
+    }
+
+    /**
+     * 本地恢复的资源包发现：主包与资源包都同步在备份路径目录下，
+     * 从该目录枚举 backup_assets 前缀的 zip（附带显示名供弹窗确认）；
+     * 目录不可枚举时返回空。
+     */
+    private suspend fun findLocalAssetsUris(): List<Pair<Uri, String>> {
+        val path = AppConfig.backupPath
+        if (path.isNullOrBlank()) return emptyList()
+        return runCatching {
+            if (path.isContentScheme()) {
+                DocumentFile.fromTreeUri(appCtx, Uri.parse(path))?.listFiles()
+                    ?.filter { it.isFile && it.name?.startsWith("backup_assets") == true }
+                    ?.mapNotNull { doc -> doc.name?.let { doc.uri to it } }
+                    .orEmpty()
+            } else {
+                java.io.File(path).listFiles()
+                    ?.filter { it.isFile && it.name.startsWith("backup_assets") }
+                    ?.map { Uri.fromFile(it) to it.name }
+                    .orEmpty()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun askLocalRestore(uri: Uri, assetsUris: List<Pair<Uri, String>>) {
+        if (assetsUris.isEmpty()) {
+            startLocalRestore(uri, emptyList())
+            return
+        }
+        view?.post {
+            showComposeConfirmDialog(
+                title = getString(R.string.restore),
+                message = "备份路径下检测到资源文件包\n${assetsUris.joinToString("\n") { it.second }}\n是否一并恢复字体、背景图等资源？",
+                onPositive = { startLocalRestore(uri, assetsUris.map { it.first }) },
+                onNegative = { startLocalRestore(uri, emptyList()) }
+            )
+        }
+    }
+
+    private fun startLocalRestore(uri: Uri, assetsUris: List<Uri>) {
+        waitDialog.setText(R.string.restore)
+        waitDialog.show()
+        val task = Coroutine.async {
+            Restore.restore(appCtx, uri, assetsUris)
+        }.onFinally {
+            waitDialog.dismiss()
+        }
+        waitDialog.setOnCancelListener {
+            task.cancel()
         }
     }
 

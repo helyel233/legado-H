@@ -23,6 +23,7 @@ import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.cloud.WebDavCloudStorageBackend
 import io.legado.app.lib.webdav.ObjectNotFoundException
 import io.legado.app.model.remote.RemoteBookWebDav
+import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.AlphanumComparator
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
@@ -40,6 +41,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import splitties.init.appCtx
 import java.io.File
+import java.util.UUID
 
 object AppCloudStorage {
 
@@ -84,20 +86,50 @@ object AppCloudStorage {
     suspend fun getBackupNames(): ArrayList<String> {
         ensureNetwork()
         val files = backupFiles()
+            // 资源包不作为独立恢复项出现，云端恢复时单独询问
+            .filter { !it.displayName.startsWith("backup_assets") }
             .sortedWith { o1, o2 -> AlphanumComparator.compare(o1.displayName, o2.displayName) }
             .reversed()
         return ArrayList(files.map { it.displayName })
     }
 
-    suspend fun restore(name: String) {
-        val location = findBackupLocation(name)
-        if (location != null && type == CloudStorageType.S3) {
-            s3Backend.downloadTo(location.containerId, name, File(Backup.zipFilePath), true)
-        } else {
-            storage(S3ContainerScope.MAIN_BACKUP).downloadTo(name, File(Backup.zipFilePath), true)
+    suspend fun restore(name: String, assetsFileNames: List<String> = emptyList()) {
+        // 主包与资源包的下载解压在 Backup.mutex 锁内执行（prepare），
+        // 避免自动备份的删建把已解压内容清掉；主包下载/解压失败即中断恢复。
+        Restore.restoreLocked(Backup.backupPath) {
+            val location = findBackupLocation(name)
+            if (location != null && type == CloudStorageType.S3) {
+                s3Backend.downloadTo(location.containerId, name, File(Backup.zipFilePath), true)
+            } else {
+                storage(S3ContainerScope.MAIN_BACKUP).downloadTo(name, File(Backup.zipFilePath), true)
+            }
+            BackupArchiveExtractor.extract(File(Backup.zipFilePath), File(Backup.backupPath))
+            // 资源包（字体/背景图/头像/分组封面）与主包解压到同一目录，恢复逻辑按条目前缀统一处理；
+            // 单个资源包失败不阻断主包恢复。
+            assetsFileNames.forEach { assetsName ->
+                val assetsZip = File(appCtx.cacheDir, "restore_assets_${UUID.randomUUID()}.zip")
+                try {
+                    storage(S3ContainerScope.MAIN_BACKUP).downloadTo(assetsName, assetsZip, true)
+                    BackupArchiveExtractor.extract(assetsZip, File(Backup.backupPath))
+                } catch (e: Exception) {
+                    io.legado.app.constant.AppLog.put("恢复资源包出错 $assetsName\n${e.localizedMessage}", e)
+                } finally {
+                    assetsZip.delete()
+                }
+            }
         }
-        BackupArchiveExtractor.extract(File(Backup.zipFilePath), File(Backup.backupPath))
-        Restore.restoreLocked(Backup.backupPath)
+    }
+
+    /**
+     * 云端资源包文件名列表（backup_assets 前缀），供云端恢复时询问用户是否一并恢复。
+     * 列取失败返回空列表，不应因此中断恢复流程。
+     */
+    suspend fun listAssetsBackupNames(): List<String> {
+        return runCatching {
+            storage(S3ContainerScope.MAIN_BACKUP).listFiles("")
+                .map { it.displayName }
+                .filter { it.startsWith("backup_assets") }
+        }.getOrDefault(emptyList())
     }
 
     suspend fun hasBackup(name: String): Boolean {
@@ -436,6 +468,35 @@ object AppCloudStorage {
             }
         }.onFailure {
             io.legado.app.constant.AppLog.put("恢复书架封面出错\n${it.localizedMessage}", it)
+        }
+        // 下载完成后改写失效的本地封面路径：书库里的 coverUrl 指向旧设备绝对路径，
+        // 文件已还原到 covers/ 目录，不改写界面永远空白。
+        normalizeBookCoverPaths()
+    }
+
+    private fun normalizeBookCoverPaths() {
+        val coversDir = appCtx.externalFiles.getFile("covers")
+        if (!coversDir.isDirectory) return
+        appDb.bookDao.all.forEach { book ->
+            val display = book.getDisplayCover()
+            if (display.isNullOrBlank()
+                || display.startsWith("http", true)
+                || display.isContentScheme()
+            ) return@forEach
+            if (File(display).exists()) return@forEach
+            val restoredFile = if (book.isLocal) {
+                // 本地书封面按 md516(bookUrl) 命名，扩展名可能不同
+                LocalBook.findCoverPath(book)
+            } else {
+                File(coversDir, File(display).name).takeIf { it.isFile }?.absolutePath
+            }
+            val newCover = restoredFile ?: return@forEach
+            if (book.customCoverUrl == display) {
+                book.customCoverUrl = newCover
+            } else {
+                book.coverUrl = newCover
+            }
+            appDb.bookDao.update(book)
         }
     }
 

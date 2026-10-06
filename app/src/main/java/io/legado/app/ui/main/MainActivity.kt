@@ -103,6 +103,7 @@ import io.legado.app.ui.widget.MainTopBarView
 import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.ui.widget.compose.ComposeThemeImageLayer
 import io.legado.app.ui.widget.compose.ComposeThemeImageState
+import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.text.BadgeView
 import io.legado.app.utils.isCreated
@@ -2264,7 +2265,28 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
                     cancelButton()
                     okButton {
-                        viewModel.restoreWebDav(lastBackupFile.displayName)
+                        lifecycleScope.launch {
+                            val assetsNames = withContext(IO) {
+                                runCatching { AppCloudStorage.listAssetsBackupNames() }
+                                    .getOrDefault(emptyList())
+                            }
+                            if (assetsNames.isEmpty()) {
+                                viewModel.restoreWebDav(lastBackupFile.displayName)
+                                return@launch
+                            }
+                            showComposeConfirmDialog(
+                                title = getString(R.string.restore),
+                                message = "检测到资源文件包，是否一并恢复字体、背景图等资源？",
+                                positiveText = "全部恢复",
+                                negativeText = "仅主包",
+                                onPositive = {
+                                    viewModel.restoreWebDav(lastBackupFile.displayName, assetsNames)
+                                },
+                                onNegative = {
+                                    viewModel.restoreWebDav(lastBackupFile.displayName)
+                                }
+                            )
+                        }
                     }
                 }
             }

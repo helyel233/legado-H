@@ -259,9 +259,9 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun restoreWebDav(name: String) {
+    fun restoreWebDav(name: String, assetsFileNames: List<String> = emptyList()) {
         execute {
-            AppCloudStorage.restore(name)
+            AppCloudStorage.restore(name, assetsFileNames)
         }
     }
 
