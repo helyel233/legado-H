@@ -559,11 +559,17 @@ object Backup {
     }
 
     /**
-     * 收集阅读界面选择的字体文件：readConfig 各样式的 textFont 引用的字体本体
-     * （@font:名 与绝对路径均支持），直接以 fonts/ 前缀压入 zip，
-     * 恢复端将文件还原到应用私有 font 目录后引用即可命中。
+     * 收集阅读字体：应用私有 font 目录整个字体库（阅读菜单「字体」选择列表的全部来源，
+     * 恢复后选择列表完整）+ 各样式引用的字体本体（@font:名 与绝对路径均支持），
+     * 直接以 fonts/ 前缀压入 zip，恢复端将文件还原到应用私有 font 目录后引用即可命中。
      */
     private fun collectReaderFontSources(): List<ZipUtils.ZipSource> {
+        val sources = arrayListOf<ZipUtils.ZipSource>()
+        // 字体库目录整个打包；字体选择列表（AppFont.list）即扫描此目录
+        val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
+        if (fontDir.isDirectory && fontDir.listFiles()?.any { it.isFile } == true) {
+            sources.add(ZipUtils.ZipSource(fontDir, fontsDirName))
+        }
         val refs = linkedSetOf<String>()
         ReadBookConfig.allLayoutConfigs().forEach { config ->
             config.textFont.takeIf { it.isNotBlank() }?.let(refs::add)
@@ -577,13 +583,15 @@ object Backup {
         ).forEach { key ->
             appCtx.getPrefString(key)?.takeIf { it.isNotBlank() }?.let(refs::add)
         }
-        if (refs.isEmpty()) return emptyList()
+        // 引用的字体不在字体库目录内时（绝对路径引用）单独补上，避免与目录条目重复
         val files = refs.mapNotNull { resolveReaderFontFile(it) }
+            .filter { !it.absolutePath.startsWith(fontDir.absolutePath + File.separator) }
             .distinctBy { it.absolutePath }
-        if (files.isNotEmpty()) {
-            AppLog.put("备份阅读字体 ${files.size} 个")
+        files.forEach { sources.add(ZipUtils.ZipSource(it, fontsDirName)) }
+        if (sources.isNotEmpty()) {
+            AppLog.put("备份阅读字体库 ${sources.size} 项")
         }
-        return files.map { ZipUtils.ZipSource(it, fontsDirName) }
+        return sources
     }
 
     private fun resolveReaderFontFile(ref: String): File? {
