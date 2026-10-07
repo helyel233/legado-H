@@ -15,8 +15,6 @@ import splitties.init.appCtx
 
 object AppUpdateConfig {
 
-    const val STRATEGY_GITEE_THEN_GITHUB = "gitee_then_github"
-    const val STRATEGY_GITEE_ONLY = "gitee_only"
     const val STRATEGY_GITHUB_ONLY = "github_only"
     const val INTERNAL_BETA_KEY_HEADER = "X-Download-Key"
 

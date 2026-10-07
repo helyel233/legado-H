@@ -10,9 +10,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 object AppUpdate {
 
-    val giteeUpdate: AppUpdateInterface by lazy {
-        AppUpdateGitee
-    }
     val githubUpdate: AppUpdateInterface by lazy {
         AppUpdateGitHub
     }
@@ -186,32 +183,7 @@ object AppUpdate {
         }
 
         private suspend fun checkOfficialNow(): UpdateInfo {
-            return when (AppUpdateConfig.strategy) {
-                AppUpdateConfig.STRATEGY_GITEE_ONLY -> AppUpdateGitee.checkNow()
-                AppUpdateConfig.STRATEGY_GITHUB_ONLY -> AppUpdateGitHub.checkNow()
-                else -> checkGiteeThenGithub()
-            }
-        }
-
-        private suspend fun checkGiteeThenGithub(): UpdateInfo {
-            return try {
-                AppUpdateGitee.checkNow()
-            } catch (giteeError: Throwable) {
-                try {
-                    AppUpdateGitHub.checkNow()
-                } catch (githubError: Throwable) {
-                    if (isLatestVersionError(giteeError) && !isLatestVersionError(githubError)) {
-                        throw githubError
-                    }
-                    if (isLatestVersionError(githubError)) {
-                        throw githubError
-                    }
-                    throw NoStackTraceException(
-                        "Gitee 更新失败: ${giteeError.localizedMessage ?: giteeError.message ?: giteeError}\n" +
-                            "GitHub 更新失败: ${githubError.localizedMessage ?: githubError.message ?: githubError}"
-                    )
-                }
-            }
+            return AppUpdateGitHub.checkNow()
         }
     }
 
