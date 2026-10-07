@@ -4,6 +4,12 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**v3.2610071125 · 2026/10/07**
+
+- 修复 Compose retained store 跨 Activity 复用竞态：WaitDialog、NumberPickerDialog 等 ComposeView 设置唯一 id，避免无 id 时跨窗口共享
+- 恢复完成后由 RECREATE 改为整应用重启，规避多 Activity 同时重建击穿 Compose「tried to enter composition twice」断言（vivo / Android 16 实测）
+- ReadAloudSystemFloatingWindow、ShareNotePreviewOverlay、TextActionMenu 等同步调整
+
 **v3.2610070743 · 2026/10/07**
 
 - 重写恢复流程：恢复过程异常时自动回滚到恢复前状态，不再出现恢复失败中断报错
