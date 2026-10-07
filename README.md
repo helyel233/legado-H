@@ -35,11 +35,11 @@ LegadoH 不内置任何书籍或书源内容，你可以在应用内自行添加
 
 ## 下载
 
-前往 [GitHub Releases](https://github.com/helyel233/legado-H/releases) 获取最新安装包（tag 前缀 `legadoh-`），应用内「我的 → 关于 → 检查更新」同样指向本仓库 Releases。
+前往 [GitHub Releases](https://github.com/helyel233/legado-H/releases) 获取最新安装包（tag 前缀 `H-`），应用内「我的 → 关于 → 检查更新」同样指向本仓库 Releases。
 
 - 包名：`io.legado.app.LegadoH`，可与旧版「阅读 Archive」（`io.legado.app.Archive`）在设备上**共存**，互不影响。
 - 两版数据完全独立；可从旧版的 WebDAV/本地备份一键恢复书源、书架与阅读配置。
-- 每次发布同时提供正式版（arm64-v8a，LegadoH 签名）与调试版（全 ABI，debug 签名）两个安装包。
+- 每次发布同时提供 arm64-v8a 与 armeabi-v7a 两个 ABI 的正式签名安装包。
 
 ## 功能总览
 

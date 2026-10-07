@@ -21,7 +21,7 @@
 | APK 文件名 | `legado-<abi>_app_H.<x.y>_<CODE>.apk`（CI 自动生成） | `legado-arm64-v8a_app_H.1.0_1337.apk` |
 
 - CHANGELOG 章节命名自 1.0 起为 `## <major>.<minor> 版（日期）`，如 `## 1.0 版（2026-10-07）`；1.0 之前的旧「第 N 版」章节保留作历史记录，不再新增。
-- `app/build.gradle` 默认 `version = "3." + releaseTime()` 仅作本地调试兜底；发布一律由 CI 传 `-PVERSION_NAME=H.x.y -PVERSION_CODE=<提交数>` 覆盖，不要让 archive 的 `3.` 出现在任何发布产物中。
+- `app/build.gradle` 默认 `version = "H.dev." + releaseTime()` 仅作本地调试兜底；发布一律由 CI 传 `-PVERSION_NAME=H.x.y -PVERSION_CODE=<基线+提交数>` 覆盖，不要让 archive 的 `3.` 出现在任何发布产物中。
 
 ### 版本号与包名解析约束（应用内检查更新依赖）
 
@@ -32,7 +32,7 @@
 ## 2. 发布前准备（全部完成后再触发 CI）
 
 1. **定稿 `CHANGELOG.md`**：顶部新增 `## <x.y> 版（日期）` 小节并写全本次变更（新增/优化/修复）。⚠️ CI 直接以仓库中的 `CHANGELOG.md` 作为 Release 正文与更新通道说明，**必须在触发 CI 前定稿并提交**，触发后再改不生效。
-2. **更新 `app/src/main/assets/updateLog.md`**：在「## LegadoH」标题下插入新版本条目（格式沿用 `**vH.<x.y> · {YYYY/MM/DD}**` + 要点列表）。该文件随 APK 打包，供「我的-关于-更新日志」显示。⚠️ 必须在触发 CI 前更新并提交，否则包内更新日志滞后（历史上曾因此重建双包重传，浪费约 20 分钟）。注意：截至 1.0 发布，该文件顶部仍是 v3.2610071125 条目，**下个版本发布时必须补 H 系列条目**。
+2. **更新 `app/src/main/assets/updateLog.md`**：在「## LegadoH」标题下插入新版本条目（格式沿用 `**vH.<x.y> · {YYYY/MM/DD}**` + 要点列表）。该文件随 APK 打包，供「我的-关于-更新日志」显示。⚠️ 必须在触发 CI 前更新并提交，否则包内更新日志滞后（历史上曾因此重建双包重传，浪费约 20 分钟）。其下方的 v3.x 历史条目保留作存档，不再新增。
 3. 确认本次改动不含 `docs/移植计划.md`。
 4. 确认 `.github/workflows/android-fast-release.yml` 保持 H 风格（见第 5 节）；改动 workflow 后做字节级复核（缩进、续行符是否被写成 `\\`）。
 5. 功能代码按 Conventional Commits 分功能提交；共享文件（strings.xml 多 locale 变体）用临时删行、提交后再恢复的方式实现原子拆分。
@@ -101,7 +101,7 @@ git push origin "H-<x.y>"
 - 历史陷阱仍适用于本地构建：
   - release 与 debug **严禁并行构建**（共享 Gradle daemon 堆内存会 OOM）；release 跑完先 `./gradlew --stop` 再构建 debug。
   - `gradle.properties` 保持 `jvmargs=-Xmx4g`、`configuration-cache=false`（configuration-cache 与含 WeakHashMap 的自定义 task 不兼容）。
-  - 任何变体构建都**显式传 `-PVERSION_NAME/-PVERSION_CODE`**，否则走 `3.` 默认方案。
+  - 任何变体构建都**显式传 `-PVERSION_NAME/-PVERSION_CODE`**，否则走 `H.dev.` 默认方案。
   - 构建输出文件名不含变体尾段，需手动重命名并 `apksigner verify --print-certs` 验签。
 - 本地产物仅供自测，**不作为发布渠道**。
 

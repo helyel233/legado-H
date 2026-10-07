@@ -22,10 +22,11 @@ Ongoing improvements from sibling forks are also ported in — such as [legadoC]
 
 ## Download
 
-Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/releases) (tag prefix `legadoh-`); the in-app "Me → About → Check for updates" entry points to the same Releases page.
+Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/releases) (tag prefix `H-`); the in-app "Me → About → Check for updates" entry points to the same Releases page.
 
 - Package name: `io.legado.app.LegadoH`. It can be installed **side by side** with the old "Reading Archive" (`io.legado.app.Archive`).
 - The two versions keep data separate; sources, bookshelf and reading settings can be restored in one tap from an old WebDAV/local backup.
+- Each release provides both arm64-v8a and armeabi-v7a release-signed APKs.
 
 ## Features
 
