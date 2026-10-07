@@ -131,6 +131,10 @@ class ReadMenu @JvmOverloads constructor(
                 }
             }
             if (isSunMax) {
+                //注册前先反注册旧 observer，避免重复调用累积多个监听
+                contentObserver?.let {
+                    context.contentResolver.unregisterContentObserver(it)
+                }
                 contentObserver = object : ContentObserver(buildMainHandler()) {
                     override fun onChange(selfChange: Boolean, uri: Uri?) {
                         super.onChange(selfChange, uri)

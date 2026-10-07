@@ -18,8 +18,8 @@ data class AppReleaseInfo(
     val versionName: String = versionInfo?.first.orEmpty()
     val versionCode: Long = versionInfo?.second ?: 0L
     val abi: String? = when {
-        name.contains("arm64-v8a", ignoreCase = true) -> "arm64-v8a"
-        name.contains("armeabi-v7a", ignoreCase = true) -> "armeabi-v7a"
+        name.contains("arm64", ignoreCase = true) -> "arm64-v8a"
+        name.contains("armeabi", ignoreCase = true) -> "armeabi-v7a"
         name.contains("x86_64", ignoreCase = true) -> "x86_64"
         name.contains("x86", ignoreCase = true) -> "x86"
         else -> null
@@ -75,7 +75,9 @@ data class Asset(
     val url: String
 ) {
     val isValid: Boolean
-        get() = (contentType == "application/vnd.android.package-archive") && (state == "uploaded")
+        get() = state == "uploaded" &&
+            name.endsWith(".apk", ignoreCase = true) &&
+            !contentType.startsWith("text/html", ignoreCase = true)
 
     fun assetToAppReleaseInfo(preRelease: Boolean, note: String): AppReleaseInfo {
         val instant = Instant.parse(createdAt)

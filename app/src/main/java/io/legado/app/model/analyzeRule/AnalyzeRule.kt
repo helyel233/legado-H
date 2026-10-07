@@ -493,7 +493,7 @@ class AnalyzeRule(
             }
         }
         result?.let {
-            return it as List<Any>
+            return it as? List<Any> ?: arrayListOf(it)
         }
         return ArrayList()
     }
@@ -942,7 +942,7 @@ class AnalyzeRule(
 
     override fun ajax(url: Any, callTimeout: Long?): String? {
         val urlStr = if (url is List<*>) {
-            url.firstOrNull().toString()
+            url.firstOrNull()?.toString().orEmpty()
         } else {
             url.toString()
         }

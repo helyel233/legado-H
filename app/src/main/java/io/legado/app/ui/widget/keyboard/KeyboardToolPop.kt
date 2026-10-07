@@ -57,6 +57,7 @@ class KeyboardToolPop(
     private val adapter = Adapter(context)
     private var mIsSoftKeyBoardShowing = false
     var initialPadding = 0
+    private var attachedDecorView: View? = null
 
     init {
         contentView = binding.root
@@ -70,11 +71,21 @@ class KeyboardToolPop(
     }
 
     fun attachToWindow(window: Window) {
+        //先移除残留的旧监听，避免重复 attach 时在同一实例上累积监听
+        attachedDecorView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+        attachedDecorView = window.decorView
         window.decorView.viewTreeObserver.addOnGlobalLayoutListener(this)
         contentView.measure(
             View.MeasureSpec.UNSPECIFIED,
             View.MeasureSpec.UNSPECIFIED,
         )
+    }
+
+    override fun dismiss() {
+        //移除注册在 decorView 上的全局布局监听，避免 Popup 与 Activity 互相滞留
+        attachedDecorView?.viewTreeObserver?.removeOnGlobalLayoutListener(this)
+        attachedDecorView = null
+        super.dismiss()
     }
 
     override fun onGlobalLayout() {

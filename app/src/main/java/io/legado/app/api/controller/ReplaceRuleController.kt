@@ -79,7 +79,10 @@ object ReplaceRuleController {
             if (rule.pattern.isEmpty()) {
                 returnData.setErrorMsg("替换规则不能为空")
             }
-            val text = map["text"] as String
+            val text = map["text"]?.toString() ?: run {
+                returnData.setErrorMsg("text不能为空")
+                return returnData
+            }
             val content = try {
                 if (rule.isRegex) {
                     text.replace(
@@ -92,7 +95,8 @@ object ReplaceRuleController {
                     text.replace(rule.pattern, rule.replacement)
                 }
             } catch (e: Exception) {
-                e.stackTraceStr
+                returnData.setErrorMsg("替换规则测试失败: ${e.message}")
+                return returnData
             }
             returnData.setData(content)
         }

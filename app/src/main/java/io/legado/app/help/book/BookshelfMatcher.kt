@@ -2,7 +2,9 @@ package io.legado.app.help.book
 
 import io.legado.app.data.appDb
 import io.legado.app.domain.model.BookShelfState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,8 +32,16 @@ object BookshelfMatcher {
     private val _version = MutableStateFlow(0L)
     val version: StateFlow<Long> = _version
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile
+    private var started = false
+
     fun start() {
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+        synchronized(this) {
+            if (started) return //防止重复调用叠加永不停止的收集协程
+            started = true
+        }
+        scope.launch {
             appDb.bookDao.flowShelfKeys().collect { keys ->
                 synchronized(this@BookshelfMatcher) {
                     nameAuthorKeys.clear()

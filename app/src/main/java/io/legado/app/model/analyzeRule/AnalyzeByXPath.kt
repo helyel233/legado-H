@@ -2,6 +2,7 @@ package io.legado.app.model.analyzeRule
 
 import android.text.TextUtils
 import androidx.annotation.Keep
+import io.legado.app.utils.printOnDebug
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -42,10 +43,16 @@ class AnalyzeByXPath(doc: Any) {
 
     private fun getResult(xPath: String): List<JXNode>? {
         val node = jxNode
-        return if (node is JXNode) {
-            node.sel(xPath)
-        } else {
-            (node as JXDocument).selN(xPath)
+        return try {
+            if (node is JXNode) {
+                node.sel(xPath)
+            } else {
+                (node as JXDocument).selN(xPath)
+            }
+        } catch (e: Exception) {
+            //非法 XPath 规则降级为空结果，与其他解析器的容错行为保持一致
+            e.printOnDebug()
+            null
         }
     }
 

@@ -110,7 +110,7 @@ object BookChapterList {
                     val res = analyzeUrl.getStrResponseAwait() //控制并发访问
                     analyzeChapterList(
                         book, urlStr, res.url,
-                        res.body!!, tocRule, listRule, bookSource, false,
+                        res.body ?: "", tocRule, listRule, bookSource, false,
                         isFromBookInfo = isFromBookInfo
                     ).first
                 }.collect {

@@ -37,7 +37,7 @@ class ReviewSnapshotStatusDialog :
     private val binding by viewBinding(DialogReviewSnapshotStatusBinding::bind)
     private val viewModel by activityViewModels<CacheManageViewModel>()
     private val adapter by lazy { ReviewSnapshotStatusAdapter(requireContext(), this) }
-    private val book: Book by lazy { requireArguments().getParcelable<Book>(ARG_BOOK)!! }
+    private val book: Book by lazy { requireArguments().getParcelable<Book>(ARG_BOOK) ?: Book() }
     private var loadJob: Job? = null
     private var retryCompletionJob: Job? = null
     private var reviewItems: List<ReviewSnapshotChapterItem> = emptyList()
@@ -48,6 +48,10 @@ class ReviewSnapshotStatusDialog :
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        if (book.bookUrl.isEmpty()) { //参数缺失（如异常重建）时直接关闭
+            dismissAllowingStateLoss()
+            return
+        }
         binding.btnRetryAll.background = UiCorner.softActionSelector(
             UiCorner.themeSurfaceCardColor(requireContext()),
             UiCorner.themeSurfaceMutedColor(requireContext()),

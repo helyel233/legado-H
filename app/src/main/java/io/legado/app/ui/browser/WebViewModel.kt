@@ -120,7 +120,7 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
         }
         if (refetchAfterSuccess) {
             execute {
-                val url = intent!!.getStringExtra("url")!!
+                val url = intent?.getStringExtra("url") ?: return@execute
                 val source = appDb.bookSourceDao.getBookSource(sourceOrigin)
                 if (html == null) {
                     html = AnalyzeUrl(

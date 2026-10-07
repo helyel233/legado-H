@@ -31,6 +31,7 @@ import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 
 
 class OkHttpStreamFetcher(
@@ -51,7 +52,8 @@ class OkHttpStreamFetcher(
     private var call: Call? = null
 
     companion object {
-        private val failUrl = hashSetOf<String>()
+        // loadData 在 Glide 线程读取，onResponse/onFailure 在 OkHttp 回调线程写入，需线程安全集合
+        private val failUrl: MutableSet<String> = ConcurrentHashMap.newKeySet()
     }
 
     override fun loadData(priority: Priority, callback: DataFetcher.DataCallback<in InputStream>) {

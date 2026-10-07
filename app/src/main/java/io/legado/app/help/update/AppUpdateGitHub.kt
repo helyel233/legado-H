@@ -20,11 +20,7 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         get() = AppVariant.OFFICIAL
 
     private suspend fun getLatestRelease(): List<AppReleaseInfo> {
-        val lastReleaseUrl = if (checkVariant.isBeta()) {
-            "https://api.github.com/repos/helyel233/legado-H/releases?per_page=10"
-        } else {
-            "https://api.github.com/repos/helyel233/legado-H/releases?per_page=10"
-        }
+        val lastReleaseUrl = "https://api.github.com/repos/helyel233/legado-H/releases?per_page=10"
         val res = okHttpClient.newCallResponse {
             url(AppUpdateConfig.applyGithubProxy(lastReleaseUrl))
         }
@@ -35,20 +31,12 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         if (body.isBlank()) {
             throw NoStackTraceException("获取新版本出错")
         }
-        if (!checkVariant.isBeta()) {
-            return GSON.fromJsonArray<GithubRelease>(body)
-                .getOrElse {
-                    throw NoStackTraceException("获取新版本出错" + it.localizedMessage)
-                }
-                .filterNot { it.isPreRelease }
-                .flatMap { it.gitReleaseToAppReleaseInfo() }
-                .sortedByDescending { it.createdAt }
-        }
-        return GSON.fromJsonObject<GithubRelease>(body)
+        return GSON.fromJsonArray<GithubRelease>(body)
             .getOrElse {
                 throw NoStackTraceException("获取新版本出错" + it.localizedMessage)
             }
-            .gitReleaseToAppReleaseInfo()
+            .filterNot { it.isPreRelease }
+            .flatMap { it.gitReleaseToAppReleaseInfo() }
             .sortedByDescending { it.createdAt }
     }
 

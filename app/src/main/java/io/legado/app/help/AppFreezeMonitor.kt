@@ -104,8 +104,15 @@ object AppFreezeMonitor {
         }
         MainThreadStallWatchdog.start()
 
-        var previous = SystemClock.uptimeMillis()
+        scheduleFreezeChecker()
+    }
 
+    private var freezeRunnableScheduled = false
+
+    private fun scheduleFreezeChecker() {
+        if (freezeRunnableScheduled) return //防止重复 init 叠加常驻循环任务
+        freezeRunnableScheduled = true
+        var previous = SystemClock.uptimeMillis()
         val runnable = object : Runnable {
             override fun run() {
                 val current = SystemClock.uptimeMillis()
@@ -120,6 +127,8 @@ object AppFreezeMonitor {
 
                 if (AppConfig.recordLog) {
                     handler.postDelayed(this, 3000)
+                } else {
+                    freezeRunnableScheduled = false
                 }
             }
         }

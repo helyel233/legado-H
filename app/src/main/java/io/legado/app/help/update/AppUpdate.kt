@@ -82,8 +82,7 @@ object AppUpdate {
 
     fun isLatestVersionError(error: Throwable): Boolean {
         val message = error.message ?: return false
-        return error is NoStackTraceException &&
-            (message.contains("最新版本") || message.contains("鏈€鏂扮増鏈"))
+        return error is NoStackTraceException && message.contains("最新版本")
     }
 
     fun latestVersionError(): NoStackTraceException {

@@ -29,6 +29,8 @@ import io.legado.app.utils.isJson
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.removePref
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
@@ -58,8 +60,15 @@ object AppWebDav {
     val isJianGuoYun get() = rootWebDavUrl.startsWith(defaultWebDavUrl, true)
 
     init {
-        runBlocking {
-            upConfig()
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            // 主线程首次触达时异步初始化，避免阻塞等待网络导致 ANR
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                upConfig()
+            }
+        } else {
+            runBlocking {
+                upConfig()
+            }
         }
     }
 

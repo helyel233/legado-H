@@ -123,7 +123,13 @@ class AnalyzeByJSonPath(json: Any) {
     }
 
     internal fun getObject(rule: String): Any {
-        return ctx.read(rule)
+        return try {
+            ctx.read(rule)
+        } catch (e: Exception) {
+            //节点不存在或路径非法时返回空串，与 getString/getList 的降级行为保持一致
+            e.printOnDebug()
+            ""
+        }
     }
 
     internal fun getList(rule: String): ArrayList<Any>? {

@@ -1,6 +1,7 @@
 package io.legado.app.model.analyzeRule
 
 import androidx.annotation.Keep
+import io.legado.app.utils.printOnDebug
 import java.util.regex.Pattern
 
 @Keep
@@ -8,7 +9,13 @@ object AnalyzeByRegex {
 
     fun getElement(res: String, regs: Array<String>, index: Int = 0): List<String>? {
         var vIndex = index
-        val resM = Pattern.compile(regs[vIndex]).matcher(res)
+        val resM = try {
+            Pattern.compile(regs[vIndex]).matcher(res)
+        } catch (e: Exception) {
+            //规则被拼接了非法正则内容（如用户搜索词、网页内容），降级为匹配失败
+            e.printOnDebug()
+            return null
+        }
         if (!resM.find()) {
             return null
         }
@@ -17,7 +24,7 @@ object AnalyzeByRegex {
             // 新建容器
             val info = arrayListOf<String>()
             for (groupIndex in 0..resM.groupCount()) {
-                info.add(resM.group(groupIndex)!!)
+                info.add(resM.group(groupIndex) ?: "")
             }
             info
         } else {
@@ -31,7 +38,12 @@ object AnalyzeByRegex {
 
     fun getElements(res: String, regs: Array<String>, index: Int = 0): List<List<String>> {
         var vIndex = index
-        val resM = Pattern.compile(regs[vIndex]).matcher(res)
+        val resM = try {
+            Pattern.compile(regs[vIndex]).matcher(res)
+        } catch (e: Exception) {
+            e.printOnDebug()
+            return arrayListOf()
+        }
         if (!resM.find()) {
             return arrayListOf()
         }

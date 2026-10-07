@@ -36,9 +36,15 @@ fun Context.getSharedPreferences(
         // 创建自定义路径
         val file = File(dir)
         // 修改mPreferencesDir变量的值
+        val oldDir = fieldMPreferencesDir.get(objMBase)
         fieldMPreferencesDir.set(objMBase, file)
-        // 返回修改路径以后的 SharedPreferences :%FILE_PATH%/%fileName%.xml
-        return getSharedPreferences(fileName, Activity.MODE_PRIVATE)
+        try {
+            // 返回修改路径以后的 SharedPreferences :%FILE_PATH%/%fileName%.xml
+            return getSharedPreferences(fileName, Activity.MODE_PRIVATE)
+        } finally {
+            // 还原全局偏好目录，避免影响后续其他 SharedPreferences 的存取路径
+            fieldMPreferencesDir.set(objMBase, oldDir)
+        }
     } catch (e: NoSuchFieldException) {
         e.printOnDebug()
     } catch (e: IllegalArgumentException) {

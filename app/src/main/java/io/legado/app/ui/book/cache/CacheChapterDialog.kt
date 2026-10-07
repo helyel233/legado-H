@@ -41,7 +41,7 @@ class CacheChapterDialog :
         binding.toolBar.findViewById(R.id.search_view)
     }
     private val book: Book by lazy {
-        requireArguments().getParcelable<Book>("book")!!
+        requireArguments().getParcelable<Book>("book") ?: Book()
     }
     private var chapterLoadJob: Job? = null
     private var filter = CacheChapterFilter.ALL
@@ -52,6 +52,10 @@ class CacheChapterDialog :
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        if (book.bookUrl.isEmpty()) { //参数缺失（如异常重建）时直接关闭，避免空书引发后续错乱
+            dismissAllowingStateLoss()
+            return
+        }
         initView()
         loadChapters()
     }

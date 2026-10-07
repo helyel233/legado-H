@@ -73,7 +73,7 @@ class ColorPreference(context: Context, attrs: AttributeSet) : Preference(contex
     override fun onClick() {
         super.onClick()
         if (onShowDialogListener != null) {
-            onShowDialogListener!!.onShowColorPickerDialog(title as String, mColor)
+            onShowDialogListener!!.onShowColorPickerDialog(title?.toString().orEmpty(), mColor)
         } else if (showDialog) {
             val dialog = ColorPickerDialogCompat.newBuilder()
                 .setDialogType(dialogType)

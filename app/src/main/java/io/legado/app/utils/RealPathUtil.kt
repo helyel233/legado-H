@@ -34,6 +34,7 @@ object RealPathUtil {
             if (isExternalStorageDocument(uri)) {
                 val docId = DocumentsContract.getDocumentId(uri)
                 val split = docId.split(":")
+                if (split.size < 2) return null
                 val type = split[0]
                 if ("primary".equals(type, ignoreCase = true)) {
                     return Environment.getExternalStorageDirectory().toString() + "/" + split[1]
@@ -49,6 +50,7 @@ object RealPathUtil {
             } else if (isMediaDocument(uri)) {
                 val docId = DocumentsContract.getDocumentId(uri)
                 val split = docId.split(":").toTypedArray()
+                if (split.size < 2) return null
                 val type = split[0]
                 var contentUri: Uri? = null
                 when (type) {
@@ -72,6 +74,7 @@ object RealPathUtil {
             if (isExternalStorageDocument(uri)) {
                 val docId = DocumentsContract.getTreeDocumentId(uri)
                 val split = docId.split(":")
+                if (split.size < 2) return null
                 val type = split[0]
                 if ("primary".equals(type, ignoreCase = true)) {
                     return Environment.getExternalStorageDirectory().toString() + "/" + split[1]

@@ -691,9 +691,9 @@ class AnalyzeUrl(
      * 上传文件
      */
     suspend fun upload(fileName: String, file: Any, contentType: String): StrResponse {
+        val bodyMap = GSON.fromJsonObject<HashMap<String, Any>>(body).getOrNull() ?: HashMap()
         return getClient().newCallStrResponse(retry) {
             url(urlNoQuery)
-            val bodyMap = GSON.fromJsonObject<HashMap<String, Any>>(body).getOrNull()!!
             bodyMap.forEach { entry ->
                 if (entry.value.toString() == "fileRequest") {
                     bodyMap[entry.key] = mapOf(
@@ -945,7 +945,7 @@ class AnalyzeUrl(
         }
 
         fun setServerID(value: String?) {
-            serverID = if (value.isNullOrBlank()) null else value.toLong()
+            serverID = value?.trim()?.toLongOrNull()
         }
 
         fun getServerID(): Long? {
@@ -953,7 +953,7 @@ class AnalyzeUrl(
         }
 
         fun setWebViewDelayTime(value: String?) {
-            webViewDelayTime = if (value.isNullOrBlank()) null else value.toLong()
+            webViewDelayTime = value?.trim()?.toLongOrNull()
         }
 
         fun getWebViewDelayTime(): Long? {
