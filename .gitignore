@@ -44,3 +44,6 @@ cloudflare/**/.wrangler/
 /rb*.log
 /release-build*.log
 .legadoh/
+
+# 本地移植/对比工作文档（含 Max 仓库路径与未公开计划，不推送）
+docs/移植计划.md

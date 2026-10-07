@@ -343,6 +343,11 @@
             android:name=".ui.config.BubbleManageActivity"
             android:launchMode="standard" />
         <activity
+            android:name=".ui.config.coverhtml.CoverHtmlActivity"
+            android:configChanges="orientation|screenSize"
+            android:hardwareAccelerated="true"
+            android:launchMode="standard" />
+        <activity
             android:name=".ui.config.AdvancedTitleManageActivity"
             android:exported="false"
             android:launchMode="standard" />

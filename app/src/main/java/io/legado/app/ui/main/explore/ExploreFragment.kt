@@ -188,6 +188,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var usingSuiteDiscovery = false
     private var sourceMenuPopup: PopupWindow? = null
     private var tagFilterPopup: ModernActionPopup.Handle? = null
+    private var discoverMorePopup: ModernActionPopup.Handle? = null
     private var discoverSourceFlowJob: Job? = null
     private var discoverBookshelfFlowJob: Job? = null
     private var discoverWarmupJob: Job? = null
@@ -452,6 +453,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         sourceMenuPopup = null
         tagFilterPopup?.dismiss()
         tagFilterPopup = null
+        discoverMorePopup?.dismiss()
+        discoverMorePopup = null
         discoverWarmupJob?.cancel()
         discoverWarmupJob = null
         discoverSourceFlowJob?.cancel()
@@ -2000,6 +2003,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         binding.topBar.filterButton.setOnClickListener {
             showDiscoverTagFilterMenu()
         }
+        binding.topBar.moreButton.setOnClickListener {
+            showDiscoverMoreMenu(it)
+        }
         updateDiscoverTagFilterButtonState()
         updateDiscoverSearchButtonState()
     }
@@ -2010,6 +2016,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         val actionsWidth = listOf(
             binding.topBar.searchButton,
             binding.topBar.filterButton,
+            binding.topBar.moreButton,
             binding.topBar.loginButton
         ).filter { it.isVisible }.sumOf { it.measuredWidth.takeIf { width -> width > 0 } ?: it.layoutParams.width }
         val spacing = 36.dpToPx()
@@ -3170,6 +3177,23 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         binding.topBar.filterButton.isVisible = enabled
         binding.topBar.filterButton.isEnabled = enabled
         binding.topBar.filterButton.alpha = if (enabled) 1f else 0.45f
+    }
+
+    /** 三点菜单：作用于当前选中的发现书源（编辑书源 / 搜索书籍），与旧版长按书源菜单同一动作 */
+    private fun showDiscoverMoreMenu(anchor: View) {
+        val source = selectedDiscoverSourcePart
+        discoverMorePopup = ModernActionPopup.show(
+            anchor,
+            listOf(
+                ModernActionPopup.Action(title = getString(R.string.edit)) {
+                    source?.let { editSource(it.bookSourceUrl) }
+                },
+                ModernActionPopup.Action(title = getString(R.string.search)) {
+                    source?.let(::searchBook)
+                }
+            ),
+            discoverMorePopup
+        )
     }
 
     private fun showDiscoverTagFilterMenu() {

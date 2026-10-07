@@ -17,6 +17,7 @@ import android.view.ViewOutlineProvider
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.collection.LruCache
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import com.bumptech.glide.Priority
@@ -34,6 +35,7 @@ import io.legado.app.help.CoverDisplayResolver
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
+import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.lib.theme.backgroundColor
@@ -455,6 +457,14 @@ class CoverImageView @JvmOverloads constructor(
                 .centerCrop()
                 .into(this)
         } else {
+            // HTML 模板封面：无真实封面地址（含图集默认封面已由 resolver 处理）时，
+            // 用用户配置的 HTML 模板生成，模板自带书名作者，不再叠加书名
+            if (path.isNullOrBlank() && HtmlCoverRenderer.isApplicable(currentName)) {
+                drawNameOverlayForCurrentCover = false
+                loadedKey = newLoadKey
+                loadHtmlCover(currentName, currentAuthor, onLoadFinish)
+                return
+            }
             if (drawNameOverlayForCurrentCover && drawBookName && currentName != null) {
                 val pathName = if (drawBookAuthor){
                     currentName + currentAuthor
@@ -537,6 +547,41 @@ class CoverImageView @JvmOverloads constructor(
                 })
                 .into(this)
         }
+    }
+
+    /**
+     * 加载 HTML 模板封面（移植自 Max）。
+     *
+     * 渲染与缓存都委托给 [HtmlCoverRenderer]（固定 600x900 渲染，与控件实际像素尺寸无关），
+     * 这里只负责把结果贴到控件上；渲染失败回退默认封面。
+     */
+    private fun loadHtmlCover(bookName: String?, author: String?, onLoadFinish: (() -> Unit)?) {
+        currentJob?.cancel()
+        currentJob = CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val bitmap = HtmlCoverRenderer.load(bookName.orEmpty(), author)
+                setImageDrawable(bitmap?.toDrawable(resources) ?: BookCover.defaultDrawable)
+                loadedKey = loadKey
+                onLoadFinish?.invoke()
+            } catch (_: CancellationException) {
+                // Job 被取消，不执行回调
+            } catch (e: Exception) {
+                e.printStackTrace()
+                setImageDrawable(BookCover.defaultDrawable)
+                loadedKey = loadKey
+                onLoadFinish?.invoke()
+            }
+        }
+    }
+
+    /**
+     * 清除 HTML 封面渲染缓存。
+     *
+     * 在模板内容变更、切换选中模板、启用/禁用 HTML 封面时调用，
+     * 确保书架上的封面能及时刷新。
+     */
+    fun clearHtmlCoverCache() {
+        HtmlCoverRenderer.clearCache()
     }
 
     override fun onDetachedFromWindow() {

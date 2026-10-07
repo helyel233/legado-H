@@ -6,6 +6,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.model.BookCover
 import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
@@ -14,6 +15,7 @@ import io.legado.app.ui.config.compose.SettingChoiceSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
+import io.legado.app.ui.config.coverhtml.CoverHtmlActivity
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
@@ -83,6 +85,26 @@ class CoverConfigFragment : ComposeSettingFragment() {
                             checked = booleanSetting("useDefaultCover", false),
                             onCheckedChange = {
                                 updateBooleanSetting("useDefaultCover", it)
+                            }
+                        ),
+                        SettingSwitchSpec(
+                            key = PreferKey.coverHtmlEnable,
+                            title = getString(R.string.cover_html_enable),
+                            summary = getString(R.string.cover_html_enable_summary),
+                            checked = booleanSetting(PreferKey.coverHtmlEnable, false),
+                            searchKeys = listOf("coverHtml", "cover_html", "html"),
+                            onCheckedChange = {
+                                updateBooleanSetting(PreferKey.coverHtmlEnable, it)
+                                HtmlCoverRenderer.clearCache()
+                                refreshCoverCollection()
+                            }
+                        ),
+                        SettingActionSpec(
+                            key = KEY_COVER_HTML_CODE,
+                            title = getString(R.string.cover_html_code),
+                            summary = getString(R.string.cover_html_code_summary),
+                            onClick = {
+                                CoverHtmlActivity.start(requireContext())
                             }
                         ),
                         SettingActionSpec(
@@ -243,5 +265,6 @@ class CoverConfigFragment : ComposeSettingFragment() {
     companion object {
         private const val KEY_COVER_RULE = "coverRule"
         private const val KEY_COVER_COLLECTION_MANAGE = "coverCollectionManage"
+        private const val KEY_COVER_HTML_CODE = "coverHtmlCode"
     }
 }

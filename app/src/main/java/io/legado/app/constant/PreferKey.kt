@@ -25,6 +25,7 @@ object PreferKey {
     const val useDefaultCover = "useDefaultCover"
     const val loadCoverOnlyWifi = "loadCoverOnlyWifi"
     const val loadCoverHighQuality = "loadCoverHighQuality"
+    const val coverHtmlEnable = "coverHtmlEnable"
     const val bookCoverShadow = "bookCoverShadow"
     const val coverShowName = "coverShowName"
     const val coverShowAuthor = "coverShowAuthor"

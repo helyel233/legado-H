@@ -61,6 +61,13 @@ object BookCover {
         upDefaultCover()
     }
 
+    /** HTML 封面模板变量替换：支持 {{bookName}} 与 {{author}}（移植自 Max） */
+    fun renderHtmlTemplate(template: String, bookName: String, author: String): String {
+        return template
+            .replace("{{bookName}}", bookName)
+            .replace("{{author}}", author)
+    }
+
     @SuppressLint("UseCompatLoadingForDrawables")
     fun upDefaultCover() {
         var path: String?

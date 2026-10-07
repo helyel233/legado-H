@@ -378,10 +378,24 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     chapterListData.postValue(it)
                     tocLoadTracker.complete(request, book.bookUrl, it.size)
                 }.onError {
-                    chapterListData.postValue(emptyList())
                     tocLoadTracker.fail(request, book.bookUrl)
-                    AppLog.put("获取目录失败\n${it.localizedMessage}", it)
-                    context.toastOnUi(R.string.error_get_chapter_list)
+                    val oldChapters = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
+                    if (oldChapters.isNotEmpty()) {
+                        bookData.postValue(oldBook)
+                        chapterListData.postValue(oldChapters)
+                        AppLog.put(
+                            "${context.getString(R.string.toc_load_failed_using_cache)}\n${it.localizedMessage}",
+                            it
+                        )
+                        context.toastOnUi(R.string.toc_load_failed_using_cache)
+                    } else {
+                        chapterListData.postValue(emptyList())
+                        AppLog.put(
+                            "${context.getString(R.string.error_get_chapter_list)}\n${it.localizedMessage}",
+                            it
+                        )
+                        context.toastOnUi(R.string.error_get_chapter_list)
+                    }
                 }
         }
     }

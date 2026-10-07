@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.compose
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Paint
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +40,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import com.bumptech.glide.Glide
 import com.bumptech.glide.Priority
-import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.DecodeFormat
-import com.bumptech.glide.load.engine.GlideException
-import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
@@ -55,6 +53,7 @@ import io.legado.app.help.CoverThumbnailCache
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
+import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.lib.theme.backgroundColor
@@ -66,10 +65,22 @@ import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.textHeight
 import io.legado.app.utils.toStringArray
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val BOOK_COVER_ASPECT_RATIO = 0.75f
 private const val COVER_THUMB_WIDTH = 240
 private const val COVER_THUMB_HEIGHT = 320
+
+/** 单次封面请求超时；超时视为挂起，按失败处理 */
+private const val COVER_LOAD_TIMEOUT_MS = 12_000L
+
+/** 最多尝试次数（含首次） */
+private const val COVER_LOAD_ATTEMPTS = 2
+
+/** 相邻两次尝试的间隔 */
+private const val COVER_LOAD_RETRY_DELAY_MS = 1500L
 
 private var cachedDefaultDrawable: Drawable? = null
 private var cachedDefaultBitmap: Bitmap? = null
@@ -179,8 +190,10 @@ fun BookCoverImage(
     val cleanAuthor = remember(author) { author?.replace(AppPattern.bdRegex, "")?.trim() }
     val useThumb = preferThumb && !AppConfig.loadCoverHighQuality
     val hasRealCover = remember(path) { path.isRealCoverPath() }
-    val drawNameOverlay = allowNameOverlay
-        ?: ((AppConfig.useDefaultCover && !forcePath) || !hasRealCover)
+    // HTML 模板封面：无真实封面地址时用用户配置的 HTML 模板生成，模板自带书名作者，不叠加书名
+    val htmlCover = path.isNullOrBlank() && HtmlCoverRenderer.isApplicable(cleanName)
+    val drawNameOverlay = !htmlCover && (allowNameOverlay
+        ?: ((AppConfig.useDefaultCover && !forcePath) || !hasRealCover))
     val thumbKey = remember(sourceOrigin, path, cleanName, cleanAuthor) {
         "$sourceOrigin|$path|$cleanName|$cleanAuthor"
     }
@@ -215,99 +228,37 @@ fun BookCoverImage(
     }
     var bitmap by remember(loadKey, defaultBitmap) { mutableStateOf(defaultBitmap) }
 
-    DisposableEffect(loadKey, context, fragment, lifecycle) {
-        var active = true
+    LaunchedEffect(loadKey, context, fragment, lifecycle) {
         bitmap = defaultBitmap
-        if (!(AppConfig.useDefaultCover && !forcePath)) {
-            val thumbFile = if (useThumb) CoverThumbnailCache.existing(context, thumbKey) else null
-            val target = object : CustomTarget<Bitmap>() {
-                override fun onLoadStarted(placeholder: Drawable?) {
-                    if (active) {
-                        bitmap = placeholder.toCoverBitmap(defaultBitmap)
-                    }
-                }
-
-                override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-                    if (active && !resource.isRecycled) {
-                        bitmap = resource
-                    }
-                }
-
-                override fun onLoadFailed(errorDrawable: Drawable?) {
-                    if (active) {
-                        bitmap = errorDrawable.toCoverBitmap(defaultBitmap)
-                    }
-                }
-
-                override fun onLoadCleared(placeholder: Drawable?) {
-                    if (active) {
-                        bitmap = placeholder.toCoverBitmap(defaultBitmap)
-                    }
-                }
-            }
-            var options = RequestOptions()
-                .format(DecodeFormat.PREFER_ARGB_8888)
-                .disallowHardwareConfig()
-                .set(OkHttpModelLoader.loadOnlyWifiOption, loadOnlyWifi)
-            if (sourceOrigin != null) {
-                options = options.set(OkHttpModelLoader.sourceOriginOption, sourceOrigin)
-            }
-            val builder = when {
-                thumbFile != null -> ImageLoader.loadBitmap(context, thumbFile.absolutePath)
-                fragment != null && lifecycle != null -> runCatching {
-                    ImageLoader.loadBitmap(fragment, lifecycle, path)
-                }.getOrElse {
-                    ImageLoader.loadBitmap(context, path)
-                }
-                else -> ImageLoader.loadBitmap(context, path)
-            }
-            builder
-                .apply(options)
-                .let { if (thumbFile == null) it.placeholder(BookCover.defaultDrawable) else it }
-                .error(BookCover.defaultDrawable)
-                .priority(if (useThumb) Priority.HIGH else Priority.NORMAL)
-                .override(
-                    if (useThumb) COVER_THUMB_WIDTH else Target.SIZE_ORIGINAL,
-                    if (useThumb) COVER_THUMB_HEIGHT else Target.SIZE_ORIGINAL
-                )
-                .centerCrop()
-                .addListener(object : RequestListener<Bitmap> {
-                    override fun onLoadFailed(
-                        e: GlideException?,
-                        model: Any?,
-                        target: Target<Bitmap>,
-                        isFirstResource: Boolean
-                    ): Boolean {
-                        return false
-                    }
-
-                    override fun onResourceReady(
-                        resource: Bitmap,
-                        model: Any,
-                        target: Target<Bitmap>?,
-                        dataSource: DataSource,
-                        isFirstResource: Boolean
-                    ): Boolean {
-                        if (useThumb && thumbFile == null) {
-                            CoverThumbnailCache.saveAsync(
-                                context,
-                                thumbKey,
-                                BitmapDrawable(context.resources, resource)
-                            )
-                        }
-                        return false
-                    }
-                })
-                .into(target)
-            onDispose {
-                active = false
-                runCatching { Glide.with(context.applicationContext).clear(target) }
-            }
-        } else {
-            onDispose {
-                active = false
-            }
+        if (AppConfig.useDefaultCover && !forcePath) return@LaunchedEffect
+        if (htmlCover) {
+            bitmap = HtmlCoverRenderer.load(cleanName.orEmpty(), cleanAuthor) ?: defaultBitmap
+            return@LaunchedEffect
         }
+        val thumbFile = if (useThumb) CoverThumbnailCache.existing(context, thumbKey) else null
+        var loaded: Bitmap? = null
+        for (attempt in 0 until COVER_LOAD_ATTEMPTS) {
+            val bmp = withTimeoutOrNull(COVER_LOAD_TIMEOUT_MS) {
+                loadCoverBitmapOnce(
+                    context, path, sourceOrigin, loadOnlyWifi,
+                    useThumb, thumbFile, fragment, lifecycle
+                )
+            }
+            if (bmp != null) {
+                loaded = bmp
+                bitmap = bmp
+                if (useThumb && thumbFile == null) {
+                    CoverThumbnailCache.saveAsync(
+                        context,
+                        thumbKey,
+                        BitmapDrawable(context.resources, bmp)
+                    )
+                }
+                break
+            }
+            if (attempt < COVER_LOAD_ATTEMPTS - 1) delay(COVER_LOAD_RETRY_DELAY_MS)
+        }
+        if (loaded == null) bitmap = defaultBitmap
     }
 
     val currentOnBoundsChanged by rememberUpdatedState(onBoundsChanged)
@@ -479,4 +430,68 @@ private fun Drawable?.toCoverBitmap(fallback: Bitmap): Bitmap {
         ?: runCatching {
             drawable.toBitmap(width = COVER_THUMB_WIDTH, height = COVER_THUMB_HEIGHT)
         }.getOrDefault(fallback)
+}
+
+/**
+ * 单次封面请求，移植自 Max 版 loadCoverDrawableOnce：
+ * 以挂起方式等待 Glide 结果，失败返回 null，配合外部 [withTimeoutOrNull]
+ * 覆盖「请求一直无回调」的挂起场景，实现失败/挂起后有界重试。
+ */
+private suspend fun loadCoverBitmapOnce(
+    context: Context,
+    path: String?,
+    sourceOrigin: String?,
+    loadOnlyWifi: Boolean,
+    useThumb: Boolean,
+    thumbFile: java.io.File?,
+    fragment: Fragment?,
+    lifecycle: Lifecycle?,
+): Bitmap? = suspendCancellableCoroutine { cont ->
+    // 先在协程存活时取到 RequestManager：取消回调里 Activity 可能已 destroy，
+    // 那时再 Glide.with(context) 会抛 "You cannot start a load for a destroyed activity"
+    val requestManager = Glide.with(context)
+    val target = object : CustomTarget<Bitmap>() {
+        override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+            when {
+                cont.isActive && !resource.isRecycled -> cont.resume(resource, null)
+                cont.isActive -> cont.resume(null, null)
+            }
+        }
+
+        override fun onLoadCleared(placeholder: Drawable?) = Unit
+
+        override fun onLoadFailed(errorDrawable: Drawable?) {
+            if (cont.isActive) cont.resume(null, null)
+        }
+    }
+    cont.invokeOnCancellation {
+        runCatching { requestManager.clear(target) }
+    }
+    var options = RequestOptions()
+        .format(DecodeFormat.PREFER_ARGB_8888)
+        .disallowHardwareConfig()
+        .set(OkHttpModelLoader.loadOnlyWifiOption, loadOnlyWifi)
+    if (sourceOrigin != null) {
+        options = options.set(OkHttpModelLoader.sourceOriginOption, sourceOrigin)
+    }
+    val builder = when {
+        thumbFile != null -> ImageLoader.loadBitmap(context, thumbFile.absolutePath)
+        fragment != null && lifecycle != null -> runCatching {
+            ImageLoader.loadBitmap(fragment, lifecycle, path)
+        }.getOrElse {
+            ImageLoader.loadBitmap(context, path)
+        }
+        else -> ImageLoader.loadBitmap(context, path)
+    }
+    builder
+        .apply(options)
+        .let { if (thumbFile == null) it.placeholder(BookCover.defaultDrawable) else it }
+        .error(BookCover.defaultDrawable)
+        .priority(if (useThumb) Priority.HIGH else Priority.NORMAL)
+        .override(
+            if (useThumb) COVER_THUMB_WIDTH else Target.SIZE_ORIGINAL,
+            if (useThumb) COVER_THUMB_HEIGHT else Target.SIZE_ORIGINAL
+        )
+        .centerCrop()
+        .into(target)
 }
