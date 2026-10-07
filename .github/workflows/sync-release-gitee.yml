@@ -39,6 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
           TAG_INPUT: ${{ inputs.tag_name }}
           SYNC_CHANNEL: ${{ inputs.sync_update_channel }}
         run: |

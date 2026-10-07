@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  UPSTREAM_REPOSITORY: Luoyacheng/legado
+  UPSTREAM_REPOSITORY: helyel233/legado-H
 
 jobs:
   build:
@@ -53,7 +53,7 @@ jobs:
         run: |
           pnpm i
           pnpm build
-          version="v$(date -d "8 hour" -u +3.%y.%m%d%H)"
+          version="vH.$(date -d "8 hour" -u +%y.%m%d%H)"
           echo "APP_VER=$version" >> $GITHUB_ENV
 
       - name: push changes

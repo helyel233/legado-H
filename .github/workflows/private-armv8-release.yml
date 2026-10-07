@@ -55,8 +55,9 @@ jobs:
       - name: Prepare release version
         id: version
         run: |
-          VERSION_NAME="3.$(TZ=Asia/Shanghai date +%y.%m%d%H%M)"
-          VERSION_CODE=$(($(date -u +%s) / 60))
+          VERSION_NAME="H.dev.$(TZ=Asia/Shanghai date +%y.%m%d%H%M)"
+          # 与正式发布一致的基线偏移，避免 epoch 分钟数在 2027 年后超过 29860000 基线干扰版本判定
+          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
           TAG_NAME="private-armv8-${VERSION_NAME}"
           {
             echo "name=${VERSION_NAME}"
@@ -117,7 +118,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Legado private arm64-v8a ${{ steps.version.outputs.name }}
           prerelease: false
-          make_latest: true
+          make_latest: false
           generate_release_notes: false
           files: release-apks/*.apk
           body_path: release-notes.md

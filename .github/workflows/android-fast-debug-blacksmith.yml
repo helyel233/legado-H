@@ -28,7 +28,8 @@ jobs:
 
       - name: Build arm64 debug APK
         run: |
-          VERSION_CODE=$(($(date -u +%s) / 60))
+          # 与正式发布一致的基线偏移，避免 epoch 分钟数在 2027 年后超过 29860000 基线干扰版本判定
+          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
           ./gradlew :app:assembleAppDebug \
             -Pabi=arm64-v8a \
             -PVERSION_CODE="$VERSION_CODE" \

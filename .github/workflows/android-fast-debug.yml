@@ -78,7 +78,8 @@ jobs:
             -Dorg.gradle.jvmargs=-XX:+UseParallelGC\ -Xmx4g\ -Xms256m\ -XX:MaxMetaspaceSize=768m\ -Dfile.encoding=UTF-8
             -Dorg.gradle.workers.max=2
         run: |
-          VERSION_CODE=$(($(date -u +%s) / 60))
+          # 与正式发布一致的基线偏移，避免 epoch 分钟数在 2027 年后超过 29860000 基线干扰版本判定
+          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
           ./gradlew :app:assembleAppDebug \
             -Pabi=arm64-v8a \
             -PVERSION_CODE="$VERSION_CODE" \
@@ -109,21 +110,14 @@ jobs:
             echo "No release found to upload debug APK."
             exit 1
           fi
-          NOTES_FILE="debug-release-notes.md"
-          cat > "$NOTES_FILE" <<EOF
-          Debug build
 
-          Commit: ${{ github.sha }}
-          Branch: ${{ github.ref_name }}
-          APK: ${{ steps.apk.outputs.name }}
-          EOF
-
+          # 只替换旧 debug APK，保留同 Release 中的正式签名 APK
           gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --paginate \
-            --jq '.[] | select(.name | endswith(".apk")) | .id' \
+            --jq '.[] | select(.name | test("debug"; "i")) | .id' \
             | while read -r ASSET_ID; do
                 gh api -X DELETE repos/${{ github.repository }}/releases/assets/$ASSET_ID
               done
           gh release upload "$TAG_NAME" "${{ steps.apk.outputs.path }}" --clobber
+          # 仅标记预发布使演练包不进入应用内更新通道；保留原 Release 正文不被覆盖
           gh release edit "$TAG_NAME" \
-            --notes-file "$NOTES_FILE" \
             --prerelease
