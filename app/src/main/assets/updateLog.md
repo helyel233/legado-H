@@ -4,6 +4,13 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.2 · 2026/10/07**
+
+- 发布流程回归本机构建双包：正式版（arm64，LegadoH 签名）+ 调试版（全 ABI）随 Release 一同发布，构建与发布脚本参数化，修正包支持直接重传
+- 加速管理移除「更新通道」选项，更新固定走 GitHub Releases，界面仅保留 GitHub 加速代理
+- 移除 Gitee 渠道全部相关代码（同步脚本、CI 同步、更新策略常量），检查更新为 GitHub 单通道
+- 本地构建兜底 versionCode 与正式发布统一为基线偏移方案
+
 **vH.1.1 · 2026/10/07**
 
 - 发布提速：正式包与调试包改为并行异步构建，调试包与正式包同版本号随 Release 一同发布
