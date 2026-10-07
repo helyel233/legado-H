@@ -4,15 +4,42 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（不含 H 前缀，如 1.0）'
+        description: '版本号（不含 H 前缀，如 1.1）'
         required: true
-        default: '1.0'
+        default: '1.1'
 
 permissions:
   contents: write
 
 jobs:
-  build-release-abi:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      code: ${{ steps.version.outputs.code }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare release version
+        id: version
+        run: |
+          VERSION_NAME="H.${{ inputs.version }}"
+          # 基线偏移：29860000 高于全部旧版（epoch 分钟数）versionCode，保证应用内检查更新能识别为更新
+          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
+          TAG_NAME="H-${{ inputs.version }}"
+          {
+            echo "name=${VERSION_NAME}"
+            echo "code=${VERSION_CODE}"
+            echo "tag=${TAG_NAME}"
+          } >> "$GITHUB_OUTPUT"
+
+  # 正式包（release 签名）：arm64-v8a + armeabi-v7a
+  build-release:
+    needs: prepare
     runs-on: ubuntu-latest
 
     steps:
@@ -40,53 +67,110 @@ jobs:
           echo RELEASE_STORE_FILE='./key.jks' >> gradle.properties
           echo ${{ secrets.CI_DEBUG_KEY_STORE_B64 }} | base64 --decode > $GITHUB_WORKSPACE/app/key.jks
 
-      - name: Prepare release version
-        id: version
-        run: |
-          VERSION_NAME="H.${{ inputs.version }}"
-          # 基线偏移：29860000 高于全部旧版（epoch 分钟数）versionCode，保证应用内检查更新能识别为更新
-          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
-          TAG_NAME="H-${{ inputs.version }}"
-          {
-            echo "name=${VERSION_NAME}"
-            echo "code=${VERSION_CODE}"
-            echo "tag=${TAG_NAME}"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Build arm64 release APK
         run: |
-          rm -rf release-apks app/build/outputs/apk/app/release
+          rm -rf app/build/outputs/apk/app/release
           mkdir -p release-apks
           ./gradlew :app:clean :app:assembleAppRelease \
             -Pabi=arm64-v8a \
-            -PVERSION_NAME="${{ steps.version.outputs.name }}" \
-            -PVERSION_CODE="${{ steps.version.outputs.code }}" \
+            -PVERSION_NAME="${{ needs.prepare.outputs.name }}" \
+            -PVERSION_CODE="${{ needs.prepare.outputs.code }}" \
             --stacktrace
           APK_PATH=$(find app/build/outputs/apk/app/release -type f -name '*.apk' | head -n 1)
-          cp "$APK_PATH" "release-apks/legado-arm64-v8a_app_${{ steps.version.outputs.name }}_${{ steps.version.outputs.code }}.apk"
+          cp "$APK_PATH" "release-apks/legado-arm64-v8a_app_${{ needs.prepare.outputs.name }}_${{ needs.prepare.outputs.code }}.apk"
 
       - name: Build armeabi-v7a release APK
         run: |
           rm -rf app/build/outputs/apk/app/release
           ./gradlew :app:clean :app:assembleAppRelease \
             -Pabi=armeabi-v7a \
-            -PVERSION_NAME="${{ steps.version.outputs.name }}" \
-            -PVERSION_CODE="${{ steps.version.outputs.code }}" \
+            -PVERSION_NAME="${{ needs.prepare.outputs.name }}" \
+            -PVERSION_CODE="${{ needs.prepare.outputs.code }}" \
             --stacktrace
           APK_PATH=$(find app/build/outputs/apk/app/release -type f -name '*.apk' | head -n 1)
-          cp "$APK_PATH" "release-apks/legado-armeabi-v7a_app_${{ steps.version.outputs.name }}_${{ steps.version.outputs.code }}.apk"
+          cp "$APK_PATH" "release-apks/legado-armeabi-v7a_app_${{ needs.prepare.outputs.name }}_${{ needs.prepare.outputs.code }}.apk"
 
-      - name: Upload APK artifact
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: legado-release-abi
           path: release-apks/*.apk
 
+  # 调试包（ci-debug 签名）：arm64-v8a，与正式包异步并行构建
+  build-debug:
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Debug Apk Sign
+        run: |
+          echo -e "\n" >> gradle.properties
+          echo RELEASE_STORE_FILE='ci-debug.keystore' >> gradle.properties
+          echo RELEASE_STORE_PASSWORD='legado-ci-debug' >> gradle.properties
+          echo RELEASE_KEY_ALIAS='legado-ci-debug' >> gradle.properties
+          echo RELEASE_KEY_PASSWORD='legado-ci-debug' >> gradle.properties
+
+      - name: Build arm64 debug APK
+        run: |
+          rm -rf app/build/outputs/apk/app/debug
+          mkdir -p release-apks
+          ./gradlew :app:clean :app:assembleAppDebug \
+            -Pabi=arm64-v8a \
+            -PVERSION_NAME="${{ needs.prepare.outputs.name }}" \
+            -PVERSION_CODE="${{ needs.prepare.outputs.code }}" \
+            --stacktrace
+          APK_PATH=$(find app/build/outputs/apk/app/debug -type f -name '*.apk' | head -n 1)
+          cp "$APK_PATH" "release-apks/legado-arm64-v8a_app_debug_${{ needs.prepare.outputs.name }}_${{ needs.prepare.outputs.code }}.apk"
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legado-debug-abi
+          path: release-apks/*.apk
+
+  publish:
+    needs: [prepare, build-release, build-debug]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: legado-release-abi
+          path: release-apks
+
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: legado-debug-abi
+          path: release-apks
+
+      - name: List APKs
+        run: ls -l release-apks/
+
       - name: Clear existing versioned release APKs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.tag }} --jq '.id' 2>/dev/null || true)
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.prepare.outputs.tag }} --jq '.id' 2>/dev/null || true)
           if [ -n "$RELEASE_ID" ]; then
             gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --paginate \
               --jq '.[] | select(.name | endswith(".apk")) | .id' \
@@ -98,7 +182,7 @@ jobs:
       - name: Publish versioned release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           name: legado-H ${{ inputs.version }}
           prerelease: false
           make_latest: true
@@ -118,12 +202,12 @@ jobs:
               | while read -r ASSET_ID; do
                   gh api -X DELETE repos/${{ github.repository }}/releases/assets/$ASSET_ID
                 done
-            gh release upload "$CHANNEL_TAG" release-apks/*.apk --clobber
+            gh release upload "$CHANNEL_TAG" release-apks/legado-arm64-v8a_app_${{ needs.prepare.outputs.name }}_${{ needs.prepare.outputs.code }}.apk --clobber
             gh release edit "$CHANNEL_TAG" \
               --title "legado-H 更新通道" \
               --notes-file CHANGELOG.md
           else
-            gh release create "$CHANNEL_TAG" release-apks/*.apk \
+            gh release create "$CHANNEL_TAG" release-apks/legado-arm64-v8a_app_${{ needs.prepare.outputs.name }}_${{ needs.prepare.outputs.code }}.apk \
               --title "legado-H 更新通道" \
               --notes-file CHANGELOG.md
           fi
@@ -140,7 +224,7 @@ jobs:
 
           set +e
           API="https://gitee.com/api/v5/repos/${GITEE_REPO}"
-          TAG_NAME="${{ steps.version.outputs.tag }}"
+          TAG_NAME="${{ needs.prepare.outputs.tag }}"
           RELEASE_NAME="legado-H ${TAG_NAME}"
           CHANNEL_TAG="latest-arm64-release"
           TOKEN_QUERY="$(python3 -c 'import os, urllib.parse; print(urllib.parse.urlencode({"access_token": os.environ["GITEE_TOKEN"]}))')"
