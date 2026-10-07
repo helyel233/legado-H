@@ -4,6 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.3 · 2026/10/07**
+
+- 修复更新检测 ABI 匹配与内容类型门禁，避免有更新却提示已是最新
+- 解析引擎对非法 JsonPath/XPath/正则/空响应体降级，修复多处崩溃
+- 封面加载失败集合改用线程安全结构，WebDav 主线程初始化异步化
+- ContentObserver/ViewTreeObserver 监听正确反注册，修复资源泄漏
+- 多处空安全断言改为安全调用与兜底，清理死代码与乱码串
+
 **vH.1.2 · 2026/10/07**
 
 - 发布流程回归本机构建双包：正式版（arm64，LegadoH 签名）+ 调试版（全 ABI）随 Release 一同发布，构建与发布脚本参数化，修正包支持直接重传
