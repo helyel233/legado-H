@@ -111,11 +111,23 @@ class GiteeReleaseSafetyTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             sync.ensure_gitee_tag('archive-v14')
         fetch = next(args for args in calls if args[0] == 'fetch')
-        self.assertIn('https://github.com/Rimchars/legado.git', fetch)
+        self.assertIn('https://github.com/helyel233/legado-H.git', fetch)
         push = next(args for args in calls if 'push' in args)
-        self.assertIn('https://gitee.com/zziji/legado.git', push)
+        self.assertIn('https://gitee.com/helyel233/legado-H.git', push)
         self.assertIn('a' * 40 + ':refs/tags/archive-v14', push)
         self.assertFalse(any(arg in ('-f', '--force') for args in calls for arg in args))
+
+    def test_repositories_can_be_overridden_by_environment(self):
+        with patch.dict(os.environ, {'GITHUB_REPO': 'someone/example',
+                                     'GITEE_REPO': 'other/mirror'}):
+            self.assertEqual(sync.github_repo(), 'someone/example')
+            self.assertEqual(sync.gitee_repo(), 'other/mirror')
+            self.assertEqual(sync.gitee_owner(), 'other')
+            self.assertEqual(sync.gitee_name(), 'mirror')
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(sync.github_repo(), 'helyel233/legado-H')
+            self.assertEqual(sync.gitee_repo(), 'helyel233/legado-H')
+            self.assertEqual(sync.channel_name(), 'legado-H 更新通道')
 
     def test_failed_upload_keeps_previous_apk(self):
         with patch.object(sync, 'list_gitee_assets', return_value=[self.old]), \

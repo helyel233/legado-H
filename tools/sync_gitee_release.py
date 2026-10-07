@@ -19,11 +19,35 @@ import zipfile
 from pathlib import Path
 
 
-GITHUB_REPO = "Rimchars/legado"
-GITEE_OWNER = "zziji"
-GITEE_REPO = "legado"
+DEFAULT_GITHUB_REPO = "helyel233/legado-H"
+DEFAULT_GITEE_REPO = "helyel233/legado-H"
 CHANNEL_TAG = "latest-arm64-release"
-CHANNEL_NAME = "阅读 Archive 更新通道"
+DEFAULT_CHANNEL_NAME = "legado-H 更新通道"
+
+
+def _repo_from_env(name, default):
+    value = os.environ.get(name, "").strip()
+    return value or default
+
+
+def github_repo():
+    return _repo_from_env("GITHUB_REPO", DEFAULT_GITHUB_REPO)
+
+
+def gitee_repo():
+    return _repo_from_env("GITEE_REPO", DEFAULT_GITEE_REPO)
+
+
+def gitee_owner():
+    return gitee_repo().split("/")[0]
+
+
+def gitee_name():
+    return gitee_repo().split("/")[1]
+
+
+def channel_name():
+    return _repo_from_env("GITEE_CHANNEL_NAME", DEFAULT_CHANNEL_NAME)
 
 
 class ApiError(RuntimeError):
@@ -137,14 +161,14 @@ def request_bytes(url):
 
 def github_release(tag_name):
     if tag_name:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{urllib.parse.quote(tag_name)}"
+        url = f"https://api.github.com/repos/{github_repo()}/releases/tags/{urllib.parse.quote(tag_name)}"
     else:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        url = f"https://api.github.com/repos/{github_repo()}/releases/latest"
     return request_json("GET", url)
 
 
 def gitee_api(path):
-    return f"https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}{path}"
+    return f"https://gitee.com/api/v5/repos/{gitee_owner()}/{gitee_name()}{path}"
 
 
 def gitee_get_release(tag_name):
@@ -162,9 +186,9 @@ def ensure_gitee_tag(tag_name, source_tag=None):
     ref = f"refs/tags/{tag_name}"
     run_git(["check-ref-format", ref])
     run_git(["check-ref-format", f"refs/tags/{source_tag}"])
-    run_git(["fetch", "--no-tags", f"https://github.com/{GITHUB_REPO}.git", f"refs/tags/{source_tag}"])
+    run_git(["fetch", "--no-tags", f"https://github.com/{github_repo()}.git", f"refs/tags/{source_tag}"])
     expected = run_git(["rev-parse", "FETCH_HEAD"]).stdout.strip()
-    remote = f"https://gitee.com/{GITEE_OWNER}/{GITEE_REPO}.git"
+    remote = f"https://gitee.com/{gitee_repo()}.git"
     with gitee_git_environment() as env:
         current = run_git(["-c", "credential.helper=", "ls-remote", "--exit-code", "--refs", remote, ref],
                           check=False, env=env)
@@ -239,8 +263,11 @@ def multipart(fields, files):
 
 
 def apk_digest(path):
+    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def verified_asset(asset, apk):
@@ -362,7 +389,7 @@ def main():
                     raise RuntimeError("APK manifest is missing: " + apk.name)
         if not args.publish:
             log(json.dumps({"status": "prepared", "remoteWritesAttempted": False,
-                "githubRepository": GITHUB_REPO, "giteeRepository": f"{GITEE_OWNER}/{GITEE_REPO}",
+                "githubRepository": github_repo(), "giteeRepository": gitee_repo(),
                 "tag": tag_name, "updateChannel": not args.skip_channel,
                 "apks": [{"name": apk.name, "size": apk.stat().st_size, "sha256": apk_digest(apk)} for apk in apks]},
                 ensure_ascii=False, indent=2))
@@ -379,9 +406,9 @@ def main():
             channel = gitee_get_release(CHANNEL_TAG)
             if channel is None:
                 ensure_gitee_tag(CHANNEL_TAG, source_tag=tag_name)
-            channel_id = int(channel["id"]) if channel else upsert_gitee_release(CHANNEL_TAG, CHANNEL_NAME, body, CHANNEL_TAG)
+            channel_id = int(channel["id"]) if channel else upsert_gitee_release(CHANNEL_TAG, channel_name(), body, CHANNEL_TAG)
             upload_apks(channel_id, apks, replace_old=True)
-            upsert_gitee_release(CHANNEL_TAG, CHANNEL_NAME, body, CHANNEL_TAG)
+            upsert_gitee_release(CHANNEL_TAG, channel_name(), body, CHANNEL_TAG)
             verify_gitee_release(CHANNEL_TAG)
 
     log("Gitee release sync finished.")
