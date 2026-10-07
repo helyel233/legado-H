@@ -74,6 +74,7 @@ class RssSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
     }
 
     override fun onException(exception: IOException) {
+        cancel()
         Debug.cancelDebug(true)
     }
 

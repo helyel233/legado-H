@@ -214,7 +214,7 @@ class BackstageWebView(
 
     private fun setCookie(url: String) {
         tag?.let {
-            Coroutine.async(executeContext = IO) {
+            Coroutine.async(Coroutine.defaultScope, executeContext = IO) {
                 val cookie = CookieManager.getInstance().getCookie(url)
                 CookieStore.setCookie(it, cookie)
             }
@@ -281,7 +281,7 @@ class BackstageWebView(
                 }
             }
 
-            private fun handleResult(result: String) = Coroutine.async {
+            private fun handleResult(result: String) = Coroutine.async(Coroutine.defaultScope) {
                 if (closed) return@async
                 if (result.isNotEmpty() && result != "null") {
                     val content = StringEscapeUtils.unescapeJson(result)

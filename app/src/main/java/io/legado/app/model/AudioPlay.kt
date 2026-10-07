@@ -203,7 +203,7 @@ object AudioPlay : CoroutineScope by MainScope() {
                 // 章节表地址没缓存时，再按清单/缓存正文找"缓存时的地址"
                 // （地址刷新被覆盖后，已缓存的章节仍能离线播放）
                 // 探测要读清单文件与缓存索引，放 IO 执行，避免拖慢起播；结果回主线程接管播放
-                Coroutine.async {
+                Coroutine.async(Coroutine.defaultScope) {
                     val cachedUrl = book.takeIf { it.isAudio || it.isVideo }
                         ?.let { CacheManifestHelper.cachedMediaUrl(it, chapter) }
                         ?: chapter.resourceUrl?.takeIf { ExoPlayerHelper.isMediaCached(it) }
@@ -285,7 +285,7 @@ object AudioPlay : CoroutineScope by MainScope() {
             removeLoading(index)
             return
         }
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             MediaTocRefresh.refresh(source, book, index)
         }.onSuccess {
             chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
@@ -415,7 +415,7 @@ object AudioPlay : CoroutineScope by MainScope() {
     }
 
     fun skipTo(index: Int) {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             stopPlay()
             if (index in 0..<simulatedChapterSize) {
                 durChapterIndex = index
@@ -429,7 +429,7 @@ object AudioPlay : CoroutineScope by MainScope() {
     }
 
     fun prev() {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             stopPlay()
             if (durChapterIndex > 0) {
                 durChapterIndex -= 1
@@ -513,7 +513,7 @@ object AudioPlay : CoroutineScope by MainScope() {
 
     fun saveRead(first: Boolean = false) {
         val book = book ?: return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             book.lastCheckCount = 0
             val durTime = System.currentTimeMillis()
             book.durChapterTime = durTime
@@ -541,7 +541,7 @@ object AudioPlay : CoroutineScope by MainScope() {
      */
     fun saveDurChapter(audioSize: Long) {
         val chapter = durChapter ?: return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             durAudioSize = audioSize.toInt()
             chapter.end = audioSize
             chapter.update()

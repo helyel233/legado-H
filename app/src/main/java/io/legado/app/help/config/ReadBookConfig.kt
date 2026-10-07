@@ -219,7 +219,7 @@ object ReadBookConfig {
     }
 
     fun save() {
-        Coroutine.async { saveLayoutFiles() }
+        Coroutine.async(Coroutine.defaultScope) { saveLayoutFiles() }
     }
 
     @Synchronized

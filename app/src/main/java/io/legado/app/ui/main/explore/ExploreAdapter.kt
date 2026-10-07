@@ -112,7 +112,12 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                 Coroutine.async(callBack.scope) {
                     loadExploreKinds(item)
                 }.onSuccess { kindList ->
-                    upKindList(this@run, item, kindList, exIndex)
+                    //异步期间行可能被复用为其它源，校验位置与源后再注入，避免错行与错误点击
+                    if (holder.layoutPosition == exIndex &&
+                        getItemByLayoutPosition(exIndex)?.bookSourceUrl == item.bookSourceUrl
+                    ) {
+                        upKindList(this@run, item, kindList, exIndex)
+                    }
                 }.onFinally {
                     rotateLoading.gone()
                     if (scrollTo >= 0) {
@@ -316,6 +321,10 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             }.onError{ _ ->
                                 ti.hint = "err"
                             }
+                        }
+                        //先移除可能残留的旧 watcher，防止异步回收未完成时旧闭包被 setText 误触发
+                        (ti.getTag(R.id.text_watcher) as? TextWatcher)?.let {
+                            ti.removeTextChangedListener(it)
                         }
                         ti.setText(infoMap[title])
                         var actionJob: Job? = null
@@ -569,25 +578,26 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         val children = flexbox.children.toList()
         if (children.isEmpty()) return
         flexbox.removeAllViews()
-        callBack.scope.launch {
-            for (child in children) {
-                when (child) {
-                    is AutoCompleteTextView -> {
-                        val watcher = child.getTag(R.id.text_watcher) as? TextWatcher
-                        if (watcher != null) {
-                            child.removeTextChangedListener(watcher)
-                        }
-                        textRecycler.add(child)
+        //同步搬入回收池：若放入协程，锁在真正修改池之前就已释放，
+        //与 getFlexboxChild*/upKindList 交叉执行会重复入池/错位
+        for (child in children) {
+            when (child) {
+                is AutoCompleteTextView -> {
+                    val watcher = child.getTag(R.id.text_watcher) as? TextWatcher
+                    if (watcher != null) {
+                        child.removeTextChangedListener(watcher)
+                        child.setTag(R.id.text_watcher, null)
                     }
-                    is TextView -> {
-                        child.setOnTouchListener(null)
-                        child.setOnClickListener(null)
-                        recycler.add(child)
-                    }
-                    is LinearLayout -> {
-                        child.findViewById<AppCompatSpinner>(R.id.sp_type)?.onItemSelectedListener = null
-                        selectRecycler.add(child)
-                    }
+                    textRecycler.add(child)
+                }
+                is TextView -> {
+                    child.setOnTouchListener(null)
+                    child.setOnClickListener(null)
+                    recycler.add(child)
+                }
+                is LinearLayout -> {
+                    child.findViewById<AppCompatSpinner>(R.id.sp_type)?.onItemSelectedListener = null
+                    selectRecycler.add(child)
                 }
             }
         }

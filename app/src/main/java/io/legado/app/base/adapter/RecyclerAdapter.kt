@@ -170,7 +170,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
             }
             diffJob?.cancel()
             val version = ++diffVersion
-            diffJob = Coroutine.async {
+            diffJob = Coroutine.async(Coroutine.defaultScope) {
                 val diffResult = if (skipDiff) withTimeoutOrNullAsync(500L) {
                     DiffUtil.calculateDiff(callback, itemsSize < 2000)
                 } else {

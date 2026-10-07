@@ -275,7 +275,7 @@ object CacheManifestHelper {
         book: Book,
         chapters: List<BookChapter>? = null
     ) {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             if (chapters == null) {
                 refresh(book)
             } else {

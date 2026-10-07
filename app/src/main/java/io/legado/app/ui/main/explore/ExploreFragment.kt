@@ -536,6 +536,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         suiteLoadJob?.cancel()
         suiteLoadJob = null
         composeSuiteLoadingWidgets.clear()
+        //切换/刷新套件时重置分页状态，避免旧套件残留的 exhausted/loading 永久阻塞加载更多
+        synchronized(suiteHorizontalPagingStates) { suiteHorizontalPagingStates.clear() }
+        synchronized(suiteRankedPagingStates) { suiteRankedPagingStates.clear() }
         val suite = selectedSuite() ?: run {
             composeSuiteWidgetBooks.clear()
             composeSuiteRankedWidgetBooks.clear()
@@ -3470,7 +3473,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         if (!reset && !discoverHasMore) return
         if (reset) {
             discoverLoadJob?.cancel()
-        } else if (discoverLoading) {
+        } else if (discoverLoading || discoverLoadJob?.isActive == true) {
+            //reset 读缓存挂起期间 discoverLoading 尚未置位，需同时检查在途 Job，
+            //否则该窗口触发的 loadMore 会拿到相同 requestVersion 形成并发丢页
             return
         }
         val requestVersion = if (reset) {

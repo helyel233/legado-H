@@ -455,7 +455,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     fun removeFromBookshelf(success: (() -> Unit)?) {
         val book = ReadBook.book
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             if (book != null) {
                 val byUrl = appDb.bookDao.deleteIfNotShelf(book.bookUrl)
                 // The row saved when the book was opened is not always the row this

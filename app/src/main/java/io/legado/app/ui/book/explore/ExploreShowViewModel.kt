@@ -35,6 +35,7 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
     private var exploreUrl: String? = null
     private var page = 1
     private var books = emptyList<SearchBook>()
+    private var requestVersion = 0
 
     init {
         execute {
@@ -77,6 +78,7 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         val source = bookSource
         val url = exploreUrl
         if (source == null || url == null) return
+        val version = requestVersion
         WebBook.exploreBook(
             viewModelScope,
             source,
@@ -86,17 +88,21 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         )
             .timeout(if (BuildConfig.DEBUG) 0L else 60000L)
             .onSuccess(IO) { searchBooks ->
+                if (version != requestVersion) return@onSuccess //跳页后的过期结果丢弃
                 books = SearchBookMergeUtils.prependReplacing(books, searchBooks)
                 addBooksData.postValue(books)
                 appDb.searchBookDao.insert(*searchBooks.toTypedArray())
                 pageLiveData.postValue(page)
             }.onError {
+                if (version != requestVersion) return@onError
                 it.printOnDebug()
                 errorTopLiveData.postValue(it.stackTraceStr)
             }
     }
     fun skipPage(page: Int) {
         if (page > 0) {
+            //作废所有在途请求的结果，避免旧页返回后覆盖/污染目标页数据
+            requestVersion += 1
             books = emptyList()
             this.page = page
         }
@@ -106,6 +112,7 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         val source = bookSource
         val url = exploreUrl
         if (source == null || url == null) return
+        val version = requestVersion
         WebBook.exploreBook(
             viewModelScope,
             source,
@@ -115,12 +122,14 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         )
             .timeout(if (BuildConfig.DEBUG) 0L else 60000L)
             .onSuccess(IO) { searchBooks ->
+                if (version != requestVersion) return@onSuccess //跳页后的过期结果丢弃
                 books = SearchBookMergeUtils.appendReplacing(books, searchBooks)
                 booksData.postValue(books)
                 appDb.searchBookDao.insert(*searchBooks.toTypedArray())
                 pageLiveData.postValue(page)
                 page++
             }.onError {
+                if (version != requestVersion) return@onError
                 it.printOnDebug()
                 errorLiveData.postValue(it.stackTraceStr)
             }

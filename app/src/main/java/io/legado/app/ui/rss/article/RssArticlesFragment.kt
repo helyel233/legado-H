@@ -73,6 +73,7 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
     override val isGridLayout: Boolean
         get() = activityViewModel.articleStyle == 2
     private var fullRefresh = true
+    private var firstResumedLoadDone = false
     private var topOverlaySpace = 0
     private var topOverlayEnabled = false
     private var externalRefreshFinish: (() -> Unit)? = null
@@ -166,9 +167,12 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
         }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                refreshLayout.isRefreshing = !embeddedInModernRss
-                loadArticles()
-                this@launch.cancel()
+                //仅首次 RESUMED 刷新一次，保留 repeatOnLifecycle 机制而非自取消外层协程
+                if (!firstResumedLoadDone) {
+                    firstResumedLoadDone = true
+                    refreshLayout.isRefreshing = !embeddedInModernRss
+                    loadArticles()
+                }
             }
         } //只刷新可见页面,非预加载时使用
     }

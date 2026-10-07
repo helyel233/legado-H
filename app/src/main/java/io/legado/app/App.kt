@@ -103,7 +103,7 @@ class App : Application() {
         registerActivityLifecycleCallbacks(LifecycleHelp)
         DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             RestoreSnapshot.cleanupOrphans()
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")

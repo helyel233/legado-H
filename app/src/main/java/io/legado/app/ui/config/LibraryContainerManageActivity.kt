@@ -47,7 +47,9 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
     override val binding by viewBinding(ActivityS3ContainerManageBinding::inflate)
 
     private val containersState = mutableStateOf<List<LibraryContainerConfig>>(emptyList())
-    private val waitDialog by lazy { WaitDialog(this) }
+    private var _waitDialog: WaitDialog? = null
+    private val waitDialog: WaitDialog
+        get() = _waitDialog ?: WaitDialog(this).also { _waitDialog = it }
     private var editingSourceUrls: MutableSet<String> = mutableSetOf()
     private var pendingExportDecryptKey: String? = null
     private val importJson = registerForActivityResult(HandleFileContract()) { result ->
@@ -77,7 +79,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
 
     override fun onDestroy() {
         super.onDestroy()
-        waitDialog.dismiss()
+        _waitDialog?.dismiss()
     }
 
     private fun initComposeContent() {

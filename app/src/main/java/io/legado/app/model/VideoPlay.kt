@@ -659,7 +659,7 @@ object VideoPlay : CoroutineScope by MainScope(){
         val volumes = volumes.toList()
         val durVolume = durVolume
         val toc = toc
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             book?.let { book ->
                 book.lastCheckCount = 0
                 val durTime = System.currentTimeMillis()

@@ -34,10 +34,12 @@ class Coroutine<T>(
 
     companion object {
 
-        private val DEFAULT = MainScope()
+        //进程级作用域：仅限与界面生命周期无关的后台工具任务使用，
+        //UI 相关调用必须显式传入受生命周期约束的 scope
+        val defaultScope: CoroutineScope = MainScope()
 
         fun <T> async(
-            scope: CoroutineScope = DEFAULT,
+            scope: CoroutineScope,
             context: CoroutineContext = Dispatchers.IO,
             start: CoroutineStart = CoroutineStart.DEFAULT,
             executeContext: CoroutineContext = Dispatchers.Main,
@@ -147,7 +149,7 @@ class Coroutine<T>(
             job.cancel(cause)
         }
         cancel?.let {
-            DEFAULT.launch(executeContext) {
+            defaultScope.launch(executeContext) {
                 if (null == it.context) {
                     it.block.invoke(this)
                 } else {

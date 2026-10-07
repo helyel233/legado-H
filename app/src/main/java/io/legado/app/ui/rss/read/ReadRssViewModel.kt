@@ -50,12 +50,12 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
         execute {
             val origin = intent.getStringExtra("origin") ?: return@execute
             this@ReadRssViewModel.origin = origin
-            val title = intent.getStringExtra("title") ?: rssSource!!.sourceName
-            upTitleData.postValue(title)
-            val link = intent.getStringExtra("link")
             rssSource = appDb.rssSourceDao.getByKey(origin)?.also {
                 hasPreloadJs = !it.preloadJs.isNullOrBlank()
             }
+            val title = intent.getStringExtra("title") ?: rssSource?.sourceName ?: ""
+            upTitleData.postValue(title)
+            val link = intent.getStringExtra("link")
             headerMap = runScriptWithContext {
                 rssSource?.getHeaderMap() ?: emptyMap()
             }

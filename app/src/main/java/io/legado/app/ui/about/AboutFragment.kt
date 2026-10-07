@@ -257,7 +257,7 @@ class AboutFragment : ComposeSettingFragment() {
     }
 
     private fun saveLog() {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val backupPath = AppConfig.backupPath ?: let {
                 appCtx.toastOnUi("未设置备份目录")
                 return@async
@@ -276,7 +276,7 @@ class AboutFragment : ComposeSettingFragment() {
     }
 
     private fun createHeapDump() {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val backupPath = AppConfig.backupPath ?: let {
                 appCtx.toastOnUi("未设置备份目录")
                 return@async

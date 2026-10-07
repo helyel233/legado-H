@@ -128,7 +128,7 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
                 val data = returnData.data
                 if (data is List<*> && data.size > 3000) {
                     val pipe = Pipe(16 * 1024)
-                    Coroutine.async {
+                    Coroutine.async(Coroutine.defaultScope) {
                         pipe.sink.buffer().outputStream().bufferedWriter(Charsets.UTF_8).use {
                             GSON.toJson(returnData, it)
                         }

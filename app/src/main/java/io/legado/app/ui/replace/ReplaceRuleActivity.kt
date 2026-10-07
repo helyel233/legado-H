@@ -527,7 +527,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
 
     override fun onDestroy() {
         super.onDestroy()
-        Coroutine.async { ContentProcessor.upReplaceRules() }
+        Coroutine.async(Coroutine.defaultScope) { ContentProcessor.upReplaceRules() }
     }
 
     private fun upCountView() {

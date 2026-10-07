@@ -18,6 +18,7 @@ import android.graphics.drawable.Drawable
 import android.view.View
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.ui.main.MainThemeBackgroundState
@@ -54,6 +55,10 @@ object ExploreGlassBackdrop {
     @Volatile
     private var cache: BackdropCache? = null
 
+    //按 key 去重的在途构建任务与等待回填的 drawable，避免多行同时 miss 重复构建
+    private val inFlightKeys = HashSet<String>()
+    private val pendingCallbacks = HashMap<String, ArrayList<(Bitmap?) -> Unit>>()
+
     fun level(context: Context): Int {
         if (AppConfig.isEInkMode) return 0
         return context.getPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(), LEVEL_DEFAULT)
@@ -68,14 +73,21 @@ object ExploreGlassBackdrop {
         val glassLevel = level.coerceIn(0, 100) / 200f
         return FrostedGlassDrawable(
             host = host,
-            backdrop = backdrop(context, glassLevel),
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             glassLevel = glassLevel,
             baseColor = ThemeStore.bottomBackground(context)
-        )
+        ).also { drawable ->
+            //主线程只查缓存；miss 时异步构建（decode+软件模糊较重，避免主线程卡顿/ANR），
+            //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
+            drawable.updateBackdrop(backdrop(context, glassLevel, drawable::updateBackdrop))
+        }
     }
 
-    private fun backdrop(context: Context, glassLevel: Float): Bitmap? {
+    private fun backdrop(
+        context: Context,
+        glassLevel: Float,
+        onReady: (Bitmap?) -> Unit
+    ): Bitmap? {
         val state = MainThemeBackgroundState.from(context)
         val metrics = context.resources.displayMetrics
         val targetW = max(64, (metrics.widthPixels / DOWNSCALE).toInt())
@@ -98,19 +110,38 @@ object ExploreGlassBackdrop {
         // 折算为位图像素：屏幕等效半径 ≈ dp*密度*1.4（GPU 高斯→stackBlur 等效系数），
         // 再除以降采样比例。模糊必须抹平壁纸高频纹理避免摩尔纹，同时保留大块明暗。
         // 固定用纯软件模糊：不依赖 renderscript toolkit 的 native 库。
-        val density = context.resources.displayMetrics.density
+        val density = metrics.density
         val blurDp = 12f + glassLevel * 18f
         val radius = (state.blur / DOWNSCALE + blurDp * density * 1.4f / DOWNSCALE)
             .toInt().coerceIn(3, 25)
-        val bitmap = buildBitmap(file, state.blur, state.fallbackColor, state.crop, targetW, targetH, radius)
         synchronized(this) {
-            val old = cache
-            cache = BackdropCache(key, bitmap)
-            if (old != null && old.key != key) {
-                old.bitmap?.takeIf { it !== bitmap }?.recycle()
+            val stale = cache?.bitmap
+            pendingCallbacks.getOrPut(key) { ArrayList() }.add(onReady)
+            if (inFlightKeys.add(key)) {
+                //构建放 IO；旧缓存位图不显式 recycle（仍可能被各行 drawable 引用，
+                //显式回收会在重绘时抛 "trying to use a recycled bitmap"），交给 GC 回收
+                Coroutine.async(Coroutine.defaultScope) {
+                    buildBitmap(file, state.blur, state.fallbackColor, state.crop, targetW, targetH, radius)
+                }.onSuccess { bitmap ->
+                    finishBackdropBuild(key, bitmap)
+                }.onError {
+                    finishBackdropBuild(key, null)
+                }
             }
+            return stale
         }
-        return bitmap
+    }
+
+    /** 构建完成：更新缓存并回填所有等待的 drawable（回调在主线程执行）。 */
+    private fun finishBackdropBuild(key: String, bitmap: Bitmap?) {
+        val callbacks = synchronized(this) {
+            inFlightKeys.remove(key)
+            if (bitmap != null) {
+                cache = BackdropCache(key, bitmap)
+            }
+            pendingCallbacks.remove(key)
+        } ?: return
+        callbacks.forEach { it(bitmap) }
     }
 
     private fun buildBitmap(
@@ -192,7 +223,6 @@ object ExploreGlassBackdrop {
  */
 private class FrostedGlassDrawable(
     private val host: View,
-    private val backdrop: Bitmap?,
     private val radiusPx: Float,
     private val glassLevel: Float,
     baseColor: Int
@@ -221,6 +251,18 @@ private class FrostedGlassDrawable(
     private val rootLocation = IntArray(2)
     private val rect = RectF()
     private var shader: BitmapShader? = null
+
+    /** 模糊背景位图；缓存未命中时先为空，异步构建完成后由 [updateBackdrop] 回填。 */
+    private var backdrop: Bitmap? = null
+
+    fun updateBackdrop(bitmap: Bitmap?) {
+        if (bitmap === backdrop) return
+        backdrop = bitmap
+        //位图更换后旧 shader 引用的已是过期位图，必须重建
+        shader = null
+        glassPaint.shader = null
+        invalidateSelf()
+    }
 
     init {
         tintPaint.color = Color.WHITE
@@ -254,7 +296,7 @@ private class FrostedGlassDrawable(
     override fun draw(canvas: Canvas) {
         val b = backdrop
         rect.set(bounds)
-        if (b != null && b.width > 0 && b.height > 0) {
+        if (b != null && !b.isRecycled && b.width > 0 && b.height > 0) {
             val root = host.rootView
             if (root.width > 0 && root.height > 0) {
                 host.getLocationOnScreen(location)

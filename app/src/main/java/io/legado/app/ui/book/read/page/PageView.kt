@@ -1879,7 +1879,7 @@ class PageView(context: Context) : FrameLayout(context) {
         fun applyLoaded(composition: com.airbnb.lottie.LottieComposition) {
             cancelAdvancedTitleImagePreparation(slot)
             lateinit var prepareJob: Coroutine<Boolean>
-            prepareJob = Coroutine.async(start = CoroutineStart.LAZY) {
+            prepareJob = Coroutine.async(Coroutine.defaultScope, start = CoroutineStart.LAZY) {
                 renderConfig.imageAssetResolver.prepareCompositionImages(composition)
             }.onSuccess { ready ->
                 if (advancedTitleImagePrepareJobs[slot.ordinal] !== prepareJob) return@onSuccess
@@ -2124,7 +2124,7 @@ class PageView(context: Context) : FrameLayout(context) {
             val requestedWidth = lottieView.width.takeIf { it > 0 }
                 ?: binding.contentTextView.width.takeIf { it > 0 }
             val requestedHeight = lottieView.height.takeIf { it > 0 }
-            Coroutine.async {
+            Coroutine.async(Coroutine.defaultScope) {
                 val document = AdvancedTipConfig.rawDocument(slot) ?: return@async
                 val composition = LottieCompositionCache.getInstance().get(key)
                     ?: LottieCompositionFactory.fromJsonStringSync(document.json, key).value
@@ -2258,7 +2258,7 @@ class PageView(context: Context) : FrameLayout(context) {
             ?: binding.contentTextView.width.takeIf { it > 0 }
         val requestedHeight = lottieView.height.takeIf { it > 0 }
         lateinit var prepareJob: Coroutine<PreparedAdvancedTipComposition?>
-        prepareJob = Coroutine.async(start = CoroutineStart.LAZY) {
+        prepareJob = Coroutine.async(Coroutine.defaultScope, start = CoroutineStart.LAZY) {
             val document = AdvancedTipConfig.rawDocument(slot) ?: return@async null
             val composition = LottieCompositionCache.getInstance().get(nextKey)
                 ?: LottieCompositionFactory.fromJsonStringSync(document.json, nextKey).value

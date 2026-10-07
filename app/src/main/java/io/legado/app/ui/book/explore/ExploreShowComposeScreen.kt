@@ -68,9 +68,10 @@ fun ExploreShowComposeScreen(
     var previewState by remember { mutableStateOf<SearchBookPreviewState?>(null) }
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    val shouldLoadMore by remember(books, hasMore, isLoading, isLoadingPrevious) {
+    val shouldLoadMore by remember(books, hasMore, isLoading, isLoadingPrevious, errorMessage) {
         derivedStateOf {
-            if (!hasMore || isLoading || isLoadingPrevious || books.isEmpty()) {
+            //错误态不自动重试：否则加载状态翻转会使 shouldLoadMore 反复触发形成无限轮询
+            if (errorMessage != null || !hasMore || isLoading || isLoadingPrevious || books.isEmpty()) {
                 return@derivedStateOf false
             }
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1

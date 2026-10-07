@@ -155,16 +155,14 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
 
     fun delGroup(group: String) {
         execute {
-            execute {
-                val sources = appDb.rssSourceDao.getByGroup(group)
-                sources.forEach { source ->
-                    source.sourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
-                        it.remove(group)
-                        source.sourceGroup = TextUtils.join(",", it)
-                    }
+            val sources = appDb.rssSourceDao.getByGroup(group)
+            sources.forEach { source ->
+                source.sourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
+                    it.remove(group)
+                    source.sourceGroup = TextUtils.join(",", it)
                 }
-                appDb.rssSourceDao.update(*sources.toTypedArray())
             }
+            appDb.rssSourceDao.update(*sources.toTypedArray())
         }
     }
 

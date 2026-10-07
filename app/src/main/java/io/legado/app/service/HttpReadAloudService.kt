@@ -182,7 +182,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         downloadTask?.cancel()
         exoPlayer.release()
         cache.release()
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             removeCacheFile()
         }
     }

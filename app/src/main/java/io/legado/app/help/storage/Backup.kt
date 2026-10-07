@@ -171,7 +171,7 @@ object Backup {
 
     fun autoBack(context: Context) {
         val appContext = context.applicationContext ?: context
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             if (shouldBackup()) {
                 LogUtils.d(TAG, "auto backup delayed for foreground first frame")
                 delay(5000)
@@ -221,7 +221,7 @@ object Backup {
             return
         }
         pendingShelfChangeJob?.cancel()
-        pendingShelfChangeJob = Coroutine.async {
+        pendingShelfChangeJob = Coroutine.async(Coroutine.defaultScope) {
             // 去抖：连续的增删（如批量导入、批量删除）只触发一次。
             delay(SHELF_CHANGE_DEBOUNCE_MS)
             // 去抖期间开关可能被关闭或进了恢复，这里复查一次。

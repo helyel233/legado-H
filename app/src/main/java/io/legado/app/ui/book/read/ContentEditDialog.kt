@@ -124,7 +124,7 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
 
     private fun save() {
         val content = binding.contentView.text?.toString() ?: return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val book = ReadBook.book ?: return@async
             val chapter = appDb.bookChapterDao
                 .getChapter(book.bookUrl, ReadBook.durChapterIndex)

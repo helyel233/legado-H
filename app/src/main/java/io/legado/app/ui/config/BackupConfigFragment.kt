@@ -111,7 +111,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         it.uri?.let { uri ->
             waitDialog.setText(R.string.restore)
             waitDialog.show()
-            val task = Coroutine.async {
+            val task = Coroutine.async(Coroutine.defaultScope) {
                 findLocalAssetsUris()
             }.onSuccess { assetsUris ->
                 waitDialog.dismiss()
@@ -602,7 +602,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         showBackupProgressDialog()
         val appContext = requireContext().applicationContext
         // 使用全局协程：点「后台继续」或离开页面不会中断备份
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             Backup.backupLocked(appContext, backupPath, uploadCloud, uploadWebDavFallback) { progress ->
                 BackupProgressHolder.update(progress)
             }
@@ -734,7 +734,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             restoreJob?.cancel()
         }
         waitDialog.show()
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             restoreJob = coroutineContext[Job]
             showRestoreDialog(requireContext())
         }.onError {
@@ -806,7 +806,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun restoreWebDav(name: String) {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             AppCloudStorage.listAssetsBackupNames()
         }.onError {
             startCloudRestore(name, emptyList())
@@ -829,7 +829,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private fun startCloudRestore(name: String, assetsFileNames: List<String>) {
         waitDialog.setText(R.string.restore)
         waitDialog.show()
-        val task = Coroutine.async {
+        val task = Coroutine.async(Coroutine.defaultScope) {
             AppCloudStorage.restore(name, assetsFileNames)
         }.onError {
             AppLog.put("云端恢复出错\n${it.localizedMessage}", it)
@@ -891,7 +891,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private fun startLocalRestore(uri: Uri, assetsUris: List<Uri>) {
         waitDialog.setText(R.string.restore)
         waitDialog.show()
-        val task = Coroutine.async {
+        val task = Coroutine.async(Coroutine.defaultScope) {
             Restore.restore(appCtx, uri, assetsUris)
         }.onFinally {
             waitDialog.dismiss()

@@ -723,7 +723,7 @@ class ReadMenu @JvmOverloads constructor(
     private fun handleChapterClick() {
         if (ReadBook.isLocalBook) return
         val url = currentChapterUrl?.trim().orEmpty().takeIf { it.isNotBlank() } ?: return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             context.startActivity<WebViewActivity> {
                 val bookSource = ReadBook.bookSource
                 putExtra("title", currentChapterName)

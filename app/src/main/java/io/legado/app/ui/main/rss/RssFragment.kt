@@ -397,7 +397,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
                 AppDatabase.RSS_SOURCE_TABLE_NAME
-            ).catch {
+            ).conflate().catch {
                 AppLog.put("订阅页面更新数据出错\n${it.localizedMessage}", it)
             }.flowOn(IO).collect {
                 val currentItems = adapter.getItems()
@@ -426,7 +426,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
                 AppDatabase.RSS_SOURCE_TABLE_NAME
-            ).catch {
+            ).conflate().catch {
                 AppLog.put("订阅页面更新数据出错\n${it.localizedMessage}", it)
             }.flowOn(IO).collect { sources ->
                 binding.swipeRefreshLayout.isRefreshing = false
@@ -619,21 +619,28 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             webView.loadUrl("about:blank")
         }
         viewModel.launchRssWithHtml(source, {
+            //回调运行在 viewModelScope 上，视图销毁后仍可能触发，需自行防护
+            if (view == null || !isAdded || rssWebView == null) {
+                return@launchRssWithHtml
+            }
             if (currentVersion != webSourceVersion || selectedRssSource?.sourceUrl != source.sourceUrl) {
                 return@launchRssWithHtml
             }
             binding.pbRssLoading.gone()
             binding.swipeRefreshLayout.isRefreshing = false
             lastRenderedWebSourceUrl = source.sourceUrl
-            webView.loadUrl(source.sourceUrl)
+            rssWebView?.loadUrl(source.sourceUrl)
         }) { html ->
+            if (view == null || !isAdded || rssWebView == null) {
+                return@launchRssWithHtml
+            }
             if (currentVersion != webSourceVersion || selectedRssSource?.sourceUrl != source.sourceUrl) {
                 return@launchRssWithHtml
             }
             binding.pbRssLoading.gone()
             binding.swipeRefreshLayout.isRefreshing = false
             lastRenderedWebSourceUrl = source.sourceUrl
-            webView.loadDataWithBaseURL(
+            rssWebView?.loadDataWithBaseURL(
                 source.sourceUrl,
                 html,
                 "text/html",

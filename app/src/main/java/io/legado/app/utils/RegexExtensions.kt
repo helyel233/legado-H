@@ -39,7 +39,7 @@ fun CharSequence.replace(
     val reJsExtensions by lazy { RegexJsExtensions(name) }
     return runBlocking {
         suspendCancellableCoroutine { block ->
-            Coroutine.async(executeContext = IO) {
+            Coroutine.async(Coroutine.defaultScope, executeContext = IO) {
                 val job = launch {
                     try {
                         val pattern = regex.toPattern()

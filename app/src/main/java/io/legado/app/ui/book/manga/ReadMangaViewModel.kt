@@ -281,7 +281,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
 
     fun removeFromBookshelf(success: (() -> Unit)?) {
         val bookUrl = ReadManga.book?.bookUrl
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             bookUrl?.let(appDb.bookDao::deleteIfNotShelf)
         }.onError {
             AppLog.put("删除临时漫画失败: bookUrl=$bookUrl", it)

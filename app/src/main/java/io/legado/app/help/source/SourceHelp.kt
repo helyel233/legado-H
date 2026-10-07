@@ -168,7 +168,7 @@ object SourceHelp {
         bookSourcesGroup[false]?.let {
             appDb.bookSourceDao.insert(*it.toTypedArray())
         }
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             adjustSortNumber()
         }
     }

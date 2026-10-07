@@ -165,7 +165,10 @@ class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        activity?.finish()
+        //配置变更重建时 DialogFragment 会 dismiss 旧实例触发本回调，此时不能关闭宿主
+        if (activity?.isChangingConfigurations != true) {
+            activity?.finish()
+        }
     }
 
     @SuppressLint("SetTextI18n")

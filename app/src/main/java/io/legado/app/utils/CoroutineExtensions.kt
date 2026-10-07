@@ -13,7 +13,7 @@ class TimeoutCancellationException(msg: String) : CancellationException(msg)
 
 suspend fun <T> withTimeoutAsync(delayMillis: Long, block: suspend CoroutineScope.() -> T): T {
     return suspendCancellableCoroutine { cout ->
-        Coroutine.async(context = cout.context) {
+        Coroutine.async(Coroutine.defaultScope, context = cout.context) {
             launch {
                 delay(delayMillis)
                 if (!cout.isCompleted) {

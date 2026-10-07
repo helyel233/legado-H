@@ -23,7 +23,7 @@ object DefaultData {
 
     fun upVersion() {
         if (LocalConfig.versionCode < AppConst.appInfo.versionCode) {
-            Coroutine.async {
+            Coroutine.async(Coroutine.defaultScope) {
                 if (LocalConfig.needUpHttpTTS) {
                     importDefaultHttpTTS()
                 }

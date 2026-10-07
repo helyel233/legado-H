@@ -56,7 +56,9 @@ class AiProviderEditActivity : BaseActivity<ViewBinding>() {
     private var modelList by mutableStateOf<List<AiModelConfig>>(emptyList())
     private var modelSummary by mutableStateOf("")
 
-    private val waitDialog by lazy { WaitDialog(this) }
+    private var _waitDialog: WaitDialog? = null
+    private val waitDialog: WaitDialog
+        get() = _waitDialog ?: WaitDialog(this).also { _waitDialog = it }
     private var providerId: String? = null
 
     // Minimal ViewBinding shim: BaseActivity requires a ViewBinding.
@@ -99,7 +101,7 @@ class AiProviderEditActivity : BaseActivity<ViewBinding>() {
 
     override fun onDestroy() {
         super.onDestroy()
-        waitDialog.dismiss()
+        _waitDialog?.dismiss()
     }
 
     // ── Root Composable ──────────────────────────────────────────────────────

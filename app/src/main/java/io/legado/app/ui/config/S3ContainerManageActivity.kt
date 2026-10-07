@@ -32,7 +32,9 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
     override val binding by viewBinding(ActivityS3ContainerManageBinding::inflate)
 
     private val containersState = mutableStateOf<List<S3Container>>(emptyList())
-    private val waitDialog by lazy { WaitDialog(this) }
+    private var _waitDialog: WaitDialog? = null
+    private val waitDialog: WaitDialog
+        get() = _waitDialog ?: WaitDialog(this).also { _waitDialog = it }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initComposeContent()
@@ -41,7 +43,7 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
 
     override fun onDestroy() {
         super.onDestroy()
-        waitDialog.dismiss()
+        _waitDialog?.dismiss()
     }
 
     private fun initComposeContent() {

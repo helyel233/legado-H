@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -120,7 +121,13 @@ class RssSourceEditActivity :
         }
     }
 
+    private var globalFocusChangeListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
+
     override fun onDestroy() {
+        globalFocusChangeListener?.let {
+            binding.recyclerView.viewTreeObserver.removeOnGlobalFocusChangeListener(it)
+        }
+        globalFocusChangeListener = null
         super.onDestroy()
         softKeyboardTool.dismiss()
     }
@@ -244,11 +251,17 @@ class RssSourceEditActivity :
         }
         binding.recyclerView.layoutManager = gridLayoutManager
         binding.recyclerView.adapter = adapter
-        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+        val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
             if (newFocus is EditText) {
-                newFocus.postDelayed({ sendText("") }, 120)
+                newFocus.postDelayed({
+                    if (!isDestroyed && !isFinishing) {
+                        sendText("")
+                    }
+                }, 120)
             }
         }
+        globalFocusChangeListener = focusListener
+        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
         binding.tabLayout.setBackgroundColor(backgroundColor)
         binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {

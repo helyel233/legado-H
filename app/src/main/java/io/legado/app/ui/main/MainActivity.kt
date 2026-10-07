@@ -2307,7 +2307,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         resetLiquidGlassBindingState()
         clearSideNavigationBackground()
         super.onDestroy()
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             BookHelp.clearInvalidCache()
         }
         Backup.autoBack(this)

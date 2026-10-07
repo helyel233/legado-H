@@ -11,7 +11,13 @@ class ExploreDiffItemCallBack : DiffUtil.ItemCallback<BookSourcePart>() {
     }
 
     override fun areContentsTheSame(oldItem: BookSourcePart, newItem: BookSourcePart): Boolean {
-        return oldItem.bookSourceName == newItem.bookSourceName
+        return oldItem.bookSourceName == newItem.bookSourceName &&
+            oldItem.bookSourceGroup == newItem.bookSourceGroup &&
+            oldItem.enabled == newItem.enabled &&
+            oldItem.enabledExplore == newItem.enabledExplore &&
+            oldItem.hasLoginUrl == newItem.hasLoginUrl &&
+            oldItem.hasExploreUrl == newItem.hasExploreUrl &&
+            oldItem.bookSourceType == newItem.bookSourceType
     }
 
 }

@@ -179,7 +179,7 @@ object ReadManga : CoroutineScope by MainScope() {
     }
 
     private fun loadContent(index: Int) {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val book = book!!
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return@async
             if (addLoading(index)) {
@@ -519,7 +519,7 @@ object ReadManga : CoroutineScope by MainScope() {
     ) {
         if (!AppConfig.syncBookProgress) return
         val book = book ?: return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             AppCloudStorage.getBookProgress(book)
         }.onError {
             AppLog.put("拉取阅读进度失败", it)
@@ -529,7 +529,7 @@ object ReadManga : CoroutineScope by MainScope() {
                         && progress.durChapterPos < book.durChapterPos)
             ) {
                 // 服务器没有进度或者进度比服务器快，上传现有进度
-                Coroutine.async {
+                Coroutine.async(Coroutine.defaultScope) {
                     AppCloudStorage.uploadBookProgress(BookProgress(book), uploadSuccessAction)
                     book.update()
                 }

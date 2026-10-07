@@ -116,7 +116,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                 themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
                 isEInkMode = themeMode == "3"
                 val expectedNight = isNightTheme
-                Coroutine.async {
+                Coroutine.async(Coroutine.defaultScope) {
                     runCatching {
                         // 调用方在写入 themeMode 后会立刻同步 applyDayNight 重建界面，
                         // 套件投影异步完成时界面可能已用旧偏好重建，需补发刷新事件。

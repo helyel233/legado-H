@@ -217,7 +217,7 @@ abstract class AbsCallBack(
     }
 
     fun startCheckCancelJob(request: UrlRequest) {
-        cancelJob = Coroutine.async {
+        cancelJob = Coroutine.async(Coroutine.defaultScope) {
             while (!mCall.isCanceled()) {
                 delay(1000)
             }

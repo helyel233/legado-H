@@ -93,7 +93,7 @@ object SourceCallBack {
         if (source == null || book == null || !source.eventListener) return
         val jsStr = source.getContentRule().callBackJs
         if (jsStr.isNullOrEmpty()) return
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             withTimeout(60000L) {
                 runScriptWithContext(coroutineContext) {
                     source.evalJS(jsStr) {

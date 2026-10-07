@@ -641,7 +641,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
         characterId: Long,
         characterName: String
     ) {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val book = ReadBook.book
                 ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, "书籍不存在")
             val chapter = ReadBook.curTextChapter

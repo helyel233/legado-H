@@ -447,7 +447,7 @@ object ThemeConfig {
                         clearUsableBgImageCache()
                     }
                     appCtx.toastOnUi(R.string.theme_background_downloading)
-                    Coroutine.async {
+                    Coroutine.async(Coroutine.defaultScope) {
                         downloadThemeBackground(backgroundPath, fileImg)
                     }.onSuccess { downloaded ->
                         if (downloaded) {
@@ -1068,7 +1068,7 @@ object ThemeConfig {
                     .apply()
             }
         }
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             UiCorner.warmPanelBitmap(this@with)
         }
     }

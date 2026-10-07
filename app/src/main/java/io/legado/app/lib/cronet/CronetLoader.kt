@@ -82,7 +82,7 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader(), Cronet.LoaderInterfa
      * 预加载Cronet
      */
     override fun preDownload() {
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             //md5 = getUrlMd5(md5Url)
             if (soFile.exists() && md5 == getFileMD5(soFile)) {
                 DebugLog.d(javaClass.simpleName, "So 库已存在")
@@ -270,7 +270,7 @@ object CronetLoader : CronetEngine.Builder.LibraryLoader(), Cronet.LoaderInterfa
         }
         download = true
 
-        Coroutine.async {
+        Coroutine.async(Coroutine.defaultScope) {
             val result = downloadFileIfNotExist(url, downloadTempFile)
             DebugLog.d(javaClass.simpleName, "download result:$result")
             //文件md5再次校验

@@ -57,7 +57,8 @@ inline fun <reified EVENT> Fragment.observeEvent(
         observer(it)
     }
     tags.forEach {
-        eventObservable<EVENT>(it).observe(this, o)
+        //绑定视图生命周期，避免视图销毁后回调仍触碰 binding
+        eventObservable<EVENT>(it).observe(viewLifecycleOwner, o)
     }
 }
 
@@ -69,7 +70,8 @@ inline fun <reified EVENT> Fragment.observeEventSticky(
         observer(it)
     }
     tags.forEach {
-        eventObservable<EVENT>(it).observeSticky(this, o)
+        //绑定视图生命周期，避免视图销毁后回调仍触碰 binding
+        eventObservable<EVENT>(it).observeSticky(viewLifecycleOwner, o)
     }
 }
 
