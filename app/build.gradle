@@ -21,7 +21,7 @@ static def releaseTime() {
 def name = "legado"
 def version = project.hasProperty("VERSION_NAME")
         ? project.property("VERSION_NAME").toString()
-        : "3." + releaseTime()
+        : "H.dev." + releaseTime()
 def gitCommitsText = ""
 try {
     def gitRevList = ['git', 'rev-list', 'HEAD', '--count'].execute(null, rootDir)
@@ -124,7 +124,6 @@ android {
     productFlavors {
         app {
             dimension "mode"
-            manifestPlaceholders.put("APP_CHANNEL_VALUE", "app")
         }
     }
 

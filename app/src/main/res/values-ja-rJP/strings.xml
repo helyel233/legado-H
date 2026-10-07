@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--App-->
-    <string name="app_name">阅读Archive</string>
-    <string name="app_name_a">阅读Archive·A</string>
-    <string name="receiving_shared_label">阅读Archive·搜索</string>
-    <string name="tip_perm_request_storage">阅读Archive needs storage access to find and read books. please go "App Settings" to allow "Storage permission".</string>
+    <string name="app_name">LegadoH</string>
+    <string name="app_name_a">阅读H·A</string>
+    <string name="receiving_shared_label">阅读·搜索</string>
+    <string name="tip_perm_request_storage">LegadoH needs storage access to find and read books. please go "App Settings" to allow "Storage permission".</string>
 
     <!--Other-->
     <string name="menu_backup">Home</string>
     <string name="menu_restore">Restore</string>
-    <string name="menu_import_old">Import 阅读Archive data</string>
+    <string name="menu_import_old">Import legacy data</string>
     <string name="webdav_cache_backup">Offline cache book backup</string>
     <string name="webdav_cache_backup_s">Export to local and back up to the exports directory under the legado folder</string>
     <string name="backup_path">Backup to</string>
@@ -101,7 +101,7 @@
         \u3000\u3000 This is an open source reading software newly developed by Kotlin, welcome to join us.
     </string>
     <string name="app_share_description">
-        阅读Archive download link：\n https://github.com/Rimchars/legado/releases
+        LegadoH download link：\n https://github.com/helyel233/legado-H/releases
     </string>
     <string name="version_name">Version %s</string>
     <string name="pt_background_verification">Background-verification</string>
@@ -480,7 +480,6 @@
     <string name="theme">Theme</string>
     <string name="theme_mode">Theme mode</string>
     <string name="theme_mode_desc">Select a theme you want</string>
-    <string name="join_qq_group">Join QQ group</string>
     <string name="bg_image_per">Set the background image requires storage permission</string>
     <string name="input_book_source_url">Input book source address</string>
     <string name="del_file">Delete file</string>
@@ -648,7 +647,7 @@
     <string name="app_folder_picker">App folder picker</string>
     <string name="app_file_picker">App file picker</string>
     <string name="a10_permission_toast">Android 10+ unable to read and write file due to permission restrictions</string>
-    <string name="add_to_text_context_menu_s">Long tap to display 阅读Archive·Search in the operation menu</string>
+    <string name="add_to_text_context_menu_s">Long tap to display 阅读H·Search in the operation menu</string>
     <string name="add_to_text_context_menu_t">Text operation display Search</string>
     <string name="record_log">Record log</string>
     <string name="log">Log</string>
@@ -690,7 +689,7 @@
     <string name="btn_default_s">Default</string>
     <string name="main_menu">Main menu</string>
     <string name="request_permission">Tap to grant permission</string>
-    <string name="tip_local_perm_request_storage">阅读Archive needs Storage permission, please tap the "Grant Permission" button below, or go to "Settings"-"Application Permissions"-to open the required permission. If the permission is still not work, please tap "Select Folder" in the upper right corner to use the system folder picker.</string>
+    <string name="tip_local_perm_request_storage">LegadoH needs Storage permission, please tap the "Grant Permission" button below, or go to "Settings"-"Application Permissions"-to open the required permission. If the permission is still not work, please tap "Select Folder" in the upper right corner to use the system folder picker.</string>
     <string name="alouding_disable">The selected text cannot be spoken in full text speech</string>
     <string name="read_body_to_lh">Extend to cutout</string>
     <string name="toc_updateing">Updating Chapters</string>
@@ -751,8 +750,7 @@
     <string name="alipay_red_envelope_copy">537954522 Click to copy</string>
     <string name="alipay_red_envelope_qr_code">AliPay red envelope QR code</string>
     <string name="alipay_payment_qr_code">AliPay QR code</string>
-    <string name="qq_collection_qr_code">QQ Collection QR code</string>
-    <string name="contributors_summary">gedoor,Invinciblelee,Xwite etc. Checking in github for details</string>
+    <string name="contributors_summary">Maintained at helyel233/legado-H, checking in github for details</string>
     <string name="clear_cache_summary">Clear the cache of the downloaded books and fonts</string>
     <string name="default_cover">Default cover</string>
     <string name="restore_ignore">Bypass list</string>
@@ -956,8 +954,6 @@
     <string name="use_replace">使用替换</string>
     <string name="scope_title">作用于标题</string>
     <string name="scope_content">作用于正文</string>
-    <string name="join_qq_channel">加入QQ频道</string>
-    <string name="qq_channel_summary">点击加入阅读QQ频道</string>
     <string name="menu_refresh_dur">刷新当前章节</string>
     <string name="menu_refresh_after">刷新之后章节</string>
     <string name="menu_refresh_all">刷新全部章节</string>

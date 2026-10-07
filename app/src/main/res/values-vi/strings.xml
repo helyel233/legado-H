@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--App-->
-    <string name="app_name">阅读Archive</string>
-    <string name="app_name_a">阅读Archive·A</string>
-    <string name="receiving_shared_label">阅读Archive·搜索</string>
-    <string name="tip_perm_request_storage">阅读Archive cần quyền truy cập bộ nhớ để tìm và đọc sách. Vui lòng vào "Cài đặt ứng dụng" để cấp "Quyền truy cập bộ nhớ".</string>
+    <string name="app_name">LegadoH</string>
+    <string name="app_name_a">阅读H·A</string>
+    <string name="receiving_shared_label">阅读·搜索</string>
+    <string name="tip_perm_request_storage">LegadoH cần quyền truy cập bộ nhớ để tìm và đọc sách. Vui lòng vào "Cài đặt ứng dụng" để cấp "Quyền truy cập bộ nhớ".</string>
 
     <!--Other-->
     <string name="menu_backup">Sao lưu</string>
     <string name="menu_restore">Khôi phục</string>
-    <string name="menu_import_old">Nhập dữ liệu 阅读Archive cũ</string>
+    <string name="menu_import_old">Nhập dữ liệu phiên bản cũ</string>
     <string name="webdav_cache_backup">Sao lưu sách đệm ngoại tuyến</string>
-    <string name="webdav_cache_backup_s">Xuất ra bộ nhớ cục bộ và sao lưu vào thư mục exports trong thư mục 阅读Archive</string>
+    <string name="webdav_cache_backup_s">Xuất ra bộ nhớ cục bộ và sao lưu vào thư mục exports trong thư mục LegadoH</string>
     <string name="backup_path">Đường dẫn sao lưu</string>
     <string name="select_backup_path">Vui lòng chọn đường dẫn sao lưu.</string>
     <string name="menu_import_old_version">Nhập dữ liệu phiên bản cũ</string>
@@ -97,7 +97,7 @@
     <string name="offline_cache_s">Lưu trữ các chương đã chọn vào bộ nhớ đệm</string>
     <string name="change_origin">Đổi nguồn</string>
     <string name="about_description">Đây là một phần mềm đọc mã nguồn mở được phát triển mới bằng Kotlin, chào mừng bạn tham gia.</string>
-    <string name="app_share_description">Link tải 阅读Archive:\n https://github.com/Rimchars/legado/releases</string>
+    <string name="app_share_description">Link tải LegadoH:\n https://github.com/helyel233/legado-H/releases</string>
     <string name="version_name">Phiên bản %s</string>
     <string name="pt_background_verification">Xác minh trong nền</string>
     <string name="ps_background_verification">Bạn có thể thao tác tự do khi đang xác minh nguồn sách</string>
@@ -474,7 +474,6 @@
     <string name="theme">Chủ đề</string>
     <string name="theme_mode">Chế độ chủ đề</string>
     <string name="theme_mode_desc">Chọn chủ đề bạn muốn</string>
-    <string name="join_qq_group">Tham gia nhóm QQ</string>
     <string name="bg_image_per">Đặt ảnh nền cần quyền truy cập bộ nhớ</string>
     <string name="input_book_source_url">Nhập địa chỉ nguồn sách</string>
     <string name="del_file">Xóa tệp</string>
@@ -642,7 +641,7 @@
     <string name="app_folder_picker">Bộ chọn thư mục ứng dụng</string>
     <string name="app_file_picker">Bộ chọn tệp ứng dụng</string>
     <string name="a10_permission_toast">Android 10+ không thể đọc và ghi tệp do hạn chế quyền</string>
-    <string name="add_to_text_context_menu_s">Nhấn giữ để hiển thị 阅读Archive·Tìm kiếm trong menu thao tác</string>
+    <string name="add_to_text_context_menu_s">Nhấn giữ để hiển thị 阅读H·Tìm kiếm trong menu thao tác</string>
     <string name="add_to_text_context_menu_t">Thao tác văn bản hiển thị Tìm kiếm</string>
     <string name="record_log">Ghi nhật ký</string>
     <string name="log">Nhật ký</string>
@@ -685,7 +684,7 @@
     <string name="btn_default_s">Mặc định</string>
     <string name="main_menu">Menu chính</string>
     <string name="request_permission">Chạm để cấp quyền</string>
-    <string name="tip_local_perm_request_storage">阅读Archive cần quyền truy cập bộ nhớ, vui lòng chạm vào nút "Cấp quyền" bên dưới, hoặc vào "Cài đặt"-"Quyền ứng dụng"-để mở quyền yêu cầu. Nếu quyền vẫn không hoạt động, vui lòng chạm vào "Chọn thư mục" ở góc trên bên phải để sử dụng bộ chọn thư mục hệ thống.</string>
+    <string name="tip_local_perm_request_storage">LegadoH cần quyền truy cập bộ nhớ, vui lòng chạm vào nút "Cấp quyền" bên dưới, hoặc vào "Cài đặt"-"Quyền ứng dụng"-để mở quyền yêu cầu. Nếu quyền vẫn không hoạt động, vui lòng chạm vào "Chọn thư mục" ở góc trên bên phải để sử dụng bộ chọn thư mục hệ thống.</string>
     <string name="alouding_disable">Không thể đọc văn bản đã chọn ở chế độ đọc toàn văn</string>
     <string name="read_body_to_lh">Mở rộng đến phần cắt</string>
     <string name="toc_updateing">Đang cập nhật chương</string>
@@ -746,8 +745,7 @@
     <string name="alipay_red_envelope_copy">537954522 Nhấn để sao chép</string>
     <string name="alipay_red_envelope_qr_code">Mã QR bao lì xì AliPay</string>
     <string name="alipay_payment_qr_code">Mã QR AliPay</string>
-    <string name="qq_collection_qr_code">Mã QR bộ sưu tập QQ</string>
-    <string name="contributors_summary">gedoor, Invinciblelee, Xwite, v.v. Kiểm tra trên github để biết chi tiết</string>
+    <string name="contributors_summary">Được duy trì tại helyel233/legado-H, kiểm tra trên github để biết chi tiết</string>
     <string name="clear_cache_summary">Xóa bộ đệm của sách và phông chữ đã tải xuống</string>
     <string name="default_cover">Bìa mặc định</string>
     <string name="restore_ignore">Danh sách bỏ qua</string>
@@ -951,8 +949,6 @@
     <string name="use_replace">Sử dụng thay thế</string>
     <string name="scope_title">Áp dụng cho tiêu đề</string>
     <string name="scope_content">Áp dụng cho nội dung</string>
-    <string name="join_qq_channel">Tham gia kênh QQ</string>
-    <string name="qq_channel_summary">Nhấn để tham gia kênh QQ đọc</string>
     <string name="menu_refresh_dur">Làm mới chương hiện tại</string>
     <string name="menu_refresh_after">Làm mới các chương sau</string>
     <string name="menu_refresh_all">Làm mới tất cả các chương</string>

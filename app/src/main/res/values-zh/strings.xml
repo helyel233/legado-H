@@ -2,9 +2,9 @@
     <!--App-->
     <string name="app_name">LegadoH</string>
     <string name="app_launcher_name">阅读</string>
-    <string name="app_name_a">阅读Archive·A</string>
-    <string name="app_name_s">阅读ArchivePlus</string>
-    <string name="receiving_shared_label">阅读Archive·搜索</string>
+    <string name="app_name_a">阅读H·A</string>
+    <string name="app_name_s">阅读HPlus</string>
+    <string name="receiving_shared_label">阅读·搜索</string>
     <string name="tip_perm_request_storage">阅读需要访问存储卡权限，请前往“设置”—“应用权限”，打开所需权限</string>
 
     <!--Other-->
@@ -108,7 +108,7 @@
         \u3000\u3000这是一款使用 Kotlin 全新开发的开源的阅读软件，欢迎您的加入。
     </string>
     <string name="app_share_description">
-        阅读 3.0 下载地址：\nhttps://gitee.com/zziji/legado/releases\nGitHub 备用：\nhttps://github.com/Rimchars/legado/releases
+        LegadoH 下载地址：\nhttps://github.com/helyel233/legado-H/releases
     </string>
     <string name="version_name">版本 %s</string>
     <string name="pt_background_verification">后台校验书源</string>
@@ -542,7 +542,6 @@
     <string name="theme">主题</string>
     <string name="theme_mode">主题模式</string>
     <string name="theme_mode_desc">选择主题模式</string>
-    <string name="join_qq_group">加入 QQ 群</string>
     <string name="bg_image_per">获取背景图片需存储权限</string>
     <string name="input_book_source_url">输入书源网址</string>
     <string name="del_file">删除文件</string>
@@ -839,8 +838,7 @@
     <string name="alipay_red_envelope_copy">537954522 点击复制</string>
     <string name="alipay_red_envelope_qr_code">支付宝红包二维码</string>
     <string name="alipay_payment_qr_code">支付宝收款二维码</string>
-    <string name="qq_collection_qr_code">QQ 收款二维码</string>
-    <string name="contributors_summary">gedoor、Invinciblelee 和 Xwite 等，详情请在 GitHub 中查看</string>
+    <string name="contributors_summary">当前维护仓库：helyel233/legado-H，详情请在 GitHub 中查看</string>
     <string name="clear_cache_summary">清除已下载书籍和字体缓存</string>
     <string name="default_cover">默认封面</string>
     <string name="restore_ignore">恢复忽略列表</string>
@@ -1164,8 +1162,6 @@
     <string name="use_replace">使用替换</string>
     <string name="scope_title">作用于标题</string>
     <string name="scope_content">作用于正文</string>
-    <string name="join_qq_channel">加入 QQ 频道</string>
-    <string name="qq_channel_summary">点击加入阅读 QQ 频道</string>
     <string name="menu_refresh_dur">刷新当前章节</string>
     <string name="menu_refresh_after">刷新之后章节</string>
     <string name="menu_refresh_all">刷新全部章节</string>
@@ -1693,7 +1689,7 @@
     <string name="discover_group_other">其他</string>
     <string name="ai_view_log">查看日志</string>
     <string name="change_book_source_action">更换书源</string>
-    <string name="ai_import_default_skill">安装默认 阅读Archive Skill</string>
+    <string name="ai_import_default_skill">安装默认 阅读H Skill</string>
     <string name="ai_import_default_skill_summary">从 DandanLLab/legadoSkill 下载真实 SKILL.md</string>
     <string name="ai_skill_prompt">管理 Skill</string>
     <string name="ai_skill_prompt_hint">粘贴 SKILL.md 内容</string>
