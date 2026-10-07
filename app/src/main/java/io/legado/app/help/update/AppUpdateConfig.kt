@@ -15,17 +15,11 @@ import splitties.init.appCtx
 
 object AppUpdateConfig {
 
-    const val STRATEGY_GITHUB_ONLY = "github_only"
     const val INTERNAL_BETA_KEY_HEADER = "X-Download-Key"
 
     private const val URL_PLACEHOLDER = "\${url}"
 
-    // Gitee 通道已隐藏：历史偏好中的 Gitee 策略读取时归一化为 GitHub，仅保留 GitHub 通道
-    var strategy: String
-        get() = STRATEGY_GITHUB_ONLY
-        set(value) {
-            appCtx.putPrefString(PreferKey.updateSourceStrategy, STRATEGY_GITHUB_ONLY)
-        }
+    // 更新通道固定为 GitHub Releases 单通道，Gitee 通道相关代码已彻底移除
 
     var githubProxyTemplates: List<String>
         get() {
