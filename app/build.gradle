@@ -33,7 +33,8 @@ try {
 def gitCommits = gitCommitsText?.isInteger() ? Integer.parseInt(gitCommitsText) : 0
 def buildVersionCode = project.hasProperty("VERSION_CODE")
         ? project.property("VERSION_CODE").toString().toInteger()
-        : 10000 + gitCommits
+        // 本地未显式传 -PVERSION_CODE 时的兜底：与新方案一致（基线偏移 + 提交数）
+        : 29860000 + gitCommits
 
 android {
     compileSdk = compile_sdk_version
