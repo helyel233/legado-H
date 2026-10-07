@@ -4,6 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.0 · 2026/10/07**
+
+- 新增「自动生成封面」：无真实封面地址的书籍可用 HTML 模板生成封面，支持 {{bookName}}/{{author}} 变量与多模板管理（我的-界面设置-封面）
+- 现代发现页顶栏新增三点菜单，提供「编辑书源」「搜索书籍」动作
+- 封面加载失败或挂起时自动重试（单次 12 秒超时、最多 2 次、间隔 1.5 秒），不再永久停留占位图
+- 书籍详情页目录加载失败时回退展示本地缓存目录并提示
+- 发布规则切换为 H.x.y 版本号，更新通道与检查更新同步适配
+
 **v3.2610071125 · 2026/10/07**
 
 - 修复 Compose retained store 跨 Activity 复用竞态：WaitDialog、NumberPickerDialog 等 ComposeView 设置唯一 id，避免无 id 时跨窗口共享
