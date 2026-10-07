@@ -15,7 +15,7 @@
 |---|---|---|
 | `versionName` | `H.<major>.<minor>`；常规功能/修复 +minor，重大改版/破坏性变更 +major | `H.1.0`、`H.1.1`、`H.2.0` |
 | git tag | `H-<major>.<minor>`（annotated，与 versionName 成对） | `H-1.0` |
-| `versionCode` | `git rev-list --count HEAD`（git 提交数，单调递增；CI 自动计算） | — |
+| `versionCode` | `29860000 + git rev-list --count HEAD`（基线偏移 + 提交数，CI 自动计算） | `29862140`（2140 个提交时） |
 | Release 标题 | `legado-H <major>.<minor>` | `legado-H 1.0` |
 | Release 正文 | `CHANGELOG.md`（仓库根目录） | — |
 | APK 文件名 | `legado-<abi>_app_H.<x.y>_<CODE>.apk`（CI 自动生成） | `legado-arm64-v8a_app_H.1.0_1337.apk` |
@@ -26,7 +26,7 @@
 ### 版本号与包名解析约束（应用内检查更新依赖）
 
 - 应用内检查更新从 GitHub Releases 资产文件名解析版本（`AppUpdate.versionInfoFromFileName`，正则 `(\d+(?:\.\d+)+)_(\d+)`）。**资产文件名必须保持 `<x.y>_<CODE>` 连续段**，CI 命名已满足；手工上传/改名时不得破坏。
-- `H.` 前缀的 versionName 不以数字开头，不参与字符串比较；新旧版本判定**完全依赖 versionCode**（git 提交数单调递增），因此同一版本重复构建不产生新 versionCode，重复 dispatch 前必须确认版本号已 bump。
+- `H.` 前缀的 versionName 不以数字开头，不参与字符串比较；新旧版本判定**完全依赖 versionCode**（基线偏移 29860000 + 提交数，单调递增；29860000 高于全部旧 `legadoh-3.x` 的 epoch 分钟 code，保证旧版用户能收到更新提示），因此同一版本重复构建不产生新 versionCode，重复 dispatch 前必须确认版本号已 bump。
 - 发布前冲突检查：`git log --oneline -6` + `git tag -l` 确认最新 tag，新版本号（minor/major）必须严格递增，不得沿用其他会话可能已发布的版本号。
 
 ## 2. 发布前准备（全部完成后再触发 CI）
@@ -68,7 +68,7 @@ git push origin "H-<x.y>"
 - Release 资产 `state=uploaded`，两个 ABI 的 APK 均在；
 - 下载远端 APK 与本地比对 SHA-256（或核对文件大小）；
 - 安装包内自检：`unzip -p <apk> assets/updateLog.md | head` 确认含本版条目；
-- 用包内 `output-metadata.json` 核对 versionName=`H.<x.y>`、versionCode=提交数。
+- 用包内 `output-metadata.json` 核对 versionName=`H.<x.y>`、versionCode=29860000+提交数。
 
 ## 5. `android-fast-release.yml` 的 H 风格要点
 
@@ -80,7 +80,8 @@ git push origin "H-<x.y>"
     id: version
     run: |
       VERSION_NAME="H.${{ inputs.version }}"
-      VERSION_CODE=$(git rev-list --count HEAD)
+      # 基线偏移：29860000 高于全部旧版（epoch 分钟数）versionCode，保证应用内检查更新能识别为更新
+      VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
       TAG_NAME="H-${{ inputs.version }}"
       {
         echo "name=${VERSION_NAME}"

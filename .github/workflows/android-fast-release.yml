@@ -44,7 +44,8 @@ jobs:
         id: version
         run: |
           VERSION_NAME="H.${{ inputs.version }}"
-          VERSION_CODE=$(git rev-list --count HEAD)
+          # 基线偏移：29860000 高于全部旧版（epoch 分钟数）versionCode，保证应用内检查更新能识别为更新
+          VERSION_CODE=$((29860000 + $(git rev-list --count HEAD)))
           TAG_NAME="H-${{ inputs.version }}"
           {
             echo "name=${VERSION_NAME}"
