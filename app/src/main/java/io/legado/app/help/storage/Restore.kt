@@ -76,6 +76,7 @@ import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.restart
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
@@ -407,11 +408,17 @@ object Restore {
         bookshelfRebuildPending = true
         appCtx.toastOnUi(R.string.restore_success)
         withContext(Main) {
-            delay(100)
+            delay(1500)
             if (!BuildConfig.DEBUG) {
                 LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
             }
-            ThemeConfig.applyDayNight(appCtx)
+            // 恢复覆盖了偏好/主题/书架等全局状态。此处不能走原 applyDayNight 的
+            // RECREATE 风暴：多 Activity 同时 recreate 会让 Compose retained store
+            // 条目跨 Activity 复用，并与 setDefaultNightMode 触发的 recreate 二次
+            // 交错，在部分设备（vivo / Android 16 实测）击穿 "ManagedValuesStore
+            // tried to enter composition twice" 断言。
+            // 改为整应用重启，恢复后的状态在新进程全新加载。
+            appCtx.restart()
         }
     }
 
@@ -1014,7 +1021,9 @@ object Restore {
                 AppLog.put("恢复底栏包出错\n${it.localizedMessage}", it)
             }
         }
-        postEvent(EventBus.RECREATE, "")
+        // 不再发 RECREATE 事件：恢复成功后统一重启应用（见 restore 尾部），
+        // 顶栏/底栏包在新进程加载；RECREATE 会让多 Activity 同时重建，
+        // 触发 Compose retained store 条目跨 Activity 复用竞态（见尾部注释）。
         postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
         postEvent(EventBus.NAVIGATION_BAR_CHANGED, AppConfig.isNightTheme)
     }

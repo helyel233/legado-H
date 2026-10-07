@@ -80,7 +80,8 @@ import kotlin.math.ceil
 class TextActionMenu(private val context: Context, private val callBack: CallBack) :
     PopupWindow(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT) {
 
-    private val composeView = ComposeView(context)
+    // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，无 id 会与其它 overlay 共享
+    private val composeView = ComposeView(context).apply { id = View.generateViewId() }
     private val allMenuItems: List<MenuItemImpl>
     private var menuActions by mutableStateOf<List<TextMenuAction>>(emptyList())
     private var popupWidthPx by mutableIntStateOf(1)

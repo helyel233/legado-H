@@ -1,6 +1,7 @@
 package io.legado.app.ui.file
 
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.addCallback
 import androidx.activity.viewModels
@@ -51,6 +52,8 @@ class FileManageActivity : io.legado.app.base.VMBaseActivity<ActivityFileManageB
         val container = binding.container
         container.removeAllViews()
         val cv = ComposeView(this).apply {
+            // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域
+            id = View.generateViewId()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

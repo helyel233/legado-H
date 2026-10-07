@@ -2,6 +2,7 @@ package io.legado.app.ui.widget.dialog
 
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
+import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import androidx.activity.ComponentDialog
@@ -49,6 +50,8 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
         setCanceledOnTouchOutside(false)
         setContentView(
             ComposeView(context).apply {
+                // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，避免无 id 时共享
+                id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     val style = rememberAppDialogStyle()

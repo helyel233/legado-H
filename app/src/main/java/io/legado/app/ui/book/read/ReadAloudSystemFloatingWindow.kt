@@ -741,11 +741,21 @@ internal class ReadAloudSystemFloatingWindow(
         init {
             savedStateController.performAttach()
             savedStateController.performRestore(null)
+            // 悬浮窗内容不消费生命周期状态，固定为 RESUMED：compose-ui 会按
+            // (ViewModelStoreOwner, viewId) 创建 retained store，并随本 registry 的
+            // STOP/RESUME 做 exit/enter 迁移；悬浮窗独立于服务反复 add/removeView，
+            // 条目跨 attach 复用，镜像的 STOP/RESUME 与条目复用交错可能触发
+            // "ManagedValuesStore tried to enter composition twice" 崩溃。
+            // 固定 RESUMED 后条目永不进入保留态，迁移断言不可达。
+            lifecycleRegistry.currentState = Lifecycle.State.RESUMED
             serviceLifecycleOwner.lifecycle.addObserver(this)
         }
 
         override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-            lifecycleRegistry.handleLifecycleEvent(event)
+            // 仅镜像销毁事件用于释放组合；不镜像 START/STOP/RESUME
+            if (event == Lifecycle.Event.ON_DESTROY) {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            }
         }
 
         fun clear() {

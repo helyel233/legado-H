@@ -3,6 +3,7 @@ package io.legado.app.ui.widget
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.KeyEvent
+import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
@@ -92,6 +93,8 @@ object SourceSelectDialog {
         }
         dialog.setContentView(
             ComposeView(context).apply {
+                // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，避免无 id 时共享
+                id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
                     SourceSelectContent(

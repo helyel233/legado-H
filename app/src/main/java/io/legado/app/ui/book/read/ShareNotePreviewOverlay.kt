@@ -77,7 +77,8 @@ class ShareNotePreviewOverlay private constructor(
     private var webView = WebView(activity)
     private val previewImage = ImageView(activity)
     private val statusView = TextView(activity)
-    private val bottomBar = ComposeView(activity)
+    // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，无 id 会与其它 overlay 共享
+    private val bottomBar = ComposeView(activity).apply { id = View.generateViewId() }
     private var currentEntry = initialEntry
     private var selectedDirName by mutableStateOf(initialEntry.dirName)
     private var selectedTemplateName by mutableStateOf(initialEntry.meta.name)

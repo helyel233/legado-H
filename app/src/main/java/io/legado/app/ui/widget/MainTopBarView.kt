@@ -73,6 +73,8 @@ class MainTopBarView @JvmOverloads constructor(
         clipToPadding = false
     }
     private val backgroundLayer = ComposeView(context).apply {
+        // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，避免与其它无 id ComposeView 共享
+        id = View.generateViewId()
         isClickable = false
         isFocusable = false
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO

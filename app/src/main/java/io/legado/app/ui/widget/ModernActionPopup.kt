@@ -135,6 +135,9 @@ object ModernActionPopup {
         val visibleState = mutableStateOf(false)
         var handle: Handle? = null
         val overlay = ComposeView(host.context).apply {
+            // 唯一 id：compose retained store 以 (ViewModelStoreOwner, viewId) 为作用域，
+            // 无 id 时所有 overlay 共享同一 store，快速切换会触发重复进入 composition 崩溃
+            id = View.generateViewId()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             installViewTreeOwnersFrom(anchor, host.context)
             isFocusable = true
@@ -262,6 +265,8 @@ object ModernActionPopup {
         val visibleState = mutableStateOf(false)
         var handle: Handle? = null
         val overlay = ComposeView(context).apply {
+            // 同上：唯一 id 避免与其它 overlay 共享 retained store 作用域
+            id = View.generateViewId()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             installViewTreeOwnersFrom(host, context)
             isFocusable = true
