@@ -110,7 +110,8 @@ object AppCloudStorage {
                 val assetsZip = File(appCtx.cacheDir, "restore_assets_${UUID.randomUUID()}.zip")
                 try {
                     storage(S3ContainerScope.MAIN_BACKUP).downloadTo(assetsName, assetsZip, true)
-                    BackupArchiveExtractor.extract(assetsZip, File(Backup.backupPath))
+                    // 追加解压：不清空目标目录，否则会把主包已恢复的书架/书源等全部删掉
+                    BackupArchiveExtractor.extract(assetsZip, File(Backup.backupPath), resetDestination = false)
                 } catch (e: Exception) {
                     io.legado.app.constant.AppLog.put("恢复资源包出错 $assetsName\n${e.localizedMessage}", e)
                 } finally {

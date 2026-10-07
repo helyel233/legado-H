@@ -74,13 +74,18 @@ internal object BackupArchiveExtractor {
     fun extract(
         zipFile: File,
         destination: File,
+        resetDestination: Boolean = true,
         policy: BackupArchivePolicy = defaultPolicy,
         usableSpace: Long = destination.parentFile?.usableSpace ?: destination.usableSpace
     ) {
         require(zipFile.isFile && zipFile.length() in 1..policy.maxArchiveBytes) {
             "backup archive is empty or too large"
         }
-        resetDestination(destination)
+        // 追加模式（resetDestination=false）用于资源包与主包解压到同一目录：
+        // 主包内容已在目录中，逐个资源包解压时绝不能再清空目标
+        if (resetDestination) {
+            resetDestination(destination)
+        }
         try {
             SafeZipExtractor.extract(
                 zipFile = zipFile,
@@ -88,7 +93,9 @@ internal object BackupArchiveExtractor {
                 limits = policy.limitsFor(usableSpace)
             )
         } catch (error: Throwable) {
-            runCatching { resetDestination(destination) }
+            if (resetDestination) {
+                runCatching { resetDestination(destination) }
+            }
             throw error
         }
     }

@@ -85,7 +85,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
-        requireContext().putPrefBoolean(PreferKey.webService, WebService.isRun)
         initSearchView()
         applySearchBarStyle()
         installComposeContent()
@@ -227,7 +226,9 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         requireContext().putPrefString(PreferKey.themeMode, value)
         themeModeState.value = value
         view?.post {
-            ThemeConfig.applyDayNight(requireContext())
+            //延迟到下一帧执行时 Fragment 可能已分离，requireContext 会抛 IllegalStateException
+            val context = context ?: return@post
+            ThemeConfig.applyDayNight(context)
         }
     }
 

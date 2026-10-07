@@ -2,6 +2,7 @@ package io.legado.app.help.storage
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -169,7 +170,8 @@ object BookCacheZip {
                 } ?: return@withContext
                 outFile
             } else {
-                File(zipUri.path!!)
+                val zipPath = zipUri.path ?: return@withContext
+                File(zipPath)
             }
             onProgress(appCtx.getString(R.string.book_cache_import_extracting))
             SafeZipExtractor.extract(
@@ -381,14 +383,48 @@ object BookCacheZip {
     private fun writeZipToTarget(context: Context, targetUri: Uri, zipFile: File, zipName: String) {
         if (targetUri.isContentScheme()) {
             val targetDir = DocumentFile.fromTreeUri(context, targetUri) ?: return
-            val docFile = targetDir.findFile(zipName)
-                ?: targetDir.createFile("application/zip", zipName)
-                ?: return
-            context.contentResolver.openOutputStream(docFile.uri)?.use { output ->
-                zipFile.inputStream().use { input -> input.copyTo(output) }
+            // 先写临时文件成功后再替换目标：同名旧包被截断后写入中断会得到坏 zip
+            val tmpName = "$zipName.tmp"
+            targetDir.findFile(tmpName)?.delete()
+            val tmpDoc = targetDir.createFile("application/zip", tmpName) ?: return
+            val copied = runCatching {
+                context.contentResolver.openOutputStream(tmpDoc.uri)?.use { output ->
+                    zipFile.inputStream().use { input -> input.copyTo(output) }
+                } != null
+            }.getOrDefault(false)
+            if (!copied) {
+                tmpDoc.delete()
+                return
+            }
+            targetDir.findFile(zipName)?.delete()
+            val renamed = runCatching {
+                DocumentsContract.renameDocument(context.contentResolver, tmpDoc.uri, zipName)
+            }.getOrNull()
+            if (renamed == null) {
+                // provider 不支持重命名：退回复制临时文件内容到目标
+                val docFile = targetDir.createFile("application/zip", zipName)
+                if (docFile == null) {
+                    tmpDoc.delete()
+                    return
+                }
+                runCatching {
+                    context.contentResolver.openInputStream(tmpDoc.uri)?.use { input ->
+                        context.contentResolver.openOutputStream(docFile.uri)?.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                tmpDoc.delete()
             }
         } else {
-            zipFile.copyTo(File(targetUri.path!!, zipName), overwrite = true)
+            val targetDir = File(targetUri.path ?: return)
+            val target = File(targetDir, zipName)
+            val tmp = File(targetDir, "$zipName.tmp")
+            zipFile.copyTo(tmp, overwrite = true)
+            if (!tmp.renameTo(target)) {
+                zipFile.copyTo(target, overwrite = true)
+                tmp.delete()
+            }
         }
     }
 }

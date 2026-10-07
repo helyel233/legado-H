@@ -2,6 +2,7 @@ package io.legado.app.help.storage
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.google.gson.stream.JsonWriter
@@ -66,7 +67,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import androidx.core.content.edit
 import io.legado.app.model.VideoPlay.VIDEO_PREF_NAME
 
 /**
@@ -99,6 +99,9 @@ object Backup {
 
     /** 与 [Restore] 共享的互斥锁：备份会删建备份目录，恢复会解压到同一目录，必须互斥。 */
     internal val mutex = Mutex()
+
+    /** [pendingShelfChangeJob] 的 cancel-assign 原子化锁：书架变动回调可能来自多线程。 */
+    private val pendingShelfChangeLock = Any()
 
     /**
      * 「书架变动自动备份」的去抖任务。
@@ -220,41 +223,43 @@ object Backup {
             AppLog.put("书架变动自动备份已跳过：恢复流程进行中")
             return
         }
-        pendingShelfChangeJob?.cancel()
-        pendingShelfChangeJob = Coroutine.async(Coroutine.defaultScope) {
-            // 去抖：连续的增删（如批量导入、批量删除）只触发一次。
-            delay(SHELF_CHANGE_DEBOUNCE_MS)
-            // 去抖期间开关可能被关闭或进了恢复，这里复查一次。
-            if (!AppConfig.autoBackupOnShelfChange || Restore.isRestoring) {
-                return@async
+        synchronized(pendingShelfChangeLock) {
+            pendingShelfChangeJob?.cancel()
+            pendingShelfChangeJob = Coroutine.async(Coroutine.defaultScope) {
+                // 去抖：连续的增删（如批量导入、批量删除）只触发一次。
+                delay(SHELF_CHANGE_DEBOUNCE_MS)
+                // 去抖期间开关可能被关闭或进了恢复，这里复查一次。
+                if (!AppConfig.autoBackupOnShelfChange || Restore.isRestoring) {
+                    return@async
+                }
+                // 持锁后再复查：恢复流程（restoreLocked）持同一把锁，锁内复查可保证
+                // 备份删建 backupPath 与恢复解压到 backupPath 互斥。
+                mutex.withLock {
+                    if (Restore.isRestoring) {
+                        AppLog.put("书架变动自动备份已跳过：恢复流程进行中")
+                        return@withLock
+                    }
+                    val backupPath = AppConfig.backupPath
+                    if (backupPath.isNullOrBlank()) {
+                        // 未配置备份路径：跳过并记日志，不弹 UI（自动行为不该打断用户）。
+                        AppLog.put("书架变动自动备份已跳过：未配置备份路径")
+                        return@withLock
+                    }
+                    val currentKeys = ShelfIdentity.keysOf(appDb.bookDao.all)
+                    if (encodeKeys(currentKeys) == LocalConfig.lastShelfKeys) {
+                        // 补跳过日志：消除「开关开着但从不备份」时的静默出口，便于排查。
+                        AppLog.put("书架变动自动备份已跳过：身份键集合未变化")
+                        return@withLock
+                    }
+                    backup(context, backupPath)
+                    // ⚠️ 记账必须放在**备份成功之后**：放在开头的话，备份中途被取消/进程被杀
+                    // 会留下「标记已更新但备份没做成」，该次变动此后永不补备份。
+                    LocalConfig.lastShelfKeys = encodeKeys(currentKeys)
+                    AppLog.put("书架变动自动备份完成：${currentKeys.size} 本在线书")
+                }
+            }.onError {
+                AppLog.put("书架变动自动备份失败\n${it.localizedMessage}", it)
             }
-            // 持锁后再复查：恢复流程（restoreLocked）持同一把锁，锁内复查可保证
-            // 备份删建 backupPath 与恢复解压到 backupPath 互斥。
-            mutex.withLock {
-                if (Restore.isRestoring) {
-                    AppLog.put("书架变动自动备份已跳过：恢复流程进行中")
-                    return@withLock
-                }
-                val backupPath = AppConfig.backupPath
-                if (backupPath.isNullOrBlank()) {
-                    // 未配置备份路径：跳过并记日志，不弹 UI（自动行为不该打断用户）。
-                    AppLog.put("书架变动自动备份已跳过：未配置备份路径")
-                    return@withLock
-                }
-                val currentKeys = ShelfIdentity.keysOf(appDb.bookDao.all)
-                if (encodeKeys(currentKeys) == LocalConfig.lastShelfKeys) {
-                    // 补跳过日志：消除「开关开着但从不备份」时的静默出口，便于排查。
-                    AppLog.put("书架变动自动备份已跳过：身份键集合未变化")
-                    return@withLock
-                }
-                backup(context, backupPath)
-                // ⚠️ 记账必须放在**备份成功之后**：放在开头的话，备份中途被取消/进程被杀
-                // 会留下「标记已更新但备份没做成」，该次变动此后永不补备份。
-                LocalConfig.lastShelfKeys = encodeKeys(currentKeys)
-                AppLog.put("书架变动自动备份完成：${currentKeys.size} 本在线书")
-            }
-        }.onError {
-            AppLog.put("书架变动自动备份失败\n${it.localizedMessage}", it)
         }
     }
 
@@ -342,51 +347,38 @@ object Backup {
         }
         exportSourceRuntime()
         currentCoroutineContext().ensureActive()
-        appCtx.getSharedPreferences(backupPath, "config")?.let { sp ->
-            val edit = sp.edit()
-            appCtx.defaultSharedPreferences.all.forEach { (key, value) ->
-                if (BackupConfig.keyIsNotIgnore(key)) {
-                    when (key) {
-                        PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken -> {
-                            edit.putString(key, aes.runCatching {
-                                encryptBase64(value.toString())
-                            }.getOrDefault(value.toString()))
-                        }
-
-                        PreferKey.s3Containers -> {
-                            edit.putString(key, S3ContainerManager.toEncryptedBackupJson(aes) ?: value.toString())
-                        }
-
-                        else -> when (value) {
-                            is Int -> edit.putInt(key, value)
-                            is Boolean -> edit.putBoolean(key, value)
-                            is Long -> edit.putLong(key, value)
-                            is Float -> edit.putFloat(key, value)
-                            is String -> edit.putString(key, value)
-                            is Set<*> -> edit.putStringSet(
-                                key,
-                                value.mapNotNull { it?.toString() }.toSet()
-                            )
+        // 直接以文件形式写入 config.xml：SharedPreferences 进程级缓存只在首次
+        // 创建时读盘，且会残留上次备份的键（如后来开启「忽略阅读配置」前的键），
+        // 直接读写绕开缓存，每次都依据当前偏好生成完整文件
+        val configValues = mutableMapOf<String, Any?>()
+        appCtx.defaultSharedPreferences.all.forEach { (key, value) ->
+            if (BackupConfig.keyIsNotIgnore(key)) {
+                when (key) {
+                    PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken -> {
+                        // 加密失败跳过该键：绝不能把明文密码落进备份包
+                        val plain = value?.toString().orEmpty()
+                        if (plain.isNotEmpty()) {
+                            runCatching { aes.encryptBase64(plain) }.getOrNull()?.let {
+                                configValues[key] = it
+                            } ?: AppLog.put("备份加密 $key 失败，已跳过该键")
                         }
                     }
+
+                    PreferKey.s3Containers -> {
+                        configValues[key] = S3ContainerManager.toEncryptedBackupJson(aes) ?: value?.toString()
+                    }
+
+                    else -> configValues[key] = value
                 }
             }
-            edit.commit()
         }
+        BackupPrefsFile.write(File(backupPath, "config.xml"), configValues)
         currentCoroutineContext().ensureActive()
-        appCtx.getSharedPreferences(backupPath, "videoConfig")?.let { sp ->
-            sp.edit(commit = true) {
-                appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).all.forEach { (key, value) ->
-                    when (value) {
-                        is Int -> putInt(key, value)
-                        is Boolean -> putBoolean(key, value)
-                        is Long -> putLong(key, value)
-                        is Float -> putFloat(key, value)
-                        is String -> putString(key, value)
-                    }
-                }
-            }
-        }
+        // 直接以文件形式写入 videoConfig.xml（同 config.xml，绕开 SP 进程缓存）
+        BackupPrefsFile.write(
+            File(backupPath, "videoConfig.xml"),
+            appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).all
+        )
         currentCoroutineContext().ensureActive()
         val zipFileName = getNowZipFileName()
         val zipSources = arrayListOf<ZipUtils.ZipSource>()
@@ -425,55 +417,62 @@ object Backup {
             zipFileName
         }
         var backupSuccess = false
-        reporter.report(BackupProgress(BackupStage.PACKING), force = true)
-        if (ZipUtils.zipFiles(zipSources, zipFilePath) { processed, total ->
-                reporter.report(BackupProgress(BackupStage.PACKING, processed, total))
-            }) {
-            reporter.report(BackupProgress(BackupStage.SAVING), force = true)
-            when {
-                path.isNullOrBlank() -> {
-                    copyBackup(context.getExternalFilesDir(null)!!, backupFileName) { processed, total ->
-                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+        try {
+            reporter.report(BackupProgress(BackupStage.PACKING), force = true)
+            if (ZipUtils.zipFiles(zipSources, zipFilePath) { processed, total ->
+                    reporter.report(BackupProgress(BackupStage.PACKING, processed, total))
+                }) {
+                reporter.report(BackupProgress(BackupStage.SAVING), force = true)
+                when {
+                    path.isNullOrBlank() -> {
+                        val fallbackDir = context.getExternalFilesDir(null)
+                            ?: throw NoStackTraceException("外部存储不可用")
+                        copyBackup(fallbackDir, backupFileName) { processed, total ->
+                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                        }
                     }
-                }
 
-                path.isContentScheme() -> {
-                    copyBackup(context, path.toUri(), backupFileName) { processed, total ->
-                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                    path.isContentScheme() -> {
+                        copyBackup(context, path.toUri(), backupFileName) { processed, total ->
+                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                        }
                     }
-                }
 
-                else -> {
-                    copyBackup(File(path), backupFileName) { processed, total ->
-                        reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                    else -> {
+                        copyBackup(File(path), backupFileName) { processed, total ->
+                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
+                        }
                     }
                 }
-            }
-            if (uploadCloud) {
-                val cloudType = if (uploadWebDavFallback) CloudStorageType.WEBDAV else AppCloudStorage.type
-                AppLog.put("Upload cloud backup: ${cloudType.name} $zipFileName")
-                reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
-                if (uploadWebDavFallback) {
-                    AppCloudStorage.backupToWebDav(zipFileName)
-                } else {
-                    AppCloudStorage.backup(zipFileName)
+                if (uploadCloud) {
+                    val cloudType = if (uploadWebDavFallback) CloudStorageType.WEBDAV else AppCloudStorage.type
+                    AppLog.put("Upload cloud backup: ${cloudType.name} $zipFileName")
+                    reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
+                    if (uploadWebDavFallback) {
+                        AppCloudStorage.backupToWebDav(zipFileName)
+                    } else {
+                        AppCloudStorage.backup(zipFileName)
+                    }
+                    AppLog.put("Cloud backup finished: ${cloudType.name} $zipFileName")
+                    AppCloudStorage.upBookCovers()
                 }
-                AppLog.put("Cloud backup finished: ${cloudType.name} $zipFileName")
-                AppCloudStorage.upBookCovers()
+                backupSuccess = true
+                if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
+                    backupAssetsSeparately(context, path, assetSources, reporter, uploadCloud)
+                }
+            } else {
+                throw NoStackTraceException("创建备份压缩包失败")
             }
-            backupSuccess = true
-            if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
-                backupAssetsSeparately(context, path, assetSources, reporter, uploadCloud)
+            if (backupSuccess) {
+                LocalConfig.lastBackup = System.currentTimeMillis()
+                LogUtils.d(TAG, "备份完成")
             }
-        } else {
-            throw NoStackTraceException("创建备份压缩包失败")
+        } finally {
+            // 无论成功失败都清理：上传失败时若跳过清理，含明文数据的临时 zip
+            // 与备份目录会一直残留在 externalFiles 里
+            FileUtils.delete(backupPath)
+            FileUtils.delete(zipFilePath)
         }
-        if (backupSuccess) {
-            LocalConfig.lastBackup = System.currentTimeMillis()
-            LogUtils.d(TAG, "备份完成")
-        }
-        FileUtils.delete(backupPath)
-        FileUtils.delete(zipFilePath)
         // fonts_collect 临时目录保留复用：SAF 字体复制件 mtime 稳定才能让源级指纹命中跳传；
         // 仅 clearCache 时清理。
         currentCoroutineContext().ensureActive()
@@ -777,7 +776,12 @@ object Backup {
             reporter.report(BackupProgress(BackupStage.SAVING), force = true)
             when {
                 path.isNullOrBlank() ->
-                    copyBackup(context.getExternalFilesDir(null)!!, assetsZipName, assetsZipFile)
+                    copyBackup(
+                        context.getExternalFilesDir(null)
+                            ?: throw NoStackTraceException("外部存储不可用"),
+                        assetsZipName,
+                        assetsZipFile
+                    )
                 path.isContentScheme() ->
                     copyBackup(context, path.toUri(), assetsZipName, assetsZipFile)
                 else ->
@@ -933,15 +937,38 @@ object Backup {
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
         val treeDoc = DocumentFile.fromTreeUri(context, uri)!!
-        treeDoc.findFile(fileName)?.delete()
-        val fileDoc = treeDoc.createFile("", fileName)
-            ?: throw NoStackTraceException("创建文件失败")
-        val outputS = fileDoc.openOutputStream()
-            ?: throw NoStackTraceException("打开OutputStream失败")
-        outputS.use {
-            FileInputStream(sourceFile).use { inputS ->
-                copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
+        // 写临时文件成功后再替换目标：直接删旧建新再覆盖写，过程中断
+        // （进程被杀/断电/存储瞬满）会把上一份完好的备份一并毁掉
+        val tmpName = "$fileName.tmp"
+        treeDoc.findFile(tmpName)?.delete()
+        val tmpDoc = treeDoc.createFile("", tmpName)
+            ?: throw NoStackTraceException("创建临时文件失败")
+        try {
+            val outputS = tmpDoc.openOutputStream()
+                ?: throw NoStackTraceException("打开OutputStream失败")
+            outputS.use {
+                FileInputStream(sourceFile).use { inputS ->
+                    copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
+                }
             }
+            val oldDoc = treeDoc.findFile(fileName)
+            oldDoc?.delete()
+            val renamed = runCatching {
+                DocumentsContract.renameDocument(context.contentResolver, tmpDoc.uri, fileName)
+            }.getOrNull()
+            if (renamed == null) {
+                // provider 不支持重命名：退回复制临时文件内容到目标
+                val fileDoc = treeDoc.createFile("", fileName)
+                    ?: throw NoStackTraceException("创建文件失败")
+                runCatching {
+                    context.contentResolver.openInputStream(tmpDoc.uri)?.use { input ->
+                        fileDoc.openOutputStream()?.use { output -> input.copyTo(output) }
+                    }
+                }
+            }
+        } finally {
+            // 成功（tmp 已改名）或失败都清理临时文件
+            runCatching { treeDoc.findFile(tmpName)?.delete() }
         }
     }
 
@@ -953,11 +980,25 @@ object Backup {
         sourceFile: File = File(zipFilePath),
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
-        FileInputStream(sourceFile).use { inputS ->
-            val file = FileUtils.createFileIfNotExist(rootFile, fileName)
-            FileOutputStream(file).use { outputS ->
-                copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
+        val file = FileUtils.createFileIfNotExist(rootFile, fileName)
+        // 先写临时文件再替换：FileOutputStream 直接截断覆盖旧备份，中断即毁唯一备份
+        val tmp = File(rootFile, "$fileName.tmp")
+        try {
+            FileInputStream(sourceFile).use { inputS ->
+                FileOutputStream(tmp).use { outputS ->
+                    copyStreamWithProgress(inputS, outputS, sourceFile, onProgress)
+                }
             }
+            if (!tmp.renameTo(file)) {
+                // rename 失败（跨文件系统等）：退回复制
+                FileInputStream(tmp).use { inputS ->
+                    FileOutputStream(file).use { outputS -> inputS.copyTo(outputS) }
+                }
+                tmp.delete()
+            }
+        } catch (e: Throwable) {
+            tmp.delete()
+            throw e
         }
     }
 

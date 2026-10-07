@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.withTransaction
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -14,6 +15,7 @@ import io.legado.app.constant.AppConst.androidId
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
@@ -71,13 +73,13 @@ import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
-import io.legado.app.utils.getSharedPreferences
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.restart
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.withLock
@@ -137,31 +139,44 @@ object Restore {
                 // 资源包（字体/背景图/头像）与主包解压到同一目录，恢复逻辑按条目前缀统一处理；
                 // 单个资源包失败不阻断主包恢复。
                 assetsUris.forEach { assetsUri ->
-                    runCatching { extractUriToBackupPath(context, assetsUri) }.onFailure {
+                    // 资源包追加解压：不清空目标目录，否则会把主包已恢复的书架/书源等全部删掉
+                    runCatching {
+                        extractUriToBackupPath(context, assetsUri, resetDestination = false)
+                    }.onFailure {
                         AppLog.put("恢复资源包出错\n${it.localizedMessage}", it)
                     }
                 }
             }
             LocalConfig.lastBackup = System.currentTimeMillis()
         }.onFailure {
+            // 用户主动取消不是恢复出错：重新抛出让协程正常结束，避免误报「恢复备份出错\nnull」
+            if (it is CancellationException) {
+                throw it
+            }
             appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
             AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
         }
     }
 
-    private fun extractUriToBackupPath(context: Context, uri: Uri): Result<Unit> = runCatching {
+    private fun extractUriToBackupPath(
+        context: Context,
+        uri: Uri,
+        resetDestination: Boolean = true
+    ): Result<Unit> = runCatching {
         if (uri.isContentScheme()) {
             val tempArchive = File(context.cacheDir, "restore_${UUID.randomUUID()}.zip")
             try {
                 DocumentFile.fromSingleUri(context, uri)!!.openInputStream()!!.use { input ->
                     BackupArchiveExtractor.copyToTemporaryFile(input, tempArchive)
                 }
-                BackupArchiveExtractor.extract(tempArchive, File(Backup.backupPath))
+                BackupArchiveExtractor.extract(tempArchive, File(Backup.backupPath), resetDestination)
             } finally {
                 tempArchive.delete()
             }
         } else {
-            BackupArchiveExtractor.extract(File(uri.path!!), File(Backup.backupPath))
+            val filePath = uri.path
+                ?: throw NoStackTraceException("无效的文件路径")
+            BackupArchiveExtractor.extract(File(filePath), File(Backup.backupPath), resetDestination)
         }
     }
 
@@ -241,8 +256,12 @@ object Restore {
             insertRestored(it) { items -> appDb.dictRuleDao.insert(*items) }
         }
         fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
-            appDb.keyboardAssistsDao.deleteAll() //先删除所有,保证和备份数据一样
-            insertRestored(it) { items -> appDb.keyboardAssistsDao.insert(*items) }
+            // 先删后插必须在同一事务：快照回滚只覆盖文件不覆盖数据库，
+            // 中途失败会让本机全部键盘辅助配置永久丢失
+            appDb.withTransaction {
+                appDb.keyboardAssistsDao.deleteAll() //先删除所有,保证和备份数据一样
+                insertRestored(it) { items -> appDb.keyboardAssistsDao.insert(*items) }
+            }
         }
         restoreAutoTasks(path)
         fileToListT<ReadRecord>(path, "readRecord.json")?.let {
@@ -339,7 +358,10 @@ object Restore {
         restoreCoverCollections(path)
         restoreVisualResourcePackages(path)
         restoreSourceRuntime(path)
-        appCtx.getSharedPreferences(path, "config")?.all?.let { map ->
+        // 直接以文件形式读取 config.xml：SharedPreferences 进程级缓存只在首次
+        // 创建时读盘，本机此前若做过备份，缓存里还是本机上次备份的旧值，
+        // 直接读文件才能拿到刚解压出来的备份内容
+        BackupPrefsFile.read(File(path, "config.xml"))?.let { map ->
             val edit = appCtx.defaultSharedPreferences.edit()
 
             map.forEach { (key, value) ->
@@ -349,14 +371,13 @@ object Restore {
                 ) {
                     when (key) {
                         PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken -> {
-                            kotlin.runCatching {
-                                aes.decryptStr(value.toString())
-                            }.getOrNull()?.let {
-                                edit.putString(key, it)
-                            } ?: let {
-                                if (appCtx.getPrefString(key).isNullOrBlank()) {
-                                    edit.putString(key, value.toString())
-                                }
+                            // 解密失败说明本机加密密码与备份端不同：跳过该键，
+                            // 绝不能把密文当明文写入造成永久认证失败
+                            val decrypted = value?.toString()?.let { plain ->
+                                kotlin.runCatching { aes.decryptStr(plain) }.getOrNull()
+                            }
+                            if (decrypted != null) {
+                                edit.putString(key, decrypted)
                             }
                         }
 
@@ -385,21 +406,24 @@ object Restore {
         refreshWebDavAfterRestore()
         restoreBookCovers()
         restoreReadConfigBackgrounds()
+        // restoreBookCovers/restoreReadConfigBackgrounds 恢复的资源可能再次引入
+        // 待修复状态（封面引用/背景文件），故在资源恢复完成后再次执行修复
         ReaderDataRepair.repairAfterRestore()
         restoreAppliedUiPackages()
-        appCtx.getSharedPreferences(path, "videoConfig")?.all?.let { map ->
-            appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit().apply {
-                map.forEach { (key, value) ->
-                    when (value) {
-                        is Int -> putInt(key, value)
-                        is Boolean -> putBoolean(key, value)
-                        is Long -> putLong(key, value)
-                        is Float -> putFloat(key, value)
-                        is String -> putString(key, value)
-                    }
+        // 直接读文件（同 config.xml，绕开 SharedPreferences 进程缓存）；
+        // commit 同步落盘：随后 1.5 秒即整进程重启，apply 异步写可能丢失
+        BackupPrefsFile.read(File(path, "videoConfig.xml"))?.let { map ->
+            val videoEdit = appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit()
+            map.forEach { (key, value) ->
+                when (value) {
+                    is Int -> videoEdit.putInt(key, value)
+                    is Boolean -> videoEdit.putBoolean(key, value)
+                    is Long -> videoEdit.putLong(key, value)
+                    is Float -> videoEdit.putFloat(key, value)
+                    is String -> videoEdit.putString(key, value)
                 }
-                apply()
             }
+            videoEdit.commit()
         }
         AutoTask.refreshSchedule()
         // ⚠️ 「按备份覆盖」的删书放在所有可能失败的步骤之后：若在前面执行，
@@ -1073,152 +1097,6 @@ object Restore {
             val restoredFile = File(fontDir, fileName)
             if (restoredFile.exists()) {
                 edit.putString(key, restoredFile.absolutePath)
-                changed = true
-            }
-        }
-        if (changed) {
-            edit.commit()
-        }
-    }
-
-    private fun normalizeStringPrefs() {
-        val stringKeys = setOf(
-            PreferKey.language,
-            PreferKey.themeMode,
-            PreferKey.userAgent,
-            PreferKey.customHosts,
-            PreferKey.bookGroupStyle,
-            PreferKey.bookshelfHiddenTags,
-            PreferKey.bookshelfGroupTags,
-            PreferKey.ttsEngine,
-            PreferKey.prevKeys,
-            PreferKey.nextKeys,
-            PreferKey.mergedDiscoveryRssTarget,
-            PreferKey.modernDiscoverySourceUrl,
-            PreferKey.modernRssSourceUrl,
-            PreferKey.aiProviderList,
-            PreferKey.aiCurrentProviderId,
-            PreferKey.aiModelConfigList,
-            PreferKey.aiCurrentModelId,
-            PreferKey.aiMcpServerList,
-            PreferKey.aiChatSessionList,
-            PreferKey.aiReadHistoryList,
-            PreferKey.themePackageSyncTasks,
-            PreferKey.aiCurrentChatSessionId,
-            PreferKey.aiChatCompanionList,
-            PreferKey.aiCurrentChatCompanionId,
-            PreferKey.aiChatAutoSpeakEnabled,
-            PreferKey.aiSystemPrompt,
-            PreferKey.aiSkillPrompt,
-            PreferKey.aiSkillList,
-            PreferKey.aiWorldBookList,
-            PreferKey.aiTavilyApiKey,
-            PreferKey.aiTavilyBaseUrl,
-            PreferKey.aiTavilySearchDepth,
-            PreferKey.aiTavilyTopic,
-            PreferKey.aiBaseUrl,
-            PreferKey.aiApiKey,
-            PreferKey.aiCurrentModel,
-            PreferKey.aiModelList,
-            PreferKey.bookshelfLayout,
-            PreferKey.bookshelfSort,
-            PreferKey.bookshelfReturnToTopAfterRead,
-            PreferKey.bookExportFileName,
-            PreferKey.bookImportFileName,
-            PreferKey.episodeExportFileName,
-            PreferKey.fontFolder,
-            PreferKey.backupPath,
-            PreferKey.webDavUrl,
-            PreferKey.webDavAccount,
-            PreferKey.webDavPassword,
-            PreferKey.webDavDir,
-            PreferKey.cloudStorageType,
-            PreferKey.s3Endpoint,
-            PreferKey.s3Region,
-            PreferKey.s3Bucket,
-            PreferKey.s3Prefix,
-            PreferKey.s3AccessKey,
-            PreferKey.s3SecretKey,
-            PreferKey.s3SessionToken,
-            PreferKey.s3Containers,
-            PreferKey.s3ContainerSelections,
-            PreferKey.exportType,
-            PreferKey.chineseConverterType,
-            PreferKey.launcherIcon,
-            PreferKey.systemTypefaces,
-            PreferKey.uiFontPath,
-            PreferKey.uiFontPathN,
-            PreferKey.titleFontPath,
-            PreferKey.titleFontPathN,
-            PreferKey.uiFontColor,
-            PreferKey.uiFontColorN,
-            PreferKey.titleFontColor,
-            PreferKey.titleFontColorN,
-            PreferKey.bottomBarEffectMode,
-            PreferKey.bottomBarLayoutMode,
-            PreferKey.bottomBarSidebarGravity,
-            PreferKey.uiCornerScale,
-            PreferKey.uiCornerScaleN,
-            PreferKey.themeCardColor,
-            PreferKey.themeCardColorN,
-            PreferKey.themeMutedColor,
-            PreferKey.themeMutedColorN,
-            PreferKey.themeSearchFieldBackgroundColor,
-            PreferKey.themeSearchFieldBackgroundColorN,
-            PreferKey.themeTabBackgroundColor,
-            PreferKey.themeTabBackgroundColorN,
-            PreferKey.themeShelfColor,
-            PreferKey.themeShelfColorN,
-            PreferKey.uiCornerEffectMode,
-            PreferKey.bookCoverShadow,
-            PreferKey.defaultCover,
-            PreferKey.defaultCoverDark,
-            PreferKey.screenOrientation,
-            PreferKey.exportCharset,
-            PreferKey.mangaFooterConfig,
-            PreferKey.mangaColorFilter,
-            PreferKey.contentSelectMenuConfig,
-            PreferKey.contentSelectDefaultOpen,
-            PreferKey.contentSelectSearchEngines,
-            PreferKey.contentSelectSearchEngineId,
-            PreferKey.advancedTitleConfig,
-            PreferKey.advancedTitleLottieJson,
-            PreferKey.advancedTitleLottiePath,
-            PreferKey.advancedTitlePackage,
-            PreferKey.advancedTitleHeightFactor,
-            PreferKey.doublePageHorizontal,
-            PreferKey.defaultBookTreeUri,
-            PreferKey.readRecordComponents,
-            PreferKey.readRecordRecentSnapshots,
-            PreferKey.readRecordGoalConfig,
-            PreferKey.localBookImportSort,
-            PreferKey.welcomeImage,
-            PreferKey.welcomeImageDark,
-            PreferKey.welcomeShowText,
-            PreferKey.welcomeShowTextDark,
-            PreferKey.progressBarBehavior,
-            PreferKey.webDavDeviceName,
-            PreferKey.defaultHomePage,
-            PreferKey.clickImgWay,
-            PreferKey.updateToVariant,
-            PreferKey.dThemeName,
-            PreferKey.dNThemeName,
-            PreferKey.bgImage,
-            PreferKey.bookInfoBgImage,
-            PreferKey.bgImageN,
-            PreferKey.bookInfoBgImageN,
-            PreferKey.panelBgImage,
-            PreferKey.panelBgImageN,
-            PreferKey.navigationBarPackageDay,
-            PreferKey.navigationBarPackageNight
-        )
-        val all = appCtx.defaultSharedPreferences.all
-        val edit = appCtx.defaultSharedPreferences.edit()
-        var changed = false
-        stringKeys.forEach { key ->
-            val value = all[key] ?: return@forEach
-            if (value !is String) {
-                edit.putString(key, value.toString())
                 changed = true
             }
         }

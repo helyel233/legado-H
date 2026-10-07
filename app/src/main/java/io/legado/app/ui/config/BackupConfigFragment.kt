@@ -79,8 +79,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private val viewModel by activityViewModels<ConfigViewModel>()
-    private val waitDialog by lazy { WaitDialog(requireContext()) }
-    private val backupProgressDialog by lazy { BackupProgressDialog(requireContext()) }
+    private var _waitDialog: WaitDialog? = null
+    private var _backupProgressDialog: BackupProgressDialog? = null
     private var restoreJob: Job? = null
     private var activeBackupPath: String? = null
     private var pendingS3FullBackupPath: String? = null
@@ -109,18 +109,18 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
     private val restoreDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
-            waitDialog.setText(R.string.restore)
-            waitDialog.show()
+            obtainWaitDialog().setText(R.string.restore)
+            obtainWaitDialog().show()
             val task = Coroutine.async(Coroutine.defaultScope) {
                 findLocalAssetsUris()
             }.onSuccess { assetsUris ->
-                waitDialog.dismiss()
+                _waitDialog?.dismiss()
                 askLocalRestore(uri, assetsUris)
             }.onError {
-                waitDialog.dismiss()
+                _waitDialog?.dismiss()
                 askLocalRestore(uri, emptyList())
             }
-            waitDialog.setOnCancelListener {
+            obtainWaitDialog().setOnCancelListener {
                 task.cancel()
             }
         }
@@ -629,15 +629,38 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun showBackupProgressDialog() {
-        if (!backupProgressDialog.isShowing) {
-            backupProgressDialog.show()
+        val dialog = obtainBackupProgressDialog()
+        if (!dialog.isShowing) {
+            dialog.show()
         }
     }
 
     private fun dismissBackupProgressDialog() {
-        if (backupProgressDialog.isShowing) {
-            backupProgressDialog.dismiss()
+        _backupProgressDialog?.let { dialog ->
+            if (dialog.isShowing) {
+                dialog.dismiss()
+            }
         }
+    }
+
+    // Dialog 一经创建便绑定创建时的 Activity：宿主 Activity 重建后旧实例
+    // 持有失效 window token，show 会抛 BadTokenException，须以当前 Activity 重建
+    private fun obtainWaitDialog(): WaitDialog {
+        val context = requireContext()
+        var dialog = _waitDialog
+        if (dialog == null || dialog.context !== context) {
+            dialog = WaitDialog(context).also { _waitDialog = it }
+        }
+        return dialog
+    }
+
+    private fun obtainBackupProgressDialog(): BackupProgressDialog {
+        val context = requireContext()
+        var dialog = _backupProgressDialog
+        if (dialog == null || dialog.context !== context) {
+            dialog = BackupProgressDialog(context).also { _backupProgressDialog = it }
+        }
+        return dialog
     }
 
     private fun shouldShowS3FullWebDavFallback(): Boolean {
@@ -729,11 +752,11 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     fun restore() {
-        waitDialog.setText(R.string.loading)
-        waitDialog.setOnCancelListener {
+        obtainWaitDialog().setText(R.string.loading)
+        obtainWaitDialog().setOnCancelListener {
             restoreJob?.cancel()
         }
-        waitDialog.show()
+        obtainWaitDialog().show()
         Coroutine.async(Coroutine.defaultScope) {
             restoreJob = coroutineContext[Job]
             showRestoreDialog(requireContext())
@@ -750,7 +773,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                 }
             )
         }.onFinally {
-            waitDialog.dismiss()
+            _waitDialog?.dismiss()
         }
     }
 
@@ -827,17 +850,17 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun startCloudRestore(name: String, assetsFileNames: List<String>) {
-        waitDialog.setText(R.string.restore)
-        waitDialog.show()
+        obtainWaitDialog().setText(R.string.restore)
+        obtainWaitDialog().show()
         val task = Coroutine.async(Coroutine.defaultScope) {
             AppCloudStorage.restore(name, assetsFileNames)
         }.onError {
             AppLog.put("云端恢复出错\n${it.localizedMessage}", it)
             appCtx.toastOnUi("云端恢复出错\n${it.localizedMessage}")
         }.onFinally {
-            waitDialog.dismiss()
+            _waitDialog?.dismiss()
         }
-        waitDialog.setOnCancelListener {
+        obtainWaitDialog().setOnCancelListener {
             task.cancel()
         }
     }
@@ -889,22 +912,25 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun startLocalRestore(uri: Uri, assetsUris: List<Uri>) {
-        waitDialog.setText(R.string.restore)
-        waitDialog.show()
+        obtainWaitDialog().setText(R.string.restore)
+        obtainWaitDialog().show()
         val task = Coroutine.async(Coroutine.defaultScope) {
             Restore.restore(appCtx, uri, assetsUris)
         }.onFinally {
-            waitDialog.dismiss()
+            _waitDialog?.dismiss()
         }
-        waitDialog.setOnCancelListener {
+        obtainWaitDialog().setOnCancelListener {
             task.cancel()
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        waitDialog.dismiss()
-        backupProgressDialog.dismiss()
+        // 不走 getter：销毁阶段 requireContext 可能已不可用
+        _waitDialog?.dismiss()
+        _waitDialog = null
+        _backupProgressDialog?.dismiss()
+        _backupProgressDialog = null
     }
 
 }

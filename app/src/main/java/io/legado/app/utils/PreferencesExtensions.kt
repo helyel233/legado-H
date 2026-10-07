@@ -24,36 +24,45 @@ fun Context.getSharedPreferences(
     dir: String,
     fileName: String
 ): SharedPreferences? {
-    try {
-        // 获取 ContextWrapper对象中的mBase变量。该变量保存了 ContextImpl 对象
-        val fieldMBase = ContextWrapper::class.java.getDeclaredField("mBase")
-        fieldMBase.isAccessible = true
-        // 获取 mBase变量
-        val objMBase = fieldMBase.get(this)
-        // 获取 ContextImpl。mPreferencesDir变量，该变量保存了数据文件的保存路径
-        val fieldMPreferencesDir = objMBase.javaClass.getDeclaredField("mPreferencesDir")
-        fieldMPreferencesDir.isAccessible = true
-        // 创建自定义路径
-        val file = File(dir)
-        // 修改mPreferencesDir变量的值
-        val oldDir = fieldMPreferencesDir.get(objMBase)
-        fieldMPreferencesDir.set(objMBase, file)
+    // 反射修改的是 ContextImpl 的全局可变状态 mPreferencesDir：备份/恢复在 IO
+    // 线程调用，set 与还原之间的窗口期内其它线程对未缓存 SP 的首次访问会被
+    // 重定向到备份目录，必须全局互斥。
+    return synchronized(prefsDirMutationLock) {
         try {
-            // 返回修改路径以后的 SharedPreferences :%FILE_PATH%/%fileName%.xml
-            return getSharedPreferences(fileName, Activity.MODE_PRIVATE)
-        } finally {
-            // 还原全局偏好目录，避免影响后续其他 SharedPreferences 的存取路径
-            fieldMPreferencesDir.set(objMBase, oldDir)
+            // 获取 ContextWrapper对象中的mBase变量。该变量保存了 ContextImpl 对象
+            val fieldMBase = ContextWrapper::class.java.getDeclaredField("mBase")
+            fieldMBase.isAccessible = true
+            // 获取 mBase变量
+            val objMBase = fieldMBase.get(this)
+            // 获取 ContextImpl。mPreferencesDir变量，该变量保存了数据文件的保存路径
+            val fieldMPreferencesDir = objMBase.javaClass.getDeclaredField("mPreferencesDir")
+            fieldMPreferencesDir.isAccessible = true
+            // 创建自定义路径
+            val file = File(dir)
+            // 修改mPreferencesDir变量的值
+            val oldDir = fieldMPreferencesDir.get(objMBase)
+            fieldMPreferencesDir.set(objMBase, file)
+            try {
+                // 返回修改路径以后的 SharedPreferences :%FILE_PATH%/%fileName%.xml
+                getSharedPreferences(fileName, Activity.MODE_PRIVATE)
+            } finally {
+                // 还原全局偏好目录，避免影响后续其他 SharedPreferences 的存取路径
+                fieldMPreferencesDir.set(objMBase, oldDir)
+            }
+        } catch (e: NoSuchFieldException) {
+            e.printOnDebug()
+            null
+        } catch (e: IllegalArgumentException) {
+            e.printOnDebug()
+            null
+        } catch (e: IllegalAccessException) {
+            e.printOnDebug()
+            null
         }
-    } catch (e: NoSuchFieldException) {
-        e.printOnDebug()
-    } catch (e: IllegalArgumentException) {
-        e.printOnDebug()
-    } catch (e: IllegalAccessException) {
-        e.printOnDebug()
     }
-    return null
 }
+
+private val prefsDirMutationLock = Any()
 
 fun SharedPreferences.getString(key: String): String? {
     return getString(key, null)
