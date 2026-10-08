@@ -11,6 +11,7 @@ import com.bumptech.glide.util.ContentLengthInputStream
 import com.script.rhino.runScriptWithContext
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.addHeaders
 import io.legado.app.help.http.imageHttpClient as okHttpClient
@@ -80,6 +81,18 @@ class OkHttpStreamFetcher(
 
         val requestBuilder = Request.Builder().url(analyzedUrl.toStringUrl())
         requestBuilder.addHeaders(analyzedUrl.headers)
+        // 兜底:部分图床(CDN/WAF)会校验浏览器请求头,缺失时补默认 Accept 与 User-Agent
+        analyzedUrl.headers?.let { headerMap ->
+            if (headerMap.keys.none { it.equals("Accept", true) }) {
+                requestBuilder.header(
+                    "Accept",
+                    "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+                )
+            }
+            if (headerMap.keys.none { it.equals("User-Agent", true) }) {
+                requestBuilder.header("User-Agent", AppConfig.userAgent)
+            }
+        }
         val request: Request = requestBuilder.build()
         this.callback = callback
         call = if (manga) {

@@ -122,7 +122,15 @@ object RssParserByRule {
         try {
             analyzeRule.getString(ruleImage).let {
                 if (it.isNotEmpty()) {
-                    rssArticle.image = NetworkUtils.getAbsoluteURL(sourceUrl, it)
+                    // 兜底:列表规则命中多个img时规则会返回多行url,封面只取第一个有效url
+                    val lines = it.split("\n")
+                        .map { line -> line.trim() }
+                        .filter { line -> line.isNotEmpty() }
+                    val imageUrl = lines.firstOrNull { line -> line.contains("://") }
+                        ?: lines.firstOrNull()
+                    if (imageUrl != null) {
+                        rssArticle.image = NetworkUtils.getAbsoluteURL(sourceUrl, imageUrl)
+                    }
                 }
             }
             Debug.log(sourceUrl, "└${rssArticle.image ?: ""}", log)

@@ -914,6 +914,9 @@
     <string name="chapter_pay">trả phí</string>
     <string name="double_page_horizontal">Trang kép trên máy tính bảng/màn hình ngang</string>
     <string name="open_in_browser">mở trong trình duyệt</string>
+    <string name="rss_no_img_iframe">Tải trang gốc cho nội dung không có hình ảnh</string>
+    <string name="rss_no_img_iframe_on">Đã bật: nội dung không có hình ảnh sẽ tải trang gốc. Mở lại bài viết để áp dụng</string>
+    <string name="rss_no_img_iframe_off">Đã tắt: nội dung không có hình ảnh sẽ tải trang gốc</string>
     <string name="copy_url">sao chép url</string>
     <string name="full_screen">toàn màn hình</string>
     <string name="open_fun">chức năng mở</string>

@@ -17,6 +17,7 @@ import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssStar
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.TTS
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.imageHttpClient as okHttpClient
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_URL
@@ -70,7 +71,13 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                     }
                 rssArticle?.let { article ->
                     if (!article.description.isNullOrBlank()) {
-                        contentLiveData.postValue(article.description!!)
+                        if (noImageContent(article, article.description!!)) {
+                            // 回退网页态：清除文章态，星标/收藏与普通网页态保持一致
+                            rssArticle = null
+                            loadUrl(article.link, article.origin)
+                        } else {
+                            contentLiveData.postValue(article.description!!)
+                        }
                     } else {
                         rssSource?.let {
                             val ruleContent = it.ruleContent
@@ -125,10 +132,29 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                     appDb.rssStarDao.insert(it)
                 }
                 this@ReadRssViewModel.rssArticle = rssArticle
-                contentLiveData.postValue(body)
+                if (noImageContent(rssArticle, body)) {
+                    // 回退网页态：清除文章态，星标/收藏与普通网页态保持一致
+                    this@ReadRssViewModel.rssArticle = null
+                    loadUrl(rssArticle.link, rssArticle.origin)
+                } else {
+                    contentLiveData.postValue(body)
+                }
             }.onError {
                 contentLiveData.postValue("加载正文失败\n${it.stackTraceToString()}")
             }
+    }
+
+    /**
+     * 正文提取不到图片时直接加载原网页,由站点自身JS渲染图片
+     * 仅对图片样式订阅源(双列/三列)生效,可在阅读菜单中开关
+     */
+    private fun noImageContent(rssArticle: RssArticle, body: String): Boolean {
+        if (!AppConfig.rssNoImgIframe) return false
+        val style = rssSource?.articleStyle ?: return false
+        if (style < 2) return false
+        if (body.contains("<img", true) || body.contains("<iframe", true)) return false
+        val link = rssArticle.link
+        return !link.isNullOrBlank() && link.startsWith("http", true)
     }
 
     fun refresh(finish: () -> Unit) {

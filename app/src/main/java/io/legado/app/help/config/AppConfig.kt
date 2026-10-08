@@ -92,6 +92,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var useDefaultCover = appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
     var loadCoverHighQuality = appCtx.getPrefBoolean(PreferKey.loadCoverHighQuality, false)
 
+    /** 订阅源图片样式正文提取不到图片时,直接加载原网页由站点JS渲染图片 */
+    var rssNoImgIframe: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.rssNoImgIframe, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.rssNoImgIframe, value)
+        }
+
     val immersiveManageBar: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.immersiveManageBar, true)
     var optimizeRender = CanvasRecorderFactory.isSupport

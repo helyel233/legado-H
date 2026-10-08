@@ -1356,6 +1356,9 @@
     <string name="chapter_pay">pay</string>
     <string name="double_page_horizontal">Tablet/Landscape Dual Page</string>
     <string name="open_in_browser">open in browser</string>
+    <string name="rss_no_img_iframe">Load original page for imageless content</string>
+    <string name="rss_no_img_iframe_on">Enabled: imageless content loads the original page. Reopen the article to apply</string>
+    <string name="rss_no_img_iframe_off">Disabled: imageless content loads the original page</string>
     <string name="copy_url">copy url</string>
     <string name="full_screen">full screen</string>
     <string name="open_fun">open function</string>

@@ -490,4 +490,5 @@ object PreferKey {
     const val homepageLayoutMode = "homepageLayoutMode"
     const val homepagePreload = "homepagePreload"
     const val showLocalBookIcon = "showLocalBookIcon"
+    const val rssNoImgIframe = "rssNoImgIframe"
 }

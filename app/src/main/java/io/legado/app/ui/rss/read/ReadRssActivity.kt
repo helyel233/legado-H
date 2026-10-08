@@ -250,6 +250,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         starMenuItem = menu.findItem(R.id.menu_rss_star)
         ttsMenuItem = menu.findItem(R.id.menu_aloud)
+        menu.findItem(R.id.menu_rss_no_img_iframe)?.isChecked = AppConfig.rssNoImgIframe
         upStarMenu()
         return super.onPrepareOptionsMenu(menu)
     }
@@ -262,6 +263,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_rss_refresh -> refresh()
+
+            R.id.menu_rss_no_img_iframe -> {
+                AppConfig.rssNoImgIframe = !AppConfig.rssNoImgIframe
+                item.isChecked = AppConfig.rssNoImgIframe
+                toastOnUi(
+                    if (AppConfig.rssNoImgIframe) R.string.rss_no_img_iframe_on
+                    else R.string.rss_no_img_iframe_off
+                )
+            }
 
             R.id.menu_rss_star -> {
                 if (viewModel.rssArticle != null) {

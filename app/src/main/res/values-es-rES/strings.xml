@@ -913,7 +913,10 @@
     <string name="delete_source">删除源</string>
     <string name="chapter_pay">购买</string>
     <string name="double_page_horizontal">平板/横屏双页</string>
-    <string name="open_in_browser">浏览器打开</string>
+    <string name="open_in_browser">Abrir en el navegador</string>
+    <string name="rss_no_img_iframe">Cargar la página original para contenido sin imágenes</string>
+    <string name="rss_no_img_iframe_on">Activado: el contenido sin imágenes carga la página original. Reabre el artículo para aplicarlo</string>
+    <string name="rss_no_img_iframe_off">Desactivado: el contenido sin imágenes carga la página original</string>
     <string name="copy_url">拷贝url</string>
     <string name="full_screen">全屏</string>
     <string name="open_fun">打开方式</string>
