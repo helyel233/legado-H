@@ -735,7 +735,8 @@
     <string name="sort_by_url">Sort by URL</string>
     <string name="backup_summary">Backup the local and WebDav simultaneously</string>
     <string name="restore_summary">Restore from WebDAV first, Restore form the local backup on long click</string>
-    <string name="import_old_summary">Select a legacy backup folder</string>
+    <string name="import_old_summary">Select a legacy data folder or a backup archive (zip)</string>
+    <string name="select_zip_backup">Select a legacy backup archive (zip)</string>
     <string name="enabled">Enabled</string>
     <string name="disabled">Disabled</string>
     <string name="enabled_explore">Discovery Enabled</string>

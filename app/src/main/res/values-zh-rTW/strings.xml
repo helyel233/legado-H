@@ -738,7 +738,8 @@
     <string name="sort_by_url">地址排序</string>
     <string name="backup_summary">本機和 WebDav 一起備份</string>
     <string name="restore_summary">優先從 WebDav 復原，長按從本機復原</string>
-    <string name="import_old_summary">選擇舊版備份資料夾</string>
+    <string name="import_old_summary">選擇舊版資料夾或備份壓縮包（zip）</string>
+    <string name="select_zip_backup">選擇舊版備份壓縮包（zip）</string>
     <string name="enabled">已啟用</string>
     <string name="disabled">已禁用</string>
     <string name="enabled_explore">已啟用發現</string>

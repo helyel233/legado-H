@@ -17,6 +17,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3CapacityFullException
+import io.legado.app.lib.dialogs.SelectItem
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.help.config.AppConfig
@@ -85,6 +86,19 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private var activeBackupPath: String? = null
     private var pendingS3FullBackupPath: String? = null
 
+    /**
+     * 旧版数据选择器：默认选数据目录，附加动作可选旧版备份压缩包(zip)
+     * 或单个旧版 json 文件（myBookShelf.json 等）。
+     */
+    private val restoreOldParam: HandleFileContract.HandleFileParam.() -> Unit = {
+        title = getString(R.string.menu_import_old_version)
+        mode = HandleFileContract.DIR
+        allowExtensions = arrayOf("zip", "json")
+        otherActions = arrayListOf(
+            SelectItem(getString(R.string.select_zip_backup), HandleFileContract.FILE)
+        )
+    }
+
     private val selectBackupPath = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -127,7 +141,21 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
     private val restoreOld = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
-            ImportOldData.importUri(appCtx, uri)
+            obtainWaitDialog().setText(R.string.loading)
+            obtainWaitDialog().show()
+            val task = Coroutine.async(Coroutine.defaultScope) {
+                ImportOldData.importUri(appCtx, uri)
+            }.onSuccess { summary ->
+                _waitDialog?.dismiss()
+                appCtx.toastOnUi(summary)
+            }.onError {
+                _waitDialog?.dismiss()
+                AppLog.put("导入旧版数据出错\n${it.localizedMessage}", it)
+                appCtx.toastOnUi("导入旧版数据失败\n${it.localizedMessage}")
+            }
+            obtainWaitDialog().setOnCancelListener {
+                task.cancel()
+            }
         }
     }
 
@@ -316,7 +344,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                             key = KEY_IMPORT_OLD,
                             title = getString(R.string.menu_import_old_version),
                             summary = getString(R.string.import_old_summary),
-                            onClick = { restoreOld.launch() }
+                            onClick = { restoreOld.launch(restoreOldParam) }
                         ),
                         switch(
                             key = PreferKey.backupBookFiles,

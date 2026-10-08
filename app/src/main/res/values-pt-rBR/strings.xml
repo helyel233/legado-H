@@ -733,7 +733,8 @@
     <string name="sort_by_url">Ordenar por URL</string>
     <string name="backup_summary">Faça backup local e de WebDav simultaneamente</string>
     <string name="restore_summary">Primeiro restaurar de WebDAV, ao clicar longo restaurar do local backup</string>
-    <string name="import_old_summary">Selecione uma pasta de Backup da versão antiga</string>
+    <string name="import_old_summary">Selecione uma pasta de dados antiga ou um arquivo de backup (zip)</string>
+    <string name="select_zip_backup">Selecione um arquivo de backup antigo (zip)</string>
     <string name="enabled">Ativado</string>
     <string name="disabled">Desativado</string>
     <string name="enabled_explore">Discovery Enabled</string>

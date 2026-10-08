@@ -732,7 +732,8 @@
     <string name="sort_by_url">Ordenar por URL</string>
     <string name="backup_summary">Respalde en simultáneo vía local y WebDav</string>
     <string name="restore_summary">Restaure primero desde WebDAV, haga clic en restaurar desde la ubicación del respaldo</string>
-    <string name="import_old_summary">Seleccione una carpeta de respaldo heredada</string>
+    <string name="import_old_summary">Seleccione una carpeta de datos antiguos o un archivo de respaldo (zip)</string>
+    <string name="select_zip_backup">Seleccione un archivo de respaldo heredado (zip)</string>
     <string name="enabled">Activado</string>
     <string name="disabled">Desactivado</string>
     <string name="enabled_explore">Discovery Enabled</string>

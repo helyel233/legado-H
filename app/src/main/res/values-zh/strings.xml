@@ -823,7 +823,8 @@
     <string name="sort_by_url">地址排序</string>
     <string name="backup_summary">本地和 WebDav 一起备份</string>
     <string name="restore_summary">优先从 WebDav 恢复，长按从本地恢复</string>
-    <string name="import_old_summary">选择旧版备份文件夹</string>
+    <string name="import_old_summary">选择旧版数据文件夹或备份压缩包（zip）</string>
+    <string name="select_zip_backup">选择旧版备份压缩包（zip）</string>
     <string name="enabled">已启用</string>
     <string name="disabled">已禁用</string>
     <string name="enabled_explore">已启用发现</string>
