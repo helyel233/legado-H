@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -71,6 +72,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -312,6 +315,8 @@ fun AiChatScreen(
     var stickToBottom by rememberSaveable { mutableStateOf(true) }
     var positionedConversationKey by rememberSaveable { mutableStateOf("") }
     var jumpButtonsVisible by rememberSaveable { mutableStateOf(false) }
+    var draftSeed by rememberSaveable { mutableStateOf("") }
+    var draftSeedVersion by rememberSaveable { mutableStateOf(0) }
     val uiItems = remember(context, messages, thinkingToolbarEnabled) {
         buildAiChatUiItems(
             context = context,
@@ -545,17 +550,35 @@ fun AiChatScreen(
                 }
             }
         }
-        AiComposer(
-            requesting = requesting,
-            enterToSend = enterToSend,
-            style = style,
-            actions = actions,
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
-        )
+        ) {
+            AnimatedVisibility(visible = uiItems.isEmpty()) {
+                Column {
+                    AiPresetRow(
+                        style = style,
+                        onSelect = { preset ->
+                            draftSeed = preset.prompt
+                            draftSeedVersion += 1
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            AiComposer(
+                requesting = requesting,
+                enterToSend = enterToSend,
+                style = style,
+                actions = actions,
+                draftSeed = draftSeed,
+                draftSeedVersion = draftSeedVersion,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         if (uiItems.size > 1) {
             AnimatedVisibility(
                 visible = jumpButtonsVisible,
@@ -1805,9 +1828,18 @@ private fun AiComposer(
     enterToSend: Boolean,
     style: AiComposeStyle,
     actions: AiChatScreenActions,
+    draftSeed: String = "",
+    draftSeedVersion: Int = 0,
     modifier: Modifier = Modifier
 ) {
     var text by rememberSaveable { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(draftSeedVersion) {
+        if (draftSeedVersion > 0 && draftSeed.isNotBlank()) {
+            text = draftSeed
+            focusRequester.requestFocus()
+        }
+    }
     fun submitDraft() {
         val content = text.trim()
         if (!requesting && content.isNotEmpty() && actions.onSend(content)) {
@@ -1855,7 +1887,9 @@ private fun AiComposer(
                         fontSize = 15.sp,
                         lineHeight = 21.sp
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
                 )
             }
             Surface(
@@ -1889,3 +1923,59 @@ private fun AiComposer(
 }
 
 private const val searchBookScheme = "legado-search-book://"
+
+private data class AiChatPreset(
+    val label: String,
+    val prompt: String
+)
+
+private val aiChatPresets = listOf(
+    AiChatPreset(
+        "总结",
+        "请先查询我的书架找到最近在读的书，然后总结这本书目前已读内容的主要情节和要点。"
+    ),
+    AiChatPreset(
+        "问书",
+        "我想查证《书名》里的一个细节：\n\n请先搜索相关章节正文，引用原文并给出解读。"
+    ),
+    AiChatPreset(
+        "续写",
+        "请先读取《书名》最近已读章节的正文，然后基于当前情节续写约 300 字的后续发展。"
+    ),
+    AiChatPreset(
+        "配图",
+        "请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\n\n"
+    ),
+    AiChatPreset(
+        "角色卡",
+        "请为《书名》中的主角创建角色卡，包含：外貌、性格、背景故事、说话风格与配音建议。"
+    )
+)
+
+@Composable
+private fun AiPresetRow(
+    style: AiComposeStyle,
+    onSelect: (AiChatPreset) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(aiChatPresets) { preset ->
+            Surface(
+                onClick = { onSelect(preset) },
+                shape = RoundedCornerShape(50),
+                color = style.colors.cardSurface
+            ) {
+                Text(
+                    text = preset.label,
+                    color = style.colors.secondaryText,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}

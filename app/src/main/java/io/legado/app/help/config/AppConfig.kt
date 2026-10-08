@@ -1356,6 +1356,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(PreferKey.aiThinkingContextTokens, 128_000).coerceIn(0, 1_000_000)
         set(value) = appCtx.putPrefInt(PreferKey.aiThinkingContextTokens, value.coerceIn(0, 1_000_000))
 
+    /** 每日 AI token 预算，0 表示不限；超额后当日所有模型请求被拦截 */
+    var aiDailyTokenBudget: Long
+        get() = appCtx.getPrefLong(PreferKey.aiDailyTokenBudget, 0L).coerceAtLeast(0L)
+        set(value) = appCtx.putPrefLong(PreferKey.aiDailyTokenBudget, value.coerceAtLeast(0L))
+
     var aiTavilyEnabled: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.aiTavilyEnabled, false)
         set(value) = appCtx.putPrefBoolean(PreferKey.aiTavilyEnabled, value)

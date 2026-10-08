@@ -175,9 +175,13 @@ android {
         androidTest.assets.srcDirs += files("$projectDir/schemas".toString())
     }
     testOptions {
-        unitTests.all {
-            maxHeapSize = '1536m'
-            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+        unitTests {
+            // 让 Robolectric 能加载合并后的资源（strings/raw 等），否则资源查找全部 NotFoundException
+            includeAndroidResources = true
+            all {
+                maxHeapSize = '1536m'
+                systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+            }
         }
     }
     lint {

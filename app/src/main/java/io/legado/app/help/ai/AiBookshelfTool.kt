@@ -469,7 +469,7 @@ object AiBookshelfTool {
                 put("name", TOOL_SEARCH_CHAPTER_CONTENT)
                 put(
                     "description",
-                    "在本地书架指定书籍的章节标题和已缓存正文中搜索关键词，返回少量命中片段。需要补充角色记忆或查找剧情细节时优先用它，再按需读取整章。"
+                    "在本地书架指定书籍的章节标题和已缓存正文中搜索：中文按二字词拆解关键词，按相关度评分排序后返回最相关的少量命中片段。需要补充角色记忆或查找剧情细节时优先用它，再按需读取整章。"
                 )
                 put("parameters", JSONObject().apply {
                     put("type", "object")
@@ -851,11 +851,11 @@ object AiBookshelfTool {
             .coerceIn(20, 1200)
         val chapterCount = appDb.bookChapterDao.getChapterCount(book.bookUrl)
         val chapters = resolveSearchChapters(book, arguments, scope, maxScanChapters, chapterCount)
-        val matches = JSONArray()
+        val terms = searchQueryTerms(keyword)
+        val exactHit = keyword.length >= 2
+        val hits = mutableListOf<ChapterHit>()
         var scannedCachedContent = 0
         for (chapter in chapters) {
-            if (matches.length() >= maxResults) break
-            val titleHit = chapter.title.contains(keyword, ignoreCase = true)
             val cached = BookHelp.hasContent(book, chapter)
             val content = if (cached) {
                 BookHelp.getContent(book, chapter).orEmpty()
@@ -864,19 +864,39 @@ object AiBookshelfTool {
             }
             if (content.isNotBlank()) scannedCachedContent += 1
             val normalized = normalizeSearchContent(content)
-            val hitIndex = normalized.indexOf(keyword, ignoreCase = true)
-            if (!titleHit && hitIndex < 0) continue
+            val titleHit = chapter.title.contains(keyword, ignoreCase = true)
+            val titleScore = searchScore(chapter.title, keyword, terms, exactHit)
+            val contentScore = searchScore(normalized, keyword, terms, exactHit)
+            if (titleScore <= 0 && contentScore <= 0) continue
+            val (hitIndex, hitLength) = bestSearchHit(normalized, keyword, terms)
+            hits.add(
+                ChapterHit(
+                    chapter = chapter,
+                    cached = cached,
+                    titleHit = titleHit,
+                    contentHit = contentScore > 0,
+                    score = titleScore * 3 + contentScore,
+                    content = normalized,
+                    hitIndex = hitIndex,
+                    hitLength = hitLength
+                )
+            )
+        }
+        hits.sortByDescending { it.score }
+        val matches = JSONArray()
+        hits.take(maxResults).forEach { hit ->
             matches.put(JSONObject().apply {
-                put("chapterIndex", chapter.index)
-                put("chapterTitle", chapter.title)
-                put("volume", chapter.tag ?: "")
-                put("cached", cached)
-                put("titleHit", titleHit)
-                put("contentHit", hitIndex >= 0)
+                put("chapterIndex", hit.chapter.index)
+                put("chapterTitle", hit.chapter.title)
+                put("volume", hit.chapter.tag ?: "")
+                put("cached", hit.cached)
+                put("titleHit", hit.titleHit)
+                put("contentHit", hit.contentHit)
+                put("score", hit.score)
                 put(
                     "snippet",
-                    if (hitIndex >= 0) {
-                        buildSearchSnippet(normalized, hitIndex, keyword.length, contextChars)
+                    if (hit.hitIndex >= 0) {
+                        buildSearchSnippet(hit.content, hit.hitIndex, hit.hitLength, contextChars)
                     } else {
                         ""
                     }
@@ -886,6 +906,7 @@ object AiBookshelfTool {
         successJson().apply {
             put("book", bookToJson(book))
             put("keyword", keyword)
+            put("terms", JSONArray(terms))
             put("scope", scope)
             put("chapterCount", chapterCount)
             put("scannedChapters", chapters.size)
@@ -893,6 +914,66 @@ object AiBookshelfTool {
             put("resultCount", matches.length())
             put("results", matches)
         }.toString()
+    }
+
+    /** 相关度命中的章节（评分排序后取 top N） */
+    private class ChapterHit(
+        val chapter: io.legado.app.data.entities.BookChapter,
+        val cached: Boolean,
+        val titleHit: Boolean,
+        val contentHit: Boolean,
+        val score: Int,
+        val content: String,
+        val hitIndex: Int,
+        val hitLength: Int
+    )
+
+    /** 查询词元：拉丁词 + CJK 二元词；无词元时退化为关键词本身 */
+    private fun searchQueryTerms(keyword: String): List<String> {
+        val terms = AiFtsTokenizer.queryTerms(keyword, maxTerms = 16).filter { it.isNotBlank() }
+        return terms.ifEmpty { listOf(keyword.lowercase()) }
+    }
+
+    private fun searchScore(text: String, keyword: String, terms: List<String>, exactHit: Boolean): Int {
+        if (text.isBlank()) return 0
+        var score = 0
+        if (exactHit) {
+            val count = countOccurrences(text, keyword, cap = 4)
+            if (count > 0) score += 40 + (count - 1) * 8
+        }
+        for (term in terms) {
+            val count = countOccurrences(text, term, cap = 4)
+            if (count > 0) score += 8 + (count - 1) * 3
+        }
+        return score
+    }
+
+    private fun countOccurrences(text: String, term: String, cap: Int = 4): Int {
+        var count = 0
+        var index = text.indexOf(term, 0, true)
+        while (index >= 0 && count < cap) {
+            count += 1
+            index = text.indexOf(term, index + term.length, true)
+        }
+        return count
+    }
+
+    /** 片段定位：优先完整关键词，其次最长的命中词元 */
+    private fun bestSearchHit(content: String, keyword: String, terms: List<String>): Pair<Int, Int> {
+        if (keyword.length >= 2) {
+            val index = content.indexOf(keyword, 0, true)
+            if (index >= 0) return index to keyword.length
+        }
+        var bestIndex = -1
+        var bestLength = 0
+        for (term in terms) {
+            val index = content.indexOf(term, 0, true)
+            if (index >= 0 && term.length > bestLength) {
+                bestIndex = index
+                bestLength = term.length
+            }
+        }
+        return bestIndex to bestLength
     }
 
     private suspend fun readBookChapterContent(arguments: JSONObject?): String = withContext(IO) {

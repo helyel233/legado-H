@@ -6,6 +6,7 @@ import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.ai.AiToolRegistry
+import io.legado.app.help.ai.AiUsageTracker
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.importHttpClient as okHttpClient
@@ -32,6 +33,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 class AiConfigFragment : ComposeSettingFragment() {
 
@@ -48,6 +50,7 @@ class AiConfigFragment : ComposeSettingFragment() {
         const val KEY_CONTEXT_COMPRESSION = "aiContextCompression"
         const val KEY_WORLD_BOOK_MANAGE = "aiWorldBookManage"
         const val KEY_CONTENT_CONSENT = "aiContentConsent"
+        const val KEY_USAGE_BUDGET = "aiUsageBudget"
         const val KEY_DEFAULT_MODEL_SETTINGS = "aiDefaultModelSettings"
         const val KEY_IMAGE_GALLERY = "aiImageGallery"
         const val KEY_IMAGE_PROVIDER_MANAGE = "aiImageProviderManage"
@@ -182,6 +185,12 @@ class AiConfigFragment : ComposeSettingFragment() {
                             title = "正文隐私授权",
                             summary = contentConsentSummary(),
                             onClick = ::showContentConsentDialog
+                        ),
+                        SettingActionSpec(
+                            key = KEY_USAGE_BUDGET,
+                            title = "用量与预算",
+                            summary = aiUsageBudgetSummary(),
+                            onClick = ::showAiBudgetDialog
                         ),
                         SettingActionSpec(
                             key = KEY_DEFAULT_MODEL_SETTINGS,
@@ -622,6 +631,30 @@ class AiConfigFragment : ComposeSettingFragment() {
         AppConfig.AI_CONTENT_CONSENT_ALLOW -> "始终允许发送正文"
         AppConfig.AI_CONTENT_CONSENT_DENY -> "始终禁止发送正文"
         else -> "每次询问"
+    }
+
+    private fun aiUsageBudgetSummary(): String {
+        val usage = AiUsageTracker.todayUsage()
+        val budget = AppConfig.aiDailyTokenBudget
+        val budgetText = if (budget > 0L) formatTokenCount(budget) else "不限"
+        return "今日 ${formatTokenCount(usage.totalTokens)} tokens · ${usage.requests} 次请求 · 每日上限 $budgetText"
+    }
+
+    private fun formatTokenCount(value: Long): String = when {
+        value >= 1_000_000L -> String.format(Locale.US, "%.1fM", value / 1_000_000.0)
+        value >= 1_000L -> String.format(Locale.US, "%.1fk", value / 1_000.0)
+        else -> value.toString()
+    }
+
+    private fun showAiBudgetDialog() {
+        val values = listOf(0L, 20_000L, 50_000L, 100_000L, 200_000L, 500_000L, 1_000_000L)
+        showComposeActionListDialog(
+            title = "每日 token 预算",
+            labels = values.map { if (it <= 0L) "不限" else "${formatTokenCount(it)} tokens" }
+        ) { index ->
+            AppConfig.aiDailyTokenBudget = values[index]
+            refreshUi()
+        }
     }
 
     private fun showContentConsentDialog() {

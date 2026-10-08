@@ -644,6 +644,11 @@ object AiChatService {
         onUsage: (AiUsageStats) -> Unit
     ): AiAgentAssistantTurn {
         AiRateLimiter.acquire()
+        AiUsageTracker.ensureWithinDailyBudget()
+        val trackedUsage: (AiUsageStats) -> Unit = { stats ->
+            AiUsageTracker.record(stats)
+            onUsage(stats)
+        }
         val requestBody = buildRequestBody(
             messages = messages,
             model = model,
@@ -709,17 +714,17 @@ object AiChatService {
                         val payload = rawLine.removePrefix("data:").trim()
                         if (payload == "[DONE]") break
                         if (apiMode == AI_API_MODE_RESPONSES) {
-                            consumeResponsesStreamPayload(payload, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, onUsage)
+                            consumeResponsesStreamPayload(payload, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, trackedUsage)
                         } else {
-                            consumeStreamPayload(payload, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, onUsage)
+                            consumeStreamPayload(payload, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, trackedUsage)
                         }
-                    } else if (rawLine.startsWith("{")) {
+                        } else if (rawLine.startsWith("{")) {
                         if (apiMode == AI_API_MODE_RESPONSES) {
-                            consumeResponsesStreamPayload(rawLine, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, onUsage)
+                            consumeResponsesStreamPayload(rawLine, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, trackedUsage)
                         } else {
-                            consumeStreamPayload(rawLine, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, onUsage)
+                            consumeStreamPayload(rawLine, rawRendered, rendered, reasoningRendered, toolCallBuilders, onPartial, onThinking, trackedUsage)
                         }
-                    }
+                        }
                 }
             }
             requestLog.append("response=").append(safeDebugPayload(rawPayload.toString())).append('\n')
