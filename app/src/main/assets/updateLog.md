@@ -4,6 +4,12 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.7.3 · 2026/10/08**
+
+- 新增无图正文回退原网页：图片样式订阅源提取不到图片时加载原网页由站点 JS 渲染（阅读菜单可切换，默认开启）
+- 修复图片加载：缺失请求头时补默认 Accept/User-Agent，修复部分 CDN/WAF 图床不返回图片
+- 修复封面提取：列表规则命中多图时封面只取首个有效 url
+
 **vH.1.6.2 · 2026/10/08**
 
 - 新增气泡 SVG 导入净化（去除 xml 声明/DOCTYPE 并映射占位符，提升 AndroidSVG 渲染兼容性）
