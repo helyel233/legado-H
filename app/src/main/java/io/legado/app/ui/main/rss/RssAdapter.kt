@@ -80,8 +80,9 @@ class RssAdapter(
     private fun ItemRssBinding.applyItemLayout() {
         val multiColumn = columns > 1
         val style = if (multiColumn) STYLE_GRID else STYLE_LIST
-        if ((root.getTag(R.id.rss_item_layout_style) as? Int) == style) return
-        root.setTag(R.id.rss_item_layout_style, style)
+        // 标签记录具体列数而非样式：列数在 2↔3 间切换时样式不变但文字大小不同，不能早退
+        if ((root.getTag(R.id.rss_item_layout_style) as? Int) == columns) return
+        root.setTag(R.id.rss_item_layout_style, columns)
         if (multiColumn) {
             gridConstraints.applyTo(root)
         } else {

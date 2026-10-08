@@ -21,13 +21,8 @@ import kotlin.coroutines.resume
  */
 object AiContentConsent {
 
-    /** 进程内"仅本次允许"标记 */
-    @Volatile
-    private var sessionAllowed = false
-
     fun isAllowed(): Boolean {
-        return sessionAllowed ||
-                AppConfig.aiExternalContentConsent == AppConfig.AI_CONTENT_CONSENT_ALLOW
+        return AppConfig.aiExternalContentConsent == AppConfig.AI_CONTENT_CONSENT_ALLOW
     }
 
     fun isDenied(): Boolean {
@@ -64,7 +59,6 @@ object AiContentConsent {
                     .setTitle(R.string.ai_content_consent_title)
                     .setMessage(activity.getString(R.string.ai_content_consent_message, feature))
                     .setPositiveButton(R.string.ai_content_consent_allow_once) { _, _ ->
-                        sessionAllowed = true
                         onAllowed()
                     }
                     .setNeutralButton(R.string.ai_content_consent_allow_always) { _, _ ->
@@ -107,7 +101,6 @@ object AiContentConsent {
                     .setTitle(R.string.ai_content_consent_title)
                     .setMessage(activity.getString(R.string.ai_content_consent_message, feature))
                     .setPositiveButton(R.string.ai_content_consent_allow_once) { _, _ ->
-                        sessionAllowed = true
                         resume(true)
                     }
                     .setNeutralButton(R.string.ai_content_consent_allow_always) { _, _ ->

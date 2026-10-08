@@ -23,6 +23,8 @@ object AiRateLimiter {
 
     /** 获取令牌，不足时挂起等待，不做无限自旋 */
     suspend fun acquire(permits: Double = 1.0) {
+        // 桶容量被 BURST 封顶，permits 超过容量时永远等不到足够令牌，会陷入死循环
+        require(permits in 0.0..BURST) { "permits must be within [0, $BURST], got $permits" }
         var waitMillis: Long
         while (true) {
             waitMillis = mutex.withLock {
