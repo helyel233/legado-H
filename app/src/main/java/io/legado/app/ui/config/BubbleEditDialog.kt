@@ -41,6 +41,7 @@ import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
 import io.legado.app.ui.widget.compose.AppDialogSize
+import io.legado.app.ui.widget.compose.DismissWhenCallbackMissing
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
@@ -92,6 +93,11 @@ class BubbleEditDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                // Callbacks are not persisted across recreation; dismiss silently instead of discarding edits.
+                DismissWhenCallbackMissing(
+                    missing = onSaved == null,
+                    dismiss = ::dismissAllowingStateLoss
+                )
                 BubbleEditContent(
                     title = titleText,
                     initialName = configName,
@@ -118,6 +124,7 @@ class BubbleEditDialog : ComposeDialogFragment() {
                         onOpenSvgEditor?.invoke()
                     },
                     onPickColor = { dialogId, currentColor ->
+                        dismissAllowingStateLoss()
                         onPickColor?.invoke(dialogId, currentColor)
                     }
                 )

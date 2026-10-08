@@ -25,6 +25,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
+import io.legado.app.data.entities.RssStar
 import io.legado.app.databinding.FragmentRssBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.sortUrls
@@ -52,6 +53,7 @@ import io.legado.app.utils.dpToPx
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.gone
 import io.legado.app.utils.openUrl
+import io.legado.app.utils.share
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
@@ -291,8 +293,20 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             selectedRssSource?.let(::openRssLogin)
         }
         binding.topBar.starButton.setOnClickListener {
-            startActivity<RssFavoritesActivity>()
+            favoriteCurrentSource()
         }
+        binding.topBar.starButton.setOnLongClickListener {
+            startActivity<RssFavoritesActivity>()
+            true
+        }
+        binding.topBar.shareButton.setOnClickListener {
+            selectedRssSource?.sourceUrl?.let { url ->
+                context?.share(url)
+            } ?: toastOnUi(R.string.null_url)
+        }
+        // 未进入具体源前先隐藏收藏/分享，待 selectSource 选中源后再显示
+        binding.topBar.shareButton.isVisible = false
+        binding.topBar.starButton.isVisible = false
         binding.topBar.refreshButton.setOnClickListener {
             refreshCurrentRssContent(forceWebRefresh = true)
         }
@@ -468,6 +482,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.topBar.searchEntry.isEnabled = hasSearch
         binding.topBar.searchEntry.alpha = if (hasSearch) 1f else 0.58f
         binding.topBar.refreshButton.isVisible = source.ruleArticles.isNullOrBlank()
+        binding.topBar.starButton.isVisible = true
+        binding.topBar.shareButton.isVisible = true
         renderRssSourceSelector()
         binding.topBar.post(::updateRssSourceNameWidth)
         scheduleModernRssTopBarOverlayUpdate()
@@ -694,6 +710,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.topBar.loginButton.gone()
         binding.topBar.searchButton.gone()
         binding.topBar.refreshButton.gone()
+        binding.topBar.starButton.isVisible = false
+        binding.topBar.shareButton.isVisible = false
         binding.swipeRefreshLayout.isEnabled = true
         binding.topBar.showTags(false)
         binding.recyclerView.gone()
@@ -849,6 +867,26 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
 
     override fun disable(rssSource: RssSource) {
         viewModel.disable(rssSource)
+    }
+
+    /**
+     * 现代 RSS 模式下收藏当前浏览的订阅源
+     */
+    private fun favoriteCurrentSource() {
+        val source = selectedRssSource ?: return
+        val ctx = context ?: return
+        lifecycleScope.launch(IO) {
+            val star = RssStar(
+                origin = source.sourceUrl,
+                sort = "",
+                title = source.sourceName,
+                starTime = System.currentTimeMillis(),
+                link = source.sourceUrl,
+                type = 0
+            )
+            appDb.rssStarDao.insert(star)
+            ctx.toastOnUi(R.string.in_favorites)
+        }
     }
 
     fun gotoTop() {

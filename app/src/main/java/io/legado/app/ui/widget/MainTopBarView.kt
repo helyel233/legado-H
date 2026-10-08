@@ -57,6 +57,7 @@ class MainTopBarView @JvmOverloads constructor(
     val searchButton = actionButton(R.drawable.ic_search, R.string.search)
     val filterButton = actionButton(R.drawable.ic_sort, R.string.sort)
     val starButton = actionButton(R.drawable.ic_star, R.string.favorite)
+    val shareButton = actionButton(R.drawable.ic_share, R.string.share)
     val refreshButton = actionButton(R.drawable.ic_refresh_black_24dp, R.string.refresh)
     val loginButton = actionButton(R.drawable.ic_bottom_person, R.string.login)
     val primaryBar = RoundedTagBarView(context)
@@ -178,6 +179,7 @@ class MainTopBarView @JvmOverloads constructor(
         searchButton.isVisible = mode == Mode.DISCOVERY || mode == Mode.RSS
         filterButton.isVisible = mode == Mode.DISCOVERY
         starButton.isVisible = mode == Mode.RSS
+        shareButton.isVisible = mode == Mode.RSS
         refreshButton.isVisible = mode == Mode.RSS
         loginButton.isVisible = mode == Mode.DISCOVERY || mode == Mode.RSS
         titleText.textSize = if (mode == Mode.BOOKSHELF) 24f else 20f
@@ -293,12 +295,14 @@ class MainTopBarView @JvmOverloads constructor(
         search: Boolean? = null,
         filter: Boolean? = null,
         star: Boolean? = null,
+        share: Boolean? = null,
         refresh: Boolean? = null,
         login: Boolean? = null
     ) {
         search?.let { searchButton.isVisible = it }
         filter?.let { filterButton.isVisible = it }
         star?.let { starButton.isVisible = it }
+        share?.let { shareButton.isVisible = it }
         refresh?.let { refreshButton.isVisible = it }
         login?.let { loginButton.isVisible = it }
     }
@@ -372,7 +376,7 @@ class MainTopBarView @JvmOverloads constructor(
             searchButton.isVisible = showSearch
         }
         titleSelect.background = ContextCompat.getDrawable(context, R.drawable.bg_discover_embedded_action)
-        listOf(moreButton, searchButton, filterButton, starButton, refreshButton, loginButton, filterToggleButton).forEach {
+        listOf(moreButton, searchButton, filterButton, starButton, shareButton, refreshButton, loginButton, filterToggleButton).forEach {
             it.background = ContextCompat.getDrawable(context, R.drawable.bg_discover_embedded_action)
             it.layoutParams = (it.layoutParams as LayoutParams).apply {
                 width = resources.getDimensionPixelSize(R.dimen.bookshelf_action_button_size)
@@ -423,7 +427,7 @@ class MainTopBarView @JvmOverloads constructor(
         searchEntry.background = TopBarSearchStyle.actionBackground(context)
         searchEntry.setPadding(14.dp, 0, 14.dp, 0)
         titleSelect.setPadding(12.dp, 0, 8.dp, 0)
-        listOf(moreButton, searchButton, filterButton, starButton, refreshButton, loginButton, filterToggleButton).forEach {
+        listOf(moreButton, searchButton, filterButton, starButton, shareButton, refreshButton, loginButton, filterToggleButton).forEach {
             it.background = null
             it.layoutParams = (it.layoutParams as LayoutParams).apply {
                 width = resources.getDimensionPixelSize(R.dimen.top_bar_regular_action_size)
@@ -503,6 +507,7 @@ class MainTopBarView @JvmOverloads constructor(
             addAction(searchButton)
             addAction(filterButton)
             addAction(starButton)
+            addAction(shareButton)
             addAction(refreshButton)
             addAction(loginButton)
             addAction(moreButton)
@@ -546,7 +551,7 @@ class MainTopBarView @JvmOverloads constructor(
         val color = context.primaryTextColor
         titleArrow.setColorFilter(color)
         searchEntryIcon.setColorFilter(color)
-        listOf(moreButton, searchButton, filterButton, starButton, refreshButton, loginButton, filterToggleButton).forEach {
+        listOf(moreButton, searchButton, filterButton, starButton, shareButton, refreshButton, loginButton, filterToggleButton).forEach {
             it.setColorFilter(color)
         }
     }

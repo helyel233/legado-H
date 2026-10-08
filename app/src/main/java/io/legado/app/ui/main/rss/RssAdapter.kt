@@ -92,7 +92,8 @@ class RssAdapter(
         tvName.apply {
             gravity = if (multiColumn) Gravity.CENTER else Gravity.CENTER_VERTICAL
             maxLines = if (multiColumn) 3 else 2
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (columns > 2) 13f else 14f)
+            // 单列保持 XML 原始 15sp；多列收窄字号以适配更窄的格子
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (columns > 2) 13f else if (columns == 2) 14f else 15f)
         }
         val hPadding: Int
         val vPadding: Int

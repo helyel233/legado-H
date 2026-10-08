@@ -13,6 +13,18 @@
         tools:visible="true" />
 
     <item
+        android:id="@+id/menu_share_source"
+        android:title="@string/share"
+        android:icon="@drawable/ic_share"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/menu_favorite_source"
+        android:title="@string/favorite"
+        android:icon="@drawable/ic_star_border"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/menu_login"
         android:title="@string/login"
         app:showAsAction="never" />

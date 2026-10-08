@@ -497,7 +497,9 @@ object BubblePackageManager {
         val resources = PackageResourcePolicy.normalize(config.resources.orEmpty())
         return config.copy(
             name = config.name.trim().ifBlank { "段评气泡" },
-            svgTemplate = config.svgTemplate.ifBlank { defaultSvgTemplate() },
+            svgTemplate = BubbleSvgPolicy.repair(
+                config.svgTemplate.ifBlank { defaultSvgTemplate() }
+            ),
             formatVersion = version,
             resources = resources,
             sizeScale = size.coerceIn(MIN_SIZE_SCALE, MAX_SIZE_SCALE),

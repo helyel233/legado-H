@@ -87,7 +87,7 @@ private const val MAX_SAVEABLE_MULTI_CHOICE_ITEMS = 128
 private const val MAX_ACTION_LIST_ITEMS = 64
 
 @Composable
-private fun DismissWhenCallbackMissing(
+internal fun DismissWhenCallbackMissing(
     missing: Boolean,
     dismiss: () -> Unit
 ) {
@@ -939,6 +939,7 @@ class ComposeNumberPickerDialog : ComposeDialogFragment() {
 
     private var onPositive: ((Int) -> Unit)? = null
     private var onCustom: (() -> Unit)? = null
+    private var onNegative: (() -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -1108,7 +1109,10 @@ class ComposeNumberPickerDialog : ComposeDialogFragment() {
                         LegadoMiuixActionButton(
                             text = negativeText,
                             palette = palette,
-                            onClick = { dismissAllowingStateLoss() },
+                            onClick = {
+                                dismissAllowingStateLoss()
+                                onNegative?.invoke()
+                            },
                             cornerRadius = style.actionRadius
                         )
                         onPositive?.let { callback ->
@@ -1141,7 +1145,8 @@ class ComposeNumberPickerDialog : ComposeDialogFragment() {
             negativeText: String,
             customText: String? = null,
             onPositive: (Int) -> Unit,
-            onCustom: (() -> Unit)? = null
+            onCustom: (() -> Unit)? = null,
+            onNegative: (() -> Unit)? = null
         ): ComposeNumberPickerDialog {
             return ComposeNumberPickerDialog().apply {
                 arguments = Bundle().apply {
@@ -1156,6 +1161,7 @@ class ComposeNumberPickerDialog : ComposeDialogFragment() {
                 }
                 this.onPositive = onPositive
                 this.onCustom = onCustom
+                this.onNegative = onNegative
             }
         }
 

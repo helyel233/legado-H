@@ -1,6 +1,8 @@
 package io.legado.app.help.config
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -40,6 +42,73 @@ class BubbleSvgPolicyTest {
     @Test(expected = IllegalArgumentException::class)
     fun rejectsXmlEntities() {
         BubbleSvgPolicy.validate("""<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg>&x;</svg>""")
+    }
+
+    @Test
+    fun repairStripsXmlDeclarationAndDoctype() {
+        val svg = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg><text>${'$'}displayText</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        BubbleSvgPolicy.validate(fixed)
+        assertEquals("""<svg><text>${'$'}{num}</text></svg>""", fixed)
+    }
+
+    @Test
+    fun repairStripsDoctypeWithInternalSubset() {
+        val svg = """<!DOCTYPE svg [<!ENTITY x "y">]><svg><text>${'$'}displayText</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        BubbleSvgPolicy.validate(fixed)
+        assertEquals("""<svg><text>${'$'}{num}</text></svg>""", fixed)
+    }
+
+    @Test
+    fun repairMapsCommonNumberPlaceholders() {
+        val svg = """<svg><text>${'$'}displayText ${'$'}text ${'$'}number ${'$'}value ${'$'}count ${'$'}num ${'$'}NUM</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        assertEquals(
+            """<svg><text>${'$'}{num} ${'$'}{num} ${'$'}{num} ${'$'}{num} ${'$'}{num} ${'$'}{num} ${'$'}{num}</text></svg>""",
+            fixed
+        )
+    }
+
+    @Test
+    fun repairMapsColorPlaceholder() {
+        val svg = """<svg><text fill="${'$'}color" stroke="${'$'}fontColor">${'$'}textColor</text></svg>"""
+        assertEquals(
+            """<svg><text fill="${'$'}{color}" stroke="${'$'}{color}">${'$'}{color}</text></svg>""",
+            BubbleSvgPolicy.repair(svg)
+        )
+    }
+
+    @Test
+    fun repairHandlesBraceForms() {
+        val svg = """<svg><text>${'$'}{displayText} {{num}} {{color}}</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        assertEquals(
+            """<svg><text>${'$'}{num} ${'$'}{num} ${'$'}{color}</text></svg>""",
+            fixed
+        )
+    }
+
+    @Test
+    fun repairLeavesUnknownPlaceholdersAndIsIdempotent() {
+        val svg = """<svg><text>${'$'}unknown ${'$'}{num} ${'$'}{color}</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        assertEquals(svg, fixed)
+    }
+
+    @Test
+    fun repairKeepsEmbeddedDataImageAndPassesValidate() {
+        val svg = """<?xml version="1.0"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "dtd">
+<svg><image href="data:image/webp;base64,UklGRg=="/><text>${'$'}displayText</text></svg>"""
+        val fixed = BubbleSvgPolicy.repair(svg)
+        BubbleSvgPolicy.validate(fixed)
+        assertTrue(fixed.contains("data:image/webp;base64,UklGRg=="))
+        assertTrue(fixed.contains("${'$'}{num}"))
+        assertFalse(fixed.contains("<!DOCTYPE"))
+        assertFalse(fixed.contains("<?xml"))
     }
 
     @Test

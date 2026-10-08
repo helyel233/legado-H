@@ -4515,7 +4515,14 @@ class ReadBookActivity : BaseReadBookActivity(),
         lifecycleScope.launch {
             kotlin.runCatching {
                 withContext(IO) {
-                    BubblePackageManager.apply(entry)
+                    val localEntry = if (entry.source == BubblePackageManager.Source.REMOTE) {
+                        // Remote-only package must be downloaded first, otherwise
+                        // currentEntry() silently falls back to the builtin bubble.
+                        BubblePackageManager.download(entry)
+                    } else {
+                        entry
+                    }
+                    BubblePackageManager.apply(localEntry)
                     ImageProvider.clear()
                 }
             }.onSuccess {

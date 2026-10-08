@@ -68,6 +68,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private var containerMenuItem: MenuItem? = null
     private var editingConfig: BubblePackageManager.Config? = null
     private var editingEntry: BubblePackageManager.Entry? = null
+    private var pendingColorPickId: Int = -1
     private var svgCursorPosition: Int = 0
     private var loadVersion = 0
     private var loadJob: Job? = null
@@ -111,8 +112,11 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     editingConfig = editingConfig?.copy(svgTemplate = text)
                     svgCursorPosition =
                         result.data?.getIntExtra("cursorPosition", text.length) ?: text.length
-                    showBubbleEditDialog(editingEntry)
                 }
+            }
+            if (editingConfig != null) {
+                // Cancel also returns to the edit dialog instead of losing the editing flow.
+                showBubbleEditDialog(editingEntry)
             }
         }
 
@@ -296,7 +300,9 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 if (entry.source != BubblePackageManager.Source.REMOTE) add(Action.SHARE_DIRECT_LINK)
                 if (entry.source != BubblePackageManager.Source.REMOTE) add(Action.UPLOAD)
                 if (entry.source != BubblePackageManager.Source.LOCAL) add(Action.DOWNLOAD)
-                if (entry.source != BubblePackageManager.Source.REMOTE) add(Action.DELETE_LOCAL)
+                if (entry.source == BubblePackageManager.Source.LOCAL ||
+                    entry.source == BubblePackageManager.Source.BOTH
+                ) add(Action.DELETE_LOCAL)
                 if (entry.source != BubblePackageManager.Source.LOCAL) add(Action.DELETE_REMOTE)
                 if (entry.source == BubblePackageManager.Source.BOTH) add(Action.DELETE_BOTH)
             }
@@ -384,6 +390,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     openSvgEditor()
                 },
                 onPickColor = { dialogId, currentColor ->
+                    pendingColorPickId = dialogId
                     ColorPickerDialog.newBuilder()
                         .setColor(currentColor)
                         .setShowAlphaSlider(false)
@@ -416,6 +423,9 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                             BubblePackageManager.MAX_SIZE_SCALE
                         )
                     )
+                    showBubbleEditDialog(editingEntry)
+                },
+                onNegative = {
                     showBubbleEditDialog(editingEntry)
                 }
             )
@@ -617,6 +627,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     // region ColorPickerDialogListener
 
     override fun onColorSelected(dialogId: Int, color: Int) {
+        pendingColorPickId = -1
         val config = editingConfig ?: return
         val hex = String.format(Locale.ROOT, "#%06X", color and 0x00FFFFFF)
         editingConfig = when (dialogId) {
@@ -630,7 +641,15 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         showBubbleEditDialog(editingEntry)
     }
 
-    override fun onDialogDismissed(dialogId: Int) = Unit
+    override fun onDialogDismissed(dialogId: Int) {
+        if (dialogId == pendingColorPickId) {
+            pendingColorPickId = -1
+            if (editingConfig != null) {
+                // Color picker canceled: return to the edit dialog instead of losing the flow.
+                showBubbleEditDialog(editingEntry)
+            }
+        }
+    }
 
     // endregion
 

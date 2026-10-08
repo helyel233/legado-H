@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.BubblePackageManager
+import io.legado.app.help.config.PackageSvgResourceResolver
 import io.legado.app.model.ImageProvider
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppManagementCard
@@ -82,11 +83,12 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                 val previews = remember { mutableStateMapOf<String, Bitmap>() }
                 val activeDirName = BubblePackageManager.activeDirName()
                 LaunchedEffect(Unit) {
-                    val loaded = BubblePackageManager.loadEntries()
+                    // Local + cached remote only; no network round-trip on dialog open.
+                    val loaded = BubblePackageManager.loadEntrySnapshot().mergedEntries
                     entries = loaded
                     loaded.forEach { entry ->
                         withContext(Dispatchers.Default) {
-                            bubblePreviewBitmap(context.resources.displayMetrics.density, entry.config)
+                            bubblePreviewBitmap(context.resources.displayMetrics.density, entry)
                         }?.let { bitmap ->
                             previews[entry.dirName] = bitmap
                         }
@@ -220,8 +222,9 @@ private fun BubblePreview(bitmap: Bitmap?) {
     }
 }
 
-private fun bubblePreviewBitmap(density: Float, config: BubblePackageManager.Config): Bitmap? {
+private fun bubblePreviewBitmap(density: Float, entry: BubblePackageManager.Entry): Bitmap? {
     return runCatching {
+        val config = entry.config
         val color = when {
             AppConfig.isNightTheme -> config.nightNormalColor
             else -> config.dayNormalColor
@@ -230,7 +233,19 @@ private fun bubblePreviewBitmap(density: Float, config: BubblePackageManager.Con
             .replace("\${color}", color)
             .replace("\${num}", "12")
         val sidePx = (58 * density).toInt()
-        SvgUtils.createBitmap(ByteArrayInputStream(svg.toByteArray()), sidePx, sidePx)
+        ByteArrayInputStream(svg.toByteArray()).use { input ->
+            val root = entry.localDir
+            if (root == null) {
+                SvgUtils.createBitmap(input, sidePx, sidePx)
+            } else {
+                SvgUtils.createBitmap(
+                    input,
+                    sidePx,
+                    sidePx,
+                    PackageSvgResourceResolver(root, config.resources, sidePx, sidePx)
+                )
+            }
+        }
     }.getOrNull()
 }
 
@@ -238,7 +253,7 @@ private fun bubbleSourceText(source: BubblePackageManager.Source): String {
     return when (source) {
         BubblePackageManager.Source.BUILTIN -> "内置"
         BubblePackageManager.Source.LOCAL -> "本地"
-        BubblePackageManager.Source.REMOTE -> "远端"
-        BubblePackageManager.Source.BOTH -> "本地 · 远端"
+        BubblePackageManager.Source.REMOTE -> "云端"
+        BubblePackageManager.Source.BOTH -> "本地 + 云端"
     }
 }

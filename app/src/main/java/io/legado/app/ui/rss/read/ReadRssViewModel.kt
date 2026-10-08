@@ -195,6 +195,38 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
+    /**
+     * 网页态（未解析出文章）时切换收藏当前浏览的网页
+     * @param onResult 主线程回调，true=已收藏，false=已取消收藏
+     */
+    fun toggleWebFavorite(currentUrl: String?, title: String?, onResult: (Boolean) -> Unit) {
+        val origin = origin ?: return
+        val link = currentUrl ?: return
+        execute {
+            val existing = appDb.rssStarDao.get(origin, link)
+            if (existing != null) {
+                appDb.rssStarDao.delete(origin, link)
+                rssStar = null
+                false
+            } else {
+                val star = RssStar(
+                    origin = origin,
+                    sort = "",
+                    title = title?.takeIf { it.isNotBlank() } ?: rssSource?.sourceName ?: "",
+                    starTime = System.currentTimeMillis(),
+                    link = link,
+                    type = 0
+                )
+                appDb.rssStarDao.insert(star)
+                rssStar = star
+                true
+            }
+        }.onSuccess { added ->
+            upStarMenuData.postValue(true)
+            onResult(added)
+        }
+    }
+
     fun saveImage(webPic: String?, uri: Uri) {
         webPic ?: return
         execute {

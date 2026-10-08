@@ -36,6 +36,7 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.imagePathKey
 import io.legado.app.constant.AppLog
+import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityRssReadBinding
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions
@@ -97,6 +98,7 @@ import io.legado.app.help.webView.WebViewPool.BLANK_HTML
 import io.legado.app.help.webView.WebViewPool.DATA_HTML
 import io.legado.app.model.Download
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Dispatchers.Main
 import java.lang.ref.WeakReference
 import splitties.systemservices.powerManager
 import java.net.URLDecoder
@@ -262,9 +264,22 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             R.id.menu_rss_refresh -> refresh()
 
             R.id.menu_rss_star -> {
-                viewModel.addFavorite()
-                viewModel.rssArticle?.let {
-                    showDialogFragment(RssFavoritesDialog(it))
+                if (viewModel.rssArticle != null) {
+                    viewModel.addFavorite()
+                    viewModel.rssArticle?.let {
+                        showDialogFragment(RssFavoritesDialog(it))
+                    }
+                } else {
+                    // 网页态（无文章对象）：切换收藏当前网页，已收藏则取消
+                    // （仅支持 http/https，过滤 data:/about: 等内部地址）
+                    val url = currentWebView.url?.takeIf { it.startsWith("http", true) }
+                    if (url == null) {
+                        toastOnUi(R.string.null_url)
+                    } else {
+                        viewModel.toggleWebFavorite(url, currentWebView.title) { added ->
+                            toastOnUi(if (added) R.string.in_favorites else R.string.out_favorites)
+                        }
+                    }
                 }
             }
 
@@ -437,15 +452,37 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     private fun upStarMenu() {
-        starMenuItem?.isVisible = viewModel.rssArticle != null
+        starMenuItem?.isVisible = true
         if (viewModel.rssStar != null) {
             starMenuItem?.setIcon(R.drawable.ic_star)
             starMenuItem?.setTitle(R.string.in_favorites)
         } else {
             starMenuItem?.setIcon(R.drawable.ic_star_border)
             starMenuItem?.setTitle(R.string.out_favorites)
+            upWebStarMenu()
         }
         starMenuItem?.icon?.setTintMutate(primaryTextColor)
+    }
+
+    /**
+     * 网页态（无文章对象）下按当前网页地址回查收藏状态，避免星标显示与收藏库不一致
+     */
+    private fun upWebStarMenu() {
+        if (viewModel.rssArticle != null) return
+        val origin = viewModel.origin ?: return
+        val url = currentWebView.url?.takeIf { it.startsWith("http", true) } ?: return
+        lifecycleScope.launch(IO) {
+            val starred = appDb.rssStarDao.get(origin, url) != null
+            launch(Main) {
+                if (viewModel.rssArticle == null && viewModel.rssStar == null &&
+                    currentWebView.url == url && !isFinishing && !isDestroyed
+                ) {
+                    starMenuItem?.setIcon(if (starred) R.drawable.ic_star else R.drawable.ic_star_border)
+                    starMenuItem?.setTitle(if (starred) R.string.in_favorites else R.string.out_favorites)
+                    starMenuItem?.icon?.setTintMutate(primaryTextColor)
+                }
+            }
+        }
     }
 
     private fun upTtsMenu(isPlaying: Boolean) {

@@ -28,6 +28,8 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityRssArtivlesBinding
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.RssStar
 import io.legado.app.help.source.sortUrls
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
@@ -377,6 +379,12 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             }
 
             R.id.menu_read_record -> showDialogFragment(ReadRecordDialog(viewModel.rssSource?.sourceUrl))
+
+            R.id.menu_share_source -> viewModel.rssSource?.sourceUrl?.let {
+                share(it)
+            } ?: toastOnUi(R.string.null_url)
+
+            R.id.menu_favorite_source -> favoriteCurrentSource()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -472,6 +480,24 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
                     comment
                 )
             )
+        }
+    }
+
+    private fun favoriteCurrentSource() {
+        val source = viewModel.rssSource ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            val star = RssStar(
+                origin = source.sourceUrl,
+                sort = "",
+                title = source.sourceName,
+                starTime = System.currentTimeMillis(),
+                link = source.sourceUrl,
+                type = 0
+            )
+            appDb.rssStarDao.insert(star)
+            launch(Dispatchers.Main) {
+                toastOnUi(R.string.in_favorites)
+            }
         }
     }
 
