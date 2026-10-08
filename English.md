@@ -15,7 +15,7 @@ LegadoH ships with no books and no book sources. Add your own online sources in 
 - **Independent EPUB layout engine**: supports image-based pattern highlights and rich CSS effects, with the default "Camellia" loading template and artwork extending behind the status bar in day/night modes.
 - **Page template system**: fixed-frame scrolling templates, unified font/color/header/footer management, horizontal and vertical typesetting.
 - **Theme system**: built-in Minecraft, Asuka, Lord of the Mysteries and Doraemon reading themes, advanced-title and header/footer Lottie animations, independently adjustable opacity for the top bar, bottom bar and dialogs.
-- **AI-assisted reading**: configurable AI services for source search, book and chapter reading, reading-record queries and web-connected tools.
+- **AI-assisted reading**: configurable AI services for source search, book and chapter reading, reading-record queries and web-connected tools; chapter text sent to third-party AI requires a consent prompt, sensitive config such as apiKey is stored encrypted locally, and built-in request rate limiting with daily usage stats is included.
 - **Modernized UI**: Compose bookshelf and explore pages, adaptive launcher icon with a monochrome themed layer, frosted-glass top and bottom bars.
 
 Ongoing improvements from sibling forks are also ported in — such as [legadoC](https://github.com/CCSSNE/legadoC)'s review-snapshot and offline-comment system, cache download coordinator, bookshelf collections with homepage modules and inline illustrations with audio blocks, and [Legado_Max](https://github.com/Suml-1/Legado_Max)'s interaction and tooling features.
@@ -26,7 +26,7 @@ Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/
 
 - Package name: `io.legado.app.LegadoH`. It can be installed **side by side** with the old "Reading Archive" (`io.legado.app.Archive`).
 - The two versions keep data separate; sources, bookshelf and reading settings can be restored in one tap from an old WebDAV/local backup.
-- Each release provides both arm64-v8a and armeabi-v7a release-signed APKs.
+- The release-signed APK is arm64-v8a (LegadoH signature); each Release also ships a full-ABI debug APK (debug signature, including armeabi-v7a) for non-arm64 devices.
 
 ## Features
 
