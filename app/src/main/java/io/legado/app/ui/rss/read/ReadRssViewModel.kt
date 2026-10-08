@@ -206,7 +206,6 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
             val existing = appDb.rssStarDao.get(origin, link)
             if (existing != null) {
                 appDb.rssStarDao.delete(origin, link)
-                rssStar = null
                 false
             } else {
                 val star = RssStar(
@@ -218,7 +217,6 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                     type = 0
                 )
                 appDb.rssStarDao.insert(star)
-                rssStar = star
                 true
             }
         }.onSuccess { added ->

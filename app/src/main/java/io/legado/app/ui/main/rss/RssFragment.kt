@@ -65,6 +65,7 @@ import io.legado.app.utils.visible
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.ui.widget.SourceSelectDialog
 import io.legado.app.ui.widget.RoundedTagBarView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
@@ -484,6 +485,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.topBar.refreshButton.isVisible = source.ruleArticles.isNullOrBlank()
         binding.topBar.starButton.isVisible = true
         binding.topBar.shareButton.isVisible = true
+        updateStarButtonIcon()
         renderRssSourceSelector()
         binding.topBar.post(::updateRssSourceNameWidth)
         scheduleModernRssTopBarOverlayUpdate()
@@ -870,22 +872,51 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     }
 
     /**
-     * 现代 RSS 模式下收藏当前浏览的订阅源
+     * 现代 RSS 模式下收藏/取消收藏当前浏览的订阅源
      */
     private fun favoriteCurrentSource() {
         val source = selectedRssSource ?: return
         val ctx = context ?: return
+        val sourceUrl = source.sourceUrl
         lifecycleScope.launch(IO) {
-            val star = RssStar(
-                origin = source.sourceUrl,
-                sort = "",
-                title = source.sourceName,
-                starTime = System.currentTimeMillis(),
-                link = source.sourceUrl,
-                type = 0
-            )
-            appDb.rssStarDao.insert(star)
-            ctx.toastOnUi(R.string.in_favorites)
+            val added = if (appDb.rssStarDao.get(sourceUrl, sourceUrl) != null) {
+                appDb.rssStarDao.delete(sourceUrl, sourceUrl)
+                false
+            } else {
+                appDb.rssStarDao.insert(
+                    RssStar(
+                        origin = sourceUrl,
+                        sort = "",
+                        title = source.sourceName,
+                        starTime = System.currentTimeMillis(),
+                        link = sourceUrl,
+                        type = 0
+                    )
+                )
+                true
+            }
+            launch(Dispatchers.Main) {
+                binding.topBar.starButton.setImageResource(
+                    if (added) R.drawable.ic_star else R.drawable.ic_star_border
+                )
+                ctx.toastOnUi(if (added) R.string.in_favorites else R.string.out_favorites)
+            }
+        }
+    }
+
+    /** 按收藏库状态刷新收藏按钮图标 */
+    private fun updateStarButtonIcon() {
+        val source = selectedRssSource ?: return
+        val sourceUrl = source.sourceUrl
+        viewLifecycleOwner.lifecycleScope.launch(IO) {
+            val starred = appDb.rssStarDao.get(sourceUrl, sourceUrl) != null
+            launch(Dispatchers.Main) {
+                if (selectedRssSource?.sourceUrl == sourceUrl) {
+                    binding.topBar.starButton.setImageResource(
+                        if (starred) R.drawable.ic_star else R.drawable.ic_star_border
+                    )
+                }
+            }
         }
     }
 

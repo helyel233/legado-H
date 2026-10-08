@@ -57,6 +57,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     private val orientation by lazy { resources.configuration.orientation }
     private var shouldFocusSearch = false
     private var pureSearch = false
+    private var favoriteMenuItem: MenuItem? = null
     private val editSourceResult = registerForActivityResult(
         StartActivityContract(RssSourceEditActivity::class.java)
     ) {
@@ -285,6 +286,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.rss_articles, menu)
+        favoriteMenuItem = menu.findItem(R.id.menu_favorite_source)
         if (pureSearch) {
             listOf(
                 R.id.menu_login,
@@ -392,6 +394,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     private fun upFragments() {
         lifecycleScope.launch {
             val source = viewModel.rssSource ?: return@launch
+            refreshFavoriteMenuState(source.sourceUrl)
             if (viewModel.searchKey != null) {
                 sortList.apply {
                     val name = "搜索"
@@ -485,18 +488,39 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
 
     private fun favoriteCurrentSource() {
         val source = viewModel.rssSource ?: return
+        val sourceUrl = source.sourceUrl
         lifecycleScope.launch(Dispatchers.IO) {
-            val star = RssStar(
-                origin = source.sourceUrl,
-                sort = "",
-                title = source.sourceName,
-                starTime = System.currentTimeMillis(),
-                link = source.sourceUrl,
-                type = 0
-            )
-            appDb.rssStarDao.insert(star)
-            launch(Dispatchers.Main) {
-                toastOnUi(R.string.in_favorites)
+            val added = if (appDb.rssStarDao.get(sourceUrl, sourceUrl) != null) {
+                appDb.rssStarDao.delete(sourceUrl, sourceUrl)
+                false
+            } else {
+                appDb.rssStarDao.insert(
+                    RssStar(
+                        origin = sourceUrl,
+                        sort = "",
+                        title = source.sourceName,
+                        starTime = System.currentTimeMillis(),
+                        link = sourceUrl,
+                        type = 0
+                    )
+                )
+                true
+            }
+            withContext(Dispatchers.Main) {
+                toastOnUi(if (added) R.string.in_favorites else R.string.out_favorites)
+                refreshFavoriteMenuState(sourceUrl)
+            }
+        }
+    }
+
+    /** 按收藏库状态刷新收藏菜单图标 */
+    private fun refreshFavoriteMenuState(sourceUrl: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val starred = appDb.rssStarDao.get(sourceUrl, sourceUrl) != null
+            withContext(Dispatchers.Main) {
+                favoriteMenuItem?.setIcon(
+                    if (starred) R.drawable.ic_star else R.drawable.ic_star_border
+                )
             }
         }
     }

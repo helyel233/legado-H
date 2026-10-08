@@ -453,13 +453,18 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     private fun upStarMenu() {
         starMenuItem?.isVisible = true
-        if (viewModel.rssStar != null) {
+        if (viewModel.rssArticle == null) {
+            // 网页态：rssStar 只代表当前文章的收藏，网页态一律按当前地址回查，
+            // 避免残留状态导致跳转新页面后星标显示陈旧
+            starMenuItem?.setIcon(R.drawable.ic_star_border)
+            starMenuItem?.setTitle(R.string.out_favorites)
+            upWebStarMenu()
+        } else if (viewModel.rssStar != null) {
             starMenuItem?.setIcon(R.drawable.ic_star)
             starMenuItem?.setTitle(R.string.in_favorites)
         } else {
             starMenuItem?.setIcon(R.drawable.ic_star_border)
             starMenuItem?.setTitle(R.string.out_favorites)
-            upWebStarMenu()
         }
         starMenuItem?.icon?.setTintMutate(primaryTextColor)
     }
@@ -474,7 +479,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         lifecycleScope.launch(IO) {
             val starred = appDb.rssStarDao.get(origin, url) != null
             launch(Main) {
-                if (viewModel.rssArticle == null && viewModel.rssStar == null &&
+                if (viewModel.rssArticle == null &&
                     currentWebView.url == url && !isFinishing && !isDestroyed
                 ) {
                     starMenuItem?.setIcon(if (starred) R.drawable.ic_star else R.drawable.ic_star_border)
@@ -750,6 +755,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            // 网页内跳转后按当前地址刷新星标，避免沿用上一页的收藏状态
+            upStarMenu()
             view.title?.let { title ->
                 if (title != url
                     && title != view.url

@@ -6,6 +6,7 @@ internal object BubbleSvgPolicy {
     fun escapeText(value: String): String = value.replace("&", "&amp;")
         .replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
 
+    // 只要出现 onXxx= 即拒绝，不限定值的引号形式，避免 onload='x' / onload=x 绕过
     private val eventHandlerPattern = Regex("""\son[a-z]+\s*=""", RegexOption.IGNORE_CASE)
     private val hrefPattern = Regex(
         """(?:href|xlink:href)\s*=\s*(["'])(.*?)\1""",

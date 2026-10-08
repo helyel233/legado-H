@@ -40,6 +40,21 @@ class BubbleSvgPolicyTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
+    fun rejectsEventHandlerWithSingleQuotes() {
+        BubbleSvgPolicy.validate("""<svg><rect onload='run()'/></svg>""")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsEventHandlerWithoutQuotes() {
+        BubbleSvgPolicy.validate("""<svg><rect onload=run() /></svg>""")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsEventHandlerWithMixedCaseAndSpaces() {
+        BubbleSvgPolicy.validate("""<svg><rect OnLoad = "run()" /></svg>""")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
     fun rejectsXmlEntities() {
         BubbleSvgPolicy.validate("""<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg>&x;</svg>""")
     }
