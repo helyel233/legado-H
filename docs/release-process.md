@@ -1,6 +1,6 @@
 # legado-H 发布流程规范
 
-> 本文件是 legado-H 发布版本的**唯一规范**。发布渠道为**本机构建 + GitHub API 上传**（沿用旧方案），版本号沿用 H 方案（`H.x.y` / versionCode 基线偏移）。Gitee 渠道及其相关代码已于 2026-10-07 彻底移除，不再恢复。
+> 本文件是 legado-H 发布版本的**唯一规范**。发布渠道为**本机构建 + GitHub API 上传**（沿用旧方案），版本号采用 H 方案三段式（`H.<major>.<minor>.<patch>` / versionCode 基线偏移）。Gitee 渠道及其相关代码已于 2026-10-07 彻底移除，不再恢复。
 
 ## 0. 关键前提
 
@@ -13,15 +13,15 @@
 
 | 项 | 规则 | 示例 |
 |---|---|---|
-| `versionName` | `H.<major>.<minor>`；常规功能/修复 +minor，重大改版 +major | `H.1.2` |
-| git tag | `H-<x.y>`（annotated，与 versionName 成对） | `H-1.2` |
-| `versionCode` | `29860000 + git rev-list --count HEAD`（脚本自动计算，无需手填） | 2148 个提交时 = `29862148` |
-| Release 标题 | `legado-H <x.y>` | `legado-H 1.2` |
+| `versionName` | `H.<major>.<minor>.<patch>` 三段式；相对紧邻上一版计算：重大改版 +major（`+1.0.0`）、仅新功能 +minor（`+0.1`）、仅修复 +patch（`+0.0.1`）、功能与修复并存 +minor+patch（`+0.1.1`）；历史上 `H.1.0`–`H.1.4` 视作隐含 `.0` 补丁（`H.1.4` ≡ `H.1.4.0`） | `H.1.5.1` |
+| git tag | `H-<x.y.z>`（annotated，与 versionName 成对） | `H-1.5.1` |
+| `versionCode` | `29860000 + git rev-list --count HEAD`（脚本自动计算，无需手填） | 2163 个提交时 = `29862163` |
+| Release 标题 | `legado-H <x.y.z>` | `legado-H 1.5.1` |
 | Release 正文 | 仓库根 `CHANGELOG.md`（脚本自动读取） | — |
-| APK 文件名 | `legado_app_H.<x.y>_<CODE>_LegadoH_arm64.apk` / `legado_app_H.<x.y>_<CODE>_LegadoH_debug.apk` | `legado_app_H.1.2_29862148_LegadoH_arm64.apk` |
+| APK 文件名 | `legado_app_H.<x.y.z>_<CODE>_LegadoH_arm64.apk` / `legado_app_H.<x.y.z>_<CODE>_LegadoH_debug.apk` | `legado_app_H.1.5.1_29862163_LegadoH_arm64.apk` |
 
-- versionCode 判定规则：应用内检查更新（`AppUpdate.versionInfoFromFileName`，正则 `(\d+(?:\.\d+)+)_(\d+)`）从资产文件名解析 `<x.y>_<CODE>`，`H.` 前缀不参与比较，**新旧判定完全靠 versionCode**。基线 29860000 高于全部旧 `legadoh-3.x` 的 epoch 分钟 code，保证旧版用户能收到更新提示；资产文件名**必须**保持上述形态，不得手工改名破坏。
-- `app/build.gradle` 本地兜底（不传 `-P` 时）：versionName = `H.dev.<时间>`、versionCode = `29860000 + 提交数`，仅用于日常调试；**正式发布一律用 `.legadoh/build-signed.sh <x.y>`**，它显式注入版本与签名参数。
+- versionCode 判定规则：应用内检查更新（`AppUpdate.versionInfoFromFileName`，正则 `(\d+(?:\.\d+)+)_(\d+)`）从资产文件名解析 `<x.y.z>_<CODE>`，`H.` 前缀不参与比较，**新旧判定完全靠 versionCode**。基线 29860000 高于全部旧 `legadoh-3.x` 的 epoch 分钟 code，保证旧版用户能收到更新提示；资产文件名**必须**保持上述形态，不得手工改名破坏。
+- `app/build.gradle` 本地兜底（不传 `-P` 时）：versionName = `H.dev.<时间>`、versionCode = `29860000 + 提交数`，仅用于日常调试；**正式发布一律用 `.legadoh/build-signed.sh <x.y.z>`**，它显式注入版本与签名参数。
 
 ### 发布前冲突检查
 
@@ -56,7 +56,7 @@ git push origin "H-<x.y>"
 ### 4.1 正式版（arm64，LegadoH 签名）
 
 ```bash
-.legadoh/build-signed.sh 1.2     # 传数字版本号，不要带 H 前缀
+.legadoh/build-signed.sh 1.5.1     # 传数字版本号，不要带 H 前缀
 ```
 
 脚本自动：计算 `versionCode = 29860000 + 提交数` → 注入 `.legadoh/keystore.properties` 签名参数与 JAVA_HOME → 构建 arm64-v8a release。完成后把 `app/build/outputs/apk/app/release/` 下的 APK 复制到仓库根并重命名为 `legado_app_H.<x.y>_<CODE>_LegadoH_arm64.apk`（`<CODE>` 以脚本输出为准）。
@@ -66,7 +66,7 @@ git push origin "H-<x.y>"
 ```bash
 ./gradlew --stop                 # ⚠️ 必须：release 的 R8 跑完后重启干净 daemon，防 GC/swap 死亡行进
 ./gradlew :app:assembleAppDebug \
-  -PVERSION_NAME="H.1.2" -PVERSION_CODE=<同上CODE> -q
+  -PVERSION_NAME="H.1.5.1" -PVERSION_CODE=<同上CODE> -q
 ```
 
 复制到仓库根并重命名为 `legado_app_H.<x.y>_<CODE>_LegadoH_debug.apk`。
@@ -74,9 +74,9 @@ git push origin "H-<x.y>"
 ### 4.3 验证
 
 ```bash
-apksigner verify --print-certs legado_app_H.1.2_29862148_LegadoH_arm64.apk
+apksigner verify --print-certs legado_app_H.1.5.1_29862163_LegadoH_arm64.apk
 # 预期 release：CN=LegadoH, SHA-256 ee8fe11d…；debug 为 Android Debug 证书
-unzip -p legado_app_H.1.2_29862148_LegadoH_debug.apk assets/updateLog.md | head   # 确认含本版条目
+unzip -p legado_app_H.1.5.1_29862163_LegadoH_debug.apk assets/updateLog.md | head   # 确认含本版条目
 ```
 
 ### 4.4 本机构建红线（历史陷阱，仍然全部有效）
@@ -90,7 +90,7 @@ unzip -p legado_app_H.1.2_29862148_LegadoH_debug.apk assets/updateLog.md | head 
 ## 5. 发布（create-release.sh）
 
 ```bash
-.legadoh/create-release.sh 1.2
+.legadoh/create-release.sh 1.5.1
 ```
 
 脚本自动：
