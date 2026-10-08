@@ -687,6 +687,11 @@
     <string name="ai_context_compression_summary_default">默认 258K 上下文，128K 思考上下文；接近上限时压缩旧历史</string>
     <string name="ai_context_compression_enabled">启用上下文压缩</string>
     <string name="ai_context_tokens">上下文长度</string>
+    <string name="ai_content_consent_title">允许发送书籍正文？</string>
+    <string name="ai_content_consent_message">「%1$s」需要把章节正文发送到你配置的第三方 AI 服务商处理。正文会离开本机，请确认你已了解并接受对应服务的隐私条款。可在 AI 设置中修改默认授权。</string>
+    <string name="ai_content_consent_allow_once">仅本次允许</string>
+    <string name="ai_content_consent_allow_always">始终允许</string>
+    <string name="ai_content_consent_deny_once">本次禁止</string>
     <string name="ai_thinking_context_tokens">思考上下文</string>
     <string name="ai_persona_manage">人格提示词</string>
     <string name="ai_persona_manage_summary_empty">未设置人格提示词</string>

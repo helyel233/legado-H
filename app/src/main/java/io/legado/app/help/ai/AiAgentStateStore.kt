@@ -98,23 +98,22 @@ object AiAgentStateStore {
         )
     }
 
-    fun markWaitingResume(
-        run: Run?,
-        reason: String,
-        delayMillis: Long = 5_000L
-    ) {
+    /**
+     * 任务被系统中断（进程回收、作用域取消等）时落为 interrupted 终态。
+     * 历史上的 waiting_resume 状态没有调度器真正恢复，属于误导性中间态，已废弃。
+     */
+    fun markInterrupted(run: Run?, reason: String) {
         if (run == null) return
         val now = System.currentTimeMillis()
-        val nextRunAt = now + delayMillis.coerceAtLeast(0L)
-        appDb.aiAgentDao.markJobWaitingResume(
+        appDb.aiAgentDao.finishJob(
             jobId = run.jobId,
+            status = AiAgentJob.STATUS_INTERRUPTED,
             error = reason.take(4_000),
-            nextRunAt = nextRunAt,
             updatedAt = now
         )
         appDb.aiAgentDao.updateSessionStatus(
             sessionId = run.sessionId,
-            status = AiAgentSession.STATUS_WAITING_RESUME,
+            status = AiAgentSession.STATUS_INTERRUPTED,
             error = reason.take(4_000),
             updatedAt = now
         )
@@ -171,21 +170,10 @@ object AiAgentStateStore {
     }
 
     fun markExpiredRunningJobs(now: Long = System.currentTimeMillis()) {
-        appDb.aiAgentDao.expiredRunningJobs(now).forEach { job ->
-            val reason = "任务被系统中断，等待恢复"
-            appDb.aiAgentDao.markJobWaitingResume(
-                jobId = job.jobId,
-                error = reason,
-                nextRunAt = now + 5_000L,
-                updatedAt = now
-            )
-            appDb.aiAgentDao.updateSessionStatus(
-                sessionId = job.sessionId,
-                status = AiAgentSession.STATUS_WAITING_RESUME,
-                error = reason,
-                updatedAt = now
-            )
-        }
+        val reason = "任务因应用退出或超时被中断，可重新发起"
+        // 先按会话收口（此时过期 job 仍是 running，可被子查询命中），再收口 job
+        appDb.aiAgentDao.finalizeStaleSessions(now, reason.take(4_000), now)
+        appDb.aiAgentDao.finalizeStaleJobs(now, reason.take(4_000), now)
     }
 
     private fun buildCheckpoint(

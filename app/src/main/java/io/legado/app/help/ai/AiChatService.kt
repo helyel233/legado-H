@@ -23,6 +23,7 @@ import io.legado.app.ui.main.ai.AiSkillConfig
 import io.legado.app.ui.main.ai.AiWorldBookEntry
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.delay
 import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
 
@@ -587,11 +588,18 @@ object AiChatService {
         repeat(NETWORK_ABORT_RETRY_COUNT + 1) { attempt ->
             try {
                 if (attempt > 0) {
+                    val retryAfter = (lastError as? AiChatException)
+                        ?.takeIf { it.retryAfterMillis > 0L }
+                        ?.retryAfterMillis
+                    val delayMillis = retryAfter
+                        ?: AiRateLimiter.backoffDelayMillis(attempt - 1)
                     requestLog.append("round=").append(round)
                         .append(" retry=").append(attempt)
+                        .append(" delay=").append(delayMillis)
                         .append(" reason=").append(lastError?.message ?: lastError?.javaClass?.simpleName)
                         .append('\n')
                     onThinking("AI 请求失败，正在重试 $attempt/$NETWORK_ABORT_RETRY_COUNT")
+                    delay(delayMillis)
                 }
                 return requestCompletionStream(
                     chatUrl = chatUrl,
@@ -635,6 +643,7 @@ object AiChatService {
         onThinking: (String) -> Unit,
         onUsage: (AiUsageStats) -> Unit
     ): AiAgentAssistantTurn {
+        AiRateLimiter.acquire()
         val requestBody = buildRequestBody(
             messages = messages,
             model = model,
@@ -670,7 +679,11 @@ object AiChatService {
                         append(requestLog)
                         append("status=${rawResponse.code} ${rawResponse.message}").append('\n')
                         append("response=").append(safeDebugPayload(payload)).append('\n')
-                    }.let(::safeDebugLog)
+                    }.let(::safeDebugLog),
+                    httpCode = rawResponse.code,
+                    retryAfterMillis = rawResponse.header("Retry-After")
+                        ?.let { parseRetryAfterMillis(it) }
+                        ?: 0L
                 )
             }
             val rendered = StringBuilder()
@@ -1663,6 +1676,7 @@ object AiChatService {
     }
 
     private fun Throwable.isAiRetryableRequestFailure(): Boolean {
+        if (this is AiChatException && (httpCode == 429 || httpCode in 500..599)) return true
         if (isAiRetryableNetworkAbort()) return true
         var current: Throwable? = this
         while (current != null) {
@@ -1693,6 +1707,12 @@ object AiChatService {
             current = current.cause
         }
         return false
+    }
+
+    /** Retry-After 秒数形式转毫秒；HTTP 日期形式不处理 */
+    private fun parseRetryAfterMillis(value: String): Long {
+        val seconds = value.trim().toLongOrNull() ?: return 0L
+        return (seconds * 1000L).coerceIn(0L, 30_000L)
     }
 
     private fun resolveChatUrl(baseUrl: String, apiMode: String): String {

@@ -19,6 +19,7 @@
     <item name="full_id" type="id" />
     <item name="text_watcher" type="id" />
     <item name="main_bottom_bar_space_decoration" type="id" />
+    <item name="rss_item_layout_style" type="id" />
     <item name="ui_title_typeface_role" type="id" />
     <item name="ai_markdown_link_tap_handler" type="id" />
     <item name="book_info_useweb_popup_host" type="id" />

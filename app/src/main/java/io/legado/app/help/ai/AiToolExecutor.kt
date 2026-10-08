@@ -2,6 +2,7 @@ package io.legado.app.help.ai
 
 import io.legado.app.help.config.AppConfig
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.IOException
@@ -84,6 +85,7 @@ internal object AiToolExecutor {
                     ) {
                         throw throwable
                     }
+                    delay(AiRateLimiter.backoffDelayMillis(attempt, baseMillis = 500L, maxMillis = 5_000L))
                 }
             }
             throw lastError ?: IllegalStateException("Tool failed")

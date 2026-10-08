@@ -47,6 +47,7 @@ class AiConfigFragment : ComposeSettingFragment() {
         const val KEY_AI_WORKSPACE = "aiWorkspace"
         const val KEY_CONTEXT_COMPRESSION = "aiContextCompression"
         const val KEY_WORLD_BOOK_MANAGE = "aiWorldBookManage"
+        const val KEY_CONTENT_CONSENT = "aiContentConsent"
         const val KEY_DEFAULT_MODEL_SETTINGS = "aiDefaultModelSettings"
         const val KEY_IMAGE_GALLERY = "aiImageGallery"
         const val KEY_IMAGE_PROVIDER_MANAGE = "aiImageProviderManage"
@@ -175,6 +176,12 @@ class AiConfigFragment : ComposeSettingFragment() {
                             onClick = {
                                 startActivity(Intent(requireContext(), AiWorldBookManageActivity::class.java))
                             }
+                        ),
+                        SettingActionSpec(
+                            key = KEY_CONTENT_CONSENT,
+                            title = "正文隐私授权",
+                            summary = contentConsentSummary(),
+                            onClick = ::showContentConsentDialog
                         ),
                         SettingActionSpec(
                             key = KEY_DEFAULT_MODEL_SETTINGS,
@@ -610,6 +617,30 @@ class AiConfigFragment : ComposeSettingFragment() {
         )
     }
 
+
+    private fun contentConsentSummary(): String = when (AppConfig.aiExternalContentConsent) {
+        AppConfig.AI_CONTENT_CONSENT_ALLOW -> "始终允许发送正文"
+        AppConfig.AI_CONTENT_CONSENT_DENY -> "始终禁止发送正文"
+        else -> "每次询问"
+    }
+
+    private fun showContentConsentDialog() {
+        showComposeActionListDialog(
+            title = "正文隐私授权",
+            labels = listOf(
+                "每次询问",
+                "始终允许发送正文",
+                "始终禁止发送正文"
+            )
+        ) { index ->
+            AppConfig.aiExternalContentConsent = when (index) {
+                1 -> AppConfig.AI_CONTENT_CONSENT_ALLOW
+                2 -> AppConfig.AI_CONTENT_CONSENT_DENY
+                else -> AppConfig.AI_CONTENT_CONSENT_ASK
+            }
+            refreshUi()
+        }
+    }
 
     private fun showContextCompressionDialog() {
         val enabledText = if (AppConfig.aiContextCompressionEnabled) "关闭上下文压缩" else "启用上下文压缩"

@@ -8,6 +8,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.help.ai.AiSecretCipher
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.utils.GSON
@@ -707,6 +708,29 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val aiEnabledMcpServers: List<AiMcpServerConfig>
         get() = aiMcpServerList.filter { it.enabled }
 
+    /** 书籍正文外发授权取值 */
+    const val AI_CONTENT_CONSENT_ASK = "ask"
+    const val AI_CONTENT_CONSENT_ALLOW = "allow"
+    const val AI_CONTENT_CONSENT_DENY = "deny"
+
+    /** 书籍正文外发授权：ask(每次询问)/allow(始终允许)/deny(始终禁止) */
+    var aiExternalContentConsent: String
+        get() {
+            val stored = appCtx.getPrefString(PreferKey.aiExternalContentConsent)
+            return when (stored) {
+                AI_CONTENT_CONSENT_ALLOW, AI_CONTENT_CONSENT_DENY, AI_CONTENT_CONSENT_ASK -> stored
+                else -> AI_CONTENT_CONSENT_ASK
+            }
+        }
+        set(value) {
+            val normalized = when (value) {
+                AI_CONTENT_CONSENT_ALLOW, AI_CONTENT_CONSENT_DENY -> value
+                else -> AI_CONTENT_CONSENT_ASK
+            }
+            appCtx.putPrefString(PreferKey.aiExternalContentConsent, normalized)
+            postEvent(EventBus.AI_CONFIG_CHANGED, true)
+        }
+
     var aiChatSessionList: List<AiChatSession>
         get() = runCatching {
             GSON.fromJsonArray<AiChatSession>(appCtx.getPrefString(PreferKey.aiChatSessionList))
@@ -1035,11 +1059,26 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = normalizeAiImageProviders(
             GSON.fromJsonArray<AiImageProviderConfig>(appCtx.getPrefString(PreferKey.aiImageProviderList))
                 .getOrDefault(emptyList())
+                .map { provider ->
+                    provider.copy(
+                        apiKey = AiSecretCipher.decrypt(provider.apiKey),
+                        headers = AiSecretCipher.decrypt(provider.headers)
+                    )
+                }
         )
         set(value) {
             val providers = normalizeAiImageProviders(value)
-            if (providers.isEmpty()) appCtx.removePref(PreferKey.aiImageProviderList)
-            else appCtx.putPrefString(PreferKey.aiImageProviderList, GSON.toJson(providers))
+            if (providers.isEmpty()) {
+                appCtx.removePref(PreferKey.aiImageProviderList)
+            } else {
+                val saving = providers.map { provider ->
+                    provider.copy(
+                        apiKey = AiSecretCipher.encrypt(provider.apiKey),
+                        headers = AiSecretCipher.encrypt(provider.headers)
+                    )
+                }
+                appCtx.putPrefString(PreferKey.aiImageProviderList, GSON.toJson(saving))
+            }
             syncAiImageState(providers)
         }
 
@@ -1412,6 +1451,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         return normalizeAiProviders(
             GSON.fromJsonArray<AiProviderConfig>(appCtx.getPrefString(PreferKey.aiProviderList))
                 .getOrDefault(emptyList())
+                .map { provider ->
+                    provider.copy(
+                        apiKey = AiSecretCipher.decrypt(provider.apiKey),
+                        headers = AiSecretCipher.decrypt(provider.headers.orEmpty())
+                    )
+                }
         )
     }
 
@@ -1465,7 +1510,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         if (providers.isEmpty()) {
             appCtx.removePref(PreferKey.aiProviderList)
         } else {
-            appCtx.putPrefString(PreferKey.aiProviderList, GSON.toJson(providers))
+            val saving = providers.map { provider ->
+                provider.copy(
+                    apiKey = AiSecretCipher.encrypt(provider.apiKey),
+                    headers = AiSecretCipher.encrypt(provider.headers.orEmpty())
+                )
+            }
+            appCtx.putPrefString(PreferKey.aiProviderList, GSON.toJson(saving))
         }
     }
 
@@ -1524,6 +1575,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         return normalizeAiMcpServers(
             GSON.fromJsonArray<AiMcpServerConfig>(appCtx.getPrefString(PreferKey.aiMcpServerList))
                 .getOrDefault(emptyList())
+                .map { server ->
+                    server.copy(apiKey = AiSecretCipher.decrypt(server.apiKey))
+                }
         )
     }
 
@@ -1550,7 +1604,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         if (servers.isEmpty()) {
             appCtx.removePref(PreferKey.aiMcpServerList)
         } else {
-            appCtx.putPrefString(PreferKey.aiMcpServerList, GSON.toJson(servers))
+            val saving = servers.map { server ->
+                server.copy(apiKey = AiSecretCipher.encrypt(server.apiKey))
+            }
+            appCtx.putPrefString(PreferKey.aiMcpServerList, GSON.toJson(saving))
         }
     }
 

@@ -128,6 +128,8 @@ object PreferKey {
     const val aiThinkingContextTokens = "aiThinkingContextTokens"
     const val aiEnterToSend = "aiEnterToSend"
     const val aiChatAgentMode = "aiChatAgentMode"
+    const val aiExternalContentConsent = "aiExternalContentConsent"
+    const val aiMemoryFtsBigramVersion = "aiMemoryFtsBigramVersion"
     const val aiEnabledToolNames = "aiEnabledToolNames"
     const val aiEnabledToolNamesVersion = "aiEnabledToolNamesVersion"
     const val aiReadToolMode = "aiReadToolMode"

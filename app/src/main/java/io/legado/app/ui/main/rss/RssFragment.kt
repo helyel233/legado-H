@@ -248,8 +248,9 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     }
 
     private fun applyRssSourceLayout() {
-        (binding.recyclerView.layoutManager as? GridLayoutManager)?.spanCount =
-            AppConfig.rssSourceLayout
+        val columns = AppConfig.rssSourceLayout
+        (binding.recyclerView.layoutManager as? GridLayoutManager)?.spanCount = columns
+        adapter.setColumns(columns)
     }
 
     private fun initModernRssView() {

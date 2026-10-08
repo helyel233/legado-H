@@ -16,6 +16,12 @@ interface AiMemoryDao {
     @Query("SELECT * FROM ai_memory_fragments WHERE fragmentId = :fragmentId LIMIT 1")
     fun fragment(fragmentId: String): AiMemoryFragment?
 
+    @Query("SELECT * FROM ai_memory_items")
+    fun allItems(): List<AiMemoryItem>
+
+    @Query("SELECT * FROM ai_memory_fragments")
+    fun allFragments(): List<AiMemoryFragment>
+
     @Query(
         """
         SELECT * FROM ai_memory_items

@@ -65,5 +65,7 @@ data class AiChatSession(
 class AiChatException(
     override val message: String,
     val debugLog: String,
-    cause: Throwable? = null
+    cause: Throwable? = null,
+    val httpCode: Int = 0,
+    val retryAfterMillis: Long = 0L
 ) : IllegalStateException(message, cause)

@@ -246,7 +246,7 @@ class AiChatViewModel : ViewModel() {
                             targetFor(requestSessionId, requestCompanionId).replacePendingAssistant(cancelledText)
                         } else {
                             val message = AiAgentInterruption.systemCancellationMessage(throwable)
-                            AiAgentStateStore.markWaitingResume(agentRun, message)
+                            AiAgentStateStore.markInterrupted(agentRun, message)
                             targetFor(requestSessionId, requestCompanionId).failPendingAssistant(failureMessage(message))
                         }
                         activeVariantGroupId = null

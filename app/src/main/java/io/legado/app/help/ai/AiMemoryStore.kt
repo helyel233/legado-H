@@ -1,10 +1,14 @@
 package io.legado.app.help.ai
 
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiMemoryFragment
 import io.legado.app.data.entities.AiMemoryItem
 import io.legado.app.ui.main.ai.AiChatMessage
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.putPrefInt
+import splitties.init.appCtx
 import org.json.JSONObject
 
 data class AiMemoryContext(
@@ -51,10 +55,29 @@ data class AiRetrievedMemory(
 
 object AiMemoryStore {
 
+    private const val FTS_BIGRAM_VERSION = 1
+    private val reindexLock = Any()
+
     fun bookKey(bookName: String, author: String): String {
         return listOf(bookName.trim(), author.trim())
             .filter { it.isNotBlank() }
             .joinToString("::")
+    }
+
+    /**
+     * 记忆 FTS 索引引入 CJK 二元词后重建一次历史数据。
+     * 由 AiMemoryRetriever.retrieve 触发，通过版本标记保证只执行一次。
+     */
+    fun ensureFtsBigramIndex() {
+        if (appCtx.getPrefInt(PreferKey.aiMemoryFtsBigramVersion, 0) >= FTS_BIGRAM_VERSION) return
+        synchronized(reindexLock) {
+            if (appCtx.getPrefInt(PreferKey.aiMemoryFtsBigramVersion, 0) >= FTS_BIGRAM_VERSION) return
+            runCatching {
+                appDb.aiMemoryDao.allItems().forEach { upsertItem(it) }
+                appDb.aiMemoryDao.allFragments().forEach { upsertFragment(it) }
+            }
+            appCtx.putPrefInt(PreferKey.aiMemoryFtsBigramVersion, FTS_BIGRAM_VERSION)
+        }
     }
 
     fun upsertItem(item: AiMemoryItem) {
@@ -63,10 +86,10 @@ object AiMemoryStore {
         appDb.aiMemoryDao.deleteItemFts(saving.memoryId)
         appDb.aiMemoryDao.upsertItemFts(
             memoryId = saving.memoryId,
-            subject = saving.subject,
-            predicate = saving.predicate,
-            objectValue = saving.objectValue,
-            content = saving.content
+            subject = AiFtsTokenizer.indexText(saving.subject),
+            predicate = AiFtsTokenizer.indexText(saving.predicate),
+            objectValue = AiFtsTokenizer.indexText(saving.objectValue),
+            content = AiFtsTokenizer.indexText(saving.content)
         )
     }
 
@@ -76,9 +99,9 @@ object AiMemoryStore {
         appDb.aiMemoryDao.deleteFragmentFts(saving.fragmentId)
         appDb.aiMemoryDao.upsertFragmentFts(
             fragmentId = saving.fragmentId,
-            title = saving.title,
-            content = saving.content,
-            chapterTitle = saving.chapterTitle
+            title = AiFtsTokenizer.indexText(saving.title),
+            content = AiFtsTokenizer.indexText(saving.content),
+            chapterTitle = AiFtsTokenizer.indexText(saving.chapterTitle)
         )
     }
 
@@ -105,6 +128,7 @@ object AiMemoryRetriever {
         limit: Int = 8
     ): AiRetrievedMemory {
         if (context == null) return AiRetrievedMemory()
+        AiMemoryStore.ensureFtsBigramIndex()
         val queryText = messages
             .takeLast(6)
             .joinToString("\n") { it.content }
@@ -144,12 +168,8 @@ object AiMemoryRetriever {
     }
 
     private fun buildFtsQuery(text: String): String {
-        return Regex("[A-Za-z0-9_]{2,}")
-            .findAll(text)
-            .map { it.value.lowercase() }
-            .distinct()
-            .take(8)
-            .joinToString(" OR ")
+        return AiFtsTokenizer.queryTerms(text)
+            .joinToString(" OR ") { term -> "\"${term.replace("\"", "")}\"" }
     }
 
     private fun keywords(text: String): List<String> {
@@ -169,6 +189,42 @@ object AiMemoryRetriever {
     private fun score(text: String, keywords: List<String>): Int {
         if (keywords.isEmpty()) return 0
         return keywords.count { keyword -> text.contains(keyword, ignoreCase = true) } * 10
+    }
+}
+
+/**
+ * FTS 索引/查询的分词工具：SQLite 默认 simple 分词器把整段 CJK 视作单个 token，
+ * 导致中文记忆检索失效。写入索引前把 CJK 串切为空格分隔的二元词，查询侧用同样的方式生成词元。
+ */
+internal object AiFtsTokenizer {
+
+    private val latinTokenRegex = Regex("[A-Za-z0-9_]{2,}")
+    private val cjkRunRegex = Regex("[\\p{IsHan}\\p{IsHangul}\\p{IsHiragana}\\p{IsKatakana}]+")
+    private const val MAX_INDEX_TOKENS = 1_200
+
+    private fun tokens(text: String): List<String> {
+        val result = mutableListOf<String>()
+        latinTokenRegex.findAll(text).forEach { result.add(it.value.lowercase()) }
+        cjkRunRegex.findAll(text).forEach { match ->
+            val run = match.value
+            if (run.length == 1) {
+                result.add(run)
+            } else {
+                run.windowed(2, 1).forEach(result::add)
+            }
+        }
+        return result
+    }
+
+    /** 生成 FTS 索引文本：拉丁词原样，CJK 转为空格分隔的二元词 */
+    fun indexText(text: String): String {
+        if (text.isBlank()) return ""
+        return tokens(text).take(MAX_INDEX_TOKENS).joinToString(" ")
+    }
+
+    /** 生成 FTS MATCH 查询词元：拉丁词 + CJK 二元词，去重限量 */
+    fun queryTerms(text: String, maxTerms: Int = 12): List<String> {
+        return tokens(text).distinct().take(maxTerms)
     }
 }
 

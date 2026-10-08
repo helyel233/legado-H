@@ -75,6 +75,7 @@ import io.legado.app.data.entities.AiMemoryItem
 import io.legado.app.help.ai.AiAgentStateStore
 import io.legado.app.help.ai.AiChatService
 import io.legado.app.help.ai.AiAgentInterruption
+import io.legado.app.help.ai.AiContentConsent
 import io.legado.app.help.ai.AiMemoryContext
 import io.legado.app.help.ai.AiMemoryStore
 import io.legado.app.help.ai.AiTaskKeepAlive
@@ -302,7 +303,14 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     }
 
     private fun ask(question: String) {
-        val context = readContext ?: return
+        val readContext = readContext ?: return
+        AiContentConsent.withConsent(this.context, "阅读页问 AI") {
+            doAsk(readContext, question)
+        }
+    }
+
+    private fun doAsk(readContext: ReadContext, question: String) {
+        val context = readContext
         answerJob?.cancel(CancellationException(AiAgentInterruption.SUPERSEDED_READ_AI_QUESTION))
         AiAgentStateStore.cancel(activeAgentRun, AiAgentInterruption.SUPERSEDED_READ_AI_QUESTION)
         finishActiveProcessMessages(currentSessionId, success = false)
@@ -388,7 +396,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                         if (AiAgentInterruption.isUserCancellation(throwable)) {
                             AiAgentStateStore.cancel(agentRun, throwable.message.orEmpty())
                         } else {
-                            AiAgentStateStore.markWaitingResume(
+                            AiAgentStateStore.markInterrupted(
                                 agentRun,
                                 AiAgentInterruption.systemCancellationMessage(throwable)
                             )

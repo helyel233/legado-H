@@ -15,6 +15,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.IntentHelp
+import io.legado.app.help.ai.AiContentConsent
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
 import io.legado.app.help.readaloud.ReadAloudSpeakerLoudnessManager
@@ -468,7 +469,15 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                     summary = if (hasModel) "后台分析当前章节的旁白和角色片段，并缓存结果" else "请先选择多角色模型",
                     checked = enabled,
                     enabled = hasModel,
-                    onCheckedChange = { AppConfig.aiReadAloudRoleEnabled = it }
+                    onCheckedChange = { enabled ->
+                        if (!enabled) {
+                            AppConfig.aiReadAloudRoleEnabled = false
+                        } else {
+                            AiContentConsent.withConsent(requireActivity(), "AI 多角色朗读") {
+                                AppConfig.aiReadAloudRoleEnabled = true
+                            }
+                        }
+                    }
                 ),
                 action(
                     key = KEY_AI_READ_ALOUD_MODEL_ROUTING,

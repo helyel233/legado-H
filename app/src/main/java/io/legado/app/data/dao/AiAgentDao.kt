@@ -26,14 +26,7 @@ interface AiAgentDao {
     )
     fun activeJobs(): List<AiAgentJob>
 
-    @Query(
-        """
-        SELECT * FROM ai_agent_jobs
-        WHERE status = 'running' AND leaseUntil > 0 AND leaseUntil < :now
-        ORDER BY updatedAt DESC
-        """
-    )
-    fun expiredRunningJobs(now: Long): List<AiAgentJob>
+
 
     @Query("SELECT * FROM ai_agent_traces WHERE jobId = :jobId ORDER BY createdAt ASC")
     fun traces(jobId: String): List<AiAgentTrace>
@@ -70,21 +63,37 @@ interface AiAgentDao {
 
     @Query(
         """
-        UPDATE ai_agent_jobs
-        SET status = :status,
-            error = :error,
-            leaseUntil = 0,
-            nextRunAt = :nextRunAt,
-            retryCount = retryCount + 1,
+        UPDATE ai_agent_sessions
+        SET status = 'interrupted',
+            lastError = :error,
             updatedAt = :updatedAt
-        WHERE jobId = :jobId
+        WHERE status = 'waiting_resume'
+           OR (status = 'running' AND sessionId IN (
+                SELECT sessionId FROM ai_agent_jobs
+                WHERE status = 'running' AND leaseUntil > 0 AND leaseUntil < :now
+           ))
         """
     )
-    fun markJobWaitingResume(
-        jobId: String,
-        status: String = AiAgentJob.STATUS_WAITING_RESUME,
-        error: String = "",
-        nextRunAt: Long = 0L,
+    fun finalizeStaleSessions(
+        now: Long,
+        error: String,
+        updatedAt: Long = System.currentTimeMillis()
+    )
+
+    @Query(
+        """
+        UPDATE ai_agent_jobs
+        SET status = 'interrupted',
+            error = :error,
+            leaseUntil = 0,
+            updatedAt = :updatedAt
+        WHERE status = 'waiting_resume'
+           OR (status = 'running' AND leaseUntil > 0 AND leaseUntil < :now)
+        """
+    )
+    fun finalizeStaleJobs(
+        now: Long,
+        error: String,
         updatedAt: Long = System.currentTimeMillis()
     )
 }

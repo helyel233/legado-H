@@ -53,6 +53,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookAiChapterSummary
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.ai.AiChapterSummaryService
+import io.legado.app.help.ai.AiContentConsent
 import io.legado.app.help.ai.AiTaskKeepAlive
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.selector
@@ -187,6 +188,9 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                             return@runCatching cached to true
                         }
                     }
+                    if (!AiContentConsent.awaitConsent(context, "AI 章节总结")) {
+                        throw CancellationException(CONSENT_DENIED_MESSAGE)
+                    }
                     withContext(IO) {
                         AiChapterSummaryService.summarize(
                             input = currentInput,
@@ -211,7 +215,11 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                 post {
                     val (summary, fromCache) = result.getOrElse { throwable ->
                         val text = if (throwable is CancellationException) {
-                            "已停止总结"
+                            if (throwable.message == CONSENT_DENIED_MESSAGE) {
+                                CONSENT_DENIED_MESSAGE
+                            } else {
+                                "已停止总结"
+                            }
                         } else {
                             "总结失败：${throwable.localizedMessage ?: throwable.message ?: throwable.javaClass.simpleName}"
                         }
@@ -363,6 +371,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
     }
 
     companion object {
+        private const val CONSENT_DENIED_MESSAGE = "已取消，未发送正文"
         private val requestScope = CoroutineScope(SupervisorJob() + IO)
     }
 }
