@@ -74,6 +74,10 @@
     <string name="book_source_manage">Sources management</string>
     <string name="book_source_manage_desc">Create/Import/Edit/Manage Book sources</string>
     <string name="setting">Settings</string>
+    <string name="ui_section_launch_display">Launch &amp; status bar</string>
+    <string name="ui_section_bottom_nav">Bottom navigation</string>
+    <string name="ui_section_component_manage">Interface components</string>
+    <string name="ui_section_reader_assets">Reader resources</string>
     <string name="theme_setting">Other UI settings</string>
     <string name="theme_setting_s">UI misc settings outside the three packages</string>
     <string name="other_setting">Other settings</string>

@@ -383,7 +383,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         title = getString(R.string.app_ui_config),
                         summary = getString(R.string.app_ui_config_summary)
                     ),
-                    actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s),
+                    actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s)
+                )
+            ),
+            MySettingsSectionModel(
+                title = getString(R.string.ai_setting),
+                rows = listOf(
                     actionRow("ai_setting", R.string.ai_setting, R.string.ai_setting_summary)
                 )
             ),

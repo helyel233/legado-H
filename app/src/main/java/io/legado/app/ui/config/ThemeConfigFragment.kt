@@ -40,6 +40,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
             titleRes = titleRes,
             sections = listOf(
                 SettingSectionSpec(
+                    title = getString(R.string.ui_section_launch_display),
                     items = listOf(
                         SettingChoiceSpec(
                             key = PreferKey.launcherIcon,
@@ -67,7 +68,12 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             onCheckedChange = {
                                 updateBooleanSetting(PreferKey.immersiveManageBar, it)
                             }
-                        ),
+                        )
+                    )
+                ),
+                SettingSectionSpec(
+                    title = getString(R.string.ui_section_bottom_nav),
+                    items = listOf(
                         SettingSwitchSpec(
                             key = KEY_HOMEPAGE_VISIBLE,
                             title = getString(R.string.homepage),
@@ -100,18 +106,23 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                                 postEvent(EventBus.NOTIFY_MAIN, true)
                             },
                             searchKeys = listOf("订阅", "rss", "底部导航", "底部导航栏")
-                        ),
-                        SettingActionSpec(
-                            key = KEY_THEME_MANAGE,
-                            title = getString(R.string.theme_list),
-                            summary = getString(R.string.theme_list_summary),
-                            onClick = { startActivity<ThemeManageActivity>() }
-                        ),
+                        )
+                    )
+                ),
+                SettingSectionSpec(
+                    title = getString(R.string.ui_section_component_manage),
+                    items = listOf(
                         SettingActionSpec(
                             key = KEY_NAVIGATION_BAR_MANAGE,
                             title = getString(R.string.navigation_bar_manage),
                             summary = getString(R.string.navigation_bar_manage_summary),
                             onClick = { startActivity<NavigationBarManageActivity>() }
+                        ),
+                        SettingActionSpec(
+                            key = KEY_TOP_BAR_MANAGE,
+                            title = getString(R.string.top_bar_manage),
+                            summary = getString(R.string.top_bar_manage_summary),
+                            onClick = { startActivity<TopBarManageActivity>() }
                         ),
                         SettingActionSpec(
                             key = KEY_DISCOVERY_SUBSCRIPTION_SETTINGS,
@@ -124,17 +135,26 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             }
                         ),
                         SettingActionSpec(
-                            key = KEY_TOP_BAR_MANAGE,
-                            title = getString(R.string.top_bar_manage),
-                            summary = getString(R.string.top_bar_manage_summary),
-                            onClick = { startActivity<TopBarManageActivity>() }
-                        ),
-                        SettingActionSpec(
                             key = KEY_BOOK_INFO_MANAGE,
                             title = getString(R.string.book_info_manage),
                             summary = getString(R.string.book_info_manage_summary),
                             onClick = { startActivity<BookInfoManageActivity>() }
                         ),
+                        SettingActionSpec(
+                            key = ConfigTag.COVER_CONFIG,
+                            title = getString(R.string.cover_config),
+                            summary = getString(R.string.cover_config_summary),
+                            onClick = {
+                                startActivity<ConfigActivity> {
+                                    putExtra("configTag", ConfigTag.COVER_CONFIG)
+                                }
+                            }
+                        )
+                    )
+                ),
+                SettingSectionSpec(
+                    title = getString(R.string.ui_section_reader_assets),
+                    items = listOf(
                         SettingActionSpec(
                             key = KEY_BUBBLE_MANAGE,
                             title = getString(R.string.bubble_manage),
@@ -155,16 +175,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             summary = "管理正文长按分享图片使用的 HTML 模板",
                             searchKeys = listOf("分享模板", "摘录模板", "笔记模板", "正文分享"),
                             onClick = { startActivity<ShareNoteTemplateManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = ConfigTag.COVER_CONFIG,
-                            title = getString(R.string.cover_config),
-                            summary = getString(R.string.cover_config_summary),
-                            onClick = {
-                                startActivity<ConfigActivity> {
-                                    putExtra("configTag", ConfigTag.COVER_CONFIG)
-                                }
-                            }
                         )
                     )
                 )
