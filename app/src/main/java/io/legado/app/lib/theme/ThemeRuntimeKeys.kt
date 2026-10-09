@@ -1,159 +1,107 @@
 package io.legado.app.lib.theme
 
 import android.content.Context
-import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
-import io.legado.app.utils.defaultSharedPreferences
+import io.legado.app.theme.apply.ThemeApplier
+import io.legado.app.theme.apply.ThemeKeys
 
+/**
+ * P0a-4: the key-name truth and the day/night split moved to the theme
+ * module ([ThemeKeys]); this object stays as a thin delegate so existing
+ * callers keep compiling unchanged. New code should use ThemeKeys directly.
+ */
 object ThemeRuntimeKeys {
 
-    private const val legacyNightMigratedKey = "themeNightExtMigrated"
-
-    // 日夜键拆分前，这些字段日夜共用旧键。首次升级时把旧值复制到夜间键，
-    // 否则夜间模式的字号/字体/颜色/透明度等会全部回落默认值。
-    private val legacyNightPairs = listOf(
-        PreferKey.fontScale to PreferKey.fontScaleN,
-        PreferKey.uiFontPath to PreferKey.uiFontPathN,
-        PreferKey.titleFontPath to PreferKey.titleFontPathN,
-        PreferKey.uiFontColor to PreferKey.uiFontColorN,
-        PreferKey.titleFontColor to PreferKey.titleFontColorN,
-        PreferKey.uiCornerScale to PreferKey.uiCornerScaleN,
-        PreferKey.uiLayoutAlpha to PreferKey.uiLayoutAlphaN,
-        PreferKey.dialogAlpha to PreferKey.dialogAlphaN,
-        PreferKey.uiCornerSearchFollow to PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow to PreferKey.uiCornerReplyFollowN,
-        PreferKey.themeCardColor to PreferKey.themeCardColorN,
-        PreferKey.themeMutedColor to PreferKey.themeMutedColorN,
-        PreferKey.themeSearchFieldBackgroundColor to PreferKey.themeSearchFieldBackgroundColorN,
-        PreferKey.themeTabBackgroundColor to PreferKey.themeTabBackgroundColorN,
-        PreferKey.themeShelfColor to PreferKey.themeShelfColorN,
-        PreferKey.themeCardShadow to PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur to PreferKey.themeCardBackgroundBlurN,
-        PreferKey.themeExploreGlassBlur to PreferKey.themeExploreGlassBlurN
-    )
-
     fun migrateLegacyNightValues(context: Context) {
-        val prefs = context.defaultSharedPreferences
-        if (prefs.getBoolean(legacyNightMigratedKey, false)) return
-        val all = prefs.all
-        val editor = prefs.edit()
-        legacyNightPairs.forEach { (dayKey, nightKey) ->
-            if (!all.containsKey(nightKey)) {
-                when (val value = all[dayKey]) {
-                    is Int -> editor.putInt(nightKey, value)
-                    is Boolean -> editor.putBoolean(nightKey, value)
-                    is String -> editor.putString(nightKey, value)
-                    is Float -> editor.putFloat(nightKey, value)
-                    is Long -> editor.putLong(nightKey, value)
-                }
-            }
-        }
-        editor.putBoolean(legacyNightMigratedKey, true)
-        editor.commit()
+        ThemeApplier(SpThemePersistence(context)).migrateLegacyNightValues()
     }
 
     fun fontScale(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.fontScaleN else PreferKey.fontScale
+        ThemeKeys.fontScale(isNight)
 
     fun uiFontPath(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiFontPathN else PreferKey.uiFontPath
+        ThemeKeys.uiFontPath(isNight)
 
     fun titleFontPath(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.titleFontPathN else PreferKey.titleFontPath
+        ThemeKeys.titleFontPath(isNight)
 
     fun uiFontColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiFontColorN else PreferKey.uiFontColor
+        ThemeKeys.uiFontColor(isNight)
 
     fun titleFontColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.titleFontColorN else PreferKey.titleFontColor
+        ThemeKeys.titleFontColor(isNight)
 
     fun uiCornerScale(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiCornerScaleN else PreferKey.uiCornerScale
+        ThemeKeys.uiCornerScale(isNight)
 
     fun uiLayoutAlpha(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiLayoutAlphaN else PreferKey.uiLayoutAlpha
+        ThemeKeys.uiLayoutAlpha(isNight)
 
     fun dialogAlpha(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.dialogAlphaN else PreferKey.dialogAlpha
+        ThemeKeys.dialogAlpha(isNight)
 
     fun uiCornerSearchFollow(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiCornerSearchFollowN else PreferKey.uiCornerSearchFollow
+        ThemeKeys.uiCornerSearchFollow(isNight)
 
     fun uiCornerReplyFollow(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.uiCornerReplyFollowN else PreferKey.uiCornerReplyFollow
+        ThemeKeys.uiCornerReplyFollow(isNight)
 
     fun themeCardColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeCardColorN else PreferKey.themeCardColor
+        ThemeKeys.themeCardColor(isNight)
 
     fun themeMutedColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeMutedColorN else PreferKey.themeMutedColor
+        ThemeKeys.themeMutedColor(isNight)
 
     fun themeSearchFieldBackgroundColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeSearchFieldBackgroundColorN else PreferKey.themeSearchFieldBackgroundColor
+        ThemeKeys.themeSearchFieldBackgroundColor(isNight)
 
     fun themeTabBackgroundColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeTabBackgroundColorN else PreferKey.themeTabBackgroundColor
+        ThemeKeys.themeTabBackgroundColor(isNight)
 
     fun themeShelfColor(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeShelfColorN else PreferKey.themeShelfColor
+        ThemeKeys.themeShelfColor(isNight)
 
     fun themeCardShadow(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeCardShadowN else PreferKey.themeCardShadow
+        ThemeKeys.themeCardShadow(isNight)
 
     fun themeCardBackgroundBlur(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeCardBackgroundBlurN else PreferKey.themeCardBackgroundBlur
+        ThemeKeys.themeCardBackgroundBlur(isNight)
 
     fun themeExploreGlassBlur(isNight: Boolean = AppConfig.isNightTheme): String =
-        if (isNight) PreferKey.themeExploreGlassBlurN else PreferKey.themeExploreGlassBlur
+        ThemeKeys.themeExploreGlassBlur(isNight)
 
     fun activeColorKey(key: String, isNight: Boolean = AppConfig.isNightTheme): String {
         return when (key) {
-            PreferKey.themeCardColor, PreferKey.themeCardColorN -> themeCardColor(isNight)
-            PreferKey.themeMutedColor, PreferKey.themeMutedColorN -> themeMutedColor(isNight)
-            PreferKey.themeSearchFieldBackgroundColor,
-            PreferKey.themeSearchFieldBackgroundColorN -> themeSearchFieldBackgroundColor(isNight)
-            PreferKey.themeTabBackgroundColor, PreferKey.themeTabBackgroundColorN -> themeTabBackgroundColor(isNight)
-            PreferKey.themeShelfColor, PreferKey.themeShelfColorN -> themeShelfColor(isNight)
+            ThemeKeys.THEME_CARD_COLOR, ThemeKeys.THEME_CARD_COLOR_NIGHT -> themeCardColor(isNight)
+            ThemeKeys.THEME_MUTED_COLOR, ThemeKeys.THEME_MUTED_COLOR_NIGHT -> themeMutedColor(isNight)
+            ThemeKeys.THEME_SEARCH_FIELD_BACKGROUND_COLOR,
+            ThemeKeys.THEME_SEARCH_FIELD_BACKGROUND_COLOR_NIGHT -> themeSearchFieldBackgroundColor(isNight)
+            ThemeKeys.THEME_TAB_BACKGROUND_COLOR, ThemeKeys.THEME_TAB_BACKGROUND_COLOR_NIGHT ->
+                themeTabBackgroundColor(isNight)
+            ThemeKeys.THEME_SHELF_COLOR, ThemeKeys.THEME_SHELF_COLOR_NIGHT -> themeShelfColor(isNight)
             else -> key
         }
     }
 
     fun allKeys(): Set<String> = setOf(
-        PreferKey.fontScale,
-        PreferKey.fontScaleN,
-        PreferKey.uiFontPath,
-        PreferKey.uiFontPathN,
-        PreferKey.titleFontPath,
-        PreferKey.titleFontPathN,
-        PreferKey.uiFontColor,
-        PreferKey.uiFontColorN,
-        PreferKey.titleFontColor,
-        PreferKey.titleFontColorN,
-        PreferKey.uiCornerScale,
-        PreferKey.uiCornerScaleN,
-        PreferKey.uiLayoutAlpha,
-        PreferKey.uiLayoutAlphaN,
-        PreferKey.dialogAlpha,
-        PreferKey.dialogAlphaN,
-        PreferKey.uiCornerSearchFollow,
-        PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow,
-        PreferKey.uiCornerReplyFollowN,
-        PreferKey.themeCardColor,
-        PreferKey.themeCardColorN,
-        PreferKey.themeMutedColor,
-        PreferKey.themeMutedColorN,
-        PreferKey.themeSearchFieldBackgroundColor,
-        PreferKey.themeSearchFieldBackgroundColorN,
-        PreferKey.themeTabBackgroundColor,
-        PreferKey.themeTabBackgroundColorN,
-        PreferKey.themeShelfColor,
-        PreferKey.themeShelfColorN,
-        PreferKey.themeCardShadow,
-        PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur,
-        PreferKey.themeCardBackgroundBlurN,
-        PreferKey.themeExploreGlassBlur,
-        PreferKey.themeExploreGlassBlurN
+        ThemeKeys.FONT_SCALE, ThemeKeys.FONT_SCALE_NIGHT,
+        ThemeKeys.UI_FONT_PATH, ThemeKeys.UI_FONT_PATH_NIGHT,
+        ThemeKeys.TITLE_FONT_PATH, ThemeKeys.TITLE_FONT_PATH_NIGHT,
+        ThemeKeys.UI_FONT_COLOR, ThemeKeys.UI_FONT_COLOR_NIGHT,
+        ThemeKeys.TITLE_FONT_COLOR, ThemeKeys.TITLE_FONT_COLOR_NIGHT,
+        ThemeKeys.UI_CORNER_SCALE, ThemeKeys.UI_CORNER_SCALE_NIGHT,
+        ThemeKeys.UI_LAYOUT_ALPHA, ThemeKeys.UI_LAYOUT_ALPHA_NIGHT,
+        ThemeKeys.DIALOG_ALPHA, ThemeKeys.DIALOG_ALPHA_NIGHT,
+        ThemeKeys.UI_CORNER_SEARCH_FOLLOW, ThemeKeys.UI_CORNER_SEARCH_FOLLOW_NIGHT,
+        ThemeKeys.UI_CORNER_REPLY_FOLLOW, ThemeKeys.UI_CORNER_REPLY_FOLLOW_NIGHT,
+        ThemeKeys.THEME_CARD_COLOR, ThemeKeys.THEME_CARD_COLOR_NIGHT,
+        ThemeKeys.THEME_MUTED_COLOR, ThemeKeys.THEME_MUTED_COLOR_NIGHT,
+        ThemeKeys.THEME_SEARCH_FIELD_BACKGROUND_COLOR,
+        ThemeKeys.THEME_SEARCH_FIELD_BACKGROUND_COLOR_NIGHT,
+        ThemeKeys.THEME_TAB_BACKGROUND_COLOR, ThemeKeys.THEME_TAB_BACKGROUND_COLOR_NIGHT,
+        ThemeKeys.THEME_SHELF_COLOR, ThemeKeys.THEME_SHELF_COLOR_NIGHT,
+        ThemeKeys.THEME_CARD_SHADOW, ThemeKeys.THEME_CARD_SHADOW_NIGHT,
+        ThemeKeys.THEME_CARD_BACKGROUND_BLUR, ThemeKeys.THEME_CARD_BACKGROUND_BLUR_NIGHT,
+        ThemeKeys.THEME_EXPLORE_GLASS_BLUR, ThemeKeys.THEME_EXPLORE_GLASS_BLUR_NIGHT,
     )
 }

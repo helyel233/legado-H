@@ -15,11 +15,13 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.DefaultData
+import io.legado.app.lib.theme.SpThemePersistence
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.defaultThemeTextColor
 import io.legado.app.lib.theme.defaultThemeTextColorHex
+import io.legado.app.theme.apply.ThemeApplier
 import io.legado.app.model.BookCover
 import io.legado.app.utils.BitmapUtils
 import io.legado.app.utils.ColorUtils
@@ -406,28 +408,22 @@ object ThemeConfig {
             } ?: PANEL_BG_CROP
             val panelBorderColor = config.panelBorderColor?.takeIf { it.isNotBlank() }
             val panelBorderAlpha = config.panelBorderAlpha?.coerceIn(0, 100) ?: 100
-            config.uiCornerScale?.let {
-                context.putPrefString(ThemeRuntimeKeys.uiCornerScale(isNightTheme), it.coerceIn(0f, 3f).toPlainScale())
-            }
-            config.uiLayoutAlpha?.let {
-                context.putPrefInt(ThemeRuntimeKeys.uiLayoutAlpha(isNightTheme), it.coerceIn(0, 100))
-            }
-            config.dialogAlpha?.let {
-                context.putPrefInt(ThemeRuntimeKeys.dialogAlpha(isNightTheme), it.coerceIn(0, 100))
-            }
-            applyExtendedInterfaceColors(context, config)
-            config.uiCornerSearchFollow?.let {
-                context.putPrefBoolean(ThemeRuntimeKeys.uiCornerSearchFollow(isNightTheme), it)
-            }
-            config.uiCornerReplyFollow?.let {
-                context.putPrefBoolean(ThemeRuntimeKeys.uiCornerReplyFollow(isNightTheme), it)
-            }
-            config.fontScale?.let {
-                context.putPrefInt(ThemeRuntimeKeys.fontScale(isNightTheme), it.coerceIn(0, 16))
-            }
-            context.putPrefString(ThemeRuntimeKeys.uiFontPath(isNightTheme), config.uiFontPath.orEmpty())
-            context.putPrefString(ThemeRuntimeKeys.titleFontPath(isNightTheme), config.titleFontPath.orEmpty())
-            applyFontColorPrefs(context, config)
+            val applier = ThemeApplier(SpThemePersistence(context))
+            applier.writeMetrics(
+                isNightTheme,
+                config.uiCornerScale,
+                config.uiLayoutAlpha,
+                config.dialogAlpha
+            )
+            applyExtendedInterfaceColors(applier, config)
+            applier.writeCornerFollow(
+                isNightTheme,
+                config.uiCornerSearchFollow,
+                config.uiCornerReplyFollow
+            )
+            applier.writeFontScale(isNightTheme, config.fontScale)
+            applier.writeFontPaths(isNightTheme, config.uiFontPath, config.titleFontPath)
+            applyFontColorPrefs(applier, config)
             if (backgroundPath != null && backgroundPath.startsWith("http")) {
                 val fileRoot = context.externalFiles
                 val preferenceKey = if (isNightTheme) {
@@ -463,37 +459,25 @@ object ThemeConfig {
                 }
             }
             val backgroundBlur = config.backgroundImgBlur
-            if (isNightTheme) {
-                context.putPrefString(PreferKey.dNThemeName, config.themeName)
-                context.putPrefInt(PreferKey.cNPrimary, primary)
-                context.putPrefInt(PreferKey.cNAccent, accent)
-                context.putPrefInt(PreferKey.cNBackground, background)
-                context.putPrefInt(PreferKey.cNBBackground, bBackground)
-                context.putPrefBoolean(PreferKey.tNavBarN, true)
-                context.putPrefString(PreferKey.bgImageN, backgroundPath)
-                context.putPrefInt(PreferKey.bgImageNBlurring, backgroundBlur)
-                context.putPrefString(PreferKey.bgImageNCrop, backgroundCrop.orEmpty())
-                context.putPrefString(PreferKey.bookInfoBgImageN, bookInfoBackgroundPath)
-                context.putPrefString(PreferKey.panelBgImageN, panelBackgroundPath)
-                context.putPrefString(PreferKey.panelBgScaleTypeN, panelBackgroundScaleType)
-                context.putPrefString(PreferKey.panelBorderColorN, panelBorderColor.orEmpty())
-                context.putPrefInt(PreferKey.panelBorderAlphaN, panelBorderAlpha)
-            } else {
-                context.putPrefString(PreferKey.dThemeName, config.themeName)
-                context.putPrefInt(PreferKey.cPrimary, primary)
-                context.putPrefInt(PreferKey.cAccent, accent)
-                context.putPrefInt(PreferKey.cBackground, background)
-                context.putPrefInt(PreferKey.cBBackground, bBackground)
-                context.putPrefBoolean(PreferKey.tNavBar, true)
-                context.putPrefString(PreferKey.bgImage, backgroundPath)
-                context.putPrefInt(PreferKey.bgImageBlurring, backgroundBlur)
-                context.putPrefString(PreferKey.bgImageCrop, backgroundCrop.orEmpty())
-                context.putPrefString(PreferKey.bookInfoBgImage, bookInfoBackgroundPath)
-                context.putPrefString(PreferKey.panelBgImage, panelBackgroundPath)
-                context.putPrefString(PreferKey.panelBgScaleType, panelBackgroundScaleType)
-                context.putPrefString(PreferKey.panelBorderColor, panelBorderColor.orEmpty())
-                context.putPrefInt(PreferKey.panelBorderAlpha, panelBorderAlpha)
-            }
+            applier.writeMainColors(
+                isNightTheme,
+                themeName = config.themeName,
+                primary = primary,
+                accent = accent,
+                background = background,
+                bottomBackground = bBackground
+            )
+            applier.writeBackgrounds(
+                isNightTheme,
+                mainPath = backgroundPath,
+                mainBlur = backgroundBlur,
+                mainCrop = backgroundCrop,
+                bookInfoPath = bookInfoBackgroundPath,
+                panelPath = panelBackgroundPath,
+                panelScaleType = panelBackgroundScaleType,
+                panelBorderColor = panelBorderColor,
+                panelBorderAlpha = panelBorderAlpha
+            )
             if (switchNightMode) {
                 AppConfig.isNightTheme = isNightTheme
             }
@@ -509,7 +493,7 @@ object ThemeConfig {
                 postEvent(EventBus.RECREATE, "")
             }
         } catch (e: Exception) {
-            AppLog.put("璁剧疆涓婚鍑洪敊\n$e", e, true)
+            AppLog.put("设置主题出错\n$e", e, true)
         }
     }
 
@@ -773,25 +757,18 @@ object ThemeConfig {
         }
     }
 
-    private fun applyExtendedInterfaceColors(context: Context, config: Config) {
-        val isNightTheme = config.isNightTheme
-        context.putOrClearThemeColor(ThemeRuntimeKeys.themeCardColor(isNightTheme), config.cardColor)
-        context.putOrClearThemeColor(ThemeRuntimeKeys.themeMutedColor(isNightTheme), config.mutedColor)
-        context.putOrClearThemeColor(
-            ThemeRuntimeKeys.themeSearchFieldBackgroundColor(isNightTheme),
-            config.searchFieldBackgroundColor
+    private fun applyExtendedInterfaceColors(applier: ThemeApplier, config: Config) {
+        applier.writeExtendedColors(
+            night = config.isNightTheme,
+            cardColor = config.cardColor,
+            mutedColor = config.mutedColor,
+            searchFieldBackgroundColor = config.searchFieldBackgroundColor,
+            tabBackgroundColor = config.tabBackgroundColor,
+            shelfColor = config.shelfColor,
+            cardShadow = config.cardShadow,
+            cardBackgroundBlur = config.cardBackgroundBlur,
+            exploreGlassBlur = config.exploreGlassBlur,
         )
-        context.putOrClearThemeColor(ThemeRuntimeKeys.themeTabBackgroundColor(isNightTheme), config.tabBackgroundColor)
-        context.putOrClearThemeColor(ThemeRuntimeKeys.themeShelfColor(isNightTheme), config.shelfColor)
-        config.cardShadow?.let {
-            context.putPrefInt(ThemeRuntimeKeys.themeCardShadow(isNightTheme), it.coerceIn(0, 24))
-        } ?: context.removePref(ThemeRuntimeKeys.themeCardShadow(isNightTheme))
-        config.cardBackgroundBlur?.let {
-            context.putPrefInt(ThemeRuntimeKeys.themeCardBackgroundBlur(isNightTheme), (it * 10f).toInt().coerceIn(0, 250))
-        } ?: context.removePref(ThemeRuntimeKeys.themeCardBackgroundBlur(isNightTheme))
-        config.exploreGlassBlur?.let {
-            context.putPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme), it.coerceIn(0, 100))
-        } ?: context.removePref(ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme))
     }
 
     private fun Context.putOrClearThemeColor(key: String, value: String?) {
@@ -923,7 +900,7 @@ object ThemeConfig {
         }
     }
 
-    private fun applyFontColorPrefs(context: Context, config: Config) {
+    private fun applyFontColorPrefs(applier: ThemeApplier, config: Config) {
         val isNightTheme = config.isNightTheme
         // 文字主要落在主背景、卡片、底部背景上，字体色与这些表面撞色时文字会不可读；
         // 设置了背景图时主背景色被图片遮盖，不参与判断以免误杀
@@ -940,8 +917,7 @@ object ThemeConfig {
         val titleColor = sanitizeFontColorAgainstSurfaces(
             normalizeThemeColor(config.titleFontColor) ?: defaultColor, isNightTheme, surfaces
         )
-        context.putPrefString(ThemeRuntimeKeys.uiFontColor(isNightTheme), uiColor)
-        context.putPrefString(ThemeRuntimeKeys.titleFontColor(isNightTheme), titleColor)
+        applier.writeFontColors(isNightTheme, uiColor, titleColor)
     }
 
     private const val MIN_FONT_SURFACE_CONTRAST = 1.3
