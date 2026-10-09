@@ -351,8 +351,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
             "fileManage" -> startActivity<FileManageActivity>()
             "readRecord" -> startActivity<ReadRecordActivity>()
-            "mainRss" -> AppRoute.Rss.start(requireContext())
-            "mainHomepage" -> AppRoute.Homepage.start(requireContext())
             "about" -> startActivity<AboutActivity>()
             "exit" -> activity?.finish()
         }
@@ -363,8 +361,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             MySettingsSectionModel(
                 title = getString(R.string.config_category_content),
                 rows = listOf(
-                    actionRow("mainRss", R.string.rss, null),
-                    actionRow("mainHomepage", R.string.homepage, null),
                     actionRow("bookSourceManage", R.string.book_source_manage, R.string.book_source_manage_desc),
                     actionRow("rssSourceManage", R.string.rss_source_manage, R.string.rss_source_manage_summary),
                     actionRow("txtTocRuleManage", R.string.txt_toc_rule, R.string.config_txt_toc_rule),

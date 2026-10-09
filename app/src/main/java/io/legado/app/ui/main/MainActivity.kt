@@ -51,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.viewpager.widget.ViewPager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.navigation.NavigationBarView
+import io.legado.app.ui.navigation.AppRoute
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -449,14 +450,24 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             R.id.menu_bookshelf ->
                 selectFragmentId(idBookshelf, false)
 
-            R.id.menu_homepage ->
-                selectFragmentId(idHomepage, false)
+            R.id.menu_homepage -> {
+                if (MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_HOMEPAGE)) {
+                    selectFragmentId(idHomepage, false)
+                } else {
+                    AppRoute.Homepage.start(this@MainActivity)
+                }
+            }
 
             R.id.menu_discovery ->
                 selectFragmentId(resolveDiscoveryNavTarget(), true)
 
-            R.id.menu_rss ->
-                selectFragmentId(idRss, false)
+            R.id.menu_rss -> {
+                if (MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_RSS)) {
+                    selectFragmentId(idRss, false)
+                } else {
+                    AppRoute.Rss.start(this@MainActivity)
+                }
+            }
 
             R.id.menu_read_record ->
                 selectFragmentId(idReadRecord, false)
@@ -1123,13 +1134,21 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val mergedDiscovery = isDiscoveryRssMerged()
         sideNavigationButtonMap().forEach { (itemId, button) ->
             val menuItem = bottomNavigationView.menu.findItem(itemId)
-            val visible = menuItem?.isVisible == true && !(mergedDiscovery && itemId == R.id.menu_rss)
+            // RSS/首页聚合收纳后仍常驻侧栏（tab 隐藏时点击走独立页）
+            val alwaysVisible = itemId == R.id.menu_rss || itemId == R.id.menu_homepage
+            val visible =
+                (menuItem?.isVisible == true || alwaysVisible) &&
+                    !(mergedDiscovery && itemId == R.id.menu_rss)
             sideNavigationRowMap()[itemId]?.isVisible = visible
             button.isVisible = visible
             button.isSelected = itemId == selectedItemId
             val title = sideNavigationTitle(itemId, menuItem?.title)
             button.contentDescription = title
-            button.setImageDrawable(menuItem?.icon?.constantState?.newDrawable()?.mutate() ?: menuItem?.icon)
+            button.setImageDrawable(
+                menuItem?.icon?.constantState?.newDrawable()?.mutate()
+                    ?: menuItem?.icon
+                    ?: sideNavigationFallbackIcon(itemId)
+            )
             button.imageTintList = null
             sideNavigationTextMap()[itemId]?.let {
                 it.text = title
@@ -1147,9 +1166,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         sideNavAiText.applyUiTitleTypeface(this@MainActivity)
     }
 
+    private fun sideNavigationFallbackIcon(itemId: Int): Drawable? = when (itemId) {
+        R.id.menu_rss -> ContextCompat.getDrawable(this, R.drawable.ic_bottom_rss_feed)
+        R.id.menu_homepage -> ContextCompat.getDrawable(this, R.drawable.ic_bottom_home)
+        else -> null
+    }
+
     private fun sideNavigationTitle(itemId: Int, fallback: CharSequence?): CharSequence {
         return when (itemId) {
             R.id.menu_read_record -> getString(R.string.side_nav_stats)
+            R.id.menu_rss -> fallback ?: getString(R.string.rss)
+            R.id.menu_homepage -> fallback ?: getString(R.string.homepage)
             else -> fallback ?: ""
         }
     }

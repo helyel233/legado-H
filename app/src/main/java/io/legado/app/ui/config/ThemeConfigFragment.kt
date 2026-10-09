@@ -90,6 +90,17 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             },
                             searchKeys = listOf("统计", "stats", "底部导航", "底部导航栏")
                         ),
+                        SettingSwitchSpec(
+                            key = KEY_RSS_VISIBLE,
+                            title = getString(R.string.rss),
+                            summary = getString(R.string.rss_switch_summary),
+                            checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_RSS),
+                            onCheckedChange = { checked ->
+                                MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_RSS, checked)
+                                postEvent(EventBus.NOTIFY_MAIN, true)
+                            },
+                            searchKeys = listOf("订阅", "rss", "底部导航", "底部导航栏")
+                        ),
                         SettingActionSpec(
                             key = KEY_THEME_MANAGE,
                             title = getString(R.string.theme_list),
@@ -224,6 +235,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
         private const val DEFAULT_LAUNCHER_ICON = "ic_launcher"
         private const val KEY_THEME_MANAGE = "theme_manage"
         private const val KEY_HOMEPAGE_VISIBLE = "homepage_visible"
+        private const val KEY_RSS_VISIBLE = "rss_visible"
         private const val KEY_STATS_VISIBLE = "stats_visible"
         private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
         private const val KEY_DISCOVERY_SUBSCRIPTION_SETTINGS = "discoverySubscriptionSettings"

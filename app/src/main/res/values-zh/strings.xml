@@ -2602,6 +2602,7 @@ bookUrl：%7$s
     <!-- legadoC 首页模块与书架合集（C3 移植） -->
     <string name="homepage_switch_summary">在底部导航栏显示首页入口</string>
     <string name="stats_switch_summary">在底部导航栏显示统计入口</string>
+    <string name="rss_switch_summary">在底部导航栏显示订阅入口</string>
     <string name="update_select_package_title">选择下载包</string>
     <string name="update_package_official">正式包（arm64-v8a）</string>
     <string name="update_package_debug">Debug 包（全架构）</string>
