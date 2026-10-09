@@ -4,6 +4,11 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.9.0 · 2026/10/09**
+
+- 「应用主题」升级为「App UI 配置」：统一管理主题包、外观套件、界面设置与阅读资源
+- Compose 页面随用户主题渲染（语义色桥）
+
 **vH.1.8.6 · 2026/10/09**
 
 - 界面设置新增 RSS 开关，可重新显示订阅入口
