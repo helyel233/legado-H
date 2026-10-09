@@ -1,5 +1,6 @@
 package io.legado.app.help.config
 
+import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplatePackages
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
@@ -67,6 +68,8 @@ object ThemePackageManager {
     private const val builtinNightDirName = "builtin_night"
     private const val builtinDayName = "\u5185\u7f6e\u65e5\u95f4\u4e3b\u9898"
     private const val builtinNightName = "\u5185\u7f6e\u591c\u95f4\u4e3b\u9898"
+    private const val THEME_PACKAGE_FORMAT_VERSION = 2
+
     private val importMutex = Mutex()
     private val imageMagic = listOf(
         byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) to ".png",
@@ -240,9 +243,87 @@ object ThemePackageManager {
             val dir = localEntry.localDir ?: localDir(localEntry.packageInfo.isNightTheme, localEntry.dirName)
             val zipFile = tempDir.getFile("${localEntry.dirName}.zip")
             if (zipFile.exists()) zipFile.delete()
-            ZipUtils.zipFile(dir, zipFile)
+            // P2-c：导出根 = <dirName>/（包体）+ resources/（封面图集/气泡/EPUB 模板内层 zip）。
+            // resources 与 theme.json 所在目录平级，导入端从解压根分发，不进入主题包安装目录。
+            val exportRoot = tempDir.getFile("export_${UUID.randomUUID()}")
+            try {
+                val packageDir = File(exportRoot, localEntry.dirName)
+                check(dir.copyRecursively(packageDir, overwrite = true)) {
+                    "failed to copy theme package for export"
+                }
+                runCatching {
+                    val manifest = File(packageDir, packageFileName)
+                    val pkg = GSON.fromJsonObject<Package>(manifest.readTextLimited(maxPackageManifestBytes)).getOrThrow()
+                    manifest.writeText(GSON.toJson(pkg.copy(formatVersion = THEME_PACKAGE_FORMAT_VERSION)))
+                }
+                writeBundledResources(exportRoot, localEntry)
+                ZipUtils.zipFile(exportRoot, zipFile)
+            } finally {
+                FileUtils.delete(exportRoot, deleteRootDir = true)
+            }
             zipFile
         }
+    }
+
+    /** 打包当前选中的封面图集/气泡包/EPUB 模板为 resources 内层 zip；单项失败跳过不阻塞导出。 */
+    private suspend fun writeBundledResources(exportRoot: File, entry: Entry) {
+        val isNight = entry.packageInfo.isNightTheme
+        val resDir = File(exportRoot, "resources")
+        runCatching {
+            val selected = CoverCollectionManager.selectedEntry(isNight) ?: return@runCatching
+            val bundled = CoverCollectionManager.exportZip(selected)
+            try {
+                val out = File(File(resDir, "covers"), "${selected.dirName}.zip")
+                out.parentFile?.mkdirs()
+                bundled.copyTo(out, overwrite = true)
+            } finally {
+                bundled.delete()
+            }
+        }
+        runCatching {
+            val current = BubblePackageManager.currentEntry()
+            val bundled = BubblePackageManager.exportZip(current)
+            try {
+                val out = File(File(resDir, "bubbles"), "${current.dirName}.zip")
+                out.parentFile?.mkdirs()
+                bundled.copyTo(out, overwrite = true)
+            } finally {
+                bundled.delete()
+            }
+        }
+        runCatching {
+            val templateId = ReadBookConfig.config.readerTemplateId
+            if (templateId.isNotBlank()) {
+                val out = File(File(resDir, "epub-templates"), "reader-template.zip")
+                out.parentFile?.mkdirs()
+                out.outputStream().buffered().use { output ->
+                    EpubReaderTemplatePackages.exportTemplate(templateId, output)
+                }
+            }
+        }
+    }
+
+    /** 分发主题包携带的 resources（best-effort，失败不阻塞主题导入）。 */
+    private suspend fun importBundledResources(resDir: File, isNight: Boolean) = withContext(IO) {
+        File(resDir, "covers").listFiles()
+            ?.filter { it.isFile && it.extension == "zip" }
+            ?.forEach { file ->
+                runCatching { CoverCollectionManager.importZip(appCtx, file, isNight) }
+                    .onFailure { AppLog.put("主题包附带封面图集导入失败\n$it", it) }
+            }
+        File(resDir, "bubbles").listFiles()
+            ?.filter { it.isFile && it.extension == "zip" }
+            ?.forEach { file ->
+                runCatching { BubblePackageManager.importZip(file) }
+                    .onFailure { AppLog.put("主题包附带气泡包导入失败\n$it", it) }
+            }
+        File(resDir, "epub-templates").listFiles()
+            ?.filter { it.isFile && it.extension == "zip" }
+            ?.forEach { file ->
+                runCatching {
+                    file.inputStream().buffered().use { EpubReaderTemplatePackages.importPackage(it) }
+                }.onFailure { AppLog.put("主题包附带 EPUB 模板导入失败\n$it", it) }
+            }
     }
 
     suspend fun deleteLocal(entry: Entry) = withContext(IO) {
@@ -1059,6 +1140,8 @@ object ThemePackageManager {
             require(packageFiles.size == 1) { "theme package contains multiple $packageFileName files" }
             val packageFile = packageFiles.single()
             val pkg = GSON.fromJsonObject<Package>(packageFile.readTextLimited(maxPackageManifestBytes)).getOrThrow()
+            // P2-c：resources 与 theme.json 所在目录平级，随安装分发到各资源管理器
+            val bundledResourcesDir = File(unzipDir, "resources").takeIf { it.isDirectory }
             val dirName = safeImportedDirName(pkg)
             val parentDir = typeDir(pkg.isNightTheme).canonicalFile
             val targetDir = File(parentDir, dirName).canonicalFile
@@ -1085,7 +1168,7 @@ object ThemePackageManager {
                     "staged theme identity mismatch"
                 }
 
-                installStagedTheme(targetDir, stagingDir, backupDir) { installedDir ->
+                val importedEntry = installStagedTheme(targetDir, stagingDir, backupDir) { installedDir ->
                     val installedPackage = readPackage(installedDir)
                         ?: throw IllegalStateException("installed theme package is unreadable")
                     ThemeConfig.replaceImportedConfig(
@@ -1100,6 +1183,11 @@ object ThemePackageManager {
                         remoteUpdatedAt = remoteUpdatedAt
                     )
                 }
+                bundledResourcesDir?.let { resDir ->
+                    runCatching { importBundledResources(resDir, pkg.isNightTheme) }
+                        .onFailure { AppLog.put("主题包附带资源导入失败\n$it", it) }
+                }
+                importedEntry
             } finally {
                 deletePathBestEffort(stagingDir)
             }
@@ -1512,7 +1600,9 @@ object ThemePackageManager {
         val dirName: String,
         val isNightTheme: Boolean,
         val updatedAt: Long,
-        val config: ThemeConfig.Config?
+        val config: ThemeConfig.Config?,
+        // P2-c：2 = 清单含 resources 资源段（封面图集/气泡/EPUB 模板）；缺省 1 = 旧包纯平铺 assets
+        val formatVersion: Int = 1
     )
 
     @Keep

@@ -74,8 +74,8 @@
     <string name="book_source_manage">Sources management</string>
     <string name="book_source_manage_desc">Create/Import/Edit/Manage Book sources</string>
     <string name="setting">Settings</string>
-    <string name="theme_setting">Interface settings</string>
-    <string name="theme_setting_s">Interface, color and display settings</string>
+    <string name="theme_setting">Other UI settings</string>
+    <string name="theme_setting_s">UI misc settings outside the three packages</string>
     <string name="other_setting">Other settings</string>
     <string name="other_setting_s">Some function-related settings</string>
     <string name="about">About</string>
