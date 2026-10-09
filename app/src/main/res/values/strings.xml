@@ -1178,11 +1178,9 @@
     <string name="app_ui_config">App UI settings</string>
     <string name="app_ui_config_summary">Manage theme packages, UI kit and reader kit</string>
     <string name="app_ui_config_theme_title">Theme packages</string>
-    <string name="app_ui_config_theme_desc">Manage local and cloud theme packages</string>
-    <string name="app_ui_config_kit_title">Appearance kit</string>
-    <string name="app_ui_config_kit_desc">Theme, top bar, bottom bar and cover collections</string>
-    <string name="app_ui_config_ui_title">UI settings</string>
-    <string name="app_ui_config_ui_desc">Interface, color and display related settings</string>
+    <string name="app_ui_config_theme_desc">Colors, backgrounds, fonts; cover collections, SVG bubbles and EPUB templates will be included</string>
+    <string name="app_ui_config_interface_title">Interface package</string>
+    <string name="app_ui_config_interface_desc">Top bar, bottom bar, buttons, borders and sidebar as one configurable package (in progress)</string>
     <string name="app_ui_config_reader_title">Reader kit</string>
     <string name="app_ui_config_reader_desc">Reader assets, templates and presets (grows with P3)</string>
     <string name="reader_asset_manage">Reader assets</string>

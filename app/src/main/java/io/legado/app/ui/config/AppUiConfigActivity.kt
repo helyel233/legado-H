@@ -69,21 +69,12 @@ private fun AppUiConfigScreen() {
             actionLabel = stringResource(R.string.theme_list),
             onAction = { context.startActivity<ThemeManageActivity>() }
         )
+        // 界面包：过渡期指向外观套件（现有布局预设管理），P2-b 统一为界面包管理器
         PackageCard(
-            title = stringResource(R.string.app_ui_config_kit_title),
-            desc = stringResource(R.string.app_ui_config_kit_desc),
+            title = stringResource(R.string.app_ui_config_interface_title),
+            desc = stringResource(R.string.app_ui_config_interface_desc),
             actionLabel = stringResource(R.string.appearance_kit_manage),
             onAction = { context.startActivity<AppearanceKitActivity>() }
-        )
-        PackageCard(
-            title = stringResource(R.string.app_ui_config_ui_title),
-            desc = stringResource(R.string.app_ui_config_ui_desc),
-            actionLabel = stringResource(R.string.theme_setting),
-            onAction = {
-                context.startActivity<ConfigActivity> {
-                    putExtra("configTag", ConfigTag.THEME_CONFIG)
-                }
-            }
         )
         PackageCard(
             title = stringResource(R.string.app_ui_config_reader_title),
