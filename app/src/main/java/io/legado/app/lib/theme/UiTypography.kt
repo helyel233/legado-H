@@ -9,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.TextView
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.theme.model.FontRole
+import io.legado.app.theme.repository.ThemeRepositoryHost
 import io.legado.app.ui.widget.TitleBar
 import io.legado.app.utils.RealPathUtil
 import io.legado.app.utils.dpToPx
@@ -23,7 +25,7 @@ private fun Context.baseSystemTypeface(): Typeface {
 }
 
 fun Context.uiTypeface(): Typeface {
-    val fontPath = AppConfig.uiFontPath
+    val fontPath = fontPath(FontRole.UI)
     if (fontPath.isNotBlank()) {
         loadUiTypeface(fontPath)?.let {
             return it
@@ -33,13 +35,28 @@ fun Context.uiTypeface(): Typeface {
 }
 
 fun Context.titleTypeface(): Typeface {
-    val fontPath = AppConfig.titleFontPath
+    val fontPath = fontPath(FontRole.TITLE)
     if (fontPath.isNotBlank()) {
         loadUiTypeface(fontPath)?.let {
             return it
         }
     }
     return baseSystemTypeface()
+}
+
+/**
+ * Unified font entry (P0a-2): reads through the ThemeRepository contract
+ * so UI/TITLE/READING share one source of truth. Values and behavior are
+ * unchanged (same underlying keys), with a direct fallback.
+ */
+private fun Context.fontPath(role: FontRole): String = runCatching {
+    ThemeRepositoryHost.get().fontPath(role)
+}.getOrElse {
+    when (role) {
+        FontRole.UI -> AppConfig.uiFontPath
+        FontRole.TITLE -> AppConfig.titleFontPath
+        FontRole.READING -> ""
+    }
 }
 
 fun Context.loadUiTypeface(fontPath: String): Typeface? {
