@@ -187,6 +187,4 @@
 
 ## 历史记录
 
-- [2026 年 7 月更新记录](docs/changelog/2026-07.md)
-- [上游历史日志](docs/changelog/upstream-2022.md)
-- [已经公开的版本](https://github.com/Rimchars/legado/releases)
+- [历史版本发布页](https://github.com/helyel233/legado-H/releases)

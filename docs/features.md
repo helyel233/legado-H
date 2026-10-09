@@ -1,8 +1,8 @@
-# 阅读 Archive 功能说明
+# LegadoH 功能说明
 
-阅读 Archive 是基于 Legado / 阅读 Sigma 分支继续开发的 Android 阅读器。支持自行添加书源、阅读本地书籍，并提供书架管理、听书、主题、AI 和自动任务等功能。应用不内置书籍内容，书源与阅读内容由使用者自行添加。
+LegadoH 是「阅读 Archive」的独立 fork，血统上溯至 [Legado（阅读 3.0）](https://github.com/gedoor/legado)。支持自行添加书源、阅读本地书籍，并提供书架管理、听书、主题、AI 和自动任务等功能。应用不内置书籍内容，书源与阅读内容由使用者自行添加。
 
-本文介绍第十四版功能。安装包见 [GitHub Releases](https://github.com/Rimchars/legado/releases) 和 [Gitee Releases](https://gitee.com/zziji/legado/releases)。
+安装包见 [GitHub Releases](https://github.com/helyel233/legado-H/releases)。
 
 ## 阅读与书籍管理
 
@@ -78,4 +78,4 @@ EPUB 支持覆盖、滑动、仿真等翻页方式和独立阅读样式。默认
 
 ## 当前验证范围
 
-第十四版已完成 JVM 回归、浏览器渲染比较、静态检查和安装包校验。复杂模板、高亮图案和系统 WebView 的实际表现仍需设备反馈；当前未完成 Android 真机显示、触控或整机帧率验收。
+版本发布前已完成自动化回归、浏览器渲染比较、静态检查和安装包校验。复杂模板、高亮图案和系统 WebView 的实际表现仍需设备反馈；真机显示、触控或整机帧率表现以实际设备体验为准。

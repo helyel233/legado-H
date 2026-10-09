@@ -91,7 +91,7 @@ The following features are ported from community forks, with special thanks:
 
 Rhino, Jsoup, OkHttp, Glide, Miuix, Paged.js and other open-source components are used by this project; each keeps its own license. See the [third-party license notices](app/src/main/assets/LICENSE.md).
 
-[Changelog](CHANGELOG.md) · [History notes](docs/changelog/2026-07.md) · [Upstream changelog](docs/changelog/upstream-2022.md)
+[Changelog](CHANGELOG.md)
 
 ## License
 

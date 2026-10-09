@@ -106,7 +106,7 @@ cd legado-H
 
 项目使用了 Rhino、Jsoup、OkHttp、Glide、Miuix、Paged.js 等开源组件；各组件保留各自许可。应用内使用的组件说明见 [开源许可](app/src/main/assets/LICENSE.md)。
 
-[更新日志](CHANGELOG.md) · [历史说明](docs/changelog/2026-07.md) · [上游历史日志](docs/changelog/upstream-2022.md)
+[更新日志](CHANGELOG.md)
 
 ## 许可证
 
