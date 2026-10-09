@@ -306,6 +306,8 @@
     <string name="showTimeBattery">Display time and battery</string>
     <string name="showLine">Display divider</string>
     <string name="dark_status_icon">Darken the status bar\'s icon color</string>
+    <string name="reader_follow_theme">Follow theme</string>
+    <string name="reader_follow_theme_summary">Reader colors follow the app theme (day/night/E-Ink)</string>
     <string name="content">Content</string>
     <string name="copy_text">Copy</string>
     <string name="download_all">Download all</string>

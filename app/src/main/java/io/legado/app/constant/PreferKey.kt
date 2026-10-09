@@ -255,6 +255,7 @@ object PreferKey {
     const val uiLayoutAlphaN = "uiLayoutAlphaNight"
     const val dialogAlpha = "dialogAlpha"
     const val dialogAlphaN = "dialogAlphaNight"
+    const val readerFollowTheme = "readerFollowTheme"
     const val themeCardColor = "themeCardColor"
     const val themeCardColorN = "themeCardColorNight"
     const val themeMutedColor = "themeMutedColor"

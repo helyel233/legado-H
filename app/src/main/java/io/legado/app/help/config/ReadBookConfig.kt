@@ -1,5 +1,6 @@
 package io.legado.app.help.config
 
+import io.legado.app.lib.theme.ThemeReaderBridge
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -1135,6 +1136,9 @@ object ReadBookConfig {
         }
 
         fun curTextColor(): Int {
+            if (AppConfig.readerFollowTheme) {
+                return ThemeReaderBridge.textColor(appCtx)
+            }
             if (!initColorInt) {
                 initColorInt()
             }
@@ -1165,6 +1169,9 @@ object ReadBookConfig {
         }
 
         fun curTextAccentColor(): Int {
+            if (AppConfig.readerFollowTheme) {
+                return ThemeReaderBridge.accentColor(appCtx)
+            }
             if (!initAccentColorInt) {
                 initAccentColorInt()
             }
@@ -1184,6 +1191,9 @@ object ReadBookConfig {
         }
 
         fun curStatusIconDark(): Boolean {
+            if (AppConfig.readerFollowTheme) {
+                return ThemeReaderBridge.darkStatusIcon(appCtx)
+            }
             return when {
                 AppConfig.isEInkMode -> darkStatusIconEInk
                 AppConfig.isNightTheme -> darkStatusIconNight
@@ -1225,6 +1235,9 @@ object ReadBookConfig {
         }
 
         fun curBgStr(): String {
+            if (AppConfig.readerFollowTheme) {
+                return "#" + ThemeReaderBridge.backgroundColor(appCtx).hexString
+            }
             return when {
                 AppConfig.isEInkMode -> bgStrEInk
                 AppConfig.isNightTheme -> bgStrNight
@@ -1233,6 +1246,9 @@ object ReadBookConfig {
         }
 
         fun curBgType(): Int {
+            if (AppConfig.readerFollowTheme) {
+                return 0
+            }
             return when {
                 AppConfig.isEInkMode -> bgTypeEInk
                 AppConfig.isNightTheme -> bgTypeNight

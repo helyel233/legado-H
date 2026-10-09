@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.dns.DnsScope
 import android.content.DialogInterface
 import android.net.Uri
@@ -283,8 +284,22 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     @Composable
     private fun ToggleSection(style: AppDialogStyle) {
         ReaderSectionCard(style = style, title = null, contentPadding = PaddingValues(6.dp)) {
+            var followTheme by rememberSaveable(refreshTick) {
+                mutableStateOf(AppConfig.readerFollowTheme)
+            }
             var darkStatusIcon by rememberSaveable(refreshTick) {
                 mutableStateOf(ReadBookConfig.durConfig.curStatusIconDark())
+            }
+            ReaderSwitchRow(
+                title = stringResource(R.string.reader_follow_theme),
+                summary = stringResource(R.string.reader_follow_theme_summary),
+                checked = followTheme,
+                style = style
+            ) {
+                followTheme = it
+                AppConfig.readerFollowTheme = it
+                postReadConfigChanged(1, 5)
+                (activity as? ReadBookActivity)?.upSystemUiVisibility()
             }
             var scrollFollowBg by rememberSaveable(refreshTick) {
                 mutableStateOf(ReadBookConfig.durConfig.curReadScrollFollowBackground())

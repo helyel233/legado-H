@@ -339,6 +339,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val isMainTransparentStatusBar: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.mainTransparentStatusBar, false)
 
+    /** P2-d：阅读配色跟随主题（默认关闭保证向后兼容） */
+    var readerFollowTheme: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readerFollowTheme, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.readerFollowTheme, value)
+        }
+
     val immNavigationBar: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.immNavigationBar, true)
 
