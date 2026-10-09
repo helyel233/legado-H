@@ -1,5 +1,8 @@
 package io.legado.app.ui.book.read.config
 
+import com.google.gson.JsonObject
+import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
+import io.legado.app.reader.aloud.ReadAloudConfig
 import io.legado.app.reader.config.ReadConfigEvent
 import io.legado.app.reader.config.ReadConfigEvent.SystemBars
 import io.legado.app.reader.config.ReadConfigEvent.Background
@@ -102,6 +105,7 @@ import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.compress.ZipUtils
@@ -845,6 +849,11 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             val configFile = configDir.getFile("readConfig.json")
             configFile.createFileReplace()
             val config = ReadBookConfig.getExportConfig()
+            // P3-b：朗读配置随阅读配置包导出
+            val aloudFile = configDir.getFile("readAloudConfig.json")
+            aloudFile.createFileReplace()
+            aloudFile.writeText(ReadAloudConfig.toExportJson().toString(), Charsets.UTF_8)
+            exportFiles.add(aloudFile)
             if (config.readerTemplateId.isNotEmpty()) {
                 val templateFile = configDir.getFile(EpubReaderTemplateStore.singleTemplateFileName)
                 templateFile.writeText(EpubReaderTemplateStore.exportJson(config.readerTemplateId), Charsets.UTF_8)
@@ -938,7 +947,25 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
 
     private fun importConfig(byteArray: ByteArray) {
         execute {
-            ReadBookConfig.import(byteArray)
+            ReadBookConfig.import(byteArray).also {
+                // P3-b：恢复随包携带的朗读配置（旧包无此文件则跳过）
+                runCatching {
+                java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(byteArray)).use { stream ->
+                    var entry = stream.nextEntry
+                    while (entry != null) {
+                        if (entry.name == "readAloudConfig.json") {
+                            val json = stream.readBytes().toString(Charsets.UTF_8)
+                            ReadAloudConfig.applyExport(
+                                GSON.fromJsonObject<JsonObject>(json).getOrThrow()
+                            )
+                            break
+                        }
+                        entry = stream.nextEntry
+                    }
+                }
+                ReadAloudConfigChangeNotifier.notifyEngine()
+            }
+            }
         }.onSuccess {
             ReadBookConfig.durConfig = it
             refreshTick++
