@@ -28,6 +28,9 @@ object MainBottomNavConfig {
     /** 首页入口固定到最左侧第一位的迁移版本 */
     private const val NAV_ORDER_HOMEPAGE_FIRST = 1
 
+    /** P1 IA 收敛：默认主界面为 3 Tab（书架/发现/我的）的迁移版本 */
+    private const val NAV_3TAB_DEFAULT = 2
+
     @Keep
     data class ItemState(
         val key: String,
@@ -72,8 +75,24 @@ object MainBottomNavConfig {
                 normalized = listOf(homepage) + normalized.filterNot { it.key == KEY_HOMEPAGE }
             }
         }
-        if (needHomepageFirst || stored.isNullOrBlank() || normalized != raw) {
-            appCtx.putPrefInt(PreferKey.mainBottomNavOrderVersion, NAV_ORDER_HOMEPAGE_FIRST)
+        // 一次性迁移：IA 收敛为 3 Tab（书架/发现/我的）。首页/RSS/阅读记录
+        // 默认隐藏但仍可在界面设置中重新开启，阅读记录另有「我的-阅读记录」入口。
+        val need3TabDefault =
+            appCtx.getPrefInt(PreferKey.mainBottomNavOrderVersion, 0) < NAV_3TAB_DEFAULT
+        if (need3TabDefault) {
+            normalized = normalized.map { state ->
+                if (state.key == KEY_HOMEPAGE || state.key == KEY_RSS || state.key == KEY_READ_RECORD) {
+                    state.copy(visible = false)
+                } else {
+                    state
+                }
+            }
+        }
+        if (needHomepageFirst || need3TabDefault || stored.isNullOrBlank() || normalized != raw) {
+            appCtx.putPrefInt(
+                PreferKey.mainBottomNavOrderVersion,
+                maxOf(NAV_ORDER_HOMEPAGE_FIRST, NAV_3TAB_DEFAULT)
+            )
             save(normalized)
         } else if (!prefs.contains(PreferKey.mainBottomNavItems)) {
             save(normalized)
