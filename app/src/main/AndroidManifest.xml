@@ -150,6 +150,11 @@
             android:launchMode="singleTask" />
         <!-- 主框架页面独立宿主（RSS/首页聚合） -->
         <activity
+            android:name=".ui.config.AppUiConfigActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard" />
+        <activity
             android:name=".ui.main.MainPageActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"

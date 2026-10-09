@@ -530,7 +530,7 @@ sealed interface ReadConfigEvent {
 |---|---|---|---|
 | **P0a** | 主题包收口 | 建 `modules/theme`；`ThemeRepository` 收口 4 层持久化；`BackgroundStore[Scene]`、`FontStore[Role]` | +0.0.1（纯重构，视觉无变化） |
 | **P0b** | 界面包地基 | 建 `modules/uikit`；Token 与视觉语言规范（6.5）落地；`SkinProvider` 收敛 miuix/液态玻璃；`AppButton` / `AppToast` / `AppListState` 三项优先 | +0.0.1 |
-| **P1** | 主框架换壳 | IA 收敛为 3 Tab；`MainScaffold + NavHost`；建 `AppRoute`；删侧栏 | +0.1.1 |
+| **P1** | 主框架收敛 | IA 收敛为 3 Tab；建 `AppRoute`；RSS/首页独立宿主与入口（P1-a/b，已发 H.1.8.5/1.8.6）。**P1-c 修订（2026-10-09 用户确认）**：NavHost 换壳推迟到 P4 末尾（各域 Compose 化后一次性完成，避免 AndroidFragment 包旧 Fragment 的两次改造与滚动状态迁移风险）；自绘侧栏**保留**——它是 sidebar 布局预设的载体（floating/standard/sidebar 三态），删除属功能砍除而非重构 | 已发版 |
 | **P2** | 主题 × 阅读打通 | 阅读配色/字体引用 `ColorScheme`；新增「跟随主题」开关；「应用主题」更名为 **App UI 配置**，整合管理 主题包/界面包/阅读页包 三包（需求 R2） | +0.1.1 |
 | **P3** | 阅读页包重构 | `ReadConfig` 拆分、事件 sealed 化、朗读配置对象化、面板化 | +0.1.1 |
 | **P4** | 分域迁移 | 发现 → 书架（三实现合一）→ 书籍详情（删双胞胎）→ 书源/RSS → 配置中心；**随域清理硬编码颜色、位图与离线图标**；配置中心按新 IA 重组（需求 R1/R3）：外观与 AI 拆分、「我的」仅设置条目、界面设置二级收敛（≤8 个一级条目） | 每域 +0.1.1，独立发版 |

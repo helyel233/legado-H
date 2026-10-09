@@ -938,6 +938,17 @@
     <string name="save_night_theme_summary">保存夜间主题配置以供调用和分享</string>
     <string name="theme_list">界面管理</string>
     <string name="theme_list_summary">管理本地和云端主题包</string>
+    <string name="app_ui_config">App UI 配置</string>
+    <string name="app_ui_config_summary">统一管理主题包、界面包与阅读页包</string>
+    <string name="app_ui_config_theme_title">主题包</string>
+    <string name="app_ui_config_theme_desc">管理本地与云端主题包</string>
+    <string name="app_ui_config_kit_title">外观套件</string>
+    <string name="app_ui_config_kit_desc">主题、顶栏、底栏与封面图集</string>
+    <string name="app_ui_config_ui_title">界面设置</string>
+    <string name="app_ui_config_ui_desc">界面、颜色和显示相关设置</string>
+    <string name="app_ui_config_reader_title">阅读页包</string>
+    <string name="app_ui_config_reader_desc">阅读资源、模板与预设（随阅读页包重构逐步完善）</string>
+    <string name="reader_asset_manage">阅读资源管理</string>
     <string name="select_theme">切换默认主题</string>
     <string name="sort_by_lastUpdateTime">更新时间排序</string>
     <string name="search_content">全文搜索</string>

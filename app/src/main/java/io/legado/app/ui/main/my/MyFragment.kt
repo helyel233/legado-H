@@ -11,6 +11,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import io.legado.app.ui.config.AppUiConfigActivity
 import io.legado.app.ui.navigation.AppRoute
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
@@ -343,7 +344,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 putExtra("configTag", ConfigTag.THEME_CONFIG)
             }
 
-            "appearanceKit" -> startActivity<AppearanceKitActivity>()
+            "appearanceKit" -> startActivity<AppUiConfigActivity>()
 
             "ai_setting" -> startActivity<ConfigActivity> {
                 putExtra("configTag", ConfigTag.AI_CONFIG)
@@ -379,8 +380,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     ),
                     MySettingsRowModel(
                         key = "appearanceKit",
-                        title = getString(R.string.appearance_kit_manage),
-                        summary = getString(R.string.appearance_kit_summary)
+                        title = getString(R.string.app_ui_config),
+                        summary = getString(R.string.app_ui_config_summary)
                     ),
                     actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s),
                     actionRow("ai_setting", R.string.ai_setting, R.string.ai_setting_summary)
