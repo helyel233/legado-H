@@ -25,14 +25,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.legado.app.uikit.components.AppButton
+import io.legado.app.uikit.components.AppButtonSize
+import io.legado.app.uikit.components.AppButtonStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -1043,17 +1043,20 @@ private fun SaveBar(
             .padding(vertical = 18.dp),
         horizontalArrangement = Arrangement.End
     ) {
-        TextButton(onClick = onCancel) {
-            Text("取消", color = style.colors.secondaryText)
-        }
+        AppButton(
+            text = "取消",
+            onClick = onCancel,
+            style = AppButtonStyle.TEXT,
+            size = AppButtonSize.COMPACT
+        )
         Spacer(modifier = Modifier.width(8.dp))
-        Button(
-            enabled = enabled,
+        AppButton(
+            text = "保存",
             onClick = onSave,
-            colors = ButtonDefaults.buttonColors(containerColor = style.colors.accent)
-        ) {
-            Text("保存")
-        }
+            enabled = enabled,
+            style = AppButtonStyle.FILLED,
+            size = AppButtonSize.COMPACT
+        )
     }
 }
 

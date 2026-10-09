@@ -38,8 +38,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import io.legado.app.uikit.components.AppButton
+import io.legado.app.uikit.components.AppButtonSize
+import io.legado.app.uikit.components.AppButtonStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -477,12 +478,12 @@ private fun CharacterSummaryHeader(count: Int, onAdd: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            Button(
+            AppButton(
+                text = "添加",
                 onClick = onAdd,
-                colors = ButtonDefaults.buttonColors(containerColor = style.colors.accent)
-            ) {
-                Text("添加")
-            }
+                style = AppButtonStyle.FILLED,
+                size = AppButtonSize.COMPACT
+            )
         }
     }
 }

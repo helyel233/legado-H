@@ -2,24 +2,18 @@
 
 package io.legado.app.utils
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import io.legado.app.BuildConfig
 import io.legado.app.data.repository.debug.DebugEventCenter
-import io.legado.app.databinding.ViewToastBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.debug.DebugCategory
 import io.legado.app.model.debug.DebugEvent
 import io.legado.app.model.debug.DebugLevel
 import io.legado.app.model.debug.DebugLogScope
+import io.legado.app.uikit.facade.AppToast
 import kotlinx.coroutines.launch
-import splitties.systemservices.layoutInflater
-
-private var toast: Toast? = null
 
 private var toastLegacy: Toast? = null
 
@@ -27,8 +21,6 @@ fun Context.toastOnUi(message: Int, duration: Int = Toast.LENGTH_SHORT) {
     toastOnUi(getString(message), duration)
 }
 
-@SuppressLint("InflateParams")
-@Suppress("DEPRECATION")
 fun Context.toastOnUi(message: CharSequence?, duration: Int = Toast.LENGTH_SHORT) {
     message?.let {
         DebugLogScope.launch {
@@ -42,21 +34,7 @@ fun Context.toastOnUi(message: CharSequence?, duration: Int = Toast.LENGTH_SHORT
                 )
             }
         }
-    }
-    runOnUI {
-        kotlin.runCatching {
-            toast?.cancel()
-            toast = Toast(this)
-            val isLight = ColorUtils.isColorLight(bottomBackground)
-            ViewToastBinding.inflate(layoutInflater).run {
-                toast?.view = root
-                cvToast.setCardBackgroundColor(bottomBackground)
-                tvText.setTextColor(getPrimaryTextColor(isLight))
-                tvText.text = message
-            }
-            toast?.duration = duration
-            toast?.show()
-        }
+        AppToast.show(it, long = duration == Toast.LENGTH_LONG)
     }
 }
 

@@ -40,6 +40,7 @@ import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.utils.GSON
+import io.legado.app.utils.longToast
 import io.legado.app.utils.showDialogFragment
 
 class ImportAutoTaskDialog() : ComposeDialogFragment(), CodeDialog.Callback {
@@ -113,14 +114,7 @@ class ImportAutoTaskDialog() : ComposeDialogFragment(), CodeDialog.Callback {
                                     dismissAllowingStateLoss()
                                 },
                                 onError = { error ->
-                                    context?.let { ctx ->
-                                        android.widget.Toast.makeText(
-                                            ctx,
-                                            error.localizedMessage
-                                                ?: getString(R.string.wrong_format),
-                                            android.widget.Toast.LENGTH_LONG
-                                        ).show()
-                                    }
+                                    longToast(error.localizedMessage ?: getString(R.string.wrong_format))
                                 }
                             )
                         },

@@ -18,7 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
+import io.legado.app.uikit.components.AppButton
+import io.legado.app.uikit.components.AppButtonStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -216,7 +217,8 @@ private fun CoverHtmlTemplateScreen(
                 )
             }
         }
-        FilledTonalButton(
+        AppButton(
+            text = "+ " + stringResource(R.string.add),
             onClick = {
                 val template = CoverHtmlTemplateConfig.Template(
                     id = CoverHtmlTemplateConfig.generateId(),
@@ -228,12 +230,11 @@ private fun CoverHtmlTemplateScreen(
                 versionTick++
                 onEdit(template)
             },
+            style = AppButtonStyle.TONAL,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
-        ) {
-            Text(text = "+ " + stringResource(R.string.add))
-        }
+        )
     }
 
     when (val spec = overlay) {

@@ -5,84 +5,51 @@ package io.legado.app.utils
 import android.view.View
 import androidx.annotation.StringRes
 import com.google.android.material.snackbar.Snackbar
+import io.legado.app.uikit.facade.AppToast
 
 /**
- * Display the Snackbar with the [Snackbar.LENGTH_SHORT] duration.
- *
- * @param message the message text resource.
+ * Snackbars without an action delegate to [AppToast] so all passive
+ * notifications share one themed visual style (docs/ui-rewrite-plan.md 6.4).
+ * Variants with an action keep using Snackbar because they require user
+ * interaction; they will be replaced by the dialog/sheet facade in P4.
  */
+
 @JvmName("snackbar2")
 fun View.snackbar(
     @StringRes message: Int
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_SHORT)
-    .apply { show() }
+) = snackbar(context.getString(message))
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_LONG] duration.
- *
- * @param message the message text resource.
- */
 @JvmName("longSnackbar2")
 fun View.longSnackbar(
     @StringRes message: Int
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_LONG)
-    .apply { show() }
+) = longSnackbar(context.getString(message))
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_INDEFINITE] duration.
- *
- * @param message the message text resource.
- */
 @JvmName("indefiniteSnackbar2")
 fun View.indefiniteSnackbar(
     @StringRes message: Int
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_INDEFINITE)
-    .apply { show() }
+) = longSnackbar(context.getString(message))
 
-/**
- * Display the Snackbar with the [Snackbar.LENGTH_SHORT] duration.
- *
- * @param message the message text.
- */
 @JvmName("snackbar2")
 fun View.snackbar(
     message: CharSequence
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_SHORT)
-    .apply { show() }
+) {
+    AppToast.show(message)
+}
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_LONG] duration.
- *
- * @param message the message text.
- */
 @JvmName("longSnackbar2")
 fun View.longSnackbar(
     message: CharSequence
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_LONG)
-    .apply { show() }
+) {
+    AppToast.show(message, long = true)
+}
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_INDEFINITE] duration.
- *
- * @param message the message text.
- */
 @JvmName("indefiniteSnackbar2")
 fun View.indefiniteSnackbar(
     message: CharSequence
-) = Snackbar
-    .make(this, message, Snackbar.LENGTH_INDEFINITE)
-    .apply { show() }
+) {
+    AppToast.show(message, long = true)
+}
 
-/**
- * Display the Snackbar with the [Snackbar.LENGTH_SHORT] duration.
- *
- * @param message the message text resource.
- */
 @JvmName("snackbar2")
 fun View.snackbar(
     message: Int,
@@ -93,11 +60,6 @@ fun View.snackbar(
     .setAction(actionText, action)
     .apply { show() }
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_LONG] duration.
- *
- * @param message the message text resource.
- */
 @JvmName("longSnackbar2")
 fun View.longSnackbar(
     @StringRes message: Int,
@@ -108,11 +70,6 @@ fun View.longSnackbar(
     .setAction(actionText, action)
     .apply { show() }
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_INDEFINITE] duration.
- *
- * @param message the message text resource.
- */
 @JvmName("indefiniteSnackbar2")
 fun View.indefiniteSnackbar(
     @StringRes message: Int,
@@ -123,11 +80,6 @@ fun View.indefiniteSnackbar(
     .setAction(actionText, action)
     .apply { show() }
 
-/**
- * Display the Snackbar with the [Snackbar.LENGTH_SHORT] duration.
- *
- * @param message the message text.
- */
 @JvmName("snackbar2")
 fun View.snackbar(
     message: CharSequence,
@@ -138,11 +90,6 @@ fun View.snackbar(
     .setAction(actionText, action)
     .apply { show() }
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_LONG] duration.
- *
- * @param message the message text.
- */
 @JvmName("longSnackbar2")
 fun View.longSnackbar(
     message: CharSequence,
@@ -153,11 +100,6 @@ fun View.longSnackbar(
     .setAction(actionText, action)
     .apply { show() }
 
-/**
- * Display Snackbar with the [Snackbar.LENGTH_INDEFINITE] duration.
- *
- * @param message the message text.
- */
 @JvmName("indefiniteSnackbar2")
 fun View.indefiniteSnackbar(
     message: CharSequence,

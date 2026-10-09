@@ -4,27 +4,23 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
-import android.view.ViewStub
 import android.widget.FrameLayout
-import android.widget.ProgressBar
-import androidx.appcompat.widget.AppCompatButton
-import androidx.appcompat.widget.AppCompatImageView
-import androidx.appcompat.widget.AppCompatTextView
 import io.legado.app.R
+import io.legado.app.uikit.state.StateViewBindings
 
+/**
+ * Legacy state container kept for its [ViewSwitcher] API (used by search and
+ * explore pages). Rendering is delegated to the unified uikit state views
+ * (docs/ui-rewrite-plan.md 6.5.6); the old ViewStub layouts were removed.
+ */
 @Suppress("unused")
 class DynamicFrameLayout @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs), ViewSwitcher {
 
-    private var errorView: View? = null
-    private var errorImage: AppCompatImageView? = null
-    private var errorTextView: AppCompatTextView? = null
-    private var actionBtn: AppCompatButton? = null
-
+    private var stateBindings: StateViewBindings? = null
     private var progressView: View? = null
-    private var progressBar: ProgressBar? = null
 
     private var contentView: View? = null
 
@@ -41,8 +37,6 @@ class DynamicFrameLayout @JvmOverloads constructor(
     private var changeListener: OnVisibilityChangeListener? = null
 
     init {
-        View.inflate(context, R.layout.view_dynamic, this)
-
         val a = context.obtainStyledAttributes(attrs, R.styleable.DynamicFrameLayout)
         errorIcon = a.getDrawable(R.styleable.DynamicFrameLayout_errorSrc)
         emptyIcon = a.getDrawable(R.styleable.DynamicFrameLayout_emptySrc)
@@ -59,28 +53,24 @@ class DynamicFrameLayout @JvmOverloads constructor(
 
     override fun onFinishInflate() {
         super.onFinishInflate()
-        if (childCount > 2) {
-            contentView = getChildAt(2)
-        }
+        contentView = getChildAt(0)
     }
 
     override fun showErrorView(message: CharSequence) {
         ensureErrorView()
 
-        setViewVisible(errorView, true)
+        stateBindings?.let {
+            it.root.visibility = View.VISIBLE
+            it.icon.setImageDrawable(errorIcon)
+            it.icon.visibility = if (errorIcon == null) View.GONE else View.VISIBLE
+            it.title.text = message
+            it.setAction(
+                errorActionDescription,
+                filled = true,
+            ) { errorAction?.onAction(this@DynamicFrameLayout) }
+        }
         setViewVisible(contentView, false)
         setViewVisible(progressView, false)
-
-        errorTextView?.text = message
-        errorImage?.setImageDrawable(errorIcon)
-
-        actionBtn?.let {
-            it.tag = ACTION_WHEN_ERROR
-            it.visibility = View.VISIBLE
-            if (errorActionDescription != null) {
-                it.text = errorActionDescription
-            }
-        }
 
         dispatchVisibilityChanged(ViewSwitcher.SHOW_ERROR_VIEW)
     }
@@ -92,22 +82,18 @@ class DynamicFrameLayout @JvmOverloads constructor(
     override fun showEmptyView() {
         ensureErrorView()
 
-        setViewVisible(errorView, true)
+        stateBindings?.let {
+            it.root.visibility = View.VISIBLE
+            it.icon.setImageDrawable(emptyIcon)
+            it.icon.visibility = if (emptyIcon == null) View.GONE else View.VISIBLE
+            it.title.text = emptyDescription
+            it.setAction(
+                errorActionDescription,
+                filled = true,
+            ) { emptyAction?.onAction(this@DynamicFrameLayout) }
+        }
         setViewVisible(contentView, false)
         setViewVisible(progressView, false)
-
-        errorTextView?.text = emptyDescription
-        errorImage?.setImageDrawable(emptyIcon)
-
-        actionBtn?.let {
-            it.tag = ACTION_WHEN_EMPTY
-            if (errorActionDescription != null) {
-                it.visibility = View.VISIBLE
-                it.text = errorActionDescription
-            } else {
-                it.visibility = View.INVISIBLE
-            }
-        }
 
         dispatchVisibilityChanged(ViewSwitcher.SHOW_EMPTY_VIEW)
     }
@@ -115,7 +101,7 @@ class DynamicFrameLayout @JvmOverloads constructor(
     override fun showProgressView() {
         ensureProgressView()
 
-        setViewVisible(errorView, false)
+        setViewVisible(stateBindings?.root, false)
         setViewVisible(contentView, false)
         setViewVisible(progressView, true)
 
@@ -123,7 +109,7 @@ class DynamicFrameLayout @JvmOverloads constructor(
     }
 
     override fun showContentView() {
-        setViewVisible(errorView, false)
+        setViewVisible(stateBindings?.root, false)
         setViewVisible(contentView, true)
         setViewVisible(progressView, false)
 
@@ -149,25 +135,25 @@ class DynamicFrameLayout @JvmOverloads constructor(
     }
 
     private fun ensureErrorView() {
-        if (errorView == null) {
-            errorView = findViewById<ViewStub>(R.id.error_view_stub).inflate()
-            errorImage = errorView?.findViewById(R.id.iv_error_image)
-            errorTextView = errorView?.findViewById(R.id.tv_error_message)
-            actionBtn = errorView?.findViewById(R.id.btn_error_retry)
-
-            actionBtn?.setOnClickListener {
-                when (it.tag) {
-                    ACTION_WHEN_EMPTY -> emptyAction?.onAction(this@DynamicFrameLayout)
-                    ACTION_WHEN_ERROR -> errorAction?.onAction(this@DynamicFrameLayout)
-                }
-            }
+        if (stateBindings == null) {
+            stateBindings = StateViewBindings.create(context)
+            addView(
+                stateBindings!!.root,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            )
         }
     }
 
     private fun ensureProgressView() {
         if (progressView == null) {
-            progressView = findViewById<ViewStub>(R.id.progress_view_stub).inflate()
-            progressBar = progressView?.findViewById(R.id.loading_progress)
+            progressView = StateViewBindings.loadingView(
+                context,
+                context.getString(R.string.dynamic_loading)
+            )
+            addView(
+                progressView,
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            )
         }
     }
 
@@ -183,10 +169,5 @@ class DynamicFrameLayout @JvmOverloads constructor(
     interface OnVisibilityChangeListener {
 
         fun onVisibilityChanged(@ViewSwitcher.Visibility visibility: Int)
-    }
-
-    companion object {
-        private const val ACTION_WHEN_ERROR = "ACTION_WHEN_ERROR"
-        private const val ACTION_WHEN_EMPTY = "ACTION_WHEN_EMPTY"
     }
 }
