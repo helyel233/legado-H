@@ -270,7 +270,12 @@ object ThemePackageManager {
         val isNight = entry.packageInfo.isNightTheme
         val resDir = File(exportRoot, "resources")
         runCatching {
-            val selected = CoverCollectionManager.selectedEntry(isNight) ?: return@runCatching
+            // 封面图集：仅当该侧选中了图集时携带（选中键 coverCollectionDay/Night）
+            val selected = CoverCollectionManager.selectedEntry(isNight)
+                ?: run {
+                    AppLog.put("主题包导出：该侧未选中封面图集，跳过 covers 段")
+                    return@runCatching
+                }
             val bundled = CoverCollectionManager.exportZip(selected)
             try {
                 val out = File(File(resDir, "covers"), "${selected.dirName}.zip")
@@ -279,7 +284,7 @@ object ThemePackageManager {
             } finally {
                 bundled.delete()
             }
-        }
+        }.onFailure { AppLog.put("主题包导出：封面图集打包失败\n$it", it) }
         runCatching {
             val current = BubblePackageManager.currentEntry()
             val bundled = BubblePackageManager.exportZip(current)
@@ -290,17 +295,19 @@ object ThemePackageManager {
             } finally {
                 bundled.delete()
             }
-        }
+        }.onFailure { AppLog.put("主题包导出：气泡包打包失败\n$it", it) }
         runCatching {
             val templateId = ReadBookConfig.config.readerTemplateId
-            if (templateId.isNotBlank()) {
-                val out = File(File(resDir, "epub-templates"), "reader-template.zip")
-                out.parentFile?.mkdirs()
-                out.outputStream().buffered().use { output ->
-                    EpubReaderTemplatePackages.exportTemplate(templateId, output)
-                }
+            if (templateId.isBlank()) {
+                AppLog.put("主题包导出：当前排版未选用自定义 EPUB 模板，跳过 epub-templates 段")
+                return@runCatching
             }
-        }
+            val out = File(File(resDir, "epub-templates"), "reader-template.zip")
+            out.parentFile?.mkdirs()
+            out.outputStream().buffered().use { output ->
+                EpubReaderTemplatePackages.exportTemplate(templateId, output)
+            }
+        }.onFailure { AppLog.put("主题包导出：EPUB 模板打包失败\n$it", it) }
     }
 
     /** 分发主题包携带的 resources（best-effort，失败不阻塞主题导入）。 */
