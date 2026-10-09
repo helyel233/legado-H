@@ -1,5 +1,7 @@
 package io.legado.app.help.config
 
+import io.legado.app.utils.putPrefBoolean
+import io.legado.app.help.config.MainBottomNavConfig
 import android.content.Context
 import androidx.annotation.Keep
 import io.legado.app.constant.EventBus
@@ -39,7 +41,7 @@ object AppearanceKitManager {
     const val KIT_REGULAR = "builtin_regular"
     const val KIT_SIDEBAR = "builtin_sidebar"
     private const val kitManifestName = "appearance_kit.json"
-    private const val kitVersion = 1
+    private const val kitVersion = 2
     private const val maxKitManifestBytes = 1024L * 1024L
     private val kitZipLimits = SafeZipLimits(
         maxEntries = 2_048,
@@ -500,6 +502,22 @@ object AppearanceKitManager {
         NavigationBarIconConfig.applyCurrentBottomConfig(currentNight)
         // 主题包显式携带的"底栏隐藏悬浮搜索"覆盖在底栏配置之后生效(隐藏时顶栏会自动显示搜索)。
         binding.floatingBottomBarHideSearch?.let { AppConfig.floatingBottomBarHideSearch = it }
+        binding.immersiveManageBar?.let {
+            appCtx.putPrefBoolean(PreferKey.immersiveManageBar, it)
+        }
+        binding.mainTransparentStatusBar?.let {
+            appCtx.putPrefBoolean(PreferKey.mainTransparentStatusBar, it)
+        }
+        binding.bottomNavItems?.let { items ->
+            runCatching {
+                val states = GSON.fromJsonArray<MainBottomNavConfig.ItemState>(items)
+                    .getOrDefault(emptyList())
+                if (states.isNotEmpty()) {
+                    MainBottomNavConfig.save(states)
+                    postEvent(EventBus.NOTIFY_MAIN, true)
+                }
+            }
+        }
         ThemeConfig.applyTheme(context)
         BookCover.upDefaultCover()
     }
@@ -625,7 +643,10 @@ object AppearanceKitManager {
             nightNavigationBar = currentNavigationRef(true),
             dayCoverCollection = currentCoverRef(false),
             nightCoverCollection = currentCoverRef(true),
-            floatingBottomBarHideSearch = AppConfig.floatingBottomBarHideSearch
+            floatingBottomBarHideSearch = AppConfig.floatingBottomBarHideSearch,
+            bottomNavItems = appCtx.getPrefString(PreferKey.mainBottomNavItems),
+            immersiveManageBar = AppConfig.immersiveManageBar,
+            mainTransparentStatusBar = AppConfig.isMainTransparentStatusBar
         )
     }
 
@@ -849,7 +870,11 @@ data class KitBinding(
     var dayCoverCollection: ComponentRef? = null,
     var nightCoverCollection: ComponentRef? = null,
     // 悬浮底栏是否隐藏搜索按钮(隐藏时顶栏自动显示搜索)。可空：旧主题包无此字段时不改变现状。
-    var floatingBottomBarHideSearch: Boolean? = null
+    var floatingBottomBarHideSearch: Boolean? = null,
+    // P2-b 界面包 v2：Tab 显隐排序（MainBottomNavConfig 的 JSON）。可空：旧包缺字段不改变现状。
+    var bottomNavItems: String? = null,
+    var immersiveManageBar: Boolean? = null,
+    var mainTransparentStatusBar: Boolean? = null
 ) {
     fun mergeImported(imported: KitBinding): KitBinding {
         return copy(
@@ -861,7 +886,10 @@ data class KitBinding(
             nightNavigationBar = imported.nightNavigationBar ?: nightNavigationBar,
             dayCoverCollection = imported.dayCoverCollection ?: dayCoverCollection,
             nightCoverCollection = imported.nightCoverCollection ?: nightCoverCollection,
-            floatingBottomBarHideSearch = imported.floatingBottomBarHideSearch ?: floatingBottomBarHideSearch
+            floatingBottomBarHideSearch = imported.floatingBottomBarHideSearch ?: floatingBottomBarHideSearch,
+            bottomNavItems = imported.bottomNavItems ?: bottomNavItems,
+            immersiveManageBar = imported.immersiveManageBar ?: immersiveManageBar,
+            mainTransparentStatusBar = imported.mainTransparentStatusBar ?: mainTransparentStatusBar
         )
     }
 
