@@ -26,7 +26,9 @@ import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.RssSortActivity
+import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.applyMainBottomBarPadding
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.startActivity
@@ -76,7 +78,13 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
             }
             rvModules.layoutManager = LinearLayoutManager(requireContext())
             rvModules.setEdgeEffectColor(accentColor)
-            rvModules.applyMainBottomBarPadding()
+            rvModules.let {
+                if (activity is MainActivity) {
+                    it.applyMainBottomBarPadding()
+                } else {
+                    it.applyNavigationBarPadding()
+                }
+            }
             rvModules.adapter = adapter
 
             tabSource.setSelectedTabIndicatorColor(accentColor)
@@ -363,7 +371,13 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
             attachedBinding = binding
             binding.rvPage.layoutManager = LinearLayoutManager(requireContext())
             binding.rvPage.setEdgeEffectColor(accentColor)
-            binding.rvPage.applyMainBottomBarPadding()
+            binding.rvPage.let {
+                if (activity is MainActivity) {
+                    it.applyMainBottomBarPadding()
+                } else {
+                    it.applyNavigationBarPadding()
+                }
+            }
             binding.rvPage.adapter = adapter
             binding.root.setColorSchemeColors(accentColor)
             binding.root.setProgressViewOffset(true, (-28).dpToPx(), 56.dpToPx())

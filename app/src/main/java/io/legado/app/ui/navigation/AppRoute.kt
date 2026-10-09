@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.config.ConfigActivity
+import io.legado.app.ui.main.MainPageActivity
 
 /**
  * Central route table for the main frame (docs/ui-rewrite-plan.md 4.3/8.2).
@@ -15,7 +16,7 @@ import io.legado.app.ui.config.ConfigActivity
  */
 sealed class AppRoute(private val clazz: Class<out AppCompatActivity>) {
 
-    fun intent(context: Context): Intent = Intent(context, clazz)
+    open fun intent(context: Context): Intent = Intent(context, clazz)
 
     fun start(context: Context) {
         context.startActivity(intent(context))
@@ -23,6 +24,18 @@ sealed class AppRoute(private val clazz: Class<out AppCompatActivity>) {
 
     /** Route for the read record page (standalone host of the old tab). */
     data object ReadRecord : AppRoute(ReadRecordActivity::class.java)
+
+    /** RSS sources page (standalone host of the old tab). */
+    data object Rss : AppRoute(MainPageActivity::class.java) {
+        override fun intent(context: Context): Intent =
+            super.intent(context).putExtra(MainPageActivity.EXTRA_PAGE, MainPageActivity.PAGE_RSS)
+    }
+
+    /** Homepage aggregate (standalone host of the old tab). */
+    data object Homepage : AppRoute(MainPageActivity::class.java) {
+        override fun intent(context: Context): Intent =
+            super.intent(context).putExtra(MainPageActivity.EXTRA_PAGE, MainPageActivity.PAGE_HOMEPAGE)
+    }
 
     /** Global search. */
     data object Search : AppRoute(SearchActivity::class.java)
