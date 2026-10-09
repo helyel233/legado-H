@@ -185,7 +185,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        observeEvent<ArrayList<Int>>(EventBus.UP_CONFIG) {
+        observeEvent<ArrayList<ReadConfigEvent>>(EventBus.READ_CONFIG_V2) {
             if (pendingSelfConfigEvents > 0) {
                 pendingSelfConfigEvents--
             } else {

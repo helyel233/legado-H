@@ -6,11 +6,8 @@ import io.legado.app.utils.postEvent
 /**
  * P3-a: typed replacement for the legacy UP_CONFIG int-code channel.
  *
- * Posting still emits the legacy ArrayList<Int> channel so the existing
- * consumers (ReadBookActivity.handleReadConfigUpdate, BgTextConfigDialog
- * self-event filtering) keep working unchanged; the code mapping lives in
- * exactly one place (legacyCodes below). Consumers migrate to these typed
- * events in P3-c/P4, after which the legacy channel is removed.
+ * P3-c: this is now the only channel (legacy UP_CONFIG int channel removed);
+ * legacyCodes is retained as documentation of the historical mapping.
  *
  * Legacy code table (from ReadBookActivity.handleReadConfigUpdate):
  *   0 system bars, 1 background, 2 header/footer/tip content, 3 bg alpha,
@@ -83,11 +80,9 @@ sealed interface ReadConfigEvent {
 
     companion object {
 
-        /** 语义化发送；内部转旧通道，保持全部既有消费方工作。 */
+        /** 语义化发送（P3-c 起为唯一通道，旧 UP_CONFIG 数字通道已移除）。 */
         fun post(vararg events: ReadConfigEvent) {
-            val codes = LinkedHashSet<Int>()
-            events.forEach { codes.addAll(it.legacyCodes) }
-            postEvent(EventBus.UP_CONFIG, ArrayList(codes))
+            postEvent(EventBus.READ_CONFIG_V2, ArrayList(events.toList()))
         }
     }
 }

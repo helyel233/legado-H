@@ -48,6 +48,7 @@ object EventBus {
     const val READ_ALOUD_CONFIG_SCOPE_AUDIO = "audio"
     const val READ_ALOUD_CONFIG_SCOPE_SPEECH = "speech"
     const val READ_ALOUD_CONFIG_SCOPE_ENGINE = "engine"
+    const val READ_CONFIG_V2 = "readConfigV2"
     const val AI_READ_ALOUD_ROLE_STATE = "aiReadAloudRoleState"
     const val AI_CONFIG_CHANGED = "aiConfigChanged"
     const val EXPORT_BOOK = "exportBook"

@@ -3368,63 +3368,72 @@ class ReadBookActivity : BaseReadBookActivity(),
         )
     }
 
-    private fun handleEpubCoreConfigUpdate(values: List<Int>) {
-        if (values.contains(13)) {
+    private fun handleEpubCoreConfigUpdate(events: List<ReadConfigEvent>) {
+        if (events.contains(ReadConfigEvent.EpubEngineChanged)) {
             reloadAfterEpubEngineChanged()
             return
         }
-        if (values.contains(0)) {
+        if (events.contains(ReadConfigEvent.SystemBars)) {
             upSystemUiVisibility()
         }
-        if (values.contains(1)) {
+        if (events.contains(ReadConfigEvent.Background)) {
             refreshEpubReaderBackgroundImmediately()
         }
-        if (values.any { it == 8 || it == 10 }) {
+        if (events.contains(ReadConfigEvent.Typography)) {
             ChapterProvider.upStyle()
             epubReaderFontPreparer.invalidate()
         }
-        val needsLayout = values.any { it == 1 || it == 2 || it == 5 || it == 6 || it == 8 || it == 10 }
+        val needsLayout = events.any {
+            it == ReadConfigEvent.Background || it == ReadConfigEvent.HeaderFooterTips ||
+                it == ReadConfigEvent.Relayout || it == ReadConfigEvent.TipStyle ||
+                it == ReadConfigEvent.Typography
+        }
         if (needsLayout) {
             cancelEpubCorePrefetch()
             loadEpubCoreContent(resetPageOffset = false)
             return
         }
-        if (values.contains(0)) {
+        if (events.contains(ReadConfigEvent.SystemBars)) {
             refreshEpubCoreAfterConfigurationChange()
         } else {
             applyEpubRendererStyleOnly()
         }
     }
 
-    private fun handleReadConfigUpdate(values: List<Int>) = binding.run {
-        if (values.contains(13)) {
+    private fun handleReadConfigUpdate(events: List<ReadConfigEvent>) = binding.run {
+        if (events.contains(ReadConfigEvent.EpubEngineChanged)) {
             reloadAfterEpubEngineChanged()
             return@run
         }
-        val needSystemUi = values.contains(0)
-        val needBackground = values.contains(1)
-        val needStyle = values.any { it == 2 || it == 8 || it == 10 }
-        val needReload = values.any { it == 5 || it == 6 || it == 8 || it == 10 }
-        val needInvalidate = values.contains(9)
-        val needSubmitRender = values.contains(11)
+        val needSystemUi = events.contains(ReadConfigEvent.SystemBars)
+        val needBackground = events.contains(ReadConfigEvent.Background)
+        val needStyle = events.any {
+            it == ReadConfigEvent.HeaderFooterTips || it == ReadConfigEvent.Typography
+        }
+        val needReload = events.any {
+            it == ReadConfigEvent.Relayout || it == ReadConfigEvent.TipStyle ||
+                it == ReadConfigEvent.Typography
+        }
+        val needInvalidate = events.contains(ReadConfigEvent.InvalidateTextPage)
+        val needSubmitRender = events.contains(ReadConfigEvent.SubmitRender)
         var textRenderInvalidated = false
         if (needSystemUi) {
             upSystemUiVisibility()
         }
-        if (values.contains(4)) {
+        if (events.contains(ReadConfigEvent.PageTouchSlop)) {
             readView.upPageSlopSquare()
         }
-        if (values.contains(12)) {
+        if (events.contains(ReadConfigEvent.PageClick)) {
             readView.upPageTouchClick()
         }
         if (epubCoreActive) {
-            handleEpubCoreConfigUpdate(values)
+            handleEpubCoreConfigUpdate(events)
             return@run
         }
         if (needBackground) {
             readView.upBg()
         }
-        if (values.contains(3)) {
+        if (events.contains(ReadConfigEvent.BackgroundAlpha)) {
             readView.upBgAlpha()
         }
         if (needStyle) {
@@ -6453,7 +6462,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 ReadBook.readAloud(!BaseReadAloudService.pause)
             }
         }
-        observeEvent<ArrayList<Int>>(EventBus.UP_CONFIG) {
+        observeEvent<ArrayList<ReadConfigEvent>>(EventBus.READ_CONFIG_V2) {
             handleReadConfigUpdate(it)
         }
         observeEvent<Boolean>(EventBus.LIBRARY_CONTAINER_CHANGED) {
