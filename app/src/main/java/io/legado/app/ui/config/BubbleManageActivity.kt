@@ -1,5 +1,7 @@
 package io.legado.app.ui.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.net.Uri
@@ -604,7 +606,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private fun notifyBubbleChanged() {
         ImageProvider.clear()
-        postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+        ReadConfigEvent.post(Relayout)
     }
 
     private fun setForceSoftwareBubble(enabled: Boolean) {

@@ -1,5 +1,12 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Background
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.InvalidateTextPage
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.SubmitRender
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.ClipData
@@ -4526,7 +4533,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     ImageProvider.clear()
                 }
             }.onSuccess {
-                postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                ReadConfigEvent.post(Relayout)
                 toastOnUi(R.string.success)
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
@@ -5692,7 +5699,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
             if (deleted) {
                 ReadBook.clearTextChapter()
-                postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                ReadConfigEvent.post(Relayout)
                 toastOnUi(R.string.ai_image_insert_deleted)
             } else {
                 toastOnUi(R.string.ai_image_insert_not_found)
@@ -5764,7 +5771,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         when (dialogId) {
             TEXT_COLOR -> {
                 setCurTextColor(color)
-                postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6, 9, 11))
+                ReadConfigEvent.post(HeaderFooterTips, TipStyle, InvalidateTextPage, SubmitRender)
                 if (AppConfig.readBarStyleFollowPage) {
                     postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
                 }
@@ -5772,7 +5779,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             TEXT_ACCENT_COLOR -> {
                 setCurTextAccentColor(color)
-                postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6, 9, 11))
+                ReadConfigEvent.post(HeaderFooterTips, TipStyle, InvalidateTextPage, SubmitRender)
                 if (AppConfig.readBarStyleFollowPage) {
                     postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
                 }
@@ -5780,7 +5787,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             BG_COLOR -> {
                 setCurBg(0, "#${color.hexString}")
-                postEvent(EventBus.UP_CONFIG, arrayListOf(1))
+                ReadConfigEvent.post(Background)
                 if (AppConfig.readBarStyleFollowPage) {
                     postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
                 }
@@ -5789,13 +5796,13 @@ class ReadBookActivity : BaseReadBookActivity(),
             TIP_COLOR -> {
                 ReadTipConfig.tipColor = color
                 postEvent(EventBus.TIP_COLOR, "")
-                postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+                ReadConfigEvent.post(HeaderFooterTips)
             }
 
             TIP_DIVIDER_COLOR -> {
                 ReadTipConfig.tipDividerColor = color
                 postEvent(EventBus.TIP_COLOR, "")
-                postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+                ReadConfigEvent.post(HeaderFooterTips)
             }
         }
     }

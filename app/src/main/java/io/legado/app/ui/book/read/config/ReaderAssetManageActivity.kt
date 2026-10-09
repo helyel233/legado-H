@@ -1,5 +1,8 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -288,7 +291,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
     private fun copyReference(asset: ReaderAsset) {
         sendToClip(if (asset.kind == "font") "font-family:'${ReaderAssetReferences.fontFamily(asset.id)}';" else ReaderAssetReferences.url(asset.id))
     }
-    private fun changed() { postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5)) }
+    private fun changed() { ReadConfigEvent.post(Typography, Relayout) }
 
     private suspend fun readContent() {
         val directory = navigation.lastOrNull()

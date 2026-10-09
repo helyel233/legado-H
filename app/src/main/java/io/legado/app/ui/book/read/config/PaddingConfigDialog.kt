@@ -1,5 +1,9 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -488,10 +492,10 @@ class PaddingConfigDialog : ComposeDialogFragment() {
     }
 
     private fun postBodyChanged() {
-        postEvent(EventBus.UP_CONFIG, arrayListOf(10, 5))
+        ReadConfigEvent.post(Typography, Relayout)
     }
 
     private fun postHeaderFooterChanged() {
-        postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+        ReadConfigEvent.post(HeaderFooterTips)
     }
 }

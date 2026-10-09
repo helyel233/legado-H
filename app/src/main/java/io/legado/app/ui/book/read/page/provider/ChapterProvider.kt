@@ -1,5 +1,7 @@
 package io.legado.app.ui.book.read.page.provider
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
 import android.graphics.Paint.FontMetrics
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -519,7 +521,7 @@ object ChapterProvider {
         viewWidth = width
         viewHeight = height
         upLayout()
-        postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+        ReadConfigEvent.post(Relayout)
     }
 
     /**

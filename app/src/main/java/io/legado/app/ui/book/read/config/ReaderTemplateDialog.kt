@@ -1,5 +1,8 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
@@ -481,7 +484,7 @@ class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
 
     private fun notifySelectionChange(previousId: String) {
         if (previousId != ReadBookConfig.config.readerTemplateId) {
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+            ReadConfigEvent.post(Typography, Relayout)
         }
     }
 
@@ -537,7 +540,7 @@ class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
                 model.message = savedMessage
                 if (apply) applyTemplateNow(saved.id, scopeError)
                 else if (saved.id == ReadBookConfig.config.readerTemplateId && ReadBook.usesPageTemplate()) {
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                    ReadConfigEvent.post(Typography, Relayout)
                 }
             }
         }
@@ -553,7 +556,7 @@ class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
         require(id.isNotEmpty()) { scopeError }
         withContext(NonCancellable) {
             withContext(Dispatchers.IO) { EpubReaderTemplateStore.saveSelection(id) }
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+            ReadConfigEvent.post(Typography, Relayout)
             if (isAdded) dismissAllowingStateLoss()
         }
     }
@@ -624,7 +627,7 @@ internal class ReaderTemplateViewModel : ViewModel() {
             }
             appliedId = ReadBookConfig.config.readerTemplateId
             pageAnimation = EpubReaderTemplateStore.pageAnimation(appliedId)
-            if (previousId != appliedId) postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+            if (previousId != appliedId) ReadConfigEvent.post(Typography, Relayout)
             templates = library.first
             hasHiddenBuiltIns = library.second
         }

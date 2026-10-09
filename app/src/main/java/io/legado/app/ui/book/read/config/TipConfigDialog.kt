@@ -1,5 +1,10 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -258,11 +263,11 @@ private fun TipConfigContent(
             val value = tipValues.getOrElse(index) { ReadTipConfig.none }
             clearRepeat(value)
             onAssign(value)
-            postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6))
+            ReadConfigEvent.post(HeaderFooterTips, TipStyle)
             if (value == ReadTipConfig.customTemplate) {
                 onShowTemplateEditor(title, customTemplateOf(slotKey)) { text ->
                     setCustomTemplate(slotKey, text)
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6))
+                    ReadConfigEvent.post(HeaderFooterTips, TipStyle)
                 }
             }
         }
@@ -282,19 +287,19 @@ private fun TipConfigContent(
                 value = titleSize,
                 range = 0..20,
                 style = style
-            ) { titleSize = it; ReadBookConfig.titleSize = it; postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5)) }
+            ) { titleSize = it; ReadBookConfig.titleSize = it; ReadConfigEvent.post(Typography, Relayout) }
             TipCompactSlider(
                 label = stringResource(R.string.title_margin_top),
                 value = titleTopSpacing,
                 range = 0..100,
                 style = style
-            ) { titleTopSpacing = it; ReadBookConfig.titleTopSpacing = it; postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5)) }
+            ) { titleTopSpacing = it; ReadBookConfig.titleTopSpacing = it; ReadConfigEvent.post(Typography, Relayout) }
             TipCompactSlider(
                 label = stringResource(R.string.title_margin_bottom),
                 value = titleBottomSpacing,
                 range = 0..100,
                 style = style
-            ) { titleBottomSpacing = it; ReadBookConfig.titleBottomSpacing = it; postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5)) }
+            ) { titleBottomSpacing = it; ReadBookConfig.titleBottomSpacing = it; ReadConfigEvent.post(Typography, Relayout) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -309,7 +314,7 @@ private fun TipConfigContent(
                             val newMode = uiIndexToTitleMode(index)
                             titleMode = newMode
                             ReadBookConfig.titleMode = newMode
-                            postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                            ReadConfigEvent.post(Relayout)
                             if (newMode == AdvancedTitleConfig.TITLE_MODE_ADVANCED) {
                                 onShowAdvancedTitleConfig()
                             }
@@ -344,7 +349,7 @@ private fun TipConfigContent(
                 onShowSelector(context.getString(R.string.header), headerModes.values.toList()) { index ->
                     headerMode = keys.getOrElse(index) { 0 }
                     ReadTipConfig.headerMode = headerMode
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+                    ReadConfigEvent.post(HeaderFooterTips)
                     if (headerMode == ReadTipConfig.HEADER_MODE_ADVANCED) {
                         AdvancedTipManageActivity.start(context, AdvancedTipSlot.HEADER)
                     }
@@ -382,7 +387,7 @@ private fun TipConfigContent(
                 onShowSelector(context.getString(R.string.footer), footerModes.values.toList()) { index ->
                     footerMode = keys.getOrElse(index) { 0 }
                     ReadTipConfig.footerMode = footerMode
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+                    ReadConfigEvent.post(HeaderFooterTips)
                     if (footerMode == ReadTipConfig.FOOTER_MODE_ADVANCED) {
                         AdvancedTipManageActivity.start(context, AdvancedTipSlot.FOOTER)
                     }
@@ -405,7 +410,7 @@ private fun TipConfigContent(
             onTipColorClick = {
                 onShowSelector(context.getString(R.string.text_color), ReadTipConfig.tipColorNames) { index ->
                     when (index) {
-                        0 -> { ReadTipConfig.tipColor = 0; onColorChanged(); postEvent(EventBus.UP_CONFIG, arrayListOf(2)) }
+                        0 -> { ReadTipConfig.tipColor = 0; onColorChanged(); ReadConfigEvent.post(HeaderFooterTips) }
                         1 -> onShowTipColorPicker()
                     }
                 }
@@ -413,7 +418,7 @@ private fun TipConfigContent(
             onDividerColorClick = {
                 onShowSelector(context.getString(R.string.tip_divider_color), ReadTipConfig.tipDividerColorNames) { index ->
                     when (index) {
-                        0, 1 -> { ReadTipConfig.tipDividerColor = index - 1; onColorChanged(); postEvent(EventBus.UP_CONFIG, arrayListOf(2)) }
+                        0, 1 -> { ReadTipConfig.tipDividerColor = index - 1; onColorChanged(); ReadConfigEvent.post(HeaderFooterTips) }
                         2 -> onShowTipDividerColorPicker()
                     }
                 }

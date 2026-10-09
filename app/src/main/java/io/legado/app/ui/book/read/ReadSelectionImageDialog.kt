@@ -1,5 +1,7 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -157,7 +159,7 @@ class ReadSelectionImageDialog() : BaseDialogFragment(R.layout.dialog_read_selec
             }.onSuccess { inserted ->
                 if (inserted) {
                     ReadBook.clearTextChapter()
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                    ReadConfigEvent.post(Relayout)
                     toastOnUi(R.string.ai_image_inserted)
                     dismissAllowingStateLoss()
                 } else {

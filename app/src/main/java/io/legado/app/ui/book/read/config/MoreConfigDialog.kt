@@ -1,5 +1,11 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.PageClick
+import io.legado.app.reader.config.ReadConfigEvent.PageTouchSlop
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.SystemBars
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
@@ -292,12 +298,12 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 PreferKey.readBodyToLh -> activity?.recreate()
                 PreferKey.hideStatusBar -> {
                     ReadBookConfig.hideStatusBar = booleanSetting(PreferKey.hideStatusBar, false)
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(0, 2))
+                    ReadConfigEvent.post(SystemBars, HeaderFooterTips)
                 }
 
                 PreferKey.hideNavigationBar -> {
                     ReadBookConfig.hideNavigationBar = booleanSetting(PreferKey.hideNavigationBar, false)
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(0, 2))
+                    ReadConfigEvent.post(SystemBars, HeaderFooterTips)
                 }
 
                 PreferKey.keepLight -> postEvent(key, true)
@@ -311,7 +317,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 PreferKey.textBottomJustify,
                 PreferKey.useZhLayout,
                 PreferKey.adaptSpecialStyle-> {
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                    ReadConfigEvent.post(Relayout)
                 }
 
                 PreferKey.showBrightnessView -> {
@@ -351,7 +357,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 }
 
                 PreferKey.paddingDisplayCutouts -> {
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(2))
+                    ReadConfigEvent.post(HeaderFooterTips)
                 }
             }
         }
@@ -422,7 +428,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 maxValue = 9999,
                 onValue = {
                     AppConfig.pageTouchSlop = it
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(4))
+                    ReadConfigEvent.post(PageTouchSlop)
                 }
             )
         }
@@ -435,7 +441,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 maxValue = 399,
                 onValue = {
                     AppConfig.pageTouchClick = it
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(12))
+                    ReadConfigEvent.post(PageClick)
                 }
             )
         }

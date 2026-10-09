@@ -1,5 +1,12 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Background
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.InvalidateTextPage
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -201,7 +208,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                     ReadBookConfig.textWeight = value
                 },
                 onValueChangeFinished = {
-                    postEvent(EventBus.UP_CONFIG, arrayListOf(8, 9, 6))
+                    ReadConfigEvent.post(Typography, InvalidateTextPage, TipStyle)
                 }
             )
             Row(
@@ -237,7 +244,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         chineseMode = (chineseMode + 1) % chineseLabels.size
                         AppConfig.chineseConverterType = chineseMode
                         ChineseUtils.unLoad(*TransType.entries.toTypedArray())
-                        postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+                        ReadConfigEvent.post(Relayout)
                     }
                 )
                 ReaderTextAction(
@@ -256,7 +263,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
             ) { checked ->
                 shareLayout = if (checked) 1 else 0
                 ReadBookConfig.shareLayout = checked
-                postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+                ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
             }
         }
     }
@@ -342,7 +349,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         onValueChange = {
                             textSize = it
                             ReadBookConfig.textSize = it + 5
-                            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                            ReadConfigEvent.post(Typography, Relayout)
                         }
                     )
                     MetricSliderTile(
@@ -355,7 +362,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         onValueChange = {
                             letterSpacing = it
                             ReadBookConfig.letterSpacing = (it - 50) / 100f
-                            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                            ReadConfigEvent.post(Typography, Relayout)
                         }
                     )
                 }
@@ -373,7 +380,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         onValueChange = {
                             lineSpacing = it
                             ReadBookConfig.lineSpacingExtra = it
-                            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                            ReadConfigEvent.post(Typography, Relayout)
                         }
                     )
                     MetricSliderTile(
@@ -386,7 +393,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         onValueChange = {
                             paragraphSpacing = it
                             ReadBookConfig.paragraphSpacing = it
-                            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                            ReadConfigEvent.post(Typography, Relayout)
                         }
                     )
                 }
@@ -508,7 +515,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                 selectedIndex = ReadBookConfig.styleSelect
                 onThemeApplied()
                 version++
-                postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+                ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
             }
         }
     }
@@ -616,7 +623,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
             labels = resources.getStringArray(R.array.indent).toList()
         ) { index ->
             ReadBookConfig.paragraphIndent = "　".repeat(index)
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+            ReadConfigEvent.post(Typography, Relayout)
         }
     }
 
@@ -626,7 +633,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
             ReadBook.book?.setPageAnim(-1)
             ReadBookConfig.useStyleForBook(index)
             callBack?.upPageAnim()
-            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
             if (AppConfig.readBarStyleFollowPage) {
                 postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
             }
@@ -639,7 +646,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
             // Page animation belongs to the selected reading theme. Rebind the
             // delegate now instead of waiting for the activity to be recreated.
             callBack?.upPageAnim()
-            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
             if (AppConfig.readBarStyleFollowPage) {
                 postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
             }
@@ -696,7 +703,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
         if (ReadBook.usesPageTemplate()) return
         if (path != ReadBookConfig.textFont || path.isEmpty()) {
             ReadBookConfig.textFont = path
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+            ReadConfigEvent.post(Typography, Relayout)
         }
     }
 }

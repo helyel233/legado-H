@@ -1,5 +1,18 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.SystemBars
+import io.legado.app.reader.config.ReadConfigEvent.Background
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.BackgroundAlpha
+import io.legado.app.reader.config.ReadConfigEvent.PageTouchSlop
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
+import io.legado.app.reader.config.ReadConfigEvent.Typography
+import io.legado.app.reader.config.ReadConfigEvent.InvalidateTextPage
+import io.legado.app.reader.config.ReadConfigEvent.SubmitRender
+import io.legado.app.reader.config.ReadConfigEvent.PageClick
+import io.legado.app.reader.config.ReadConfigEvent.EpubEngineChanged
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.dns.DnsScope
 import android.content.DialogInterface
@@ -298,7 +311,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             ) {
                 followTheme = it
                 AppConfig.readerFollowTheme = it
-                postReadConfigChanged(1, 5)
+                postReadConfigChanged(Background, Relayout)
                 (activity as? ReadBookActivity)?.upSystemUiVisibility()
             }
             var scrollFollowBg by rememberSaveable(refreshTick) {
@@ -321,7 +334,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             ) {
                 scrollFollowBg = it
                 ReadBookConfig.durConfig.setCurReadScrollFollowBackground(it)
-                postReadConfigChanged(1, 5)
+                postReadConfigChanged(Background, Relayout)
             }
         }
     }
@@ -356,7 +369,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 if (next == underlineMode) return@ReaderSegmentedOptions
                 underlineMode = next
                 ReadBookConfig.underlineMode = next
-                postReadConfigChanged(9, 11)
+                postReadConfigChanged(InvalidateTextPage, SubmitRender)
             }
             if (underlineMode != 0) {
                 SliderRow(
@@ -368,7 +381,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 ) {
                     strokeWidthStep = it
                     ReadBookConfig.underlineStrokeWidth = it / 2f
-                    postReadConfigChanged(9, 11)
+                    postReadConfigChanged(InvalidateTextPage, SubmitRender)
                 }
             }
             if (underlineMode == 2) {
@@ -381,7 +394,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 ) {
                     dashLength = it
                     ReadBookConfig.underlineDashLength = it.toFloat()
-                    postReadConfigChanged(9, 11)
+                    postReadConfigChanged(InvalidateTextPage, SubmitRender)
                 }
             }
         }
@@ -543,7 +556,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             ) {
                 bgAlpha = it
                 ReadBookConfig.bgAlpha = it
-                postReadConfigChanged(3)
+                postReadConfigChanged(BackgroundAlpha)
             }
             SliderRow(
                 title = stringResource(R.string.text_shadow),
@@ -554,7 +567,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             ) {
                 textShadow = it
                 ReadBookConfig.paperInkStrength = it
-                postReadConfigChanged(2, 9, 6)
+                postReadConfigChanged(HeaderFooterTips, InvalidateTextPage, TipStyle)
             }
         }
     }
@@ -675,7 +688,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 .height(82.dp)
                 .clickable {
                     ReadBookConfig.durConfig.setCurBg(1, imageName)
-                    postReadConfigChanged(1)
+                    postReadConfigChanged(Background)
                     refreshTick++
                 },
             shape = RoundedCornerShape(style.actionRadius),
@@ -746,7 +759,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             if (i >= 0) {
                 ReadBookConfig.durConfig = defaultConfigs[i].copy()
                 refreshTick++
-                postReadConfigChanged(1, 2, 5)
+                postReadConfigChanged(Background, HeaderFooterTips, Relayout)
             }
         }
     }
@@ -790,9 +803,9 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         }
     }
 
-    private fun postReadConfigChanged(vararg configKeys: Int) {
+    private fun postReadConfigChanged(vararg events: ReadConfigEvent) {
         pendingSelfConfigEvents++
-        postEvent(EventBus.UP_CONFIG, arrayListOf(*configKeys.toTypedArray()))
+        ReadConfigEvent.post(*events)
     }
 
     private fun launchImport() {
@@ -812,7 +825,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
 
     private fun deleteCurrentConfig() {
         if (ReadBookConfig.deleteDur()) {
-            postReadConfigChanged(1, 2, 5)
+            postReadConfigChanged(Background, HeaderFooterTips, Relayout)
             dismissAllowingStateLoss()
         } else {
             toastOnUi("数量已是最少, 不能删除.")
@@ -929,7 +942,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         }.onSuccess {
             ReadBookConfig.durConfig = it
             refreshTick++
-            postReadConfigChanged(1, 2, 5)
+            postReadConfigChanged(Background, HeaderFooterTips, Relayout)
             toastOnUi("导入成功")
         }.onError {
             it.printOnDebug()
@@ -969,7 +982,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                         }
                     }
                     ReadBookConfig.durConfig.setCurBg(2, fileName)
-                    postReadConfigChanged(1)
+                    postReadConfigChanged(Background)
                     refreshTick++
                 }.onSuccess {
                     appCtx.toastOnUi("设定成功")
@@ -995,7 +1008,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                     inputStream.copyTo(outputStream)
                 }
                 ReadBookConfig.durConfig.setCurBg(2, fileName)
-                postReadConfigChanged(1)
+                postReadConfigChanged(Background)
                 refreshTick++
             }.onFailure {
                 appCtx.toastOnUi(it.localizedMessage)

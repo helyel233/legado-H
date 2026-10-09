@@ -1,5 +1,8 @@
 package io.legado.app.ui.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -490,6 +493,6 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun notifyReader() {
         LottieImageBitmapCache.clear()
-        postEvent(EventBus.UP_CONFIG, arrayListOf(2, 6))
+        ReadConfigEvent.post(HeaderFooterTips, TipStyle)
     }
 }

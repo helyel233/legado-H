@@ -1,5 +1,7 @@
 package io.legado.app.ui.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.EpubEngineChanged
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import androidx.core.view.postDelayed
@@ -262,7 +264,7 @@ class OtherConfigFragment : ComposeSettingFragment() {
             }
 
             PreferKey.epubReadEngine, PreferKey.textReadEngine -> {
-                postEvent(EventBus.UP_CONFIG, arrayListOf(13))
+                ReadConfigEvent.post(EpubEngineChanged)
             }
 
             PreferKey.recordLog -> {

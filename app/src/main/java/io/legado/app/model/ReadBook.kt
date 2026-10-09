@@ -1,5 +1,9 @@
 package io.legado.app.model
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Background
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PageAnim.scrollPageAnim
@@ -301,7 +305,7 @@ object ReadBook : CoroutineScope by MainScope() {
         val bookStyleChanged = ReadBookConfig.bindBook(book)
         ReadBookConfig.isComic = book.isImage
         if (oldIndex != ReadBookConfig.styleSelect || bookStyleChanged) {
-            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+            ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
             if (AppConfig.readBarStyleFollowPage) {
                 postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
             }

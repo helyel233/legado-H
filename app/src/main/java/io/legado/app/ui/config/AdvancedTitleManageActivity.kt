@@ -1,5 +1,8 @@
 package io.legado.app.ui.config
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -411,6 +414,6 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private fun notifyReader() {
         LottieImageBitmapCache.clear()
-        postEvent(EventBus.UP_CONFIG, arrayListOf(5, 8))
+        ReadConfigEvent.post(Typography, Relayout)
     }
 }

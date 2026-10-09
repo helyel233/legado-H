@@ -1,5 +1,7 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
 import android.app.Application
 import android.content.DialogInterface
 import android.os.Bundle
@@ -136,7 +138,7 @@ class ContentEditDialog : BaseDialogFragment(R.layout.dialog_content_edit) {
 
     private fun refreshCurrentChapter() {
         ReadBook.clearTextChapter()
-        postEvent(EventBus.UP_CONFIG, arrayListOf(5))
+        ReadConfigEvent.post(Relayout)
     }
 
     class ContentEditViewModel(application: Application) : BaseViewModel(application) {
