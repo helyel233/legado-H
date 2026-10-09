@@ -14,8 +14,12 @@ enum class AppColorName {
  * View(XML) side color bridge. The app registers an implementation at startup;
  * after P0a the implementation delegates to the theme package repository.
  */
-fun interface AppColorProvider {
+interface AppColorProvider {
+
     fun color(name: AppColorName): Int
+
+    /** Live corner scale (user setting uiCornerScale), default 1f. */
+    fun cornerScale(): Float = 1f
 }
 
 /**
@@ -27,8 +31,9 @@ object AppUiColors {
     @Volatile
     var provider: AppColorProvider? = null
 
-    @Volatile
-    var radiusScale: Float = 1f
+    /** Live value so views rendered after a settings change follow it. */
+    val radiusScale: Float
+        get() = provider?.cornerScale() ?: 1f
 
     val primary: Int get() = get(AppColorName.PRIMARY)
     val onPrimary: Int get() = get(AppColorName.ON_PRIMARY)

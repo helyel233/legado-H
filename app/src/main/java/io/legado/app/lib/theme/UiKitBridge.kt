@@ -5,6 +5,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.theme.model.ThemeColorName
 import io.legado.app.theme.repository.ThemeRepository
 import io.legado.app.theme.repository.ThemeRepositoryHost
+import io.legado.app.theme.repository.ThemeWriterHost
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.theme.AppColorName
 import io.legado.app.uikit.theme.AppColorProvider
@@ -24,8 +25,11 @@ object UiKitBridge {
         AppToast.init(app)
         val repository = ThemeRepositoryImpl(app)
         ThemeRepositoryHost.register(repository)
-        AppUiColors.radiusScale = repository.cornerScale()
-        AppUiColors.provider = AppColorProvider { name -> mapColor(app, repository, name) }
+        ThemeWriterHost.register(ThemeWriterImpl(app))
+        AppUiColors.provider = object : AppColorProvider {
+            override fun color(name: AppColorName): Int = mapColor(app, repository, name)
+            override fun cornerScale(): Float = repository.cornerScale()
+        }
     }
 
     private fun mapColor(context: Context, repo: ThemeRepository, name: AppColorName): Int =
