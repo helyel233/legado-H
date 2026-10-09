@@ -70,6 +70,7 @@
 | D16 | 功能双胞胎 | `BookInfoActivity`(142KB) 与 `BookInfoComposeActivity`；书架 3 种实现；发现页 XML/Compose 两套 |
 | D17 | 无路由表 | 107 个 `<activity>`（7 个为桌面图标别名），全部显式 `Intent` 跳转，无 `NavController` |
 | D18 | 硬编码遍地 | `ui/` 下 224+ 处 `.dp`/`.dpToPx`；`AppUiTokens.kt` 仅 24 行 |
+| D19 | 视觉语言无规范：硬编码颜色 + 位图混用 + 图标无基准 | kt `Color(0xFF`/`Color.parseColor` 约 39 处/21 文件；xml `textColor="#"`/`backgroundTint="#"` 27 处/6 文件；自绘 vector `ic_*.xml` 158 个但无线宽/圆角基准，另有 7 个位图（`icon_read_book.png`、`ic_close_with__shadow.png`、`image_loading_error.png` 等）混入 |
 
 ### 2.3 关键文件地图
 
@@ -329,10 +330,103 @@ XML 侧提供 `StateLayout` 包装（替换 43 个内嵌空态），Compose 侧�
 - `AppDialogHost`：统一 `BaseDialogFragment` 的圆角、按钮排布、夜间；逐步替换 `applyTint()` 等
 - `StateLayout`：XML 版状态容器
 
-### 6.5 视觉语言定一尊
+### 6.5 视觉语言规范
 
-**Material3 为唯一组件基线**。
-`LegadoMiuixComponents.kt` 与液态玻璃（`StableLiquidGlassView`、`bg_*_glass.xml`）降级为**可切换皮肤**，不得再进入业务组件层。新增代码禁止直接引用两者。
+**基线**：Material3 为唯一组件基线。本节定义所有页面（含新旧栈、含阅读页外壳）共同遵守的视觉语言；它是 token（6.1）与组件（6.2）之上的第三层约束——**任何视觉属性都必须能回答「值从哪来」**。
+
+**设计原则（4 条）**
+
+1. 内容优先：一切控件服务于阅读内容，装饰性元素克制。
+2. 参数化：任何颜色、圆角、间距、字号、时长必须来自 token，禁止就地取值。
+3. 明暗同构：同一组件在 日/夜/E-Ink 三种模式下用同一结构、不同取值；禁止为某个模式单独改结构。
+4. 触控优先：所有可点击元素 ≥ 48dp 触控目标。
+
+#### 6.5.1 色彩系统
+
+**现状**：`colors.xml` 约 80 项 + `colors_material_design.xml`（`md_*` 调色板数百项）+ `values-night` 覆盖；已有扩展色板 `ThemeUiPalette`（cardColor/mutedColor/searchFieldBackgroundColor/tabBackgroundColor/shelfColor/dividerColor）与 `MaterialValueHelper`（primaryTextColor/titleTextColor/secondaryTextColor/disabled 系列）；硬编码颜色 66 处（kt 39 + xml 27）。
+
+**目标语义色板（唯一）**：
+
+| 语义色 | 用途 | 映射现状 |
+|---|---|---|
+| `primary` / `onPrimary` | 主操作、强调 | `primaryColor` |
+| `secondary` / `onSecondary` | 次强调 | `accentColor` |
+| `surface` / `onSurface` / `surfaceVariant` | 卡片、面板 | `cardColor` |
+| `background` / `onBackground` | 页面底色 | `backgroundColor` |
+| `outline` | 描边、分割线 | `dividerColor` |
+| `muted` | 次要文字、占位符 | `mutedColor` / `secondaryTextColor` |
+| `error` / `success` / `warning` | 状态色 | 固定值 |
+| `readerText` / `readerBackground` / `readerTip` | 阅读正文（P2 打通后） | 主题包 `ColorScheme` 子集 |
+
+**规则**：
+
+1. 全库取色只允许两种方式：Compose 用 `MaterialTheme.colorScheme.*`；View/XML 用 `?attr/*` 或 `MaterialValueHelper` 系列方法。
+2. 禁止 `Color(0xFF...)`、`Color.parseColor("#...")`、xml `#RRGGBB` 字面值（白名单：测试代码、调试日志、启动图标）。
+3. `md_*` 调色板仅作为主题包配色生成源，布局与代码不得直接引用。
+4. 透明度统一档位：`alpha.disabled=0.38` / `alpha.muted=0.6` / `alpha.overlay=0.72`；用户设置 `uiLayoutAlpha`/`dialogAlpha` 保留，但其输出必须映射到档位而非自由值。
+5. 现有 66 处硬编码颜色纳入 P0b 清理：`ReadAloudPlayerPanel.kt`(8 处)、`widget_read_rank.xml`(11 处)、`video_layout_controller_full.xml`(6 处) 为重点。
+
+#### 6.5.2 图标系统
+
+**现状**：全自绘 vector `ic_*.xml` 158 个，未引入 Material Icons/Symbols 依赖；7 个位图混入（`ic_close_with__shadow.png`、`icon_read_book.png`、`image_cover_default.jpg`、`image_legado.png`、`image_loading_error.png`、`image_rss.jpg`、`image_rss_article.jpg`）。
+
+**规范**：
+
+1. **继续自绘 vector，不引入 icons 库**（避免包体膨胀）。第一步先审计现有 158 个图标，确立「基准图标集」（统一线宽 2dp、24×24dp 视口、统一端点/拐角风格），新图标向基准看齐，逐步回改偏移者。
+2. 图标着色只能 `?attr/*` 语义色或运行时 `tint`，禁止在 vector path 里写死颜色。
+3. 图标尺寸只用 24/20/32 三档（见 6.1）。
+4. 位图清理：`ic_close_with__shadow` → `AppIconButton` + vector；`icon_read_book` → vector 化；`image_loading_error` → 重绘为 vector 空态插画（配合 `AppErrorState`）；`image_cover_default` 保留但圆角/尺寸由 `AppCover` 统一处理；`image_legado` / `image_rss*` 评估 vector 化或保留为品牌资产。
+
+#### 6.5.3 排印
+
+1. 字体只走 `FontStore[Role]` 三个角色（READING / UI / TITLE），禁止任何代码直接读字体文件路径。
+2. 字重只用 400 / 500 / 700 三档（常规 / 强调 / 标题），禁止 600 等中间档（多数中文字体无对应字重文件，会触发伪粗渲染）。
+3. 阅读正文字号是用户自由设置项，**不受** 6 档字阶约束；但 App UI 内文字必须全部走字阶。
+4. 数字场景（阅读进度、统计、电量、页码）统一 `assets/font/number.ttf`，由 `FontStore` 以 tabular 等宽变体提供。
+
+#### 6.5.4 层级与形状
+
+1. 日间模式：卡片用 `surface` 色 + 可选 1dp `outline` 描边；阴影仅用于浮层（菜单、弹窗、FAB）。
+2. 夜间与 E-Ink：**禁用阴影表达层级**，一律描边或明度差；`Style.Shadow.*` 在 E-Ink 模式下自动置空。
+3. elevation 只用 0 / 1 / 3 / 6 / 12 五档；投影色统一 `black 24%`（仅日间）。
+4. 形状应用对照表：chip/标签 → `radius.xs`；按钮/输入框 → `radius.sm`；卡片/弹窗/面板 → `radius.md`；底部栏/BottomSheet → `radius.lg`；头像/圆形 → `radius.full`。
+
+#### 6.5.5 动效
+
+1. 曲线统一 `FastOutSlowIn`；时长只用 120/200/320 三档（见 6.1）。
+2. 阅读页翻页动效是用户可配置项，**不受**全局动效约束。
+3. 业务组件禁用弹跳类（spring overshoot）动效；E-Ink 模式下所有动效退化为即时切换（统一走 `AppConfig.isEInkMode` 检查，封装进 `uikit`，业务不得各自判断）。
+
+#### 6.5.6 图片与空态
+
+1. 封面/图片圆角由 `AppCover` 统一为 `radius.xs`，内置 占位/加载/错误 三态；禁止各页面自配 `FilletImageView` 参数。
+2. 空态/加载/错误统一走 `AppListState`（6.3）：加载 = 48dp 环形进度 + 文案；错误 = vector 插画 + 文案 + 重试；空态 = 同结构插画。取消现 `view_error.xml` 中 `backgroundTint=@color/accent` 这类散写。
+3. 插画风格：单色线条风，跟随 `onSurfaceVariant` 着色；**不引入多色位图插画**。
+
+#### 6.5.7 皮肤机制（miuix / 液态玻璃收敛）
+
+**现状**：`LegadoMiuixComponents.kt`(35KB) 与液态玻璃（`com.qmdeve.liquidglass:core:1.0.3`）共 17 处引用、11 个文件（`StableLiquidGlassView`、`ExploreGlassBackdrop`、`MainTopBarView`、`MainActivity`、`activity_main.xml` 等）。
+
+**收敛方案**：`uikit` 新增 `skin/` 层，皮肤是唯一合法的第三方视觉扩展途径：
+
+1. 定义 `SkinProvider` 接口：由基线实现 `Material3Skin`（默认）+ 可选 `MiuixSkin` / `GlassSkin`。
+2. 业务代码只允许调用 `SkinProvider`，直接引用 miuix 组件或 `StableLiquidGlassView` 视为违规（lint 检查）。
+3. 现有 17 处引用逐一改为经 `SkinProvider` 调用；关闭皮肤时回退 Material3 标准渲染。
+4. 新皮肤只新增 `SkinProvider` 实现 + 主题包参数，不新增第三种组件写法。
+
+**`uikit` 完整目录结构**（含本节新增的 `skin/`）：
+
+```
+modules/uikit/src/main/java/io/legado/app/uikit/
+├ token/      AppRadius  AppSpacing  AppTypeScale  AppSize  AppMotion  AppAlpha
+├ theme/      AppTheme   # 把 theme 包的 ColorScheme/FontScheme 映射成 M3 ColorScheme+Typography
+├ components/ AppButton  AppIconButton  AppCard  AppListItem  AppTopBar  AppSearchBar
+│             AppBottomBar  AppSwitchItem  AppSliderItem  AppChoiceItem  AppTextItem
+│             AppChip  AppCover  AppDivider  AppSectionHeader
+├ state/      AppListState<T>  AppEmptyState  AppLoadingState  AppErrorState  StateLayout(XML)
+├ facade/     AppToast  AppDialogHost  AppSheet   # 给 XML 旧栈用的桥
+└ skin/       SkinProvider  Material3Skin  MiuixSkin  GlassSkin
+```
 
 ---
 
@@ -431,11 +525,11 @@ sealed interface ReadConfigEvent {
 | 阶段 | 名称 | 主要内容 | 建议版本增量 |
 |---|---|---|---|
 | **P0a** | 主题包收口 | 建 `modules/theme`；`ThemeRepository` 收口 4 层持久化；`BackgroundStore[Scene]`、`FontStore[Role]` | +0.0.1（纯重构，视觉无变化） |
-| **P0b** | 界面包地基 | 建 `modules/uikit`；Token 落地；`AppButton` / `AppToast` / `AppListState` 三项优先 | +0.0.1 |
+| **P0b** | 界面包地基 | 建 `modules/uikit`；Token 与视觉语言规范（6.5）落地；`SkinProvider` 收敛 miuix/液态玻璃；`AppButton` / `AppToast` / `AppListState` 三项优先 | +0.0.1 |
 | **P1** | 主框架换壳 | IA 收敛为 3 Tab；`MainScaffold + NavHost`；建 `AppRoute`；删侧栏 | +0.1.1 |
 | **P2** | 主题 × 阅读打通 | 阅读配色/字体引用 `ColorScheme`；新增「跟随主题」开关 | +0.1.1 |
 | **P3** | 阅读页包重构 | `ReadConfig` 拆分、事件 sealed 化、朗读配置对象化、面板化 | +0.1.1 |
-| **P4** | 分域迁移 | 发现 → 书架（三实现合一）→ 书籍详情（删双胞胎）→ 书源/RSS → 配置中心 | 每域 +0.1.1，独立发版 |
+| **P4** | 分域迁移 | 发现 → 书架（三实现合一）→ 书籍详情（删双胞胎）→ 书源/RSS → 配置中心；**随域清理硬编码颜色、位图与离线图标** | 每域 +0.1.1，独立发版 |
 | **P5** | 清场 | 删 Preference 遗留栈、95 个 `bg_*`、被替代旧控件；巨型类收尾 | +0.0.1 |
 
 > 版本号按 `docs/release-process.md` 的三段式规则，在紧邻上一版上累加；上表为建议量级，实际以各阶段改动内容（是否有新功能）为准。
@@ -498,6 +592,10 @@ sealed interface ReadConfigEvent {
 | A12 | `MainActivity` 体积 | 102KB | **≤ 30KB** |
 | A13 | 冷启动 P95 / 内存 | 基线 | 劣化 **≤ 5%** |
 | A14 | 阅读页「跟随主题」开关 | 无 | 有，且默认关闭以保证向后兼容 |
+| A15 | 硬编码颜色（kt `Color(0xFF`/`Color.parseColor`、xml `#` 字面值） | 66 处 | 白名单外 **0** |
+| A16 | drawable 位图 | 7 个 | 仅品牌资产保留（≤ 3 个），UI 图标 **100% vector** |
+| A17 | 液态玻璃 / miuix 业务直引 | 17 处 / 11 文件 | **0**（仅经 `SkinProvider`） |
+| A18 | E-Ink 动效退化与阴影禁用 | 各页面自行判断 | 统一封装在 `uikit`，业务侧判断 **0** 处 |
 
 ---
 
@@ -544,3 +642,5 @@ sealed interface ReadConfigEvent {
 | Scene | 背景图场景枚举（main / bookInfo / panel / reader） |
 | Role | 字体角色枚举（reading / ui / title） |
 | 跟随主题 | 阅读页配色是否取用主题包 `ColorScheme` 的开关 |
+| 视觉语言规范 | §6.5：色彩 / 图标 / 排印 / 层级 / 动效 / 图片空态的统一约束 |
+| SkinProvider | `uikit` 皮肤接口；miuix 与液态玻璃的唯一合法暴露途径 |
