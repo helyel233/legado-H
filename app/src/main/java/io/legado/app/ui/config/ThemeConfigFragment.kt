@@ -135,12 +135,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             }
                         ),
                         SettingActionSpec(
-                            key = KEY_BOOK_INFO_MANAGE,
-                            title = getString(R.string.book_info_manage),
-                            summary = getString(R.string.book_info_manage_summary),
-                            onClick = { startActivity<BookInfoManageActivity>() }
-                        ),
-                        SettingActionSpec(
                             key = ConfigTag.COVER_CONFIG,
                             title = getString(R.string.cover_config),
                             summary = getString(R.string.cover_config_summary),
@@ -250,7 +244,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
         private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
         private const val KEY_DISCOVERY_SUBSCRIPTION_SETTINGS = "discoverySubscriptionSettings"
         private const val KEY_TOP_BAR_MANAGE = "top_bar_manage"
-        private const val KEY_BOOK_INFO_MANAGE = "book_info_manage"
         private const val KEY_BUBBLE_MANAGE = "bubble_manage"
         private const val KEY_SHARE_NOTE_TEMPLATE_MANAGE = "share_note_template_manage"
         private const val KEY_EPUB_LOADING_TEMPLATES = "epub_loading_templates"

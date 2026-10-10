@@ -190,10 +190,6 @@
                 android:name="com.samsung.android.support.REMOTE_ACTION"
                 android:resource="@xml/spen_remote_actions" />
         </activity>
-        <!-- 书籍详情页 -->
-        <activity
-            android:name=".ui.book.info.BookInfoActivity"
-            android:launchMode="singleTop" />
         <activity
             android:name=".ui.book.info.BookInfoComposeActivity"
             android:launchMode="singleTop" />
@@ -346,9 +342,6 @@
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.TopBarManageActivity"
-            android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.BookInfoManageActivity"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.BubbleManageActivity"
