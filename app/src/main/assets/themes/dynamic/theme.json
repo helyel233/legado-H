@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "id": "dynamic",
+  "name": "动态取色",
+  "author": "legado-H",
+  "seed": "dynamic",
+  "darkStrategy": "tonal"
+}

@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "id": "amoled",
+  "name": "AMOLED 纯黑",
+  "author": "legado-H",
+  "seed": "#5B6ABF",
+  "darkStrategy": "amoled"
+}

@@ -1,0 +1,8 @@
+{
+  "formatVersion": 1,
+  "id": "eink",
+  "name": "电子墨水",
+  "author": "legado-H",
+  "seed": "#808080",
+  "darkStrategy": "mono"
+}
