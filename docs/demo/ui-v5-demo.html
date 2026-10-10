@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>legado-H UI V5 视觉基准 Demo —— 骨架先行</title>
+<style>
+/* ============================================================
+   0. 基础与变量
+   ============================================================ */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+:root{
+  /* —— L0 背景层 —— */
+  --bg:hsl(228 18% 12%);
+  --bg-2:hsl(228 20% 16%);
+  /* —— L1 容器层 —— */
+  --surface:hsl(228 16% 20%);
+  --surface-2:hsl(228 15% 24%);
+  --surface-3:hsl(228 14% 28%);
+  /* —— L2 内容层 —— */
+  --tx:hsl(228 20% 96%);
+  --tx-2:hsl(228 12% 72%);
+  --tx-3:hsl(228 10% 54%);
+  --outline:hsl(228 10% 34%);
+  /* —— 语义色 —— */
+  --primary:hsl(232 54% 64%);
+  --on-primary:hsl(232 60% 12%);
+  --primary-soft:hsl(232 40% 26%);
+  --accent:hsl(268 52% 70%);
+  --ok:hsl(152 46% 56%);
+  --warn:hsl(38 72% 60%);
+  --err:hsl(2 62% 62%);
+  /* —— 界面包参数 —— */
+  --r-card:20px;          /* 形状族 → 卡片圆角 */
+  --r-bar:26px;           /* 形状族 → 栏圆角 */
+  --r-btn:999px;          /* 形状族 → 按钮圆角 */
+  --r-in:14px;            /* 形状族 → 输入框圆角 */
+  --r-tag:8px;
+  --glass-a:.42;
+  --glass-b:22px;
+  --glass-sat:1.5;
+  --stroke:1px;
+  --dens:1;               /* 密度系数 */
+  --pad:calc(16px * var(--dens));
+  --gap:calc(12px * var(--dens));
+  --row:calc(56px * var(--dens));
+  --mot:.34s;
+  --ease:cubic-bezier(.34,1.4,.5,1);
+  --ease-io:cubic-bezier(.4,0,.2,1);
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  background:#08090c;color:hsl(228 14% 88%);
+  min-height:100vh;display:flex;overflow-x:hidden;
+}
+/* 噪声纹理（真玻璃的组成之一） */
+.noise{position:absolute;inset:0;pointer-events:none;opacity:.055;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  border-radius:inherit}
+
+/* ============================================================
+   1. 左侧控制面板
+   ============================================================ */
+.panel{
+  width:302px;flex:none;height:100vh;overflow-y:auto;padding:22px 20px 60px;
+  background:linear-gradient(180deg,#0d0f14,#0a0b10);
+  border-right:1px solid hsl(228 12% 20%);
+}
+.panel::-webkit-scrollbar{width:6px}
+.panel::-webkit-scrollbar-thumb{background:hsl(228 12% 26%);border-radius:3px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--primary),var(--accent));
+  box-shadow:0 4px 14px -2px var(--primary)}
+.brand h1{font-size:15px;font-weight:700;letter-spacing:.02em}
+.brand small{display:block;font-size:10px;color:hsl(228 10% 50%);font-weight:500;letter-spacing:.06em}
+.hint{font-size:11px;line-height:1.65;color:hsl(228 10% 52%);margin:12px 0 18px;padding:10px 12px;
+  background:hsl(228 16% 13%);border-radius:10px;border-left:2px solid var(--primary)}
+.sec{margin-bottom:20px}
+.sec-t{font-size:10px;font-weight:700;letter-spacing:.14em;color:hsl(228 10% 48%);
+  text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.sec-t::after{content:"";flex:1;height:1px;background:hsl(228 12% 20%)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 11px;font-size:11.5px;border-radius:999px;cursor:pointer;user-select:none;
+  background:hsl(228 14% 15%);border:1px solid hsl(228 12% 22%);color:hsl(228 12% 70%);
+  transition:all .16s var(--ease-io)}
+.chip:hover{background:hsl(228 14% 19%);color:hsl(228 14% 88%)}
+.chip.on{background:var(--primary);border-color:transparent;color:var(--on-primary);font-weight:600;
+  box-shadow:0 3px 12px -3px var(--primary)}
+.swatch{width:26px;height:26px;border-radius:8px;cursor:pointer;border:2px solid transparent;
+  transition:transform .2s var(--ease)}
+.swatch:hover{transform:scale(1.12)}
+.swatch.on{border-color:hsl(228 20% 96%);transform:scale(1.08)}
+.rowlab{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;margin-bottom:5px;
+  color:hsl(228 10% 62%)}
+.rowlab b{color:var(--tx);font-variant-numeric:tabular-nums;font-weight:600}
+input[type=range]{width:100%;height:3px;-webkit-appearance:none;appearance:none;
+  background:hsl(228 12% 26%);border-radius:2px;outline:none;margin-bottom:11px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--primary);cursor:pointer;box-shadow:0 2px 8px -1px var(--primary)}
+.tg{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:11.5px;cursor:pointer}
+.tg span{color:hsl(228 10% 66%)}
+.tg i{width:36px;height:20px;border-radius:999px;background:hsl(228 12% 26%);position:relative;
+  transition:background .22s var(--ease-io)}
+.tg i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:hsl(228 10% 70%);transition:all .26s var(--ease)}
+.tg.on i{background:var(--primary)}
+.tg.on i::after{left:18px;background:var(--on-primary)}
+
+/* ============================================================
+   2. 舞台与手机外壳
+   ============================================================ */
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:34px 20px;gap:16px;position:relative;overflow:auto}
+.stage-t{font-size:12px;color:hsl(228 10% 46%);letter-spacing:.05em}
+.stage-t b{color:hsl(228 16% 78%);font-weight:600}
+.phone{
+  width:372px;height:762px;flex:none;position:relative;border-radius:46px;padding:11px;
+  background:linear-gradient(150deg,#262a33,#13151b 42%,#0d0f13);
+  box-shadow:0 0 0 1.5px hsl(228 12% 26%),0 42px 84px -28px #000,0 0 120px -50px var(--primary);
+  transition:box-shadow .5s var(--ease-io)}
+.screen{
+  position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;
+  background:var(--bg);color:var(--tx);isolation:isolate;
+  transition:background .4s var(--ease-io),color .4s var(--ease-io)}
+/* 状态栏 */
+.status{position:absolute;top:0;left:0;right:0;height:38px;z-index:60;display:flex;align-items:center;
+  justify-content:space-between;padding:0 22px;font-size:11.5px;font-weight:600;
+  color:var(--tx);pointer-events:none;letter-spacing:.02em}
+.status .icons{display:flex;gap:5px;align-items:center}
+.status .icons i{width:15px;height:9px;border:1.4px solid currentColor;border-radius:2.5px;opacity:.85;position:relative}
+.status .icons i::after{content:"";position:absolute;right:1.4px;top:1.4px;bottom:1.4px;width:8px;
+  background:currentColor;border-radius:1px}
+.notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:104px;height:24px;
+  background:#000;border-radius:999px;z-index:61}
+
+/* ============================================================
+   3. L0 背景层
+   ============================================================ */
+.bg-layer{position:absolute;inset:0;z-index:0;transition:all .5s var(--ease-io)}
+.bg-layer .grad{position:absolute;inset:0;
+  background:
+    radial-gradient(120% 78% at 12% 4%,hsl(var(--seed-h) 44% 30% / .55) 0%,transparent 60%),
+    radial-gradient(96% 62% at 92% 96%,hsl(var(--seed-h2) 48% 26% / .42) 0%,transparent 62%),
+    linear-gradient(170deg,var(--bg-2),var(--bg));}
+.bg-layer .tex{position:absolute;inset:0;opacity:var(--tex-o,.05);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.6' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23p)'/%3E%3C/svg%3E");
+  mix-blend-mode:soft-light}
+
+/* ============================================================
+   4. L1 容器层 —— 材质四档
+   ============================================================ */
+.mat{position:relative;transition:all var(--mot) var(--ease-io)}
+/* E0 平铺 */
+.mat-e0{background:transparent}
+/* E1 嵌入 */
+.mat-e1{background:color-mix(in srgb,var(--tx) 5%,transparent);border:none}
+/* E2 浮起：玻璃 */
+.mat-e2{
+  background:color-mix(in srgb,var(--surface) calc(var(--glass-a)*100%),transparent);
+  -webkit-backdrop-filter:blur(var(--glass-b)) saturate(var(--glass-sat));
+  backdrop-filter:blur(var(--glass-b)) saturate(var(--glass-sat));
+  border:var(--stroke) solid color-mix(in srgb,var(--tx) 13%,transparent);
+  box-shadow:0 2px 10px -4px rgb(0 0 0 / .4);}
+.mat-e2::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tx) 16%,transparent),transparent 42%)}
+/* E3 悬浮：强玻璃 */
+.mat-e3{
+  background:color-mix(in srgb,var(--surface) calc(var(--glass-a)*112%),transparent);
+  -webkit-backdrop-filter:blur(calc(var(--glass-b)*1.25)) saturate(calc(var(--glass-sat)*1.1));
+  backdrop-filter:blur(calc(var(--glass-b)*1.25)) saturate(calc(var(--glass-sat)*1.1));
+  border:var(--stroke) solid color-mix(in srgb,var(--tx) 20%,transparent);
+  box-shadow:0 16px 44px -14px rgb(0 0 0 / .62),0 2px 8px -3px rgb(0 0 0 / .4);}
+.mat-e3::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tx) 24%,transparent),transparent 38%)}
+/* 玻璃关闭 → 实色 */
+.noglass .mat-e2{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none;
+  border:var(--stroke) solid color-mix(in srgb,var(--tx) 9%,transparent);box-shadow:0 2px 8px -4px rgb(0 0 0/.35)}
+.noglass .mat-e3{background:var(--surface-2);-webkit-backdrop-filter:none;backdrop-filter:none;
+  border:var(--stroke) solid color-mix(in srgb,var(--tx) 12%,transparent);box-shadow:0 14px 40px -14px rgb(0 0 0/.6)}
+
+/* ============================================================
+   5. 主界面骨架：顶栏 / 底栏 / 悬浮 / 侧栏
+   ============================================================ */
+.content{position:absolute;inset:0;z-index:10;overflow-y:auto;overflow-x:hidden;
+  padding-bottom:calc(96px * var(--dens));scroll-behavior:smooth}
+.content::-webkit-scrollbar{width:0}
+/* —— 顶栏（大标题折叠）—— */
+.topbar{position:absolute;top:0;left:0;right:0;z-index:40;padding:44px var(--pad) 12px;
+  transition:all .3s var(--ease-io)}
+.topbar .tb-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.topbar h2{font-size:calc(27px * var(--dens));font-weight:800;letter-spacing:.015em;line-height:1.2;
+  transition:font-size .28s var(--ease-io)}
+.topbar.sub h2{font-size:calc(18px * var(--dens))}
+.topbar .sub-t{font-size:12px;color:var(--tx-3);margin-top:3px}
+.ibtn{width:calc(38px * var(--dens));height:calc(38px * var(--dens));border-radius:var(--r-in);
+  display:grid;place-items:center;cursor:pointer;flex:none;transition:all .18s var(--ease)}
+.ibtn:hover{background:color-mix(in srgb,var(--tx) 12%,transparent)}
+.ibtn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+/* —— 底栏（标准）—— */
+.bottombar{position:absolute;left:10px;right:10px;bottom:10px;z-index:50;
+  border-radius:var(--r-bar);padding:7px 4px;display:flex;justify-content:space-around;
+  transition:all .34s var(--ease)}
+.navitem{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;
+  cursor:pointer;border-radius:var(--r-tag);position:relative;transition:all .24s var(--ease)}
+.navitem svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;transition:all .3s var(--ease);color:var(--tx-3)}
+.navitem span{font-size:9.5px;font-weight:600;color:var(--tx-3);letter-spacing:.02em;
+  transition:color .24s var(--ease-io)}
+.navitem.on svg{color:var(--primary);transform:translateY(-1px) scale(1.14);stroke-width:2.1}
+.navitem.on span{color:var(--primary)}
+.navitem.on::before{content:"";position:absolute;top:-2px;width:20px;height:3px;border-radius:2px;
+  background:var(--primary);opacity:0;animation:pill .34s var(--ease) forwards}
+@keyframes pill{from{opacity:0;transform:scaleX(.2)}to{opacity:1;transform:scaleX(1)}}
+/* —— 悬浮胶囊 —— */
+.floatdock{position:absolute;left:14px;right:14px;bottom:14px;z-index:50;
+  border-radius:999px;padding:8px 10px;display:flex;align-items:center;justify-content:space-around;
+  transition:all .38s var(--ease)}
+.floatdock .navitem{padding:5px 2px}
+.floatdock .navitem.on svg{transform:scale(1.2)}
+/* —— 侧栏 —— */
+.sidebar{position:absolute;top:0;bottom:0;left:0;width:76%;z-index:55;padding:52px 14px 16px;
+  border-radius:0 var(--r-bar) var(--r-bar) 0;transform:translateX(-103%);
+  transition:transform .42s var(--ease-io)}
+.sidebar.open{transform:translateX(0)}
+.scrim{position:absolute;inset:0;z-index:54;background:rgb(0 0 0 / .46);opacity:0;
+  pointer-events:none;transition:opacity .34s var(--ease-io)}
+.scrim.on{opacity:1;pointer-events:auto}
+.side-h{display:flex;align-items:center;gap:9px;padding:10px;margin-bottom:16px;border-radius:var(--r-in)}
+.side-h .av{width:38px;height:38px;border-radius:999px;flex:none;
+  background:linear-gradient(135deg,var(--primary),var(--accent));display:grid;place-items:center;
+  font-size:14px;font-weight:700;color:var(--on-primary)}
+.side-h b{font-size:13.5px;font-weight:700}
+.side-h small{display:block;font-size:10.5px;color:var(--tx-3);font-weight:500;margin-top:1px}
+.side-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:var(--r-in);
+  cursor:pointer;margin-bottom:3px;transition:all .2s var(--ease);font-size:13px;font-weight:500}
+.side-item:hover{background:color-mix(in srgb,var(--tx) 8%,transparent)}
+.side-item.on{background:var(--primary-soft);color:var(--primary);font-weight:700}
+.side-item svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.side-badge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:999px;background:var(--err);
+  color:#fff;font-weight:700}
+
+/* ============================================================
+   6. L2 内容层 —— 通用零件
+   ============================================================ */
+.pad{padding:0 var(--pad)}
+.sec-h{display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px}
+.sec-h h3{font-size:calc(14px * var(--dens));font-weight:700;letter-spacing:.02em}
+.sec-h a{font-size:11px;color:var(--primary);font-weight:600;cursor:pointer;text-decoration:none}
+.card{border-radius:var(--r-card);padding:calc(13px * var(--dens));transition:all .24s var(--ease)}
+.card.tap{cursor:pointer}
+.card.tap:hover{transform:translateY(-2px)}
+.card.tap:active{transform:scale(.985)}
+/* 继续阅读卡 */
+.continue{display:flex;gap:12px;align-items:center;border-radius:var(--r-card);padding:12px;
+  cursor:pointer;transition:all .24s var(--ease)}
+.continue .cov{width:44px;height:62px;border-radius:var(--r-tag);flex:none;position:relative;overflow:hidden}
+.continue .meta{flex:1;min-width:0}
+.continue b{font-size:13.5px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.continue small{font-size:11px;color:var(--tx-3);display:block;margin:3px 0 7px}
+.bar{height:4px;border-radius:2px;background:color-mix(in srgb,var(--tx) 12%,transparent);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--primary),var(--accent));
+  transition:width .6s var(--ease-io)}
+/* 书架网格 */
+.grid{display:grid;gap:var(--gap)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g1{grid-template-columns:1fr}
+.book{cursor:pointer;transition:all .24s var(--ease)}
+.book .cov{position:relative;width:100%;aspect-ratio:3/4.2;border-radius:var(--r-tag);overflow:hidden;
+  box-shadow:0 6px 18px -8px rgb(0 0 0 / .6);transition:box-shadow .24s var(--ease)}
+.book:hover .cov{box-shadow:0 12px 28px -10px rgb(0 0 0 / .7)}
+.book .cov .cap{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;font-weight:800;
+  color:#fff;text-shadow:0 2px 8px rgb(0 0 0/.4)}
+.book .cov .prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgb(0 0 0 / .32)}
+.book .cov .prog i{display:block;height:100%;background:var(--primary);border-radius:0 2px 2px 0}
+.book .cov .done{position:absolute;right:5px;bottom:5px;width:17px;height:17px;border-radius:50%;
+  background:var(--primary);display:grid;place-items:center}
+.book .cov .done svg{width:10px;height:10px;stroke:#fff;stroke-width:2.6;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.book .cov .dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;
+  background:var(--err);box-shadow:0 0 0 2.5px var(--bg)}
+.book .nm{font-size:11.5px;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;letter-spacing:.01em}
+.book .sub{font-size:10px;color:var(--tx-3);margin-top:1px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+/* 列表行 */
+.row{display:flex;align-items:center;gap:12px;padding:calc(11px * var(--dens)) 12px;border-radius:var(--r-in);
+  cursor:pointer;transition:all .18s var(--ease-io)}
+.row:hover{background:color-mix(in srgb,var(--tx) 7%,transparent)}
+.row .ic{width:calc(38px * var(--dens));height:calc(38px * var(--dens));border-radius:var(--r-tag);
+  display:grid;place-items:center;flex:none}
+.row .ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.row .tx{flex:1;min-width:0}
+.row .tx b{display:block;font-size:13.5px;font-weight:600}
+.row .tx small{display:block;font-size:11px;color:var(--tx-3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .chev{width:16px;height:16px;stroke:var(--tx-3);fill:none;stroke-width:2;flex:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.row.min .ic{width:32px;height:32px}
+/* 骨架屏 */
+.sk{background:linear-gradient(100deg,color-mix(in srgb,var(--tx) 7%,transparent) 30%,
+  color-mix(in srgb,var(--tx) 15%,transparent) 50%,color-mix(in srgb,var(--tx) 7%,transparent) 70%);
+  background-size:220% 100%;animation:shim 1.5s infinite linear;border-radius:var(--r-tag)}
+@keyframes shim{from{background-position:180% 0}to{background-position:-60% 0}}
+/* 空态 */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:52px 28px;text-align:center}
+.empty .art{width:96px;height:96px;margin-bottom:16px;opacity:.85}
+.empty b{font-size:14.5px;font-weight:700;margin-bottom:6px}
+.empty p{font-size:12px;color:var(--tx-3);line-height:1.7;margin-bottom:18px}
+.btn{padding:10px 20px;border-radius:var(--r-btn);background:var(--primary);color:var(--on-primary);
+  font-size:12.5px;font-weight:700;cursor:pointer;border:none;transition:all .2s var(--ease);
+  box-shadow:0 5px 16px -5px var(--primary)}
+.btn:active{transform:scale(.96)}
+.btn.ghost{background:color-mix(in srgb,var(--tx) 10%,transparent);color:var(--tx);box-shadow:none}
+/* 芯片 */
+.chips-row{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px}
+.chips-row::-webkit-scrollbar{height:0}
+.tag{padding:6px 13px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;
+  background:color-mix(in srgb,var(--tx) 8%,transparent);color:var(--tx-2);transition:all .2s var(--ease)}
+.tag.on{background:var(--primary);color:var(--on-primary);box-shadow:0 3px 12px -4px var(--primary)}
+/* 开关 / 滑块 */
+.sw{width:42px;height:24px;border-radius:999px;background:color-mix(in srgb,var(--tx) 18%,transparent);
+  position:relative;cursor:pointer;flex:none;transition:background .26s var(--ease-io)}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--tx-2);transition:all .3s var(--ease)}
+.sw.on{background:var(--primary)}
+.sw.on::after{left:21px;background:var(--on-primary)}
+.sld{height:5px;border-radius:3px;background:color-mix(in srgb,var(--tx) 14%,transparent);position:relative;flex:1}
+.sld i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;
+  background:linear-gradient(90deg,var(--primary),var(--accent))}
+.sld b{position:absolute;top:50%;width:17px;height:17px;border-radius:50%;background:var(--primary);
+  transform:translate(-50%,-50%);box-shadow:0 2px 8px -1px var(--primary)}
+/* 搜索框 */
+.search{display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:var(--r-btn);
+  background:color-mix(in srgb,var(--tx) 8%,transparent);transition:all .22s var(--ease-io)}
+.search svg{width:17px;height:17px;stroke:var(--tx-3);fill:none;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.search input{flex:1;background:none;border:none;outline:none;color:var(--tx);font-size:12.5px;
+  font-family:inherit}
+.search input::placeholder{color:var(--tx-3)}
+/* 详情页 */
+.hero{padding:52px var(--pad) 0;display:flex;gap:15px;align-items:flex-end}
+.hero .cov{width:104px;height:146px;border-radius:var(--r-tag);flex:none;position:relative;overflow:hidden;
+  box-shadow:0 18px 40px -16px rgb(0 0 0/.75)}
+.hero .cov .cap{position:absolute;inset:0;display:grid;place-items:center;font-size:29px;font-weight:800;color:#fff}
+.hero .info{flex:1;min-width:0;padding-bottom:3px}
+.hero .info h1{font-size:19px;font-weight:800;line-height:1.25;letter-spacing:.01em}
+.hero .info .au{font-size:12px;color:var(--tx-2);margin:5px 0 9px}
+.stats{display:flex;gap:14px;margin:15px 0;font-size:11px;color:var(--tx-3)}
+.stats b{display:block;font-size:14px;color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums}
+.intro{font-size:12.5px;line-height:1.85;color:var(--tx-2);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* 组件博物馆 */
+.mu-sec{margin-bottom:20px}
+.mu-sec h4{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--tx-3);
+  text-transform:uppercase;margin-bottom:10px}
+.mu-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.mu-box{border-radius:var(--r-in);padding:12px;font-size:11.5px;font-weight:600;text-align:center;
+  cursor:pointer;transition:all .2s var(--ease)}
+.mu-box:hover{transform:translateY(-2px)}
+/* 包卡片（管理中心） */
+.pkg{border-radius:var(--r-card);padding:13px;cursor:pointer;transition:all .24s var(--ease);
+  position:relative;overflow:hidden}
+.pkg.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary),0 8px 24px -10px var(--primary)}
+.pkg .dotrow{display:flex;gap:5px;margin-bottom:9px}
+.pkg .dotrow i{width:19px;height:19px;border-radius:50%;box-shadow:inset 0 0 0 1px rgb(0 0 0/.15)}
+.pkg b{font-size:12.5px;font-weight:700;display:block}
+.pkg small{font-size:10.5px;color:var(--tx-3);display:block;margin-top:2px}
+.pkg .ck{position:absolute;top:11px;right:11px;width:19px;height:19px;border-radius:50%;
+  background:var(--primary);display:none;place-items:center}
+.pkg .ck svg{width:11px;height:11px;stroke:var(--on-primary);stroke-width:2.8;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
+.pkg.on .ck{display:grid}
+/* 浮层 */
+.sheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:70;border-radius:var(--r-bar);padding:8px;
+  transform:translateY(130%);transition:transform .44s var(--ease)}
+.sheet.on{transform:translateY(0)}
+.sheet .grab{width:36px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--tx) 22%,transparent);
+  margin:4px auto 12px}
+.toast{position:absolute;left:50%;bottom:104px;transform:translate(-50%,22px);z-index:80;
+  padding:11px 17px;border-radius:var(--r-btn);font-size:12px;font-weight:600;opacity:0;
+  pointer-events:none;transition:all .4s var(--ease);white-space:nowrap}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* 页面切换动画 */
+.page{position:absolute;inset:0}
+.fade-in{animation:fadeIn .32s var(--ease-io)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(9px) scale(.985)}to{opacity:1;transform:none}}
+.pop-in{animation:popIn .38s var(--ease)}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+/* 舞台说明 */
+.notes{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;max-width:640px}
+.note{padding:7px 13px;border-radius:999px;font-size:11px;background:hsl(228 14% 13%);
+  border:1px solid hsl(228 12% 21%);color:hsl(228 10% 64%)}
+.note b{color:hsl(228 18% 92%)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mat-e1.mat{border:none}
+</style>
+</head>
+<body>
+
+<!-- ================= 控制面板 ================= -->
+<aside class="panel">
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div><h1>legado-H UI V5</h1><small>SHELL-FIRST · VISUAL BASELINE</small></div>
+  </div>
+  <div class="hint">
+    <b>骨架先行</b>：先看骨架对不对，再往里填业务。左侧所有改动即时生效、无需重启——这就是新体系的核心能力。
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">主题包 · 美术</div>
+    <div class="chips" id="themeChips"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">界面包 · 结构</div>
+    <div class="chips" id="layoutChips"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">形状族</div>
+    <div class="chips" id="shapeChips"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">导航形态</div>
+    <div class="chips" id="navChips"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">玻璃材质</div>
+    <div class="tg" id="tgGlass"><span>启用玻璃</span><i></i></div>
+    <div class="rowlab"><span>透明度 alpha</span><b id="vA">0.42</b></div>
+    <input type="range" id="sA" min="0" max="100" value="42">
+    <div class="rowlab"><span>模糊 blur</span><b id="vB">22dp</b></div>
+    <input type="range" id="sB" min="0" max="30" value="22">
+    <div class="rowlab"><span>噪声 noise</span><b id="vN">0.05</b></div>
+    <input type="range" id="sN" min="0" max="30" value="5">
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">密度与动效</div>
+    <div class="rowlab"><span>密度系数</span><b id="vD">1.00</b></div>
+    <input type="range" id="sD" min="80" max="125" value="100">
+    <div class="chips" id="motChips" style="margin-top:9px"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">其它</div>
+    <div class="tg" id="tgDark"><span>夜间模式</span><i></i></div>
+    <div class="tg" id="tgStroke"><span>高光描边</span><i></i></div>
+    <div class="tg" id="tgTexture"><span>背景纹理</span><i></i></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">页面</div>
+    <div class="chips" id="pageChips"></div>
+  </div>
+</aside>
+
+<!-- ================= 舞台 ================= -->
+<main class="stage">
+  <div class="stage-t" id="stageT"></div>
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="notch"></div>
+      <div class="bg-layer"><div class="grad"></div><div class="tex"></div></div>
+      <div class="status" id="status"></div>
+      <div id="pageRoot"></div>
+      <div class="scrim" id="scrim"></div>
+      <div id="sidebarRoot"></div>
+      <div id="navRoot"></div>
+      <div class="sheet mat mat-e3" id="sheet"></div>
+      <div class="toast mat mat-e3" id="toast"></div>
+    </div>
+  </div>
+  <div class="notes" id="notes"></div>
+</main>
+
+<script>
+/* ============================================================
+   数据：主题包 / 界面包 / 形状族
+   ============================================================ */
+const THEMES={
+  sky:{n:'晴空白',h:232,h2:262,
+    L:{bg:'#F4F5FA',s:'#FFFFFF',s2:'#EEF0F8',tx:'#14161C',tx2:'#4A4E5C',tx3:'#8A8E9E',p:'#5B6ABF',ac:'#7C5BC0',ok:'#2E7D5B',err:'#C0392B'},
+    D:{bg:'#12141C',s:'#1A1D28',s2:'#22263A',tx:'#F0F1F7',tx2:'#B4B8C8',tx3:'#7A7E92',p:'#8C9BEF',ac:'#B79AEE',ok:'#4CC38A',err:'#FF6B5B'}},
+  night:{n:'墨夜黑',h:222,h2:250,
+    L:{bg:'#ECEEF4',s:'#FFFFFF',s2:'#E4E7EF',tx:'#0E1016',tx2:'#43475A',tx3:'#7E8298',p:'#3D5AFE',ac:'#6C4BD8',ok:'#1B7F5A',err:'#C62828'},
+    D:{bg:'#0B0D12',s:'#14171F',s2:'#1C202B',tx:'#EDEFF4',tx2:'#AEB3C4',tx3:'#6E7387',p:'#7C8CFF',ac:'#A98CF0',ok:'#43C58A',err:'#FF7261'}},
+  amoled:{n:'AMOLED',h:258,h2:288,
+    L:{bg:'#F2F2F6',s:'#FFFFFF',s2:'#E9E9F0',tx:'#0A0A0E',tx2:'#3E3E4E',tx3:'#78788E',p:'#5B3FE0',ac:'#9B3FE0',ok:'#0F7A52',err:'#C2185B'},
+    D:{bg:'#000000',s:'#0A0A0F',s2:'#121218',tx:'#FFFFFF',tx2:'#B8B8C8',tx3:'#6A6A80',p:'#8F7BFF',ac:'#C77BFF',ok:'#3BD98F',err:'#FF5C8A'}},
+  paper:{n:'纸张米',h:38,h2:28,
+    L:{bg:'#F7F2E8',s:'#FFFDF7',s2:'#F0E9DA',tx:'#2A2318',tx2:'#5C5344',tx3:'#94897A',p:'#A9703B',ac:'#8C6239',ok:'#4A7A3A',err:'#B23C2E'},
+    D:{bg:'#1A1712',s:'#241F18',s2:'#2E2820',tx:'#F5EFE3',tx2:'#C3BAA8',tx3:'#8A8172',p:'#D89A5C',ac:'#C08A54',ok:'#7FB86A',err:'#E06858'}},
+  hazel:{n:'榛子棕',h:24,h2:8,
+    L:{bg:'#F6F1ED',s:'#FFFBF7',s2:'#EDE4DC',tx:'#241B15',tx2:'#57483C',tx3:'#8E7F72',p:'#8D6E63',ac:'#A05D53',ok:'#4E7A45',err:'#B54A3E'},
+    D:{bg:'#16110E',s:'#1F1815',s2:'#2A211C',tx:'#F7F0EA',tx2:'#C6B8AC',tx3:'#8D7F74',p:'#C89E8C',ac:'#D08A7C',ok:'#86B87A',err:'#EE7A6C'}},
+  eink:{n:'电子墨水',h:0,h2:0,
+    L:{bg:'#FAFAFA',s:'#FFFFFF',s2:'#F0F0F0',tx:'#111111',tx2:'#3A3A3A',tx3:'#7A7A7A',p:'#4A4A4A',ac:'#6E6E6E',ok:'#2E2E2E',err:'#5A5A5A'},
+    D:{bg:'#0E0E0E',s:'#171717',s2:'#1F1F1F',tx:'#EDEDED',tx2:'#B0B0B0',tx3:'#757575',p:'#C8C8C8',ac:'#A8A8A8',ok:'#D0D0D0',err:'#9A9A9A'}},
+};
+const LAYOUTS={
+  classic:{n:'经典',nav:'bottom',shape:'soft',glass:false,alpha:100,blur:0,dens:100,mot:'normal',tex:false},
+  float:{n:'悬浮玻璃',nav:'float',shape:'round',glass:true,alpha:42,blur:22,dens:100,mot:'expressive',tex:true},
+  side:{n:'侧栏沉浸',nav:'side',shape:'soft',glass:true,alpha:36,blur:26,dens:105,mot:'expressive',tex:true},
+  minimal:{n:'极简',nav:'bottom',shape:'sharp',glass:false,alpha:100,blur:0,dens:85,mot:'calm',tex:false},
+  petal:{n:'花瓣',nav:'float',shape:'petal',glass:true,alpha:52,blur:16,dens:110,mot:'expressive',tex:true},
+};
+const SHAPES={
+  soft:{n:'柔和',card:20,bar:26,btn:999,inn:14,tag:8},
+  round:{n:'圆润',card:28,bar:999,btn:999,inn:22,tag:13},
+  sharp:{n:'利落',card:9,bar:11,btn:7,inn:7,tag:4},
+  petal:{n:'花瓣',card:'28px 9px 28px 9px',bar:'32px 11px 32px 11px',btn:999,inn:'22px 7px 22px 7px',tag:11},
+  cut:{n:'切角',card:7,bar:9,btn:5,inn:5,tag:3},
+};
+const MOTION={calm:{n:'克制',t:'.2s',e:'cubic-bezier(.4,0,.2,1)'},
+  normal:{n:'标准',t:'.3s',e:'cubic-bezier(.4,0,.2,1)'},
+  expressive:{n:'生动',t:'.38s',e:'cubic-bezier(.34,1.4,.5,1)'}};
+const NAVS={bottom:'底栏',float:'悬浮胶囊',side:'侧栏',top:'顶栏标签'};
+const PAGES=[['shelf','书架'],['home','主页'],['explore','发现'],['rss','订阅'],['stats','统计'],
+  ['my','我的'],['detail','书籍详情'],['search','搜索'],['center','管理中心'],['museum','组件馆'],['states','状态演示']];
+
+/* ============================================================
+   状态
+   ============================================================ */
+const S={theme:'sky',layout:'float',shape:'round',nav:'float',page:'shelf',
+  dark:true,glass:true,alpha:.42,blur:22,noise:.05,dens:1,mot:'expressive',
+  stroke:true,tex:true,side:false,shelf:'g3'};
+
+const $=id=>document.getElementById(id);
+const scr=$('screen');
+const COVERS=[
+  ['#5B6ABF','#7C5BC0'],['#C0703B','#8C6239'],['#2E7D5B','#4CAF7D'],['#A03B5B','#D06A8A'],
+  ['#3B6AC0','#5B9BD0'],['#7A5BC0','#A88CEE'],['#C09A3B','#E0C070'],['#4A5B6A','#7A8B9A'],
+  ['#8C3B3B','#C07070'],['#3BA07D','#6AC0A0'],['#6A3BC0','#9A70E0'],['#C05B8C','#E08CB0'],
+];
+const BOOKS=[
+  ['雪中悍刀行','烽火戏诸侯 · 读到 62%',62,0,0],
+  ['诡秘之主','爱潜水的乌贼 · 已读完',100,1,0],
+  ['庆余年','猫腻 · 读到 28%',28,0,1],
+  ['三体','刘慈欣 · 读到 81%',81,0,0],
+  ['全职高手','蝴蝶蓝 · 读到 45%',45,0,1],
+  ['明朝那些事儿','当年明月 · 读到 12%',12,0,0],
+  ['大奉打更人','卖报小郎君 · 读到 73%',73,0,0],
+  ['遮天','辰东 · 读到 9%',9,0,1],
+  ['琅琊榜','海宴 · 已读完',100,1,0],
+  ['盗墓笔记','南派三叔 · 读到 54%',54,0,0],
+  ['平凡的世界','路遥 · 读到 33%',33,0,0],
+  ['活着','余华 · 已读完',100,1,0],
+];
+const ICO={
+  shelf:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+  explore:'<circle cx="12" cy="12" r="10"/><path d="m16 8-4 8-4-4 8-4z"/>',
+  rss:'<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  stats:'<path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/>',
+  my:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  back:'<path d="m15 18-6-6 6-6"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  heart:'<path d="M19 14c1.5-1.5 3-3.5 3-6a4.5 4.5 0 0 0-9-1 4.5 4.5 0 0 0-9 1c0 2.5 1.5 4.5 3 6l6 6z"/>',
+  star:'<path d="m12 2 3 6.5 7 .9-5 4.8 1.2 7-6.2-3.4L6 21.2l1.2-7-5-4.8 7-.9z"/>',
+  down:'<path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  edit:'<path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+  set:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.1V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H22a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+};
+const svg=(d,cls='')=>`<svg viewBox="0 0 24 24" class="${cls}">${d}</svg>`;
+
+/* ============================================================
+   变量下发（改任何参数 → 全屏即时生效，不"重启"）
+   ============================================================ */
+function applyVars(){
+  const t=THEMES[S.theme],c=S.dark?t.D:t.L,sh=SHAPES[S.shape],m=MOTION[S.mot];
+  const r=scr.style;
+  r.setProperty('--bg',c.bg);r.setProperty('--bg-2',mix(c.bg,c.s,50));
+  r.setProperty('--surface',c.s);r.setProperty('--surface-2',c.s2);
+  r.setProperty('--surface-3',mix(c.s2,c.tx,6));
+  r.setProperty('--tx',c.tx);r.setProperty('--tx-2',c.tx2);r.setProperty('--tx-3',c.tx3);
+  r.setProperty('--primary',c.p);r.setProperty('--accent',c.ac);
+  r.setProperty('--ok',c.ok);r.setProperty('--err',c.err);
+  r.setProperty('--on-primary',lum(c.p)>140?'#14161C':'#FFFFFF');
+  r.setProperty('--primary-soft',mix(c.p,c.s,22));
+  r.setProperty('--outline',mix(c.tx3,c.bg,55));
+  r.setProperty('--seed-h',t.h);r.setProperty('--seed-h2',t.h2);
+  r.setProperty('--r-card',px(sh.card));r.setProperty('--r-bar',px(sh.bar));
+  r.setProperty('--r-btn',px(sh.btn));r.setProperty('--r-in',px(sh.inn));
+  r.setProperty('--r-tag',px(sh.tag));
+  r.setProperty('--glass-a',S.glass?S.alpha:1);
+  r.setProperty('--glass-b',(S.glass?S.blur:0)+'px');
+  r.setProperty('--stroke',(S.stroke?1:0)+'px');
+  r.setProperty('--tex-o',S.tex?.055:0);
+  r.setProperty('--dens',S.dens);
+  r.setProperty('--mot',m.t);r.setProperty('--ease',m.e);
+  scr.classList.toggle('noglass',!S.glass);
+  document.querySelectorAll('.noise').forEach(n=>n.style.opacity=S.glass?S.noise:0);
+}
+const px=v=>typeof v==='number'?v+'px':v;
+const hx=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.substr(i,2),16))};
+const mix=(a,b,p)=>{const A=hx(a),B=hx(b);
+  return'#'+A.map((v,i)=>Math.round(v*(100-p)/100+B[i]*p/100).toString(16).padStart(2,'0')).join('')};
+const lum=h=>{const[r,g,b]=hx(h);return(.299*r+.587*g+.114*b)};
+const cov=i=>`linear-gradient(140deg,${COVERS[i%12][0]},${COVERS[i%12][1]})`;
+
+/* ============================================================
+   导航（四种形态共用一张注册表）
+   ============================================================ */
+const TABS=[['shelf','书架',ICO.shelf],['home','主页',ICO.home],['explore','发现',ICO.explore],
+  ['rss','订阅',ICO.rss],['stats','统计',ICO.stats],['my','我的',ICO.my]];
+const isTab=p=>TABS.some(t=>t[0]===p);
+const curTab=()=>TABS.find(t=>t[0]===S.page)?S.page:'shelf';
+
+function renderNav(){
+  const root=$('navRoot');root.innerHTML='';
+  if(!isTab(S.page))return;
+  const cur=curTab();
+  if(S.nav==='bottom'||S.nav==='float'){
+    const d=document.createElement('div');
+    d.className=(S.nav==='float'?'floatdock':'bottombar')+' mat mat-e3';
+    d.innerHTML=TABS.map(([k,n,ic])=>
+      `<div class="navitem ${k===cur?'on':''}" data-go="${k}">${svg(ic)}<span>${n}</span></div>`).join('')
+      +'<div class="noise"></div>';
+    root.appendChild(d);
+  }else if(S.nav==='side'){
+    const b=document.createElement('div');
+    b.className='ibtn mat mat-e2';
+    b.style.cssText='position:absolute;left:12px;bottom:18px;z-index:50;width:44px;height:44px';
+    b.innerHTML=svg(ICO.menu)+'<div class="noise"></div>';
+    b.onclick=()=>toggleSide();root.appendChild(b);
+  }else{
+    const d=document.createElement('div');
+    d.className='mat mat-e2';
+    d.style.cssText='position:absolute;left:8px;right:8px;bottom:8px;z-index:50;border-radius:var(--r-bar);padding:6px;display:flex;justify-content:space-around';
+    d.innerHTML=TABS.map(([k,n,ic])=>
+      `<div class="navitem ${k===cur?'on':''}" data-go="${k}">${svg(ic)}<span>${n}</span></div>`).join('')
+      +'<div class="noise"></div>';
+    root.appendChild(d);
+  }
+  root.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
+}
+
+function renderSidebar(){
+  const root=$('sidebarRoot');root.innerHTML='';
+  if(S.nav!=='side')return;
+  const cur=curTab();
+  const d=document.createElement('div');
+  d.className='sidebar mat mat-e3'+(S.side?' open':'');
+  const extra=[['search','搜索',ICO.search],['center','UI 设置',ICO.set],['museum','组件馆',ICO.grid]];
+  d.innerHTML=`<div class="noise"></div>
+    <div class="side-h mat mat-e1"><div class="av">Z</div>
+      <div><b>Zego</b><small>本地 128 本 · 今日读 42 分钟</small></div></div>
+    ${TABS.map(([k,n,ic])=>`<div class="side-item ${k===cur?'on':''}" data-go="${k}">${svg(ic)}<span>${n}</span>
+      ${k==='rss'?'<i class="side-badge">3</i>':''}</div>`).join('')}
+    <div style="height:1px;background:var(--outline);margin:12px 6px;opacity:.5"></div>
+    ${extra.map(([k,n,ic])=>`<div class="side-item ${k===S.page?'on':''}" data-go="${k}">${svg(ic)}<span>${n}</span></div>`).join('')}`;
+  root.appendChild(d);
+  d.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>{go(e.dataset.go);S.side=false;renderSidebar();$('scrim').classList.remove('on')});
+  $('scrim').classList.toggle('on',S.side);
+}
+function toggleSide(){S.side=!S.side;renderSidebar()}
+
+/* ============================================================
+   顶栏
+   ============================================================ */
+function topbar(o){
+  const{title,sub,big,back,acts}=o;
+  return `<div class="topbar ${S.scroll?'sub':''}">
+    <div class="tb-row">
+      <div style="flex:1;min-width:0">
+        <h2>${title}</h2>${sub?`<div class="sub-t">${sub}</div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex:none">
+        ${back?`<div class="ibtn" data-go="${back}">${svg(ICO.back)}</div>`:''}
+        ${(acts||[]).map(a=>`<div class="ibtn" data-act="${a[0]}">${svg(a[1])}</div>`).join('')}
+      </div>
+    </div></div>`;
+}
+function go(p){S.page=p;S.side=false;S.scroll=false;render()}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('on');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),1600)}
+
+/* ============================================================
+   页面：书架
+   ============================================================ */
+const SHELF_MODES=[['g3','三列'],['g4','四列'],['g2','双列卡片'],['g1','极简列表'],['wall','封面墙']];
+function pageShelf(){
+  const m=S.shelf;
+  let body='';
+  if(m==='g1'){
+    body=`<div style="display:flex;flex-direction:column">${BOOKS.slice(0,9).map((b,i)=>`
+      <div class="row min" data-book="${i}">
+        <div class="cov" style="width:30px;height:42px;border-radius:5px;background:${cov(i)};flex:none"></div>
+        <div class="tx"><b>${b[0]}</b><small>${b[1]}</small></div>
+        ${b[3]?`<div style="width:8px;height:8px;border-radius:50%;background:var(--err);flex:none"></div>`:''}
+        <div style="width:34px;height:3px;border-radius:2px;background:var(--outline);overflow:hidden;flex:none">
+          <i style="display:block;height:100%;width:${b[2]}%;background:var(--primary)"></i></div>
+      </div>`).join('')}</div>`;
+  }else if(m==='g2'){
+    body=`<div class="grid g2">${BOOKS.slice(0,8).map((b,i)=>`
+      <div class="card mat mat-e2" data-book="${i}" style="padding:9px">
+        <div class="cov" style="height:104px;border-radius:var(--r-tag);background:${cov(i)};position:relative;overflow:hidden">
+          <div class="cap">${b[0][0]}</div>
+          <div class="prog"><i style="width:${b[2]}%"></i></div>
+          ${b[3]?'<div class="done">'+svg(ICO.check)+'</div>':''}
+          ${b[4]?'<div class="dot"></div>':''}
+        </div>
+        <div class="nm" style="margin-top:8px">${b[0]}</div>
+        <div class="sub">${b[1].split(' · ')[1]}</div>
+      </div>`).join('')}</div>`;
+  }else{
+    const cls=m==='wall'?'g3':m;
+    body=`<div class="grid ${cls}">${BOOKS.slice(0,12).map((b,i)=>`
+      <div class="book" data-book="${i}">
+        <div class="cov" style="background:${cov(i)}">
+          ${m==='wall'?'':'<div class="cap">'+b[0][0]+'</div>'}
+          <div class="prog"><i style="width:${b[2]}%"></i></div>
+          ${b[3]?'<div class="done">'+svg(ICO.check)+'</div>':''}
+          ${b[4]?'<div class="dot"></div>':''}
+        </div>
+        ${m==='wall'?'':`<div class="nm">${b[0]}</div><div class="sub">${b[2]}%</div>`}
+      </div>`).join('')}</div>`;
+  }
+  return topbar({title:'书架',sub:'共 128 本 · 在读 6 本',acts:[['search',ICO.search],['layout',ICO.grid]]})
+    +`<div class="content fade-in" style="padding-top:96px">
+      <div class="pad">
+        <div class="continue mat mat-e2" data-book="0" style="margin-bottom:16px">
+          <div class="cov" style="background:${cov(0)}"><div class="cap" style="font-size:15px">雪</div></div>
+          <div class="meta"><b>雪中悍刀行</b><small>读到 62% · 昨天 21:40</small>
+            <div class="bar"><i style="width:62%"></i></div></div>
+          <div class="ibtn">${svg(ICO.chev)}</div><div class="noise"></div>
+        </div>
+        <div class="sec-h"><h3>全部藏书</h3>
+          <a onclick="toast('切换排序')">最近阅读 ↓</a></div>
+        ${body}
+      </div></div>`;
+}
+
+/* ============================================================
+   页面：主页
+   ============================================================ */
+function pageHome(){
+  return topbar({title:'主页',sub:'今天读了 42 分钟',acts:[['search',ICO.search],['bell',ICO.bell]]})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="card mat mat-e2" style="background:linear-gradient(135deg,var(--primary),var(--accent));border:none">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div><div style="font-size:11px;opacity:.85;font-weight:600">本周阅读</div>
+            <div style="font-size:30px;font-weight:800;letter-spacing:-.02em;margin:2px 0">6h 24m</div>
+            <div style="font-size:11px;opacity:.85">比上周多 1h 12m ↑</div></div>
+          <div class="ibtn" style="background:rgb(255 255 255/.2)">${svg(ICO.stats)}</div>
+        </div>
+        <div style="display:flex;gap:5px;margin-top:14px">
+          ${[38,62,45,88,30,72,54].map((v,i)=>`<div style="flex:1;height:34px;border-radius:4px;background:rgb(255 255 255/.16);display:flex;align-items:flex-end;overflow:hidden">
+            <i style="display:block;width:100%;height:${v}%;background:rgb(255 255 255/.85);border-radius:3px"></i></div>`).join('')}
+        </div>
+      </div>
+      <div class="sec-h"><h3>继续阅读</h3><a>全部 →</a></div>
+      <div style="display:flex;gap:11px;overflow-x:auto;padding-bottom:4px">
+        ${BOOKS.slice(0,6).map((b,i)=>`<div style="flex:none;width:82px;cursor:pointer" data-book="${i}">
+          <div style="height:112px;border-radius:var(--r-tag);background:${cov(i)};position:relative;overflow:hidden;
+            box-shadow:0 8px 20px -8px rgb(0 0 0/.6)">
+            <div class="cap" style="position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:800;color:#fff">${b[0][0]}</div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgb(0 0 0/.3)">
+              <i style="display:block;height:100%;width:${b[2]}%;background:var(--primary)"></i></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b[0]}</div>
+        </div>`).join('')}
+      </div>
+      <div class="sec-h"><h3>今日推荐</h3><a>换一批</a></div>
+      ${BOOKS.slice(6,10).map((b,i)=>`<div class="row" data-book="${i+6}">
+        <div class="ic" style="background:${cov(i+6)}"></div>
+        <div class="tx"><b>${b[0]}</b><small>${b[1]}</small></div>
+        <div class="ibtn">${svg(ICO.plus)}</div></div>`).join('')}
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：发现 / 订阅 / 统计 / 我的
+   ============================================================ */
+function pageExplore(){
+  return topbar({title:'发现',sub:'已启用 24 个书源',acts:[['search',ICO.search],['edit',ICO.edit]]})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="search">${svg(ICO.search)}<input placeholder="搜索书名或作者" readonly></div>
+      <div class="chips-row" style="margin:13px 0 4px">
+        ${['全部','小说','文学','科技','历史','科幻'].map((t,i)=>`<div class="tag ${i===0?'on':''}">${t}</div>`).join('')}
+      </div>
+      <div class="sec-h"><h3>热门榜单</h3><a>更多 →</a></div>
+      <div class="grid g3">${BOOKS.slice(0,6).map((b,i)=>`
+        <div class="book" data-book="${i}"><div class="cov" style="background:${cov(i+3)}">
+          <div class="cap">${b[0][0]}</div></div>
+          <div class="nm">${b[0]}</div><div class="sub">${b[1].split(' · ')[0]}</div></div>`).join('')}</div>
+      <div class="sec-h"><h3>书源分组</h3><a>管理</a></div>
+      ${[['精选书源','24 个源 · 全部正常',ICO.grid],['漫画源','8 个源 · 2 个失效',ICO.star],
+         ['有声源','5 个源 · 全部正常',ICO.bell],['RSS 订阅','12 个源',ICO.rss]]
+        .map(([n,s,ic])=>`<div class="row"><div class="ic mat mat-e1" style="color:var(--primary)">${svg(ic)}</div>
+          <div class="tx"><b>${n}</b><small>${s}</small></div><svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}
+    </div></div>`;
+}
+function pageRss(){
+  const items=[['少数派','3 篇未读 · 12 分钟前','今日值得看的 8 篇文章'],
+    ['Reuters','11 篇未读 · 1 小时前','Global markets update'],
+    ['开发者头条','5 篇未读 · 3 小时前','Kotlin 2.1 正式发布']];
+  return topbar({title:'订阅',sub:'12 个源 · 19 篇未读',acts:[['plus',ICO.plus],['search',ICO.search]]})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      ${items.map(([n,t,d],i)=>`<div class="card mat mat-e2" style="margin-bottom:9px">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:9px">
+          <div class="ic" style="width:30px;height:30px;border-radius:8px;background:${cov(i*3)}"></div>
+          <div style="flex:1;min-width:0"><b style="font-size:13px">${n}</b>
+            <small style="display:block;font-size:10.5px;color:var(--tx-3)">${t}</small></div>
+          ${i===0?'<i class="side-badge" style="position:static">3</i>':''}
+        </div>
+        <div style="font-size:12px;line-height:1.7;color:var(--tx-2)">${d}</div>
+        <div class="noise"></div></div>`).join('')}
+      <div class="sec-h"><h3>最近更新</h3><a>全部已读</a></div>
+      ${BOOKS.slice(0,5).map((b,i)=>`<div class="row min"><div class="tx"><b>${b[0]}</b>
+        <small>更新至第 ${120+i*17} 章 · ${i+1} 小时前</small></div>
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--primary);flex:none"></div></div>`).join('')}
+    </div></div>`;
+}
+function pageStats(){
+  return topbar({title:'统计',sub:'2026 年 10 月',acts:[['moon',ICO.moon]]})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="card mat mat-e2">
+        <div style="font-size:11px;color:var(--tx-3);font-weight:600;margin-bottom:14px">近 30 天阅读时长（小时）</div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:96px">
+          ${[42,58,35,72,48,88,62,30,54,76,44,66,82,38,70,56,90,48,64,34].map((v,i)=>
+            `<div style="flex:1;height:${v}%;border-radius:3px;background:linear-gradient(180deg,var(--primary),var(--accent));opacity:${.45+v/180}"></div>`).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:10px;color:var(--tx-3)">
+          <span>9/12</span><span>10/11</span></div>
+        <div class="noise"></div>
+      </div>
+      <div class="grid g2" style="margin-top:11px">
+        ${[['读完','23 本',ICO.check],['在读','6 本',ICO.shelf],['笔记','148 条',ICO.edit],['连续','47 天',ICO.star]]
+          .map(([n,v,ic])=>`<div class="card mat mat-e2">
+            <div class="ibtn" style="background:var(--primary-soft);color:var(--primary)">${svg(ic)}</div>
+            <div style="font-size:21px;font-weight:800;margin:9px 0 1px">${v}</div>
+            <div style="font-size:11px;color:var(--tx-3);font-weight:600">${n}</div>
+            <div class="noise"></div></div>`).join('')}
+      </div>
+      <div class="sec-h"><h3>分类占比</h3></div>
+      ${[['小说','62%','var(--primary)'],['文学','18%','var(--accent)'],['科技','12%','var(--ok)'],['其它','8%','var(--tx-3)']]
+        .map(([n,v,c])=>`<div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px">
+            <span style="font-weight:600">${n}</span><b style="font-variant-numeric:tabular-nums">${v}</b></div>
+          <div class="bar"><i style="width:${v};background:${c}"></i></div></div>`).join('')}
+    </div></div>`;
+}
+function pageMy(){
+  const items=[[ICO.set,'UI 设置','主题 · 界面 · 外观','center'],
+    [ICO.shelf,'书架设置','布局 · 分组 · 排序','shelf'],
+    [ICO.down,'备份与恢复','WebDAV · 本地备份'],
+    [ICO.grid,'书源管理','24 个源'],
+    [ICO.edit,'替换与净化','12 条规则'],
+    [ICO.bell,'行为与提示','返回确认 · 快捷操作'],
+    [ICO.moon,'阅读设置','冻结区 · 本轮不动'],
+    [ICO.stats,'数据与存储','缓存 248 MB']];
+  return topbar({title:'我的',acts:[['set',ICO.set]]})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="card mat mat-e2" style="display:flex;align-items:center;gap:12px;margin-bottom:15px">
+        <div class="av" style="width:46px;height:46px;border-radius:999px;flex:none;
+          background:linear-gradient(135deg,var(--primary),var(--accent));display:grid;place-items:center;
+          font-size:17px;font-weight:800;color:var(--on-primary)">Z</div>
+        <div style="flex:1"><b style="font-size:14.5px">Zego</b>
+          <small style="display:block;font-size:11px;color:var(--tx-3);margin-top:2px">
+            藏书 128 · 今日 42 分钟 · 连续 47 天</small></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg><div class="noise"></div>
+      </div>
+      ${items.map(([ic,n,s,go2])=>`<div class="row" ${go2?`data-go="${go2}"`:''}>
+        <div class="ic mat mat-e1" style="color:var(--primary)">${svg(ic)}</div>
+        <div class="tx"><b>${n}</b><small>${s}</small></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}
+      <div style="height:1px;background:var(--outline);margin:12px 0;opacity:.6"></div>
+      <div class="row" data-go="museum"><div class="ic mat mat-e1" style="color:var(--tx-3)">${svg(ICO.grid)}</div>
+        <div class="tx"><b>组件博物馆</b><small>查看全部新零件</small></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>
+      <div class="row" data-go="states"><div class="ic mat mat-e1" style="color:var(--tx-3)">${svg(ICO.star)}</div>
+        <div class="tx"><b>状态演示</b><small>骨架屏 · 空态 · 错误</small></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：书籍详情（容器变换入场）
+   ============================================================ */
+function pageDetail(){
+  return topbar({title:'',back:'shelf',acts:[['heart',ICO.heart],['down',ICO.down]]})
+   +`<div class="content pop-in" style="padding-top:52px"><div class="pad">
+      <div class="hero">
+        <div class="cov" style="background:${cov(0)}"><div class="cap">雪</div></div>
+        <div class="info"><h1>雪中悍刀行</h1><div class="au">烽火戏诸侯</div>
+          <div style="display:flex;gap:6px">
+            <span class="tag on">连载</span><span class="tag">玄幻</span></div></div>
+      </div>
+      <div class="stats">${[['62%','进度'],['1284','章节'],['3.2h','本周'],['148','笔记']]
+        .map(([v,n])=>`<div><b>${v}</b>${n}</div>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn" style="flex:2" onclick="toast('继续阅读：第 796 章')">继续阅读</button>
+        <button class="btn ghost" style="flex:1">目录</button>
+        <button class="btn ghost" style="flex:0 0 auto;padding:10px 14px">${svg(ICO.plus)}</button>
+      </div>
+      <div class="card mat mat-e2" style="margin-bottom:11px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--tx-3);margin-bottom:8px">简介</div>
+        <div class="intro">江湖是一张珠帘。大人物小人物，是珠子，大人物小人物穿成一串。
+          有人上山，有人下山。北凉参差百万户，其中多少铁甲裹枯骨。
+          一个年轻人在武帝城头，负手而立，望向远方，轻声道："我有一刀，可斩天象。"</div>
+        <div class="noise"></div>
+      </div>
+      <div class="sec-h"><h3>最新章节</h3><a>全部 →</a></div>
+      ${[['第 796 章','凉莽大战',ICO.check],['第 795 章','徐凤年入北莽',ICO.check],['第 794 章','武帝城头',ICO.check]]
+        .map(([n,t,ic])=>`<div class="row"><div class="ic mat mat-e1" style="color:var(--primary)">${svg(ic)}</div>
+          <div class="tx"><b>${n}</b><small>${t} · 昨天</small></div>
+          <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}
+      <div class="sec-h"><h3>书源</h3><a>换源</a></div>
+      ${[['精选源 A','响应 180ms · 正常'],['备用源 B','响应 420ms · 正常']]
+        .map(([n,s])=>`<div class="row"><div class="tx"><b>${n}</b><small>${s}</small></div>
+          <div class="sw on"></div></div>`).join('')}
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：搜索
+   ============================================================ */
+function pageSearch(){
+  return topbar({title:'',back:'shelf'})
+   +`<div class="content fade-in" style="padding-top:52px"><div class="pad">
+      <div class="search" style="margin-bottom:13px">${svg(ICO.search)}
+        <input placeholder="搜索书名、作者、书源…" readonly></div>
+      <div class="chips-row" style="margin-bottom:16px">
+        <span style="font-size:11px;color:var(--tx-3);font-weight:600;align-self:center;margin-right:2px">历史</span>
+        ${['三体','庆余年','猫腻','科幻'].map(t=>`<div class="tag">${t}</div>`).join('')}
+        <div class="tag" style="background:none;color:var(--tx-3)">清除</div>
+      </div>
+      <div class="sec-h"><h3>搜索结果</h3><a>12 个源</a></div>
+      ${BOOKS.slice(0,7).map((b,i)=>`<div class="row" data-book="${i}">
+        <div class="ic" style="width:34px;height:48px;border-radius:5px;background:${cov(i+1)}"></div>
+        <div class="tx"><b>${b[0]}</b><small>${b[1]} · 12 个源可选</small></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：主题和界面管理中心
+   ============================================================ */
+function pageCenter(){
+  const mk=(list,cur,key)=>list.map(([id,n,d,c1,c2,c3])=>
+    `<div class="pkg mat mat-e2 ${cur===id?'on':''}" data-pick="${key}:${id}">
+      <div class="dotrow"><i style="background:${c1}"></i><i style="background:${c2}"></i>
+        <i style="background:${c3}"></i></div>
+      <b>${n}</b><small>${d}</small>
+      <div class="ck">${svg(ICO.check)}</div><div class="noise"></div></div>`).join('');
+  const themes=[['sky','晴空白','内置 · 官方','#5B6ABF','#7C5BC0','#F4F5FA'],
+    ['night','墨夜黑','内置 · 官方','#3D5AFE','#6C4BD8','#0B0D12'],
+    ['amoled','AMOLED','内置 · 纯黑','#5B3FE0','#9B3FE0','#000000'],
+    ['paper','纸张米','内置 · 护眼','#A9703B','#8C6239','#F7F2E8'],
+    ['hazel','榛子棕','我的包 · 基于晴空白','#8D6E63','#A05D53','#F6F1ED'],
+    ['eink','电子墨水','内置 · 灰阶','#4A4A4A','#9A9A9A','#FAFAFA']];
+  const layouts=[['float','悬浮玻璃','默认 · round 圆润','#8C9BEF','#B79AEE','#5B6ABF'],
+    ['classic','经典','soft 柔和 · 无玻璃','#5B6ABF','#7C5BC0','#EEF0F8'],
+    ['side','侧栏沉浸','soft + 强玻璃','#7C8CFF','#A98CF0','#3D5AFE'],
+    ['minimal','极简','sharp 利落 · 紧凑','#4A4A4A','#8A8A8A','#F0F0F0'],
+    ['petal','花瓣','petal 不对称圆角','#B79AEE','#E08CB0','#8C9BEF']];
+  return topbar({title:'管理中心',sub:'主题与界面',back:'my'})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="card mat mat-e1" style="margin-bottom:16px;padding:11px 13px;font-size:11.5px;
+        line-height:1.7;color:var(--tx-2)">
+        <b style="color:var(--tx)">入口链</b>：我的 → UI 设置 → 主题和界面管理中心。<br>
+        点包即应用、不重启；改官方包自动<br>克隆为「我的包」。
+      </div>
+      <div class="sec-h"><h3>主题包 · 美术资源</h3><a data-act="newtheme">+ 新建</a></div>
+      <div class="grid g2" style="margin-bottom:20px">${mk(themes,S.theme,'theme')}</div>
+      <div class="sec-h"><h3>界面包 · 结构参数</h3><a data-act="newlayout">+ 新建</a></div>
+      <div class="grid g2" style="margin-bottom:16px">${mk(layouts,S.layout,'layout')}</div>
+      <div class="card mat mat-e2">
+        ${[['形状族',SHAPES[S.shape].n],['导航形态',NAVS[S.nav]],
+           ['玻璃',S.glass?`开 · ${(S.alpha*100)|0}% / ${S.blur}dp`:'关（实色）'],
+           ['密度',S.dens.toFixed(2)+'×'],['动效',MOTION[S.mot].n]]
+          .map(([n,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:11.5px;
+            border-bottom:1px solid var(--outline)"><span style="color:var(--tx-3)">${n}</span>
+            <b style="font-weight:600">${v}</b></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:11.5px">
+          <span style="color:var(--tx-3)">夜间模式</span><div class="sw ${S.dark?'on':''}" data-act="dark"></div></div>
+        <div class="noise"></div>
+      </div>
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：组件博物馆
+   ============================================================ */
+function pageMuseum(){
+  const E=(lvl,name,txt)=>`<div class="mu-box mat mat-${lvl}">${txt||name}
+    <div style="font-size:9.5px;color:var(--tx-3);font-weight:600;margin-top:2px">${name}</div></div>`;
+  return topbar({title:'组件博物馆',sub:'全部消费全局参数',back:'my'})
+   +`<div class="content fade-in" style="padding-top:96px;padding-bottom:112px"><div class="pad">
+      <div class="mu-sec"><h4>材质四档</h4>
+        <div class="mu-grid">${E('e0','E0 平铺','平铺')}${E('e1','E1 嵌入','嵌入')}
+          ${E('e2','E2 浮起','浮起')}${E('e3','E3 悬浮','悬浮')}</div></div>
+      <div class="mu-sec"><h4>按钮与输入</h4>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <button class="btn" style="width:100%">主按钮</button>
+          <button class="btn ghost" style="width:100%">次要按钮</button>
+          <div class="search">${svg(ICO.search)}<input placeholder="输入框 / 搜索框" readonly></div>
+          <div style="display:flex;align-items:center;gap:11px">
+            <div class="sw on"></div><div class="sw"></div>
+            <div class="sld" style="flex:1"><i style="width:64%"></i><b style="left:64%"></b></div></div>
+          <div class="chips-row">${['芯片','标签','可横滑','全部跟随形状族'].map((t,i)=>
+            `<div class="tag ${i===0?'on':''}">${t}</div>`).join('')}</div>
+        </div></div>
+      <div class="mu-sec"><h4>列表与卡片</h4>
+        ${[['单行列表','带前导图标与箭头'],['双行列表','标题 + 辅助说明'],['网格卡片','封面 + 进度']]
+          .map(([n,s])=>`<div class="row"><div class="tx"><b>${n}</b><small>${s}</small></div>
+            <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}</div>
+      <div class="mu-sec"><h4>图标（线宽 1.8 · 可切填充）</h4>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:9px">
+          ${[ICO.shelf,ICO.home,ICO.explore,ICO.rss,ICO.stats,ICO.my,ICO.search,ICO.set,ICO.bell,
+             ICO.down,ICO.edit,ICO.star].map(ic=>
+            `<div class="ibtn" style="width:100%;aspect-ratio:1;background:var(--primary-soft);color:var(--primary)">${svg(ic)}</div>`).join('')}
+        </div></div>
+      <div class="mu-sec"><h4>进度与反馈</h4>
+        <div style="display:flex;flex-direction:column;gap:13px">
+          <div class="bar"><i style="width:62%"></i></div>
+          <div style="display:flex;gap:11px;align-items:center">
+            <div style="width:34px;height:34px;border-radius:50%;flex:none;border:3px solid var(--outline);
+              border-top-color:var(--primary);animation:spin 1s linear infinite"></div>
+            <span style="font-size:11.5px;color:var(--tx-3)">不确定进度</span></div>
+          <button class="btn ghost" style="width:100%" data-act="sheet">弹出底部抽屉</button>
+          <button class="btn ghost" style="width:100%" data-act="toast">显示 Toast</button>
+        </div></div>
+    </div></div>`;
+}
+
+/* ============================================================
+   页面：状态演示
+   ============================================================ */
+function pageStates(){
+  return topbar({title:'状态演示',sub:'加载 / 空 / 错误',back:'my'})
+   +`<div class="content fade-in" style="padding-top:96px"><div class="pad">
+      <div class="mu-sec"><h4>加载 · 骨架屏</h4>
+        <div class="grid g3">
+          ${[0,1,2,3,4,5].map(i=>`<div><div class="sk" style="aspect-ratio:3/4.2"></div>
+            <div class="sk" style="height:9px;margin-top:7px;width:76%"></div></div>`).join('')}
+        </div></div>
+      <div class="mu-sec" style="margin-top:22px"><h4>空态</h4>
+        <div class="card mat mat-e2">
+          <div class="empty" style="padding:26px 12px">
+            <svg class="art" viewBox="0 0 96 96" fill="none">
+              <rect x="12" y="22" width="52" height="60" rx="7" stroke="currentColor" stroke-width="3" opacity=".25"/>
+              <rect x="24" y="14" width="52" height="60" rx="7" fill="currentColor" opacity=".13"
+                stroke="currentColor" stroke-width="3"/>
+              <path d="M36 38h28M36 50h20" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+            </svg>
+            <b>书架还是空的</b>
+            <p>导入本地书籍，或者去发现页<br>添加几个书源找找看</p>
+            <button class="btn" onclick="toast('打开导入')">导入书籍</button>
+          </div><div class="noise"></div></div></div>
+      <div class="mu-sec" style="margin-top:22px"><h4>错误态 · 可重试</h4>
+        <div class="card mat mat-e2">
+          <div class="empty" style="padding:26px 12px">
+            <svg class="art" viewBox="0 0 96 96" fill="none" style="color:var(--err)">
+              <circle cx="48" cy="48" r="34" stroke="currentColor" stroke-width="3" opacity=".3"/>
+              <path d="M48 32v22" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="48" cy="66" r="3.4" fill="currentColor"/>
+            </svg>
+            <b>书源连接失败</b>
+            <p>精选源 A 响应超时（5s）<br>可以换个源再试</p>
+            <button class="btn" onclick="toast('正在重试…')">重试</button>
+          </div><div class="noise"></div></div></div>
+    </div></div>`;
+}
+
+/* ============================================================
+   渲染主流程
+   ============================================================ */
+const PAGER={shelf:pageShelf,home:pageHome,explore:pageExplore,rss:pageRss,stats:pageStats,
+  my:pageMy,detail:pageDetail,search:pageSearch,center:pageCenter,museum:pageMuseum,states:pageStates};
+
+function render(){
+  applyVars();
+  const root=$('pageRoot');
+  root.innerHTML=(PAGER[S.page]||pageShelf)();
+  // 噪声注入到所有 mat 容器
+  root.querySelectorAll('.mat-e2,.mat-e3').forEach(el=>{
+    if(!el.querySelector(':scope > .noise'))el.insertAdjacentHTML('beforeend','<div class="noise"></div>')});
+  document.querySelectorAll('.noise').forEach(n=>n.style.opacity=S.glass?S.noise:0);
+  // 事件
+  root.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
+  root.querySelectorAll('[data-book]').forEach(e=>e.onclick=()=>go('detail'));
+  root.querySelectorAll('[data-act]').forEach(e=>onAct(e.dataset.act));
+  root.querySelectorAll('[data-pick]').forEach(e=>{
+    const[k,v]=e.dataset.pick.split(':');e.onclick=()=>pick(k,v)});
+  // 书架：顶栏滚动折叠
+  const c=root.querySelector('.content');
+  if(c)c.onscroll=()=>{const b=c.scrollTop>30;
+    if(b!==S.scroll){S.scroll=b;const t=root.querySelector('.topbar');
+      if(t){t.classList.toggle('sub',b);
+        t.style.background=b?'':'transparent';
+        t.classList.toggle('mat',b);t.classList.toggle('mat-e2',b);
+        if(b&&!t.querySelector('.noise'))t.insertAdjacentHTML('beforeend','<div class="noise"></div>');
+        if(!b){const n=t.querySelector('.noise');if(n)n.remove()}}
+      document.querySelectorAll('.noise').forEach(n=>n.style.opacity=S.glass?S.noise:0)}};
+  renderNav();renderSidebar();renderPanel();renderNotes();
+  $('status').innerHTML=`<span>9:41</span><div class="icons"><i></i></div>`;
+}
+
+function onAct(a){
+  if(a==='search')return go('search');
+  if(a==='layout'){openSheet(`
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">书架布局</div>
+    <div style="font-size:11px;color:var(--tx-3);margin-bottom:14px">
+      只影响"内容怎么摆"，视觉全部来自全局</div>
+    <div class="chips">${SHELF_MODES.map(([k,n])=>
+      `<div class="chip ${S.shelf===k?'on':''}" data-shelf="${k}">${n}</div>`).join('')}</div>
+    <div class="row" style="padding-left:0;padding-right:0;margin-top:14px">
+      <div class="tx"><b>继续阅读卡</b><small>顶部显示上次在读</small></div>
+      <div class="sw on" data-act="toast2"></div></div>
+    <button class="btn" style="width:100%;margin-top:14px" data-act="close">完成</button>`);return}
+  if(a==='sheet')return openSheet(`
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">底部抽屉（E3 悬浮）</div>
+    <div style="font-size:11.5px;color:var(--tx-2);line-height:1.75;margin-bottom:16px">
+      抽屉、弹窗、菜单全部走同一套材质参数——<br>形状族、玻璃、圆角与其它容器完全一致。</div>
+    ${[['导入本地书籍'],['从书源搜索'],['扫描文件夹']].map(([n])=>
+      `<div class="row"><div class="tx"><b style="font-size:13px">${n}</b></div>
+        <svg class="chev" viewBox="0 0 24 24">${ICO.chev}</svg></div>`).join('')}
+    <button class="btn ghost" style="width:100%;margin-top:8px" data-act="close">取消</button>`);
+  if(a==='toast'||a==='toast2')return toast('这是一条 Toast · 样式跟随全局');
+  if(a==='dark'){S.dark=!S.dark;render();return}
+  if(a==='close')return closeSheet();
+  toast('演示：'+a);
+}
+function openSheet(html){
+  const s=$('sheet');s.innerHTML='<div class="grab"></div>'+html;
+  s.querySelectorAll('[data-shelf]').forEach(e=>e.onclick=()=>{S.shelf=e.dataset.shelf;closeSheet();render()});
+  s.querySelectorAll('[data-act]').forEach(e=>e.onclick=()=>onAct(e.dataset.act));
+  requestAnimationFrame(()=>s.classList.add('on'));
+}
+function closeSheet(){$('sheet').classList.remove('on')}
+function pick(k,v){
+  if(k==='theme'){S.theme=v;toast('已应用主题包：'+THEMES[v].n)}
+  else{S.layout=v;const L=LAYOUTS[v];S.shape=L.shape;S.nav=L.nav;S.glass=L.glass;
+    S.alpha=L.alpha/100;S.blur=L.blur;S.dens=L.dens/100;S.mot=L.mot;S.tex=L.tex;
+    toast('已应用界面包：'+L.n)}
+  render();
+}
+
+/* ============================================================
+   控制面板
+   ============================================================ */
+function chips(host,items,cur,fn){
+  $(host).innerHTML=items.map(([k,n])=>
+    `<div class="chip ${k===cur?'on':''}" data-k="${k}">${n}</div>`).join('');
+  $(host).querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>fn(e.dataset.k));
+}
+function renderPanel(){
+  chips('themeChips',Object.entries(THEMES).map(([k,v])=>[k,v.n]),S.theme,k=>pick('theme',k));
+  chips('layoutChips',Object.entries(LAYOUTS).map(([k,v])=>[k,v.n]),S.layout,k=>pick('layout',k));
+  chips('shapeChips',Object.entries(SHAPES).map(([k,v])=>[k,v.n]),S.shape,k=>{S.shape=k;render()});
+  chips('navChips',Object.entries(NAVS),S.nav,k=>{S.nav=k;S.side=false;render()});
+  chips('motChips',Object.entries(MOTION).map(([k,v])=>[k,v.n]),S.mot,k=>{S.mot=k;render()});
+  chips('pageChips',PAGES,S.page,k=>go(k));
+  $('vA').textContent=S.alpha.toFixed(2);$('sA').value=Math.round(S.alpha*100);
+  $('vB').textContent=S.blur+'dp';$('sB').value=S.blur;
+  $('vN').textContent=S.noise.toFixed(2);$('sN').value=Math.round(S.noise*100);
+  $('vD').textContent=S.dens.toFixed(2);$('sD').value=Math.round(S.dens*100);
+  $('tgGlass').classList.toggle('on',S.glass);
+  $('tgDark').classList.toggle('on',S.dark);
+  $('tgStroke').classList.toggle('on',S.stroke);
+  $('tgTexture').classList.toggle('on',S.tex);
+}
+function renderNotes(){
+  const L=LAYOUTS[S.layout],sh=SHAPES[S.shape];
+  $('stageT').innerHTML=`<b>${THEMES[S.theme].n}</b> × <b>${L.n}</b> · ${sh.n}族 · ${NAVS[S.nav]} · ${MOTION[S.mot].n}动效`;
+  $('notes').innerHTML=[
+    ['形状族',sh.n],['导航',NAVS[S.nav]],
+    ['玻璃',S.glass?`${(S.alpha*100)|0}% / blur ${S.blur}dp`:'关 · 实色'],
+    ['密度',S.dens.toFixed(2)+'×'],['动效',MOTION[S.mot].n],
+    ['噪声',S.glass?S.noise.toFixed(2):'—'],['纹理',S.tex?'开':'关'],
+  ].map(([n,v])=>`<div class="note">${n} <b>${v}</b></div>`).join('');
+}
+
+/* ============================================================
+   绑定与初始化
+   ============================================================ */
+$('sA').oninput=e=>{S.alpha=e.target.value/100;render()};
+$('sB').oninput=e=>{S.blur=+e.target.value;render()};
+$('sN').oninput=e=>{S.noise=e.target.value/100;render()};
+$('sD').oninput=e=>{S.dens=e.target.value/100;render()};
+const tg=(id,key)=>$(id).onclick=()=>{S[key]=!S[key];render()};
+tg('tgGlass','glass');tg('tgDark','dark');tg('tgStroke','stroke');tg('tgTexture','tex');
+$('scrim').onclick=()=>{S.side=false;renderSidebar()};
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeSheet();
+  if(e.key>='1'&&e.key<='6')go(TABS[+e.key-1][0]);
+});
+pick('layout',S.layout);
+</script>
+</body>
+</html>
