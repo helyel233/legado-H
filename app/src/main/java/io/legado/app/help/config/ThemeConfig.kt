@@ -23,6 +23,7 @@ import io.legado.app.lib.theme.defaultThemeTextColor
 import io.legado.app.lib.theme.defaultThemeTextColorHex
 import io.legado.app.theme.apply.ThemeApplier
 import io.legado.app.model.BookCover
+import io.legado.app.uikit.theme.Applicator
 import io.legado.app.utils.BitmapUtils
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileUtils
@@ -108,6 +109,7 @@ object ThemeConfig {
         clearUsableBgImageCache()
         applyTheme(context, isNightTheme)
         initNightMode(isNightTheme)
+        Applicator.applyDark(isNightTheme)
         BookCover.upDefaultCover()
         postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, isNightTheme)
         postEvent(EventBus.RECREATE, "")
@@ -117,6 +119,7 @@ object ThemeConfig {
         val isNightTheme = AppConfig.isNightTheme
         applyTheme(context, isNightTheme)
         initNightMode(isNightTheme)
+        Applicator.applyDark(isNightTheme)
     }
 
     private fun initNightMode(isNightTheme: Boolean = AppConfig.isNightTheme) {

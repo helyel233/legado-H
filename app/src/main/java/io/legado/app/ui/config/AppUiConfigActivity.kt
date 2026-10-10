@@ -69,6 +69,13 @@ private fun AppUiConfigScreen() {
             actionLabel = stringResource(R.string.theme_list),
             onAction = { context.startActivity<ThemeManageActivity>() }
         )
+        // A1-5: 主题中心（新引擎，最小可用版）
+        PackageCard(
+            title = stringResource(R.string.theme_center_title),
+            desc = stringResource(R.string.theme_center_desc),
+            actionLabel = stringResource(R.string.theme_center_open),
+            onAction = { context.startActivity<ThemeCenterActivity>() }
+        )
         // 界面包：过渡期指向外观套件（现有布局预设管理），P2-b 统一为界面包管理器
         PackageCard(
             title = stringResource(R.string.app_ui_config_interface_title),
