@@ -964,7 +964,7 @@
     <string name="theme_center_pick_value">取值</string>
     <string name="theme_center_open">打开</string>
     <string name="layout_center_title">界面中心（新引擎）</string>
-    <string name="layout_center_desc">选择界面包，在包内调整，另存为你的自定义包。圆角即时生效；导航/玻璃/密度接线随 A2-3/A2-4 完成。</string>
+    <string name="layout_center_desc">选择官方组合，然后在包内调整一切（导航样式也只是包内参数）——另存为你的自定义包。圆角即时生效；导航/玻璃/密度接线随 A2-3/A2-4 完成。</string>
     <string name="layout_center_builtin">内置界面包</string>
     <string name="layout_center_tune">包内调整</string>
     <string name="layout_center_based_on">自定义包，基于 %1$s</string>

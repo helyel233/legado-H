@@ -7,11 +7,14 @@ import androidx.compose.runtime.setValue
 
 /**
  * A2-3/A2-4 built-in official layout packages (docs/ui-rewrite-plan-v4.md 3.1).
+ *
+ * V4.9 语义修正（用户澄清）：内置包是「官方推荐参数组合」，不是导航形态本身——
+ * 经典底栏/悬浮/侧滑/顶栏只是包内 `navPosition` 参数的档位，选包后在包内可改。
  */
 object BuiltinLayouts {
 
     val classic = LayoutPackageSpec(
-        id = "classic", name = "经典底栏", author = "legado-H",
+        id = "classic", name = "官方·日常", author = "legado-H",
         navPosition = LayoutPackageSpec.NAV_BOTTOM,
         navVisibility = LayoutPackageSpec.VIS_ALWAYS,
         densityLevel = LayoutPackageSpec.DENSITY_STANDARD,
@@ -19,9 +22,8 @@ object BuiltinLayouts {
         shapeScale = 1f,
     )
 
-    /** Floating capsule dock + glass — formalized home of the legacy floating bar. */
     val float = LayoutPackageSpec(
-        id = "float", name = "悬浮玻璃", author = "legado-H",
+        id = "float", name = "官方·玻璃", author = "legado-H",
         navPosition = LayoutPackageSpec.NAV_FLOAT,
         navVisibility = LayoutPackageSpec.VIS_ALWAYS,
         densityLevel = LayoutPackageSpec.DENSITY_STANDARD,
@@ -30,7 +32,7 @@ object BuiltinLayouts {
     )
 
     val side = LayoutPackageSpec(
-        id = "side", name = "侧滑沉浸", author = "legado-H",
+        id = "side", name = "官方·沉浸", author = "legado-H",
         navPosition = LayoutPackageSpec.NAV_SIDE,
         navVisibility = LayoutPackageSpec.VIS_ALWAYS,
         densityLevel = LayoutPackageSpec.DENSITY_STANDARD,
@@ -39,7 +41,7 @@ object BuiltinLayouts {
     )
 
     val minimal = LayoutPackageSpec(
-        id = "minimal", name = "极简紧凑", author = "legado-H",
+        id = "minimal", name = "官方·极简", author = "legado-H",
         navPosition = LayoutPackageSpec.NAV_SIDE,
         navVisibility = LayoutPackageSpec.VIS_SCROLL_HIDE,
         densityLevel = LayoutPackageSpec.DENSITY_COMPACT,

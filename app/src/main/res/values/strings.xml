@@ -1202,7 +1202,7 @@
     <string name="theme_center_pick_value">Value</string>
     <string name="theme_center_open">Open</string>
     <string name="layout_center_title">Layout center (new engine)</string>
-    <string name="layout_center_desc">Pick a layout package, tune it inside, saved as your custom package. Corner radius applies instantly; nav/glass/density wiring lands in A2-3/A2-4.</string>
+    <string name="layout_center_desc">Pick an official combo, then tune everything INSIDE the package (nav style is just a parameter) — saved as your custom package. Corner radius applies instantly; nav/glass/density wiring lands in A2-3/A2-4.</string>
     <string name="layout_center_builtin">Builtin layouts</string>
     <string name="layout_center_tune">Tune package</string>
     <string name="layout_center_based_on">Custom package, based on %1$s</string>

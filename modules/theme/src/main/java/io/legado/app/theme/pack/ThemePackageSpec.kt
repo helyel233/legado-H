@@ -108,10 +108,18 @@ data class ThemeFonts(
 )
 
 data class ThemeImages(
-    /** Day background image, path inside the package assets/. */
+    /** Main background (day), path inside the package assets/ or absolute local path. */
     val background: String? = null,
-    /** Optional night background; falls back to [background]. */
+    /** Main background (night); falls back to [background]. */
     val backgroundNight: String? = null,
+    /** Book-info (detail) page background (day). Legacy slot: bookInfoBackgroundImgPath. */
+    val bookInfo: String? = null,
+    /** Book-info background (night); falls back to [bookInfo]. */
+    val bookInfoNight: String? = null,
+    /** Panel background (day). Legacy slot: panelBackgroundImgPath. */
+    val panel: String? = null,
+    /** Panel background (night); falls back to [panel]. */
+    val panelNight: String? = null,
 )
 
 sealed class SpecParseResult {
