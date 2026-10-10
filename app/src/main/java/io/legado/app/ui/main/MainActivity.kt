@@ -165,18 +165,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var bookshelfReselected: Long = 0
     private var exploreReselected: Long = 0
     private var pagePosition = 0
-    private var sidebarDownX = 0f
-    private var sidebarDownY = 0f
-    private var sidebarGestureHandled = false
-    private var sidebarGestureAllowed = false
+    private val sidebarGesture by lazy {
+        SideNavigationGestureDelegate(sidebarTouchSlop)
+    }
     private var sideNavigationGravity = AppConfig.bottomBarSidebarGravity
     private var sideNavigationLockedGravity: String? = null
     private var sideBookshelfGroupsExpanded = false
     private var sideBookGroups: List<BookGroup> = emptyList()
-    private var sideNavigationBackgroundJob: Job? = null
-    private var sideNavigationBackgroundLoadingKey: String? = null
-    private var sideNavigationBackgroundKey: String? = null
-    private var sideNavigationBackgroundBitmap: Bitmap? = null
+    private val sideBackgroundLoader by lazy {
+        SideBackgroundLoader(lifecycleScope, binding.sideNavigationBackground) {
+            applySideNavigationSurface()
+        }
+    }
     private var aiFloatingBallController: MainAiFloatingBallController? = null
     private var bottomNavigationConfigSignature: String? = null
     private var bottomNavigationInset = 0
@@ -738,59 +738,43 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (!isSidebarMode()) return false
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                sidebarDownX = ev.rawX
-                sidebarDownY = ev.rawY
-                sidebarGestureHandled = false
-                val edgeGuard = 28.dpToPx()
-                sidebarGestureAllowed = ev.rawX > edgeGuard && ev.rawX < binding.root.width - edgeGuard
+                sidebarGesture.onDown(ev.rawX, ev.rawY, binding.root.width, 28.dpToPx())
             }
 
             MotionEvent.ACTION_MOVE -> {
-                if (!sidebarGestureAllowed) return false
-                if (sidebarGestureHandled) return true
-                val dx = ev.rawX - sidebarDownX
-                val dy = ev.rawY - sidebarDownY
-                val absDx = abs(dx)
-                val absDy = abs(dy)
-                if (absDx < sidebarTouchSlop * 3 || absDx < absDy * 1.35f) return false
-                val handled = if (sideNavigationOpen) {
-                    if (isSidebarCloseGesture(dx)) {
+                when (sidebarGesture.recognizeMove(
+                    ev.rawX, ev.rawY,
+                    sideNavigationLockedGravity ?: sideNavigationGravity,
+                    sideNavigationOpen,
+                )) {
+                    SideNavigationGestureDelegate.Gesture.BLOCKED -> return true
+                    SideNavigationGestureDelegate.Gesture.CLOSE -> {
                         closeSideNavigation()
-                        true
-                    } else {
-                        false
+                        cancelChildTouch(ev)
+                        sidebarGesture.markHandled()
+                        return true
                     }
-                } else if (dx != 0f) {
-                    openSideNavigation(if (dx < 0f) "end" else "start")
-                    true
-                } else {
-                    false
-                }
-                if (handled) {
-                    cancelChildTouch(ev)
-                    sidebarGestureHandled = true
-                    return true
+                    SideNavigationGestureDelegate.Gesture.OPEN_START -> {
+                        openSideNavigation("start")
+                        cancelChildTouch(ev)
+                        sidebarGesture.markHandled()
+                        return true
+                    }
+                    SideNavigationGestureDelegate.Gesture.OPEN_END -> {
+                        openSideNavigation("end")
+                        cancelChildTouch(ev)
+                        sidebarGesture.markHandled()
+                        return true
+                    }
+                    SideNavigationGestureDelegate.Gesture.NONE -> if (!sidebarGesture.allowed) return false
                 }
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                sidebarGestureAllowed = false
-                if (sidebarGestureHandled) {
-                    sidebarGestureHandled = false
-                    return true
-                }
+                if (sidebarGesture.onUpCancel()) return true
             }
         }
         return false
-    }
-
-    private fun isSidebarCloseGesture(dx: Float): Boolean {
-        val gravity = sideNavigationLockedGravity ?: sideNavigationGravity
-        return if (gravity == "end") {
-            dx > 0f
-        } else {
-            dx < 0f
-        }
     }
 
     private fun cancelChildTouch(ev: MotionEvent) {
@@ -1179,79 +1163,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         updateSideNavigationItems()
     }
 
-    private fun clearSideNavigationBackground(cancelLoading: Boolean = true) = binding.run {
-        if (cancelLoading) {
-            sideNavigationBackgroundJob?.cancel()
-            sideNavigationBackgroundJob = null
-            sideNavigationBackgroundLoadingKey = null
-        }
-        sideNavigationBackgroundKey = null
-        sideNavigationBackground.setImageDrawable(null)
-        sideNavigationBackground.isVisible = false
-        sideNavigationBackgroundBitmap?.takeIf { !it.isRecycled }?.recycle()
-        sideNavigationBackgroundBitmap = null
-        applySideNavigationSurface()
+    private fun clearSideNavigationBackground(cancelLoading: Boolean = true) {
+        sideBackgroundLoader.clear(cancelLoading)
     }
 
     private fun applySideNavigationBackground() = binding.run {
         val path = NavigationBarIconConfig.currentSidebarBackgroundPath(AppConfig.isNightTheme)
-        if (path.isNullOrBlank()) {
-            clearSideNavigationBackground()
-            return@run
-        }
         val targetWidth = sideNavigationPanel.width.takeIf { it > 0 } ?: root.width
         val targetHeight = sideNavigationPanel.height.takeIf { it > 0 } ?: root.height
-        if (targetWidth <= 0 || targetHeight <= 0) {
-            applySideNavigationSurface()
-            return@run
-        }
-        val cacheKey = "$path@$targetWidth@$targetHeight"
-        sideNavigationBackgroundBitmap?.takeIf {
-            sideNavigationBackgroundKey == cacheKey && !it.isRecycled
-        }?.let { bitmap ->
-            sideNavigationBackground.setImageBitmap(bitmap)
-            sideNavigationBackground.isVisible = true
-            applySideNavigationSurface()
-            return@run
-        }
-        if (sideNavigationBackgroundLoadingKey == cacheKey) {
-            applySideNavigationSurface()
-            return@run
-        }
-        sideNavigationBackgroundJob?.cancel()
-        sideNavigationBackgroundLoadingKey = cacheKey
-        if (sideNavigationBackgroundKey != cacheKey) {
-            sideNavigationBackground.setImageDrawable(null)
-            sideNavigationBackground.isVisible = false
-        }
-        applySideNavigationSurface()
-        sideNavigationBackgroundJob = lifecycleScope.launch {
-            val bitmap = withContext(IO) {
-                kotlin.runCatching {
-                    BitmapUtils.decodeBitmap(path, targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1))
-                }.getOrNull()
-            }
-            if (sideNavigationBackgroundLoadingKey != cacheKey ||
-                NavigationBarIconConfig.currentSidebarBackgroundPath(AppConfig.isNightTheme) != path ||
-                isFinishing ||
-                isDestroyed
-            ) {
-                bitmap?.takeIf { !it.isRecycled }?.recycle()
-                return@launch
-            }
-            sideNavigationBackgroundLoadingKey = null
-            sideNavigationBackgroundKey = cacheKey
-            sideNavigationBackgroundBitmap?.takeIf { it !== bitmap && !it.isRecycled }?.recycle()
-            sideNavigationBackgroundBitmap = bitmap
-            if (bitmap == null) {
-                sideNavigationBackground.setImageDrawable(null)
-                sideNavigationBackground.isVisible = false
-            } else {
-                sideNavigationBackground.setImageBitmap(bitmap)
-                sideNavigationBackground.isVisible = true
-            }
-            applySideNavigationSurface()
-        }
+        sideBackgroundLoader.apply(path, targetWidth, targetHeight) { isFinishing || isDestroyed }
     }
 
     private fun updateSideGoalHeader() {
