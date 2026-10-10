@@ -7,10 +7,6 @@
 		<item>File</item>
 	</string-array>
 
-	<string-array name="group_style">
-		<item>Pestaña</item>
-		<item>Carpeta</item>
-	</string-array>
 
 	<string-array name="indent">
 		<item>@string/indent_0</item>

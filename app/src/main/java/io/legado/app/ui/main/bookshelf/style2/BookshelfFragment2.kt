@@ -149,14 +149,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             binding.refreshLayout.isRefreshing = false
             activityViewModel.upToc(books, onlyUpdateRead)
         }
-        binding.rvBookshelf.isGone = true
         binding.composeBookshelf.isGone = false
-        if (!useComposeBookshelf) {
-            /**
-             * 采用 layoutManager?.onRestoreInstanceState(layoutState)
-             * 恢复滚动位置
-             * **/
-        }
     }
 
     private fun bindRefreshScrollCallback() {
@@ -739,7 +732,6 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         composePendingScrollRestoreGroupId = targetGroupId
         composeDataVersion = 0
         composeGroupId = targetGroupId
-        binding.rvBookshelf.isGone = true
         binding.composeBookshelf.isGone = false
         bindRefreshScrollCallback()
         binding.tvEmptyMsg.isGone = true

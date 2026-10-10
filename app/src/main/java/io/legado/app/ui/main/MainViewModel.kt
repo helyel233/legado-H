@@ -4,7 +4,6 @@ import android.app.Application
 import android.os.Build
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import androidx.recyclerview.widget.RecyclerView.RecycledViewPool
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
@@ -53,12 +52,6 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     private val eventListenerSource = ConcurrentHashMap<BookSource, Boolean>()
     val onUpBooksLiveData = MutableLiveData<Int>()
     private var upTocJob: Job? = null
-    val booksListRecycledViewPool = RecycledViewPool().apply {
-        setMaxRecycledViews(0, 30)
-    }
-    val booksGridRecycledViewPool = RecycledViewPool().apply {
-        setMaxRecycledViews(0, 100)
-    }
     var callback: CallBack? = null
     fun setActivityCallback(callback: CallBack) {
         this.callback = callback

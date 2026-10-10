@@ -15,10 +15,6 @@
 		<item>@string/screen_portrait_reversed</item>
         <item>@string/screen_landscape_reversed</item>
 	</string-array>
-    <string-array name="group_style">
-        <item>Thẻ</item>
-        <item>Thư mục</item>
-    </string-array>
 
     <string-array name="theme_mode">
         <item>Theo hệ thống</item>
