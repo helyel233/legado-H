@@ -106,7 +106,6 @@ import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.font.FontSelectDialog
 import io.legado.app.ui.image.ImageCropContract
-import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -180,8 +179,8 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private var pendingShelfColor: String? = null
     private var pendingCardShadow: Int? = null
     private var pendingCardBackgroundBlur: Float? = null
-    private var pendingExploreGlassBlur = ExploreGlassBackdrop.LEVEL_DEFAULT
-        private var exploreGlassBlurAtEditStart = ExploreGlassBackdrop.LEVEL_DEFAULT
+    private var pendingExploreGlassBlur = EXPLORE_GLASS_BLUR_DEFAULT
+        private var exploreGlassBlurAtEditStart = EXPLORE_GLASS_BLUR_DEFAULT
     private var pendingFontScale = 0
     private var pendingUiCornerSearchFollow = false
     private var pendingUiCornerReplyFollow = false
@@ -507,7 +506,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         pendingCardBackgroundBlur = current.cardBackgroundBlur
                 pendingExploreGlassBlur = getPrefInt(
                     ThemeRuntimeKeys.themeExploreGlassBlur(configNight),
-                    current.exploreGlassBlur ?: ExploreGlassBackdrop.LEVEL_DEFAULT
+                    current.exploreGlassBlur ?: EXPLORE_GLASS_BLUR_DEFAULT
                 )
                 exploreGlassBlurAtEditStart = pendingExploreGlassBlur
         pendingFontScale = current.fontScale ?: getPrefInt(ThemeRuntimeKeys.fontScale(configNight), 0)
@@ -1482,7 +1481,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 ?.let { it / 10f },
             exploreGlassBlur = getPrefInt(
                 ThemeRuntimeKeys.themeExploreGlassBlur(isNightTheme),
-                ExploreGlassBackdrop.LEVEL_DEFAULT
+                EXPLORE_GLASS_BLUR_DEFAULT
             ),
             uiCornerSearchFollow = themeUiCornerSearchFollow(isNightTheme),
             uiCornerReplyFollow = themeUiCornerReplyFollow(isNightTheme),
@@ -2156,6 +2155,10 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     companion object {
+
+        /** 发现页玻璃效果默认强度（字段保留用于主题包兼容，功能已退役） */
+        private const val EXPLORE_GLASS_BLUR_DEFAULT = 60
+
         private val themeRemoteSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private const val EDIT_DIALOG_WIDTH_RATIO = 0.94f
         private const val EDIT_DIALOG_HEIGHT_RATIO = 0.68f
