@@ -2003,7 +2003,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     discoverBookshelf.clear()
                     books.filterNot { it.isNotShelf }
                         .forEach {
-                                    discoverBookshelf.add("${it.name}-${it.author}")
+                            discoverBookshelf.add("${it.name}-${it.author}")
                             discoverBookshelf.add(it.name)
                             discoverBookshelf.add(it.bookUrl)
                         }
@@ -3360,7 +3360,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 } else {
                     discoverBooks.clear()
                     syncDiscoverComposeState(forceBooks = true)
-                    }
+                }
                 binding.tvDiscoverEmpty.gone()
             }
             val pageToLoad = if (reset) 1 else discoverPage
@@ -3401,7 +3401,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                         discoverHasMore = false
                     }
                     syncDiscoverComposeState()
-                                binding.tvDiscoverEmpty.gone()
+                    binding.tvDiscoverEmpty.gone()
                     saveModernDiscoverCacheAsync(
                         sourceUrl = sourceUrl,
                         tagUrl = url,
