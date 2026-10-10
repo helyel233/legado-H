@@ -18,10 +18,11 @@ object ThemePackageStore {
 
     private const val FILE_NAME = "uiThemePackageRuntime.json"
 
+    // Gson bypasses Kotlin defaults: all fields nullable, normalized on load.
     data class Runtime(
-        val activeId: String = BuiltinThemes.default.id,
-        val userSpecs: List<ThemePackageSpec> = emptyList(),
-        val migratedFromLegacy: Boolean = false,
+        val activeId: String? = null,
+        val userSpecs: List<ThemePackageSpec>? = null,
+        val migratedFromLegacy: Boolean? = null,
         val customSpec: ThemePackageSpec? = null,
     )
 
@@ -35,13 +36,16 @@ object ThemePackageStore {
         normalize(gson.fromJson(f.readText(), Runtime::class.java))
     }.getOrNull()
 
-    private fun normalize(r: Runtime): Runtime = when {
-        r.userSpecs.isNotEmpty() -> r
-        r.customSpec != null -> {
-            val spec = r.customSpec.copy(id = newUserId())
-            r.copy(userSpecs = listOf(spec), activeId = if (r.activeId == "custom") spec.id else r.activeId)
+    private fun normalize(r: Runtime): Runtime {
+        val users = r.userSpecs ?: emptyList()
+        if (users.isNotEmpty()) {
+            return Runtime(activeId = r.activeId ?: BuiltinThemes.default.id, userSpecs = users, migratedFromLegacy = r.migratedFromLegacy)
         }
-        else -> r
+        r.customSpec?.let { cs ->
+            val spec = cs.copy(id = newUserId())
+            return Runtime(activeId = spec.id, userSpecs = listOf(spec), migratedFromLegacy = true)
+        }
+        return Runtime(activeId = r.activeId ?: BuiltinThemes.default.id, migratedFromLegacy = true)
     }
 
     fun save(context: Context, runtime: Runtime) {
@@ -52,20 +56,20 @@ object ThemePackageStore {
         tmp.renameTo(dst)
     }
 
-    fun resolveSpec(runtime: Runtime, id: String = runtime.activeId): ThemePackageSpec? =
-        BuiltinThemes.byId(id) ?: runtime.userSpecs.firstOrNull { it.id == id }
+    fun resolveSpec(runtime: Runtime, id: String? = runtime.activeId): ThemePackageSpec? =
+        BuiltinThemes.byId(id ?: "") ?: (runtime.userSpecs ?: emptyList()).firstOrNull { it.id == id }
 
     fun listUser(context: Context): List<ThemePackageSpec> =
         load(context)?.userSpecs ?: emptyList()
 
     fun upsertUserSpec(context: Context, spec: ThemePackageSpec) {
         val r = load(context) ?: Runtime()
-        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == spec.id } + spec))
+        save(context, r.copy(userSpecs = (r.userSpecs ?: emptyList()).filterNot { it.id == spec.id } + spec))
     }
 
     fun deleteUserSpec(context: Context, id: String) {
         val r = load(context) ?: return
-        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == id }))
+        save(context, r.copy(userSpecs = (r.userSpecs ?: emptyList()).filterNot { it.id == id }))
     }
 
     fun persistActive(context: Context) {

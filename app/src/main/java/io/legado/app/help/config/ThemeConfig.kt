@@ -123,12 +123,12 @@ object ThemeConfig {
     }
 
     private fun initNightMode(isNightTheme: Boolean = AppConfig.isNightTheme) {
-        val targetMode =
-            if (isNightTheme) {
-                AppCompatDelegate.MODE_NIGHT_YES
-            } else {
-                AppCompatDelegate.MODE_NIGHT_NO
-            }
+        val targetMode = when (AppConfig.themeMode) {
+            "0" -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            "2" -> AppCompatDelegate.MODE_NIGHT_YES
+            "1" -> AppCompatDelegate.MODE_NIGHT_NO
+            else -> if (isNightTheme) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        }
         AppCompatDelegate.setDefaultNightMode(targetMode)
     }
 

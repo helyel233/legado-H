@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityThemeCenterBinding
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeAssetStore
 import io.legado.app.help.config.ThemePackageStore
@@ -55,6 +58,8 @@ import io.legado.app.uikit.theme.AppTheme
 import io.legado.app.uikit.theme.BuiltinThemes
 import io.legado.app.uikit.token.AppSpacing
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.utils.putPrefString
+import splitties.init.appCtx
 
 /**
  * A2-4b 主题包详情：编辑指定用户包（pkgId）；官方包首次编辑自动克隆。
@@ -159,7 +164,7 @@ private fun ThemeCenterScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(scheme.background)
-            .padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s12),
+            .statusBarsPadding().padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s12),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.s12),
     ) {
         item {
@@ -181,15 +186,43 @@ private fun ThemeCenterScreen() {
         item { CenterCard(R.string.theme_center_tweaks) { TweaksSection(overrides) } }
         item { CenterCard(R.string.theme_center_fonts) { FontSection() } }
         item { CenterCard(R.string.theme_center_images) { ImageSection() } }
+        item {
+            val context = LocalContext.current
+            val savedText = stringResource(R.string.theme_center_saved)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    ThemePackageStore.persistActive(context)
+                    android.widget.Toast.makeText(context, savedText, android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.theme_center_save)) }
+            }
+        }
         item { CenterCard(R.string.theme_center_night) {
             val context = LocalContext.current
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.theme_center_night_label),
-                    modifier = Modifier.weight(1f),
-                    color = scheme.onSurface,
-                )
-                Switch(checked = AppConfig.isNightTheme, onCheckedChange = { ThemeConfig.applyDayNight(context, it) })
+            val modes = listOf(
+                "0" to R.string.theme_night_follow,
+                "1" to R.string.theme_night_light,
+                "2" to R.string.theme_night_dark,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                modes.forEach { (value, labelRes) ->
+                    val selected = AppConfig.themeMode == value
+                    Text(
+                        stringResource(labelRes),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) scheme.primary else scheme.muted,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, if (selected) scheme.primary else scheme.outline, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clickable {
+                                appCtx.putPrefString(PreferKey.themeMode, value)
+                                ThemeConfig.applyDayNight(context, AppConfig.isNightTheme)
+                            },
+                    )
+                }
             }
         } }
         item { Spacer(Modifier.height(40.dp)) }

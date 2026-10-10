@@ -1215,6 +1215,12 @@
     <string name="theme_img_hint">Stored with the package; rendering hookup lands with A2 background-job rework.</string>
     <string name="theme_asset_unset">Not set</string>
     <string name="theme_asset_pick">Pick</string>
+    <string name="theme_night_follow">Follow system</string>
+    <string name="theme_night_light">Always light</string>
+    <string name="theme_night_dark">Always dark</string>
+    <string name="theme_center_save">Save</string>
+    <string name="theme_center_saved">Saved</string>
+    <string name="skin_center_clone">Clone</string>
     <string name="theme_center_based_prefix">based on %1$s</string>
     <string name="theme_center_official">official package (editing clones it)</string>
     <string name="theme_center_role_hint">Pick a role chip then a value; role chips cover the first 8 roles in this demo, the full role list lands with the settings rewrite.</string>

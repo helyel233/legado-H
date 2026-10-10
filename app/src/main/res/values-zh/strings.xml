@@ -977,6 +977,12 @@
     <string name="theme_img_hint">随主题包保存；渲染接线随 A2 背景加载改造完成。</string>
     <string name="theme_asset_unset">未设置</string>
     <string name="theme_asset_pick">选择</string>
+    <string name="theme_night_follow">跟随系统</string>
+    <string name="theme_night_light">保持明亮</string>
+    <string name="theme_night_dark">保持深色</string>
+    <string name="theme_center_save">保存</string>
+    <string name="theme_center_saved">已保存</string>
+    <string name="skin_center_clone">克隆</string>
     <string name="theme_center_based_prefix">基于 %1$s 修改</string>
     <string name="theme_center_official">官方包（编辑将自动克隆）</string>
     <string name="theme_center_role_hint">先点角色再点取值；本演示仅列前 8 个角色，完整角色列表随设置重写上线。</string>
