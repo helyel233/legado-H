@@ -166,6 +166,7 @@ private fun SkinCenterScreen() {
                                 ThemePackageStore.persistActive(context)
                         reload()
                             }
+                            reload()
                         }) { Text(stringResource(R.string.skin_center_delete)) }
                     },
                 )
@@ -248,6 +249,7 @@ private fun SkinCenterScreen() {
                                 LayoutEngine.applyLayout(BuiltinLayouts.default)
                                 LayoutPackageStore.persistActive(context)
                             }
+                            reload()
                         }) { Text(stringResource(R.string.skin_center_delete)) }
                     },
                 )
