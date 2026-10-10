@@ -60,7 +60,11 @@
 
 ### 0.5 版本与发版
 
-- 每期一次发版，新特性 minor +0.1（P1 起 H.1.20.0）。versionCode = 29860000 + git rev-list count。
+- **骨架验证期（P1-P3）不单独发正式版**：这三期产出的是"没有业务的漂亮空壳"，
+  发出去用户会装到一个功能为空的 App。它们只以 debug 包形式交付、用于确认骨架，
+  版本号沿用 H.1.19.0，不 tag、不 release。
+- **从 P4 起每批发版**：业务逐页搬回来之后才有发布价值，新特性 minor +0.1
+  （P4 第一批起 H.1.20.0）。versionCode = 29860000 + git rev-list count。
 - 流程照 `docs/release-process.md`：CHANGELOG + updateLog 先提交再 tag；`build-signed.sh` 产物重命名为 `legado_app_H.<ver>_<code>_LegadoH_arm64.apk` 再跑 `create-release.sh`；release/debug 严禁并行，debug 前 `./gradlew --stop`。
 - 每期收尾必跑：`./gradlew :app:assembleDebug` + 读书页冻结回归 + 本期验收清单。
 
@@ -161,8 +165,10 @@
 - 内置一个**调试面板**（仅 debug 构建）：实时切换形状族、玻璃五值、密度、动效、导航形态、种子色——供本阶段快速确认观感。**发布前移除或藏在开发者选项。**
 
 **P1-6 收尾**
-- `./gradlew :app:assembleDebug`、读书页回归（本期未改任何业务页，应零差异）、发版 H.1.20.0。
-- 新壳与旧壳并存时默认走**旧壳**（功能完整），新壳通过 debug 开关进入，避免用户装到空壳。
+- `./gradlew :app:assembleAppDebug` 出 debug 包供骨架验证、**不正式发版**（见 0.5）。
+- 读书页回归：本期未改任何业务页，应零差异。
+- 新壳与旧壳并存，默认走**旧壳**（功能完整）；新壳入口：`我的 → 新骨架预览（V5）`，
+  仅 debug 构建可见。
 
 ### 文件锚点
 | 新建 | 说明 |
