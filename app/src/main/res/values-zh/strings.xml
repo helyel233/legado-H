@@ -2696,6 +2696,7 @@ bookUrl：%7$s
     <string name="yearly_report_top_books">本年阅读的书</string>
     <string name="yearly_report_total">累计时长</string>
 
+	<string name="book_info_component_ai_images">AI 图集</string>
     <string name="note_export">导出笔记</string>
     <string name="note_export_empty">本书暂无笔记</string>
     <string name="smart_group">智能分组</string>

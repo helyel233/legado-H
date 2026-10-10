@@ -2883,6 +2883,7 @@ Selected text or question:
     <string name="yearly_report_top_books">Books read this year</string>
     <string name="yearly_report_total">Total time</string>
 
+	<string name="book_info_component_ai_images">AI Images</string>
     <string name="note_export">Export notes</string>
     <string name="note_export_empty">No notes in this book</string>
     <string name="smart_group">Smart groups</string>
