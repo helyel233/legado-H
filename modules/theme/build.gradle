@@ -22,4 +22,10 @@ android {
 
 dependencies {
     implementation libs.androidx.annotation
+    // A1-1 seed palette engine: Material 3 tonal palette algorithm (Kotlin port)
+    implementation platform(libs.androidx.compose.bom)
+    implementation libs.androidx.compose.ui.graphics
+    implementation libs.androidx.compose.material3
+    implementation libs.material.kolor
+    testImplementation libs.junit
 }
