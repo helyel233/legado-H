@@ -1,5 +1,12 @@
 package io.legado.app.help.config
 
+import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.defaultSharedPreferences
+import io.legado.app.lib.theme.ThemeRuntimeKeys
+import io.legado.app.theme.apply.ThemeKeys
+import io.legado.app.theme.apply.ThemeApplier
+import io.legado.app.lib.theme.SpThemePersistence
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.help.config.MainBottomNavConfig
 import android.content.Context
@@ -41,7 +48,7 @@ object AppearanceKitManager {
     const val KIT_REGULAR = "builtin_regular"
     const val KIT_SIDEBAR = "builtin_sidebar"
     private const val kitManifestName = "appearance_kit.json"
-    private const val kitVersion = 2
+    private const val kitVersion = 3
     private const val maxKitManifestBytes = 1024L * 1024L
     private val kitZipLimits = SafeZipLimits(
         maxEntries = 2_048,
@@ -518,6 +525,17 @@ object AppearanceKitManager {
                 }
             }
         }
+        // P4-c：界面形态域（R5，归界面包）——套件携带时恢复
+        binding.interfaceTweaks?.let { tweaks ->
+            runCatching {
+                val applier = ThemeApplier(SpThemePersistence(context))
+                val night = AppConfig.isNightTheme
+                applier.writeMetrics(night, tweaks.cornerScale, tweaks.layoutAlpha, tweaks.dialogAlpha)
+                applier.writeCornerFollow(night, tweaks.cornerSearchFollow, tweaks.cornerReplyFollow)
+                applier.writeEffectParams(night, tweaks.cardShadow, tweaks.cardBackgroundBlur, tweaks.exploreGlassBlur)
+                applier.writePanelBorder(night, tweaks.panelBorderColor, tweaks.panelBorderAlpha)
+            }
+        }
         ThemeConfig.applyTheme(context)
         BookCover.upDefaultCover()
     }
@@ -645,9 +663,69 @@ object AppearanceKitManager {
             nightCoverCollection = currentCoverRef(true),
             floatingBottomBarHideSearch = AppConfig.floatingBottomBarHideSearch,
             bottomNavItems = appCtx.getPrefString(PreferKey.mainBottomNavItems),
+            interfaceTweaks = currentInterfaceTweaks(),
             immersiveManageBar = AppConfig.immersiveManageBar,
             mainTransparentStatusBar = AppConfig.isMainTransparentStatusBar
         )
+    }
+
+    /**
+     * P4-c：界面形态域快照（R5，归界面包）。读取当前日夜模式下的运行时 SP 值；
+     * 效果参数键不存在（用户未自定义）时记 null，应用套件时不覆盖。
+     */
+    private fun currentInterfaceTweaks(): InterfaceTweaks {
+        val night = AppConfig.isNightTheme
+        fun intOrNull(key: String): Int? =
+            if (appCtx.defaultSharedPreferences.contains(key)) {
+                appCtx.getPrefInt(key, 0)
+            } else {
+                null
+            }
+        fun floatOrNull(key: String): Float? =
+            if (appCtx.defaultSharedPreferences.contains(key)) {
+                appCtx.getPrefString(key)?.toFloatOrNull()
+            } else {
+                null
+            }
+        val tweaks = InterfaceTweaks(
+            cornerScale = AppConfig.uiCornerScale,
+            layoutAlpha = AppConfig.uiLayoutAlpha,
+            dialogAlpha = AppConfig.dialogAlpha,
+            cardShadow = intOrNull(ThemeRuntimeKeys.themeCardShadow(night)),
+            cardBackgroundBlur = floatOrNull(ThemeRuntimeKeys.themeCardBackgroundBlur(night)),
+            exploreGlassBlur = intOrNull(ThemeRuntimeKeys.themeExploreGlassBlur(night)),
+            panelBorderColor = appCtx.getPrefString(
+                if (night) ThemeKeys.PANEL_BORDER_COLOR_NIGHT else ThemeKeys.PANEL_BORDER_COLOR
+            )?.takeIf { it.isNotBlank() },
+            panelBorderAlpha = appCtx.getPrefInt(
+                if (night) ThemeKeys.PANEL_BORDER_ALPHA_NIGHT else ThemeKeys.PANEL_BORDER_ALPHA,
+                100
+            ),
+            cornerSearchFollow = if (appCtx.defaultSharedPreferences.contains(ThemeKeys.uiCornerSearchFollow(night))) {
+                appCtx.getPrefBoolean(ThemeKeys.uiCornerSearchFollow(night), false)
+            } else {
+                null
+            },
+            cornerReplyFollow = if (appCtx.defaultSharedPreferences.contains(ThemeKeys.uiCornerReplyFollow(night))) {
+                appCtx.getPrefBoolean(ThemeKeys.uiCornerReplyFollow(night), false)
+            } else {
+                null
+            }
+        )
+        tweaks.summary = buildInterfaceTweaksSummary(tweaks)
+        return tweaks
+    }
+
+    private fun buildInterfaceTweaksSummary(t: InterfaceTweaks): String {
+        val parts = mutableListOf<String>()
+        t.cornerScale?.let { parts.add("圆角×%.1f".format(it)) }
+        t.layoutAlpha?.let { parts.add("界面不透明度 $it") }
+        t.dialogAlpha?.let { parts.add("弹窗不透明度 $it") }
+        t.cardShadow?.let { parts.add("卡片阴影 $it") }
+        t.cardBackgroundBlur?.let { parts.add("卡片模糊 $it") }
+        t.exploreGlassBlur?.let { parts.add("玻璃效果 $it") }
+        t.panelBorderColor?.takeIf { it.isNotBlank() }?.let { parts.add("卡片边框") }
+        return if (parts.isEmpty()) "未自定义" else parts.joinToString("、")
     }
 
     private fun currentThemeRef(context: Context, isNight: Boolean): ComponentRef? {
@@ -859,6 +937,22 @@ data class StoredAppearanceKit(
 }
 
 @Keep
+data class InterfaceTweaks(
+    var cornerScale: Float? = null,
+    var layoutAlpha: Int? = null,
+    var dialogAlpha: Int? = null,
+    var cardShadow: Int? = null,
+    var cardBackgroundBlur: Float? = null,
+    var exploreGlassBlur: Int? = null,
+    var panelBorderColor: String? = null,
+    var panelBorderAlpha: Int? = null,
+    var cornerSearchFollow: Boolean? = null,
+    var cornerReplyFollow: Boolean? = null,
+    /** 摘要（编辑页展示用，不参与应用逻辑） */
+    var summary: String? = null
+)
+
+@Keep
 data class KitBinding(
     var preset: String? = null,
     var dayTheme: ComponentRef? = null,
@@ -874,7 +968,9 @@ data class KitBinding(
     // P2-b 界面包 v2：Tab 显隐排序（MainBottomNavConfig 的 JSON）。可空：旧包缺字段不改变现状。
     var bottomNavItems: String? = null,
     var immersiveManageBar: Boolean? = null,
-    var mainTransparentStatusBar: Boolean? = null
+    var mainTransparentStatusBar: Boolean? = null,
+    // P4-c 界面包 v3：界面形态域（R5 拆出自主题包）。可空：旧包不改变现状。
+    var interfaceTweaks: InterfaceTweaks? = null
 ) {
     fun mergeImported(imported: KitBinding): KitBinding {
         return copy(
@@ -889,7 +985,8 @@ data class KitBinding(
             floatingBottomBarHideSearch = imported.floatingBottomBarHideSearch ?: floatingBottomBarHideSearch,
             bottomNavItems = imported.bottomNavItems ?: bottomNavItems,
             immersiveManageBar = imported.immersiveManageBar ?: immersiveManageBar,
-            mainTransparentStatusBar = imported.mainTransparentStatusBar ?: mainTransparentStatusBar
+            mainTransparentStatusBar = imported.mainTransparentStatusBar ?: mainTransparentStatusBar,
+            interfaceTweaks = imported.interfaceTweaks ?: interfaceTweaks
         )
     }
 
