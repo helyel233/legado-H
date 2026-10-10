@@ -45,6 +45,7 @@ import io.legado.app.help.book.BookCloudEntryModeStore
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.getRemoteUrl
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isVideo
@@ -432,6 +433,13 @@ class BookInfoComposeActivity :
                 viewModel.topBook()
                 updateUiState()
             },
+            onUploadBook = {
+                viewModel.getBook()?.let { upLoadBook(it) }
+            },
+            onDeleteAlertChanged = { enabled ->
+                LocalConfig.bookInfoDeleteAlert = enabled
+                updateUiState()
+            },
             onSetupWebIntro = ::setupWebIntro,
             onIntroButtonClick = { name, click ->
                 viewModel.onButtonClick(this@BookInfoComposeActivity, "info button $name", click)
@@ -641,6 +649,8 @@ class BookInfoComposeActivity :
             hasBookSource = viewModel.bookSource != null,
             canUpdate = book.canUpdate,
             splitLongChapter = book.getSplitLongChapter(),
+            deleteAlertEnabled = LocalConfig.bookInfoDeleteAlert,
+            canUploadBook = book.isLocal || book.getRemoteUrl() != null,
             cloudEntryMode = BookCloudEntryModeStore.get(book.bookUrl),
             loading = tocPhase.isLoading
         )

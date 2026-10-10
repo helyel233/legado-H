@@ -185,7 +185,9 @@ data class BookInfoUiState(
     val canUpdate: Boolean = true,
     val splitLongChapter: Boolean = false,
     val cloudEntryMode: BookCloudEntryMode = BookCloudEntryMode.CACHE_PACKAGE,
-    val loading: Boolean = false
+    val loading: Boolean = false,
+    val deleteAlertEnabled: Boolean = true,
+    val canUploadBook: Boolean = false
 ) {
     val canScheduleUpdate: Boolean get() = inBookshelf && hasBookSource
 }
@@ -226,6 +228,8 @@ data class BookInfoActions(
     val onSplitLongChapter: () -> Unit = {},
     val onShowLog: () -> Unit = {},
     val onTopBook: () -> Unit = {},
+    val onUploadBook: () -> Unit = {},
+    val onDeleteAlertChanged: (Boolean) -> Unit = {},
     val onSetupWebIntro: (WebView) -> Unit = {},
     val onRefreshEnabledChanged: (Boolean) -> Unit = {},
     val onQuickActionsChanged: () -> Unit = {},
@@ -1189,6 +1193,19 @@ private fun BookInfoMoreActionSheet(
                 BookInfoMoreActionItem(stringResource(R.string.book_info_edit), style) {
                     onDismiss()
                     actions.onEditBookInfo()
+                }
+                if (state.canUploadBook) {
+                    BookInfoMoreActionItem(stringResource(R.string.upload_to_remote), style) {
+                        onDismiss()
+                        actions.onUploadBook()
+                    }
+                }
+                BookInfoToggleActionItem(
+                    text = stringResource(R.string.delete_alert),
+                    checked = state.deleteAlertEnabled,
+                    style = style
+                ) {
+                    actions.onDeleteAlertChanged(!state.deleteAlertEnabled)
                 }
                 BookInfoMoreActionItem(stringResource(R.string.copy_book_url), style) {
                     onDismiss()
