@@ -47,7 +47,7 @@ object UiKitBridge {
                 AppColorName.READER_TEXT -> Applicator.resolveScheme().readerText.toArgbInt()
                 AppColorName.READER_BACKGROUND -> Applicator.resolveScheme().readerBackground.toArgbInt()
             }
-            override fun cornerScale(): Float = repository.cornerScale()
+            override fun cornerScale(): Float = io.legado.app.uikit.layout.LayoutEngine.radiusScale
         }
     }
 

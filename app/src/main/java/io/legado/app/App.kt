@@ -48,6 +48,7 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.help.config.ThemePackageStore
+import io.legado.app.help.config.LayoutPackageStore
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.UiKitBridge
 import io.legado.app.help.coroutine.Coroutine
@@ -98,6 +99,7 @@ class App : Application() {
         CrashHandler(this)
         UiKitBridge.init(this)
         ThemePackageStore.init(this)
+        LayoutPackageStore.init(this)
         if (isDebuggable) {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)
         }

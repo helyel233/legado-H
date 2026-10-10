@@ -155,6 +155,11 @@
             android:exported="false"
             android:launchMode="standard" />
         <activity
+            android:name=".ui.config.LayoutCenterActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard" />
+        <activity
             android:name=".ui.config.ThemeCenterActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
