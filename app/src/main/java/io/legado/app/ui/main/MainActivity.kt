@@ -177,11 +177,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var sideNavigationBackgroundLoadingKey: String? = null
     private var sideNavigationBackgroundKey: String? = null
     private var sideNavigationBackgroundBitmap: Bitmap? = null
-    private var aiFloatingBall: FrameLayout? = null
-    private var aiFloatingBallDragged = false
-    private val aiFloatingBallAttachRunnable = Runnable {
-        aiFloatingBall?.let { placeAiFloatingBall(it, animate = true, attached = true) }
-    }
+    private var aiFloatingBallController: MainAiFloatingBallController? = null
     private var bottomNavigationConfigSignature: String? = null
     private var bottomNavigationInset = 0
     private val sidebarTouchSlop by lazy {
@@ -904,159 +900,31 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun updateAiFloatingBall(): Unit = binding.run {
-        if (!shouldShowAiFloatingBall()) {
-            aiFloatingBall?.removeCallbacks(aiFloatingBallAttachRunnable)
-            aiFloatingBall?.isVisible = false
-            return
-        }
-        val ball = aiFloatingBall ?: createAiFloatingBall().also {
-            aiFloatingBall = it
-            it.visibility = View.INVISIBLE
-            root.addView(it)
-        }
-        syncAiFloatingBallIcon(ball)
-        showAiFloatingBallWhenReady(ball)
+    private fun updateAiFloatingBall() {
+        aiBall().update()
     }
 
-    private fun shouldShowAiFloatingBall(): Boolean {
-        return (isStandardBottomMode() || isFloatingSearchHidden()) &&
-                AppConfig.aiAssistantEnabled &&
-                !isSidebarMode()
-    }
-
-    private fun createAiFloatingBall(): FrameLayout {
-        val size = resources.getDimensionPixelSize(R.dimen.main_ai_floating_ball_size)
-        val iconPadding = resources.getDimensionPixelSize(R.dimen.main_ai_floating_ball_icon_padding)
-        return FrameLayout(this).apply {
-            elevation = resources.getDimension(R.dimen.main_search_button_elevation)
-            background = createSolidBottomShellDrawable(bottomBarCornerRadius, oval = true)
-            layoutParams = ConstraintLayout.LayoutParams(size, size)
-            addView(ImageView(this@MainActivity).apply {
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                setPadding(iconPadding, iconPadding, iconPadding, iconPadding)
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            })
-            syncAiFloatingBallIcon(this)
-            setOnClickListener {
-                if (!aiFloatingBallDragged) {
-                    startActivity(Intent(this@MainActivity, AiChatActivity::class.java))
-                }
-            }
-            setOnTouchListener(AiFloatingBallTouchListener(this))
-        }
-    }
-
-    private fun scheduleAiFloatingBallAttach() {
-        aiFloatingBall?.removeCallbacks(aiFloatingBallAttachRunnable)
-        aiFloatingBall?.postDelayed(aiFloatingBallAttachRunnable, 3000L)
-    }
-
-    private fun showAiFloatingBallWhenReady(ball: View) {
-        ball.bringToFront()
-        if (placeAiFloatingBall(ball, animate = false, attached = true)) {
-            ball.isVisible = true
-            scheduleAiFloatingBallAttach()
-            return
-        }
-        ball.visibility = View.INVISIBLE
-        binding.root.doOnLayout {
-            ball.doOnLayout {
-                if (aiFloatingBall === ball && shouldShowAiFloatingBall()) {
-                    showAiFloatingBallWhenReady(ball)
-                }
-            }
-        }
+    private fun aiBall(): MainAiFloatingBallController {
+        return aiFloatingBallController ?: MainAiFloatingBallController(
+            context = this,
+            container = binding.root,
+            touchSlopPx = sidebarTouchSlop.toFloat(),
+            pulseInterpolator = bottomGlassPulseInterpolator,
+            shellDrawable = { oval -> createSolidBottomShellDrawable(bottomBarCornerRadius, oval = oval) },
+            iconSync = { ball -> syncAiFloatingBallIcon(ball) },
+            visibleProbe = {
+                (isStandardBottomMode() || isFloatingSearchHidden()) &&
+                        AppConfig.aiAssistantEnabled &&
+                        !isSidebarMode()
+            },
+            bottomInset = { bottomNavigationInset },
+            openAiChat = { startActivity(Intent(this, AiChatActivity::class.java)) }
+        ).also { aiFloatingBallController = it }
     }
 
     private fun floatingBottomControlsBottomPadding(): Int {
         return bottomNavigationInset +
                 resources.getDimensionPixelSize(R.dimen.main_bottom_controls_bottom_padding)
-    }
-
-    private fun placeAiFloatingBall(ball: View, animate: Boolean, attached: Boolean): Boolean = binding.run {
-        val parentWidth = root.width
-        val parentHeight = root.height
-        if (parentWidth <= 0 || parentHeight <= 0 || ball.width <= 0 || ball.height <= 0) return@run false
-        val side = getPrefInt(PreferKey.aiFloatingBallSide, 1).coerceIn(0, 1)
-        val yPercent = getPrefInt(PreferKey.aiFloatingBallYPercent, 50).coerceIn(8, 92)
-        val hiddenOffset = 0f
-        val targetX = if (side == 0) -hiddenOffset else parentWidth - ball.width + hiddenOffset
-        val safeMargin = resources.getDimensionPixelSize(R.dimen.main_ai_floating_ball_safe_margin)
-        val availableHeight = (parentHeight - bottomNavigationInset - ball.height).coerceAtLeast(1)
-        val maxY = (parentHeight - bottomNavigationInset - ball.height - safeMargin)
-            .coerceAtLeast(safeMargin)
-        val targetY = (availableHeight * yPercent / 100f)
-            .coerceIn(safeMargin.toFloat(), maxY.toFloat())
-        if (animate) {
-            ball.animate()
-                .x(targetX)
-                .y(targetY)
-                .setDuration(180L)
-                .setInterpolator(bottomGlassPulseInterpolator)
-                .start()
-        } else {
-            ball.x = targetX
-            ball.y = targetY
-        }
-        true
-    }
-
-    private inner class AiFloatingBallTouchListener(private val target: View) : View.OnTouchListener {
-        private var downRawX = 0f
-        private var downRawY = 0f
-        private var downX = 0f
-        private var downY = 0f
-
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    target.removeCallbacks(aiFloatingBallAttachRunnable)
-                    downRawX = event.rawX
-                    downRawY = event.rawY
-                    downX = target.x
-                    downY = target.y
-                    aiFloatingBallDragged = false
-                    return true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
-                    if (!aiFloatingBallDragged && (abs(dx) > sidebarTouchSlop || abs(dy) > sidebarTouchSlop)) {
-                        aiFloatingBallDragged = true
-                    }
-                    if (aiFloatingBallDragged) {
-                        val parent = binding.root
-                        target.x = (downX + dx).coerceIn(0f, (parent.width - target.width).toFloat())
-                        val topLimit = 12.dpToPx().toFloat()
-                        val bottomLimit = (parent.height - bottomNavigationInset - target.height - 12.dpToPx())
-                            .coerceAtLeast(12.dpToPx())
-                            .toFloat()
-                        target.y = (downY + dy).coerceIn(topLimit, bottomLimit)
-                    }
-                    return true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (aiFloatingBallDragged) {
-                        val side = if (target.x + target.width / 2f < binding.root.width / 2f) 0 else 1
-                        val availableHeight = (binding.root.height - bottomNavigationInset - target.height).coerceAtLeast(1)
-                        val yPercent = ((target.y / availableHeight) * 100).toInt()
-                            .coerceIn(8, 92)
-                        putPrefInt(PreferKey.aiFloatingBallSide, side)
-                        putPrefInt(PreferKey.aiFloatingBallYPercent, yPercent)
-                        placeAiFloatingBall(target, animate = true, attached = false)
-                        scheduleAiFloatingBallAttach()
-                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
-                        target.performClick()
-                    }
-                    return true
-                }
-            }
-            return false
-        }
     }
 
     private fun bindSideNavigationButtons() = binding.run {
@@ -1717,7 +1585,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val tint = if (hasCustomSearchIcon) null else bottomNavigationView.createThemeColorStateList()
         searchButtonIcon.imageTintList = tint
         sideSearchButton.imageTintList = tint
-        aiFloatingBall?.let(::syncAiFloatingBallIcon)
+        aiFloatingBallController?.resyncIcon()
     }
 
     private fun searchSingleDrawable(): Drawable? {
@@ -2105,7 +1973,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     override fun onDestroy() {
-        aiFloatingBall?.removeCallbacks(aiFloatingBallAttachRunnable)
+        aiFloatingBallController?.cancel()
         binding.root.removeCallbacks(appearanceRefreshRunnable)
         clearLiquidGlassCallbacks()
         resetLiquidGlassBindingState()
