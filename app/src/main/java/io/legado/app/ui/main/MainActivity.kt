@@ -823,10 +823,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomIndicatorAnimator.cancel()
             bottomNavigationIndicatorContainer.isVisible = false
             sideNavigationScrim.background = createSideNavigationScrimDrawable()
-            sideNavigationPanel.background = createSideNavigationPanelDrawable()
-            sideNavigationHeader.background = createSideNavigationHeaderDrawable()
+            sideNavigationPanel.background = createSideNavigationPanelDrawable(binding.sideNavigationBackground.isVisible)
+            sideNavigationHeader.background = createSideNavigationHeaderDrawable(binding.sideNavigationBackground.isVisible)
             sideSearchRow.background = createSideNavigationSearchDrawable()
-            sideNavAiRow.background = createSideNavigationRowDrawable(false)
+            sideNavAiRow.background = createSideNavigationRowDrawable(false, binding.sideNavigationBackground.isVisible)
             applySideNavigationBackground()
             updateSideGoalHeader()
             updateSideNavigationItems()
@@ -1152,7 +1152,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 it.text = title
                 it.applyUiTitleTypeface(this@MainActivity)
             }
-            sideNavigationRowMap()[itemId]?.background = createSideNavigationRowDrawable(itemId == selectedItemId)
+            sideNavigationRowMap()[itemId]?.background = createSideNavigationRowDrawable(
+                itemId == selectedItemId,
+                binding.sideNavigationBackground.isVisible
+            )
         }
         sideNavBookshelfGroups.isVisible = sideBookshelfGroupsExpanded &&
                 bottomNavigationView.menu.findItem(R.id.menu_bookshelf)?.isVisible == true
@@ -1302,8 +1305,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun applySideNavigationSurface() = binding.run {
-        sideNavigationPanel.background = createSideNavigationPanelDrawable()
-        sideNavigationHeader.background = createSideNavigationHeaderDrawable()
+        sideNavigationPanel.background = createSideNavigationPanelDrawable(binding.sideNavigationBackground.isVisible)
+        sideNavigationHeader.background = createSideNavigationHeaderDrawable(binding.sideNavigationBackground.isVisible)
         sideSearchRow.background = createSideNavigationSearchDrawable()
         updateSideNavigationItems()
     }
@@ -1442,7 +1445,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (sideNavigationOpen) return
         sideNavigationGravity = gravity.takeIf { it == "end" } ?: "start"
         sideNavigationLockedGravity = sideNavigationGravity
-        binding.sideNavigationPanel.background = createSideNavigationPanelDrawable()
+        binding.sideNavigationPanel.background = createSideNavigationPanelDrawable(binding.sideNavigationBackground.isVisible)
         binding.sideNavigationPanel.animate().cancel()
         updateSideNavigationPanelWidth()
         applySideNavigationEdge(sideNavigationGravity)
@@ -1556,8 +1559,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomNavigationIndicatorGlassView.visibility = android.view.View.VISIBLE
             searchButtonGlassView.visibility = if (standardMode) android.view.View.GONE else android.view.View.VISIBLE
             val glassLevel = when (effectMode) {
-                "frosted" -> bottomBarOpacityLevel(AppConfig.frostedGlassLevel)
-                else -> bottomBarOpacityLevel(AppConfig.liquidGlassLevel)
+                "frosted" -> mainBottomBarOpacityLevel(AppConfig.frostedGlassLevel)
+                else -> mainBottomBarOpacityLevel(AppConfig.liquidGlassLevel)
             }
             val frostedMode = effectMode == "frosted"
             val blurRadius = if (frostedMode) {
@@ -1726,35 +1729,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         return this?.constantState?.newDrawable()?.mutate() ?: this?.mutate()
     }
 
-    private fun createSolidBottomShellDrawable(cornerRadius: Float, oval: Boolean): GradientDrawable {
-        val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-        val baseColor = bottomBackground
-        val alpha = standardBottomBarOpacityLevel(config.opacity)
-        return GradientDrawable().apply {
-            shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
-            if (!oval) {
-                this.cornerRadius = cornerRadius
-            }
-            setColor(AppColorUtils.withAlpha(baseColor, alpha))
-            bottomBarBorderColor(config)?.let { setStroke(1.dpToPx(), it) }
-        }
-    }
-
-    private fun createStandardBottomShellDrawable(): Drawable {
-        val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-        val baseColor = bottomBackground
-        val alpha = standardBottomBarOpacityLevel(config.opacity)
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 0f
-            setColor(AppColorUtils.withAlpha(baseColor, alpha))
-            bottomBarBorderColor(config)?.let { setStroke(1.dpToPx(), it) }
-        }
-    }
-
     private fun renderStandardBottomWallpaper() = binding.run {
         val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-        val alpha = standardBottomBarOpacityLevel(config.opacity)
+        val alpha = mainStandardBottomBarOpacityLevel(config.opacity)
         val wallpaper = NavigationBarIconConfig.currentBottomWallpaperPath(AppConfig.isNightTheme)
             ?.let(::File)
             ?.takeIf { it.isFile && it.canRead() }
@@ -1769,202 +1746,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 )
             )
         }
-    }
-
-    private fun bottomBarOpacityLevel(value: Int): Float {
-        return (value.coerceIn(0, 100) / 200f).coerceIn(0f, 0.5f)
-    }
-
-    private fun standardBottomBarOpacityLevel(value: Int): Float {
-        return (value.coerceIn(0, 100) / 100f).coerceIn(0f, 1f)
-    }
-
-    private fun createEInkBottomShellDrawable(cornerRadius: Float, oval: Boolean): GradientDrawable {
-        val baseColor = bottomBackground
-        return GradientDrawable().apply {
-            shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
-            if (!oval) {
-                this.cornerRadius = cornerRadius
-            }
-            setColor(baseColor)
-            setStroke(1.dpToPx(), AppColorUtils.withAlpha(Color.BLACK, 0.42f))
-        }
-    }
-
-    private fun createSolidBottomIndicatorDrawable(cornerRadius: Float = bottomIndicatorCornerRadius): GradientDrawable {
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            this.cornerRadius = cornerRadius
-            setColor(primaryColor)
-        }
-    }
-
-    private fun createSideNavigationScrimDrawable(): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(AppColorUtils.withAlpha(Color.BLACK, 0.42f))
-        }
-    }
-
-    private fun createSideNavigationHeaderDrawable(): GradientDrawable {
-        val baseColor = bottomBackground
-        val isLight = AppColorUtils.isColorLight(baseColor)
-        val surface = if (binding.sideNavigationBackground.isVisible) {
-            AppColorUtils.withAlpha(
-                if (AppConfig.isNightTheme) Color.BLACK else Color.WHITE,
-                if (AppConfig.isNightTheme) 0.20f else 0.42f
-            )
-        } else {
-            AppColorUtils.blendColors(
-                baseColor,
-                if (isLight) Color.WHITE else Color.BLACK,
-                if (isLight) 0.34f else 0.16f
-            )
-        }
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = UiCorner.panelRadius(this@MainActivity)
-            setColor(surface)
-            setStroke(
-                1.dpToPx(),
-                AppColorUtils.withAlpha(
-                    if (isLight) Color.BLACK else Color.WHITE,
-                    if (binding.sideNavigationBackground.isVisible) 0.06f else 0.10f
-                )
-            )
-        }
-    }
-
-    private fun createSideNavigationSearchDrawable(): GradientDrawable {
-        val searchSurfaceColor = if (AppConfig.isNightTheme) {
-            AppColorUtils.withAlpha(Color.rgb(52, 52, 56), 0.42f)
-        } else {
-            AppColorUtils.withAlpha(Color.rgb(120, 120, 128), 0.22f)
-        }
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = UiCorner.searchRadius(18f)
-            setColor(searchSurfaceColor)
-            setStroke(0, Color.TRANSPARENT)
-        }
-    }
-
-    private fun createSideNavigationPanelDrawable(): GradientDrawable {
-        val baseColor = bottomBackground
-        val hasWallpaper = binding.sideNavigationBackground.isVisible
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 0f
-            setColor(if (hasWallpaper) Color.TRANSPARENT else baseColor)
-            if (hasWallpaper) {
-                setStroke(0, Color.TRANSPARENT)
-            } else {
-                setStroke(
-                    1.dpToPx(),
-                    AppColorUtils.withAlpha(
-                        if (AppColorUtils.isColorLight(baseColor)) Color.BLACK else Color.WHITE,
-                        0.12f
-                    )
-                )
-            }
-        }
-    }
-
-    private fun createSideNavigationRowDrawable(selected: Boolean): Drawable {
-        val baseColor = bottomBackground
-        val isLight = AppColorUtils.isColorLight(baseColor)
-        val fill = if (selected) {
-            if (binding.sideNavigationBackground.isVisible) {
-                AppColorUtils.withAlpha(
-                    if (AppConfig.isNightTheme) Color.BLACK else Color.WHITE,
-                    if (AppConfig.isNightTheme) 0.18f else 0.34f
-                )
-            } else {
-                if (AppConfig.isNightTheme) {
-                    AppColorUtils.withAlpha(Color.rgb(52, 52, 56), 0.46f)
-                } else {
-                    AppColorUtils.withAlpha(Color.rgb(120, 120, 128), 0.20f)
-                }
-            }
-        } else {
-            Color.TRANSPARENT
-        }
-        return InsetDrawable(
-            GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = UiCorner.actionRadius(this@MainActivity)
-                setColor(fill)
-                setStroke(0, Color.TRANSPARENT)
-            },
-            4.dpToPx(),
-            5.dpToPx(),
-            4.dpToPx(),
-            5.dpToPx()
-        )
-    }
-
-    private fun createSideNavigationGroupDrawable(selected: Boolean): Drawable {
-        val fill = if (selected) {
-            if (AppConfig.isNightTheme) {
-                AppColorUtils.withAlpha(Color.rgb(52, 52, 56), 0.42f)
-            } else {
-                AppColorUtils.withAlpha(Color.rgb(120, 120, 128), 0.18f)
-            }
-        } else {
-            Color.TRANSPARENT
-        }
-        return InsetDrawable(
-            GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = UiCorner.actionRadius(this@MainActivity)
-                setColor(fill)
-                setStroke(0, Color.TRANSPARENT)
-            },
-            12.dpToPx(),
-            0,
-            12.dpToPx(),
-            0
-        )
-    }
-
-    private fun createLiquidGlassShellDrawable(
-        glassLevel: Float,
-        cornerRadius: Float,
-        oval: Boolean,
-        selected: Boolean
-    ): GradientDrawable {
-        val baseColor = bottomBackground
-        val isLight = AppColorUtils.isColorLight(baseColor)
-        val surfaceColor = if (isLight) Color.WHITE else Color.rgb(22, 24, 28)
-        val fallbackBoost = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) 0.08f else 0f
-        val startAlpha = (0.18f + glassLevel * 0.16f + fallbackBoost).coerceIn(0f, 0.44f)
-        val centerAlpha = (0.10f + glassLevel * 0.12f + fallbackBoost * 0.65f).coerceIn(0f, 0.32f)
-        val endAlpha = (0.08f + glassLevel * 0.10f + fallbackBoost * 0.45f).coerceIn(0f, 0.26f)
-        val selectedBoost = if (selected) 0.05f else 0f
-        val strokeAlpha = (0.18f + glassLevel * 0.16f + selectedBoost).coerceIn(0f, 0.42f)
-        return GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, startAlpha + selectedBoost),
-                AppColorUtils.withAlpha(surfaceColor, centerAlpha + selectedBoost),
-                AppColorUtils.withAlpha(surfaceColor, endAlpha + selectedBoost)
-            )
-        ).apply {
-            shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
-            if (!oval) {
-                setCornerRadius(cornerRadius)
-            }
-            setStroke(
-                1.dpToPx(),
-                bottomBarBorderColor() ?: AppColorUtils.withAlpha(surfaceColor, strokeAlpha)
-            )
-        }
-    }
-
-    private fun bottomBarBorderColor(
-        config: NavigationBarIconConfig.Config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-    ): Int? {
-        val color = config.borderColor ?: return null
-        return AppColorUtils.withAlpha(color, config.borderAlpha.coerceIn(0, 100) / 100f)
     }
 
     private fun setupLiquidGlassView(
