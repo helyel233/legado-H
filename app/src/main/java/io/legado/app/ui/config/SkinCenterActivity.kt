@@ -26,6 +26,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -71,8 +73,12 @@ private fun SkinCenterScreen() {
     val context = LocalContext.current
     val scheme = Applicator.rememberAppColorScheme()
     val rev = Applicator.revision
-    val themeUsers = remember(rev) { ThemePackageStore.listUser(context) }
-    val layoutUsers = remember(rev) { LayoutPackageStore.listUser(context) }
+    var themeUsers by remember { mutableStateOf(ThemePackageStore.listUser(context)) }
+    var layoutUsers by remember { mutableStateOf(LayoutPackageStore.listUser(context)) }
+    fun reload() {
+        themeUsers = ThemePackageStore.listUser(context)
+        layoutUsers = LayoutPackageStore.listUser(context)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -105,6 +111,7 @@ private fun SkinCenterScreen() {
                     onClick = {
                         Applicator.applyTheme(spec)
                         ThemePackageStore.persistActive(context)
+                        reload()
                     },
                     actions = {
                         TextButton(onClick = {
@@ -116,6 +123,7 @@ private fun SkinCenterScreen() {
                             ThemePackageStore.upsertUserSpec(context, clone)
                             Applicator.applyTheme(clone)
                             ThemePackageStore.persistActive(context)
+                        reload()
                         }) { Text(stringResource(R.string.skin_center_clone)) }
                         TextButton(onClick = {
                             val clone = spec.copy(
@@ -126,6 +134,7 @@ private fun SkinCenterScreen() {
                             ThemePackageStore.upsertUserSpec(context, clone)
                             Applicator.applyTheme(clone)
                             ThemePackageStore.persistActive(context)
+                        reload()
                             context.startActivity<ThemeCenterActivity> { putExtra(ThemeCenterActivity.EXTRA_PKG_ID, clone.id) }
                         }) { Text(stringResource(R.string.skin_center_edit)) }
                     },
@@ -141,11 +150,13 @@ private fun SkinCenterScreen() {
                     onClick = {
                         Applicator.applyTheme(spec)
                         ThemePackageStore.persistActive(context)
+                        reload()
                     },
                     actions = {
                         TextButton(onClick = {
                             Applicator.applyTheme(spec)
                             ThemePackageStore.persistActive(context)
+                        reload()
                             context.startActivity<ThemeCenterActivity> { putExtra(ThemeCenterActivity.EXTRA_PKG_ID, spec.id) }
                         }) { Text(stringResource(R.string.skin_center_edit)) }
                         TextButton(onClick = {
@@ -153,6 +164,7 @@ private fun SkinCenterScreen() {
                             if (Applicator.activeTheme.id == spec.id) {
                                 Applicator.applyTheme(BuiltinThemes.default)
                                 ThemePackageStore.persistActive(context)
+                        reload()
                             }
                         }) { Text(stringResource(R.string.skin_center_delete)) }
                     },
@@ -169,6 +181,7 @@ private fun SkinCenterScreen() {
                     ThemePackageStore.upsertUserSpec(context, spec)
                     Applicator.applyTheme(spec)
                     ThemePackageStore.persistActive(context)
+                        reload()
                     context.startActivity<ThemeCenterActivity> { putExtra(ThemeCenterActivity.EXTRA_PKG_ID, spec.id) }
                 }) { Text(stringResource(R.string.skin_center_new_theme)) }
             }
@@ -195,6 +208,18 @@ private fun SkinCenterScreen() {
                             LayoutPackageStore.upsertUserSpec(context, clone)
                             LayoutEngine.applyLayout(clone)
                             LayoutPackageStore.persistActive(context)
+                            reload()
+                        }) { Text(stringResource(R.string.skin_center_clone)) }
+                        TextButton(onClick = {
+                            val clone = spec.copy(
+                                id = LayoutPackageStore.newUserId(),
+                                name = spec.name + " 副本",
+                                basedOn = spec.id,
+                            )
+                            LayoutPackageStore.upsertUserSpec(context, clone)
+                            LayoutEngine.applyLayout(clone)
+                            LayoutPackageStore.persistActive(context)
+                            reload()
                             context.startActivity<LayoutCenterActivity> { putExtra(LayoutCenterActivity.EXTRA_PKG_ID, clone.id) }
                         }) { Text(stringResource(R.string.skin_center_edit)) }
                     },

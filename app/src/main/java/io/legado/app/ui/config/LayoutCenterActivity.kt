@@ -1,6 +1,7 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -134,6 +135,16 @@ private fun LayoutCenterScreen() {
                 TextButton(onClick = {
                     activity?.updateTarget { it.copy(glassEnabled = !it.glassEnabled) }
                 }) { Text(stringResource(R.string.layout_glass)) }
+            }
+        }
+        item {
+            val context = LocalContext.current
+            val savedText = stringResource(R.string.theme_center_saved)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    LayoutPackageStore.persistActive(context)
+                    android.widget.Toast.makeText(context, savedText, android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.theme_center_save)) }
             }
         }
         item { Spacer(Modifier.height(40.dp)) }
