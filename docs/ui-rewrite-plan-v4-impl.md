@@ -110,7 +110,8 @@
 ### 任务分解
 
 **A2-1 界面包格式 + Applicator 扩展**
-- `uikit` 新增 `LayoutPackageSpec`（nav/density/glass/shape 四组，仅全局字段）+ `layoutTweaks.json`（手调 delta），取值并入 Applicator 同一条三明治链。
+- `uikit` 新增 `LayoutPackageSpec`（nav/density/glass/shape 四组，仅全局字段），取值并入 Applicator 取值链。
+- **包内调整模型（V4.8 用户再次确认，与主题包一致）**：可选不同的包 → 包内调整参数 → **另存为自定义界面包**（basedOn 记录基包）。不做全局手调 delta 层（原 `layoutTweaks.json` 方案作废）；「已修改」标记 = 自定义界面包相对基包的差异项，可单项还原或删除自定义包回基包。
 - 内置 4 包：经典底栏（默认）、悬浮玻璃（悬浮胶囊底栏+玻璃——现版本悬浮底栏设计的正式化归宿）、侧滑沉浸、极简紧凑。纯 json 资产。
 - **铁律检查点**：spec 中出现任何按页面字段即打回（方案验收第 5 条的机制保证）。
 
