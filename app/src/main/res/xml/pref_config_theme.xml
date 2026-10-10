@@ -51,12 +51,6 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
-        android:key="book_info_manage"
-        android:summary="@string/book_info_manage_summary"
-        android:title="@string/book_info_manage"
-        app:iconSpaceReserved="false" />
-
-    <io.legado.app.lib.prefs.Preference
         android:key="bubble_manage"
         android:summary="@string/bubble_manage_summary"
         android:title="@string/bubble_manage"
