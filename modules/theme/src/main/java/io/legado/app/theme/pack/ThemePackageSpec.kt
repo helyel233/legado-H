@@ -36,15 +36,25 @@ data class ThemePackageSpec(
         }
 
     /** @return ARGB int or null when the seed string is missing/malformed. */
-    fun seedArgb(): Int? = parseColor(seed)
+    fun seedArgb(): Int? = if (isWallpaperSeed) null else parseColor(seed)
+
+    /**
+     * "dynamic" marks the Material You wallpaper-seed theme: the app resolves
+     * the seed at runtime from the system palette (Android 12+, falls back to
+     * the builtin Sky theme below 12).
+     */
+    val isWallpaperSeed: Boolean
+        get() = seed.trim().equals(SEEED_DYNAMIC, ignoreCase = true)
 
     fun isValid(): Boolean =
         formatVersion == DEFAULT_FORMAT_VERSION &&
-            id.isNotBlank() && name.isNotBlank() && seedArgb() != null
+            id.isNotBlank() && name.isNotBlank() &&
+            (isWallpaperSeed || seedArgb() != null)
 
     companion object {
 
         const val DEFAULT_FORMAT_VERSION = 1
+        const val SEEED_DYNAMIC = "dynamic"
         const val STRATEGY_TONAL = "tonal"
         const val STRATEGY_AMOLED = "amoled"
         const val STRATEGY_MUTED = "muted"
@@ -61,8 +71,8 @@ data class ThemePackageSpec(
                     SpecParseResult.Error("主题包格式过新（v${spec.formatVersion}），请升级 App 后再导入")
                 spec.id.isBlank() || spec.name.isBlank() ->
                     SpecParseResult.Error("主题包缺少 id 或 name")
-                spec.seedArgb() == null ->
-                    SpecParseResult.Error("种子色无效：${spec.seed}（应为 #RRGGBB 或 #AARRGGBB）")
+                !(spec.isWallpaperSeed || spec.seedArgb() != null) ->
+                    SpecParseResult.Error("种子色无效：${spec.seed}（应为 #RRGGBB、#AARRGGBB 或 dynamic）")
                 else -> SpecParseResult.Ok(spec)
             }
         } catch (e: Exception) {
