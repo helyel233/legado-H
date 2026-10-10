@@ -18,7 +18,7 @@ import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.RuleData
-import io.legado.app.ui.main.explore.ExploreAdapter.Companion.exploreInfoMapList
+import io.legado.app.help.source.ExploreInfoCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -133,7 +133,7 @@ object WebBook {
     ): ArrayList<SearchBook> {
         val ruleData = RuleData()
         val sourceUrl = bookSource.bookSourceUrl
-        val exploreInfoMap = exploreInfoMapList[sourceUrl]
+        val exploreInfoMap = ExploreInfoCache.infoMapList[sourceUrl]
         val analyzeUrl = AnalyzeUrl(
             mUrl = url,
             page = page,

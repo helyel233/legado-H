@@ -424,30 +424,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     var discoveryPageMode: String
         get() {
+            // 经典发现页（legacy）已移除，历史设置迁移为现代发现页
             val stored = appCtx.getPrefString(PreferKey.discoveryPageMode)
-            return when (stored) {
-                DISCOVERY_PAGE_MODE_LEGACY,
-                DISCOVERY_PAGE_MODE_MODERN,
-                DISCOVERY_PAGE_MODE_SUITE -> stored
-                else -> if (appCtx.getPrefBoolean(PreferKey.modernDiscoveryPage, true)) {
-                    DISCOVERY_PAGE_MODE_MODERN
-                } else {
-                    DISCOVERY_PAGE_MODE_LEGACY
-                }
+            return if (stored == DISCOVERY_PAGE_MODE_SUITE) {
+                DISCOVERY_PAGE_MODE_SUITE
+            } else {
+                DISCOVERY_PAGE_MODE_MODERN
             }
         }
         set(value) {
             val normalized = when (value) {
-                DISCOVERY_PAGE_MODE_LEGACY,
                 DISCOVERY_PAGE_MODE_MODERN,
                 DISCOVERY_PAGE_MODE_SUITE -> value
                 else -> DISCOVERY_PAGE_MODE_MODERN
             }
             appCtx.putPrefString(PreferKey.discoveryPageMode, normalized)
-            appCtx.putPrefBoolean(
-                PreferKey.modernDiscoveryPage,
-                normalized != DISCOVERY_PAGE_MODE_LEGACY
-            )
         }
 
     val modernRssPage: Boolean

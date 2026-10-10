@@ -13,15 +13,12 @@ import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.Gravity
-import android.view.Menu
-import android.view.MenuItem
 import android.widget.PopupWindow
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.AutoCompleteTextView
-import android.view.SubMenu
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,11 +26,9 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.appcompat.widget.SearchView
 import androidx.appcompat.widget.AppCompatSpinner
 import androidx.core.widget.NestedScrollView
 import com.google.android.flexbox.FlexboxLayout
-import androidx.core.os.bundleOf
 import androidx.core.view.doOnLayout
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -42,7 +37,6 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Priority
@@ -50,7 +44,6 @@ import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.request.RequestOptions
 import com.script.rhino.runScriptWithContext
 import io.legado.app.R
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
@@ -69,6 +62,7 @@ import io.legado.app.databinding.FragmentExploreBinding
 import io.legado.app.help.CoverDisplayResolver
 import io.legado.app.help.CoverThumbnailCache
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.source.ExploreInfoCache
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
@@ -90,8 +84,6 @@ import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.explore.ExploreShowActivity
-import io.legado.app.ui.book.explore.ExploreShowBookCallback
-import io.legado.app.ui.book.explore.ExploreShowWaterfallAdapter
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
@@ -156,9 +148,7 @@ import kotlin.random.Random
  * 发现页面
  */
 class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explore),
-    MainFragmentInterface,
-    ExploreAdapter.CallBack,
-    ExploreShowBookCallback {
+    MainFragmentInterface {
 
     constructor(position: Int) : this() {
         val bundle = Bundle()
@@ -170,18 +160,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     override val viewModel by viewModels<ExploreViewModel>()
     private val binding by viewBinding(FragmentExploreBinding::bind)
-    private val adapter by lazy { ExploreAdapter(requireContext(), this) }
-    private val linearLayoutManager by lazy { LinearLayoutManager(context) }
-    private var discoverBookAdapter: RecyclerAdapter<SearchBook, *>? = null
-    private var discoverBookLayoutMode = 0
-    private val searchView: SearchView? by lazy {
-        binding.titleBar.findViewById<SearchView?>(R.id.search_view)
-    }
-    private val diffItemCallBack = ExploreDiffItemCallBack()
-    private val groups = linkedSetOf<String>()
-    private var exploreFlowJob: Job? = null
-    private var groupsMenu: SubMenu? = null
-    private var oldModeInitialized = false
     private var modernModeInitialized = false
     private var discoveryPageMode = AppConfig.DISCOVERY_PAGE_MODE_MODERN
     private var usingModernDiscovery = false
@@ -240,7 +218,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var selectedDiscoverUrlIndex = -1
     private var discoverRequestVersion = 0L
     private var discoverSourceVersion = 0L
-    private var lastExploreGlassLevel = Int.MIN_VALUE
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
@@ -271,10 +248,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 }
             } else if (usingSuiteDiscovery) {
                 binding.swipeRefreshLayout.isRefreshing = false
-            } else {
-                if (!adapter.refreshExpandedIfNoKinds()) {
-                    upExploreData(searchView?.query?.toString())
-                }
             }
         }
         binding.topBar.setMode(io.legado.app.ui.widget.MainTopBarView.Mode.DISCOVERY)
@@ -283,10 +256,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         binding.topBar.doOnLayout {
             updateModernTopBarOverlay()
         }
-        binding.rvFind.clipToPadding = false
-        binding.rvFind.applyMainBottomBarPadding()
-        binding.rvDiscoverBooks.clipToPadding = false
-        binding.rvDiscoverBooks.applyMainBottomBarPadding(withInitialPadding = true)
         binding.composeDiscoverBooks.setViewCompositionStrategy(
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
@@ -348,17 +317,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         scheduleDiscoveryWarmup()
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu) {
-        super.onCompatCreateOptionsMenu(menu)
-        if (usingModernDiscovery || usingSuiteDiscovery) {
-            groupsMenu = null
-            return
-        }
-        menuInflater.inflate(R.menu.main_explore, menu)
-        groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
-        upGroupsMenu()
-    }
-
     private fun applyDiscoveryMode(loadData: Boolean = true) {
         val mode = AppConfig.discoveryPageMode
         val modern = mode == AppConfig.DISCOVERY_PAGE_MODE_MODERN
@@ -366,12 +324,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         discoveryPageMode = mode
         usingModernDiscovery = modern
         usingSuiteDiscovery = suite
-        binding.titleBar.isGone = modern || suite
+        binding.titleBar.isGone = true
         binding.llModernDiscovery.isVisible = modern
         binding.composeDiscoverySuite.isVisible = suite
-        binding.rvFind.isGone = modern || suite
-        binding.tvEmptyMsg.isGone = modern || suite
-        searchView?.isGone = modern || suite
         if (modern) {
             binding.topBar.post {
                 updateModernTopBarOverlay()
@@ -382,17 +337,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             return
         }
         if (modern) {
-            exploreFlowJob?.cancel()
             stopSuiteMode()
             initModernMode()
-        } else if (suite) {
-            exploreFlowJob?.cancel()
+        } else {
             stopModernMode()
             initSuiteMode()
-        } else {
-            stopSuiteMode()
-            stopModernMode()
-            initClassicMode()
         }
         activity?.invalidateOptionsMenu()
     }
@@ -404,10 +353,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         if (usingSuiteDiscovery && binding.composeDiscoverySuite.isVisible) {
             return if (composeSuiteCanScrollBackward) binding.composeDiscoverySuite else null
         }
-        return when {
-            usingModernDiscovery -> binding.rvDiscoverBooks
-            else -> binding.rvFind
-        }
+        return null
     }
 
     private fun scheduleDiscoveryWarmup() {
@@ -422,18 +368,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             ) return@launch
             applyDiscoveryMode(loadData = true)
             discoveryModeLoaded = true
-        }
-    }
-
-    private fun initClassicMode() {
-        if (!oldModeInitialized) {
-            oldModeInitialized = true
-            initSearchView()
-            initRecyclerView()
-            initGroupData()
-        }
-        if (exploreFlowJob?.isActive != true) {
-            upExploreData(searchView?.query?.toString())
         }
     }
 
@@ -1669,23 +1603,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    private fun initSearchView() {
-        val view = searchView ?: return
-        view.applyTint(primaryTextColor)
-        view.isSubmitButtonEnabled = true
-        view.queryHint = getString(R.string.screen_find)
-        view.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
-
-            override fun onQueryTextChange(newText: String?): Boolean {
-                upExploreData(newText)
-                return false
-            }
-        })
-    }
-
     private fun initDiscoverRecycler() {
         binding.topBar.tagsBar.setOnTagClickListener { index ->
             val item = discoverTagItems.getOrNull(index) ?: return@setOnTagClickListener
@@ -1707,15 +1624,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             updateModernTopBarOverlay()
         }
         applyDiscoverBookLayout(force = true)
-        binding.rvDiscoverBooks.setEdgeEffectColor(primaryColor)
-        binding.rvDiscoverBooks.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                if (dy > 0 && !recyclerView.canScrollVertically(1)) {
-                    loadDiscoverBooks(reset = false)
-                }
-            }
-        })
         updateModernTopBarOverlay()
     }
 
@@ -1733,13 +1641,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 binding.composeDiscoverBooks.paddingRight,
                 binding.composeDiscoverBooks.paddingBottom
             )
-            binding.rvDiscoverBooks.clipToPadding = true
-            binding.rvDiscoverBooks.setPadding(
-                binding.rvDiscoverBooks.paddingLeft,
-                topSpace,
-                binding.rvDiscoverBooks.paddingRight,
-                binding.rvDiscoverBooks.paddingBottom
-            )
             binding.swipeRefreshLayout.setProgressViewOffset(
                 true,
                 (topSpace - 28.dpToPx()).coerceAtLeast(0),
@@ -1754,36 +1655,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         val layoutMode = AppConfig.discoveryPageLayout
         composeDiscoverLayoutMode.intValue = layoutMode
         composeDiscoverListStyle.intValue = AppConfig.bookshelfListItemStyle
-        val useComposeList = layoutMode != 2
-        binding.composeDiscoverBooks.isVisible = useComposeList
-        binding.rvDiscoverBooks.isGone = useComposeList
-        applyDiscoverBookContainerMargins(useComposeList)
-        if (useComposeList) {
-            discoverBookLayoutMode = layoutMode
-            discoverBookAdapter = null
-            binding.rvDiscoverBooks.adapter = null
-            syncDiscoverComposeState()
-            return
-        }
-        if (!force && discoverBookLayoutMode == layoutMode && discoverBookAdapter != null) return
-        discoverBookLayoutMode = layoutMode
-        binding.rvDiscoverBooks.layoutManager =
-            StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL)
-        discoverBookAdapter = ExploreShowWaterfallAdapter(requireContext(), this, 2).also { adapter ->
-            binding.rvDiscoverBooks.adapter = adapter
-            if (discoverBooks.isNotEmpty()) {
-                adapter.setItems(discoverBooks.toList())
-            }
-        }
-    }
-
-    private fun applyDiscoverBookContainerMargins(useComposeList: Boolean) {
-        val margin = if (useComposeList) 0 else resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
-        val params = binding.flDiscoverBooks.layoutParams as? ViewGroup.MarginLayoutParams ?: return
-        if (params.marginStart == margin && params.marginEnd == margin) return
-        params.marginStart = margin
-        params.marginEnd = margin
-        binding.flDiscoverBooks.layoutParams = params
+        binding.composeDiscoverBooks.isVisible = true
+        syncDiscoverComposeState()
     }
 
     private fun syncDiscoverComposeState(forceBooks: Boolean = false) {
@@ -1840,7 +1713,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             } else if (clearOnMiss) {
                 discoverBooks.clear()
                 syncDiscoverComposeState(forceBooks = true)
-                discoverBookAdapter?.clearItems()
             }
         }
     }
@@ -1851,7 +1723,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         discoverPage = cache.nextPage.coerceAtLeast(2)
         discoverHasMore = cache.hasMore
         syncDiscoverComposeState(forceBooks = true)
-        discoverBookAdapter?.setItems(discoverBooks.toList())
         binding.tvDiscoverEmpty.gone()
     }
 
@@ -2132,19 +2003,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     discoverBookshelf.clear()
                     books.filterNot { it.isNotShelf }
                         .forEach {
-                            discoverBookshelf.add("${it.name}-${it.author}")
+                                    discoverBookshelf.add("${it.name}-${it.author}")
                             discoverBookshelf.add(it.name)
                             discoverBookshelf.add(it.bookUrl)
                         }
                     composeDiscoverBookshelfVersion.intValue += 1
-                    val bookAdapter = discoverBookAdapter
-                    if ((bookAdapter?.itemCount ?: 0) > 0) {
-                        bookAdapter?.notifyItemRangeChanged(
-                            0,
-                            bookAdapter.itemCount,
-                            bundleOf("isInBookshelf" to null)
-                        )
-                    }
                 }
         }
     }
@@ -2786,7 +2649,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         discoverCurrentUrl = AppConfig.modernDiscoveryTagUrl(source.bookSourceUrl)
         discoverBooks.clear()
         syncDiscoverComposeState()
-        discoverBookAdapter?.clearItems()
         restoreModernDiscoverCacheAsync(
             sourceUrl = source.bookSourceUrl,
             tagUrl = discoverCurrentUrl,
@@ -3443,8 +3305,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun getDiscoverInfoMap(sourceUrl: String): InfoMap {
-        return ExploreAdapter.exploreInfoMapList[sourceUrl] ?: InfoMap(sourceUrl).also {
-            ExploreAdapter.exploreInfoMapList.put(sourceUrl, it)
+        return ExploreInfoCache.infoMapList[sourceUrl] ?: InfoMap(sourceUrl).also {
+            ExploreInfoCache.infoMapList.put(sourceUrl, it)
         }
     }
 
@@ -3460,7 +3322,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         discoverPage = 1
         discoverBooks.clear()
         syncDiscoverComposeState()
-        discoverBookAdapter?.clearItems()
         binding.tvDiscoverEmpty.text = message
         binding.tvDiscoverEmpty.visible()
     }
@@ -3499,8 +3360,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 } else {
                     discoverBooks.clear()
                     syncDiscoverComposeState(forceBooks = true)
-                    discoverBookAdapter?.clearItems()
-                }
+                    }
                 binding.tvDiscoverEmpty.gone()
             }
             val pageToLoad = if (reset) 1 else discoverPage
@@ -3541,8 +3401,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                         discoverHasMore = false
                     }
                     syncDiscoverComposeState()
-                    discoverBookAdapter?.setItems(discoverBooks.toList())
-                    binding.tvDiscoverEmpty.gone()
+                                binding.tvDiscoverEmpty.gone()
                     saveModernDiscoverCacheAsync(
                         sourceUrl = sourceUrl,
                         tagUrl = url,
@@ -3581,71 +3440,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    private fun initRecyclerView() {
-        binding.rvFind.setEdgeEffectColor(primaryColor)
-        binding.rvFind.layoutManager = linearLayoutManager
-        binding.rvFind.adapter = adapter
-        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                super.onItemRangeInserted(positionStart, itemCount)
-                if (positionStart == 0) {
-                    binding.rvFind.scrollToPosition(0)
-                }
-            }
-        })
-    }
-
-    private fun initGroupData() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            appDb.bookSourceDao.flowExploreGroups()
-                .flowWithLifecycleAndDatabaseChange(
-                    viewLifecycleOwner.lifecycle,
-                    Lifecycle.State.RESUMED,
-                    AppDatabase.BOOK_SOURCE_TABLE_NAME
-                )
-                .conflate()
-                .distinctUntilChanged()
-                .collect {
-                    groups.clear()
-                    groups.addAll(it)
-                    upGroupsMenu()
-                    delay(DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS)
-                }
-        }
-    }
-
-    private fun upExploreData(searchKey: String? = null) {
-        exploreFlowJob?.cancel()
-        exploreFlowJob = viewLifecycleOwner.lifecycleScope.launch {
-            when {
-                searchKey.isNullOrBlank() -> {
-                    appDb.bookSourceDao.flowExplore()
-                }
-
-                searchKey.startsWith("group:") -> {
-                    val key = searchKey.substringAfter("group:")
-                    appDb.bookSourceDao.flowGroupExplore(key)
-                }
-
-                else -> {
-                    appDb.bookSourceDao.flowExplore(searchKey)
-                }
-            }.flowWithLifecycleAndDatabaseChange(
-                viewLifecycleOwner.lifecycle,
-                Lifecycle.State.RESUMED,
-                AppDatabase.BOOK_SOURCE_TABLE_NAME
-            ).catch {
-                AppLog.put("发现页面更新数据出错", it)
-            }.conflate().flowOn(IO).collect {
-                binding.swipeRefreshLayout.isRefreshing = false
-                binding.tvEmptyMsg.isGone = it.isNotEmpty() || (searchView?.query?.isNotEmpty() == true)
-                adapter.setItems(it, diffItemCallBack)
-                delay(DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS)
-            }
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         if (discoveryPageMode != AppConfig.discoveryPageMode || !discoveryModeLoaded) {
@@ -3657,23 +3451,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         } else if (usingSuiteDiscovery) {
             refreshSuiteConfig()
         }
-        if (!usingModernDiscovery && !usingSuiteDiscovery) {
-            // 毛玻璃强度在编辑主题中调整后，返回发现页时刷新行背景
-            val glassLevel = ExploreGlassBackdrop.level(requireContext())
-            if (glassLevel != lastExploreGlassLevel) {
-                lastExploreGlassLevel = glassLevel
-                adapter.notifyDataSetChanged()
-            }
-            adapter.upResumed(true)
-        }
     }
 
     override fun onPause() {
-        if (!usingModernDiscovery && !usingSuiteDiscovery) {
-            adapter.upResumed(false)
-            searchView?.clearFocus()
-            adapter.onPause()
-        }
         if (usingModernDiscovery) {
             discoverLoadJob?.cancel()
             discoverLoadJob = null
@@ -3689,6 +3469,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             suiteLoadJob = null
             binding.swipeRefreshLayout.isRefreshing = false
         }
+        ExploreInfoCache.savePending(viewLifecycleOwner.lifecycleScope)
         WebViewPool.scheduleDestroyScope(WebViewPool.Scope.DISCOVERY)
         super.onPause()
     }
@@ -3697,35 +3478,14 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         stopModernMode()
         stopSuiteMode()
         WebViewPool.destroyScope(WebViewPool.Scope.DISCOVERY)
-        oldModeInitialized = false
         modernModeInitialized = false
-        groupsMenu = null
         super.onDestroyView()
     }
 
-    private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
-        subMenu.removeGroup(R.id.menu_group_text)
-        groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
-        }
-    }
-
-    override val scope: CoroutineScope
+    val scope: CoroutineScope
         get() = viewLifecycleOwner.lifecycleScope
 
-    override fun onCompatOptionsItemSelected(item: MenuItem) {
-        super.onCompatOptionsItemSelected(item)
-        if (usingModernDiscovery || usingSuiteDiscovery) return
-        if (item.groupId == R.id.menu_group_text) {
-            searchView?.setQuery("group:${item.title}", true) ?: upExploreData("group:${item.title}")
-        }
-    }
-
-    override fun scrollTo(pos: Int) {
-        (binding.rvFind.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(pos, 0)
-    }
-
-    override fun openExplore(sourceUrl: String, title: String, exploreUrl: String?) {
+    private fun openExplore(sourceUrl: String, title: String, exploreUrl: String?) {
         if (exploreUrl.isNullOrBlank()) return
         startActivity<ExploreShowActivity> {
             putExtra("exploreName", title)
@@ -3734,17 +3494,17 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    override fun editSource(sourceUrl: String) {
+    private fun editSource(sourceUrl: String) {
         startActivity<BookSourceEditActivity> {
             putExtra("sourceUrl", sourceUrl)
         }
     }
 
-    override fun toTop(source: BookSourcePart) {
+    private fun toTop(source: BookSourcePart) {
         viewModel.topSource(source)
     }
 
-    override fun deleteSource(source: BookSourcePart) {
+    private fun deleteSource(source: BookSourcePart) {
         alert(R.string.draw) {
             setMessage(getString(R.string.sure_del) + "\n" + source.bookSourceName)
             noButton()
@@ -3754,16 +3514,16 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
-    override fun searchBook(bookSource: BookSourcePart) {
+    private fun searchBook(bookSource: BookSourcePart) {
         SearchActivity.start(requireContext(), bookSource)
     }
 
-    override fun isInBookshelf(book: SearchBook): Boolean {
+    private fun isInBookshelf(book: SearchBook): Boolean {
         val key = if (book.author.isNotBlank()) "${book.name}-${book.author}" else book.name
         return discoverBookshelf.contains(key) || discoverBookshelf.contains(book.bookUrl)
     }
 
-    override fun showBookInfo(book: SearchBook) {
+    fun showBookInfo(book: SearchBook) {
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(IO) {
                 appDb.searchBookDao.insert(book)
@@ -3842,29 +3602,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     fun compressExplore() {
         if (usingModernDiscovery) {
-            if (binding.composeDiscoverBooks.isVisible) {
-                composeDiscoverScrollToTopSignal.intValue++
-                return
-            }
-            if (binding.rvDiscoverBooks.canScrollVertically(-1)) {
-                if (AppConfig.isEInkMode) {
-                    binding.rvDiscoverBooks.scrollToPosition(0)
-                } else {
-                    binding.rvDiscoverBooks.smoothScrollToPosition(0)
-                }
-            }
+            composeDiscoverScrollToTopSignal.intValue++
             return
         }
         if (usingSuiteDiscovery) {
             composeSuiteScrollToTopSignal.intValue++
-            return
-        }
-        if (!adapter.compressExplore()) {
-            if (AppConfig.isEInkMode) {
-                binding.rvFind.scrollToPosition(0)
-            } else {
-                binding.rvFind.smoothScrollToPosition(0)
-            }
         }
     }
 
@@ -4035,7 +3777,6 @@ private const val RANKED_SUITE_SNAPSHOT_BOOK_LIMIT = 24
 private const val DISCOVERY_SUITE_SNAPSHOT_WIDGET_LIMIT = 20
 private const val DISCOVERY_MODERN_CACHE_BOOK_LIMIT = 80
 private const val DISCOVERY_CACHE_TTL_MS = 72L * 60L * 60L * 1000L
-private const val DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS = 120L
 private const val DISCOVERY_MODERN_CACHE_PREFIX = "discovery_modern_result_"
 private const val DISCOVERY_SUITE_CACHE_PREFIX = "discovery_suite_snapshot_"
 

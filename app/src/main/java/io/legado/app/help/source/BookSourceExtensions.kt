@@ -6,7 +6,6 @@ import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
-import io.legado.app.ui.main.explore.ExploreAdapter.Companion.exploreInfoMapList
 import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
 import io.legado.app.utils.InfoMap
@@ -71,8 +70,8 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
                 val ruleStr = when {
                     exploreUrl.startsWith("@js:", true) -> {
                         aCache.getAsString(exploreKindsKey)?.takeIf { it.isNotBlank() } ?: run {
-                            val exploreInfoMap = exploreInfoMapList[bookSourceUrl] ?: InfoMap(bookSourceUrl).also {
-                                exploreInfoMapList.put(bookSourceUrl, it)
+                            val exploreInfoMap = ExploreInfoCache.infoMapList[bookSourceUrl] ?: InfoMap(bookSourceUrl).also {
+                                ExploreInfoCache.infoMapList.put(bookSourceUrl, it)
                             }
                             runScriptWithContext {
                                 evalJS(exploreUrl.substring(4)) {
@@ -87,8 +86,8 @@ suspend fun BookSource.exploreKinds(): List<ExploreKind> {
                     }
                     exploreUrl.startsWith("<js>", true) -> {
                         aCache.getAsString(exploreKindsKey)?.takeIf { it.isNotBlank() } ?: run {
-                            val exploreInfoMap = exploreInfoMapList[bookSourceUrl] ?: InfoMap(bookSourceUrl).also {
-                                exploreInfoMapList.put(bookSourceUrl, it)
+                            val exploreInfoMap = ExploreInfoCache.infoMapList[bookSourceUrl] ?: InfoMap(bookSourceUrl).also {
+                                ExploreInfoCache.infoMapList.put(bookSourceUrl, it)
                             }
                             runScriptWithContext {
                                 evalJS(exploreUrl.substring(4, exploreUrl.lastIndexOf("<"))) {

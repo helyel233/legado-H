@@ -263,6 +263,15 @@ private fun PreviewPanel(kit: StoredAppearanceKit, palette: AppSettingPalette) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+        Text(
+            text = "界面形态：${kit.binding.interfaceTweaks?.summary ?: "未自定义"}",
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 12.dp),
+            color = palette.secondaryText,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

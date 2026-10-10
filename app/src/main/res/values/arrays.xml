@@ -228,13 +228,11 @@
 
 	<string-array name="discovery_page_mode_entries">
 		<item>@string/discovery_page_mode_modern</item>
-		<item>@string/discovery_page_mode_legacy</item>
 		<item>@string/discovery_page_mode_suite</item>
 	</string-array>
 
 	<string-array name="discovery_page_mode_values">
 		<item>modern</item>
-		<item>legacy</item>
 		<item>suite</item>
 	</string-array>
 
