@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,7 +68,9 @@ data class BookshelfBookItemUi(
     val unreadCount: Int,
     val hasNewChapter: Boolean,
     val tags: List<String>,
-    val lastUpdateText: String?
+    val lastUpdateText: String?,
+    /** A2-5 reading progress 0..1 (0 = never read / unknown). */
+    val durRatio: Float = 0f
 ) : BookshelfItemUi {
     override val key: String = "book:${display.bookUrl}"
     override val contentType: String = "book"
@@ -94,6 +97,11 @@ fun buildBookshelfItems(
                 book.latestChapterTime.toTimeAgo()
             } else {
                 null
+            },
+            durRatio = if (book.totalChapterNum > 0) {
+                ((book.durChapterIndex + 1f) / (book.totalChapterNum + 1f)).coerceIn(0f, 1f)
+            } else {
+                0f
             }
         )
     }
@@ -182,6 +190,22 @@ fun BookshelfGridItem(
             )
             if (item is BookshelfBookItemUi) {
                 BookshelfStatusBadge(item)
+                if (item.durRatio > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(Color.Black.copy(alpha = 0.28f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(item.durRatio)
+                                .height(2.dp)
+                                .background(Color(LocalContext.current.accentColor))
+                        )
+                    }
+                }
             }
             if (showBookName == 2) {
                 Text(

@@ -992,6 +992,8 @@
     <string name="skin_center_new_theme">＋ 新建主题包</string>
     <string name="skin_center_new_layout">＋ 新建界面包</string>
     <string name="skin_center_open">打开</string>
+    <string name="shelf_continue_reading">继续阅读</string>
+    <string name="shelf_continue_go">继续</string>
     <string name="layout_center_title">界面中心（新引擎）</string>
     <string name="layout_center_desc">选择官方组合，然后在包内调整一切（导航样式也只是包内参数）——另存为你的自定义包。圆角即时生效；导航/玻璃/密度接线随 A2-3/A2-4 完成。</string>
     <string name="layout_center_builtin">内置界面包</string>

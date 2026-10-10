@@ -353,6 +353,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefString(PreferKey.screenOrientation)
 
 
+    var shelfContinueCard: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.shelfContinueCard, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.shelfContinueCard, value)
+        }
+
     var bookshelfLayout: Int
         get() = appCtx.getPrefInt(PreferKey.bookshelfLayout, 0)
         set(value) {

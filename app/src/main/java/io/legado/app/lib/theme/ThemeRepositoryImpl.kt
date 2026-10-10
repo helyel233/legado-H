@@ -55,6 +55,19 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
 
     override fun background(scene: BackgroundScene): BackgroundSpec? = with(appContext) {
         val night = AppConfig.isNightTheme
+        // A2-5: package background images take precedence over legacy slots.
+        Applicator.activeTheme.images?.let { images ->
+            val pkgPath = when (scene) {
+                BackgroundScene.MAIN -> if (night) images.backgroundNight ?: images.background else images.background
+                BackgroundScene.BOOK_INFO -> if (night) images.bookInfoNight ?: images.bookInfo else images.bookInfo
+                BackgroundScene.PANEL -> if (night) images.panelNight ?: images.panel else images.panel
+                // READER is frozen: package images never apply to the reading page.
+                else -> null
+            }
+            if (!pkgPath.isNullOrBlank()) {
+                return@with BackgroundSpec(path = pkgPath, crop = null, blur = 0)
+            }
+        }
         when (scene) {
             BackgroundScene.MAIN -> {
                 val path = getPrefString(if (night) PreferKey.bgImageN else PreferKey.bgImage)

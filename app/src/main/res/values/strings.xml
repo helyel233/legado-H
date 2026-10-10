@@ -1230,6 +1230,8 @@
     <string name="skin_center_new_theme">+ New theme package</string>
     <string name="skin_center_new_layout">+ New layout package</string>
     <string name="skin_center_open">Open</string>
+    <string name="shelf_continue_reading">Continue reading</string>
+    <string name="shelf_continue_go">Go</string>
     <string name="layout_center_title">Layout center (new engine)</string>
     <string name="layout_center_desc">Pick an official combo, then tune everything INSIDE the package (nav style is just a parameter) — saved as your custom package. Corner radius applies instantly; nav/glass/density wiring lands in A2-3/A2-4.</string>
     <string name="layout_center_builtin">Builtin layouts</string>

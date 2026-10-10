@@ -89,6 +89,25 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.draw.clip
+import io.legado.app.lib.theme.titleTextColor
+import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.lib.theme.themeCardColorOrDefault
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
 import kotlin.math.max
 
 /**
@@ -235,6 +254,20 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     bottom = marginDp + bottomBarPadding + 12.dp
                 )
             ) {
+                if (AppConfig.shelfContinueCard) {
+                    val reading = composeItems
+                        .filterIsInstance<BookshelfBookItemUi>()
+                        .filter { it.durRatio > 0.01f }
+                        .maxByOrNull { it.display.durChapterTime }
+                    if (reading != null) {
+                        item(key = "continue_reading", span = { GridItemSpan(maxLineSpan) }) {
+                            ContinueReadingCard(
+                                item = reading,
+                                onClick = ::onComposeItemClick,
+                            )
+                        }
+                    }
+                }
                 items(
                     items = composeItems,
                     key = { it.key },
@@ -757,5 +790,78 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             4 -> list.sortedByDescending { max(it.latestChapterTime, it.durChapterTime) }
             else -> list.sortedByDescending { it.durChapterTime }
         }
+    }
+}
+
+/**
+ * A2-5: continue-reading card on top of the shelf (plan 3.5c).
+ */
+@Composable
+private fun ContinueReadingCard(
+    item: BookshelfBookItemUi,
+    onClick: (BookshelfItemUi) -> Unit,
+) {
+    val context = LocalContext.current
+    val titleColor = Color(context.titleTextColor)
+    val mutedColor = Color(context.primaryTextColor).copy(alpha = 0.6f)
+    val surface = Color(context.themeCardColorOrDefault())
+    val accent = Color(context.accentColor)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(surface)
+            .clickable { onClick(item) }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 40.dp, height = 56.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = item.display.name.take(1),
+                color = accent,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.shelf_continue_reading),
+                style = MaterialTheme.typography.labelSmall,
+                color = mutedColor,
+            )
+            Text(
+                text = item.display.name,
+                style = MaterialTheme.typography.titleSmall,
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = item.display.durChapterTitle ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                color = mutedColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = stringResource(R.string.shelf_continue_go),
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(accent)
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+        )
     }
 }
