@@ -10,6 +10,7 @@ import io.legado.app.theme.model.BackgroundSpec
 import io.legado.app.theme.model.FontRole
 import io.legado.app.theme.model.ThemeColorName
 import io.legado.app.theme.repository.ThemeRepository
+import io.legado.app.uikit.theme.Applicator
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 
@@ -47,8 +48,9 @@ class ThemeRepositoryImpl(context: Context) : ThemeRepository {
 
     override fun fontPath(role: FontRole): String = when (role) {
         FontRole.READING -> ReadBookConfig.textFont
-        FontRole.UI -> AppConfig.uiFontPath
-        FontRole.TITLE -> AppConfig.titleFontPath
+        // A1-5b: package fonts take precedence; legacy keys stay as fallback.
+        FontRole.UI -> Applicator.uiFontPath.ifBlank { AppConfig.uiFontPath }
+        FontRole.TITLE -> Applicator.titleFontPath.ifBlank { AppConfig.titleFontPath }
     }
 
     override fun background(scene: BackgroundScene): BackgroundSpec? = with(appContext) {

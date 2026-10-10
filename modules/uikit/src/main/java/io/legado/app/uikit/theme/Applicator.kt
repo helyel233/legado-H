@@ -49,6 +49,16 @@ object Applicator {
     var wallpaperSeed: Int? = null
         private set
 
+    /**
+     * A1-5b: package fonts (absolute paths). Blank = not set by the package,
+     * consumers fall back to the legacy settings. Reader font is frozen.
+     */
+    var uiFontPath by mutableStateOf("")
+        private set
+
+    var titleFontPath by mutableStateOf("")
+        private set
+
     // ---- layer ③ manual tweaks (delta, only touched keys) -------------------
 
     private val tweaks = LinkedHashMap<String, String>()
@@ -58,6 +68,8 @@ object Applicator {
     fun applyTheme(spec: ThemePackageSpec) {
         require(spec.isValid()) { "invalid theme spec: ${spec.id}" }
         activeTheme = spec
+        uiFontPath = spec.fonts?.ui.orEmpty()
+        titleFontPath = spec.fonts?.title.orEmpty()
         bump()
     }
 

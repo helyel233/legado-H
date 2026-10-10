@@ -1,6 +1,8 @@
 package io.legado.app.ui.config
 
+import android.net.Uri
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,8 +42,12 @@ import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityThemeCenterBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.ThemeAssetStore
 import io.legado.app.help.config.ThemePackageStore
+import io.legado.app.theme.model.FontRole
 import io.legado.app.theme.palette.PaletteRole
+import io.legado.app.theme.pack.ThemeFonts
+import io.legado.app.theme.pack.ThemeImages
 import io.legado.app.theme.pack.ThemePackageSpec
 import io.legado.app.theme.pack.resolvePalette
 import io.legado.app.uikit.components.AppButton
@@ -61,6 +67,53 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
 
     override val binding by viewBinding(ActivityThemeCenterBinding::inflate)
+
+    private var pendingFontRole: FontRole? = null
+    private var pendingImageSlot: String? = null
+
+    private val fontPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val role = pendingFontRole
+        if (uri != null && role != null) onFontPicked(uri, role)
+        pendingFontRole = null
+    }
+
+    private val imagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val slot = pendingImageSlot
+        if (uri != null && slot != null) onImagePicked(uri, slot)
+        pendingImageSlot = null
+    }
+
+    fun launchFontPicker(role: FontRole) {
+        pendingFontRole = role
+        fontPicker.launch("*/*")
+    }
+
+    fun launchImagePicker(slot: String) {
+        pendingImageSlot = slot
+        imagePicker.launch("image/*")
+    }
+
+    private fun onFontPicked(uri: Uri, role: FontRole) {
+        val path = ThemeAssetStore.copyToApp(this, uri, "fonts") ?: return
+        updateCustomSpec { spec ->
+            val fonts = (spec.fonts ?: ThemeFonts()).let {
+                if (role == FontRole.UI) it.copy(ui = path) else it.copy(title = path)
+            }
+            spec.copy(fonts = fonts)
+        }
+    }
+
+    private fun onImagePicked(uri: Uri, slot: String) {
+        val path = ThemeAssetStore.copyToApp(this, uri, "images") ?: return
+        updateCustomSpec { spec -> spec.copy(images = (spec.images ?: ThemeImages()).withSlot(slot, path)) }
+    }
+
+    private fun updateCustomSpec(transform: (ThemePackageSpec) -> ThemePackageSpec) {
+        val cur = Applicator.activeTheme
+        val spec = if (cur.id == ThemePackageStore.CUSTOM_ID) cur else customBase()
+        Applicator.applyTheme(transform(spec))
+        ThemePackageStore.persistCurrent(this)
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.composeContent.setContent {
@@ -162,6 +215,12 @@ private fun ThemeCenterScreen() {
             }
         } }
         item { SectionCard(R.string.theme_center_tweaks) { TweaksSection(tweaks) } }
+        item { SectionCard(R.string.theme_center_fonts) {
+            FontSection()
+        } }
+        item { SectionCard(R.string.theme_center_images) {
+            ImageSection()
+        } }
         item { Spacer(Modifier.height(40.dp)) }
     }
 }
