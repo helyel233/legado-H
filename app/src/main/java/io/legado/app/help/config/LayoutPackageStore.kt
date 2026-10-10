@@ -52,8 +52,15 @@ object LayoutPackageStore {
         var runtime = load(app)
         if (runtime == null) {
             val legacyScale = AppConfig.uiCornerScale
-            runtime = if (legacyScale != 1f) {
-                val folded = BuiltinLayouts.default.copy(shapeScale = legacyScale.coerceIn(0f, 1.5f))
+            val legacyNav = when (AppConfig.bottomBarLayoutMode) {
+                "sidebar" -> LayoutPackageSpec.NAV_SIDE
+                "standard" -> LayoutPackageSpec.NAV_BOTTOM
+                else -> LayoutPackageSpec.NAV_FLOAT
+            }
+            val needFold = legacyScale != 1f || legacyNav != BuiltinLayouts.default.navPosition
+            runtime = if (needFold) {
+                val folded = BuiltinLayouts.default
+                    .copy(shapeScale = legacyScale.coerceIn(0f, 1.5f), navPosition = legacyNav)
                 Runtime(
                     activeId = CUSTOM_ID,
                     customSpec = folded.copy(id = CUSTOM_ID, name = "我的界面", author = "迁移自旧版"),

@@ -1227,7 +1227,7 @@
     <string name="layout_nav_bottom">Bottom bar</string>
     <string name="layout_nav_float">Floating dock</string>
     <string name="layout_nav_side">Side drawer</string>
-    <string name="layout_nav_top">Top bar</string>
+    <string name="layout_nav_top">Top bar (soon)</string>
     <string name="layout_nav_visibility">Navigation visibility</string>
     <string name="layout_vis_always">Always</string>
     <string name="layout_vis_scroll_hide">Hide on scroll</string>

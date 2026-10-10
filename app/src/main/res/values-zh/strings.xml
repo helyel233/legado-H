@@ -989,7 +989,7 @@
     <string name="layout_nav_bottom">底栏</string>
     <string name="layout_nav_float">悬浮</string>
     <string name="layout_nav_side">侧滑</string>
-    <string name="layout_nav_top">顶栏</string>
+    <string name="layout_nav_top">顶栏（即将）</string>
     <string name="layout_nav_visibility">导航可见性</string>
     <string name="layout_vis_always">常驻</string>
     <string name="layout_vis_scroll_hide">滚动隐藏</string>

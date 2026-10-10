@@ -121,6 +121,8 @@ import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.setStatusBarColorAuto
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
+import io.legado.app.uikit.layout.LayoutEngine
+import io.legado.app.uikit.layout.LayoutPackageSpec
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.windowSize
 import io.legado.app.utils.ColorUtils as AppColorUtils
@@ -179,6 +181,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
     private var aiFloatingBallController: MainAiFloatingBallController? = null
     private var bottomNavigationConfigSignature: String? = null
+    private var seenLayoutRevision = -1
     private var bottomNavigationInset = 0
     private val sidebarTouchSlop by lazy {
         ViewConfiguration.get(this).scaledTouchSlop
@@ -360,6 +363,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             scheduleShibbolethImport(500L)
         }
         refreshMainThemeBackground()
+        if (seenLayoutRevision != LayoutEngine.revision) {
+            seenLayoutRevision = LayoutEngine.revision
+            applyBottomLayoutMode()
+        }
         refreshBottomNavigationConfig()
         binding.root.post {
             scheduleLiquidGlassWarmup()
@@ -715,16 +722,24 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun isSidebarMode(): Boolean {
-        return AppConfig.bottomBarLayoutMode == "sidebar"
+    /**
+     * A2-3: the main-skeleton mode is driven by the active layout package's
+     * navPosition (bottom/float/side; top falls back to standard until the
+     * top-bar skeleton lands). Legacy bottomBarLayoutMode stays as the
+     * migration source only.
+     */
+    private fun layoutBarMode(): String = when (LayoutEngine.navPosition) {
+        LayoutPackageSpec.NAV_SIDE -> "sidebar"
+        LayoutPackageSpec.NAV_FLOAT -> "floating"
+        else -> "standard"
     }
 
-    private fun isStandardBottomMode(): Boolean {
-        return AppConfig.bottomBarLayoutMode == "standard"
-    }
+    private fun isSidebarMode(): Boolean = layoutBarMode() == "sidebar"
+
+    private fun isStandardBottomMode(): Boolean = layoutBarMode() == "standard"
 
     private fun isFloatingSearchHidden(): Boolean {
-        return AppConfig.bottomBarLayoutMode == "floating" && AppConfig.floatingBottomBarHideSearch
+        return layoutBarMode() == "floating" && AppConfig.floatingBottomBarHideSearch
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
