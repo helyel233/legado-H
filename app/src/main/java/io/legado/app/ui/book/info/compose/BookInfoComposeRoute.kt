@@ -183,6 +183,7 @@ data class BookInfoUiState(
     val hasSourceLogin: Boolean = false,
     val hasBookSource: Boolean = false,
     val canUpdate: Boolean = true,
+    val splitLongChapter: Boolean = false,
     val cloudEntryMode: BookCloudEntryMode = BookCloudEntryMode.CACHE_PACKAGE,
     val loading: Boolean = false
 ) {
@@ -220,6 +221,11 @@ data class BookInfoActions(
     val onCopyBookUrl: () -> Unit = {},
     val onCopyTocUrl: () -> Unit = {},
     val onClearCache: () -> Unit = {},
+    val onShareBook: () -> Unit = {},
+    val onExportNotes: () -> Unit = {},
+    val onSplitLongChapter: () -> Unit = {},
+    val onShowLog: () -> Unit = {},
+    val onTopBook: () -> Unit = {},
     val onSetupWebIntro: (WebView) -> Unit = {},
     val onRefreshEnabledChanged: (Boolean) -> Unit = {},
     val onQuickActionsChanged: () -> Unit = {},
@@ -721,6 +727,31 @@ private fun BookInfoQuickActionItem.toQuickActionUi(
             label = alias.ifBlank { stringResource(R.string.reading) },
             value = stringResource(R.string.reading),
             onClick = actions.onRead
+        )
+        BookInfoQuickActionType.SHARE_BOOK -> BookInfoQuickActionUi(
+            label = alias.ifBlank { stringResource(R.string.share) },
+            value = state.name.cleanBookInfoValue(),
+            onClick = actions.onShareBook
+        )
+        BookInfoQuickActionType.EXPORT_NOTES -> BookInfoQuickActionUi(
+            label = alias.ifBlank { stringResource(R.string.note_export) },
+            value = stringResource(R.string.note_export),
+            onClick = actions.onExportNotes
+        )
+        BookInfoQuickActionType.SPLIT_LONG_CHAPTER -> BookInfoQuickActionUi(
+            label = alias.ifBlank { stringResource(R.string.split_long_chapter) },
+            value = stringResource(if (state.splitLongChapter) R.string.close else R.string.open),
+            onClick = actions.onSplitLongChapter
+        )
+        BookInfoQuickActionType.LOG -> BookInfoQuickActionUi(
+            label = alias.ifBlank { stringResource(R.string.log) },
+            value = stringResource(R.string.log),
+            onClick = actions.onShowLog
+        )
+        BookInfoQuickActionType.TOP -> BookInfoQuickActionUi(
+            label = alias.ifBlank { stringResource(R.string.to_top) },
+            value = stringResource(R.string.to_top),
+            onClick = actions.onTopBook
         )
     }
 }
@@ -1562,6 +1593,11 @@ private fun BookInfoQuickActionType.editorTitle(): String {
         BookInfoQuickActionType.EDIT_INFO -> stringResource(R.string.book_info_edit)
         BookInfoQuickActionType.SHELF -> stringResource(R.string.bookshelf)
         BookInfoQuickActionType.READ -> stringResource(R.string.reading)
+        BookInfoQuickActionType.SHARE_BOOK -> stringResource(R.string.share)
+        BookInfoQuickActionType.EXPORT_NOTES -> stringResource(R.string.note_export)
+        BookInfoQuickActionType.SPLIT_LONG_CHAPTER -> stringResource(R.string.split_long_chapter)
+        BookInfoQuickActionType.LOG -> stringResource(R.string.log)
+        BookInfoQuickActionType.TOP -> stringResource(R.string.to_top)
     }
 }
 
@@ -1577,6 +1613,11 @@ private fun BookInfoQuickActionType.defaultAliasPlaceholder(): String {
         BookInfoQuickActionType.EDIT_INFO -> stringResource(R.string.book_info_edit)
         BookInfoQuickActionType.SHELF -> stringResource(R.string.bookshelf)
         BookInfoQuickActionType.READ -> stringResource(R.string.reading)
+        BookInfoQuickActionType.SHARE_BOOK -> stringResource(R.string.share)
+        BookInfoQuickActionType.EXPORT_NOTES -> stringResource(R.string.note_export)
+        BookInfoQuickActionType.SPLIT_LONG_CHAPTER -> stringResource(R.string.split_long_chapter)
+        BookInfoQuickActionType.LOG -> stringResource(R.string.log)
+        BookInfoQuickActionType.TOP -> stringResource(R.string.to_top)
     }
 }
 

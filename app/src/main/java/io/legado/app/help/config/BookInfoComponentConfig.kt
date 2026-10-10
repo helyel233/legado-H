@@ -36,8 +36,10 @@ enum class BookInfoPageStyle(val key: String) {
 
     companion object {
         fun fromKey(key: String?): BookInfoPageStyle {
+            // 详情页双胞胎收敛：Compose 版（immersive_compose）成为默认，
+            // 历史上显式选择 classic 的用户保持不变
             return entries.firstOrNull { it.key.equals(key, ignoreCase = true) }
-                ?: CLASSIC
+                ?: IMMERSIVE_COMPOSE
         }
     }
 }

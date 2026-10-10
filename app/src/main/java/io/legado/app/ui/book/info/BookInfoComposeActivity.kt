@@ -26,6 +26,13 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
+import io.legado.app.help.export.BookmarkMarkdownExporter
+import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.utils.GSON
+import io.legado.app.utils.longToastOnUi
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -132,6 +139,8 @@ class BookInfoComposeActivity :
             AppConfig.defaultBookTreeUri = treeUri.toString()
         }
     }
+
+    private val exportNotesResult = registerForActivityResult(HandleFileContract()) {}
 
     private val tocActivityResult = registerForActivityResult(TocActivityResult()) {
         it?.let { result ->
@@ -415,6 +424,14 @@ class BookInfoComposeActivity :
             onCopyBookUrl = ::copyBookUrl,
             onCopyTocUrl = ::copyTocUrl,
             onClearCache = ::clearBookCache,
+            onShareBook = ::shareBook,
+            onExportNotes = ::exportNotes,
+            onSplitLongChapter = ::toggleSplitLongChapter,
+            onShowLog = { showDialogFragment<AppLogDialog>() },
+            onTopBook = {
+                viewModel.topBook()
+                updateUiState()
+            },
             onSetupWebIntro = ::setupWebIntro,
             onIntroButtonClick = { name, click ->
                 viewModel.onButtonClick(this@BookInfoComposeActivity, "info button $name", click)
@@ -489,6 +506,61 @@ class BookInfoComposeActivity :
                 null
             ) {
                 viewModel.clearCache(book)
+            }
+        }
+    }
+
+    private fun shareBook() {
+        viewModel.getBook()?.let { book ->
+            val bookJson = GSON.toJson(book)
+            val shareStr = "${book.bookUrl}#$bookJson"
+            SourceCallBack.callBackBtn(
+                this,
+                SourceCallBack.CLICK_SHARE_BOOK,
+                viewModel.bookSource,
+                book,
+                null,
+                result = shareStr
+            ) {
+                val intent = Intent(Intent.ACTION_SEND)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                intent.putExtra(Intent.EXTRA_TEXT, shareStr)
+                intent.type = "text/plain"
+                startActivity(Intent.createChooser(intent, book.name))
+            }
+        }
+    }
+
+    private fun exportNotes() {
+        val book = viewModel.getBook() ?: return
+        lifecycleScope.launch {
+            val data = withContext(IO) {
+                runCatching { BookmarkMarkdownExporter.export(book) }.getOrNull()
+            }
+            if (data == null) {
+                toastOnUi(R.string.note_export_empty)
+                return@launch
+            }
+            val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+            exportNotesResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData = HandleFileContract.FileData(
+                    "${book.name}_notes_$date.md",
+                    data,
+                    "text/markdown"
+                )
+            }
+        }
+    }
+
+    private fun toggleSplitLongChapter() {
+        viewModel.getBook()?.let { book ->
+            val next = !book.getSplitLongChapter()
+            book.setSplitLongChapter(next)
+            viewModel.loadBookInfo(book, false)
+            updateUiState()
+            if (!next) {
+                longToastOnUi(R.string.need_more_time_load_content)
             }
         }
     }
@@ -568,6 +640,7 @@ class BookInfoComposeActivity :
             hasSourceLogin = !viewModel.bookSource?.loginUrl.isNullOrBlank(),
             hasBookSource = viewModel.bookSource != null,
             canUpdate = book.canUpdate,
+            splitLongChapter = book.getSplitLongChapter(),
             cloudEntryMode = BookCloudEntryModeStore.get(book.bookUrl),
             loading = tocPhase.isLoading
         )

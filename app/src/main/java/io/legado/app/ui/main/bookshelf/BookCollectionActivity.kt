@@ -30,7 +30,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.UiCorner
-import io.legado.app.ui.book.info.BookInfoActivity
+import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.book.manage.BookshelfManageViewModel
 import io.legado.app.ui.main.bookshelf.style1.books.BaseBooksAdapter
 import io.legado.app.ui.main.bookshelf.style1.books.BooksAdapterGrid
@@ -453,11 +453,7 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
     }
 
     override fun openBookInfo(book: Book) {
-        startActivity<BookInfoActivity> {
-            putExtra("name", book.name)
-            putExtra("author", book.author)
-            putExtra("bookUrl", book.bookUrl)
-        }
+        BookInfoNavigator.open(this, book)
     }
 
     override fun onBookLongPressed(book: Book, view: View) {

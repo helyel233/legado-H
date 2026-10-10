@@ -15,7 +15,12 @@ enum class BookInfoQuickActionType {
     CUSTOM_BUTTON,
     EDIT_INFO,
     SHELF,
-    READ
+    READ,
+    SHARE_BOOK,
+    EXPORT_NOTES,
+    SPLIT_LONG_CHAPTER,
+    LOG,
+    TOP
 }
 
 data class BookInfoQuickActionItem(
@@ -40,7 +45,12 @@ object BookInfoQuickActionConfig {
         BookInfoQuickActionType.GALLERY,
         BookInfoQuickActionType.GROUP,
         BookInfoQuickActionType.CLOUD,
-        BookInfoQuickActionType.CUSTOM_BUTTON
+        BookInfoQuickActionType.CUSTOM_BUTTON,
+        BookInfoQuickActionType.SHARE_BOOK,
+        BookInfoQuickActionType.EXPORT_NOTES,
+        BookInfoQuickActionType.SPLIT_LONG_CHAPTER,
+        BookInfoQuickActionType.LOG,
+        BookInfoQuickActionType.TOP
     )
 
     fun load(): List<BookInfoQuickActionItem> {
