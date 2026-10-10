@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocal
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,9 +23,10 @@ import io.legado.app.uikit.v5.token.VisualSpec
  * 全 App 只有一个提供者（宿主），页面只能读不能写。
  * 改任何参数 → 这里的值变化 → 整棵树自动重组，**不需要 recreate()**。
  */
-val LocalVisualSpec: CompositionLocal<VisualSpec> = compositionLocalOf { VisualSpec.DEFAULT }
+val LocalVisualSpec: ProvidableCompositionLocal<VisualSpec> =
+    compositionLocalOf { VisualSpec.DEFAULT }
 
-val LocalSemanticColors: CompositionLocal<AppSemanticColors> =
+val LocalSemanticColors: ProvidableCompositionLocal<AppSemanticColors> =
     compositionLocalOf { NeutralSemanticColors }
 
 /** 未注入主题包时的中性默认色（保证 Provider 缺失也不崩）。 */

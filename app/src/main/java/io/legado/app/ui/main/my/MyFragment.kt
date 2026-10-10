@@ -12,7 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import io.legado.app.ui.config.AppUiConfigActivity
+import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.navigation.AppRoute
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
 import io.legado.app.constant.EventBus
@@ -346,6 +348,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
             "appearanceKit" -> startActivity<AppUiConfigActivity>()
 
+            "hostV5" -> startActivity<AppHostActivity>()
+
             "ai_setting" -> startActivity<ConfigActivity> {
                 putExtra("configTag", ConfigTag.AI_CONFIG)
             }
@@ -371,7 +375,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ),
             MySettingsSectionModel(
                 title = getString(R.string.config_category_appearance),
-                rows = listOf(
+                rows = listOfNotNull(
                     MySettingsRowModel(
                         key = PreferKey.themeMode,
                         title = getString(R.string.theme_mode),
@@ -383,6 +387,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         title = getString(R.string.app_ui_config),
                         summary = getString(R.string.app_ui_config_summary)
                     ),
+                    // P1 V5 新骨架预览：仅 debug 构建可见，P4 搬迁完成前用于验证骨架
+                    if (BuildConfig.DEBUG) MySettingsRowModel(
+                        key = "hostV5",
+                        title = "新骨架预览（V5）",
+                        summary = "空壳验证：四种导航 + 实时调参，业务内容在 P4 搬迁"
+                    ) else null,
                     actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s)
                 )
             ),

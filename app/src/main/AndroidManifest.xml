@@ -148,6 +148,12 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
             android:launchMode="singleTask" />
+        <!-- P1 V5 新宿主骨架（骨架先行），P1 阶段与旧 MainActivity 并存；P4-5 旧壳退役后成为唯一主界面 -->
+        <activity
+            android:name=".ui.host.AppHostActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask" />
         <!-- 主框架页面独立宿主（RSS/首页聚合） -->
         <activity
             android:name=".ui.config.AppUiConfigActivity"
