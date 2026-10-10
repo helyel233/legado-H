@@ -57,7 +57,6 @@ import kotlinx.coroutines.launch
  * 订阅源管理
  */
 class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceViewModel>(),
-    MenuItem.OnMenuItemClickListener,
     SelectActionBar.CallBack {
 
     override val binding by viewBinding(ActivityRssSourceBinding::inflate)
@@ -300,13 +299,6 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         )
     }
 
-    private fun initSelectActionBar() {
-        binding.selectActionBar.setMainActionText(R.string.delete)
-        binding.selectActionBar.inflateMenu(R.menu.rss_source_sel)
-        binding.selectActionBar.setOnMenuItemClickListener(this)
-        binding.selectActionBar.setCallBack(this)
-    }
-
     private fun initGroupFlow() {
         lifecycleScope.launch {
             appDb.rssSourceDao.flowGroups().conflate().collect {
@@ -315,21 +307,6 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 upGroupMenu()
             }
         }
-    }
-
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_enable_selection -> enableSelected()
-            R.id.menu_disable_selection -> disableSelected()
-            R.id.menu_add_group -> selectionAddToGroups()
-            R.id.menu_remove_group -> selectionRemoveFromGroups()
-            R.id.menu_top_sel -> topSelected()
-            R.id.menu_bottom_sel -> bottomSelected()
-            R.id.menu_export_selection -> exportSelected()
-            R.id.menu_share_source -> shareSelected()
-            R.id.menu_check_selected_interval -> checkSelectedInterval()
-        }
-        return true
     }
 
     private fun enableSelected() {
