@@ -1,5 +1,16 @@
 # 更新日志
 
+## 1.16.1 版（2026-10-10）
+
+### 优化
+
+- **P3-d 阅读配置面板化收尾**：最后 3 个传统 Dialog 迁移为 Compose——朗读面板（播放控制/定时/语速）、高级标题编辑（规则/预览/JSON 编辑器）、插入媒体面板（缩略图/五布局/逐条备注）；阅读配置域 17 个面板至此全部进入 Compose 体系，`dialog_read_aloud.xml`、`dialog_illustration_edit.xml` 删除。
+- **主界面骨架拆分**：底部栏/侧栏 Drawable 工厂拆出 `MainDrawables.kt`，AI 悬浮球抽出为 `MainAiFloatingBallController`，MainActivity 体积 106KB → 92KB；书源/RSS 管理页清理不可达旧代码。
+
+### 兼容
+
+- 全部为行为等价重构，无设置存储与主题包格式改动，覆盖升级无感。
+
 ## 1.16.0 版（2026-10-10）
 
 ### 新增
