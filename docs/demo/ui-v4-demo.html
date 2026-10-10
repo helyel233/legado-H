@@ -279,10 +279,8 @@
       <div class="fab" id="fab">＋</div>
     </div>
     <div class="demoNote">
-      <b>这页演示什么：</b>导航默认 6 Tab（主页/书架/发现/订阅/统计/我的），杂项里可开<b>精简导航（收敛 3 Tab）</b>· 种子色换装（含夜间自动配色）· 全局旋钮（导航含<b>悬浮底栏</b>/密度/玻璃/形状）联动所有窗口 ·
-      书架 4 种成品布局与进度条/更新角标/继续阅读卡 · 手调「已修改」标记与还原。<br>
-      <b>书架的布局/分组/继续阅读卡设置在样机书架页右上「⋯」里</b>（保留在书架页内，不进外观设置）。<br>
-      书城/发现/我 也吃同一组全局参数。正式 App 中，气泡、高级标题、EPUB 模板等视觉杂项全部保留（方案 3.6 节）。
+      <b>V4.10 包模型演示：</b>样机里走 <b>我的 → UI 设置 → 主题和界面管理中心</b>——主题选包/界面选包两个包库（官方 + 我的 1/2/3/4…，可新建）；点包即应用，包内换美术资源/界面组合。<br>
+      左面板 = 包详情快速编辑器（正式版位于包详情页）。6 Tab 导航 · 精简导航开关 · 种子色/全局旋钮 · 书架 4 布局（书架页右上「⋯」）照旧演示。
     </div>
   </div>
 </div>
@@ -547,11 +545,33 @@ function renderFeed(){
   html+=`<div style="height:80px"></div>`;
   cont.innerHTML=html;
 }
+/* ===== 包库状态（V4.10 多包模型） ===== */
+const THEME_LIB = [
+  {id:'sky',    name:'晴空白',   builtin:true, seed:'#5B6ABF', strategy:'tonal'},
+  {id:'night',  name:'墨夜黑',   builtin:true, seed:'#3A4258', strategy:'muted'},
+  {id:'amoled', name:'AMOLED 纯黑', builtin:true, seed:'#5B6ABF', strategy:'amoled'},
+  {id:'paper',  name:'纸张米',   builtin:true, seed:'#A08A5B', strategy:'tonal'},
+  {id:'dynamic',name:'动态取色', builtin:true, seed:'dynamic', strategy:'tonal'},
+  {id:'eink',   name:'电子墨水', builtin:true, seed:'#808080', strategy:'mono'},
+  {id:'my1',    name:'我的主题包 1', seed:'#9B4B4B', strategy:'tonal', fonts:{ui:'霞鹜文楷',title:'思源宋体'}, images:{bg:'bg_my1.webp'}},
+  {id:'my2',    name:'我的主题包 2', seed:'#2E5266', strategy:'muted', fonts:{ui:'系统默认',title:'MiSans'}, images:{}},
+];
+const LAYOUT_LIB = [
+  {id:'classic',name:'官方·日常', builtin:true, nav:'bottom', density:'1',    alpha:65, blur:12, shape:100},
+  {id:'float',  name:'官方·玻璃', builtin:true, nav:'float',  density:'1',    alpha:40, blur:18, shape:120},
+  {id:'side',   name:'官方·沉浸', builtin:true, nav:'side',   density:'1',    alpha:45, blur:20, shape:130},
+  {id:'minimal',name:'官方·极简', builtin:true, nav:'side',   density:'0.85', alpha:95, blur:0,  shape:15},
+  {id:'my1',    name:'我的界面包 1', nav:'float', density:'1.15', alpha:55, blur:16, shape:90},
+];
+const NAV={stack:[]}; // in-phone 页面流
+function navPush(screen){NAV.stack.push(S.page);S.page=screen;render()}
+function navBack(){S.page=NAV.stack.pop()||'me';render()}
+
 function renderMe(){
   const cont=document.getElementById('content');
   let html=`<div class="topbar"><div class="title">我的</div><div class="iconBtn">⚙️</div></div>`;
   const rows=[
-    ['🎨','外观','主题包 · 界面包 · 手调','外观',`toast('外观设置=本 Demo 左侧面板')`],
+    ['🧩','UI 设置','主题和界面管理中心','ui',`navPush('uisetting')`],
     ...(S.tabCompact?[
       ['🧭','发现','（精简模式收编页）','feed',`S.page='feed';render()`],
       ['📰','订阅','（精简模式收编页）','rss',`S.page='rss';render()`],
@@ -569,10 +589,76 @@ function renderMe(){
   html+=`<div style="height:90px"></div>`;
   cont.innerHTML=html;
 }
+function renderUiSetting(){
+  const cont=document.getElementById('content');
+  cont.innerHTML=`
+  <div class="topbar"><div class="title" style="font-size:17px;display:flex;align-items:center;gap:8px"><span onclick="navBack()" style="color:var(--c-primary);font-weight:400">‹</span>UI 设置</div></div>
+  <div class="meRow" onclick="navPush('skincenter')"><div class="mi">🧩</div><div><div class="mn">主题和界面管理中心</div><div class="md">主题选包 · 界面选包（多包库）</div></div><div class="ar">›</div></div>
+  <div style="font-size:11px;color:var(--c-text2);padding:10px 4px">UI 设置其余分区（外观预览等）后续版本补齐</div>
+  <div style="height:90px"></div>`;
+}
+function renderSkinCenter(){
+  const cont=document.getElementById('content');
+  const activeTheme=THEME_LIB.find(t=>t.id===S.theme)||THEME_LIB[0];
+  const activeLayout=LAYOUT_LIB.find(l=>l.id===S.pkg)||LAYOUT_LIB[0];
+  cont.innerHTML=`
+  <div class="topbar"><div class="title" style="font-size:17px;display:flex;align-items:center;gap:8px"><span onclick="navBack()" style="color:var(--c-primary);font-weight:400">‹</span>主题和界面管理中心</div></div>
+  <div class="groupHead" style="margin-top:0"><b>主题选包（美术资源）</b><span>使用中：${activeTheme.name}</span></div>
+  ${THEME_LIB.map(t=>`
+    <div class="meRow" onclick="applyThemePkg('${t.id}')">
+      <div class="mi" style="background:${t.seed==='dynamic'?'linear-gradient(135deg,#7A9B76,#5B6ABF)':t.seed}"></div>
+      <div><div class="mn">${t.name}${t.builtin?'':' ✎'}</div><div class="md">${t.builtin?'官方主题包':'我的主题包 · 包内可换美术资源'}</div></div>
+      <div class="ar">${t.id===S.theme?'✓':'›'}</div>
+    </div>`).join('')}
+  <div style="font-size:11px;color:var(--c-primary);padding:8px 4px;cursor:pointer" onclick="newThemePkg()">＋ 新建主题包（1/2/3/4…）</div>
+  <div class="groupHead" style="margin-top:16px"><b>界面选包（界面组合）</b><span>使用中：${activeLayout.name}</span></div>
+  ${LAYOUT_LIB.map(l=>`
+    <div class="meRow" onclick="applyLayoutPkg('${l.id}')">
+      <div class="mi">${({bottom:'▬',float:'⬭',side:'⧉',top:'⌃'})[l.nav]||'▬'}</div>
+      <div><div class="mn">${l.name}${l.builtin?'':' ✎'}</div><div class="md">${l.builtin?'官方推荐组合':'我的界面包 · 包内可换界面组合'}</div></div>
+      <div class="ar">${l.id===S.pkg?'✓':'›'}</div>
+    </div>`).join('')}
+  <div style="font-size:11px;color:var(--c-primary);padding:8px 4px;cursor:pointer" onclick="newLayoutPkg()">＋ 新建界面包（1/2/3/4…）</div>
+  <div style="height:90px"></div>`;
+}
+function applyThemePkg(id){
+  const t=THEME_LIB.find(x=>x.id===id);if(!t)return;
+  S.theme=id;S.seed=t.seed;S.strategy=t.strategy;
+  document.getElementById('seedInput').value=t.seed==='dynamic'?'#7A9B76':t.seed;
+  setSeg('darkStrategy',t.strategy);
+  render();
+  if(t.builtin){toast(`已应用官方主题包：${t.name}（官方包受保护，编辑自动克隆为“我的主题包”）`)}
+  else if(t.fonts){toast(`已应用${t.name}：字体 ${t.fonts.ui}/${t.fonts.title}，背景图 ${t.images&&t.images.bg?'已带':'无'}——美术资源在本 Demo 左面板或正式版包详情内换`)}
+  else{toast(`已应用主题包：${t.name}`)}
+}
+function newThemePkg(){
+  const n=THEME_LIB.filter(t=>!t.builtin).length+1;
+  THEME_LIB.push({id:'my'+n,name:'我的主题包 '+n,seed:'#9B4B4B',strategy:'tonal',fonts:{},images:{}});
+  toast('已新建，点它进入包详情换美术资源');
+  render();
+}
+function applyLayoutPkg(id){
+  const l=LAYOUT_LIB.find(x=>x.id===id);if(!l)return;
+  S.pkg=id;S.nav=l.nav;S.density=parseFloat(l.density);S.alpha=l.alpha;S.blur=l.blur;S.shape=l.shape;
+  setSeg('navPos',S.nav);setSeg('density',l.density);
+  document.getElementById('glassAlpha').value=S.alpha;
+  document.getElementById('glassBlur').value=S.blur;
+  document.getElementById('shapeScale').value=S.shape;
+  render();
+  toast(`已应用界面包：${l.name}（进包可换界面组合）`);
+}
+function newLayoutPkg(){
+  const n=LAYOUT_LIB.filter(l=>!l.builtin).length+1;
+  LAYOUT_LIB.push({id:'my'+n,name:'我的界面包 '+n,nav:'bottom',density:'1',alpha:65,blur:12,shape:100});
+  toast('已新建，点它进入包详情换界面组合');
+  render();
+}
 function renderNav(){
   const body=document.getElementById('appBody');
   document.querySelectorAll('.navBottom,.navSide,.navTop,.navFloat').forEach(e=>e.remove());
   let items=NAV_ITEMS.map(n=>({ ...n, on:n.k===S.page}));
+  const inSubPage=['uisetting','skincenter'].includes(S.page);
+  if(inSubPage){items=items.map(n=>({...n,on:n.k==='me'}))}
   if(S.tabCompact){
     items=items.filter(n=>['home','shelf','me'].includes(n.k));
     items[items.length-1].on=['feed','rss','stats','me'].includes(S.page);
@@ -600,7 +686,8 @@ function renderNav(){
   document.getElementById('fab').classList.toggle('floatMode',S.nav==='float');
 }
 function renderPage(){
-  ({home:renderHome,shelf:renderShelf,feed:renderFeed,rss:renderSubscribe,stats:renderStats,me:renderMe})[S.page]();
+  ({home:renderHome,shelf:renderShelf,feed:renderFeed,rss:renderSubscribe,stats:renderStats,me:renderMe,
+    uisetting:renderUiSetting,skincenter:renderSkinCenter})[S.page]();
 }
 function render(){applyTheme();renderNav();renderPage();refreshBadges()}
 
