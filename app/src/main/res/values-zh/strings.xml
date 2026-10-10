@@ -1819,6 +1819,7 @@
     <string name="theme_delete_remote_confirm">删除云端主题？</string>
     <string name="theme_delete_both_confirm">同时删除本地和云端主题？</string>
     <string name="theme_export_failed">导出主题失败：%s</string>
+    <string name="theme_export_resources">已携带资源：%1$s</string>
     <string name="theme_zip_read_failed">无法读取主题 ZIP</string>
     <string name="theme_builtin_export_forbidden">内置主题不能导出</string>
     <string name="theme_config_file_missing">缺少 theme.json</string>

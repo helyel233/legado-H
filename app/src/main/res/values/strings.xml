@@ -2063,6 +2063,7 @@ function login() {
     <string name="theme_delete_remote_confirm">Delete cloud theme?</string>
     <string name="theme_delete_both_confirm">Delete both local and cloud theme?</string>
     <string name="theme_export_failed">Failed to export theme: %s</string>
+    <string name="theme_export_resources">Resources included: %1$s</string>
     <string name="theme_zip_read_failed">Unable to read theme ZIP</string>
     <string name="theme_builtin_export_forbidden">The built-in theme cannot be exported</string>
     <string name="theme_config_file_missing">theme.json not found</string>

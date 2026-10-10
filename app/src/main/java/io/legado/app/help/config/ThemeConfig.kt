@@ -409,18 +409,9 @@ object ThemeConfig {
             val panelBorderColor = config.panelBorderColor?.takeIf { it.isNotBlank() }
             val panelBorderAlpha = config.panelBorderAlpha?.coerceIn(0, 100) ?: 100
             val applier = ThemeApplier(SpThemePersistence(context))
-            applier.writeMetrics(
-                isNightTheme,
-                config.uiCornerScale,
-                config.uiLayoutAlpha,
-                config.dialogAlpha
-            )
+            // P4-b/R5：界面形态域（圆角/透明度/边框/阴影/模糊/玻璃/跟随）已归属界面包，
+            // 主题包应用不再写这些键（界面形态由外观套件与全局界面调整管理）
             applyExtendedInterfaceColors(applier, config)
-            applier.writeCornerFollow(
-                isNightTheme,
-                config.uiCornerSearchFollow,
-                config.uiCornerReplyFollow
-            )
             applier.writeFontScale(isNightTheme, config.fontScale)
             applier.writeFontPaths(isNightTheme, config.uiFontPath, config.titleFontPath)
             applyFontColorPrefs(applier, config)
@@ -474,9 +465,7 @@ object ThemeConfig {
                 mainCrop = backgroundCrop,
                 bookInfoPath = bookInfoBackgroundPath,
                 panelPath = panelBackgroundPath,
-                panelScaleType = panelBackgroundScaleType,
-                panelBorderColor = panelBorderColor,
-                panelBorderAlpha = panelBorderAlpha
+                panelScaleType = panelBackgroundScaleType
             )
             if (switchNightMode) {
                 AppConfig.isNightTheme = isNightTheme
@@ -758,16 +747,13 @@ object ThemeConfig {
     }
 
     private fun applyExtendedInterfaceColors(applier: ThemeApplier, config: Config) {
-        applier.writeExtendedColors(
+        applier.writeInterfaceColors(
             night = config.isNightTheme,
             cardColor = config.cardColor,
             mutedColor = config.mutedColor,
             searchFieldBackgroundColor = config.searchFieldBackgroundColor,
             tabBackgroundColor = config.tabBackgroundColor,
             shelfColor = config.shelfColor,
-            cardShadow = config.cardShadow,
-            cardBackgroundBlur = config.cardBackgroundBlur,
-            exploreGlassBlur = config.exploreGlassBlur,
         )
     }
 

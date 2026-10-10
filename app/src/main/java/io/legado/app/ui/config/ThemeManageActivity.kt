@@ -1,5 +1,7 @@
 package io.legado.app.ui.config
 
+import io.legado.app.lib.theme.SpThemePersistence
+import io.legado.app.theme.apply.ThemeApplier
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -1314,6 +1316,15 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }.onFailure {
             toastOnUi(R.string.color_format_error)
         }.getOrNull() ?: return false
+        // P4-b/R5：界面形态域即时生效（写全局设置），但不再随主题包应用/导出
+        runCatching {
+            val applier = ThemeApplier(SpThemePersistence(this))
+            val night = config.isNightTheme
+            applier.writeMetrics(night, config.uiCornerScale, config.uiLayoutAlpha, config.dialogAlpha)
+            applier.writeCornerFollow(night, config.uiCornerSearchFollow, config.uiCornerReplyFollow)
+            applier.writeEffectParams(night, config.cardShadow, config.cardBackgroundBlur, config.exploreGlassBlur)
+            applier.writePanelBorder(night, config.panelBorderColor, config.panelBorderAlpha)
+        }
         addTheme(config)
         return true
     }
@@ -1766,6 +1777,10 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             kotlin.runCatching {
                 ThemePackageManager.exportZip(entry)
             }.onSuccess { zipFile ->
+                // P4-b/R5：反馈主题包携带的资源段
+                ThemePackageManager.lastExportResourceSummary?.let { summary ->
+                    toastOnUi(getString(R.string.theme_export_resources, summary))
+                }
                 exportThemePackage.launch {
                     mode = HandleFileContract.EXPORT
                     showUploadUrl = false

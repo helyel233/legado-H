@@ -66,6 +66,66 @@ class ThemeApplier(private val persistence: ThemePersistence) {
     }
 
     /**
+     * P4-b/R5: interface semantic colors only (card/muted/search/tab/shelf).
+     */
+    fun writeInterfaceColors(
+        night: Boolean,
+        cardColor: String?,
+        mutedColor: String?,
+        searchFieldBackgroundColor: String?,
+        tabBackgroundColor: String?,
+        shelfColor: String?,
+    ) {
+        putOrClear(ThemeKeys.themeCardColor(night), cardColor)
+        putOrClear(ThemeKeys.themeMutedColor(night), mutedColor)
+        putOrClear(ThemeKeys.themeSearchFieldBackgroundColor(night), searchFieldBackgroundColor)
+        putOrClear(ThemeKeys.themeTabBackgroundColor(night), tabBackgroundColor)
+        putOrClear(ThemeKeys.themeShelfColor(night), shelfColor)
+    }
+
+    /** P4-b/R5: panel border (interface package domain), applied immediately on edit. */
+    fun writePanelBorder(night: Boolean, color: String?, alpha: Int?) {
+        val safeAlpha = alpha ?: 100
+        if (night) {
+            persistence.putString(ThemeKeys.PANEL_BORDER_COLOR_NIGHT, color.orEmpty())
+            persistence.putInt(ThemeKeys.PANEL_BORDER_ALPHA_NIGHT, safeAlpha)
+        } else {
+            persistence.putString(ThemeKeys.PANEL_BORDER_COLOR, color.orEmpty())
+            persistence.putInt(ThemeKeys.PANEL_BORDER_ALPHA, safeAlpha)
+        }
+    }
+
+    /**
+     * P4-b/R5: interface effect params (now owned by the interface package).
+     * null value removes the key (falls back to defaults).
+     */
+    fun writeEffectParams(
+        night: Boolean,
+        cardShadow: Int?,
+        cardBackgroundBlur: Float?,
+        exploreGlassBlur: Int?,
+    ) {
+        if (cardShadow != null) {
+            persistence.putInt(ThemeKeys.themeCardShadow(night), cardShadow.coerceIn(0, 24))
+        } else {
+            persistence.remove(ThemeKeys.themeCardShadow(night))
+        }
+        if (cardBackgroundBlur != null) {
+            persistence.putInt(
+                ThemeKeys.themeCardBackgroundBlur(night),
+                (cardBackgroundBlur * 10f).toInt().coerceIn(0, 250)
+            )
+        } else {
+            persistence.remove(ThemeKeys.themeCardBackgroundBlur(night))
+        }
+        if (exploreGlassBlur != null) {
+            persistence.putInt(ThemeKeys.themeExploreGlassBlur(night), exploreGlassBlur.coerceIn(0, 100))
+        } else {
+            persistence.remove(ThemeKeys.themeExploreGlassBlur(night))
+        }
+    }
+
+    /**
      * Extended surface colors; null value removes the key (falls back to defaults).
      */
     fun writeExtendedColors(
@@ -137,9 +197,8 @@ class ThemeApplier(private val persistence: ThemePersistence) {
         bookInfoPath: String?,
         panelPath: String?,
         panelScaleType: String,
-        panelBorderColor: String?,
-        panelBorderAlpha: Int,
     ) {
+        // panelBorderColor/panelBorderAlpha 已归属界面包（R5），主题包不再写
         if (night) {
             persistence.putString(ThemeKeys.BG_IMAGE_NIGHT, mainPath)
             persistence.putInt(ThemeKeys.BG_IMAGE_NIGHT_BLURRING, mainBlur ?: 0)
@@ -147,8 +206,6 @@ class ThemeApplier(private val persistence: ThemePersistence) {
             persistence.putString(ThemeKeys.BOOK_INFO_BG_IMAGE_NIGHT, bookInfoPath)
             persistence.putString(ThemeKeys.PANEL_BG_IMAGE_NIGHT, panelPath)
             persistence.putString(ThemeKeys.PANEL_BG_SCALE_TYPE_NIGHT, panelScaleType)
-            persistence.putString(ThemeKeys.PANEL_BORDER_COLOR_NIGHT, panelBorderColor.orEmpty())
-            persistence.putInt(ThemeKeys.PANEL_BORDER_ALPHA_NIGHT, panelBorderAlpha)
         } else {
             persistence.putString(ThemeKeys.BG_IMAGE, mainPath)
             persistence.putInt(ThemeKeys.BG_IMAGE_BLURRING, mainBlur ?: 0)
@@ -156,8 +213,6 @@ class ThemeApplier(private val persistence: ThemePersistence) {
             persistence.putString(ThemeKeys.BOOK_INFO_BG_IMAGE, bookInfoPath)
             persistence.putString(ThemeKeys.PANEL_BG_IMAGE, panelPath)
             persistence.putString(ThemeKeys.PANEL_BG_SCALE_TYPE, panelScaleType)
-            persistence.putString(ThemeKeys.PANEL_BORDER_COLOR, panelBorderColor.orEmpty())
-            persistence.putInt(ThemeKeys.PANEL_BORDER_ALPHA, panelBorderAlpha)
         }
     }
 

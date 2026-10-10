@@ -70,6 +70,11 @@ object ThemePackageManager {
     private const val builtinNightName = "\u5185\u7f6e\u591c\u95f4\u4e3b\u9898"
     private const val THEME_PACKAGE_FORMAT_VERSION = 2
 
+    /** P4-b：最近一次主题包导出携带的资源段摘要（UI 反馈用）。 */
+    @Volatile
+    var lastExportResourceSummary: String? = null
+        private set
+
     private val importMutex = Mutex()
     private val imageMagic = listOf(
         byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) to ".png",
@@ -254,8 +259,24 @@ object ThemePackageManager {
                 runCatching {
                     val manifest = File(packageDir, packageFileName)
                     val pkg = GSON.fromJsonObject<Package>(manifest.readTextLimited(maxPackageManifestBytes)).getOrThrow()
-                    manifest.writeText(GSON.toJson(pkg.copy(formatVersion = THEME_PACKAGE_FORMAT_VERSION)))
+                    // P4-b/R5：界面形态域不随主题包导出（归界面包）
+                    val strippedConfig = pkg.config?.copy(
+                        uiCornerScale = null,
+                        uiLayoutAlpha = null,
+                        dialogAlpha = null,
+                        panelBorderColor = null,
+                        panelBorderAlpha = null,
+                        cardShadow = null,
+                        cardBackgroundBlur = null,
+                        exploreGlassBlur = null,
+                        uiCornerSearchFollow = null,
+                        uiCornerReplyFollow = null
+                    )
+                    manifest.writeText(
+                        GSON.toJson(pkg.copy(formatVersion = THEME_PACKAGE_FORMAT_VERSION, config = strippedConfig))
+                    )
                 }
+                lastExportResourceSummary = null
                 writeBundledResources(exportRoot, localEntry)
                 ZipUtils.zipFile(exportRoot, zipFile)
             } finally {
@@ -269,6 +290,7 @@ object ThemePackageManager {
     private suspend fun writeBundledResources(exportRoot: File, entry: Entry) {
         val isNight = entry.packageInfo.isNightTheme
         val resDir = File(exportRoot, "resources")
+        val bundledSummary = mutableListOf<String>()
         runCatching {
             // 封面图集：仅当该侧选中了图集时携带（选中键 coverCollectionDay/Night）
             val selected = CoverCollectionManager.selectedEntry(isNight)
@@ -281,6 +303,7 @@ object ThemePackageManager {
                 val out = File(File(resDir, "covers"), "${selected.dirName}.zip")
                 out.parentFile?.mkdirs()
                 bundled.copyTo(out, overwrite = true)
+                bundledSummary.add("封面图集")
             } finally {
                 bundled.delete()
             }
@@ -292,6 +315,7 @@ object ThemePackageManager {
                 val out = File(File(resDir, "bubbles"), "${current.dirName}.zip")
                 out.parentFile?.mkdirs()
                 bundled.copyTo(out, overwrite = true)
+                bundledSummary.add("SVG 气泡包")
             } finally {
                 bundled.delete()
             }
@@ -307,7 +331,9 @@ object ThemePackageManager {
             out.outputStream().buffered().use { output ->
                 EpubReaderTemplatePackages.exportTemplate(templateId, output)
             }
+            bundledSummary.add("EPUB 模板")
         }.onFailure { AppLog.put("主题包导出：EPUB 模板打包失败\n$it", it) }
+        lastExportResourceSummary = if (bundledSummary.isEmpty()) "无" else bundledSummary.joinToString("、")
     }
 
     /** 分发主题包携带的 resources（best-effort，失败不阻塞主题导入）。 */
