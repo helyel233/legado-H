@@ -1876,7 +1876,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_illustration -> {
                 illustrationAnchor?.let { anchor ->
-                    val dialog = IllustrationEditDialog(anchor)
+                    val dialog = IllustrationEditDialog.newInstance(anchor)
                     dialog.setOnInserted {
                         ReadBook.loadContent(resetPageOffset = true)
                     }

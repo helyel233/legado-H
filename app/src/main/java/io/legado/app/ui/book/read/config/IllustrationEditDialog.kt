@@ -2,64 +2,92 @@ package io.legado.app.ui.book.read.config
 
 import android.net.Uri
 import android.os.Bundle
-import android.text.InputType
-import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.recyclerview.widget.LinearLayoutManager
+import android.widget.ImageView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
-import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookIllustration
-import io.legado.app.databinding.DialogIllustrationEditBinding
-import io.legado.app.databinding.ItemImageSimpleBinding
+import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.illustration.IllustrationAnchor
 import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.help.illustration.imageSrcsToJson
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.widget.compose.AppDialogSize
+import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.ComposeDialogFragment
+import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.SelectImagesContract
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.getCompatColor
-import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.visible
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import org.json.JSONObject
 
 /**
- * 插入媒体对话框：选择图片、视频或音频，设置显示高度、布局、独占一页、备注。
+ * 插入媒体面板（P3-d 面板化：原 dialog_illustration_edit.xml 迁移为 Compose）。
+ * 选择图片、视频或音频，设置显示高度、布局、独占一页、备注。
  * 备注默认统一填写（本次插入的所有记录共用）；取消"统一备注"后按媒体逐条填写，
  * 排版只管显示分组，不管备注条数，两者解构。
  */
-class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration_edit, true) {
+class IllustrationEditDialog : ComposeDialogFragment() {
 
-    constructor(anchor: IllustrationAnchor) : this() {
-        arguments = Bundle().apply {
-            putString("anchorType", anchor.anchorType)
-            putInt("anchorPos", anchor.anchorPos)
-            putString("frontParagraph", anchor.frontParagraph)
-            putString("backParagraph", anchor.backParagraph)
+    companion object {
+        fun newInstance(anchor: IllustrationAnchor): IllustrationEditDialog {
+            return IllustrationEditDialog().apply {
+                arguments = Bundle().apply {
+                    putString("anchorType", anchor.anchorType)
+                    putInt("anchorPos", anchor.anchorPos)
+                    putString("frontParagraph", anchor.frontParagraph)
+                    putString("backParagraph", anchor.backParagraph)
+                }
+            }
         }
     }
 
-    /** 成组单元：firstIndex 为单元内第一个媒体的下标，indexes 为单元包含的媒体下标 */
-    private data class MediaUnit(
-        val firstIndex: Int,
-        val indexes: List<Int>,
-        val isAudio: Boolean
-    )
-
-    private val binding by viewBinding(DialogIllustrationEditBinding::bind)
     private val anchor by lazy {
         IllustrationAnchor(
             anchorType = arguments?.getString("anchorType").orEmpty(),
@@ -69,20 +97,22 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         )
     }
 
-    private val selectedUris = arrayListOf<Uri>()
+    private var insertedCallback: (() -> Unit)? = null
+
+    fun setOnInserted(callback: () -> Unit) {
+        insertedCallback = callback
+    }
+
+    override val dialogSize: AppDialogSize? = AppDialogSize.Form
 
     // 选择时统一读取字节并解析类型，保存与逐条备注分组共用这份结果
-    private val parsedMedia = arrayListOf<Pair<ByteArray, String>>() // bytes to ext
+    private val mediaState = mutableStateListOf<Pair<ByteArray, String>>() // bytes to ext
+    private val uriState = mutableStateListOf<Uri>()
 
-    private val unitNoteEdits = arrayListOf<EditText>()
-    private val unitKeys = arrayListOf<Int>()
-    private val unitNotes = LinkedHashMap<Int, String>() // 媒体下标 -> 备注（排版只管显示分组，不管备注）
-
-    private val selectImages = registerForActivityResult(SelectImagesContract()) {
-        if (it.uris.isNotEmpty()) {
+    private val selectImages = registerForActivityResult(SelectImagesContract()) { result ->
+        if (result.uris.isNotEmpty()) {
             val parsed = arrayListOf<Pair<ByteArray, String>>()
-            it.uris.forEach { uri ->
-                // 选择器放开 */* 后可能选到非媒体文件，先统一读取字节并解析类型
+            result.uris.forEach { uri ->
                 val bytes = kotlin.runCatching {
                     requireContext().contentResolver.openInputStream(uri)?.use { s ->
                         s.readBytes()
@@ -92,8 +122,6 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
                     toastOnUi("读取媒体文件失败")
                     return@forEach
                 }
-                // 文件选择器返回的 MIME 可能不可靠（null/octet-stream/报成 image 类），
-                // 按文件名扩展名 → MIME → 文件头嗅探三级判断，确保视频/音频不会落成 jpg
                 val name = IllustrationHelp.queryDisplayName(requireContext(), uri)
                 val mime = requireContext().contentResolver.getType(uri)
                 val ext = IllustrationHelp.resolveMediaExt(name, mime, bytes)
@@ -106,71 +134,327 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
                 }
                 parsed.add(bytes to ext)
             }
-            if (parsed.size != it.uris.size) {
-                // 有媒体读取或解析失败：本次选择整体不生效，直接暴露问题
+            if (parsed.size != result.uris.size) {
                 return@registerForActivityResult
             }
-            selectedUris.clear()
-            selectedUris.addAll(it.uris)
-            parsedMedia.clear()
-            parsedMedia.addAll(parsed)
-            upSelected()
-            rebuildNoteInputs()
+            uriState.clear()
+            uriState.addAll(result.uris)
+            mediaState.clear()
+            mediaState.addAll(parsed)
         }
     }
 
-    private var thumbAdapter: ThumbAdapter? = null
-
-    override fun onStart() {
-        super.onStart()
-        setLayout(0.92f, ViewGroup.LayoutParams.WRAP_CONTENT)
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        return ComposeView(requireContext()).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                val style = rememberAppDialogStyle()
+                CompositionLocalProvider(
+                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+                ) {
+                    IllustrationEditContent(style)
+                }
+            }
+        }
     }
 
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.root.applyUiBodyTypefaceDeep(requireContext().uiTypeface())
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.rvSelected.layoutManager = LinearLayoutManager(
-            requireContext(),
-            LinearLayoutManager.HORIZONTAL,
-            false
+    @Composable
+    private fun IllustrationEditContent(style: AppDialogStyle) {
+        var selectedLayout by remember { mutableStateOf(BookIllustration.LAYOUT_SINGLE) }
+        var heightText by remember { mutableStateOf("") }
+        var pageBreak by remember { mutableStateOf(false) }
+        var unifiedNote by remember { mutableStateOf(false) }
+        var unifiedNoteText by remember { mutableStateOf("") }
+        val unitNotes = remember { mutableStateMapOf<Int, String>() }
+        val expandedNotes = remember { mutableStateMapOf<Int, Boolean>() }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.illustration_title),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = style.primaryText,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = stringResource(R.string.illustration_pick_images),
+                    color = style.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(style.actionRadius))
+                        .clickable { selectImages.launch(0) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+            }
+            if (uriState.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.height(72.dp)
+                ) {
+                    items(uriState.size) { index ->
+                        ThumbCell(style, uriState[index])
+                    }
+                }
+            }
+
+            ReaderSectionCard(style = style, title = stringResource(R.string.illustration_layout)) {
+                ReaderSegmentedOptions(
+                    options = listOf(
+                        ReaderOption(
+                            BookIllustration.LAYOUT_SINGLE,
+                            stringResource(R.string.illustration_layout_single)
+                        ),
+                        ReaderOption(
+                            BookIllustration.LAYOUT_DOUBLE,
+                            stringResource(R.string.illustration_layout_double)
+                        ),
+                        ReaderOption(
+                            BookIllustration.LAYOUT_TRIPLE,
+                            stringResource(R.string.illustration_layout_triple)
+                        ),
+                        ReaderOption(
+                            BookIllustration.LAYOUT_QUAD,
+                            stringResource(R.string.illustration_layout_quad)
+                        ),
+                        ReaderOption(
+                            BookIllustration.LAYOUT_QUAD_GRID,
+                            stringResource(R.string.illustration_layout_quad_grid)
+                        )
+                    ),
+                    selectedValue = selectedLayout,
+                    style = style,
+                    scrollable = true,
+                    onSelected = { selectedLayout = it }
+                )
+            }
+
+            ReaderSectionCard(style = style) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.illustration_height),
+                        color = style.secondaryText,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    OutlinedTextField(
+                        value = heightText,
+                        onValueChange = { heightText = it.filter(Char::isDigit).take(5) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.illustration_height_hint)) },
+                        colors = outlinedColors(style)
+                    )
+                }
+                SwitchRow(
+                    title = stringResource(R.string.illustration_page_break),
+                    checked = pageBreak,
+                    style = style,
+                    onCheckedChange = { pageBreak = it }
+                )
+                SwitchRow(
+                    title = stringResource(R.string.illustration_unified_note),
+                    checked = unifiedNote,
+                    style = style,
+                    onCheckedChange = { unifiedNote = it }
+                )
+                if (unifiedNote) {
+                    OutlinedTextField(
+                        value = unifiedNoteText,
+                        onValueChange = { unifiedNoteText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(R.string.illustration_note_hint)) },
+                        colors = outlinedColors(style)
+                    )
+                } else {
+                    mediaState.forEachIndexed { mediaIndex, media ->
+                        NoteRow(
+                            style = style,
+                            label = if (media.second in IllustrationHelp.AUDIO_EXTS) {
+                                stringResource(R.string.illustration_note_audio_unit, mediaIndex + 1)
+                            } else {
+                                stringResource(R.string.illustration_note_image_unit, mediaIndex + 1, 1)
+                            },
+                            text = unitNotes[mediaIndex].orEmpty(),
+                            expanded = expandedNotes[mediaIndex] == true,
+                            onTextChange = { unitNotes[mediaIndex] = it },
+                            onToggle = {
+                                expandedNotes[mediaIndex] = !(expandedNotes[mediaIndex] ?: false)
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                subtleButton(stringResource(R.string.cancel), style, Modifier.weight(1f)) {
+                    dismissAllowingStateLoss()
+                }
+                subtleButton(stringResource(R.string.ok), style, Modifier.weight(1f)) {
+                    save(
+                        selectedLayout = selectedLayout,
+                        heightText = heightText,
+                        pageBreak = pageBreak,
+                        unifiedNote = unifiedNote,
+                        unifiedNoteText = unifiedNoteText,
+                        unitNotes = unitNotes.toMap()
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ThumbCell(style: AppDialogStyle, uri: Uri) {
+        AndroidView(
+            factory = { ctx ->
+                ImageView(ctx).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    clipToOutline = true
+                }
+            },
+            update = { view ->
+                ImageLoader.load(view.context, uri).into(view)
+            },
+            modifier = Modifier
+                .size(72.dp)
+                .clip(RoundedCornerShape(style.actionRadius))
         )
-        thumbAdapter = ThumbAdapter()
-        binding.rvSelected.adapter = thumbAdapter
-        binding.tvPickImages.setOnClickListener {
-            selectImages.launch(0)
-        }
-        binding.tvCancel.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
-        binding.tvOk.setOnClickListener {
-            save()
-        }
-        binding.rgLayout.check(binding.rbSingle.id)
-        //排版只管显示分组，不管备注条数：切排版不重建备注输入
-        binding.cbUnifiedNote.isChecked = false
-        binding.cbUnifiedNote.setOnCheckedChangeListener { _, _ ->
-            rebuildNoteInputs()
-        }
-        rebuildNoteInputs()
     }
 
-    private fun upSelected() {
-        thumbAdapter?.setItems(selectedUris)
-        binding.rvSelected.visible(selectedUris.isNotEmpty())
-    }
-
-    private fun selectedLayout(): String {
-        return when (binding.rgLayout.checkedRadioButtonId) {
-            binding.rbDouble.id -> BookIllustration.LAYOUT_DOUBLE
-            binding.rbTriple.id -> BookIllustration.LAYOUT_TRIPLE
-            binding.rbQuad.id -> BookIllustration.LAYOUT_QUAD
-            binding.rbQuadGrid.id -> BookIllustration.LAYOUT_QUAD_GRID
-            else -> BookIllustration.LAYOUT_SINGLE
+    @Composable
+    private fun SwitchRow(
+        title: String,
+        checked: Boolean,
+        style: AppDialogStyle,
+        onCheckedChange: (Boolean) -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!checked) }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = style.primaryText,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f)
+            )
+            LegadoMiuixSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                palette = style.toMiuixPalette()
+            )
         }
     }
 
-    private fun layoutCellCount(): Int {
-        return when (selectedLayout()) {
+    @Composable
+    private fun NoteRow(
+        style: AppDialogStyle,
+        label: String,
+        text: String,
+        expanded: Boolean,
+        onTextChange: (String) -> Unit,
+        onToggle: () -> Unit
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(style.actionRadius))
+                .background(style.fieldSurface)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = label,
+                color = style.primaryText,
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+            )
+            if (expanded) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    placeholder = { Text(stringResource(R.string.illustration_note_hint)) },
+                    colors = outlinedColors(style)
+                )
+            } else {
+                Text(
+                    text = previewTextOf(text),
+                    color = style.secondaryText,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onToggle)
+                        .padding(top = 2.dp)
+                )
+            }
+        }
+    }
+
+    /** 备注收起行：取首个非空行，空的就是无备注 */
+    private fun previewTextOf(text: String): String {
+        val first = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+        return first.ifBlank { "" }
+    }
+
+    @Composable
+    private fun outlinedColors(style: AppDialogStyle) = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = style.primaryText,
+        unfocusedTextColor = style.primaryText,
+        cursorColor = style.accent,
+        focusedBorderColor = style.accent,
+        unfocusedBorderColor = style.stroke,
+        focusedContainerColor = style.fieldSurface,
+        unfocusedContainerColor = style.fieldSurface
+    )
+
+    @Composable
+    private fun subtleButton(
+        text: String,
+        style: AppDialogStyle,
+        modifier: Modifier = Modifier,
+        onClick: () -> Unit
+    ) {
+        Text(
+            text = text,
+            color = style.primaryText,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            modifier = modifier
+                .clip(RoundedCornerShape(style.actionRadius))
+                .background(style.fieldSurface, RoundedCornerShape(style.actionRadius))
+                .clickable(onClick = onClick)
+                .padding(vertical = 10.dp)
+        )
+    }
+
+    private fun layoutCellCount(layout: String): Int {
+        return when (layout) {
             BookIllustration.LAYOUT_DOUBLE -> 2
             BookIllustration.LAYOUT_TRIPLE -> 3
             BookIllustration.LAYOUT_QUAD -> 4
@@ -179,19 +463,26 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         }
     }
 
+    /** 成组单元：firstIndex 为单元内第一个媒体的下标，indexes 为单元包含的媒体下标 */
+    private data class MediaUnit(
+        val firstIndex: Int,
+        val indexes: List<Int>,
+        val isAudio: Boolean
+    )
+
     /**
      * 成组单元与保存时的记录一一对应：图片/视频按所选布局分块，音频永不参与宫格单独成格；
      * 各块按原始选择顺序排序（音频夹在宫格区间内时排在宫格块之后）。
      */
-    private fun computeUnits(): List<MediaUnit> {
-        val cellCount = layoutCellCount()
+    private fun computeUnits(layout: String): List<MediaUnit> {
+        val cellCount = layoutCellCount(layout)
         val units = arrayListOf<MediaUnit>()
-        parsedMedia.mapIndexedNotNull { index, m ->
+        mediaState.mapIndexedNotNull { index, m ->
             if (m.second in IllustrationHelp.AUDIO_EXTS) null else index
         }.chunked(cellCount).forEach { chunk ->
             units.add(MediaUnit(chunk.first(), chunk, false))
         }
-        parsedMedia.forEachIndexed { index, m ->
+        mediaState.forEachIndexed { index, m ->
             if (m.second in IllustrationHelp.AUDIO_EXTS) {
                 units.add(MediaUnit(index, listOf(index), true))
             }
@@ -200,124 +491,24 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         return units
     }
 
-    private fun snapshotUnitNotes() {
-        unitNoteEdits.forEachIndexed { i, edit ->
-            unitKeys.getOrNull(i)?.let { key ->
-                unitNotes[key] = edit.text.toString()
-            }
-        }
-    }
-
-    /** 备注输入区：统一备注勾选时单个输入框；取消勾选后按媒体逐条输入（与排版无关） */
-    private fun rebuildNoteInputs() {
-        snapshotUnitNotes()
-        val unified = binding.cbUnifiedNote.isChecked
-        binding.etNote.visibility = if (unified) View.VISIBLE else View.GONE
-        binding.llNoteItems.visibility = if (unified) View.GONE else View.VISIBLE
-        binding.llNoteItems.removeAllViews()
-        unitNoteEdits.clear()
-        unitKeys.clear()
-        if (unified) {
-            return
-        }
-        val context = requireContext()
-        //一媒体一条：四宫格 4 张图就是 4 条备注，排版只决定显示分组，不合并备注
-        parsedMedia.forEachIndexed { mediaIndex, m ->
-            //每条备注默认收成一行：点预览展开输入，点标题收起
-            val initial = unitNotes[mediaIndex].orEmpty()
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                val rowParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-                rowParams.topMargin = 12.dpToPx()
-                layoutParams = rowParams
-            }
-            val label = TextView(context).apply {
-                text = if (m.second in IllustrationHelp.AUDIO_EXTS) {
-                    getString(R.string.illustration_note_audio_unit, mediaIndex + 1)
-                } else {
-                    getString(R.string.illustration_note_image_unit, mediaIndex + 1, 1)
-                }
-                setTextColor(context.getCompatColor(R.color.primaryText))
-                textSize = 14f
-            }
-            val preview = TextView(context).apply {
-                text = previewTextOf(initial)
-                setTextColor(context.getCompatColor(R.color.secondaryText))
-                textSize = 14f
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                isClickable = true
-                isFocusable = true
-            }
-            val edit = EditText(context).apply {
-                hint = getString(R.string.illustration_note_hint)
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                gravity = Gravity.TOP or Gravity.START
-                background = null
-                setTextColor(context.getCompatColor(R.color.primaryText))
-                textSize = 14f
-                setText(initial)
-                visibility = View.GONE
-            }
-            preview.setOnClickListener { expandNoteRow(preview, edit) }
-            label.setOnClickListener { toggleNoteRow(preview, edit) }
-            row.addView(label)
-            row.addView(preview)
-            row.addView(edit)
-            binding.llNoteItems.addView(row)
-            unitNoteEdits.add(edit)
-            unitKeys.add(mediaIndex)
-        }
-        binding.llNoteItems.applyUiBodyTypefaceDeep(context.uiTypeface())
-    }
-
-    /** 备注收起行：取首个非空行，空的就是无备注 */
-    private fun previewTextOf(text: CharSequence): String {
-        val first = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
-        return first.ifBlank { getString(R.string.illustration_note_empty) }
-    }
-
-    private fun expandNoteRow(preview: TextView, edit: EditText) {
-        preview.visibility = View.GONE
-        edit.visibility = View.VISIBLE
-        edit.requestFocus()
-        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-            as? android.view.inputmethod.InputMethodManager
-        imm?.showSoftInput(edit, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-    }
-
-    private fun toggleNoteRow(preview: TextView, edit: EditText) {
-        if (edit.visibility == View.VISIBLE) {
-            preview.text = previewTextOf(edit.text ?: "")
-            edit.visibility = View.GONE
-            preview.visibility = View.VISIBLE
-            val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-                as? android.view.inputmethod.InputMethodManager
-            imm?.hideSoftInputFromWindow(edit.windowToken, 0)
-        } else {
-            expandNoteRow(preview, edit)
-        }
-    }
-
-    private fun save() {
-        if (parsedMedia.isEmpty()) {
+    private fun save(
+        selectedLayout: String,
+        heightText: String,
+        pageBreak: Boolean,
+        unifiedNote: Boolean,
+        unifiedNoteText: String,
+        unitNotes: Map<Int, String>
+    ) {
+        if (mediaState.isEmpty()) {
             toastOnUi(R.string.illustration_no_images)
             return
         }
         val book = ReadBook.book ?: return
         val chapter = ReadBook.curTextChapter?.chapter ?: return
-        val heightText = binding.etHeight.text.toString().trim()
-        val displayHeight = heightText.toIntOrNull() ?: 0
-        val pageBreak = binding.cbPageBreak.isChecked
-        snapshotUnitNotes()
-        val unified = binding.cbUnifiedNote.isChecked
-        val unifiedNote = binding.etNote.text.toString()
-        val units = computeUnits()
+        val displayHeight = heightText.trim().toIntOrNull() ?: 0
+        val units = computeUnits(selectedLayout)
         // 保存媒体文件，选择顺序与单元下标一致
-        val srcs = parsedMedia.map { (bytes, ext) ->
+        val srcs = mediaState.map { (bytes, ext) ->
             val src = IllustrationHelp.newSrc(ext)
             IllustrationHelp.saveImage(book, src, bytes)
             src
@@ -325,10 +516,10 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         val records = arrayListOf<BookIllustration>()
         units.forEach { unit ->
             val unitSrcs = unit.indexes.map { srcs[it] }
-            //记录按排版分组存（宫格渲染靠它），备注按媒体各写各的：
-            //统一备注/单媒体组走 note 字段；多媒体组 note 置空，每图备注进 srcNotes
-            val (note, srcNotes) = if (unified) {
-                unifiedNote to "{}"
+            // 记录按排版分组存（宫格渲染靠它），备注按媒体各写各的：
+            // 统一备注/单媒体组走 note 字段；多媒体组 note 置空，每图备注进 srcNotes
+            val (note, srcNotes) = if (unifiedNote) {
+                unifiedNoteText to "{}"
             } else if (unit.indexes.size == 1) {
                 unitNotes[unit.firstIndex].orEmpty() to "{}"
             } else {
@@ -348,7 +539,8 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
                     records.size,
                     note = note,
                     srcNotes = srcNotes,
-                    single = unit.isAudio
+                    single = unit.isAudio,
+                    layout = if (unit.isAudio) BookIllustration.LAYOUT_SINGLE else selectedLayout
                 )
             )
         }
@@ -356,7 +548,7 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         appDb.bookIllustrationDao.insert(*records.toTypedArray())
         dismissAllowingStateLoss()
         toastOnUi(R.string.illustration_inserted)
-        callback?.invoke()
+        insertedCallback?.invoke()
     }
 
     private fun newRecord(
@@ -368,7 +560,8 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         sortOrder: Int,
         note: String,
         srcNotes: String = "{}",
-        single: Boolean = false
+        single: Boolean = false,
+        layout: String = BookIllustration.LAYOUT_SINGLE
     ): BookIllustration {
         return BookIllustration(
             bookUrl = book.bookUrl,
@@ -382,41 +575,12 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
             frontFingerprint = IllustrationHelp.fingerprint(anchor.frontParagraph, false),
             backFingerprint = IllustrationHelp.fingerprint(anchor.backParagraph, true),
             imageSrcs = imageSrcsToJson(srcs),
-            layoutType = if (single) BookIllustration.LAYOUT_SINGLE else selectedLayout(),
+            layoutType = layout,
             displayHeight = displayHeight,
             pageBreak = pageBreak,
             sortOrder = sortOrder,
             note = note,
             srcNotes = srcNotes
         )
-    }
-
-    private var callback: (() -> Unit)? = null
-
-    fun setOnInserted(callback: () -> Unit) {
-        this.callback = callback
-    }
-
-    private inner class ThumbAdapter :
-        RecyclerAdapter<Uri, ItemImageSimpleBinding>(requireContext()) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemImageSimpleBinding {
-            return ItemImageSimpleBinding.inflate(inflater, parent, false)
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemImageSimpleBinding,
-            item: Uri,
-            payloads: MutableList<Any>
-        ) {
-            binding.ivImage.run {
-                io.legado.app.help.glide.ImageLoader.load(context, item).into(this)
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemImageSimpleBinding) {
-            // 缩略图无需点击
-        }
     }
 }
