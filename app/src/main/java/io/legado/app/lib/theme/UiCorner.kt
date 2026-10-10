@@ -100,7 +100,10 @@ object UiCorner {
     fun effectMode(): String = "solid"
 
     fun layoutAlpha(): Float {
-        return AppConfig.uiLayoutAlpha.coerceIn(0, 100) / 100f
+        // A2-4: panel opacity now follows the active layout package (V4.8 model);
+        // legacy uiLayoutAlpha stays as the fallback for packages without glass.
+        val engine = io.legado.app.uikit.layout.LayoutEngine
+        return engine.glassAlpha.coerceIn(0.05f, 1f)
     }
 
     fun surfaceColor(color: Int, pressed: Boolean = false): Int {

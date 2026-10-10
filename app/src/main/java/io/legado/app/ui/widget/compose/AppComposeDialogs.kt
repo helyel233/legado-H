@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import io.legado.app.R
+import io.legado.app.uikit.layout.LayoutEngine
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
@@ -122,7 +123,7 @@ fun rememberAppDialogStyle(): AppDialogStyle {
     val layoutAlpha = if (AppConfig.isEInkMode) {
         1f
     } else {
-        AppConfig.dialogAlpha.coerceIn(0, 100) / 100f
+        io.legado.app.uikit.layout.LayoutEngine.glassAlpha.coerceIn(0.05f, 1f)
     }
     val themeUiPalette = rememberThemeUiPalette()
     val customSurface = themeUiPalette.cardColor.takeIf { themeUiPalette.hasCustomCardColor }

@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.R
+import io.legado.app.uikit.layout.LayoutEngine
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.rememberThemeUiPalette
@@ -368,7 +369,7 @@ private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
 private fun rememberDialogLikePanelColor(): Int {
     val context = LocalContext.current
     val themeUiPalette = rememberThemeUiPalette()
-    val dialogAlpha = AppConfig.dialogAlpha
+    val dialogAlpha = (io.legado.app.uikit.layout.LayoutEngine.glassAlpha * 100).toInt()
     val eInk = AppConfig.isEInkMode
     val surfaceBase = if (themeUiPalette.hasCustomCardColor) {
         themeUiPalette.cardColor
@@ -379,7 +380,7 @@ private fun rememberDialogLikePanelColor(): Int {
         val alpha = if (eInk) {
             1f
         } else {
-            dialogAlpha.coerceIn(0, 100) / 100f
+            dialogAlpha.coerceIn(5, 100) / 100f
         }
         ColorUtils.withAlpha(surfaceBase, alpha)
     }

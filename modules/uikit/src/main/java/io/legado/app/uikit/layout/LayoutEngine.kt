@@ -18,7 +18,7 @@ object BuiltinLayouts {
         navPosition = LayoutPackageSpec.NAV_BOTTOM,
         navVisibility = LayoutPackageSpec.VIS_ALWAYS,
         densityLevel = LayoutPackageSpec.DENSITY_STANDARD,
-        glassEnabled = true, glassTransparency = 0.65f, glassBlur = 12f,
+        glassEnabled = false, glassTransparency = 1f, glassBlur = 0f,
         shapeScale = 1f,
     )
 
