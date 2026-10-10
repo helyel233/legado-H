@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.help.config.LayoutPackageStore
 import io.legado.app.uikit.layout.LayoutEngine
 import io.legado.app.uikit.layout.LayoutPackageSpec
 import io.legado.app.uikit.theme.Applicator
@@ -39,20 +39,13 @@ internal fun PackageEditor(active: LayoutPackageSpec) {
     val scheme = Applicator.rememberAppColorScheme()
     var draft by remember(active.id, LayoutEngine.revision) { mutableStateOf(active) }
 
+    val activity = context as? LayoutCenterActivity
+
     fun commit(spec: LayoutPackageSpec) {
-        draft = spec
-        LayoutEngine.applyLayout(spec)
-        LayoutPackageStore.persistCurrent(context)
+        activity?.updateTarget { spec }
     }
 
-    fun edit(): LayoutPackageSpec =
-        if (draft.id == LayoutPackageStore.CUSTOM_ID) draft
-        else draft.copy(
-            id = LayoutPackageStore.CUSTOM_ID,
-            name = "我的界面",
-            author = "自定义",
-            basedOn = draft.id,
-        )
+    fun edit(): LayoutPackageSpec = active
 
     LabeledRow(R.string.layout_nav_position)
     SegGroup(

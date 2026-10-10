@@ -62,7 +62,7 @@ internal fun FontSection() {
             Applicator.applyTheme(Applicator.activeTheme.let { s ->
                 s.copy(fonts = s.fonts?.copy(ui = null) ?: s.fonts)
             })
-            ThemePackageStore.persistCurrent(context)
+            ThemePackageStore.persistActive(context)
         },
     )
     FontRow(
@@ -73,7 +73,7 @@ internal fun FontSection() {
             Applicator.applyTheme(Applicator.activeTheme.let { s ->
                 s.copy(fonts = s.fonts?.copy(title = null) ?: s.fonts)
             })
-            ThemePackageStore.persistCurrent(context)
+            ThemePackageStore.persistActive(context)
         },
     )
     Text(
@@ -133,7 +133,7 @@ internal fun ImageSection() {
                     Applicator.applyTheme(
                         Applicator.activeTheme.copy(images = Applicator.activeTheme.images?.withSlot(slot, null))
                     )
-                    ThemePackageStore.persistCurrent(context)
+                    ThemePackageStore.persistActive(context)
                 }) { Text(stringResource(R.string.theme_center_restore)) }
             }
         }

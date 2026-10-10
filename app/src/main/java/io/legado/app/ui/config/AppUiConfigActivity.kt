@@ -63,38 +63,12 @@ private fun AppUiConfigScreen() {
             .padding(horizontal = AppSpacing.s16, vertical = AppSpacing.s12),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.s12),
     ) {
+        // A2-4b: 主题和界面管理中心（V4.10 统一入口）
         PackageCard(
-            title = stringResource(R.string.app_ui_config_theme_title),
-            desc = stringResource(R.string.app_ui_config_theme_desc),
-            actionLabel = stringResource(R.string.theme_list),
-            onAction = { context.startActivity<ThemeManageActivity>() }
-        )
-        // A2-1: 界面中心（新引擎）
-        PackageCard(
-            title = stringResource(R.string.layout_center_title),
-            desc = stringResource(R.string.layout_center_desc),
-            actionLabel = stringResource(R.string.theme_center_open),
-            onAction = { context.startActivity<LayoutCenterActivity>() }
-        )
-        // A1-5: 主题中心（新引擎，最小可用版）
-        PackageCard(
-            title = stringResource(R.string.theme_center_title),
-            desc = stringResource(R.string.theme_center_desc),
-            actionLabel = stringResource(R.string.theme_center_open),
-            onAction = { context.startActivity<ThemeCenterActivity>() }
-        )
-        // 界面包：过渡期指向外观套件（现有布局预设管理），P2-b 统一为界面包管理器
-        PackageCard(
-            title = stringResource(R.string.app_ui_config_interface_title),
-            desc = stringResource(R.string.app_ui_config_interface_desc),
-            actionLabel = stringResource(R.string.appearance_kit_manage),
-            onAction = { context.startActivity<AppearanceKitActivity>() }
-        )
-        PackageCard(
-            title = stringResource(R.string.app_ui_config_reader_title),
-            desc = stringResource(R.string.app_ui_config_reader_desc),
-            actionLabel = stringResource(R.string.reader_asset_manage),
-            onAction = { context.startActivity<ReaderAssetManageActivity>() }
+            title = stringResource(R.string.skin_center_title),
+            desc = stringResource(R.string.skin_center_desc),
+            actionLabel = stringResource(R.string.skin_center_open),
+            onAction = { context.startActivity<SkinCenterActivity>() }
         )
     }
 }

@@ -9,29 +9,20 @@ import io.legado.app.uikit.theme.BuiltinThemes
 import java.io.File
 
 /**
- * A1-5/A1-6 runtime store for the new theme engine (docs/ui-rewrite-plan-v4.md 2.2).
- *
- * Single runtime file `uiThemePackageRuntime.json` (filesDir):
- *  - activeId: active package id (builtin id or "custom")
- *  - customSpec: the user's custom package (seed/strategy), null unless used
- *  - tweaks: manual delta, keys `color.<palette_role>`
- *  - migratedFromLegacy: translator already ran (A1-6, one-shot)
- *
- * Legacy translation (one-shot, docs/ui-rewrite-plan-v4-impl.md A1-6):
- * active spec = custom package whose seed is the legacy primary color
- * (ThemeStore.KEY_PRIMARY_COLOR). The palette derives a coherent day/night
- * pair from that seed; users can fine-tune from the theme center.
+ * A2-4b theme package library (V4.10 multi-package model).
+ * Runtime file uiThemePackageRuntime.json: activeId + userSpecs list.
+ * Back-compat: A1 single-custom format normalizes into a user package;
+ * first launch translates the legacy theme into "我的主题包 1".
  */
 object ThemePackageStore {
 
     private const val FILE_NAME = "uiThemePackageRuntime.json"
-    const val CUSTOM_ID = "custom"
 
     data class Runtime(
         val activeId: String = BuiltinThemes.default.id,
-        val customSpec: ThemePackageSpec? = null,
-        val tweaks: Map<String, String> = emptyMap(),
+        val userSpecs: List<ThemePackageSpec> = emptyList(),
         val migratedFromLegacy: Boolean = false,
+        val customSpec: ThemePackageSpec? = null,
     )
 
     private val gson = Gson()
@@ -41,8 +32,17 @@ object ThemePackageStore {
     fun load(context: Context): Runtime? = runCatching {
         val f = file(context)
         if (!f.exists()) return null
-        gson.fromJson(f.readText(), Runtime::class.java)
+        normalize(gson.fromJson(f.readText(), Runtime::class.java))
     }.getOrNull()
+
+    private fun normalize(r: Runtime): Runtime = when {
+        r.userSpecs.isNotEmpty() -> r
+        r.customSpec != null -> {
+            val spec = r.customSpec.copy(id = newUserId())
+            r.copy(userSpecs = listOf(spec), activeId = if (r.activeId == "custom") spec.id else r.activeId)
+        }
+        else -> r
+    }
 
     fun save(context: Context, runtime: Runtime) {
         val tmp = File(context.filesDir, ".$FILE_NAME.tmp")
@@ -52,62 +52,47 @@ object ThemePackageStore {
         tmp.renameTo(dst)
     }
 
-    /** Push the stored runtime into the engine; falls back to factory default. */
-    fun applyToApplicator(context: Context) {
-        val runtime = load(context)
-        val spec = runtime?.let { resolveSpec(it) } ?: BuiltinThemes.default
-        Applicator.applyTheme(spec)
-        Applicator.loadTweaks(runtime?.tweaks ?: emptyMap())
-        Applicator.applyDark(AppConfig.isNightTheme)
+    fun resolveSpec(runtime: Runtime, id: String = runtime.activeId): ThemePackageSpec? =
+        BuiltinThemes.byId(id) ?: runtime.userSpecs.firstOrNull { it.id == id }
+
+    fun listUser(context: Context): List<ThemePackageSpec> =
+        load(context)?.userSpecs ?: emptyList()
+
+    fun upsertUserSpec(context: Context, spec: ThemePackageSpec) {
+        val r = load(context) ?: Runtime()
+        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == spec.id } + spec))
     }
 
-    /** Snapshot the engine state back to disk (called after user mutations). */
-    fun persistCurrent(context: Context) {
-        val runtime = load(context) ?: Runtime()
-        val custom = if (Applicator.activeTheme.id == CUSTOM_ID) Applicator.activeTheme else null
-        save(
-            context,
-            runtime.copy(
-                activeId = Applicator.activeTheme.id,
-                customSpec = custom,
-                tweaks = Applicator.tweaksSnapshot(),
-            ),
-        )
+    fun deleteUserSpec(context: Context, id: String) {
+        val r = load(context) ?: return
+        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == id }))
     }
 
-    fun resolveSpec(runtime: Runtime): ThemePackageSpec? =
-        when (runtime.activeId) {
-            CUSTOM_ID -> runtime.customSpec?.takeIf { it.isValid() }
-            else -> BuiltinThemes.byId(runtime.activeId)
-        }
+    fun persistActive(context: Context) {
+        val r = load(context) ?: Runtime()
+        save(context, r.copy(activeId = Applicator.activeTheme.id))
+    }
 
-    // ---- A1-6 legacy translator (one-shot) ---------------------------------
+    fun newUserId(): String = "u_" + System.currentTimeMillis()
 
-    /**
-     * Translate the legacy theme into a custom package seeded by the legacy
-     * primary color. Runs only when no runtime file exists yet; then the
-     * runtime is applied to the engine.
-     */
     fun init(context: Context) {
         val app = context.applicationContext
-        if (load(app) == null) {
-            save(app, translateLegacy(app))
+        var runtime = load(app)
+        if (runtime == null) {
+            val seed = runCatching { ThemeStore.primaryColor(app) }.getOrNull()
+            runtime = if (seed != null) {
+                val spec = ThemePackageSpec(
+                    id = newUserId(),
+                    name = "我的主题包 1",
+                    author = "迁移自旧版",
+                    seed = String.format("#%06X", seed and 0xFFFFFF),
+                )
+                Runtime(activeId = spec.id, userSpecs = listOf(spec), migratedFromLegacy = true)
+            } else {
+                Runtime(migratedFromLegacy = true)
+            }
+            save(app, runtime)
         }
-        applyToApplicator(app)
-    }
-
-    private fun translateLegacy(context: Context): Runtime {
-        val seed = runCatching { ThemeStore.primaryColor(context) }.getOrNull()
-        if (seed == null) return Runtime(migratedFromLegacy = true)
-        return Runtime(
-            activeId = CUSTOM_ID,
-            customSpec = ThemePackageSpec(
-                id = CUSTOM_ID,
-                name = "我的主题",
-                author = "迁移自旧版",
-                seed = String.format("#%06X", seed and 0xFFFFFF),
-            ),
-            migratedFromLegacy = true,
-        )
+        Applicator.applyTheme(resolveSpec(runtime) ?: BuiltinThemes.default)
     }
 }

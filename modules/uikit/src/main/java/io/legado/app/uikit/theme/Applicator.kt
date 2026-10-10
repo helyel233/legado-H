@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import io.legado.app.theme.palette.PaletteRole
 import io.legado.app.theme.pack.ThemePackageSpec
-import io.legado.app.theme.pack.paletteRoleFromKey
 import io.legado.app.theme.pack.resolvePalette
 
 /**
@@ -59,10 +58,6 @@ object Applicator {
     var titleFontPath by mutableStateOf("")
         private set
 
-    // ---- layer ③ manual tweaks (delta, only touched keys) -------------------
-
-    private val tweaks = LinkedHashMap<String, String>()
-
     // ---- inputs from the app layer ------------------------------------------
 
     fun applyTheme(spec: ThemePackageSpec) {
@@ -85,37 +80,6 @@ object Applicator {
         bump()
     }
 
-    fun setTweak(role: PaletteRole, argb: Int) {
-        tweaks[tweakKey(role)] = String.format("#%08X", argb)
-        bump()
-    }
-
-    fun clearTweak(role: PaletteRole) {
-        if (tweaks.remove(tweakKey(role)) != null) bump()
-    }
-
-    fun clearAllTweaks() {
-        if (tweaks.isNotEmpty()) {
-            tweaks.clear()
-            bump()
-        }
-    }
-
-    fun isTweaked(role: PaletteRole): Boolean = tweaks.containsKey(tweakKey(role))
-
-    /** For persistence: only touched keys. */
-    fun tweaksSnapshot(): Map<String, String> = tweaks.toMap()
-
-    fun loadTweaks(saved: Map<String, String>) {
-        tweaks.clear()
-        saved.forEach { (key, value) ->
-            if (paletteRoleFromKey(key) != null && ThemePackageSpec.parseColor(value) != null) {
-                tweaks[key.trim()] = value.trim()
-            }
-        }
-        bump()
-    }
-
     // ---- resolution ----------------------------------------------------------
 
     private fun tweakKey(role: PaletteRole) = "color.${role.name.lowercase()}"
@@ -126,23 +90,18 @@ object Applicator {
     private fun factory(dark: Boolean): Map<PaletteRole, Int> =
         factoryDefaults.getOrPut(dark) { BuiltinThemes.sky.resolvePalette(dark) }
 
-    /** Full sandwich resolve for one role. */
-    fun resolveColor(role: PaletteRole): Int {
-        tweaks[tweakKey(role)]?.let { return ThemePackageSpec.parseColor(it)!! }
-        return activeTheme.resolvePalette(isDark, wallpaperSeed)[role]
+    /** Two-layer resolve for one role: factory defaults ← active package. */
+    fun resolveColor(role: PaletteRole): Int =
+        activeTheme.resolvePalette(isDark, wallpaperSeed)[role]
             ?: factory(isDark)[role]
             ?: 0xFF000000.toInt()
-    }
 
-    /** Full role set after all three layers (for previews and the XML bridge). */
+    /** Full role set (for previews and the XML bridge). */
     fun resolvePalette(): Map<PaletteRole, Int> {
         val base = activeTheme.resolvePalette(isDark, wallpaperSeed).toMutableMap()
         val defaults = factory(isDark)
         PaletteRole.entries.forEach { role ->
             if (!base.containsKey(role)) base[role] = defaults[role] ?: 0xFF000000.toInt()
-            tweaks[tweakKey(role)]?.let { value ->
-                ThemePackageSpec.parseColor(value)?.let { base[role] = it }
-            }
         }
         return base
     }

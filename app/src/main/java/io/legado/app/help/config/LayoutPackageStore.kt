@@ -8,19 +8,19 @@ import io.legado.app.uikit.layout.LayoutPackageSpec
 import java.io.File
 
 /**
- * A2-1 runtime store for the layout engine (edit-in-package model, V4.8).
- * See docs/ui-rewrite-plan-v4-impl.md A2-1. Legacy uiCornerScale folds into
- * a custom package once; density/glass legacy keys fold in at A2-4.
+ * A2-4b layout package library (V4.10 multi-package model), mirroring
+ * ThemePackageStore. Legacy uiCornerScale/bottomBarLayoutMode fold into
+ * "我的界面包 1" on first launch.
  */
 object LayoutPackageStore {
 
     private const val FILE_NAME = "uiLayoutPackageRuntime.json"
-    const val CUSTOM_ID = "custom"
 
     data class Runtime(
         val activeId: String = BuiltinLayouts.default.id,
-        val customSpec: LayoutPackageSpec? = null,
+        val userSpecs: List<LayoutPackageSpec> = emptyList(),
         val migratedFromLegacy: Boolean = false,
+        val customSpec: LayoutPackageSpec? = null,
     )
 
     private val gson = Gson()
@@ -30,8 +30,17 @@ object LayoutPackageStore {
     fun load(context: Context): Runtime? = runCatching {
         val f = file(context)
         if (!f.exists()) return null
-        gson.fromJson(f.readText(), Runtime::class.java)
+        normalize(gson.fromJson(f.readText(), Runtime::class.java))
     }.getOrNull()
+
+    private fun normalize(r: Runtime): Runtime = when {
+        r.userSpecs.isNotEmpty() -> r
+        r.customSpec != null -> {
+            val spec = r.customSpec.copy(id = newUserId())
+            r.copy(userSpecs = listOf(spec), activeId = if (r.activeId == "custom") spec.id else r.activeId)
+        }
+        else -> r
+    }
 
     fun save(context: Context, runtime: Runtime) {
         val tmp = File(context.filesDir, ".$FILE_NAME.tmp")
@@ -41,11 +50,28 @@ object LayoutPackageStore {
         tmp.renameTo(dst)
     }
 
-    fun resolveSpec(runtime: Runtime): LayoutPackageSpec? =
-        when (runtime.activeId) {
-            CUSTOM_ID -> runtime.customSpec?.takeIf { it.isValid() }
-            else -> BuiltinLayouts.byId(runtime.activeId)
-        }
+    fun resolveSpec(runtime: Runtime, id: String = runtime.activeId): LayoutPackageSpec? =
+        BuiltinLayouts.byId(id) ?: runtime.userSpecs.firstOrNull { it.id == id }
+
+    fun listUser(context: Context): List<LayoutPackageSpec> =
+        load(context)?.userSpecs ?: emptyList()
+
+    fun upsertUserSpec(context: Context, spec: LayoutPackageSpec) {
+        val r = load(context) ?: Runtime()
+        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == spec.id } + spec))
+    }
+
+    fun deleteUserSpec(context: Context, id: String) {
+        val r = load(context) ?: return
+        save(context, r.copy(userSpecs = r.userSpecs.filterNot { it.id == id }))
+    }
+
+    fun persistActive(context: Context) {
+        val r = load(context) ?: Runtime()
+        save(context, r.copy(activeId = LayoutEngine.activeLayout.id))
+    }
+
+    fun newUserId(): String = "u_" + System.currentTimeMillis()
 
     fun init(context: Context) {
         val app = context.applicationContext
@@ -59,30 +85,20 @@ object LayoutPackageStore {
             }
             val needFold = legacyScale != 1f || legacyNav != BuiltinLayouts.default.navPosition
             runtime = if (needFold) {
-                val folded = BuiltinLayouts.default
-                    .copy(shapeScale = legacyScale.coerceIn(0f, 1.5f), navPosition = legacyNav)
-                Runtime(
-                    activeId = CUSTOM_ID,
-                    customSpec = folded.copy(id = CUSTOM_ID, name = "我的界面", author = "迁移自旧版"),
-                    migratedFromLegacy = true,
-                )
+                val spec = BuiltinLayouts.default
+                    .copy(
+                        id = newUserId(),
+                        name = "我的界面包 1",
+                        author = "迁移自旧版",
+                        shapeScale = legacyScale.coerceIn(0f, 1.5f),
+                        navPosition = legacyNav,
+                    )
+                Runtime(activeId = spec.id, userSpecs = listOf(spec), migratedFromLegacy = true)
             } else {
                 Runtime(migratedFromLegacy = true)
             }
             save(app, runtime)
         }
         LayoutEngine.applyLayout(resolveSpec(runtime) ?: BuiltinLayouts.default)
-    }
-
-    fun persistCurrent(context: Context) {
-        val runtime = load(context) ?: Runtime()
-        val custom = if (LayoutEngine.activeLayout.id == CUSTOM_ID) LayoutEngine.activeLayout else null
-        save(
-            context,
-            runtime.copy(
-                activeId = LayoutEngine.activeLayout.id,
-                customSpec = custom,
-            ),
-        )
     }
 }

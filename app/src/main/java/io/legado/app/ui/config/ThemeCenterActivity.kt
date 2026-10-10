@@ -28,9 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,11 +39,10 @@ import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityThemeCenterBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemeAssetStore
 import io.legado.app.help.config.ThemePackageStore
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.theme.model.FontRole
-import io.legado.app.theme.palette.PaletteRole
 import io.legado.app.theme.pack.ThemeFonts
 import io.legado.app.theme.pack.ThemeImages
 import io.legado.app.theme.pack.ThemePackageSpec
@@ -60,9 +57,8 @@ import io.legado.app.uikit.token.AppSpacing
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
- * A1-5 主题中心（新引擎最小可用版）：
- * 内置 6 主题 / 自定义种子色与策略 / 夜间模式 / 手调管理。
- * 每次变更即时生效并持久化（ThemePackageStore）。
+ * A2-4b 主题包详情：编辑指定用户包（pkgId）；官方包首次编辑自动克隆。
+ * 由管理中心携 pkgId 打开；无 pkgId 时编辑当前应用中的包。
  */
 class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
 
@@ -83,6 +79,20 @@ class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
         pendingImageSlot = null
     }
 
+    private val targetId: String? by lazy { intent?.getStringExtra(EXTRA_PKG_ID) }
+
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        val spec = targetId?.let { id -> ThemePackageStore.resolveSpec(ThemePackageStore.load(this) ?: ThemePackageStore.Runtime(), id) }
+        if (spec != null && Applicator.activeTheme.id != spec.id) {
+            Applicator.applyTheme(spec)
+        }
+        binding.composeContent.setContent {
+            AppTheme(Applicator.rememberAppColorScheme()) {
+                ThemeCenterScreen()
+            }
+        }
+    }
+
     fun launchFontPicker(role: FontRole) {
         pendingFontRole = role
         fontPicker.launch("*/*")
@@ -95,7 +105,7 @@ class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
 
     private fun onFontPicked(uri: Uri, role: FontRole) {
         val path = ThemeAssetStore.copyToApp(this, uri, "fonts") ?: return
-        updateCustomSpec { spec ->
+        updateTarget { spec ->
             val fonts = (spec.fonts ?: ThemeFonts()).let {
                 if (role == FontRole.UI) it.copy(ui = path) else it.copy(title = path)
             }
@@ -105,22 +115,32 @@ class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
 
     private fun onImagePicked(uri: Uri, slot: String) {
         val path = ThemeAssetStore.copyToApp(this, uri, "images") ?: return
-        updateCustomSpec { spec -> spec.copy(images = (spec.images ?: ThemeImages()).withSlot(slot, path)) }
+        updateTarget { spec -> spec.copy(images = (spec.images ?: ThemeImages()).withSlot(slot, path)) }
     }
 
-    private fun updateCustomSpec(transform: (ThemePackageSpec) -> ThemePackageSpec) {
+    /** 官方包编辑 → 自动克隆为用户包（另存模型）。 */
+    private fun editTarget(): ThemePackageSpec {
         val cur = Applicator.activeTheme
-        val spec = if (cur.id == ThemePackageStore.CUSTOM_ID) cur else customBase()
-        Applicator.applyTheme(transform(spec))
-        ThemePackageStore.persistCurrent(this)
+        if (BuiltinThemes.byId(cur.id) == null && cur.basedOn != null) return cur
+        val clone = cur.copy(
+            id = ThemePackageStore.newUserId(),
+            name = cur.name + " 副本",
+            basedOn = cur.id,
+        )
+        ThemePackageStore.upsertUserSpec(this, clone)
+        Applicator.applyTheme(clone)
+        return clone
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.composeContent.setContent {
-            AppTheme(Applicator.rememberAppColorScheme()) {
-                ThemeCenterScreen()
-            }
-        }
+    fun updateTarget(transform: (ThemePackageSpec) -> ThemePackageSpec) {
+        val spec = transform(editTarget())
+        Applicator.applyTheme(spec)
+        ThemePackageStore.upsertUserSpec(this, spec)
+        ThemePackageStore.persistActive(this)
+    }
+
+    companion object {
+        const val EXTRA_PKG_ID = "pkgId"
     }
 }
 
@@ -131,10 +151,9 @@ private val SEED_PRESETS = listOf(
 
 @Composable
 private fun ThemeCenterScreen() {
-    val context = LocalContext.current
     val scheme = Applicator.rememberAppColorScheme()
     val rev = Applicator.revision
-    val tweaks = remember(rev) { Applicator.tweaksSnapshot() }
+    val overrides = remember(rev) { Applicator.activeTheme.override ?: emptyMap() }
 
     LazyColumn(
         modifier = Modifier
@@ -150,88 +169,35 @@ private fun ThemeCenterScreen() {
                 color = scheme.onBackground,
             )
             Text(
-                stringResource(R.string.theme_center_desc),
+                Applicator.activeTheme.name + " · " + if (Applicator.activeTheme.basedOn != null)
+                    stringResource(R.string.theme_center_based_prefix, Applicator.activeTheme.basedOn ?: "")
+                else stringResource(R.string.theme_center_official),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.muted,
             )
         }
-        item { SectionCard(R.string.theme_center_builtin) {
-            BuiltinThemes.all.forEach { spec ->
-                val selected = Applicator.activeTheme.id == spec.id
-                val palette = remember(spec.id, scheme.isDark, rev) { spec.resolvePalette(scheme.isDark) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            Applicator.applyTheme(spec)
-                            ThemePackageStore.persistCurrent(context)
-                        }
-                        .padding(vertical = AppSpacing.s8),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .border(
-                                width = if (selected) 3.dp else 1.dp,
-                                color = if (selected) scheme.primary else Color.Transparent,
-                                shape = CircleShape,
-                            )
-                            .padding(3.dp)
-                            .background(Color(palette.getValue(PaletteRole.PRIMARY)), CircleShape),
-                    )
-                    Spacer(Modifier.width(AppSpacing.s12))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(spec.name, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
-                        Text(
-                            spec.id + if (spec.isWallpaperSeed) " · wallpaper" else "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.muted,
-                        )
-                    }
-                    Row {
-                        ThemeSwatch(palette.getValue(PaletteRole.SURFACE))
-                        ThemeSwatch(palette.getValue(PaletteRole.ACCENT))
-                    }
-                }
-            }
-        } }
-        item { SectionCard(R.string.theme_center_custom) {
-            SeedRow()
-            Spacer(Modifier.height(AppSpacing.s8))
-            StrategyRow()
-        } }
-        item { SectionCard(R.string.theme_center_night) {
+        item { CenterCard(R.string.theme_center_seed) { SeedRow() } }
+        item { CenterCard(R.string.theme_center_strategy) { StrategyRow() } }
+        item { CenterCard(R.string.theme_center_tweaks) { TweaksSection(overrides) } }
+        item { CenterCard(R.string.theme_center_fonts) { FontSection() } }
+        item { CenterCard(R.string.theme_center_images) { ImageSection() } }
+        item { CenterCard(R.string.theme_center_night) {
+            val context = LocalContext.current
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.theme_center_night_label),
                     modifier = Modifier.weight(1f),
                     color = scheme.onSurface,
                 )
-                Switch(
-                    checked = AppConfig.isNightTheme,
-                    onCheckedChange = { ThemeConfig.applyDayNight(context, it) },
-                )
+                Switch(checked = AppConfig.isNightTheme, onCheckedChange = { ThemeConfig.applyDayNight(context, it) })
             }
-        } }
-        item { SectionCard(R.string.theme_center_tweaks) { TweaksSection(tweaks) } }
-        item { SectionCard(R.string.theme_center_fonts) {
-            FontSection()
-        } }
-        item { SectionCard(R.string.theme_center_images) {
-            ImageSection()
         } }
         item { Spacer(Modifier.height(40.dp)) }
     }
 }
 
 @Composable
-internal fun ThemeCenterSectionCard(titleRes: Int, content: @Composable () -> Unit) {
-    SectionCard(titleRes, content)
-}
-
-@Composable
-private fun SectionCard(titleRes: Int, content: @Composable () -> Unit) {
+private fun CenterCard(titleRes: Int, content: @Composable () -> Unit) {
     val scheme = Applicator.rememberAppColorScheme()
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -258,11 +224,8 @@ internal fun ThemeSwatch(colorInt: Int) {
 
 @Composable
 private fun SeedRow() {
-    val context = LocalContext.current
+    val activity = LocalContext.current as? ThemeCenterActivity
     val scheme = Applicator.rememberAppColorScheme()
-    var custom by remember { mutableStateOf(ThemePackageStore.load(context)?.customSpec) }
-    val currentSeed = custom?.seed
-        ?: (if (!Applicator.activeTheme.isWallpaperSeed) Applicator.activeTheme.seed else "#5B6ABF")
     Text(
         stringResource(R.string.theme_center_seed),
         style = MaterialTheme.typography.bodyMedium,
@@ -270,7 +233,7 @@ private fun SeedRow() {
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SEED_PRESETS.forEach { hex ->
-            val selected = currentSeed.equals(hex, ignoreCase = true)
+            val selected = Applicator.activeTheme.seed.equals(hex, ignoreCase = true)
             Box(
                 modifier = Modifier
                     .size(26.dp)
@@ -281,12 +244,7 @@ private fun SeedRow() {
                     )
                     .padding(3.dp)
                     .background(Color(ThemePackageSpec.parseColor(hex) ?: 0), CircleShape)
-                    .clickable {
-                        val spec = (custom ?: customBase()).copy(seed = hex)
-                        custom = spec
-                        Applicator.applyTheme(spec)
-                        ThemePackageStore.persistCurrent(context)
-                    },
+                    .clickable { activity?.updateTarget { it.copy(seed = hex) } },
             )
         }
     }
@@ -294,9 +252,8 @@ private fun SeedRow() {
 
 @Composable
 private fun StrategyRow() {
-    val context = LocalContext.current
+    val activity = LocalContext.current as? ThemeCenterActivity
     val scheme = Applicator.rememberAppColorScheme()
-    var custom by remember { mutableStateOf(ThemePackageStore.load(context)?.customSpec) }
     val strategies = listOf("tonal", "amoled", "muted", "mono")
     Text(
         stringResource(R.string.theme_center_strategy),
@@ -305,29 +262,13 @@ private fun StrategyRow() {
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         strategies.forEach { value ->
-            val selected = (custom?.darkStrategy ?: Applicator.activeTheme.darkStrategy) == value
+            val selected = Applicator.activeTheme.darkStrategy == value
             AppButton(
                 text = value,
-                onClick = {
-                    val spec = (custom ?: customBase()).copy(darkStrategy = value)
-                    custom = spec
-                    Applicator.applyTheme(spec)
-                    ThemePackageStore.persistCurrent(context)
-                },
+                onClick = { activity?.updateTarget { it.copy(darkStrategy = value) } },
                 style = if (selected) AppButtonStyle.FILLED else AppButtonStyle.TONAL,
                 size = AppButtonSize.COMPACT,
             )
         }
     }
 }
-
-/** Copy the current look into a editable custom package. */
-internal fun customBase(): ThemePackageSpec =
-    Applicator.activeTheme.let {
-        it.copy(
-            id = ThemePackageStore.CUSTOM_ID,
-            name = "我的主题",
-            author = "自定义",
-            seed = if (it.isWallpaperSeed) "#5B6ABF" else it.seed,
-        )
-    }

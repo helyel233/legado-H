@@ -25,6 +25,8 @@ data class ThemePackageSpec(
     val images: ThemeImages? = null,
     /** Optional per-role overrides keyed as `color.<palette_role>`, e.g. "color.primary". */
     val `override`: Map<String, String>? = null,
+    /** id of the package this custom package was copied from (edit-as-custom model). */
+    val basedOn: String? = null,
 ) {
 
     val strategy: PaletteStrategy

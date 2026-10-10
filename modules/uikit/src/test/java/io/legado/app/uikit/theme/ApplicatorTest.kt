@@ -2,13 +2,12 @@ package io.legado.app.uikit.theme
 
 import io.legado.app.theme.palette.PaletteRole
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A1-4 self-check: sandwich precedence, tweak marks, frozen reader roles.
+ * A2-4b self-check: two-layer resolve (factory defaults <- active package,
+ * package override wins over derivation), frozen reader roles.
  */
 class ApplicatorTest {
 
@@ -16,51 +15,49 @@ class ApplicatorTest {
         Applicator.applyTheme(BuiltinThemes.sky)
         Applicator.applyWallpaperSeed(null)
         Applicator.applyDark(false)
-        Applicator.clearAllTweaks()
     }
 
     @Test
     fun `default theme is sky and roles resolve`() {
         reset()
         val bg = Applicator.resolveColor(PaletteRole.BACKGROUND)
-        assertTrue("background should be light in day mode: $bg", (bg shr 16) and 0xFF > 0xC0)
+        assertTrue("background should be light in day mode: " + bg, (bg shr 16) and 0xFF > 0xC0)
     }
 
     @Test
-    fun `tweak overrides package and marks the role`() {
+    fun `package override wins over derivation`() {
         reset()
         val before = Applicator.resolveColor(PaletteRole.SURFACE)
-        assertFalse(Applicator.isTweaked(PaletteRole.SURFACE))
-        Applicator.setTweak(PaletteRole.SURFACE, 0xFFFF00FF.toInt())
+        val tweaked = BuiltinThemes.sky.copy(
+            id = "u_test", name = "test", basedOn = "sky",
+            override = mapOf("color.surface" to "#FFFF00FF"),
+        )
+        Applicator.applyTheme(tweaked)
         assertEquals(0xFFFF00FF.toInt(), Applicator.resolveColor(PaletteRole.SURFACE))
-        assertTrue(Applicator.isTweaked(PaletteRole.SURFACE))
-        assertNotEquals(before, Applicator.resolveColor(PaletteRole.SURFACE))
-        // single restore
-        Applicator.clearTweak(PaletteRole.SURFACE)
+        Applicator.applyTheme(BuiltinThemes.sky)
         assertEquals(before, Applicator.resolveColor(PaletteRole.SURFACE))
-        assertFalse(Applicator.isTweaked(PaletteRole.SURFACE))
     }
 
     @Test
-    fun `tweak survives theme switch but clearAll restores package values`() {
+    fun `switching packages changes derived values`() {
         reset()
-        Applicator.setTweak(PaletteRole.PRIMARY, 0xFFFF0000.toInt())
+        val skyPrimary = Applicator.resolveColor(PaletteRole.PRIMARY)
         Applicator.applyTheme(BuiltinThemes.paper)
-        assertEquals(0xFFFF0000.toInt(), Applicator.resolveColor(PaletteRole.PRIMARY))
-        Applicator.clearAllTweaks()
-        val paperPrimary = Applicator.resolveColor(PaletteRole.PRIMARY)
-        val expected = io.legado.app.theme.palette.SeedPalette.generate(0xFFA08A5B.toInt(), dark = false)
-        assertEquals(expected.getValue(PaletteRole.PRIMARY), paperPrimary)
+        assertTrue(skyPrimary != Applicator.resolveColor(PaletteRole.PRIMARY))
     }
 
     @Test
-    fun `reader roles are frozen against themes and tweaks`() {
+    fun `reader roles are frozen against themes and overrides`() {
         reset()
         val readerText = Applicator.resolveScheme().readerText
         val readerBg = Applicator.resolveScheme().readerBackground
         Applicator.applyTheme(BuiltinThemes.amoled)
-        Applicator.setTweak(PaletteRole.PRIMARY, 0xFFFF0000.toInt())
-        Applicator.setTweak(PaletteRole.BACKGROUND, 0xFF00FF00.toInt())
+        Applicator.applyTheme(
+            BuiltinThemes.sky.copy(
+                id = "u_test", name = "t", basedOn = "sky",
+                override = mapOf("color.background" to "#00FF00"),
+            ),
+        )
         assertEquals(readerText, Applicator.resolveScheme().readerText)
         assertEquals(readerBg, Applicator.resolveScheme().readerBackground)
     }
@@ -72,20 +69,17 @@ class ApplicatorTest {
         Applicator.applyDark(true)
         val nightBg = Applicator.resolveColor(PaletteRole.BACKGROUND)
         assertTrue(Applicator.resolveScheme().isDark)
-        assertTrue("night bg should be darker: $dayBg -> $nightBg", nightBg < dayBg)
+        assertTrue("night bg should be darker: " + dayBg + " -> " + nightBg, nightBg < dayBg)
     }
 
     @Test
-    fun `tweaks snapshot round-trips through load`() {
+    fun `wallpaper seed drives dynamic package`() {
         reset()
-        Applicator.setTweak(PaletteRole.OUTLINE, 0xFF123456.toInt())
-        val snap = Applicator.tweaksSnapshot()
-        Applicator.clearAllTweaks()
-        assertTrue(Applicator.tweaksSnapshot().isEmpty())
-        Applicator.loadTweaks(snap)
-        assertEquals(0xFF123456.toInt(), Applicator.resolveColor(PaletteRole.OUTLINE))
-        // invalid saved entries are dropped, not crashed on
-        Applicator.loadTweaks(mapOf("color.primary" to "#ABC", "nonsense" to "#FFF"))
-        assertTrue(!Applicator.isTweaked(PaletteRole.PRIMARY))
+        Applicator.applyTheme(BuiltinThemes.dynamic)
+        val fallback = Applicator.resolveColor(PaletteRole.PRIMARY)
+        Applicator.applyWallpaperSeed(0xFF112233.toInt())
+        val seeded = io.legado.app.theme.palette.SeedPalette.generate(0xFF112233.toInt(), dark = false)
+        assertEquals(seeded.getValue(PaletteRole.PRIMARY), Applicator.resolveColor(PaletteRole.PRIMARY))
+        assertTrue(fallback != Applicator.resolveColor(PaletteRole.PRIMARY))
     }
 }

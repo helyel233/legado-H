@@ -2,7 +2,6 @@ package io.legado.app.ui.config
 
 import android.os.Bundle
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -41,19 +39,50 @@ import io.legado.app.uikit.token.AppSpacing
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
- * A2-1 界面中心（新引擎）：可选不同的界面包 + 包内调整（另存为自定义界面包）。
- * 导航/玻璃/密度对主界面的接线随 A2-3/A2-4 完成；圆角已即时生效。
+ * A2-4b 界面包详情（编辑指定用户包；官方包首次编辑自动克隆）。
+ * 由管理中心携 pkgId 打开；无 pkgId 时编辑当前应用中的包。
  */
 class LayoutCenterActivity : BaseActivity<ActivityLayoutCenterBinding>() {
 
     override val binding by viewBinding(ActivityLayoutCenterBinding::inflate)
 
+    private val targetId: String? by lazy { intent?.getStringExtra(EXTRA_PKG_ID) }
+
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        val spec = targetId?.let { id -> LayoutPackageStore.resolveSpec(LayoutPackageStore.load(this) ?: LayoutPackageStore.Runtime(), id) }
+        if (spec != null && LayoutEngine.activeLayout.id != spec.id) {
+            LayoutEngine.applyLayout(spec)
+        }
         binding.composeContent.setContent {
             AppTheme(Applicator.rememberAppColorScheme()) {
                 LayoutCenterScreen()
             }
         }
+    }
+
+    /** 官方包编辑 → 自动克隆为用户包。 */
+    private fun editTarget(): LayoutPackageSpec {
+        val cur = LayoutEngine.activeLayout
+        if (BuiltinLayouts.byId(cur.id) == null && cur.basedOn != null) return cur
+        val clone = cur.copy(
+            id = LayoutPackageStore.newUserId(),
+            name = cur.name + " 副本",
+            basedOn = cur.id,
+        )
+        LayoutPackageStore.upsertUserSpec(this, clone)
+        LayoutEngine.applyLayout(clone)
+        return clone
+    }
+
+    fun updateTarget(transform: (LayoutPackageSpec) -> LayoutPackageSpec) {
+        val spec = transform(editTarget())
+        LayoutEngine.applyLayout(spec)
+        LayoutPackageStore.upsertUserSpec(this, spec)
+        LayoutPackageStore.persistActive(this)
+    }
+
+    companion object {
+        const val EXTRA_PKG_ID = "pkgId"
     }
 }
 
@@ -72,10 +101,8 @@ private fun densityLabel(p: String): Int = when (p) {
 
 @Composable
 private fun LayoutCenterScreen() {
-    val context = LocalContext.current
     val scheme = Applicator.rememberAppColorScheme()
-    val rev = LayoutEngine.revision
-    val active = remember(rev) { LayoutEngine.activeLayout }
+    val activity = LocalContext.current as? LayoutCenterActivity
 
     LazyColumn(
         modifier = Modifier
@@ -91,63 +118,21 @@ private fun LayoutCenterScreen() {
                 color = scheme.onBackground,
             )
             Text(
-                stringResource(R.string.layout_center_desc),
+                LayoutEngine.activeLayout.name + " · " + if (LayoutEngine.activeLayout.basedOn != null)
+                    stringResource(R.string.theme_center_based_prefix, LayoutEngine.activeLayout.basedOn ?: "")
+                else stringResource(R.string.theme_center_official),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.muted,
             )
         }
-        item { LayoutSectionCard(R.string.layout_center_builtin) {
-            BuiltinLayouts.all.forEach { spec ->
-                val selected = active.id == spec.id
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            LayoutEngine.applyLayout(spec)
-                            LayoutPackageStore.persistCurrent(context)
-                        }
-                        .padding(vertical = AppSpacing.s8),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(spec.name, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
-                        Text(
-                            stringResource(navLabel(spec.navPosition)) + " · " +
-                                stringResource(densityLabel(spec.densityLevel)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.muted,
-                        )
-                    }
-                    if (selected) {
-                        Text(
-                            stringResource(R.string.layout_center_active),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = scheme.primary,
-                        )
-                    }
-                }
-            }
-        } }
         item { LayoutSectionCard(R.string.layout_center_tune) {
-            Text(
-                if (active.id == LayoutPackageStore.CUSTOM_ID && active.basedOn != null)
-                    stringResource(R.string.layout_center_based_on, active.basedOn ?: "")
-                else stringResource(R.string.layout_center_tune_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.muted,
-            )
-            Spacer(Modifier.height(AppSpacing.s8))
-            PackageEditor(active)
+            PackageEditor(LayoutEngine.activeLayout)
         } }
-        if (active.id == LayoutPackageStore.CUSTOM_ID) {
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = {
-                        val base = BuiltinLayouts.byId(active.basedOn ?: "") ?: BuiltinLayouts.default
-                        LayoutEngine.applyLayout(base)
-                        LayoutPackageStore.persistCurrent(context)
-                    }) { Text(stringResource(R.string.layout_center_discard)) }
-                }
+        item {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    activity?.updateTarget { it.copy(glassEnabled = !it.glassEnabled) }
+                }) { Text(stringResource(R.string.layout_glass)) }
             }
         }
         item { Spacer(Modifier.height(40.dp)) }
