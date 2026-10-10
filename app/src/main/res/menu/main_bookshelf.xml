@@ -53,6 +53,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_book_tag_filter"
+        android:icon="@drawable/ic_search"
+        android:title="@string/bookshelf_tag_filter"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_book_tag_manage"
         android:icon="@drawable/ic_groups"
         android:title="@string/bookshelf_tag_manage"

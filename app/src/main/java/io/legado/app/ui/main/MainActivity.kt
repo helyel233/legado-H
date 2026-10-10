@@ -92,7 +92,6 @@ import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.association.ImportTxtTocRuleDialog
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
-import io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1
 import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
 import io.legado.app.ui.main.ai.AiChatActivity
 import io.legado.app.ui.main.explore.ExploreFragment
@@ -1237,10 +1236,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val position = bookshelfPosition()
         binding.viewPagerMain.setCurrentItem(position, false)
         binding.root.post {
-            when (val fragment = fragmentMap[getFragmentId(position)]) {
-                is BookshelfFragment1 -> fragment.switchToGroupId(group.groupId)
-                is BookshelfFragment2 -> fragment.switchToGroupId(group.groupId)
-            }
+            (fragmentMap[getFragmentId(position)] as? BookshelfFragment2)
+                ?.switchToGroupId(group.groupId)
         }
     }
 
@@ -2476,7 +2473,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private fun getFragmentId(position: Int): Int {
         val id = realPositions[position]
         if (id == idBookshelf) {
-            return if (AppConfig.bookGroupStyle == 1) idBookshelf2 else idBookshelf1
+            return idBookshelf2
         }
         return id
     }
@@ -2505,8 +2502,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             val position = (any as MainFragmentInterface).position
                 ?: return POSITION_NONE
             val fragmentId = getId(position)
-            if ((fragmentId == idBookshelf1 && any is BookshelfFragment1)
-                || (fragmentId == idBookshelf2 && any is BookshelfFragment2)
+            if ((fragmentId == idBookshelf2 && any is BookshelfFragment2)
                 || (fragmentId == idHomepage && any is HomepageFragment)
                 || (fragmentId == idExplore && any is ExploreFragment)
                 || (fragmentId == idRss && any is RssFragment)
@@ -2520,7 +2516,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
         override fun getItem(position: Int): Fragment {
             return when (getId(position)) {
-                idBookshelf1 -> BookshelfFragment1(position)
                 idBookshelf2 -> BookshelfFragment2(position)
                 idHomepage -> HomepageFragment(position)
                 idExplore -> ExploreFragment(position)

@@ -1663,6 +1663,7 @@
     <string name="config_category_tools">工具与关于</string>
     <string name="ai_chat_cancelled">已停止生成</string>
     <string name="bookshelf_tag_manage">管理标签</string>
+    <string name="bookshelf_tag_filter">标签筛选</string>
     <string name="bookshelf_tag_all">全部</string>
     <string name="bookshelf_tag_manage_hint">取消勾选会从当前书架分组的书籍中移除该标签。</string>
     <string name="bookshelf_tag_edit">编辑标签</string>

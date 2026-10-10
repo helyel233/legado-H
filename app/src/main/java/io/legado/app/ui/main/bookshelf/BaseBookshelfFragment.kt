@@ -264,10 +264,6 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     }
 
     fun configBookshelf() {
-        val groupStyleCount = resources.getStringArray(R.array.group_style).size
-        if (AppConfig.bookGroupStyle !in 0 until groupStyleCount) {
-            AppConfig.bookGroupStyle = 0
-        }
         var bookshelfLayout = AppConfig.bookshelfLayout
         var bookshelfSort = AppConfig.bookshelfSort
         var showBookname = AppConfig.showBookname
@@ -296,7 +292,6 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
         showDialogFragment(
             BookshelfConfigDialog.create(
                 initialValues = BookshelfConfigValues(
-                    groupStyle = AppConfig.bookGroupStyle,
                     showUnread = AppConfig.showUnread,
                     showLastUpdateTime = AppConfig.showLastUpdateTime,
                     showWaitUpCount = AppConfig.showWaitUpCount,
@@ -338,20 +333,14 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
         values: BookshelfConfigValues
     ) {
         dismissBookshelfTransientUi()
-        var notifyMain = false
         var refreshBookshelf = false
         var structureChanged = false
-        val groupStyle = values.groupStyle.coerceIn(0, 1)
         val layout = values.layout.coerceIn(0, 6)
         val sort = values.sort.coerceIn(0, 5)
         val showBookname = values.showBookname.coerceIn(0, 2)
         val listItemStyle = values.listItemStyle.coerceIn(0, 2)
         val listIntroLines = values.listIntroLines.coerceIn(0, 3)
         val margin = values.margin.coerceIn(0, 60)
-        if (AppConfig.bookGroupStyle != groupStyle) {
-            AppConfig.bookGroupStyle = groupStyle
-            notifyMain = true
-        }
         if (previousShowBookname != showBookname) {
             AppConfig.showBookname = showBookname
             structureChanged = true
@@ -393,23 +382,14 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
         }
         if (previousLayout != layout) {
             AppConfig.bookshelfLayout = layout
-            if (AppConfig.bookshelfLayout < 2) {
-                activityViewModel.booksGridRecycledViewPool.clear()
-            } else {
-                activityViewModel.booksListRecycledViewPool.clear()
-            }
             structureChanged = true
         }
-        if (notifyMain) {
-            postEvent(EventBus.NOTIFY_MAIN, false)
-        } else if (structureChanged) {
+        if (structureChanged) {
             view?.post {
                 postEvent(EventBus.BOOKSHELF_STRUCTURE_CHANGED, "")
             }
         } else if (refreshBookshelf) {
             postEvent(EventBus.BOOKSHELF_REFRESH, "")
-        } else if (notifyMain) {
-            postEvent(EventBus.NOTIFY_MAIN, false)
         }
     }
 

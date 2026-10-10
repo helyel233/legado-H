@@ -76,7 +76,6 @@ private const val BOOKSHELF_PANEL_ANIMATION_MS = 160
 private const val BOOKSHELF_PANEL_DISMISS_MS = BOOKSHELF_PANEL_ANIMATION_MS + 20L
 
 data class BookshelfConfigValues(
-    val groupStyle: Int,
     val showUnread: Boolean,
     val showLastUpdateTime: Boolean,
     val showWaitUpCount: Boolean,
@@ -96,7 +95,6 @@ private data class BookshelfConfigOption(
 )
 
 private data class BookshelfConfigOptions(
-    val groupStyles: List<BookshelfConfigOption>,
     val layouts: List<BookshelfConfigOption>,
     val sorts: List<BookshelfConfigOption>,
     val bookNameModes: List<BookshelfConfigOption>,
@@ -107,7 +105,6 @@ private data class BookshelfConfigOptions(
 private data class BookshelfConfigTexts(
     val title: String,
     val viewTitle: String,
-    val groupStyleLabel: String,
     val layoutLabel: String,
     val showTitle: String,
     val sortLabel: String,
@@ -157,7 +154,6 @@ class BookshelfConfigDialog : ComposeDialogFragment() {
     override val dialogWindowAnimations: Int = R.style.AnimDialogCenter
 
     private var initialValues = BookshelfConfigValues(
-        groupStyle = 0,
         showUnread = false,
         showLastUpdateTime = false,
         showWaitUpCount = false,
@@ -233,8 +229,6 @@ class BookshelfConfigDialog : ComposeDialogFragment() {
 
     private fun buildBookshelfConfigOptions(): BookshelfConfigOptions {
         return BookshelfConfigOptions(
-            groupStyles = resources.getStringArray(R.array.group_style)
-                .mapIndexed { index, label -> BookshelfConfigOption(label, index) },
             layouts = listOf(
                 getString(R.string.layout_list),
                 getString(R.string.layout_list_compact),
@@ -274,7 +268,6 @@ class BookshelfConfigDialog : ComposeDialogFragment() {
         return BookshelfConfigTexts(
             title = getString(R.string.bookshelf_layout),
             viewTitle = getString(R.string.view),
-            groupStyleLabel = getString(R.string.group_style),
             layoutLabel = getString(R.string.view),
             showTitle = getString(R.string.show),
             sortLabel = getString(R.string.sort),
@@ -313,15 +306,6 @@ private fun BookshelfConfigContent(
 ) {
     val spec = BookshelfPremiumSpec()
     val selectItems = buildList {
-        add(
-            BookshelfSelectItem(
-                key = "group",
-                label = texts.groupStyleLabel,
-                options = options.groupStyles,
-                selectedValue = values.groupStyle,
-                onSelected = { onValuesChange(values.copy(groupStyle = it)) }
-            )
-        )
         add(
             BookshelfSelectItem(
                 key = "layout",

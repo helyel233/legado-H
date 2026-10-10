@@ -3,6 +3,7 @@ package io.legado.app.ui.main.bookshelf.style2
 import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.widget.SearchView
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import io.legado.app.data.dao.BookShelfDisplay
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
+import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -63,6 +65,7 @@ import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.main.bookshelf.compose.updateBookshelfItemUpdating
 import io.legado.app.ui.widget.compose.ComposeLazyGridFastScroller
 import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.dpToPx
@@ -72,6 +75,7 @@ import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
@@ -108,6 +112,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     private var shelfDisplays: List<BookShelfDisplay> = emptyList()
     private var enableRefresh = true
     override var onlyUpdateRead = false
+    // style1 迁移：书签/自定义标签筛选（原 BookshelfFragment1 顶栏标签栏能力）
+    private var bookTagFilter = ""
     private var bookshelfMargin by mutableIntStateOf(AppConfig.bookshelfMargin)
     private var itemCount = 0
     private var totalRows = 0
@@ -384,7 +390,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     private fun initBooksData() {
         if (groupId == BookGroup.IdRoot) {
             if (isAdded) {
-                binding.titleBar.title = getString(R.string.bookshelf)
+                binding.titleBar.title = buildBookshelfTitle(null)
                 binding.refreshLayout.isEnabled = true
                 enableRefresh = true
                 onlyUpdateRead = false
@@ -393,7 +399,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             bookGroups.firstOrNull {
                 groupId == it.groupId
             }?.let {
-                binding.titleBar.title = "${getString(R.string.bookshelf)}(${it.groupName})"
+                binding.titleBar.title = buildBookshelfTitle(it.groupName)
                 binding.refreshLayout.isEnabled = it.enableRefresh
                 enableRefresh = it.enableRefresh
                 onlyUpdateRead = it.onlyUpdateRead
@@ -414,6 +420,10 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     collectionsFlow
                 ) { list, collections ->
                     val sortedList = sortShelfDisplays(list, AppConfig.getBookSortByGroupId(groupId))
+                        .let { sorted ->
+                            if (bookTagFilter.isBlank()) sorted
+                            else sorted.filter { BookTagHelper.has(it.customTag, bookTagFilter) }
+                        }
                     val collectionUiItems = collections.map { withItems ->
                         BookshelfCollectionItemUi(
                             collection = withItems.collection,
@@ -508,6 +518,41 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         switchGroup(targetGroupId)
     }
 
+    override fun onCompatOptionsItemSelected(item: MenuItem) {
+        super.onCompatOptionsItemSelected(item)
+        if (item.itemId == R.id.menu_book_tag_filter) {
+            showBookTagFilterDialog()
+        }
+    }
+
+    private fun showBookTagFilterDialog() {
+        val sourceBooks = shelfDisplays
+        val tags = sourceBooks
+            .flatMap { BookTagHelper.parse(it.customTag) }
+            .distinct()
+            .sorted()
+        if (tags.isEmpty()) {
+            requireContext().toastOnUi(getString(R.string.bookshelf_tag_none))
+            return
+        }
+        val labels = listOf(getString(R.string.bookshelf_tag_all)) + tags.map { tag ->
+            "$tag (${sourceBooks.count { BookTagHelper.has(it.customTag, tag) }})"
+        }
+        val selectedIndex = if (bookTagFilter.isBlank()) 0 else tags.indexOf(bookTagFilter) + 1
+        showComposeChoiceListDialog(
+            title = getString(R.string.bookshelf_tag_filter),
+            labels = labels,
+            selectedIndex = selectedIndex.coerceAtLeast(0),
+            onSelected = { index ->
+                val next = if (index <= 0) "" else tags.getOrNull(index - 1).orEmpty()
+                if (next != bookTagFilter) {
+                    bookTagFilter = next
+                    initBooksData()
+                }
+            }
+        )
+    }
+
     override fun onQueryTextSubmit(query: String?): Boolean {
         SearchActivity.start(requireContext(), query)
         return false
@@ -555,9 +600,18 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             style = "style2",
             groupId = groupId,
             sort = AppConfig.getBookSortByGroupId(groupId),
-            tagFilter = "",
+            tagFilter = bookTagFilter,
             groups = bookGroups
         )
+    }
+
+    private fun buildBookshelfTitle(groupName: String?): String {
+        val base = if (groupName == null) {
+            getString(R.string.bookshelf)
+        } else {
+            "${getString(R.string.bookshelf)}($groupName)"
+        }
+        return if (bookTagFilter.isBlank()) base else "$base · $bookTagFilter"
     }
 
     private fun restoreComposeSnapshot(snapshotKey: String) {
@@ -618,6 +672,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             return
         }
         groupId = targetGroupId
+        bookTagFilter = ""
         if (useComposeBookshelf) {
             composeGroupId = targetGroupId
             composePendingScrollRestoreGroupId = targetGroupId
