@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>legado-H UI V4 效果预览 Demo</title>
+<style>
+  :root{
+    --c-bg:#F5F6FA; --c-surface:#FFFFFF; --c-surface2:#EDEFF5; --c-text:#1C1E26; --c-text2:#6B7080;
+    --c-primary:#5B6ABF; --c-on-primary:#FFFFFF; --c-accent:#B0685B; --c-outline:#D8DBE4;
+    --glass-bg:rgba(255,255,255,.65); --glass-blur:12px;
+    --radius:14px; --radius-s:10px; --radius-l:20px;
+    --density:1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#17181D;color:#E8E9EE;overflow-x:hidden}
+
+  .stage{display:flex;gap:36px;justify-content:center;align-items:flex-start;padding:28px 20px 60px;flex-wrap:wrap}
+  @media(min-width:1200px){.stage{flex-wrap:nowrap}}
+
+  /* ============ 控制面板 ============ */
+  .panel{width:400px;max-width:96vw;background:#20222A;border:1px solid #31343F;border-radius:18px;padding:18px 18px 24px;position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto}
+  .panel h1{font-size:17px;margin-bottom:2px}
+  .panel .sub{font-size:12px;color:#8B8FA0;margin-bottom:14px}
+  .psec{margin-top:16px;padding-top:14px;border-top:1px solid #2C2F39}
+  .psec:first-of-type{border-top:none;padding-top:0}
+  .psec h2{font-size:13px;color:#A7ABC0;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .psec h2 .tag{font-size:10px;background:#2E3140;color:#8B92AB;padding:2px 8px;border-radius:20px}
+
+  .themeCards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .tCard{border:1.5px solid #333747;border-radius:12px;padding:8px;cursor:pointer;background:#262933;text-align:center;transition:.15s}
+  .tCard:hover{border-color:#4A5068}
+  .tCard.on{border-color:var(--accent,#B0685B);box-shadow:0 0 0 1px var(--accent,#B0685B)}
+  .tCard .sw{display:flex;gap:4px;justify-content:center;margin-bottom:6px}
+  .tCard .sw i{width:16px;height:16px;border-radius:5px;display:block}
+  .tCard .nm{font-size:11px;color:#C9CCDA}
+
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0}
+  .row label{font-size:12.5px;color:#B9BDCE;flex-shrink:0}
+  .ctrl{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end}
+  .ctrl input[type=range]{width:140px;accent-color:var(--accent,#B0685B)}
+  .ctrl select,.ctrl input[type=color]{background:#2B2E3A;border:1px solid #3A3E4E;color:#DDE0EA;font-size:12px;border-radius:8px;padding:4px 6px}
+  .ctrl input[type=color]{width:36px;height:26px;padding:2px;cursor:pointer}
+
+  .seg{display:inline-flex;background:#2B2E3A;border-radius:9px;padding:3px;gap:2px}
+  .seg button{border:none;background:transparent;color:#9AA0B5;font-size:11.5px;padding:5px 10px;border-radius:7px;cursor:pointer;transition:.15s}
+  .seg button.on{background:#454B63;color:#fff}
+
+  .pkgBtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .pkgBtns button,.shelfBtns button{border:1.5px solid #333747;background:#262933;color:#C9CCDA;font-size:11.5px;padding:8px 4px;border-radius:10px;cursor:pointer;transition:.15s}
+  .pkgBtns button:hover,.shelfBtns button:hover{border-color:#4A5068}
+  .pkgBtns button.on,.shelfBtns button.on{border-color:var(--accent,#B0685B);color:#fff;background:#2E2C3A}
+  .shelfBtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  .badge{display:none;font-size:9.5px;color:#FFB86B;background:rgba(255,184,107,.12);border:1px solid rgba(255,184,107,.35);padding:1px 6px;border-radius:20px;cursor:pointer;white-space:nowrap}
+  .badge.show{display:inline-block}
+  .badge:hover{background:rgba(255,184,107,.25)}
+
+  .switch{position:relative;width:38px;height:21px;background:#3A3E4E;border-radius:20px;cursor:pointer;transition:.2s;flex-shrink:0}
+  .switch::after{content:"";position:absolute;top:2.5px;left:3px;width:16px;height:16px;border-radius:50%;background:#9AA0B5;transition:.2s}
+  .switch.on{background:var(--accent,#B0685B)}
+  .switch.on::after{left:19px;background:#fff}
+
+  .clearBtn{margin-top:12px;width:100%;border:1px dashed #454B63;background:transparent;color:#9AA0B5;font-size:12px;padding:8px;border-radius:10px;cursor:pointer}
+  .clearBtn:hover{color:#fff;border-color:#6A7190}
+
+  /* ============ 手机样机 ============ */
+  .phoneWrap{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .phone{width:390px;height:800px;background:var(--c-bg);border-radius:44px;border:10px solid #0C0D11;box-shadow:0 24px 80px rgba(0,0,0,.55);overflow:hidden;position:relative;display:flex;flex-direction:column;transition:background .25s,color .25s;color:var(--c-text)}
+  .statusbar{height:34px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:600;opacity:.85}
+  .appBody{flex:1;display:flex;overflow:hidden;position:relative}
+  .content{flex:1;overflow-y:auto;padding:14px 16px 20px;scroll-behavior:smooth}
+  .content::-webkit-scrollbar{width:0}
+
+  /* 顶栏 */
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0}
+  .topbar .title{font-size:22px;font-weight:800;letter-spacing:.5px}
+  .iconBtn{width:34px;height:34px;border-radius:var(--radius-s);background:var(--c-surface);border:1px solid var(--c-outline);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;color:var(--c-text)}
+
+  /* 继续阅读卡 */
+  .continueCard{display:flex;align-items:center;gap:12px;background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.05);position:relative;overflow:hidden}
+  .continueCard .cc-cover{width:44px;height:62px;border-radius:calc(var(--radius-s) * .8);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700}
+  .continueCard .cc-info{flex:1;min-width:0}
+  .continueCard .cc-k{font-size:10.5px;color:var(--c-text2);margin-bottom:2px}
+  .continueCard .cc-t{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .continueCard .cc-p{font-size:11px;color:var(--c-text2);margin-top:3px}
+  .continueCard .cc-go{background:var(--c-primary);color:var(--c-on-primary);font-size:12px;font-weight:600;padding:7px 14px;border-radius:calc(var(--radius) * 2);flex-shrink:0}
+
+  /* 分组头 */
+  .groupHead{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--c-text2);margin:10px 2px calc(8px * var(--density))}
+  .groupHead b{color:var(--c-text);font-size:13.5px}
+
+  /* 书架网格 */
+  .shelfGrid{display:grid;gap:calc(14px * var(--density))}
+  .book{display:flex;flex-direction:column;cursor:pointer;position:relative}
+  .cover{position:relative;border-radius:var(--radius-s);aspect-ratio:2/3;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;box-shadow:0 6px 14px rgba(0,0,0,.14);padding:8px;transition:transform .15s}
+  .book:hover .cover{transform:translateY(-3px)}
+  .cover .cv{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:rgba(255,255,255,.92);text-shadow:0 2px 6px rgba(0,0,0,.3)}
+  .cover .spine{position:absolute;left:0;top:0;bottom:0;width:5px;background:rgba(255,255,255,.22)}
+  .cover .pbar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.28)}
+  .cover .pbar i{display:block;height:100%;background:var(--c-primary)}
+  .cover .done{position:absolute;right:5px;top:5px;width:18px;height:18px;border-radius:50%;background:var(--c-primary);color:var(--c-on-primary);font-size:10px;display:flex;align-items:center;justify-content:center}
+  .cover .upd{position:absolute;left:5px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--c-accent);border:2px solid rgba(255,255,255,.85)}
+  .bname{font-size:calc(11.5px * var(--density));line-height:1.3;margin-top:6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  .bsub{font-size:calc(10px * var(--density));color:var(--c-text2);text-align:center;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* 双列卡片 */
+  .shelfGrid.dual .book{background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:calc(9px * var(--density));flex-direction:row;gap:10px;align-items:center}
+  .shelfGrid.dual .cover{width:56px;aspect-ratio:2/3;flex-shrink:0}
+  .shelfGrid.dual .binfo{flex:1;min-width:0}
+  .shelfGrid.dual .bname{text-align:left;font-size:calc(13px * var(--density))}
+  .shelfGrid.dual .bsub{text-align:left}
+  .shelfGrid.dual .pbar2{height:4px;border-radius:4px;background:var(--c-surface2);margin-top:6px;overflow:hidden}
+  .shelfGrid.dual .pbar2 i{display:block;height:100%;background:var(--c-primary)}
+
+  /* 列表 */
+  .shelfGrid.list{gap:calc(4px * var(--density))}
+  .shelfGrid.list .book{background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius-s);flex-direction:row;padding:calc(9px * var(--density)) calc(12px * var(--density));gap:11px;align-items:center}
+  .shelfGrid.list .cover{width:38px;aspect-ratio:2/3;flex-shrink:0;box-shadow:none}
+  .shelfGrid.list .cover .cv{font-size:15px}
+  .shelfGrid.list .binfo{flex:1;min-width:0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .shelfGrid.list .bname{text-align:left;margin:0;font-size:calc(13.5px * var(--density))}
+  .shelfGrid.list .bsub{text-align:left;margin:1px 0 0}
+  .shelfGrid.list .arrow{color:var(--c-text2);font-size:13px;flex-shrink:0}
+
+  /* 导航：底栏 */
+  .navBottom{flex-shrink:0;display:flex;background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border-top:1px solid var(--c-outline);padding:8px 6px calc(10px + env(safe-area-inset-bottom));transition:transform .25s,opacity .25s;z-index:5}
+  .navBottom.hide{transform:translateY(110%);opacity:0}
+  .navBottom .ni{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9.5px;color:var(--c-text2);cursor:pointer;padding:4px 0;border-radius:var(--radius-s)}
+  .navBottom .ni .ic{font-size:18px}
+  .navBottom .ni.on{color:var(--c-primary);font-weight:700}
+
+  /* 导航：侧栏 */
+  .navSide{width:64px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border-right:1px solid var(--c-outline);padding:14px 0;transition:width .2s}
+  .navSide .ni{width:48px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;color:var(--c-text2);cursor:pointer;border-radius:var(--radius-s)}
+  .navSide .ni .ic{font-size:19px}
+  .navSide .ni.on{color:var(--c-primary);background:var(--c-surface);font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .navSide .spacer{flex:1}
+
+  /* 导航：顶栏模式 */
+  .navTop{flex-shrink:0;display:flex;align-items:center;gap:4px;background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border-bottom:1px solid var(--c-outline);padding:10px 12px 12px}
+  .navTop .ni{flex:1;text-align:center;font-size:12.5px;color:var(--c-text2);cursor:pointer;padding:7px 0;border-radius:var(--radius-s);font-weight:600}
+  .navTop .ni.on{color:var(--c-primary);background:var(--c-surface);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+
+  /* 通用页面元素 */
+  .searchBar{display:flex;align-items:center;gap:8px;background:var(--c-surface);border:1px solid var(--c-outline);border-radius:calc(var(--radius) * 3);padding:9px 14px;font-size:13px;color:var(--c-text2);margin-bottom:14px}
+  .rankCard{background:linear-gradient(120deg,var(--c-primary),var(--c-accent));border-radius:var(--radius);padding:16px;color:#fff;margin-bottom:14px}
+  .rankCard .rt{font-size:15px;font-weight:800;margin-bottom:4px}
+  .rankCard .rd{font-size:11.5px;opacity:.9}
+  .feedRow{display:flex;justify-content:space-between;align-items:center;padding:calc(13px * var(--density)) 4px;border-bottom:1px solid var(--c-outline);cursor:pointer}
+  .feedRow .fn{font-size:14px;font-weight:600}
+  .feedRow .fd{font-size:11px;color:var(--c-text2);margin-top:2px}
+  .meRow{display:flex;align-items:center;gap:12px;background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:calc(13px * var(--density)) 14px;margin-bottom:calc(9px * var(--density));cursor:pointer}
+  .meRow .mi{width:36px;height:36px;border-radius:var(--radius-s);background:var(--c-surface2);display:flex;align-items:center;justify-content:center;font-size:16px}
+  .meRow .mn{font-size:14px;font-weight:600}
+  .meRow .md{font-size:11px;color:var(--c-text2);margin-top:1px}
+  .meRow .ar{margin-left:auto;color:var(--c-text2)}
+
+  .demoNote{max-width:390px;font-size:11.5px;color:#7F8496;line-height:1.7;text-align:center}
+  .demoNote b{color:#A9ADC2}
+
+  /* 弹窗演示 */
+  .fab{position:absolute;right:16px;bottom:86px;width:52px;height:52px;border-radius:50%;background:var(--c-primary);color:var(--c-on-primary);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.25);z-index:6;transition:right .2s}
+  .fab.sideMode{bottom:22px}
+  .fab.floatMode{bottom:92px}
+  .navFloat{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;display:flex;gap:2px;background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));border:1px solid var(--c-outline);border-radius:calc(var(--radius) * 2.2);padding:6px 10px;box-shadow:0 12px 32px rgba(0,0,0,.25);z-index:5}
+  .navFloat .ni{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:var(--c-text2);cursor:pointer;padding:5px 8px;border-radius:calc(var(--radius) * 1.6);transition:.15s}
+  .navFloat .ni .ic{font-size:17px}
+  .navFloat .ni.on{color:var(--c-primary);background:var(--c-surface);font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .sBtn{border:1.5px solid var(--c-outline);background:var(--c-surface);color:var(--c-text);font-size:12px;font-weight:600;padding:9px 4px;border-radius:var(--radius-s);cursor:pointer;transition:.15s}
+  .sBtn.on{border-color:var(--c-primary);color:var(--c-primary);background:var(--c-surface2)}
+  #shelfSheet .seg{background:var(--c-surface2)}
+  #shelfSheet .seg button{color:var(--c-text2)}
+  #shelfSheet .seg button.on{background:var(--c-surface);color:var(--c-primary)}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ================ 控制面板（= 演示"设置→外观"） ================ -->
+  <div class="panel">
+    <h1>🎨 外观设置（演示）</h1>
+    <div class="sub">左边调，右边看 —— 对应 V4.1 方案"设置→外观"分区。拧过的项会出现「已修改」标记，点击标记可单项还原。</div>
+
+    <div class="psec">
+      <h2>主题包 <span class="tag">美术：颜色/字体/背景</span></h2>
+      <div class="themeCards" id="themeCards"></div>
+      <div class="row">
+        <label>种子色</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="seed">已修改 ↺</span>
+          <input type="color" id="seedInput" value="#5B6ABF">
+        </div>
+      </div>
+      <div class="row">
+        <label>深色模式策略</label>
+        <div class="ctrl">
+          <div class="seg" id="darkStrategy">
+            <button data-v="tonal" class="on">标准</button><button data-v="amoled">AMOLED 纯黑</button><button data-v="muted">低饱和</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <label>夜间模式</label>
+        <div class="ctrl"><div class="switch" id="darkToggle"></div></div>
+      </div>
+    </div>
+
+    <div class="psec">
+      <h2>界面包 <span class="tag">结构：全局旋钮（所有窗口共用）</span></h2>
+      <div class="pkgBtns" id="pkgBtns">
+        <button data-pkg="classic">经典底栏</button>
+        <button data-pkg="float">悬浮玻璃</button>
+        <button data-pkg="side">侧滑沉浸</button>
+        <button data-pkg="minimal">极简紧凑</button>
+      </div>
+      <div class="row">
+        <label>导航位置</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="nav">已修改 ↺</span>
+          <div class="seg" id="navPos"><button data-v="bottom" class="on">底栏</button><button data-v="float">悬浮</button><button data-v="side">侧滑</button><button data-v="top">顶栏</button></div>
+        </div>
+      </div>
+      <div class="row">
+        <label>密度</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="density">已修改 ↺</span>
+          <div class="seg" id="density"><button data-v="0.85">紧凑</button><button data-v="1" class="on">标准</button><button data-v="1.15">宽裕</button></div>
+        </div>
+      </div>
+      <div class="row">
+        <label>玻璃透明度</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="alpha">已修改 ↺</span>
+          <input type="range" id="glassAlpha" min="0" max="100" value="65">
+        </div>
+      </div>
+      <div class="row">
+        <label>玻璃模糊</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="blur">已修改 ↺</span>
+          <input type="range" id="glassBlur" min="0" max="30" value="12">
+        </div>
+      </div>
+      <div class="row">
+        <label>圆角比例</label>
+        <div class="ctrl">
+          <span class="badge" data-badge="shape">已修改 ↺</span>
+          <input type="range" id="shapeScale" min="0" max="150" value="100">
+        </div>
+      </div>
+    </div>
+
+    <div class="psec">
+      <h2>书架 <span class="tag">功能偏好 → 在书架页内设置</span></h2>
+      <div style="font-size:12px;color:#8B8FA0;line-height:1.7">布局（4 种成品档位）、分组方式、继续阅读卡开关<b style="color:#C9CCDA">保留在书架页右上「⋯」里</b>（沿用现在的书架页设置方式），外观设置不收编书架专属项。</div>
+    </div>
+
+    <div class="psec">
+      <h2>杂项 <span class="tag">不进皮肤体系的功能开关</span></h2>
+      <div class="row">
+        <label>精简导航（收敛 3 Tab）</label>
+        <div class="ctrl"><div class="switch" id="tabCompact"></div></div>
+      </div>
+      <div style="font-size:11.5px;color:#8B8FA0;line-height:1.7;margin-top:6px">默认 6 Tab（主页/书架/发现/订阅/统计/我的）。开启后收敛为 3 Tab：主页 / 书架 / 我的——发现、订阅、统计收进「我的」页二级列表。这是功能偏好，不属于界面包。</div>
+    </div>
+
+    <button class="clearBtn" id="clearTweaks">一键清空全部手调（回到包默认）</button>
+  </div>
+
+  <!-- ================ 手机样机 ================ -->
+  <div class="phoneWrap">
+    <div class="phone" id="phone">
+      <div class="statusbar"><span id="clock">9:41</span><span>▮▮▮ ⌁ ▰</span></div>
+      <div class="appBody" id="appBody">
+        <div class="content" id="content"></div>
+      </div>
+      <div class="fab" id="fab">＋</div>
+    </div>
+    <div class="demoNote">
+      <b>这页演示什么：</b>导航默认 6 Tab（主页/书架/发现/订阅/统计/我的），杂项里可开<b>精简导航（收敛 3 Tab）</b>· 种子色换装（含夜间自动配色）· 全局旋钮（导航含<b>悬浮底栏</b>/密度/玻璃/形状）联动所有窗口 ·
+      书架 4 种成品布局与进度条/更新角标/继续阅读卡 · 手调「已修改」标记与还原。<br>
+      <b>书架的布局/分组/继续阅读卡设置在样机书架页右上「⋯」里</b>（保留在书架页内，不进外观设置）。<br>
+      书城/发现/我 也吃同一组全局参数。正式 App 中，气泡、高级标题、EPUB 模板等视觉杂项全部保留（方案 3.6 节）。
+    </div>
+  </div>
+</div>
+
+<script>
+/* =============== 数据 =============== */
+const THEMES = [
+  {id:'sky',    name:'晴空白', seed:'#5B6ABF', strategy:'tonal'},
+  {id:'night',  name:'墨夜黑', seed:'#3A4258', strategy:'muted'},
+  {id:'amoled', name:'AMOLED 纯黑', seed:'#5B6ABF', strategy:'amoled'},
+  {id:'paper',  name:'纸张米', seed:'#A08A5B', strategy:'tonal'},
+  {id:'dynamic',name:'动态取色', seed:'#7A9B76', strategy:'tonal'},
+  {id:'eink',   name:'电子墨水', seed:'#808080', strategy:'muted'},
+];
+const PKGS = {
+  classic:{nav:'bottom', density:1,    alpha:65, blur:12, shape:100},
+  float:  {nav:'float',  density:1,    alpha:40, blur:18, shape:120},
+  side:   {nav:'side',   density:1,    alpha:45, blur:20, shape:130},
+  minimal:{nav:'side',   density:0.85, alpha:95, blur:0,  shape:15},
+};
+const BOOKS = [
+  {t:'诡秘之主',a:'爱潜水的乌贼',p:0.62,up:true, c:['#6C5B7B','#3D2F4F'],done:false,last:'2 小时前'},
+  {t:'庆余年',a:'猫腻',p:1,up:false,c:['#8A6E4B','#5C4630'],done:true,last:'昨天'},
+  {t:'三体',a:'刘慈欣',p:0.25,up:true, c:['#2E5266','#1B3A49'],done:false,last:'3 天前'},
+  {t:'房思琪的初恋乐园',a:'林奕含',p:0.8,up:false,c:['#9B7B8A','#6E4E5F'],done:false,last:'上周'},
+  {t:'百年孤独',a:'马尔克斯',p:0.1,up:false,c:['#B08A5A','#7D5F3A'],done:false,last:'上周'},
+  {t:'围城',a:'钱锺书',p:1,up:false,c:['#5E7B6A','#3C5346'],done:true,last:'两周前'},
+  {t:'活着',a:'余华',p:0.45,up:false,c:['#8A5A4B','#5C372E'],done:false,last:'两周前'},
+  {t:'白夜行',a:'东野圭吾',p:0.33,up:true, c:['#4A5568','#2B3442'],done:false,last:'上月'},
+  {t:'呐喊',a:'鲁迅',p:0.9,up:false,c:['#7A6455','#4E3D31'],done:false,last:'上月'},
+];
+const NAV_ITEMS=[
+  {k:'home',ic:'🏠',n:'主页'},{k:'shelf',ic:'📖',n:'书架'},{k:'feed',ic:'🧭',n:'发现'},
+  {k:'rss',ic:'📰',n:'订阅'},{k:'stats',ic:'📊',n:'统计'},{k:'me',ic:'👤',n:'我的'}
+];
+
+/* =============== 状态 =============== */
+const S = {
+  theme:'sky', seed:'#5B6ABF', strategy:'tonal', dark:false,
+  pkg:'classic', nav:'bottom', density:1, alpha:65, blur:12, shape:100,
+  shelf:'grid', group:'flat', showCC:true, page:'home', tabCompact:false
+};
+const TWEAK = {}; // 手调记录：key -> true
+
+/* =============== 颜色工具 =============== */
+function hexToHsl(hex){
+  let r=parseInt(hex.slice(1,3),16)/255,g=parseInt(hex.slice(3,5),16)/255,b=parseInt(hex.slice(5,7),16)/255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b);let h=0,s=0;const l=(mx+mn)/2;
+  if(mx!==mn){const d=mx-mn;s=l>0.5?d/(2-mx-mn):d/(mx+mn);
+    switch(mx){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;case b:h=(r-g)/d+4}h/=6}
+  return [h*360,s*100,l*100];
+}
+function hsl(h,s,l){return `hsl(${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%)`}
+function rgbToHex(rgbStr){ // hsl() -> hex for color input
+  const m=rgbStr.match(/(\d+)/g);if(!m)return '#5B6ABF';
+  const [h,s,l]=m.map(Number);
+  const a=s/100*Math.min(l/100,1-l/100);
+  const f=n=>{const k=(n+h/30)%12;const c=l/100-a*Math.max(Math.min(k-3,9-k,1),-1);return Math.round(255*c).toString(16).padStart(2,'0')};
+  return '#'+f(0)+f(8)+f(4);
+}
+/* 种子色 → 整套配色（演示用简化版色调调色板） */
+function derivePalette(seed, strategy, dark){
+  let [h,s,l]=hexToHsl(seed);
+  if(strategy==='muted') s=Math.min(s,45);
+  if(strategy==='amoled') s=Math.min(s,50);
+  const sat=k=>Math.max(6, s*k);
+  if(!dark){
+    const bgL = strategy==='paper'?94:96;
+    return {
+      bg:      hsl(h, sat(0.18), bgL),
+      surface: hsl(h, sat(0.22), 99.5),
+      surface2:hsl(h, sat(0.20), 93),
+      text:    hsl(h, sat(0.45), 14),
+      text2:   hsl(h, sat(0.20), 42),
+      primary: hsl(h, sat(0.9),  Math.max(35, Math.min(48,l))),
+      onPrim:  '#FFFFFF',
+      accent:  hsl((h+42)%360, sat(0.75), 52),
+      outline: hsl(h, sat(0.20), 87),
+    };
+  } else {
+    const bgL = strategy==='amoled'?0:8;
+    return {
+      bg:      hsl(h, sat(0.18), bgL),
+      surface: hsl(h, sat(0.18), strategy==='amoled'?6:13),
+      surface2:hsl(h, sat(0.16), strategy==='amoled'?10:18),
+      text:    hsl(h, sat(0.15), 92),
+      text2:   hsl(h, sat(0.12), 62),
+      primary: hsl(h, sat(0.7),  74),
+      onPrim:  '#111111',
+      accent:  hsl((h+42)%360, sat(0.65), 66),
+      outline: hsl(h, sat(0.14), strategy==='amoled'?16:24),
+    };
+  }
+}
+
+/* =============== 应用外观 =============== */
+function applyTheme(){
+  const p=derivePalette(S.seed,S.strategy,S.dark);
+  const r=document.documentElement.style;
+  r.setProperty('--c-bg',p.bg); r.setProperty('--c-surface',p.surface);
+  r.setProperty('--c-surface2',p.surface2); r.setProperty('--c-text',p.text);
+  r.setProperty('--c-text2',p.text2); r.setProperty('--c-primary',p.primary);
+  r.setProperty('--c-on-primary',p.onPrim); r.setProperty('--c-accent',p.accent);
+  r.setProperty('--c-outline',p.outline);
+  // 玻璃面板底色 = surface 语义下的半透明（演示用黑白近似）
+  const surf=S.dark?[10,11,14]:[252,252,254];
+  r.setProperty('--glass-bg',`rgba(${surf.join(',')},${S.alpha/100})`);
+  r.setProperty('--glass-blur',S.blur+'px');
+  // 圆角
+  const s=S.shape/100;
+  r.setProperty('--radius',Math.round(14*s)+'px');
+  r.setProperty('--radius-s',Math.round(10*s)+'px');
+  r.setProperty('--radius-l',Math.round(20*s)+'px');
+  r.setProperty('--density',S.density);
+  // 面板强调色跟随主色
+  document.querySelectorAll('.tCard.on').forEach(e=>{});
+  const pc=document.documentElement.style;pc.setProperty('--accent-demo',p.primary);
+}
+
+/* =============== 手调标记 =============== */
+const CONTROL_KEYS={seed:'seed',nav:'nav',density:'density',alpha:'alpha',blur:'blur',shape:'shape'};
+const PKG_FIELD={nav:'nav',density:'density',alpha:'alpha',blur:'blur',shape:'shape'};
+function refreshBadges(){
+  const pkg=PKGS[S.pkg];
+  const checks={
+    seed: THEMES.find(t=>t.id===S.theme).seed.toLowerCase()!==S.seed.toLowerCase(),
+    nav:  pkg.nav!==S.nav,
+    density: String(pkg.density)!==String(S.density),
+    alpha: pkg.alpha!==S.alpha,
+    blur:  pkg.blur!==S.blur,
+    shape: pkg.shape!==S.shape,
+  };
+  document.querySelectorAll('.badge').forEach(b=>{
+    const k=b.dataset.badge;
+    b.classList.toggle('show',!!checks[k]);
+    b.onclick=()=>{ // 单项还原
+      if(k==='seed'){S.seed=THEMES.find(t=>t.id===S.theme).seed;document.getElementById('seedInput').value=S.seed}
+      else{const f=PKG_FIELD[k];S[f]=PKG_FIELD[k]?pkg[f]:pkg[f];
+        if(f==='nav')setSeg('navPos',S.nav);
+        if(f==='density')setSeg('density',String(S.density));
+        if(f==='alpha')document.getElementById('glassAlpha').value=S.alpha;
+        if(f==='blur')document.getElementById('glassBlur').value=S.blur;
+        if(f==='shape')document.getElementById('shapeScale').value=S.shape;
+      }
+      render();refreshBadges();
+    };
+  });
+}
+function setSeg(id,v){document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===String(v)))}
+
+/* =============== 页面渲染 =============== */
+function bookCover(b,mode){
+  const [c1,c2]=b.c;
+  const grad=`linear-gradient(150deg,${c1},${c2})`;
+  let inner=`<div class="cv" style="background:${grad}">${b.t[0]}</div><div class="spine"></div>`;
+  if(mode!=='dual'&&mode!=='list'){
+    if(b.done) inner+=`<div class="done">✓</div>`;
+    else if(b.up) inner+=`<div class="upd"></div>`;
+    if(b.p>0&&b.p<1) inner+=`<div class="pbar"><i style="width:${b.p*100}%"></i></div>`;
+    else if(b.p>=1) inner+=`<div class="pbar"><i style="width:100%"></i></div>`;
+  }
+  return `<div class="cover">${inner}</div>`;
+}
+function bookGrid(list){
+  const mode=S.shelf;
+  const cols = mode==='dual'?2 : (mode==='list'?1:3);
+  let h=`<div class="shelfGrid ${mode==='dual'?'dual':''} ${mode==='list'?'list':''}" style="grid-template-columns:repeat(${cols},1fr)">`;
+  for(const b of list){
+    if(mode==='dual'){
+      h+=`<div class="book" onclick="toast('${b.t}')">${bookCover(b,'dual')}
+        <div class="binfo"><div class="bname">${b.t}</div><div class="bsub">${b.a}${b.up?' · <span style="color:var(--c-accent)">有更新</span>':''}</div>
+        <div class="pbar2"><i style="width:${b.p*100}%"></i></div><div class="bsub" style="margin-top:3px">${b.done?'已读完':`已读 ${Math.round(b.p*100)}% · ${b.last}`}</div></div></div>`;
+    } else if(mode==='list'){
+      h+=`<div class="book" onclick="toast('${b.t}')">${bookCover(b,'list')}
+        <div class="binfo"><div><div class="bname">${b.t}</div><div class="bsub">${b.a}${b.up?' · <span style="color:var(--c-accent)">有更新</span>':''}</div></div>
+        <div class="bsub" style="white-space:nowrap">${b.done?'✓ 已读完':Math.round(b.p*100)+'%'}</div></div>
+        <div class="arrow">›</div></div>`;
+    } else {
+      h+=`<div class="book" onclick="toast('${b.t}')">${bookCover(b,mode)}<div class="bname">${b.t}</div><div class="bsub">${b.done?'已读完':Math.round(b.p*100)+'%'}</div></div>`;
+    }
+  }
+  return h+`</div>`;
+}
+function renderShelf(){
+  const cont=document.getElementById('content');
+  let html=`<div class="topbar"><div class="title">书架</div><div style="display:flex;gap:8px"><div class="iconBtn">🔍</div><div class="iconBtn" onclick="openShelfSettings()">⋯</div></div></div>`;
+  if(S.showCC){
+    const b=BOOKS[0];
+    html+=`<div class="continueCard" onclick="toast('直达：${b.t}')">
+      <div class="cc-cover" style="background:linear-gradient(150deg,${b.c[0]},${b.c[1]})">${b.t[0]}</div>
+      <div class="cc-info"><div class="cc-k">继续阅读 · ${b.last}</div><div class="cc-t">${b.t}</div><div class="cc-p">${b.a} · 已读 ${Math.round(b.p*100)}%</div></div>
+      <div class="cc-go">继续</div></div>`;
+  }
+  if(S.group==='grouped'){
+    const reading=BOOKS.filter(b=>!b.done),doneB=BOOKS.filter(b=>b.done);
+    html+=`<div class="groupHead"><b>在读</b><span>${reading.length} 本</span></div>`+bookGrid(reading);
+    html+=`<div class="groupHead" style="margin-top:14px"><b>已读完</b><span>${doneB.length} 本</span></div>`+bookGrid(doneB);
+  }else{
+    html+=`<div class="groupHead"><b>全部书籍</b><span>${BOOKS.length} 本 · 2 本有更新</span></div>`+bookGrid(BOOKS);
+  }
+  html+=`<div style="height:90px"></div>`;
+  cont.innerHTML=html;
+}
+function renderHome(){
+  const cont=document.getElementById('content');
+  const b=BOOKS[0];
+  let html=`<div class="topbar"><div class="title">主页</div><div style="display:flex;gap:8px"><div class="iconBtn">🔍</div><div class="iconBtn">⋯</div></div></div>
+  <div class="searchBar">🔍 搜索书名 / 作者</div>
+  <div class="continueCard" onclick="toast('直达：${b.t}')">
+    <div class="cc-cover" style="background:linear-gradient(150deg,${b.c[0]},${b.c[1]})">${b.t[0]}</div>
+    <div class="cc-info"><div class="cc-k">继续阅读 · ${b.last}</div><div class="cc-t">${b.t}</div><div class="cc-p">${b.a} · 已读 ${Math.round(b.p*100)}%</div></div>
+    <div class="cc-go">继续</div></div>
+  <div class="rankCard"><div class="rt">📊 本周热门榜</div><div class="rd">换任何主题包，这张卡的主色也跟着变——这就是全局一致</div></div>
+  <div class="groupHead"><b>猜你喜欢</b><span>换一批</span></div>
+  <div class="shelfGrid" style="grid-template-columns:repeat(3,1fr)">`;
+  BOOKS.slice(2,8).forEach(x=>{html+=`<div class="book" onclick="toast('${x.t}')">${bookCover(x,'grid')}<div class="bname">${x.t}</div><div class="bsub">${x.a}</div></div>`});
+  html+=`</div><div style="height:90px"></div>`;
+  cont.innerHTML=html;
+}
+function renderSubscribe(){
+  const cont=document.getElementById('content');
+  let html=`<div class="topbar"><div class="title">订阅</div><div class="iconBtn">＋</div></div>`;
+  [['rss@少数派','https://sspai.com','科技 · 12 篇未读'],['rss@月光博客','www.williamlong.info','互联网 · 5 篇未读'],['rss@阮一峰周刊','ruanyifeng.com','技术 · 每周五更新'],['rss@豆瓣动态','douban.com','书影音 · 28 篇未读']].forEach(([n,u,d])=>{
+    html+=`<div class="meRow" onclick="toast('${n}')"><div class="mi">📰</div><div><div class="mn">${n}</div><div class="md">${u} · ${d}</div></div><div class="ar">›</div></div>`;
+  });
+  html+=`<div class="groupHead" style="margin-top:16px"><b>最新文章</b><span>全部</span></div>`;
+  [['为什么我不再纠结阅读器的排版','少数派 · 2 小时前'],['9 月读书记录：慢下来的一个月','豆瓣 · 昨天'],['EPUB 3.3 规范里被忽视的细节','阮一峰 · 3 天前']].forEach(([t,s])=>{
+    html+=`<div class="feedRow" onclick="toast('${t}')"><div><div class="fn" style="font-size:13.5px">${t}</div><div class="fd">${s}</div></div><div class="arrow" style="color:var(--c-text2)">›</div></div>`;
+  });
+  html+=`<div style="height:90px"></div>`;
+  cont.innerHTML=html;
+}
+function renderStats(){
+  const cont=document.getElementById('content');
+  const days=['一','二','三','四','五','六','日'],mins=[35,52,18,64,40,95,73];
+  let html=`<div class="topbar"><div class="title">统计</div><div class="iconBtn">📤</div></div>
+  <div style="display:flex;gap:10px;margin-bottom:16px">
+    <div style="flex:1.3;background:linear-gradient(120deg,var(--c-primary),var(--c-accent));border-radius:var(--radius);padding:14px;color:#fff"><div style="font-size:11px;opacity:.9">今日阅读</div><div style="font-size:26px;font-weight:800;margin:2px 0">73<span style="font-size:13px"> 分钟</span></div><div style="font-size:10.5px;opacity:.9">连续打卡 12 天 🔥</div></div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+      <div style="flex:1;background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:10px 12px"><div style="font-size:10.5px;color:var(--c-text2)">今年读完</div><div style="font-size:17px;font-weight:800">18 本</div></div>
+      <div style="flex:1;background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:10px 12px"><div style="font-size:10.5px;color:var(--c-text2)">书架藏书</div><div style="font-size:17px;font-weight:800">9 本</div></div>
+    </div>
+  </div>
+  <div style="background:var(--c-surface);border:1px solid var(--c-outline);border-radius:var(--radius);padding:14px;margin-bottom:16px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px">本周阅读时长</div>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:96px">`;
+  const mx=Math.max(...mins);
+  days.forEach((d,i)=>{
+    html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end">
+      <div style="width:100%;border-radius:6px 6px 3px 3px;background:${i===5?'var(--c-primary)':'var(--c-surface2)'};height:${Math.max(8,mins[i]/mx*70)}px"></div>
+      <div style="font-size:10px;color:var(--c-text2)">${d}</div></div>`;
+  });
+  html+=`</div></div><div style="height:70px"></div>`;
+  cont.innerHTML=html;
+}
+function renderFeed(){
+  const cont=document.getElementById('content');
+  let html=`<div class="topbar"><div class="title">发现</div><div class="iconBtn">＋</div></div>`;
+  [['起点中文网','小说 · 男频'],['晋江文学城','小说 · 女频'],['笔趣阁','聚合源'],['动漫之家','漫画'],['轻小说文库','轻小说'],['rss@少数派','RSS 订阅']].forEach(([n,d])=>{
+    html+=`<div class="feedRow" onclick="toast('${n}')"><div><div class="fn">${n}</div><div class="fd">${d}</div></div><div class="arrow" style="color:var(--c-text2)">›</div></div>`;
+  });
+  html+=`<div style="height:80px"></div>`;
+  cont.innerHTML=html;
+}
+function renderMe(){
+  const cont=document.getElementById('content');
+  let html=`<div class="topbar"><div class="title">我的</div><div class="iconBtn">⚙️</div></div>`;
+  const rows=[
+    ['🎨','外观','主题包 · 界面包 · 手调','外观',`toast('外观设置=本 Demo 左侧面板')`],
+    ...(S.tabCompact?[
+      ['🧭','发现','（精简模式收编页）','feed',`S.page='feed';render()`],
+      ['📰','订阅','（精简模式收编页）','rss',`S.page='rss';render()`],
+      ['📊','统计','（精简模式收编页）','stats',`S.page='stats';render()`],
+    ]:[]),
+    ['📖','阅读','（冻结区：现有设置原样保留）','阅读',`toast('(演示占位)')`],
+    ['🔊','朗读','（冻结区：现有设置原样保留）','朗读',`toast('(演示占位)')`],
+    ['☁️','备份与恢复','WebDAV · 本地备份 · 恢复','备份',`toast('(演示占位)')`],
+    ['📚','书源与内容','书源管理 · RSS · 订阅','书源',`toast('(演示占位)')`],
+    ['ℹ️','关于','版本 · 开源许可','关于',`toast('(演示占位)')`],
+  ];
+  rows.forEach(([ic,n,d,k,act])=>{
+    html+=`<div class="meRow" onclick="${act}"><div class="mi">${ic}</div><div><div class="mn">${n}</div><div class="md">${d}</div></div><div class="ar">›</div></div>`;
+  });
+  html+=`<div style="height:90px"></div>`;
+  cont.innerHTML=html;
+}
+function renderNav(){
+  const body=document.getElementById('appBody');
+  document.querySelectorAll('.navBottom,.navSide,.navTop,.navFloat').forEach(e=>e.remove());
+  let items=NAV_ITEMS.map(n=>({ ...n, on:n.k===S.page}));
+  if(S.tabCompact){
+    items=items.filter(n=>['home','shelf','me'].includes(n.k));
+    items[items.length-1].on=['feed','rss','stats','me'].includes(S.page);
+  }
+  let nav;
+  if(S.nav==='bottom'){
+    nav=document.createElement('div');nav.className='navBottom';
+    nav.innerHTML=items.map(n=>`<div class="ni ${n.on?'on':''}" data-k="${n.k}"><span class="ic">${n.ic}</span>${n.n}</div>`).join('');
+    body.appendChild(nav);
+  } else if(S.nav==='float'){
+    nav=document.createElement('div');nav.className='navFloat';
+    nav.innerHTML=items.map(n=>`<div class="ni ${n.on?'on':''}" data-k="${n.k}"><span class="ic">${n.ic}</span>${n.n}</div>`).join('');
+    body.appendChild(nav);
+  } else if(S.nav==='side'){
+    nav=document.createElement('div');nav.className='navSide';
+    nav.innerHTML=items.map(n=>`<div class="ni ${n.on?'on':''}" data-k="${n.k}"><span class="ic">${n.ic}</span>${n.n}</div>`).join('')+'<div class="spacer"></div>';
+    body.insertBefore(nav,document.getElementById('content'));
+  } else {
+    nav=document.createElement('div');nav.className='navTop';
+    nav.innerHTML=items.map(n=>`<div class="ni ${n.on?'on':''}" data-k="${n.k}">${n.n}</div>`).join('');
+    body.insertBefore(nav,document.getElementById('content'));
+  }
+  nav.querySelectorAll('[data-k]').forEach(el=>el.onclick=()=>{S.page=el.dataset.k;closeShelfSettings();render()});
+  document.getElementById('fab').classList.toggle('sideMode',S.nav!=='bottom');
+  document.getElementById('fab').classList.toggle('floatMode',S.nav==='float');
+}
+function renderPage(){
+  ({home:renderHome,shelf:renderShelf,feed:renderFeed,rss:renderSubscribe,stats:renderStats,me:renderMe})[S.page]();
+}
+function render(){applyTheme();renderNav();renderPage();refreshBadges()}
+
+/* =============== 交互接线 =============== */
+// 主题卡
+const tc=document.getElementById('themeCards');
+THEMES.forEach(t=>{
+  const p=derivePalette(t.seed,t.strategy,false);
+  const el=document.createElement('div');el.className='tCard';el.dataset.id=t.id;
+  el.innerHTML=`<div class="sw"><i style="background:${p.primary}"></i><i style="background:${p.bg}"></i><i style="background:${p.accent}"></i></div><div class="nm">${t.name}</div>`;
+  el.onclick=()=>{
+    S.theme=t.id;S.seed=t.seed;S.strategy=t.strategy;
+    document.getElementById('seedInput').value=t.seed;
+    setSeg('darkStrategy',t.strategy);
+    document.querySelectorAll('.tCard').forEach(c=>c.classList.toggle('on',c.dataset.id===t.id));
+    render();
+  };
+  tc.appendChild(el);
+});
+document.querySelector('.tCard[data-id=sky]').classList.add('on');
+// 种子色
+document.getElementById('seedInput').oninput=e=>{S.seed=e.target.value;applyTheme();refreshBadges()};
+// 深色策略
+document.querySelectorAll('#darkStrategy button').forEach(b=>b.onclick=()=>{S.strategy=b.dataset.v;setSeg('darkStrategy',b.dataset.v);applyTheme();refreshBadges()});
+// 夜间
+document.getElementById('darkToggle').onclick=e=>{S.dark=!S.dark;e.target.classList.toggle('on',S.dark);applyTheme()};
+// 界面包
+document.querySelectorAll('#pkgBtns button').forEach(b=>b.onclick=()=>{
+  S.pkg=b.dataset.pkg;const p=PKGS[S.pkg];
+  S.nav=p.nav;S.density=p.density;S.alpha=p.alpha;S.blur=p.blur;S.shape=p.shape;
+  setSeg('navPos',S.nav);setSeg('density',String(S.density));
+  document.getElementById('glassAlpha').value=S.alpha;
+  document.getElementById('glassBlur').value=S.blur;
+  document.getElementById('shapeScale').value=S.shape;
+  document.querySelectorAll('#pkgBtns button').forEach(x=>x.classList.toggle('on',x===b));
+  render();
+});
+// 旋钮
+document.querySelectorAll('#navPos button').forEach(b=>b.onclick=()=>{S.nav=b.dataset.v;setSeg('navPos',S.nav);render()});
+document.querySelectorAll('#density button').forEach(b=>b.onclick=()=>{S.density=parseFloat(b.dataset.v);setSeg('density',b.dataset.v);render()});
+document.getElementById('glassAlpha').oninput=e=>{S.alpha=+e.target.value;applyTheme();refreshBadges()};
+document.getElementById('glassBlur').oninput=e=>{S.blur=+e.target.value;applyTheme();refreshBadges()};
+document.getElementById('shapeScale').oninput=e=>{S.shape=+e.target.value;applyTheme();refreshBadges()};
+// 书架页内设置（布局/分组/继续阅读卡 —— 保留在书架页，不进外观设置）
+function closeShelfSettings(){const s=document.getElementById('shelfSheet');if(s)s.remove()}
+function openShelfSettings(){
+  closeShelfSettings();
+  const sh=document.createElement('div');sh.id='shelfSheet';
+  sh.style.cssText='position:absolute;inset:0;z-index:50;display:flex;align-items:flex-end';
+  sh.innerHTML=`<div style="position:absolute;inset:0;background:rgba(0,0,0,.38)" onclick="closeShelfSettings()"></div>
+  <div style="position:relative;width:100%;background:var(--c-surface);border-radius:var(--radius-l) var(--radius-l) 0 0;padding:16px 18px 26px;box-shadow:0 -10px 34px rgba(0,0,0,.22)">
+    <div style="font-size:15px;font-weight:800;margin-bottom:2px">书架设置</div>
+    <div style="font-size:11px;color:var(--c-text2);margin-bottom:14px">布局、分组、继续阅读卡都留在书架页内设置（沿用现有方式）</div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">布局</div>
+    <div id="shelfBtns" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      ${[['wall','封面墙'],['grid','经典网格'],['dual','双列卡片'],['list','极简列表']].map(([k,n])=>`<button class="sBtn ${S.shelf===k?'on':''}" data-shelf="${k}">${n}</button>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">分组</div>
+    <div class="seg" id="groupMode" style="margin-bottom:16px">
+      <button data-v="flat" class="${S.group!=='grouped'?'on':''}">平铺全部</button>
+      <button data-v="grouped" class="${S.group==='grouped'?'on':''}">按分组展示</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div><div style="font-size:13px;font-weight:700">继续阅读卡</div><div style="font-size:10.5px;color:var(--c-text2);margin-top:1px">顶部直达上次在读的书</div></div>
+      <div class="switch ${S.showCC?'on':''}" id="ccToggle"></div>
+    </div>
+  </div>`;
+  document.getElementById('phone').appendChild(sh);
+  sh.querySelectorAll('[data-shelf]').forEach(b=>b.onclick=()=>{
+    S.shelf=b.dataset.shelf;
+    sh.querySelectorAll('[data-shelf]').forEach(x=>x.classList.toggle('on',x===b));
+    renderPage();
+  });
+  sh.querySelectorAll('#groupMode button').forEach(b=>b.onclick=()=>{
+    S.group=b.dataset.v;
+    sh.querySelectorAll('#groupMode button').forEach(x=>x.classList.toggle('on',x===b));
+    renderPage();
+  });
+  sh.querySelector('#ccToggle').onclick=e=>{S.showCC=!S.showCC;e.target.classList.toggle('on',S.showCC);renderPage()};
+}
+// 杂项：精简导航（收敛 3 Tab）
+document.getElementById('tabCompact').onclick=e=>{
+  S.tabCompact=!S.tabCompact;
+  e.target.classList.toggle('on',S.tabCompact);
+  if(S.tabCompact&&!['home','shelf','me','feed','rss','stats'].includes(S.page))S.page='home';
+  render();
+};
+// 清空手调
+document.getElementById('clearTweaks').onclick=()=>{
+  const t=THEMES.find(x=>x.id===S.theme);const p=PKGS[S.pkg];
+  S.seed=t.seed;S.strategy=t.strategy;S.nav=p.nav;S.density=p.density;S.alpha=p.alpha;S.blur=p.blur;S.shape=p.shape;
+  document.getElementById('seedInput').value=S.seed;
+  setSeg('darkStrategy',S.strategy);setSeg('navPos',S.nav);setSeg('density',String(S.density));
+  document.getElementById('glassAlpha').value=S.alpha;document.getElementById('glassBlur').value=S.blur;document.getElementById('shapeScale').value=S.shape;
+  render();
+};
+// 滚动隐藏演示（底栏滚动隐藏档暂以常驻演示，滚动时轻提示）
+document.getElementById('content').addEventListener('scroll',e=>{},{passive:true});
+// 时钟
+setInterval(()=>{const d=new Date();document.getElementById('clock').textContent=`${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`},10000);
+// toast
+function toast(msg){
+  let t=document.getElementById('dToast');
+  if(!t){t=document.createElement('div');t.id='dToast';
+    t.style.cssText='position:absolute;left:50%;bottom:110px;transform:translateX(-50%);background:rgba(20,20,26,.85);color:#fff;font-size:12px;padding:8px 16px;border-radius:20px;z-index:99;pointer-events:none;transition:opacity .3s;max-width:80%;text-align:center';
+    document.getElementById('phone').appendChild(t)}
+  t.textContent=msg;t.style.opacity=1;
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1400);
+}
+render();
+</script>
+</body>
+</html>
