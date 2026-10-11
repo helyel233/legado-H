@@ -45,7 +45,7 @@ object HostDestinations {
             AppDestination(
                 id = "shelf", title = DestTitle.Text("书架"),
                 icon = DestIcon.Vector(HostIcons.Shelf),
-                factory = { PlaceholderContent("书架", "共 128 本 · 在读 6 本", "shelf") },
+                factory = { HostShelfContent() },
                 topLevel = true, lockedVisible = true,
                 sideGroup = SideGroup.MAIN, order = 0,
             ),
