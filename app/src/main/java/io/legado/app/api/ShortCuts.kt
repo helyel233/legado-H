@@ -8,7 +8,7 @@ import androidx.core.graphics.drawable.IconCompat
 import io.legado.app.R
 import io.legado.app.receiver.SharedReceiverActivity
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.main.MainActivity
+import io.legado.app.ui.host.AppHostActivity
 
 object ShortCuts {
 
@@ -19,7 +19,7 @@ object ShortCuts {
     }
 
     private fun buildBookShelfShortCutInfo(context: Context): ShortcutInfoCompat {
-        val bookShelfIntent = buildIntent<MainActivity>(context)
+        val bookShelfIntent = buildIntent<AppHostActivity>(context)
         return ShortcutInfoCompat.Builder(context, "bookshelf")
             .setShortLabel(context.getString(R.string.bookshelf))
             .setLongLabel(context.getString(R.string.bookshelf))
@@ -29,7 +29,7 @@ object ShortCuts {
     }
 
     private fun buildReadBookShortCutInfo(context: Context): ShortcutInfoCompat {
-        val bookShelfIntent = buildIntent<MainActivity>(context)
+        val bookShelfIntent = buildIntent<AppHostActivity>(context)
         val readBookIntent = buildIntent<ReadBookActivity>(context)
         return ShortcutInfoCompat.Builder(context, "lastRead")
             .setShortLabel(context.getString(R.string.last_read))

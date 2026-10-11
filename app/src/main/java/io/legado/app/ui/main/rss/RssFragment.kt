@@ -46,7 +46,6 @@ import io.legado.app.ui.rss.favorites.RssFavoritesActivity
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyStatusBarPadding
@@ -238,11 +237,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.clipToPadding = false
         binding.recyclerView.let {
-            if (activity is MainActivity) {
-                it.applyMainBottomBarPadding(withInitialPadding = true)
-            } else {
-                it.applyNavigationBarPadding(withInitialPadding = true)
-            }
+            it.applyNavigationBarPadding(withInitialPadding = true)
         }
         applyRssSourceLayout()
         if (binding.recyclerView.adapter !== adapter) {
@@ -733,14 +728,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
 
     private fun applyWebContainerBottomPadding() {
         val initialPadding = binding.rssWebContainer.paddingBottom
-        val webBottomSpace =
-            if (activity is MainActivity) {
-                resources.getDimensionPixelSize(R.dimen.main_bottom_controls_bottom_padding) +
-                    resources.getDimensionPixelSize(R.dimen.main_bottom_bar_height) +
-                    5.dpToPx()
-            } else {
-                0
-            }
+        val webBottomSpace = 0
         binding.rssWebContainer.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
             view.setPadding(
                 view.paddingLeft,

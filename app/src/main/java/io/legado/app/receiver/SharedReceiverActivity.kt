@@ -11,7 +11,6 @@ import io.legado.app.help.book.TextBookImporter
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.host.AppHostActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi

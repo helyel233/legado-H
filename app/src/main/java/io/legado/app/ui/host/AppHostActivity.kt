@@ -20,13 +20,26 @@ import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 /**
  * P1-1 新宿主骨架入口。
  *
- * 与旧 [io.legado.app.ui.main.MainActivity]（2141 行，兼宿主 / 导航 / 玻璃 / 侧栏 /
+ * 与已退役的旧 MainActivity（2141 行，兼宿主 / 导航 / 玻璃 / 侧栏 /
  * 指示器 / 启动编排 / 剪贴板导入）形成对照：**这个类本体不含任何绘制逻辑**，
  * 只做三件事 —— 边缘到边缘、提供取值环境、把组合根挂上去。
  *
  * P1 阶段它与旧 MainActivity 并存，通过 debug 入口进入；P4-5 旧壳退役后成为唯一主界面。
  */
 class AppHostActivity : AppCompatActivity() {
+
+    companion object {
+        /** 外部跳书架（书架即新壳默认 Tab）：见 Context.openBookshelf()。 */
+        fun openBookshelf(context: android.content.Context) {
+            context.startActivity(
+                android.content.Intent(context, AppHostActivity::class.java).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }
+    }
 
     private var bootstrap: AppBootstrap? = null
 

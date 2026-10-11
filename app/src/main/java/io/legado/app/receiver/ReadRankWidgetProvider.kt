@@ -12,7 +12,6 @@ import io.legado.app.R
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.about.ReadRecordWidgetStore
 import io.legado.app.ui.host.AppHostActivity
-import io.legado.app.ui.main.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

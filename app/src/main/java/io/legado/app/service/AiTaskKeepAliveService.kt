@@ -10,7 +10,6 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.NotificationId
 import io.legado.app.help.ai.AiTaskKeepAlive
 import io.legado.app.ui.host.AppHostActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.activityPendingIntent
 import splitties.systemservices.notificationManager
 import splitties.systemservices.powerManager

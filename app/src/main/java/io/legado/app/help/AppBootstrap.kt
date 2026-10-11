@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 /**
- * 启动职责搬运（P4-5a 转正切换）：原 [MainActivity.onPostCreate]/onResume 的
+ * 启动职责搬运（P4-5a 转正切换）：原 （旧主界面启动职责）/onResume 的
  * 应用级启动职责，逐行搬运并参数化到任意 [AppCompatActivity] —— 新壳
  * [io.legado.app.ui.host.AppHostActivity] 转正后由它承担：
  * 隐私协议 / 版本更新日志 / 本地密码 / 崩溃报告 / 备份同步 / 剪贴板口令导入 /

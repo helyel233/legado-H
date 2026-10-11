@@ -12,7 +12,6 @@ import io.legado.app.databinding.ActivityWelcomeBinding
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.host.AppHostActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.fullScreen
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.setStatusBarColorAuto
