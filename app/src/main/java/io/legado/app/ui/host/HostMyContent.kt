@@ -3,6 +3,24 @@ package io.legado.app.ui.host
 import android.app.Activity
 import android.content.Context
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import io.legado.app.ui.host.pack.LegacyAppearanceImporter
+import io.legado.app.uikit.v5.components.AppBottomSheet
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +71,7 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 
 /**
  * P4-1「我的」页真业务（第一批搬迁）。
@@ -84,6 +103,8 @@ class HostMyContent : AppContent {
     @Composable
     override fun Content(scope: ContentScope) {
         val context = LocalContext.current
+        val colors = LocalSemanticColors.current
+        val visual = LocalVisualSpec.current
         var searchQuery by remember { mutableStateOf("") }
         var themeMode by remember { mutableStateOf(context.getPrefString(PreferKey.themeMode, "0") ?: "0") }
         var webServiceState by remember {
@@ -94,6 +115,7 @@ class HostMyContent : AppContent {
         }
         var themeSheet by remember { mutableStateOf(false) }
         var webSheet by remember { mutableStateOf(false) }
+        var legacyImportProposal by remember { mutableStateOf<LegacyAppearanceImporter.Proposal?>(null) }
 
         val themeOptions = remember {
             buildThemeOptions(context)
@@ -164,6 +186,7 @@ class HostMyContent : AppContent {
                     // 站内：新骨架路由
                     "appearanceKit" -> scope.navigate("appearance")
                     "museum" -> scope.navigate("museum")
+                    "legacyImport" -> legacyImportProposal = LegacyAppearanceImporter.read(context)
                     // 站外：功能保全，旧 Activity 照常打开
                     "bookSourceManage" -> context.startActivity<BookSourceActivity>()
                     "rssSourceManage" -> context.startActivity<RssSourceActivity>()
@@ -194,6 +217,74 @@ class HostMyContent : AppContent {
                 }
             },
         )
+
+        legacyImportProposal?.let { proposal ->
+            AppBottomSheet(onDismiss = { legacyImportProposal = null }) {
+                Column(Modifier.padding(scope.density.screenPadding)) {
+                    Text(
+                        "从旧版本导入",
+                        style = visual.type.title,
+                        color = colors.onSurface,
+                    )
+                    Spacer(Modifier.height(scope.density.blockGap / 2))
+                    Text(
+                        "把旧版外观设置翻译成一个新的主题包 + 界面包，可预览后决定。\\n不导入 = 全新开始。",
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(scope.density.blockGap))
+                    proposal.summary.forEach { (k, v) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                k,
+                                style = visual.type.body,
+                                color = colors.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(v, style = visual.type.label, color = colors.onSurface)
+                        }
+                    }
+                    Spacer(Modifier.height(scope.density.blockGap))
+                    // 导入（落库并应用）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colors.primary, visual.shape(ShapeKind.BUTTON))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) {
+                                LegacyAppearanceImporter.commit(context, proposal)
+                                legacyImportProposal = null
+                                context.toastOnUi("已导入：我的主题包 / 我的界面包")
+                            }
+                            .padding(vertical = 11.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("导入并应用", style = visual.type.label, color = colors.onPrimary)
+                    }
+                    Spacer(Modifier.height(scope.density.blockGap / 2))
+                    // 放弃
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colors.surfaceVariant, visual.shape(ShapeKind.BUTTON))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) { legacyImportProposal = null }
+                            .padding(vertical = 11.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("放弃", style = visual.type.label, color = colors.onSurface)
+                    }
+                }
+            }
+        }
 
         if (themeSheet) {
             AppMenuSheet(
@@ -246,7 +337,7 @@ class HostMyContent : AppContent {
             ),
             MySettingsSectionModel(
                 title = context.getString(R.string.config_category_appearance),
-                rows = listOf(
+                rows = listOfNotNull(
                     MySettingsRowModel(
                         key = PreferKey.themeMode,
                         title = context.getString(R.string.theme_mode),
@@ -259,6 +350,16 @@ class HostMyContent : AppContent {
                         summary = context.getString(R.string.app_ui_config_summary),
                     ),
                     actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s),
+                    // P5-2 一次性通道：旧版本外观设置 → V5 双包（仅检测有旧设置时显示）
+                    if (LegacyAppearanceImporter.hasLegacyAppearance(context)) {
+                        MySettingsRowModel(
+                            key = "legacyImport",
+                            title = "从旧版本导入外观设置",
+                            summary = "把旧版的主题色/背景图/圆角透明度翻译成 V5 主题包与界面包",
+                        )
+                    } else {
+                        null
+                    }
                 ),
             ),
             MySettingsSectionModel(
