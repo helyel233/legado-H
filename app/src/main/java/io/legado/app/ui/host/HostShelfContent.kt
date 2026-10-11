@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,9 +82,10 @@ import kotlinx.coroutines.launch
  */
 class HostShelfContent : AppContent {
 
-    /** 顶栏 actions 是纯数据拿不到页面状态，布局抽屉用静态状态桥接。 */
+    /** 顶栏 actions 是纯数据拿不到页面状态，抽屉用静态状态桥接。 */
     companion object {
         var layoutSheetOpen by mutableStateOf(false)
+        var shelfMenuOpen by mutableStateOf(false)
     }
 
     override fun chrome(): ScreenChrome = ScreenChrome(
@@ -102,10 +105,10 @@ class HostShelfContent : AppContent {
                 },
             ),
             ChromeAction(
-                id = "layout",
+                id = "menu",
                 icon = DestIcon.Vector(HostIcons.Menu),
-                contentDescription = DestTitle.Text("书架布局"),
-                onClick = { layoutSheetOpen = true },
+                contentDescription = DestTitle.Text("书架菜单"),
+                onClick = { shelfMenuOpen = true },
             ),
         ),
         contentOwnsScroll = true, // LazyVerticalGrid 自带滚动
@@ -233,6 +236,68 @@ class HostShelfContent : AppContent {
                 onDismiss = { layoutSheetOpen = false },
             )
         }
+
+        if (shelfMenuOpen) {
+            val fm = (context as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager
+            val owner = context as? androidx.lifecycle.ViewModelStoreOwner
+            val mainVm = owner?.let {
+                androidx.lifecycle.ViewModelProvider(it)[io.legado.app.ui.main.MainViewModel::class.java]
+            }
+            val shelfVm = owner?.let {
+                androidx.lifecycle.ViewModelProvider(it)[io.legado.app.ui.main.bookshelf.BookshelfViewModel::class.java]
+            }
+            fun show(dialog: androidx.fragment.app.DialogFragment) {
+                fm?.let { dialog.show(it, "shelf_menu") }
+            }
+            ShelfMenuSheet(
+                scope = scope,
+                onDismiss = { shelfMenuOpen = false },
+                onAction = { key ->
+                    shelfMenuOpen = false
+                    when (key) {
+                        "updateToc" -> mainVm?.upToc(
+                            items.filterIsInstance<BookshelfBookItemUi>()
+                                .map { it.display.toMinimalBook() },
+                            onlyUpdateRead = false,
+                        )
+                        "addLocal" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.book.import.local.ImportBookActivity::class.java)
+                        )
+                        "addRemote" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.book.import.remote.RemoteBookActivity::class.java)
+                        )
+                        "addUrl" -> if (fm != null && shelfVm != null) {
+                            io.legado.app.ui.widget.compose.ComposeTextInputDialog.create(
+                                title = "添加网址",
+                                hint = "url",
+                                positiveText = "确定",
+                                negativeText = "取消",
+                                onPositive = { url -> shelfVm.addBookByUrl(url) },
+                            ).show(fm, "addUrl")
+                        }
+                        "manage" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.book.manage.BookshelfManageActivity::class.java)
+                                .putExtra("groupId", groupId)
+                        )
+                        "groupManage" -> show(io.legado.app.ui.book.group.GroupManageDialog())
+                        "collection" -> show(io.legado.app.ui.main.bookshelf.BookCollectionSelectDialog())
+                        "tagManage" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookshelfTagManageActivity::class.java)
+                                .putExtra("groupId", groupId)
+                        )
+                        "cache" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.book.cache.CacheActivity::class.java)
+                                .putExtra("groupId", groupId)
+                        )
+                        "layoutConfig" -> show(io.legado.app.ui.main.bookshelf.BookshelfConfigDialog())
+                        "librarySearch" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.main.librarysearch.LibrarySearchActivity::class.java)
+                        )
+                        "log" -> show(io.legado.app.ui.about.AppLogDialog())
+                    }
+                },
+            )
+        }
     }
 
     private fun setLayout(context: Context, value: Int, apply: (Int) -> Unit) {
@@ -307,6 +372,85 @@ private fun ContinueReadingCardV5(
                 AppProgressBar(reading.durRatio)
             }
         }
+    }
+}
+
+/**
+ * P4-1b 书架完整菜单（对齐旧版 main_bookshelf 16 项能力，实现方式由 V5 决定）。
+ * 本轮接通 13 项；导出/导入书架（文件 launcher）与标签筛选（多选状态）登记下轮。
+ */
+@Composable
+private fun ShelfMenuSheet(
+    scope: ContentScope,
+    onDismiss: () -> Unit,
+    onAction: (String) -> Unit,
+) {
+    val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    val d = scope.density
+    io.legado.app.uikit.v5.components.AppBottomSheet(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(d.screenPadding)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text("书架菜单", style = scope.type.title, color = colors.onSurface)
+            Spacer(Modifier.height(d.blockGap))
+
+            MenuSection(scope, "书籍") {
+                MenuItem(scope, "search", "搜索") { onAction(it) }
+                MenuItem(scope, "addLocal", "导入本地书籍") { onAction(it) }
+                MenuItem(scope, "addRemote", "添加远程书籍") { onAction(it) }
+                MenuItem(scope, "addUrl", "添加网址") { onAction(it) }
+            }
+            MenuSection(scope, "管理") {
+                MenuItem(scope, "manage", "书架管理") { onAction(it) }
+                MenuItem(scope, "groupManage", "分组管理") { onAction(it) }
+                MenuItem(scope, "collection", "书架集合") { onAction(it) }
+                MenuItem(scope, "tagManage", "标签管理") { onAction(it) }
+            }
+            MenuSection(scope, "更新与缓存") {
+                MenuItem(scope, "updateToc", "刷新目录") { onAction(it) }
+                MenuItem(scope, "cache", "缓存与导出") { onAction(it) }
+            }
+            MenuSection(scope, "布局与工具") {
+                MenuItem(scope, "layoutConfig", "布局设置") { onAction(it) }
+                MenuItem(scope, "librarySearch", "书库搜索") { onAction(it) }
+                MenuItem(scope, "log", "运行日志") { onAction(it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuSection(scope: ContentScope, title: String, content: @Composable () -> Unit) {
+    val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    Column {
+        Text(
+            title,
+            style = scope.type.caption,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        content()
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun MenuItem(scope: ContentScope, key: String, label: String, onAction: (String) -> Unit) {
+    val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onAction(key) }
+            .padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = scope.type.body, color = colors.onSurface)
     }
 }
 
