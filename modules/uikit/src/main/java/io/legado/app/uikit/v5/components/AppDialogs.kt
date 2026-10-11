@@ -75,7 +75,7 @@ fun AppDialog(
                     indication = null,
                     onClick = {},
                 )) {
-                    AppSurface(level = MaterialLevel.FLOATING) { content() }
+                    AppSurface(level = MaterialLevel.FLOATING, backgroundBlur = true) { content() }
                 }
             }
         }
@@ -114,7 +114,7 @@ fun AppBottomSheet(
                     indication = null,
                     onClick = {},
                 )) {
-                    AppSurface(level = MaterialLevel.FLOATING, modifier = Modifier.fillMaxWidth()) {
+                    AppSurface(level = MaterialLevel.FLOATING, modifier = Modifier.fillMaxWidth(), backgroundBlur = true) {
                         Column(modifier = Modifier.fillMaxWidth()) { content() }
                     }
                 }

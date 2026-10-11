@@ -74,6 +74,7 @@ fun HostDebugPanel(state: HostState) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         // 把手
         AppSurface(
+            backgroundBlur = true,
             level = MaterialLevel.FLOATING,
             modifier = Modifier
                 .padding(end = 0.dp)
@@ -103,7 +104,7 @@ fun HostDebugPanel(state: HostState) {
             exit = fadeOut() + slideOutHorizontally { it },
         ) {
             val width = (LocalConfiguration.current.screenWidthDp.dp * 0.82f).coerceAtMost(330.dp)
-            AppSurface(
+            AppSurface(backgroundBlur = true,
                 level = MaterialLevel.FLOATING,
                 modifier = Modifier
                     .fillMaxHeight()

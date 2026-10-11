@@ -92,6 +92,7 @@ private fun BottomBar(
         exit = slideOutVertically(visual.motion.mediumSpec()) { it },
     ) {
         AppSurface(
+            backgroundBlur = true,
             level = visual.bottomBarLevel,
             modifier = modifier
                 .padding(horizontal = density.screenPadding / 2)
@@ -137,6 +138,7 @@ private fun FloatingDock(
         exit = slideOutVertically(visual.motion.mediumSpec()) { it },
     ) {
         AppSurface(
+            backgroundBlur = true,
             level = visual.bottomBarLevel,
             modifier = modifier
                 .padding(horizontal = density.screenPadding)
@@ -222,6 +224,7 @@ private fun SideHandle(
     val colors = LocalSemanticColors.current
     val density = visual.density
     AppSurface(
+        backgroundBlur = true,
         level = visual.bottomBarLevel,
         modifier = modifier
             .padding(start = density.screenPadding, bottom = density.screenPadding)

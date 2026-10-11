@@ -76,6 +76,7 @@ fun HostTopBar(
     val level = if (collapsed) visual.topBarLevel else MaterialLevel.FLAT
 
     io.legado.app.uikit.v5.runtime.AppSurface(
+        backgroundBlur = true,
         level = level,
         modifier = modifier.fillMaxWidth(),
     ) {

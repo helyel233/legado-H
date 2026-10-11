@@ -70,7 +70,7 @@ fun HostOverlayLayer(
             enter = fadeIn(visual.motion.shortSpec()) + slideInVertically(visual.motion.mediumSpec()) { it / 2 },
             exit = fadeOut(visual.motion.shortSpec()) + slideOutVertically(visual.motion.mediumSpec()) { it / 2 },
         ) {
-            AppSurface(
+            AppSurface(backgroundBlur = true,
                 level = MaterialLevel.FLOATING,
                 modifier = Modifier.padding(bottom = 112.dp),
             ) {

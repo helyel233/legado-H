@@ -81,7 +81,7 @@ fun HostSideBar(
             enter = slideInHorizontally(visual.motion.longSpec()) { -it },
             exit = slideOutHorizontally(visual.motion.longSpec()) { -it },
         ) {
-            AppSurface(
+            AppSurface(backgroundBlur = true,
                 level = visual.bottomBarLevel,
                 modifier = Modifier
                     .fillMaxHeight()
