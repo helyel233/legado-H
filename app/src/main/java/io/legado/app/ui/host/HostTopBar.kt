@@ -49,6 +49,9 @@ fun HostTopBar(
     actions: List<ChromeAction>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 侧栏形态下由宿主自动注入菜单按钮（导航形态是宿主的事，页面不声明） */
+    showSidebarHandle: Boolean = false,
+    onOpenSidebar: () -> Unit = {},
 ) {
     if (mode == TopBarMode.NONE) return
 
@@ -90,6 +93,12 @@ fun HostTopBar(
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (showSidebarHandle) {
+                    IconButton(onClick = onOpenSidebar, modifier = Modifier.size(density.iconButtonSize)) {
+                        Icon(HostIcons.Menu, contentDescription = "打开侧栏", tint = colors.onSurface)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
                 if (showBack) {
                     IconButton(onClick = onBack, modifier = Modifier.size(density.iconButtonSize)) {
                         Icon(HostIcons.Back, contentDescription = "返回", tint = colors.onSurface)

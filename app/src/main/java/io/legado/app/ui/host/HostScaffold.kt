@@ -109,6 +109,8 @@ fun HostScaffold(
                 showBack = chrome.showBack,
                 actions = chrome.actions,
                 onBack = { state.navigate("shelf") },
+                showSidebarHandle = visual.navPosition == NavPosition.SIDE,
+                onOpenSidebar = { state.toggleSidebar() },
             )
             if (navIsTop) {
                 HostNavBar(

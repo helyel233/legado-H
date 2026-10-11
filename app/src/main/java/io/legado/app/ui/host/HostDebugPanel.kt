@@ -141,23 +141,11 @@ fun HostDebugPanel(state: HostState) {
                         color = colors.onSurfaceVariant,
                     )
 
-                    // P2-6 组件博物馆入口（侧栏形态之外的快捷通道）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colors.primary.copy(alpha = 0.16f), visual.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { open = false; state.navigate("museum") }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "打开组件博物馆（P2 验收页）",
-                            style = visual.type.label,
-                            color = colors.primary,
-                        )
+                    // 页面直达：侧栏项（管理中心/博物馆）在非侧栏形态下不可达，
+                    // 验证期从这里走；正式入口在 P4 搬迁"我的"页时落地
+                    Section("页面直达") {
+                        PanelButton("组件博物馆（P2 验收页）") { open = false; state.navigate("museum") }
+                        PanelButton("管理中心（包库 / 包内编辑）") { open = false; state.navigate("appearance") }
                     }
 
                     Section("主题包（美术）") {
@@ -266,6 +254,25 @@ fun HostDebugPanel(state: HostState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PanelButton(text: String, onClick: () -> Unit) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.primary.copy(alpha = 0.16f), visual.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onClick() }
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = text, style = visual.type.label, color = colors.primary)
     }
 }
 
