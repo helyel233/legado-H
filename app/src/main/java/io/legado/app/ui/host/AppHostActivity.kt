@@ -9,6 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import dev.chrisbanes.haze.HazeState
+import io.legado.app.help.AppBootstrap
 import io.legado.app.ui.host.pack.V5PackageStore
 import io.legado.app.uikit.v5.resolve.LayoutResolver
 import io.legado.app.uikit.v5.resolve.ThemeResolver
@@ -27,6 +28,8 @@ import io.legado.app.uikit.v5.runtime.LocalVisualSpec
  */
 class AppHostActivity : AppCompatActivity() {
 
+    private var bootstrap: AppBootstrap? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 边缘到边缘：背景层画满全屏，避让由 HostInsets 统一处理
@@ -39,6 +42,19 @@ class AppHostActivity : AppCompatActivity() {
                 setContent { HostRoot() }
             }
         )
+
+        // P4-5a 转正：接管旧壳的应用级启动职责
+        bootstrap = AppBootstrap(this).also { it.onCreated(savedInstanceState) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        bootstrap?.onResumed()
+    }
+
+    override fun onPause() {
+        bootstrap?.onPaused()
+        super.onPause()
     }
 }
 

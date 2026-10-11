@@ -9,6 +9,7 @@ import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.NotificationId
 import io.legado.app.help.ai.AiTaskKeepAlive
+import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.activityPendingIntent
 import splitties.systemservices.notificationManager
@@ -82,7 +83,7 @@ class AiTaskKeepAliveService : BaseService() {
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(activityPendingIntent<MainActivity>("aiTask"))
+            .setContentIntent(activityPendingIntent<AppHostActivity>("aiTask"))
     }
 
     override fun onDestroy() {

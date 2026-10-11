@@ -199,7 +199,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         private const val TARGET_BOOKSHELF = "bookshelf"
 
         fun openBookshelf(context: Context) {
-            context.startActivity(Intent(context, MainActivity::class.java).apply {
+            // P4-5a 转正：书架即新壳默认 Tab，直接进新壳
+            context.startActivity(Intent(context, io.legado.app.ui.host.AppHostActivity::class.java).apply {
                 putExtra(EXTRA_TARGET_PAGE, TARGET_BOOKSHELF)
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)

@@ -11,6 +11,7 @@ import android.widget.RemoteViews
 import io.legado.app.R
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.main.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -81,7 +82,7 @@ class ReadRankWidgetProvider : AppWidgetProvider() {
         }
 
         private fun openReadRecordIntent(context: Context): PendingIntent {
-            val mainIntent = Intent(context, MainActivity::class.java)
+            val mainIntent = Intent(context, AppHostActivity::class.java)
             val recordIntent = Intent(context, ReadRecordActivity::class.java)
             return TaskStackBuilder.create(context)
                 .addNextIntent(mainIntent)

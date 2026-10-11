@@ -19,6 +19,7 @@ import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.BitmapUtils
 import kotlinx.coroutines.CoroutineScope
@@ -158,7 +159,7 @@ class ReadGoalWidgetProvider : AppWidgetProvider() {
         }
 
         private fun openReadRecordIntent(context: Context): PendingIntent {
-            val mainIntent = Intent(context, MainActivity::class.java)
+            val mainIntent = Intent(context, AppHostActivity::class.java)
             val recordIntent = Intent(context, ReadRecordActivity::class.java)
             return TaskStackBuilder.create(context)
                 .addNextIntent(mainIntent)

@@ -11,6 +11,7 @@ import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityWelcomeBinding
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.fullScreen
 import io.legado.app.utils.getPrefBoolean
@@ -55,7 +56,7 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>(imageBg = fals
     }
 
     private fun startMainActivity() {
-        startActivity<MainActivity>()
+        startActivity<AppHostActivity>()
         lifecycleScope.launch {
             // 避免在主线程同步查询数据库导致启动卡顿
             val lastReadBook = withContext(IO) { appDb.bookDao.lastReadBook }
