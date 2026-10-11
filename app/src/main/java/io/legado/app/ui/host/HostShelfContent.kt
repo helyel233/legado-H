@@ -41,7 +41,6 @@ import io.legado.app.data.dao.BookShelfDisplay
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.info.BookInfoNavigator
-import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.compose.BookshelfBookItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfFolderItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
@@ -100,11 +99,8 @@ class HostShelfContent : AppContent {
                 icon = DestIcon.Vector(HostIcons.Search),
                 contentDescription = DestTitle.Text("搜索"),
                 onClick = {
-                    val intent = android.content.Intent(
-                        splitties.init.appCtx,
-                        SearchActivity::class.java,
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    splitties.init.appCtx.startActivity(intent)
+                    // P4 整改：搜索页 V5 原生化（HostSearchActivity）
+                    HostSearchActivity.start(splitties.init.appCtx)
                 },
             ),
             ChromeAction(

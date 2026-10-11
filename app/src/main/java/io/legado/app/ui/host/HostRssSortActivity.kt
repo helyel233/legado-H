@@ -382,7 +382,7 @@ private fun RssArticleCard(
 
 /** LiveData → Compose State（app 未引入 runtime-livedata，手写轻量观察）。 */
 @Composable
-private fun <T> LiveData<T>.observeAsStateCompat(initial: T): androidx.compose.runtime.State<T> {
+internal fun <T> LiveData<T>.observeAsStateCompat(initial: T): androidx.compose.runtime.State<T> {
     val state = androidx.compose.runtime.remember(this) { androidx.compose.runtime.mutableStateOf(initial) }
     androidx.compose.runtime.DisposableEffect(this) {
         val observer = androidx.lifecycle.Observer<T> { state.value = it }

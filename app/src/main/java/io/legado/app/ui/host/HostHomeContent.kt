@@ -36,7 +36,6 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.main.homepage.HomepageModuleUi
 import io.legado.app.ui.main.homepage.HomepageViewModel
-import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.uikit.v5.components.AppCard
 import io.legado.app.uikit.v5.components.AppGroup
 import io.legado.app.uikit.v5.components.AppSkeletonList
@@ -103,7 +102,8 @@ class HostHomeContent : AppContent {
 
         fun navigateToExplore(sourceUrl: String, exploreUrl: String?, title: String?) {
             if (appDb.rssSourceDao.has(sourceUrl)) {
-                RssSortActivity.start(context, exploreUrl, sourceUrl, key = title)
+                // P4 整改：与订阅 Tab 一致，走 V5 原生排序页（此前误用旧 RssSortActivity）
+                HostRssSortActivity.start(context, sourceUrl, sortUrl = exploreUrl, key = title)
                 return
             }
             if (exploreUrl.isNullOrBlank()) return
