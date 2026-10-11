@@ -136,7 +136,7 @@ fun HostDebugPanel(state: HostState) {
                         )
                     }
                     Text(
-                        text = "全部改动即时生效，不重启 Activity",
+                        text = "实验调参：即时生效但不落盘；正式调包去管理中心",
                         style = visual.type.caption,
                         color = colors.onSurfaceVariant,
                     )

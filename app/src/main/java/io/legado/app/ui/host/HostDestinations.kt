@@ -84,11 +84,11 @@ object HostDestinations {
                 topLevel = true, lockedVisible = true,
                 sideGroup = SideGroup.MAIN, order = 5,
             ),
-            // 非 Tab，只进侧栏：验证"注册表同时驱动底栏和侧栏"
+            // P3-3 主题和界面管理中心（UI 设置归口铁律：我的 → UI 设置 → 管理中心）
             AppDestination(
-                id = "appearance", title = DestTitle.Text("UI 设置"),
+                id = "appearance", title = DestTitle.Text("管理中心"),
                 icon = DestIcon.Vector(HostIcons.Settings),
-                factory = { PlaceholderContent("UI 设置", "主题与界面管理中心（P3 落地）", "appearance") },
+                factory = { HostPackageCenterContent() },
                 topLevel = false,
                 sideGroup = SideGroup.SETTINGS, order = 10,
             ),

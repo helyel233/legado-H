@@ -27,6 +27,8 @@ data class ThemePackageSpec(
     val `override`: Map<String, String>? = null,
     /** id of the package this custom package was copied from (edit-as-custom model). */
     val basedOn: String? = null,
+    /** V5 P3: 纸张/噪点纹理叠层（可选）。缺字段 = 无纹理，v1 包解析不受影响。 */
+    val texture: ThemeTexture? = null,
 ) {
 
     val strategy: PaletteStrategy
@@ -107,6 +109,14 @@ data class ThemeFonts(
     val ui: String? = null,
     /** Role FontRole.TITLE. */
     val title: String? = null,
+)
+
+/** V5 P3: 纹理叠层（纸张感/噪点感），叠加在背景之上、内容之下。 */
+data class ThemeTexture(
+    /** 路径：包内 assets/ 相对路径或绝对本地路径 */
+    val path: String? = null,
+    /** 叠加不透明度 0..1，缺省极淡 */
+    val opacity: Float = 0.06f,
 )
 
 data class ThemeImages(

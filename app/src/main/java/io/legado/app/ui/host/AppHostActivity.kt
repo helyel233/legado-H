@@ -9,6 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import dev.chrisbanes.haze.HazeState
+import io.legado.app.ui.host.pack.V5PackageStore
 import io.legado.app.uikit.v5.resolve.LayoutResolver
 import io.legado.app.uikit.v5.resolve.ThemeResolver
 import io.legado.app.uikit.v5.runtime.LocalHazeState
@@ -50,6 +51,10 @@ class AppHostActivity : AppCompatActivity() {
  */
 @Composable
 private fun HostRoot() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // P3-2：读双包库并应用 active 包（同步，json 很小）
+    remember { V5PackageStore.init(context) }
+
     val visual = LayoutResolver.spec
     val colors = ThemeResolver.colors()
     val hazeState = remember { HazeState() }
