@@ -31,6 +31,8 @@ internal fun HostV5Page(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)?,
+    /** 顶栏右侧尾部槽（页面自己的操作入口，如溢出菜单）。 */
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val hazeState = LocalHazeState.current ?: dev.chrisbanes.haze.HazeState()
@@ -62,7 +64,7 @@ internal fun HostV5Page(
         }
 
         // ② 玻璃层：顶栏（AppSurface 内部自动 hazeEffect）
-        Column(
+        Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding(),
@@ -76,6 +78,14 @@ internal fun HostV5Page(
                 actions = emptyList(),
                 onBack = { onBack?.invoke() ?: activity?.finish() },
             )
+            if (trailing != null) {
+                Box(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    trailing()
+                }
+            }
         }
     }
 }

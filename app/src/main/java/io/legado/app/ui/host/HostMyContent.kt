@@ -176,10 +176,7 @@ class HostMyContent : AppContent {
             },
             onRowClick = { key, target ->
                 if (target != null) {
-                    context.startActivity<ConfigActivity> {
-                        putExtra("configTag", target.ownerConfigTag)
-                        putExtra("targetKey", target.key)
-                    }
+                    HostSettingsActivity.start(context, target.ownerConfigTag, target.key)
                     return@MySettingsScreen
                 }
                 when (key) {
@@ -195,21 +192,13 @@ class HostMyContent : AppContent {
                     "txtTocRuleManage" -> context.startActivity<TxtTocRuleActivity>()
                     "autoTaskManage" -> context.startActivity<AutoTaskActivity>()
                     "bookmark" -> context.startActivity<AllBookmarkActivity>()
-                    "setting" -> context.startActivity<ConfigActivity> {
-                        putExtra("configTag", ConfigTag.OTHER_CONFIG)
-                    }
-                    "web_dav_setting" -> context.startActivity<ConfigActivity> {
-                        putExtra("configTag", ConfigTag.BACKUP_CONFIG)
-                    }
+                    "setting" -> HostSettingsActivity.start(context, ConfigTag.OTHER_CONFIG)
+                    "web_dav_setting" -> HostSettingsActivity.start(context, ConfigTag.BACKUP_CONFIG)
                     "publicWebRelay" -> context.startActivity<RelaySettingsActivity>()
                     "cacheManage" -> context.startActivity<CacheManageActivity>()
                     "sourceRecycleBin" -> context.startActivity<SourceRecycleBinActivity>()
-                    "theme_setting" -> context.startActivity<ConfigActivity> {
-                        putExtra("configTag", ConfigTag.THEME_CONFIG)
-                    }
-                    "ai_setting" -> context.startActivity<ConfigActivity> {
-                        putExtra("configTag", ConfigTag.AI_CONFIG)
-                    }
+                    "theme_setting" -> HostSettingsActivity.start(context, ConfigTag.THEME_CONFIG)
+                    "ai_setting" -> HostSettingsActivity.start(context, ConfigTag.AI_CONFIG)
                     "fileManage" -> context.startActivity<FileManageActivity>()
                     "readRecord" -> context.startActivity<ReadRecordActivity>()
                     "about" -> context.startActivity<AboutActivity>()

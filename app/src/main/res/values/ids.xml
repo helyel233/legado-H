@@ -26,4 +26,5 @@
     <item name="book_info_useweb_source_binding" type="id" />
     <item name="book_info_rich_intro_image_getter" type="id" />
 
+    <item name="host_settings_container" type="id" />
 </resources>
