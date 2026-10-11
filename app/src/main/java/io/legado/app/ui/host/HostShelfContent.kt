@@ -86,6 +86,9 @@ class HostShelfContent : AppContent {
     companion object {
         var layoutSheetOpen by mutableStateOf(false)
         var shelfMenuOpen by mutableStateOf(false)
+        var settingsSheetOpen by mutableStateOf(false)
+        var groupSheetOpen by mutableStateOf(false)
+        var addUrlOpen by mutableStateOf(false)
     }
 
     override fun chrome(): ScreenChrome = ScreenChrome(
@@ -119,8 +122,10 @@ class HostShelfContent : AppContent {
         val context = LocalContext.current
         var groupId by remember { mutableStateOf(BookGroup.IdRoot) }
         var layout by remember { mutableStateOf(context.getPrefInt(PreferKey.bookshelfLayout, 3)) }
+        // 设置弹层改动（排序/样式等非 state 偏好）后触发数据重查与重组
+        var refresh by remember { mutableStateOf(0) }
 
-        val items by produceState<List<BookshelfItemUi>>(emptyList(), groupId) {
+        val items by produceState<List<BookshelfItemUi>>(emptyList(), groupId, refresh) {
             combine(
                 appDb.bookDao.flowShelfByGroup(groupId),
                 appDb.bookGroupDao.show.asFlow(),
@@ -238,16 +243,9 @@ class HostShelfContent : AppContent {
         }
 
         if (shelfMenuOpen) {
-            val fm = (context as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager
             val owner = context as? androidx.lifecycle.ViewModelStoreOwner
             val mainVm = owner?.let {
                 androidx.lifecycle.ViewModelProvider(it)[io.legado.app.ui.main.MainViewModel::class.java]
-            }
-            val shelfVm = owner?.let {
-                androidx.lifecycle.ViewModelProvider(it)[io.legado.app.ui.main.bookshelf.BookshelfViewModel::class.java]
-            }
-            fun show(dialog: androidx.fragment.app.DialogFragment) {
-                fm?.let { dialog.show(it, "shelf_menu") }
             }
             ShelfMenuSheet(
                 scope = scope,
@@ -266,21 +264,12 @@ class HostShelfContent : AppContent {
                         "addRemote" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.book.import.remote.RemoteBookActivity::class.java)
                         )
-                        "addUrl" -> if (fm != null && shelfVm != null) {
-                            io.legado.app.ui.widget.compose.ComposeTextInputDialog.create(
-                                title = "添加网址",
-                                hint = "url",
-                                positiveText = "确定",
-                                negativeText = "取消",
-                                onPositive = { url -> shelfVm.addBookByUrl(url) },
-                            ).show(fm, "addUrl")
-                        }
+                        "addUrl" -> addUrlOpen = true
                         "manage" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.book.manage.BookshelfManageActivity::class.java)
                                 .putExtra("groupId", groupId)
                         )
-                        "groupManage" -> show(io.legado.app.ui.book.group.GroupManageDialog())
-                        "collection" -> show(io.legado.app.ui.main.bookshelf.BookCollectionSelectDialog())
+                        "groupManage" -> groupSheetOpen = true
                         "tagManage" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookshelfTagManageActivity::class.java)
                                 .putExtra("groupId", groupId)
@@ -289,14 +278,42 @@ class HostShelfContent : AppContent {
                             android.content.Intent(context, io.legado.app.ui.book.cache.CacheActivity::class.java)
                                 .putExtra("groupId", groupId)
                         )
-                        "layoutConfig" -> show(io.legado.app.ui.main.bookshelf.BookshelfConfigDialog())
+                        "layoutConfig" -> settingsSheetOpen = true
                         "librarySearch" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.librarysearch.LibrarySearchActivity::class.java)
                         )
-                        "log" -> show(io.legado.app.ui.about.AppLogDialog())
                     }
                 },
             )
+        }
+
+        // ---- V5 原生弹层（书架设置 / 分组管理 / 添加网址） ----
+        if (settingsSheetOpen) {
+            ShelfSettingsSheet(
+                scope = scope,
+                layout = layout,
+                onChanged = { refresh++ },
+                onDismiss = {
+                    settingsSheetOpen = false
+                    layout = context.getPrefInt(PreferKey.bookshelfLayout, 3)
+                    refresh++
+                },
+            )
+        }
+        if (groupSheetOpen) {
+            GroupManageSheet(scope = scope, onDismiss = { groupSheetOpen = false })
+        }
+        if (addUrlOpen) {
+            val shelfVm = (context as? androidx.lifecycle.ViewModelStoreOwner)?.let {
+                androidx.lifecycle.ViewModelProvider(it)[io.legado.app.ui.main.bookshelf.BookshelfViewModel::class.java]
+            }
+            if (shelfVm != null) {
+                AddByUrlDialog(
+                    scope = scope,
+                    onConfirm = { url -> shelfVm.addBookByUrl(url) },
+                    onDismiss = { addUrlOpen = false },
+                )
+            }
         }
     }
 

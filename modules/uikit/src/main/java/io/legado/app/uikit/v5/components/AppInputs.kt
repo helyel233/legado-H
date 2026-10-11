@@ -91,6 +91,49 @@ fun AppSearchField(
     }
 }
 
+/** 文本输入框：E1 嵌入底 + 胶囊（形状族 FIELD）。表单类对话框的统一输入件。 */
+@Composable
+fun AppTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(visual.shape(ShapeKind.FIELD))
+            .background(colors.surfaceVariant)
+            .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+    ) {
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = true,
+            textStyle = visual.type.body.copy(color = colors.onSurface),
+            cursorBrush = SolidColor(colors.primary),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = visual.type.body,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                inner()
+            },
+        )
+    }
+}
+
 /** 开关：轨道读语义色，滑块随弹性曲线位移。 */
 @Composable
 fun AppSwitch(
