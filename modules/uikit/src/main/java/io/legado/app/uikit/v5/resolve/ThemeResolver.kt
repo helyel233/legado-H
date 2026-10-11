@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import io.legado.app.theme.palette.PaletteRole
 import io.legado.app.theme.pack.ThemePackageSpec
 import io.legado.app.theme.pack.resolvePalette
@@ -38,6 +40,8 @@ object ThemeResolver {
 
     private var palette: Map<PaletteRole, Int> =
         BuiltinThemes.default.resolvePalette(dark = true)
+
+    private val fontCache = HashMap<String, FontFamily>()
 
     val uiFontPath: String get() = activeTheme.fonts?.ui.orEmpty()
     val titleFontPath: String get() = activeTheme.fonts?.title.orEmpty()
@@ -118,6 +122,29 @@ object ThemeResolver {
             p[PaletteRole.ON_SURFACE] ?: 0xFFFFFFFF.toInt(),
             p[PaletteRole.SURFACE] ?: 0xFF000000.toInt(),
         )
+    }
+
+    /**
+     * P3-1 包字体 → Compose FontFamily（带缓存：字体文件加载昂贵）。
+     * 路径来自主题包 fonts.*（绝对路径），文件不存在或解析失败回 null（系统字体）。
+     */
+    fun uiFontFamily(): FontFamily? = loadedFont(uiFontPath)
+
+    fun titleFontFamily(): FontFamily? = loadedFont(titleFontPath)
+
+    private fun loadedFont(path: String): FontFamily? {
+        if (path.isBlank()) return null
+        synchronized(fontCache) {
+            fontCache[path]?.let { return it }
+            val family = try {
+                val file = java.io.File(path)
+                if (file.exists()) FontFamily(Font(file)) else null
+            } catch (_: Exception) {
+                null
+            }
+            if (family != null) fontCache[path] = family
+            return family
+        }
     }
 
     // ---------------------------------------------------------------- 内部

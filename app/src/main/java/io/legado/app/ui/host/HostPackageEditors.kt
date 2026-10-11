@@ -39,6 +39,7 @@ import io.legado.app.uikit.v5.token.SHAPE_SCALE_RANGE
 import io.legado.app.uikit.v5.token.ShapeFamily
 import io.legado.app.uikit.v5.token.TitleWeight
 import io.legado.app.uikit.v5.pack.LayoutPackageSpecV2
+import io.legado.app.theme.pack.ThemeFonts
 import io.legado.app.theme.pack.ThemePackageSpec
 import io.legado.app.uikit.v5.token.IconSpec
 import io.legado.app.uikit.v5.token.DensitySpec
@@ -67,6 +68,36 @@ fun ThemeEditorSheet(
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
     val d = visual.density
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // 资产选择器（P3-1：字体 / 背景图 / 纹理，选中即拷入 app 私有目录并落进包 spec）
+    @androidx.compose.runtime.Composable
+    fun picker(onPicked: (String) -> Unit) =
+        androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.GetContent()
+        ) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            val path = io.legado.app.ui.host.pack.V5PackageStore.importAsset(uri, spec.id, "asset")
+            if (path != null) onPicked(path)
+        }
+
+    val uiFontPicker = picker { path ->
+        onUpdate(spec.copy(fonts = ThemeFonts(ui = path, title = spec.fonts?.title)))
+    }
+    val titleFontPicker = picker { path ->
+        onUpdate(spec.copy(fonts = ThemeFonts(ui = spec.fonts?.ui, title = path)))
+    }
+    val bgDayPicker = picker { path ->
+        val img = spec.images ?: io.legado.app.theme.pack.ThemeImages()
+        onUpdate(spec.copy(images = img.copy(background = path)))
+    }
+    val bgNightPicker = picker { path ->
+        val img = spec.images ?: io.legado.app.theme.pack.ThemeImages()
+        onUpdate(spec.copy(images = img.copy(backgroundNight = path)))
+    }
+    val texturePicker = picker { path ->
+        onUpdate(spec.copy(texture = io.legado.app.theme.pack.ThemeTexture(path = path, opacity = spec.texture?.opacity ?: 0.06f)))
+    }
 
     AppBottomSheet(onDismiss = onDismiss) {
         Column(
@@ -93,15 +124,89 @@ fun ThemeEditorSheet(
                     onSelect = { key, _ -> onUpdate(spec.copy(darkStrategy = key)) },
                 )
             }
-            EditSection("字体 / 背景图 / 纹理") {
-                Text(
-                    "P3 后段接包资产导入（zip 选图/选字体），当前版本先用官方内置素材。",
-                    style = visual.type.caption,
-                    color = colors.onSurfaceVariant,
+            EditSection("字体") {
+                AssetRow(
+                    "界面字体", spec.fonts?.ui?.let { java.io.File(it).name } ?: "系统默认",
+                    onClick = { uiFontPicker.launch("font/*") },
+                    onClear = { onUpdate(spec.copy(fonts = ThemeFonts(ui = null, title = spec.fonts?.title))) },
                 )
+                AssetRow(
+                    "标题字体", spec.fonts?.title?.let { java.io.File(it).name } ?: "跟随界面字体",
+                    onClick = { titleFontPicker.launch("font/*") },
+                    onClear = { onUpdate(spec.copy(fonts = ThemeFonts(ui = spec.fonts?.ui, title = null))) },
+                )
+            }
+            EditSection("背景图（主界面）") {
+                AssetRow(
+                    "日间背景", spec.images?.background?.let { java.io.File(it).name } ?: "无（用氛围渐变）",
+                    onClick = { bgDayPicker.launch("image/*") },
+                    onClear = { spec.images?.let { onUpdate(spec.copy(images = it.copy(background = null))) } },
+                )
+                AssetRow(
+                    "夜间背景", spec.images?.backgroundNight?.let { java.io.File(it).name } ?: "回落日间图",
+                    onClick = { bgNightPicker.launch("image/*") },
+                    onClear = { spec.images?.let { onUpdate(spec.copy(images = it.copy(backgroundNight = null))) } },
+                )
+            }
+            EditSection("纹理叠层") {
+                AssetRow(
+                    "纹理图", spec.texture?.path?.let { java.io.File(it).name } ?: "无",
+                    onClick = { texturePicker.launch("image/*") },
+                    onClear = { onUpdate(spec.copy(texture = null)) },
+                )
+                spec.texture?.let { tex ->
+                    SliderRow("纹理不透明度", tex.opacity, 0f..0.4f) {
+                        onUpdate(spec.copy(texture = tex.copy(opacity = it)))
+                    }
+                }
             }
             Spacer(Modifier.height(d.screenPadding))
         }
+    }
+}
+
+/** 资产行：名称 + 当前值 + 清除。 */
+@Composable
+private fun AssetRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(visual.density.screenPadding / 2),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = visual.type.body, color = colors.onSurface)
+            Text(
+                value,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        Text(
+            "选择",
+            style = visual.type.label,
+            color = colors.primary,
+            modifier = Modifier.clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onClick() },
+        )
+        Text(
+            "清除",
+            style = visual.type.caption,
+            color = colors.onSurfaceVariant,
+            modifier = Modifier.clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onClear() },
+        )
     }
 }
 

@@ -228,6 +228,8 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.appcompat.appcompat)
     implementation(libs.activity.ktx)
+    // P3-1 包资产选择（字体/图片）需要 activity-compose 的 rememberLauncher
+    implementation(libs.activity.compose)
     implementation(libs.fragment.ktx)
     implementation(libs.preference.ktx)
     implementation(libs.androidx.constraintlayout)

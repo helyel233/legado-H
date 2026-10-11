@@ -55,7 +55,16 @@ private fun HostRoot() {
     // P3-2：读双包库并应用 active 包（同步，json 很小）
     remember { V5PackageStore.init(context) }
 
-    val visual = LayoutResolver.spec
+    // P3-1：把主题包的字体（FontFamily）并入排版规格 —— 结构来自界面包，字体来自主题包
+    val baseSpec = LayoutResolver.spec
+    val visual = remember(baseSpec, ThemeResolver.revision) {
+        baseSpec.copy(
+            type = baseSpec.type.copy(
+                uiFont = ThemeResolver.uiFontFamily(),
+                titleFont = ThemeResolver.titleFontFamily(),
+            )
+        )
+    }
     val colors = ThemeResolver.colors()
     val hazeState = remember { HazeState() }
 

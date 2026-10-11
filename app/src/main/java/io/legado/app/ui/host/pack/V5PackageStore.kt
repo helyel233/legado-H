@@ -158,6 +158,39 @@ object V5PackageStore {
     fun newThemeFromActive(): ThemePackageSpec = editableTheme(activeTheme())
     fun newLayoutFromActive(): LayoutPackageSpecV2 = editableLayout(activeLayout())
 
+    // ---------------------------------------------------------------- 资产导入
+
+    /**
+     * P3-1 把用户选的字体/图片拷进 `filesDir/v5_assets/<packageId>/`，
+     * 返回绝对路径（写进 ThemePackageSpec 的 fonts/images/texture）。
+     * @param kind font / image / texture（用于命名与将来清理）
+     */
+    fun importAsset(uri: android.net.Uri, packageId: String, kind: String): String? {
+        if (!this::appContext.isInitialized) return null
+        return try {
+            val dir = java.io.File(appContext.filesDir, "v5_assets/$packageId").apply { mkdirs() }
+            val displayName = appContext.contentResolver.queryName(uri) ?: "asset"
+            val ext = displayName.substringAfterLast('.', "bin").lowercase().take(8)
+            val target = java.io.File(dir, "${kind}_${System.currentTimeMillis()}.$ext")
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { input.copyTo(it) }
+            } ?: return null
+            target.absolutePath
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun android.content.ContentResolver.queryName(uri: android.net.Uri): String? =
+        try {
+            query(uri, null, null, null, null)?.use { cursor ->
+                val col = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (col >= 0 && cursor.moveToFirst()) cursor.getString(col) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
     // ---------------------------------------------------------------- 重命名 / 删除
 
     fun renameTheme(id: String, name: String) {
