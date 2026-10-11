@@ -80,7 +80,7 @@ object HostDestinations {
             AppDestination(
                 id = "my", title = DestTitle.Text("我的"),
                 icon = DestIcon.Vector(HostIcons.My),
-                factory = { PlaceholderContent("我的", "藏书 128 · 连续 47 天", "my") },
+                factory = { HostMyContent() },
                 topLevel = true, lockedVisible = true,
                 sideGroup = SideGroup.MAIN, order = 5,
             ),

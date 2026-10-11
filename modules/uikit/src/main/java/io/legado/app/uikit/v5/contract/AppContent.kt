@@ -63,6 +63,13 @@ interface ContentScope {
         modifier: Modifier = Modifier,
         content: @Composable () -> Unit,
     )
+
+    /**
+     * 导航请求：跳到注册表里的另一个目的地。
+     * 导航是路由语义，不是外观 —— 所以这是页面唯一能触发的"骨架动作"，
+     * 且只能按 id 跳注册表里存在的页面，不能携带任何外观指令。
+     */
+    fun navigate(destinationId: String)
 }
 
 /** 宿主专用工厂。页面拿不到 [io.legado.app.uikit.v5.token.VisualSpec]，只能拿到窄接口。 */
@@ -70,12 +77,14 @@ object HostScope {
     fun create(
         visual: io.legado.app.uikit.v5.token.VisualSpec,
         colors: AppSemanticColors,
-    ): ContentScope = ContentScopeImpl(visual, colors)
+        navigate: (String) -> Unit = {},
+    ): ContentScope = ContentScopeImpl(visual, colors, navigate)
 }
 
 internal class ContentScopeImpl(
     private val visual: io.legado.app.uikit.v5.token.VisualSpec,
     override val color: AppSemanticColors,
+    private val nav: (String) -> Unit,
 ) : ContentScope {
 
     override fun shape(kind: ShapeKind): Shape = visual.shape(kind)
@@ -92,6 +101,8 @@ internal class ContentScopeImpl(
         modifier: Modifier,
         content: @Composable () -> Unit,
     ) = AppSurface(level = level, modifier = modifier, content = content)
+
+    override fun navigate(destinationId: String) = nav(destinationId)
 }
 
 /**

@@ -52,7 +52,7 @@ fun HostScaffold(
         registry.byId(state.currentId)?.factory?.invoke()
     }
     val chrome: ScreenChrome = remember(state.currentId) { content?.chrome() ?: ScreenChrome() }
-    val scope = remember(visual, colors) { HostScope.create(visual, colors) }
+    val scope = remember(visual, colors) { HostScope.create(visual, colors, state::navigate) }
 
     val scrollState = rememberScrollState()
     val scrolled by remember { derivedStateOf { scrollState.value > 24 } }

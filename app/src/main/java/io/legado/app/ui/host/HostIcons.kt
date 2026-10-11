@@ -76,4 +76,5 @@ object HostIcons {
     val Check = v5Icon("M20 6 9 17l-5-5")
     val Chevron = v5Icon("m9 18 6-6-6-6")
     val Plus = v5Icon("M12 5v14", "M5 12h14")
+    val Star = v5Icon("m12 3 2.7 5.6 6.3.9-4.5 4.4 1 6.1-5.5-2.9-5.5 2.9 1-6.1L3 9.5l6.3-.9z")
 }

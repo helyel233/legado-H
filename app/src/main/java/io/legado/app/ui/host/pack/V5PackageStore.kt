@@ -92,6 +92,8 @@ object V5PackageStore {
         val spec = allThemes().firstOrNull { it.id == id } ?: return
         lib = lib.copy(activeThemeId = id)
         runCatching { ThemeResolver.applyTheme(spec) }
+        // P4-1：新 → 旧 同步（旧 View 页面与窗口色跟随 V5 包库）
+        if (initialized) runCatching { io.legado.app.help.config.V5ThemeSync.pushToLegacy(appContext, spec) }
         persist()
     }
 
