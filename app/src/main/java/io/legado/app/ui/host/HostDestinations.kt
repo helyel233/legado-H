@@ -73,7 +73,7 @@ object HostDestinations {
             AppDestination(
                 id = "stats", title = DestTitle.Text("统计"),
                 icon = DestIcon.Vector(HostIcons.Stats),
-                factory = { PlaceholderContent("统计", "2026 年 10 月", "stats") },
+                factory = { HostStatsContent() },
                 topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 4,
             ),
