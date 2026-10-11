@@ -215,103 +215,71 @@ private fun HostRssSortScreen() {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .statusBarsPadding(),
+    HostV5Page(
+        title = source?.sourceName ?: sorts.firstOrNull()?.first?.ifBlank { "订阅" } ?: "订阅",
+        subtitle = if (sorts.size > 1) "${sorts.size} 个分类 · ${articles.size} 篇" else null,
+        onBack = { activity.finish() },
     ) {
-        // V5 顶栏：返回 + 大标题
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = density.screenPadding, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.fillMaxSize(),
         ) {
-            Text(
-                text = "←",
-                style = visual.type.title,
-                color = colors.primary,
-                modifier = Modifier
-                    .padding(end = density.blockGap)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                    ) { activity.finish() },
-            )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = source?.sourceName ?: sorts.firstOrNull()?.first?.ifBlank { "订阅" } ?: "订阅",
-                    style = visual.type.title,
-                    color = colors.onSurface,
-                    maxLines = 1,
-                )
-                if (sorts.size > 1) {
-                    Text(
-                        text = "${sorts.size} 个分类 · ${articles.size} 篇",
-                        style = visual.type.caption,
-                        color = colors.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        // 分类 chips（单分类/搜索时不显示）
-        if (sorts.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = density.screenPadding),
-                horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-            ) {
-                sorts.forEachIndexed { i, (name, _) ->
-                    AppChip(name.ifBlank { "全部" }, selected = i == selectedSort, onClick = {
-                        selectedSort = i
-                    })
-                }
-            }
-            Spacer(Modifier.height(density.blockGap / 2))
-        }
-
-        when {
-            source == null -> AppSkeletonList(rows = 4)
-            sorts.isEmpty() -> AppEmpty(
-                title = "没有可用分类",
-                supporting = "检查源的排序规则，或刷新排序缓存",
-            )
-            loadError != null && articles.isEmpty() -> AppEmpty(
-                title = "加载失败",
-                supporting = loadError?.lineSequence()?.firstOrNull() ?: "源连接失败",
-            )
-            articles.isEmpty() -> AppSkeletonList(rows = 5)
-            else -> LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = density.screenPadding,
-                    end = density.screenPadding,
-                    top = density.blockGap / 2,
-                    bottom = density.screenPadding,
-                ),
-                verticalArrangement = Arrangement.spacedBy(density.blockGap),
-            ) {
-                items(articles, key = { it.link }) { article ->
-                    RssArticleCard(article = article) {
-                        ReadRss.readRss(activity, article, source)
+            // 分类 chips（单分类/搜索时不显示）
+            if (sorts.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = density.screenPadding),
+                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    sorts.forEachIndexed { i, (name, _) ->
+                        AppChip(name.ifBlank { "全部" }, selected = i == selectedSort, onClick = {
+                            selectedSort = i
+                        })
                     }
                 }
-                if (loadFinally) {
-                    item(key = "footer") {
-                        Text(
-                            text = "加载中…",
-                            style = visual.type.caption,
-                            color = colors.onSurfaceVariant,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentWidth(Alignment.CenterHorizontally)
-                                .padding(vertical = 10.dp),
-                        )
+                Spacer(Modifier.height(density.blockGap / 2))
+            }
+
+            when {
+                source == null -> AppSkeletonList(rows = 4)
+                sorts.isEmpty() -> AppEmpty(
+                    title = "没有可用分类",
+                    supporting = "检查源的排序规则，或刷新排序缓存",
+                )
+                loadError != null && articles.isEmpty() -> AppEmpty(
+                    title = "加载失败",
+                    supporting = loadError?.lineSequence()?.firstOrNull() ?: "源连接失败",
+                )
+                articles.isEmpty() -> AppSkeletonList(rows = 5)
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = density.screenPadding,
+                        end = density.screenPadding,
+                        top = density.blockGap / 2,
+                        bottom = density.screenPadding,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap),
+                ) {
+                    items(articles, key = { it.link }) { article ->
+                        RssArticleCard(article = article) {
+                            ReadRss.readRss(activity, article, source)
+                        }
+                    }
+                    if (loadFinally) {
+                        item(key = "footer") {
+                            Text(
+                                text = "加载中…",
+                                style = visual.type.caption,
+                                color = colors.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentWidth(Alignment.CenterHorizontally)
+                                    .padding(vertical = 10.dp),
+                            )
+                        }
                     }
                 }
             }

@@ -142,64 +142,53 @@ private fun HostSearchScreen() {
         onDispose { vm.stop() }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .statusBarsPadding(),
+    HostV5Page(
+        title = "搜索",
+        subtitle = null,
+        onBack = { activity.finish() },
     ) {
-        // V5 顶栏：返回 + 搜索框（自动聚焦）
-        val focusRequester = remember { FocusRequester() }
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = density.screenPadding, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "←",
-                style = visual.type.title,
-                color = colors.primary,
-                modifier = Modifier
-                    .padding(end = density.blockGap)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    ) { activity.finish() },
-            )
+        Column(Modifier.fillMaxSize()) {
+            // 搜索框（自动聚焦）
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
             Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(visual.shape(ShapeKind.BUTTON))
-                    .background(colors.surfaceVariant)
-                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 9.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                BasicTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    singleLine = true,
-                    textStyle = visual.type.body.copy(color = colors.onSurface),
-                    cursorBrush = SolidColor(colors.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { doSearch(input) }),
+                Row(
                     modifier = Modifier
                         .weight(1f)
-                        .focusRequester(focusRequester),
-                )
-                Text(
-                    text = "搜索",
-                    style = visual.type.label,
-                    color = colors.primary,
-                    modifier = Modifier.clickable(
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    ) { doSearch(input) },
-                )
+                        .clip(visual.shape(ShapeKind.BUTTON))
+                        .background(colors.surfaceVariant)
+                        .padding(horizontal = density.screenPadding / 1.4f, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    BasicTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        singleLine = true,
+                        textStyle = visual.type.body.copy(color = colors.onSurface),
+                        cursorBrush = SolidColor(colors.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { doSearch(input) }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
+                    )
+                    Text(
+                        text = "搜索",
+                        style = visual.type.label,
+                        color = colors.primary,
+                        modifier = Modifier.clickable(
+                            indication = null,
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        ) { doSearch(input) },
+                    )
+                }
             }
-        }
 
         when {
             // 无搜索动作：历史
@@ -251,6 +240,7 @@ private fun HostSearchScreen() {
                     }
                 }
             }
+        }
         }
     }
 }
