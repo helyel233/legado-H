@@ -273,9 +273,8 @@ private fun openRssSource(
         }
     } else {
         viewModel.launchRssWithHtml(source, {
-            context.startActivity<io.legado.app.ui.rss.article.RssSortActivity> {
-                putExtra("sourceUrl", source.sourceUrl)
-            }
+            // V5 原生排序页（P4 第二阶段）；仅当源带 startHtml 时直接进旧阅读页
+            HostRssSortActivity.start(context, source.sourceUrl)
         }) { html ->
             io.legado.app.ui.rss.read.ReadRssActivity.start(
                 context, true, source.sourceUrl, source.sourceName, startHtml = html,

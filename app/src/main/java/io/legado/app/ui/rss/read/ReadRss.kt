@@ -119,4 +119,55 @@ object ReadRss {
         }
     }
 
+    /**
+     * V5 宿主用：从 Compose Activity 直接打开一篇文章（P4 订阅页 V5 化）。
+     * 与 [readRss] 分支逻辑保持一致：type 0 网页 / 2 视频 / 1 图片 / 其他走正文规则。
+     */
+    fun readRss(activity: AppCompatActivity, rssArticle: RssArticle, rssSource: RssSource? = null) {
+        appDb.rssReadRecordDao.insertRecord(rssArticle.toRecord())
+        when (rssArticle.type) {
+            0 -> {
+                ReadRssActivity.start(
+                    activity, rssArticle.origin, rssArticle.title,
+                    link = rssArticle.link, sort = rssArticle.sort,
+                )
+                return
+            }
+            2 -> {
+                activity.startActivity<VideoPlayerActivity> {
+                    putExtra("sourceKey", rssArticle.origin)
+                    putExtra("sourceType", SourceType.rss)
+                    putExtra("record", rssArticle.link)
+                }
+                return
+            }
+        }
+        readNoHtml(activity, rssArticle, rssSource, rssArticle.type)
+    }
+
+    private fun readNoHtml(activity: AppCompatActivity, rssArticle: RssArticle, rssSource: RssSource?, type: Int) {
+        val source = rssSource ?: appDb.rssSourceDao.getByKey(rssArticle.origin)
+        source?.let { s ->
+            val ruleContent = s.ruleContent
+            if (ruleContent.isNullOrBlank()) {
+                when (type) {
+                    1 -> PhotoDialog(rssArticle.link).show(activity.supportFragmentManager, "photo")
+                }
+            } else {
+                Rss.getContent(activity.lifecycleScope, rssArticle, ruleContent, s)
+                    .onSuccess(IO) { body ->
+                        if (body.isBlank()) {
+                            throw ContentEmptyException("正文为空")
+                        }
+                        val url = NetworkUtils.getAbsoluteURL(rssArticle.link, body)
+                        when (type) {
+                            1 -> PhotoDialog(url).show(activity.supportFragmentManager, "photo")
+                        }
+                    }.onError {
+                        AppLog.put("加载为链接的正文失败", it, true)
+                    }
+            }
+        }
+    }
+
 }

@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -128,6 +130,7 @@ class HostExploreContent : AppContent {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreSourceCard(
     scope: ContentScope,
@@ -174,26 +177,14 @@ private fun ExploreSourceCard(
                     style = scope.type.caption,
                     color = colors.onSurfaceVariant,
                 )
-                else -> Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                // FlowRow：分类纵向铺开（用户反馈：横向一行放不下也不能滑）
+                else -> FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(scope.density.blockGap / 2),
+                    verticalArrangement = Arrangement.spacedBy(scope.density.blockGap / 2),
                 ) {
-                    list.take(10).forEach { kind ->
+                    list.forEach { kind ->
                         AppChip(kind.title, selected = false, onClick = { onKind(kind) })
-                    }
-                    if (list.size > 10) {
-                        Text(
-                            "+${list.size - 10}",
-                            style = scope.type.caption,
-                            color = colors.primary,
-                            modifier = Modifier
-                                .clip(scope.shape(ShapeKind.TAG))
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                ) { onKind(list.first()) }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                        )
                     }
                 }
             }
