@@ -52,7 +52,7 @@ object HostDestinations {
             AppDestination(
                 id = "home", title = DestTitle.Text("主页"),
                 icon = DestIcon.Vector(HostIcons.Home),
-                factory = { PlaceholderContent("主页", "今天读了 42 分钟", "home") },
+                factory = { HostHomeContent() },
                 topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 1,
             ),
