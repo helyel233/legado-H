@@ -173,7 +173,7 @@ fun BookshelfGridItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(4.dp)),
+                .clip(visual.shape(io.legado.app.uikit.v5.token.ShapeKind.COVER)),
             contentAlignment = Alignment.TopEnd
         ) {
             BookshelfCover(

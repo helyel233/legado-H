@@ -100,7 +100,7 @@ internal class ContentScopeImpl(
         level: MaterialLevel,
         modifier: Modifier,
         content: @Composable () -> Unit,
-    ) = AppSurface(level = level, modifier = modifier, content = content)
+    ) = AppSurface(level = level, modifier = modifier, backgroundBlur = false, content = content)
 
     override fun navigate(destinationId: String) = nav(destinationId)
 }

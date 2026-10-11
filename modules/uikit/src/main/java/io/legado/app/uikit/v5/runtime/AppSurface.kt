@@ -90,6 +90,10 @@ val NeutralSemanticColors = AppSemanticColors(
 fun AppSurface(
     level: MaterialLevel,
     modifier: Modifier = Modifier,
+    /** 真背景模糊开关。内容区内（hazeSource 子树）的容器必须传 false ——
+     * haze 架构限制：采样源内部的节点无法正确模糊，降级为半透明基底；
+     * 玻璃参数（alpha/噪声/描边）对两种形态都生效。浮层（栏/抽屉/弹窗）默认 true。 */
+    backgroundBlur: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val visual = LocalVisualSpec.current
@@ -99,7 +103,7 @@ fun AppSurface(
     val hazeState = LocalHazeState.current
 
     val glassOn = level.usesGlass && glass.enabled
-    val hazeActive = glassOn && hazeState != null
+    val hazeActive = glassOn && backgroundBlur && hazeState != null
 
     // ---- 背景 ----
     val fallbackBackground = when {
