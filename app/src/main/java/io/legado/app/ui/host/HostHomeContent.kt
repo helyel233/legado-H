@@ -80,6 +80,9 @@ class HostHomeContent : AppContent {
         var moduleSheetOpen by androidx.compose.runtime.mutableStateOf(false)
     }
 
+    /** V5 原生模块管理抽屉（替代旧 HomepageModuleManageSheet View 弹层）。 */
+    private var manageSheetVisible by androidx.compose.runtime.mutableStateOf(false)
+
     @Composable
     override fun Content(scope: ContentScope) {
         val context = LocalContext.current
@@ -94,12 +97,7 @@ class HostHomeContent : AppContent {
         androidx.compose.runtime.LaunchedEffect(moduleSheetOpen) {
             if (moduleSheetOpen) {
                 moduleSheetOpen = false
-                (context as? androidx.fragment.app.FragmentActivity)
-                    ?.supportFragmentManager
-                    ?.let { fm ->
-                        io.legado.app.ui.main.homepage.HomepageModuleManageSheet()
-                            .show(fm, "homepageManage")
-                    }
+                manageSheetVisible = true
             }
         }
 
@@ -142,6 +140,14 @@ class HostHomeContent : AppContent {
                     onExplore = { url, title -> navigateToExplore(module.sourceUrl, url, title) },
                 )
             }
+        }
+
+        if (manageSheetVisible) {
+            HostHomeManageSheet(
+                scope = scope,
+                viewModel = viewModel,
+                onDismiss = { manageSheetVisible = false },
+            )
         }
     }
 }
