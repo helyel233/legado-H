@@ -81,15 +81,28 @@ fun HostScaffold(
                     Spacer(modifier = Modifier.height(visual.density.topBarHeight))
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scrollState)
-                            .padding(
-                                bottom = if (chrome.reserveNavSpace) hostBottomNavReserve else 0.dp,
-                            ),
-                    ) {
-                        content?.Content(scope)
+                    if (chrome.contentOwnsScroll) {
+                        // 页面自带滚动容器（LazyColumn 等），宿主只给满高约束
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    bottom = if (chrome.reserveNavSpace) hostBottomNavReserve else 0.dp,
+                                ),
+                        ) {
+                            content?.Content(scope)
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .padding(
+                                    bottom = if (chrome.reserveNavSpace) hostBottomNavReserve else 0.dp,
+                                ),
+                        ) {
+                            content?.Content(scope)
+                        }
                     }
                 }
             }

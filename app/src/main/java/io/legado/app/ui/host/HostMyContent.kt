@@ -69,6 +69,8 @@ class HostMyContent : AppContent {
         topBar = TopBarMode.LARGE_TITLE,
         title = DestTitle.Text("我的"),
         subtitle = DestTitle.Text("设置与个人数据"),
+        // MySettingsScreen 内部是 LazyColumn（自带滚动），宿主不再包 verticalScroll
+        contentOwnsScroll = true,
         actions = listOf(
             io.legado.app.uikit.v5.contract.ChromeAction(
                 id = "help",

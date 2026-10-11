@@ -28,6 +28,12 @@ data class ScreenChrome(
     val scrollAffectsNav: Boolean = true,
     /** 该页是否需要底部安全区留白（有底栏时为 true） */
     val reserveNavSpace: Boolean = true,
+    /**
+     * 内容自带滚动容器（如 LazyColumn）。为 true 时宿主**不再包 verticalScroll**，
+     * 只给满高 Box —— 否则嵌套滚动容器会拿到无限高度约束直接崩溃。
+     * 注意：自带滚动的页面顶栏折叠暂不联动（后续经共享 scroll state 接入）。
+     */
+    val contentOwnsScroll: Boolean = false,
 )
 
 enum class TopBarMode {
