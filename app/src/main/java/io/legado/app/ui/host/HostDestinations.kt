@@ -59,14 +59,14 @@ object HostDestinations {
             AppDestination(
                 id = "explore", title = DestTitle.Text("发现"),
                 icon = DestIcon.Vector(HostIcons.Explore),
-                factory = { PlaceholderContent("发现", "已启用 24 个书源", "explore") },
+                factory = { HostExploreContent() },
                 topLevel = true,
                 sideGroup = SideGroup.MAIN, order = 2,
             ),
             AppDestination(
                 id = "rss", title = DestTitle.Text("订阅"),
                 icon = DestIcon.Vector(HostIcons.Rss),
-                factory = { PlaceholderContent("订阅", "12 个源 · 19 篇未读", "rss") },
+                factory = { HostRssContent() },
                 topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 3,
             ),
