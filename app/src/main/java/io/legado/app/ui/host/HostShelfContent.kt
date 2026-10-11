@@ -292,10 +292,10 @@ class HostShelfContent : AppContent {
             ShelfSettingsSheet(
                 scope = scope,
                 layout = layout,
+                onLayoutChange = { layout = it },
                 onChanged = { refresh++ },
                 onDismiss = {
                     settingsSheetOpen = false
-                    layout = context.getPrefInt(PreferKey.bookshelfLayout, 3)
                     refresh++
                 },
             )

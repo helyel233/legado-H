@@ -62,21 +62,17 @@ private val LIST_STYLES = listOf(0 to "经典", 1 to "紧凑")
 fun ShelfSettingsSheet(
     scope: ContentScope,
     layout: Int,
+    onLayoutChange: (Int) -> Unit,
     onChanged: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
     val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
-
-    fun <T> commit(reapply: (T) -> Unit): (T) -> Unit = { v ->
-        reapply(v)
-        onChanged()
-    }
 
     AppBottomSheetWrap(scope, title = "书架设置", onDismiss = onDismiss) {
         SheetSection(scope, "布局") {
             OptionChips(scope, LAYOUT_OPTIONS, layout) { v ->
                 AppConfig.bookshelfLayout = v
+                onLayoutChange(v) // 立即反映到网格列数，不等关面板
                 onChanged()
             }
         }
