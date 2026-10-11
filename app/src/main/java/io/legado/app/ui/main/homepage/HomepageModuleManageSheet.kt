@@ -45,7 +45,12 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
     private val binding by viewBinding(DialogHomepageManageBinding::bind)
 
     internal val viewModel: HomepageViewModel
-        get() = (parentFragment as HomepageFragment).viewModel
+        get() = when (val p = parentFragment) {
+            // 旧壳：挂在 HomepageFragment 下
+            is HomepageFragment -> p.viewModel
+            // P4 新壳（AppHostActivity）：共享 Activity 级实例 —— 管理后主页立即刷新
+            else -> androidx.lifecycle.ViewModelProvider(requireActivity())[HomepageViewModel::class.java]
+        }
 
     private val adapter by lazy { ManageAdapter(requireContext()) }
 

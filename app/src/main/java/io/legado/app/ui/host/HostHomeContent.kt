@@ -24,7 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,14 +64,44 @@ class HostHomeContent : AppContent {
         topBar = TopBarMode.LARGE_TITLE,
         title = DestTitle.Text("主页"),
         subtitle = DestTitle.Text("模块化聚合推荐"),
+        actions = listOf(
+            io.legado.app.uikit.v5.contract.ChromeAction(
+                id = "manage",
+                icon = io.legado.app.uikit.v5.contract.DestIcon.Vector(HostIcons.Settings),
+                contentDescription = DestTitle.Text("管理模块"),
+                onClick = { moduleSheetOpen = true },
+            ),
+        ),
         contentOwnsScroll = true,
     )
+
+    /** 模块管理抽屉开关（chrome actions 是静态数据，用静态状态桥接）。 */
+    companion object {
+        var moduleSheetOpen by androidx.compose.runtime.mutableStateOf(false)
+    }
 
     @Composable
     override fun Content(scope: ContentScope) {
         val context = LocalContext.current
-        val viewModel = remember { HomepageViewModel(appCtx as Application) }
+        // Activity 级实例：与模块管理抽屉（HomepageModuleManageSheet）共享，管理后自动刷新
+        val viewModel = remember {
+            androidx.lifecycle.ViewModelProvider(
+                context as androidx.lifecycle.ViewModelStoreOwner
+            )[HomepageViewModel::class.java]
+        }
         val uiState by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(moduleSheetOpen) {
+            if (moduleSheetOpen) {
+                moduleSheetOpen = false
+                (context as? androidx.fragment.app.FragmentActivity)
+                    ?.supportFragmentManager
+                    ?.let { fm ->
+                        io.legado.app.ui.main.homepage.HomepageModuleManageSheet()
+                            .show(fm, "homepageManage")
+                    }
+            }
+        }
 
         fun navigateToExplore(sourceUrl: String, exploreUrl: String?, title: String?) {
             if (appDb.rssSourceDao.has(sourceUrl)) {
