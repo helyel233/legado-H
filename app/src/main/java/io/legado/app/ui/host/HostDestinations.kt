@@ -92,6 +92,14 @@ object HostDestinations {
                 topLevel = false,
                 sideGroup = SideGroup.SETTINGS, order = 10,
             ),
+            // P2-6 组件博物馆：全部新零件的验收页
+            AppDestination(
+                id = "museum", title = DestTitle.Text("组件博物馆"),
+                icon = DestIcon.Vector(HostIcons.Check),
+                factory = { HostMuseumContent() },
+                topLevel = false,
+                sideGroup = SideGroup.CONTENT, order = 20,
+            ),
         )
     )
 }

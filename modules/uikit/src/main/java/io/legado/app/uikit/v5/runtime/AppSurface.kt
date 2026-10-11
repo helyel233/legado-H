@@ -11,6 +11,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import io.legado.app.uikit.v5.contract.AppSemanticColors
 import io.legado.app.uikit.v5.token.GlassSpec
 import io.legado.app.uikit.v5.token.MaterialLevel
@@ -18,7 +21,7 @@ import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.uikit.v5.token.VisualSpec
 
 /**
- * P0-4 宿主下发视觉规格的 CompositionLocal。
+ * P2-1 宿主下发视觉规格的 CompositionLocal。
  *
  * 全 App 只有一个提供者（宿主），页面只能读不能写。
  * 改任何参数 → 这里的值变化 → 整棵树自动重组，**不需要 recreate()**。
@@ -46,11 +49,18 @@ val NeutralSemanticColors = AppSemanticColors(
 )
 
 /**
- * P0-4 内容容器 —— 页面唯一能拿到的"带背景的盒子"。
+ * P2-1 材质容器 —— 页面唯一能拿到的"带背景的盒子"（宿主内部也用它）。
  *
- * 页面只说用哪一档材质，外观参数全部读 [LocalVisualSpec]。
- * P0 提供基础实现（底色 + 描边 + 投影）；真实的背景模糊与噪声
- * 在 P1 宿主层补齐（需要 Android 12+ RenderEffect 或兼容降级）。
+ * 四档材质（docs/ui-v5-skeleton-first.md 2.2）：
+ * - E0 平铺：透明，内容直接落在背景上
+ * - E1 嵌入：实色 surfaceVariant，无描边无阴影
+ * - E2 浮起：真玻璃（模糊 + 基底 + 高光描边 + 噪声）+ 极弱阴影
+ * - E3 悬浮：更强玻璃 + 亮描边 + 明显阴影
+ *
+ * 玻璃三态：
+ * ① 采样源可用（hazeState != null）→ **真背景模糊**（hazeEffect），身后内容实时被糊开
+ * ② 采样源不可用但玻璃开 → 半透明基底（P1 行为，降级）
+ * ③ 玻璃关 → 干净实色卡片 + 细描边（低端机与"不喜欢玻璃"的兜底，两套观感都成立）
  */
 @Composable
 fun AppSurface(
@@ -62,48 +72,66 @@ fun AppSurface(
     val colors = LocalSemanticColors.current
     val glass = visual.glass
     val shape = visual.shape(ShapeKind.CARD)
+    val hazeState = LocalHazeState.current
 
-    val background = when {
-        // E0 平铺：无容器
+    val glassOn = level.usesGlass && glass.enabled
+    val hazeActive = glassOn && hazeState != null
+
+    // ---- 背景 ----
+    val fallbackBackground = when {
         level == MaterialLevel.FLAT -> Color.Transparent
-        // 实色态：关玻璃时 E2/E3 退回干净实色卡片，两套观感都要成立
-        !level.usesGlass || !glass.enabled -> when (level) {
+        !glassOn -> when (level) {
             MaterialLevel.EMBEDDED -> colors.surfaceVariant
             else -> colors.surface
         }
-        // 玻璃态：P1 起由宿主替换为真实模糊；此处先用半透明基底表达层次
-        else -> {
-            val a = when (level) {
-                MaterialLevel.FLOATING -> glass.effectiveAlpha()
-                else -> glass.effectiveAlpha() * 0.86f
-            }
-            colors.surface.copy(alpha = a)
-        }
+        else -> colors.surface.copy(alpha = when (level) {
+            MaterialLevel.FLOATING -> glass.effectiveAlpha()
+            else -> glass.effectiveAlpha() * 0.86f
+        })
     }
 
+    // ---- 描边 ----
     val borderColor = when {
-        level == MaterialLevel.FLAT || level == MaterialLevel.EMBEDDED -> Color.Transparent
-        !glass.enabled -> colors.outline
-        else -> glass.strokeColor(colors.onSurface)
+        !level.hasStroke -> Color.Transparent
+        !glassOn -> colors.outline
+        glass.stroke -> glass.strokeColor(colors.onSurface)
+        else -> Color.Transparent
     }
 
+    // ---- 阴影（玻璃态略强，模拟光学厚度） ----
     val elevation = when {
-        !level.usesGlass || !glass.enabled -> level.shadowDp
+        !glassOn -> level.shadowDp
+        hazeActive -> level.shadowDp * 1.35f
         else -> level.shadowDp * 1.15f
     }
 
-    Box(
-        modifier = modifier
-            .then(if (elevation > 0.dp) Modifier.shadow(elevation, shape, clip = false) else Modifier)
-            .clip(shape)
-            .background(background)
-            .then(
-                if (level.hasStroke && borderColor != Color.Transparent)
-                    Modifier.border(1.dp, borderColor, shape)
-                else Modifier
-            ),
-        propagateMinConstraints = false,
-    ) {
-        content()
+    var m: Modifier = modifier
+        .then(if (elevation > 0.dp) Modifier.shadow(elevation, shape, clip = false) else Modifier)
+        .clip(shape)
+
+    if (hazeActive) {
+        // 真玻璃：模糊由 haze 完成，基底色/噪声/饱和度并入样式
+        m = m.hazeEffect(state = hazeState) {
+            style = HazeStyle(
+                backgroundColor = colors.surface,
+                tints = listOf(
+                    HazeTint(colors.surface.copy(alpha = when (level) {
+                        MaterialLevel.FLOATING -> glass.effectiveAlpha()
+                        else -> glass.effectiveAlpha() * 0.86f
+                    })),
+                ),
+                blurRadius = glass.effectiveBlur().dp,
+                noiseFactor = glass.noiseAlpha() * 2f,
+                fallbackTint = HazeTint(colors.surface.copy(alpha = 0.94f)),
+            )
+        }
+    } else {
+        m = m.background(fallbackBackground)
     }
+
+    if (borderColor != Color.Transparent) {
+        m = m.border(1.dp, borderColor, shape)
+    }
+
+    Box(m, propagateMinConstraints = false) { content() }
 }

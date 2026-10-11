@@ -34,5 +34,8 @@ dependencies {
     implementation libs.gson
     // A1-4: uikit reads the theme package layer (plan: uikit depends on theme)
     implementation project(':modules:theme')
+    // P2 真玻璃：背景模糊（API<31 由库自动降级为半透明 scrim）
+    // 用 api 而非 implementation：LocalHazeState 的 HazeState 类型出现在 uikit 公开 API 上
+    api libs.haze
     testImplementation libs.junit
 }

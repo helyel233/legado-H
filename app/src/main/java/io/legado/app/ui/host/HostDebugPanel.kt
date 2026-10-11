@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -62,7 +63,7 @@ import io.legado.app.uikit.v5.token.SHAPE_SCALE_RANGE
  * 发布构建里它根本不会被组合进来。
  */
 @Composable
-fun HostDebugPanel() {
+fun HostDebugPanel(state: HostState) {
     if (!BuildConfig.DEBUG) return
 
     var open by remember { mutableStateOf(false) }
@@ -139,6 +140,25 @@ fun HostDebugPanel() {
                         style = visual.type.caption,
                         color = colors.onSurfaceVariant,
                     )
+
+                    // P2-6 组件博物馆入口（侧栏形态之外的快捷通道）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colors.primary.copy(alpha = 0.16f), visual.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) { open = false; state.navigate("museum") }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "打开组件博物馆（P2 验收页）",
+                            style = visual.type.label,
+                            color = colors.primary,
+                        )
+                    }
 
                     Section("主题包（美术）") {
                         Chips(

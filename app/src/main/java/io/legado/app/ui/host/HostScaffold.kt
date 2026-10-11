@@ -2,10 +2,12 @@ package io.legado.app.ui.host
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -16,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import io.legado.app.uikit.v5.contract.HostScope
 import io.legado.app.uikit.v5.contract.ScreenChrome
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
@@ -23,10 +27,13 @@ import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.NavPosition
 
 /**
- * P1-1 宿主骨架的组合根。
+ * P1-1 / P2-1 宿主骨架的组合根。
  *
- * 这一层把宿主该干的七件事拼起来：背景、顶栏、导航、内容、弹层、侧栏、调试。
- * **没有任何业务知识** —— 它只知道"现在显示哪个 AppDestination"。
+ * P2-1 真玻璃架构：屏幕分两层 ——
+ * ① **采样源层**：背景 + 滚动内容，打 `hazeSource` 标记；
+ * ② **玻璃层**：顶栏 / 底栏 / 悬浮胶囊 / 侧栏，浮在采样源之上，
+ *    通过 AppSurface 的 hazeEffect 实时模糊身后内容 ——
+ *    列表从底栏下面滚过时会被真实糊开，这是"现代化"的核心观感。
  *
  * 页面通过 [HostScope.create] 拿到窄接口，碰不到这里的任何外观参数。
  */
@@ -34,6 +41,7 @@ import io.legado.app.uikit.v5.token.NavPosition
 fun HostScaffold(
     state: HostState,
     overlay: HostOverlay,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val visual = LocalVisualSpec.current
@@ -55,11 +63,44 @@ fun HostScaffold(
     val navIsTop = visual.navPosition == NavPosition.TOP
 
     Box(modifier = modifier.fillMaxSize()) {
-        // L0 背景
-        HostBackgroundLayer()
+        // ---- ① 采样源层：背景 + 滚动内容 ----
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
+        ) {
+            HostBackgroundLayer()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding(),
+            ) {
+                // 给玻璃顶栏（和顶栏标签形态的导航）让位
+                Spacer(modifier = Modifier.height(hostTopBarHeight(chrome.topBar, scrolled)))
+                if (navIsTop) {
+                    Spacer(modifier = Modifier.height(visual.density.topBarHeight))
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(
+                                bottom = if (chrome.reserveNavSpace) hostBottomNavReserve else 0.dp,
+                            ),
+                    ) {
+                        content?.Content(scope)
+                    }
+                }
+            }
+        }
 
-        // L1 容器 + L2 内容
-        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        // ---- ② 玻璃层：顶栏（+ 顶栏标签形态的导航）----
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding(),
+        ) {
             HostTopBar(
                 title = chrome.title,
                 subtitle = chrome.subtitle,
@@ -80,20 +121,9 @@ fun HostScaffold(
                     onOpenSidebar = { state.toggleSidebar() },
                 )
             }
-
-            Box(modifier = Modifier.weight(1f)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(bottom = if (chrome.reserveNavSpace) hostBottomNavReserve else 0.dp),
-                ) {
-                    content?.Content(scope)
-                }
-            }
         }
 
-        // 底部导航（底栏 / 悬浮胶囊 / 侧栏把手）
+        // ---- ② 玻璃层：底栏 / 悬浮胶囊 / 侧栏把手 ----
         if (!navIsTop) {
             Box(
                 modifier = Modifier
@@ -108,12 +138,11 @@ fun HostScaffold(
                     scrolled = scrolled,
                     onSelect = { state.navigate(it) },
                     onOpenSidebar = { state.toggleSidebar() },
-                    modifier = Modifier.padding(bottom = 0.dp),
                 )
             }
         }
 
-        // 侧栏（覆盖全屏，含遮罩）
+        // ---- 侧栏（玻璃，覆盖全屏含遮罩） ----
         if (visual.navPosition == NavPosition.SIDE) {
             HostSideBar(
                 groups = sideGroups,
@@ -124,10 +153,10 @@ fun HostScaffold(
             )
         }
 
-        // 弹层宿主
+        // ---- 弹层宿主 ----
         HostOverlayLayer(overlay = overlay)
 
-        // 调参面板（仅 debug 构建）
-        HostDebugPanel()
+        // ---- 调参面板（仅 debug 构建） ----
+        HostDebugPanel(state = state)
     }
 }

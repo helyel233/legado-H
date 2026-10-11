@@ -8,8 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
+import dev.chrisbanes.haze.HazeState
 import io.legado.app.uikit.v5.resolve.LayoutResolver
 import io.legado.app.uikit.v5.resolve.ThemeResolver
+import io.legado.app.uikit.v5.runtime.LocalHazeState
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
@@ -40,7 +42,7 @@ class AppHostActivity : AppCompatActivity() {
 }
 
 /**
- * 组合根：把两个解析器的输出注入 CompositionLocal。
+ * 组合根：把解析器输出与玻璃采样状态注入 CompositionLocal。
  *
  * **这里就是"换肤不重启"的全部秘密** —— `LayoutResolver.spec` 与
  * `ThemeResolver` 的内部状态都是 Compose `mutableStateOf`，在 setContent 里读一次
@@ -50,13 +52,15 @@ class AppHostActivity : AppCompatActivity() {
 private fun HostRoot() {
     val visual = LayoutResolver.spec
     val colors = ThemeResolver.colors()
+    val hazeState = remember { HazeState() }
 
     CompositionLocalProvider(
         LocalVisualSpec provides visual,
         LocalSemanticColors provides colors,
+        LocalHazeState provides hazeState,
     ) {
         val state = remember { HostState(HostDestinations.registry(), "shelf") }
         val overlay = remember { HostOverlay() }
-        HostScaffold(state = state, overlay = overlay)
+        HostScaffold(state = state, overlay = overlay, hazeState = hazeState)
     }
 }

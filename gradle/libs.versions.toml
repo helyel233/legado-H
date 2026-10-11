@@ -8,6 +8,7 @@ colorpicker = "1.1.0"
 constraintlayout = "2.2.1"
 core = "1.17.0"
 liquidglass = "1.0.3"
+haze = "1.5.3"
 lottie = "6.6.6"
 flexbox = "3.0.0"
 fragment = "1.8.9"
@@ -97,6 +98,7 @@ androidx-collection = { module = "androidx.collection:collection", version.ref =
 appcompat-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 liquidglass = { module = "com.qmdeve.liquidglass:core", version.ref = "liquidglass" }
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 material-kolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 lottie = { module = "com.airbnb.android:lottie", version.ref = "lottie" }

@@ -153,11 +153,18 @@ internal fun io.legado.app.uikit.v5.contract.DestIcon.rememberPainter(): Painter
             rememberVectorPainter(imageVector)
     }
 
-/** 顶栏折叠时给内容区的顶部留白（大标题态需要更多空间）。 */
+/** 顶栏折叠时给内容区的顶部留白（与 HostTopBar 同参数动画，两者同步伸缩）。 */
 @Composable
 internal fun hostTopBarHeight(mode: TopBarMode, scrolled: Boolean): androidx.compose.ui.unit.Dp {
     val visual = LocalVisualSpec.current
-    return if (mode == TopBarMode.NONE) 0.dp
-    else if (scrolled || mode == TopBarMode.TITLE || mode == TopBarMode.SEARCH) visual.density.topBarHeight
+    val collapsed = scrolled || mode == TopBarMode.TITLE || mode == TopBarMode.SEARCH
+    val target = if (mode == TopBarMode.NONE) 0.dp
+    else if (collapsed) visual.density.topBarHeight
     else visual.density.topBarHeight + 48.dp
+    val animated by animateDpAsState(
+        targetValue = target,
+        animationSpec = visual.motion.mediumSpec(),
+        label = "topBarSpacer",
+    )
+    return animated
 }
