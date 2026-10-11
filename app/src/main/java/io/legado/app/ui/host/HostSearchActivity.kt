@@ -80,6 +80,8 @@ class HostSearchActivity : AppCompatActivity() {
         fun start(context: Context, key: String? = null) {
             context.startActivity(
                 Intent(context, HostSearchActivity::class.java).apply {
+                    // chrome 动作可能来自 Application 上下文（appCtx），必须带 NEW_TASK
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     key?.let { putExtra("key", it) }
                 }
             )
