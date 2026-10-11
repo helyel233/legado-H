@@ -484,6 +484,8 @@ object ThemeConfig {
                 postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, isNightTheme)
                 postEvent(EventBus.RECREATE, "")
             }
+            // P4-0 旧 -> 新 同步：旧壳换肤后 V5 引擎跟随（UiKitBridge 已切桥读 V5）
+            runCatching { V5ThemeSync.pullFromLegacy(context) }
         } catch (e: Exception) {
             AppLog.put("设置主题出错\n$e", e, true)
         }

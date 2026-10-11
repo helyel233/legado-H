@@ -58,8 +58,10 @@ object V5PackageStore {
     private fun restoreActive() {
         val theme = allThemes().firstOrNull { it.id == lib.activeThemeId } ?: BuiltinThemes.default
         val layout = allLayouts().firstOrNull { it.id == lib.activeLayoutId } ?: BuiltinLayoutPackages.default
+        runCatching { ThemeResolver.applyDark(io.legado.app.help.config.AppConfig.isNightTheme) }
         runCatching { ThemeResolver.applyTheme(theme) }
         runCatching { LayoutResolver.apply(layout.toVisualSpec()) }
+        runCatching { pushLayoutToLegacyEngine(layout) }
     }
 
     private fun persist() {
@@ -101,7 +103,35 @@ object V5PackageStore {
         val spec = allLayouts().firstOrNull { it.id == id } ?: return
         lib = lib.copy(activeLayoutId = id)
         runCatching { LayoutResolver.apply(spec.toVisualSpec()) }
+        if (initialized) runCatching { pushLayoutToLegacyEngine(spec) }
         persist()
+    }
+
+    /**
+     * P4-0 结构同步：V5 界面包的形状缩放/密度/玻璃下推旧 LayoutEngine（v1），
+     * 未搬迁旧页面的圆角/密度跟随形状族（旧 View 体系只消费这几个值）。
+     */
+    private fun pushLayoutToLegacyEngine(spec: LayoutPackageSpecV2) {
+        val legacy = io.legado.app.uikit.layout.LayoutPackageSpec(
+            id = "v5_sync", name = spec.name,
+            navPosition = when (spec.navPosition) {
+                "bottom" -> io.legado.app.uikit.layout.LayoutPackageSpec.NAV_BOTTOM
+                "side" -> io.legado.app.uikit.layout.LayoutPackageSpec.NAV_SIDE
+                "top" -> io.legado.app.uikit.layout.LayoutPackageSpec.NAV_TOP
+                else -> io.legado.app.uikit.layout.LayoutPackageSpec.NAV_FLOAT
+            },
+            densityLevel = when {
+                spec.densityFactor < 0.95f -> io.legado.app.uikit.layout.LayoutPackageSpec.DENSITY_COMPACT
+                spec.densityFactor > 1.05f -> io.legado.app.uikit.layout.LayoutPackageSpec.DENSITY_COMFORTABLE
+                else -> io.legado.app.uikit.layout.LayoutPackageSpec.DENSITY_STANDARD
+            },
+            glassEnabled = spec.glassEnabled,
+            glassTransparency = spec.glassAlpha,
+            glassBlur = spec.glassBlur,
+            shapeScale = spec.shapeScale,
+            iconStroke = spec.iconStroke,
+        )
+        io.legado.app.uikit.layout.LayoutEngine.applyLayout(legacy)
     }
 
     // ---------------------------------------------------------------- 另存 / 编辑

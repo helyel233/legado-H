@@ -98,7 +98,13 @@ object ThemeResolver {
     }
 
     /**
-     * 交给读书页的一整套值（ReaderBridge 用）。
+     * P4-0 切桥：View 体系（UiKitBridge -> AppUiColors）从这里取色 --
+     * 全 App（含未搬迁旧页面）统一消费 V5 主题包。
+     */
+    fun resolveColor(role: PaletteRole): Int =
+        palette[role] ?: 0xFF808080.toInt()
+
+    /** 交给读书页的一整套值（ReaderBridge 用）。
      * 只在读书页主动来问时才调用；默认 AUTONOMOUS 模式下根本不会被走到。
      */
     fun readerTheme(): ReaderTheme {

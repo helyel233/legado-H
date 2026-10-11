@@ -11,15 +11,16 @@ import io.legado.app.uikit.theme.AppColorProvider
 import io.legado.app.uikit.theme.Applicator
 import io.legado.app.uikit.theme.AppUiColors
 import io.legado.app.theme.palette.PaletteRole
+import io.legado.app.uikit.v5.resolve.ThemeResolver
 
 /**
  * uikit bridge. Registers the theme repository (P0a-1 read contract over the
  * existing persistence; the writer stays until A3) and maps semantic colors
  * for the View side.
  *
- * A1-4: the View side now reads the new engine (Applicator sandwich); the
- * legacy translation ran first at App start (ThemePackageStore.init), so the
- * user's current look carries over.
+ * P4-0 切桥：13 路语义色改读 **V5 ThemeResolver**（V5 包库成为唯一真相，
+ * 未搬迁旧页面的颜色随新主题包实时变化）。READER 两路保持旧 Applicator ——
+ * 读书界面冻结（seam rule），颜色不受 V5 包影响。
  */
 object UiKitBridge {
 
@@ -31,19 +32,19 @@ object UiKitBridge {
         ThemeWriterHost.register(ThemeWriterImpl(app))
         AppUiColors.provider = object : AppColorProvider {
             override fun color(name: AppColorName): Int = when (name) {
-                AppColorName.PRIMARY -> Applicator.resolveColor(PaletteRole.PRIMARY)
-                AppColorName.ON_PRIMARY -> Applicator.resolveColor(PaletteRole.ON_PRIMARY)
-                AppColorName.SECONDARY -> Applicator.resolveColor(PaletteRole.SECONDARY)
-                AppColorName.ON_SECONDARY -> Applicator.resolveColor(PaletteRole.ON_SECONDARY)
-                AppColorName.SURFACE -> Applicator.resolveColor(PaletteRole.SURFACE)
-                AppColorName.ON_SURFACE -> Applicator.resolveColor(PaletteRole.ON_SURFACE)
-                AppColorName.SURFACE_VARIANT -> Applicator.resolveColor(PaletteRole.SURFACE_VARIANT)
-                AppColorName.BACKGROUND -> Applicator.resolveColor(PaletteRole.BACKGROUND)
-                AppColorName.ON_BACKGROUND -> Applicator.resolveColor(PaletteRole.ON_BACKGROUND)
-                AppColorName.OUTLINE -> Applicator.resolveColor(PaletteRole.OUTLINE)
-                AppColorName.MUTED -> Applicator.resolveColor(PaletteRole.ON_SURFACE_VARIANT)
-                AppColorName.ERROR -> Applicator.resolveColor(PaletteRole.ERROR)
-                // Reader page is frozen (plan chapter 1 seam rule).
+                AppColorName.PRIMARY -> ThemeResolver.resolveColor(PaletteRole.PRIMARY)
+                AppColorName.ON_PRIMARY -> ThemeResolver.resolveColor(PaletteRole.ON_PRIMARY)
+                AppColorName.SECONDARY -> ThemeResolver.resolveColor(PaletteRole.TERTIARY)
+                AppColorName.ON_SECONDARY -> ThemeResolver.resolveColor(PaletteRole.ON_TERTIARY)
+                AppColorName.SURFACE -> ThemeResolver.resolveColor(PaletteRole.SURFACE)
+                AppColorName.ON_SURFACE -> ThemeResolver.resolveColor(PaletteRole.ON_SURFACE)
+                AppColorName.SURFACE_VARIANT -> ThemeResolver.resolveColor(PaletteRole.SURFACE_VARIANT)
+                AppColorName.BACKGROUND -> ThemeResolver.resolveColor(PaletteRole.BACKGROUND)
+                AppColorName.ON_BACKGROUND -> ThemeResolver.resolveColor(PaletteRole.ON_BACKGROUND)
+                AppColorName.OUTLINE -> ThemeResolver.resolveColor(PaletteRole.OUTLINE_VARIANT)
+                AppColorName.MUTED -> ThemeResolver.resolveColor(PaletteRole.ON_SURFACE_VARIANT)
+                AppColorName.ERROR -> ThemeResolver.resolveColor(PaletteRole.ERROR)
+                // Reader page is frozen (plan chapter 1 seam rule): keep the legacy engine.
                 AppColorName.READER_TEXT -> Applicator.resolveScheme().readerText.toArgbInt()
                 AppColorName.READER_BACKGROUND -> Applicator.resolveScheme().readerBackground.toArgbInt()
             }

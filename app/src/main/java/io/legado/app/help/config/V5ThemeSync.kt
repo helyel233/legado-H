@@ -54,4 +54,31 @@ object V5ThemeSync {
             syncing = false
         }
     }
+
+    /**
+     * P4-0 旧 → 新：旧壳换肤（ThemeConfig.applyConfig）后调用，
+     * 把旧栈刚写入的种子色同步给 V5 引擎（只影响新壳运行态，不写 V5 包库 ——
+     * 正式换主题的入口在 V5 管理中心）。
+     */
+    fun pullFromLegacy(context: Context) {
+        if (syncing) return
+        syncing = true
+        try {
+            val seed = ThemeStore.primaryColor(context)
+            if (seed == 0) return
+            val spec = ThemePackageSpec(
+                id = "legacy_runtime",
+                name = "旧壳主题",
+                seed = String.format("#%06X", seed and 0xFFFFFF),
+            )
+            if (spec.isValid()) {
+                io.legado.app.uikit.v5.resolve.ThemeResolver.applyTheme(spec)
+                io.legado.app.uikit.v5.resolve.ThemeResolver.applyDark(AppConfig.isNightTheme)
+            }
+        } catch (_: Exception) {
+            // 同步失败不影响旧壳自身换肤
+        } finally {
+            syncing = false
+        }
+    }
 }
