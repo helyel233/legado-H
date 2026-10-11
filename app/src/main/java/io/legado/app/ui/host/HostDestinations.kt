@@ -53,7 +53,7 @@ object HostDestinations {
                 id = "home", title = DestTitle.Text("主页"),
                 icon = DestIcon.Vector(HostIcons.Home),
                 factory = { PlaceholderContent("主页", "今天读了 42 分钟", "home") },
-                topLevel = true, defaultVisible = false,
+                topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 1,
             ),
             AppDestination(
@@ -67,14 +67,14 @@ object HostDestinations {
                 id = "rss", title = DestTitle.Text("订阅"),
                 icon = DestIcon.Vector(HostIcons.Rss),
                 factory = { PlaceholderContent("订阅", "12 个源 · 19 篇未读", "rss") },
-                topLevel = true, defaultVisible = false,
+                topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 3,
             ),
             AppDestination(
                 id = "stats", title = DestTitle.Text("统计"),
                 icon = DestIcon.Vector(HostIcons.Stats),
                 factory = { PlaceholderContent("统计", "2026 年 10 月", "stats") },
-                topLevel = true, defaultVisible = false,
+                topLevel = true, defaultVisible = true,
                 sideGroup = SideGroup.MAIN, order = 4,
             ),
             AppDestination(

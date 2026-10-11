@@ -80,7 +80,9 @@ fun HostTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .padding(horizontal = density.screenPadding),
+                .padding(horizontal = density.screenPadding)
+                // 大标题态给状态栏留一点呼吸空间，避免标题贴着时间/信号
+                .padding(top = if (collapsed) 0.dp else 6.dp),
         ) {
             Row(
                 modifier = Modifier
