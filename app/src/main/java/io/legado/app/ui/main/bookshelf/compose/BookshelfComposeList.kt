@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -43,15 +44,6 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.composeActionRadius
-import io.legado.app.lib.theme.composePanelRadius
-import io.legado.app.lib.theme.secondaryTextColor
-import io.legado.app.lib.theme.rememberThemeUiPalette
-import io.legado.app.lib.theme.titleTypeface
-import io.legado.app.lib.theme.titleTextColor
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.BookIntroUtils
 
@@ -92,63 +84,46 @@ data class BookshelfListRenderConfig(
 
 @Composable
 fun rememberBookshelfListPalette(): BookshelfListPalette {
-    val context = LocalContext.current
-    val themeUiPalette = rememberThemeUiPalette()
-    val rowBaseColor = themeUiPalette.cardColor
-    val rowColor = UiCorner.surfaceColor(rowBaseColor)
-    val rowPressedColor = UiCorner.surfaceColor(rowBaseColor, pressed = true)
-    val primaryText = Color(context.titleTextColor)
-    val secondaryText = Color(context.secondaryTextColor)
-    val accent = Color(context.accentColor)
-    val border = UiCorner.panelBorderColor(context)
-    val panelRadiusPx = UiCorner.panelRadius(context)
-    val panelRadius = context.composePanelRadius()
-    val actionRadius = context.composeActionRadius()
-    val titleFontFamily = FontFamily(context.titleTypeface())
-    val bodyFontFamily = FontFamily(context.uiTypeface())
+    // P4 整改②：V5 取值（语义色 / 形状族缩放 / 主题包字体），不再读旧主题栈
+    val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    val visual = io.legado.app.uikit.v5.runtime.LocalVisualSpec.current
+    val themeRevision = io.legado.app.uikit.v5.resolve.ThemeResolver.revision
+    val layoutRevision = io.legado.app.uikit.v5.resolve.LayoutResolver.revision
+
+    val titleFontFamily = visual.type.title.fontFamily ?: FontFamily.Default
+    val bodyFontFamily = visual.type.body.fontFamily ?: FontFamily.Default
+    val tagSpec = visual.shapeFamily.specFor(io.legado.app.uikit.v5.token.ShapeKind.TAG)
+    val tagDp = (tagSpec as? io.legado.app.uikit.v5.token.CornerSpec.Radius)?.dp?.value
+        ?: 8f
+    val panelRadius = (tagDp * visual.shapeScale * 1.4f).dp
+    val actionRadius = (tagDp * visual.shapeScale).dp
+
     return remember(
-        rowColor,
-        rowPressedColor,
-        primaryText,
-        secondaryText,
-        accent,
-        border,
-        panelRadiusPx,
-        panelRadius,
-        actionRadius,
-        titleFontFamily,
-        bodyFontFamily,
-        themeUiPalette.signature
+        colors, visual.shapeScale, themeRevision, layoutRevision,
     ) {
         BookshelfListPalette(
-            primaryText = primaryText,
-            secondaryText = secondaryText,
-            accent = accent,
-            rowColor = rowColor,
-            rowPressedColor = rowPressedColor,
-            borderColor = border,
-            panelRadiusPx = panelRadiusPx,
+            primaryText = colors.onSurface,
+            secondaryText = colors.onSurfaceVariant,
+            accent = colors.primary,
+            rowColor = colors.surfaceVariant.copy(alpha = 0.6f).toArgb(),
+            rowPressedColor = colors.surfaceVariant.copy(alpha = 0.9f).toArgb(),
+            borderColor = colors.outline.toArgb(),
+            panelRadiusPx = panelRadius.value * 2f,
             panelRadius = panelRadius,
             actionRadius = actionRadius,
             titleFontFamily = titleFontFamily,
             bodyFontFamily = bodyFontFamily,
-            themeSignature = themeUiPalette.signature
+            themeSignature = "v5-$themeRevision-$layoutRevision-${visual.shapeFamily.id}",
         )
     }
 }
 
 @Composable
 fun rememberBookshelfListRenderConfig(): BookshelfListRenderConfig {
-    val context = LocalContext.current
     val palette = rememberBookshelfListPalette()
-    val panelImage = remember(context, palette.panelRadiusPx, palette.themeSignature) {
-        UiCorner.panelImageDrawable(context, palette.panelRadiusPx)
-    }
-    return remember(palette, panelImage) {
-        BookshelfListRenderConfig(
-            palette = palette,
-            panelImage = panelImage
-        )
+    // V5：不再用旧栈的面板背景图，材质由 AppSurface 统一渲染
+    return remember(palette) {
+        BookshelfListRenderConfig(palette = palette, panelImage = null)
     }
 }
 

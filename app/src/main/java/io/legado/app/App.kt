@@ -100,6 +100,8 @@ class App : Application() {
         UiKitBridge.init(this)
         ThemePackageStore.init(this)
         LayoutPackageStore.init(this)
+        // P4 整改：V5 包库全局初始化 —— 无论进新壳还是旧壳，V5 引擎都是唯一真相
+        io.legado.app.ui.host.pack.V5PackageStore.init(this)
         if (isDebuggable) {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)
         }

@@ -1,6 +1,12 @@
 package io.legado.app.ui.main.my
 
 import androidx.compose.foundation.background
+import io.legado.app.uikit.v5.components.AppDivider
+import io.legado.app.uikit.v5.components.AppSwitch
+import io.legado.app.uikit.v5.runtime.AppSurface
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.MaterialLevel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -110,8 +116,11 @@ internal fun MySettingsScreen(
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
 ) {
-    val colors = rememberAppSettingPalette()
-    val panelRadiusPx = colors.panelRadiusPx
+    // P4 整改③：V5 原生渲染 —— 语义色/字阶/密度/形状族全部来自全局解析器，
+    // 不再绑定旧 palette / UiCorner / miuix 组件
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
+    val d = visual.density
     val visibleSections = buildVisibleSections(
         sections = sections,
         subSearchItems = subSearchItems,
@@ -121,46 +130,38 @@ internal fun MySettingsScreen(
         themeModeLabel = themeModeLabel,
     )
 
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = colors.bodyFontFamily)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = d.screenPadding,
+            end = d.screenPadding,
+            top = 8.dp,
+            bottom = d.screenPadding * 6,
+        ),
+        verticalArrangement = Arrangement.spacedBy(d.blockGap),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.page)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    top = 8.dp,
-                    bottom = dimensionResource(R.dimen.main_content_bottom_bar_padding) + 24.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(visibleSections, key = { it.title }) { section ->
-                    SettingsSectionCard(
-                        section = section,
-                        colors = colors,
-                        panelRadiusPx = panelRadiusPx,
-                        themeModeLabel = themeModeLabel,
-                        webServiceState = webServiceState,
-                        autoTaskServiceState = autoTaskServiceState,
-                        onThemeModeClick = onThemeModeClick,
-                        onWebServiceCheckedChange = onWebServiceCheckedChange,
-                        onWebServiceClick = onWebServiceClick,
-                        onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
-                        onAutoTaskServiceClick = onAutoTaskServiceClick,
-                        onRowClick = onRowClick
-                    )
-                }
-                if (visibleSections.isEmpty()) {
-                    item("empty") {
-                        EmptySettingsFrame(
-                            colors = colors,
-                            panelRadiusPx = panelRadiusPx
-                        )
-                    }
-                }
+        items(visibleSections, key = { it.title }) { section ->
+            SettingsSectionCard(
+                section = section,
+                themeModeLabel = themeModeLabel,
+                webServiceState = webServiceState,
+                autoTaskServiceState = autoTaskServiceState,
+                onThemeModeClick = onThemeModeClick,
+                onWebServiceCheckedChange = onWebServiceCheckedChange,
+                onWebServiceClick = onWebServiceClick,
+                onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
+                onAutoTaskServiceClick = onAutoTaskServiceClick,
+                onRowClick = onRowClick,
+            )
+        }
+        if (visibleSections.isEmpty()) {
+            item("empty") {
+                Text(
+                    text = "没有匹配的设置",
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = d.screenPadding),
+                )
             }
         }
     }
@@ -169,8 +170,6 @@ internal fun MySettingsScreen(
 @Composable
 private fun SettingsSectionCard(
     section: VisibleSection,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
     themeModeLabel: String,
     webServiceState: MyWebServiceUiState,
     autoTaskServiceState: MyWebServiceUiState,
@@ -181,127 +180,46 @@ private fun SettingsSectionCard(
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
 ) {
-    val context = LocalContext.current
-    val panelImage = remember(context, panelRadiusPx, colors.themeSignature) {
-        UiCorner.panelImageDrawable(context, panelRadiusPx)
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = SettingsHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
-            )
-    ) {
-        AppSettingSectionTitle(title = section.title, palette = colors)
-        section.rows.forEachIndexed { index, item ->
-            val isLastRowInSection = index == section.rows.lastIndex
-            val showDivider = !isLastRowInSection
-            when (item.row.kind) {
-                MySettingsRowKind.ThemeMode -> SettingsActionRow(
-                    item = item.copy(summary = themeModeLabel),
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onClick = onThemeModeClick
-                )
-
-                MySettingsRowKind.WebService -> ServiceSwitchRow(
-                    item = item,
-                    state = webServiceState,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onCheckedChange = onWebServiceCheckedChange,
-                    onClick = onWebServiceClick
-                )
-
-                MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
-                    item = item,
-                    state = autoTaskServiceState,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onCheckedChange = onAutoTaskServiceCheckedChange,
-                    onClick = onAutoTaskServiceClick
-                )
-
-                MySettingsRowKind.Action -> SettingsActionRow(
-                    item = item,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onClick = { onRowClick(item.row.key, item.searchTarget) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsActionRow(
-    item: VisibleRow,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
-    isFirst: Boolean,
-    isLast: Boolean,
-    showDivider: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val textColor = if (item.row.danger) colors.danger else colors.primaryText
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
-            .appSettingRowDecoration(
-                pressed = pressed,
-                pressedColor = colors.rowPressed,
-                dividerColor = colors.divider,
-                showDivider = showDivider,
-                radiusPx = panelRadiusPx,
-                isFirst = isFirst,
-                isLast = isLast,
-                danger = item.row.danger,
-                dangerColor = colors.danger
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+    AppSurface(level = MaterialLevel.RAISED, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(LocalVisualSpec.current.density.cardPadding)) {
             Text(
-                text = item.row.title,
-                color = textColor,
-                fontSize = 16.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                text = section.title,
+                style = LocalVisualSpec.current.type.label,
+                color = LocalSemanticColors.current.onSurfaceVariant,
             )
-            if (item.summary.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = item.summary,
-                    color = colors.secondaryText,
-                    fontSize = 14.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Spacer(modifier = Modifier.height(4.dp))
+            section.rows.forEachIndexed { index, item ->
+                val isLastRowInSection = index == section.rows.lastIndex
+                val showDivider = !isLastRowInSection
+                when (item.row.kind) {
+                    MySettingsRowKind.ThemeMode -> SettingsActionRow(
+                        item = item.copy(summary = themeModeLabel),
+                        showDivider = showDivider,
+                        onClick = onThemeModeClick,
+                    )
+
+                    MySettingsRowKind.WebService -> ServiceSwitchRow(
+                        item = item,
+                        state = webServiceState,
+                        showDivider = showDivider,
+                        onCheckedChange = onWebServiceCheckedChange,
+                        onClick = onWebServiceClick,
+                    )
+
+                    MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
+                        item = item,
+                        state = autoTaskServiceState,
+                        showDivider = showDivider,
+                        onCheckedChange = onAutoTaskServiceCheckedChange,
+                        onClick = onAutoTaskServiceClick,
+                    )
+
+                    MySettingsRowKind.Action -> SettingsActionRow(
+                        item = item,
+                        showDivider = showDivider,
+                        onClick = { onRowClick(item.row.key, item.searchTarget) },
+                    )
+                }
             }
         }
     }
@@ -311,97 +229,91 @@ private fun SettingsActionRow(
 private fun ServiceSwitchRow(
     item: VisibleRow,
     state: MyWebServiceUiState,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
-    isFirst: Boolean,
-    isLast: Boolean,
     showDivider: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
-            .appSettingRowDecoration(
-                pressed = pressed,
-                pressedColor = colors.rowPressed,
-                dividerColor = colors.divider,
-                showDivider = showDivider,
-                radiusPx = panelRadiusPx,
-                isFirst = isFirst,
-                isLast = isLast
-            )
+            .defaultMinSize(minHeight = visual.density.rowHeight)
             .clickable(
-                interactionSource = interactionSource,
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(vertical = visual.density.rowPaddingV)
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.row.title,
-                color = colors.primaryText,
-                fontSize = 16.sp,
+                style = visual.type.body,
+                color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = state.summary,
-                color = colors.secondaryText,
-                fontSize = 14.sp,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        LegadoMiuixSwitch(
-            checked = state.checked,
-            onCheckedChange = onCheckedChange,
-            palette = colors.toMiuixPalette()
-        )
+        AppSwitch(checked = state.checked, onCheckedChange = onCheckedChange)
+    }
+    if (showDivider) {
+        AppDivider(inset = false)
     }
 }
 
 @Composable
-private fun EmptySettingsFrame(
-    colors: AppSettingPalette,
-    panelRadiusPx: Float
+private fun SettingsActionRow(
+    item: VisibleRow,
+    showDivider: Boolean,
+    onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val panelImage = remember(context, panelRadiusPx, colors.themeSignature) {
-        UiCorner.panelImageDrawable(context, panelRadiusPx)
-    }
-    Column(
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SettingsHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
+            .defaultMinSize(minHeight = visual.density.rowHeight)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
             )
+            .padding(vertical = visual.density.rowPaddingV)
     ) {
-        AppSettingSectionTitle(title = "搜索结果", palette = colors)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 60.dp)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "没有匹配的设置",
-                color = colors.secondaryText,
-                fontSize = 14.sp
+                text = item.row.title,
+                style = visual.type.body,
+                color = if (item.row.danger) colors.error else colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+            if (item.summary.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.summary,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
+    }
+    if (showDivider) {
+        AppDivider(inset = false)
     }
 }
 
@@ -458,16 +370,4 @@ private fun MySettingsRowModel.effectiveSummary(
         MySettingsRowKind.AutoTaskService -> autoTaskServiceState.summary
         MySettingsRowKind.Action -> summary.orEmpty()
     }
-}
-
-private fun AppSettingPalette.toMiuixPalette(): LegadoMiuixPalette {
-    return LegadoMiuixPalette(
-        accent = accent,
-        surface = Color(row),
-        surfaceVariant = Color(row),
-        primaryText = primaryText,
-        secondaryText = secondaryText,
-        danger = danger,
-        onAccent = onAccent
-    )
 }

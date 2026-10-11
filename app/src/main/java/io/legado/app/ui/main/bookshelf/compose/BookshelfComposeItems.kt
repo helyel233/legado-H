@@ -35,10 +35,6 @@ import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.rememberThemeUiPalette
-import io.legado.app.lib.theme.titleTypeface
-import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.utils.toTimeAgo
 
 sealed interface BookshelfItemUi {
@@ -157,15 +153,13 @@ fun BookshelfGridItem(
     onLongClick: (BookshelfItemUi) -> Unit
 ) {
     val context = LocalContext.current
-    val themeSignature = rememberThemeUiPalette().signature
+    // P4 整改②：V5 取值（主题包字体/语义色），不再读旧主题栈
+    val v5Colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    val visual = io.legado.app.uikit.v5.runtime.LocalVisualSpec.current
+    val themeSignature = "v5-${io.legado.app.uikit.v5.resolve.ThemeResolver.revision}-${io.legado.app.uikit.v5.resolve.LayoutResolver.revision}"
     val showBookName = AppConfig.showBookname
-    val titleFontFamily = remember(context, themeSignature) {
-        FontFamily(context.titleTypeface())
-    }
-    val titleColorArgb = context.titleTextColor
-    val titleColor = remember(context, themeSignature, titleColorArgb) {
-        Color(titleColorArgb)
-    }
+    val titleFontFamily = visual.type.title.fontFamily ?: FontFamily.Default
+    val titleColor = v5Colors.onSurface
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -202,7 +196,7 @@ fun BookshelfGridItem(
                             modifier = Modifier
                                 .fillMaxWidth(item.durRatio)
                                 .height(2.dp)
-                                .background(Color(LocalContext.current.accentColor))
+                                .background(io.legado.app.uikit.v5.runtime.LocalSemanticColors.current.primary)
                         )
                     }
                 }
@@ -265,13 +259,13 @@ private fun BookshelfStatusBadge(item: BookshelfBookItemUi) {
                 .padding(5.dp)
                 .size(20.dp),
             strokeWidth = 2.dp,
-            color = Color(LocalContext.current.accentColor)
+            color = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current.primary
         )
         return
     }
     if (!AppConfig.showUnread || item.unreadCount <= 0) return
     val badgeColor = if (item.hasNewChapter) {
-        Color(LocalContext.current.accentColor)
+        io.legado.app.uikit.v5.runtime.LocalSemanticColors.current.primary
     } else {
         Color.Black.copy(alpha = 0.55f)
     }

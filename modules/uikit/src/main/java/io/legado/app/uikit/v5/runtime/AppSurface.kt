@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import io.legado.app.uikit.theme.AppUiColors
+import io.legado.app.uikit.theme.AppColorName
 import io.legado.app.uikit.v5.contract.AppSemanticColors
 import io.legado.app.uikit.v5.token.GlassSpec
 import io.legado.app.uikit.v5.token.MaterialLevel
@@ -30,7 +32,29 @@ val LocalVisualSpec: ProvidableCompositionLocal<VisualSpec> =
     compositionLocalOf { VisualSpec.DEFAULT }
 
 val LocalSemanticColors: ProvidableCompositionLocal<AppSemanticColors> =
-    compositionLocalOf { NeutralSemanticColors }
+    compositionLocalOf { fallbackSemanticColors() }
+
+/**
+ * 未注入 Provider 时的语义色：优先从 AppUiColors（切桥后的 V5 值）派生 ——
+ * 旧壳/新壳任何 Composition 读到都是当前主题的正确颜色，而非固定中性色。
+ */
+fun fallbackSemanticColors(): AppSemanticColors {
+    val p = AppUiColors.provider ?: return NeutralSemanticColors
+    return AppSemanticColors(
+        background = Color(p.color(AppColorName.BACKGROUND)),
+        surface = Color(p.color(AppColorName.SURFACE)),
+        surfaceVariant = Color(p.color(AppColorName.SURFACE_VARIANT)),
+        primary = Color(p.color(AppColorName.PRIMARY)),
+        onPrimary = Color(p.color(AppColorName.ON_PRIMARY)),
+        secondary = Color(p.color(AppColorName.SECONDARY)),
+        onSurface = Color(p.color(AppColorName.ON_SURFACE)),
+        onSurfaceVariant = Color(p.color(AppColorName.MUTED)),
+        outline = Color(p.color(AppColorName.OUTLINE)),
+        success = NeutralSemanticColors.success,
+        warning = NeutralSemanticColors.warning,
+        error = Color(p.color(AppColorName.ERROR)),
+    )
+}
 
 /** 未注入主题包时的中性默认色（保证 Provider 缺失也不崩）。 */
 val NeutralSemanticColors = AppSemanticColors(
