@@ -99,7 +99,7 @@ import androidx.lifecycle.Observer
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.main.ai.AiAgentMode
 import io.legado.app.ui.main.ai.AiChatMessage
 import io.legado.app.ui.main.ai.AiChatCompanionConfig

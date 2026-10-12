@@ -16,6 +16,10 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecentVisualItem
+import io.legado.app.help.readrecord.ReadRecordRankItem
+import io.legado.app.help.readrecord.ReadRecordGoalConfig
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityReadRecordBinding
 import io.legado.app.help.config.AppConfig

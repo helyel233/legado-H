@@ -1,6 +1,8 @@
 package io.legado.app.ui.about
 
 import androidx.compose.foundation.layout.Arrangement
+import io.legado.app.help.readrecord.ReadRecentVisualSnapshot
+import io.legado.app.help.readrecord.ReadRecordRankItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box

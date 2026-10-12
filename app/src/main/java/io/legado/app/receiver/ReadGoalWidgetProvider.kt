@@ -18,7 +18,7 @@ import android.widget.RemoteViews
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.ui.about.ReadRecordActivity
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.utils.BitmapUtils
 import kotlinx.coroutines.CoroutineScope

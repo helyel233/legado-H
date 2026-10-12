@@ -165,7 +165,7 @@ import io.legado.app.model.localBook.epubcore.template.EpubTemplateLayoutPolicy
 import io.legado.app.model.localBook.MobiFile
 import io.legado.app.receiver.NetworkChangedListener
 import io.legado.app.receiver.TimeBatteryReceiver
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.bookmark.BookmarkDialog

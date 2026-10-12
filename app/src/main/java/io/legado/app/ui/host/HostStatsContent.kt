@@ -25,8 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.data.appDb
-import io.legado.app.ui.main.readrecord.YearlyReportActivity
+import io.legado.app.ui.host.HostYearlyReportActivity
 import io.legado.app.uikit.v5.components.AppCard
 import io.legado.app.uikit.v5.contract.AppContent
 import io.legado.app.uikit.v5.contract.ChromeAction
@@ -40,7 +39,6 @@ import io.legado.app.utils.startActivityForBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
-import java.time.YearMonth
 
 /**
  * P4-1c「统计」真业务（V5 自绘版）。
@@ -62,7 +60,7 @@ class HostStatsContent : AppContent {
                 icon = DestIcon.Vector(HostIcons.Stats),
                 contentDescription = DestTitle.Text("年度报告"),
                 onClick = {
-                    splitties.init.appCtx.startActivity<YearlyReportActivity>()
+                    HostYearlyReportActivity.start(splitties.init.appCtx)
                 },
             ),
         ),
@@ -209,31 +207,25 @@ class HostStatsContent : AppContent {
 
     // ---------------------------------------------------------------- 数据
 
-    private fun load(): StatsData {
-        val today = LocalDate.now()
-        val month = YearMonth.from(today)
-        val dailyRaw = appDb.readRecordDailyDao.allDesc.mapNotNull { record ->
-            runCatching { LocalDate.parse(record.date) to record.readTime }.getOrNull()
-        }.sortedByDescending { it.first }
-        val dailyMap = dailyRaw.toMap()
-        val recordMap = appDb.readRecordDao.allShow.associateBy { it.bookName }
-        val recent = appDb.readRecentBookDao.recentBooks(6).map { book ->
-            RecentBook(
-                name = book.name,
-                author = book.author,
-                bookUrl = book.bookUrl,
-                coverUrl = book.coverUrl,
-                readTime = recordMap[book.name]?.readTime ?: 0L,
-            )
-        }
+    /** 数据汇聚复用 ReadRecordRepository（台账 #29-B8：与阅读记录页同源，页面不直连 appDb）。 */
+    private suspend fun load(): StatsData {
+        val data = io.legado.app.data.repository.ReadRecordRepository.dashboard(heatmapDays = 0)
         return StatsData(
-            todayTime = dailyMap[today] ?: 0L,
-            monthTime = dailyRaw.filter { YearMonth.from(it.first) == month }.sumOf { it.second },
-            totalTime = appDb.readRecordDao.allTime,
-            bookCount = appDb.readRecordDao.allShow.size,
-            activeDays = dailyRaw.count { it.second > 0L },
-            recent = recent,
-            daily = dailyRaw,
+            todayTime = data.todayTime,
+            monthTime = data.monthTime,
+            totalTime = data.totalTime,
+            bookCount = data.bookCount,
+            activeDays = data.activeDays,
+            recent = data.recent.map {
+                RecentBook(
+                    name = it.name,
+                    author = it.author,
+                    bookUrl = it.bookUrl,
+                    coverUrl = it.coverUrl,
+                    readTime = it.readTime,
+                )
+            },
+            daily = data.daily,
         )
     }
 

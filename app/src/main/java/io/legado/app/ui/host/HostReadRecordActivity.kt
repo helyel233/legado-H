@@ -1,6 +1,7 @@
 package io.legado.app.ui.host
 
 import android.content.Context
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -41,10 +42,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.data.appDb
 import io.legado.app.help.config.AppConfig
+import io.legado.app.data.repository.ReadRecordRepository
 import io.legado.app.ui.about.ReadRecordRankDialog
-import io.legado.app.ui.main.readrecord.YearlyReportActivity
+
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppEmpty
@@ -56,11 +57,8 @@ import io.legado.app.uikit.v5.components.AppSectionHeader
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.startActivity
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -89,18 +87,7 @@ class HostReadRecordActivity : AppCompatActivity() {
     }
 }
 
-private data class ReadRecordDashboardV5(
-    val today: LocalDate = LocalDate.now(),
-    val todayTime: Long = 0,
-    val monthTime: Long = 0,
-    val totalTime: Long = 0,
-    val activeDays: Int = 0,
-    val heatmapCells: List<Pair<LocalDate, Long>> = emptyList(),
-    val recentBooks: List<Triple<String, String, String>> = emptyList(),
-    val dailyTimeline: List<Pair<LocalDate, Long>> = emptyList(),
-    val hasDailyStats: Boolean = false,
-    val rankItems: List<io.legado.app.ui.about.ReadRecordRankItem> = emptyList(),
-)
+private typealias Dashboard = io.legado.app.data.repository.ReadRecordRepository.Dashboard
 
 @Composable
 private fun HostReadRecordScreen() {
@@ -110,41 +97,14 @@ private fun HostReadRecordScreen() {
     val visual = LocalVisualSpec.current
     val density = visual.density
 
-    var dashboard by remember { mutableStateOf(ReadRecordDashboardV5()) }
+    var dashboard by remember { mutableStateOf(Dashboard()) }
     var menuOpen by remember { mutableStateOf(false) }
     var clearConfirm by remember { mutableStateOf(false) }
 
+    // 数据汇聚下沉 ReadRecordRepository（台账 #29-B8：页面不再直连 appDb）
     fun loadData() {
         activity.lifecycleScope.launch {
-            val data = withContext(Dispatchers.IO) {
-                val today = LocalDate.now()
-                val month = YearMonth.from(today)
-                val readRecordMap = appDb.readRecordDao.allShow.associateBy { it.bookName }
-                val dailyStats = appDb.readRecordDailyDao.allDesc.mapNotNull { record ->
-                    runCatching { LocalDate.parse(record.date) to record.readTime }.getOrNull()
-                }.sortedByDescending { it.first }
-                val dailyMap = dailyStats.toMap()
-                val recentBooks = appDb.readRecentBookDao.recentBooks(6).map { book ->
-                    Triple(book.name, book.author, book.coverUrl ?: "")
-                }
-                val heatmapStart = today.minusDays(111)
-                ReadRecordDashboardV5(
-                    today = today,
-                    todayTime = dailyMap[today] ?: 0L,
-                    monthTime = dailyStats.filter { YearMonth.from(it.first) == month }.sumOf { it.second },
-                    totalTime = appDb.readRecordDao.allTime,
-                    activeDays = dailyStats.count { it.second > 0L },
-                    heatmapCells = (0L..111L).map { offset ->
-                        val d = heatmapStart.plusDays(offset)
-                        d to (dailyMap[d] ?: 0L)
-                    },
-                    recentBooks = recentBooks,
-                    dailyTimeline = dailyStats.take(14),
-                    hasDailyStats = dailyStats.isNotEmpty(),
-                    rankItems = io.legado.app.ui.about.ReadRecordWidgetStore.buildRankItems(),
-                )
-            }
-            dashboard = data
+            dashboard = ReadRecordRepository.dashboard()
         }
     }
 
@@ -159,7 +119,7 @@ private fun HostReadRecordScreen() {
             AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
         },
     ) {
-        if (!dashboard.hasDailyStats && dashboard.recentBooks.isEmpty()) {
+        if (!dashboard.hasDailyStats && dashboard.recent.isEmpty()) {
             AppEmpty(title = stringResource(R.string.read_record_stats_waiting))
         } else {
             LazyColumn(
@@ -211,20 +171,20 @@ private fun HostReadRecordScreen() {
                 }
 
                 // 最近阅读
-                if (dashboard.recentBooks.isNotEmpty()) {
+                if (dashboard.recent.isNotEmpty()) {
                     item {
                         AppSectionHeader(title = stringResource(R.string.read_record_recent_books))
                     }
                     item {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
-                            items(dashboard.recentBooks) { (name, _, cover) ->
+                            items(dashboard.recent, key = { it.bookUrl }) { book ->
                                 Column(
                                     modifier = Modifier.width(64.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     BookCoverImage(
-                                        path = cover,
-                                        name = name,
+                                        path = book.coverUrl,
+                                        name = book.name,
                                         author = null,
                                         sourceOrigin = null,
                                         modifier = Modifier
@@ -233,7 +193,7 @@ private fun HostReadRecordScreen() {
                                             .clip(visual.shape(io.legado.app.uikit.v5.token.ShapeKind.COVER)),
                                     )
                                     Text(
-                                        text = name,
+                                        text = book.name,
                                         style = visual.type.caption,
                                         color = colors.onSurfaceVariant,
                                         maxLines = 1,
@@ -247,12 +207,12 @@ private fun HostReadRecordScreen() {
                     }
                 }
 
-                // 每日记录
-                if (dashboard.dailyTimeline.isNotEmpty()) {
+                // 每日记录（时间线取最近 14 天）
+                if (dashboard.daily.isNotEmpty()) {
                     item {
                         AppSectionHeader(title = stringResource(R.string.read_record_component_daily_records))
                     }
-                    items(dashboard.dailyTimeline, key = { it.first.toString() }) { (date, time) ->
+                    items(dashboard.daily.take(14), key = { it.first.toString() }) { (date, time) ->
                         AppListItem(
                             headline = date.format(DateTimeFormatter.ofPattern("MM-dd", Locale.getDefault())),
                             supporting = formatDuring(context, time),
@@ -276,9 +236,7 @@ private fun HostReadRecordScreen() {
                                             { mss -> formatDuring(context, mss) },
                                         ) { item ->
                                             activity.lifecycleScope.launch {
-                                                withContext(Dispatchers.IO) {
-                                                    appDb.readRecordDao.deleteByName(item.displayName)
-                                                }
+                                                ReadRecordRepository.deleteByName(item.displayName)
                                                 loadData()
                                             }
                                         }
@@ -309,7 +267,7 @@ private fun HostReadRecordScreen() {
                     menuOpen = false
                 },
                 stringResource(R.string.yearly_report) to {
-                    context.startActivity<YearlyReportActivity>()
+                    HostYearlyReportActivity.start(context)
                     menuOpen = false
                 },
                 stringResource(R.string.read_record_clear_all) to {
@@ -331,12 +289,7 @@ private fun HostReadRecordScreen() {
             onConfirm = {
                 clearConfirm = false
                 activity.lifecycleScope.launch {
-                    withContext(Dispatchers.IO) {
-                        appDb.readRecordDao.clear()
-                        appDb.readRecordDailyDao.clear()
-                        appDb.readRecentBookDao.clear()
-                        io.legado.app.ui.about.ReadRecordWidgetStore.clearRecentSnapshots()
-                    }
+                    ReadRecordRepository.clearAll()
                     loadData()
                 }
             },

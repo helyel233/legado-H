@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.contract.ChromeAction
 import io.legado.app.uikit.v5.contract.DestTitle
 import io.legado.app.uikit.v5.contract.TopBarMode

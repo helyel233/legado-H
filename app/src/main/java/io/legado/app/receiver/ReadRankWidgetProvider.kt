@@ -10,7 +10,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import io.legado.app.R
 import io.legado.app.ui.about.ReadRecordActivity
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.host.AppHostActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

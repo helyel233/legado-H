@@ -1,4 +1,4 @@
-package io.legado.app.ui.about
+package io.legado.app.help.readrecord
 
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb

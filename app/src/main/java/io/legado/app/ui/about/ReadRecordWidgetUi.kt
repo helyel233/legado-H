@@ -1,6 +1,9 @@
 package io.legado.app.ui.about
 
 import android.content.Context
+import io.legado.app.help.readrecord.ReadRecentVisualSnapshot
+import io.legado.app.help.readrecord.ReadRecordGoalConfig
+import io.legado.app.help.readrecord.ReadRecordRankItem
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
 import android.view.View

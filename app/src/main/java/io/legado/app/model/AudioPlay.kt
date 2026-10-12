@@ -33,7 +33,7 @@ import io.legado.app.model.webBook.WebBook
 import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.getMediaRequest
 import io.legado.app.service.AudioPlayService
 import io.legado.app.model.SourceCallBack
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startService
 import io.legado.app.utils.toastOnUi

@@ -1,6 +1,9 @@
 package io.legado.app.ui.main.readrecord
 
 import android.app.DatePickerDialog
+import io.legado.app.help.readrecord.ReadRecentVisualItem
+import io.legado.app.help.readrecord.ReadRecordGoalConfig
+import io.legado.app.help.readrecord.ReadRecordRankItem
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
@@ -35,13 +38,10 @@ import io.legado.app.ui.about.ReadRecordCoverUi
 import io.legado.app.ui.about.ReadRecordComponentConfigDialog
 import io.legado.app.ui.about.ReadRecordComponentType
 import io.legado.app.ui.about.ReadRecordComponents
-import io.legado.app.ui.about.ReadRecordGoalConfig
 import io.legado.app.ui.about.ReadRecordGoalCardContent
 import io.legado.app.ui.about.ReadRecordGoalUi
 import io.legado.app.ui.about.ReadRecordRankDialog
-import io.legado.app.ui.about.ReadRecordRankItem
-import io.legado.app.ui.about.ReadRecordWidgetStore
-import io.legado.app.ui.about.ReadRecentVisualItem
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.about.ReadRecordDailyList
 import io.legado.app.ui.about.ReadRecordDayUi
 import io.legado.app.ui.about.ReadRecordOverviewCard

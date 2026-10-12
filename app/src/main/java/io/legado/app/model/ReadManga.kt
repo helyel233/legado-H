@@ -22,7 +22,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.globalExecutor
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.about.ReadRecordWidgetStore
+import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.book.manga.entities.BaseMangaPage
 import io.legado.app.ui.book.manga.entities.MangaChapter
 import io.legado.app.ui.book.manga.entities.MangaContent
