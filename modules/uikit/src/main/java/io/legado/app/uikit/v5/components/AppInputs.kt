@@ -26,7 +26,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -126,37 +129,118 @@ fun AppTextField(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     enabled: Boolean = true,
+    /** 多行（URL 长文本/JS 片段等）；false = 单行 */
+    singleLine: Boolean = true,
+    /** 最小行数（singleLine=false 时生效） */
+    minLines: Int = 1,
+    maxLines: Int = 4,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    /** 错误态（边框色走 error 语义 + 错误说明文字） */
+    errorText: String? = null,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
     val density = visual.density
 
-    Box(
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(visual.shape(ShapeKind.FIELD))
+                .background(if (errorText != null) colors.error.copy(alpha = 0.10f) else colors.surfaceVariant)
+                .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+        ) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                enabled = enabled,
+                singleLine = singleLine,
+                minLines = if (singleLine) 1 else minLines,
+                maxLines = if (singleLine) 1 else maxLines,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                textStyle = visual.type.body.copy(color = colors.onSurface),
+                cursorBrush = SolidColor(if (errorText != null) colors.error else colors.primary),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { inner ->
+                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = visual.type.body,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                    inner()
+                },
+            )
+        }
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = visual.type.caption,
+                color = colors.error,
+                modifier = Modifier.padding(top = 4.dp, start = density.screenPadding / 2),
+            )
+        }
+    }
+}
+
+/**
+ * 选项设置行：标题+摘要+当前值，点击弹单选菜单（底层 AppMenuSheet）。
+ * "点行→弹单选→显示当前值"是设置页最基本行型，此前每页手拼 MenuSheet。
+ */
+@Composable
+fun AppOptionRow(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (index: Int) -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    var open by remember { mutableStateOf(false) }
+    val density = visual.density
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(visual.shape(ShapeKind.FIELD))
-            .background(colors.surfaceVariant)
-            .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+            .heightIn(min = 48.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { open = true }
+            .padding(horizontal = density.rowPaddingH, vertical = density.rowPaddingV),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(density.screenPadding / 2),
     ) {
-        androidx.compose.foundation.text.BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = true,
-            textStyle = visual.type.body.copy(color = colors.onSurface),
-            cursorBrush = SolidColor(colors.primary),
-            modifier = Modifier.fillMaxWidth(),
-            decorationBox = { inner ->
-                if (value.isEmpty() && placeholder.isNotEmpty()) {
-                    Text(
-                        text = placeholder,
-                        style = visual.type.body,
-                        color = colors.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
-                inner()
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = visual.type.body, color = colors.onSurface)
+            if (summary != null) {
+                Text(text = summary, style = visual.type.caption, color = colors.onSurfaceVariant)
+            }
+        }
+        Text(
+            text = options.getOrElse(selectedIndex) { "" },
+            style = visual.type.caption,
+            color = colors.primary,
+        )
+        Icon(
+            imageVector = AppIcons.Chevron,
+            contentDescription = null,
+            tint = colors.onSurfaceVariant,
+            modifier = Modifier.size(density.iconSize * 0.72f),
+        )
+    }
+
+    if (open) {
+        AppMenuSheet(
+            title = title,
+            actions = options.mapIndexed { index, label ->
+                (if (index == selectedIndex) "✓ " else "") + label to { onSelect(index) }
             },
+            onDismiss = { open = false },
         )
     }
 }

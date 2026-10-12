@@ -74,6 +74,25 @@ class HostRssContent : AppContent {
         subtitle = DestTitle.Res(R.string.v5_rss_subtitle),
         showBack = false,
         contentOwnsScroll = true,
+        actions = listOf(
+            // 2026-10-12 功能盘点修复：旧 RssFragment ⋮ 菜单的收藏列表/源管理入口此前整组丢失
+            ChromeAction(
+                id = "favorites",
+                icon = DestIcon.Vector(io.legado.app.ui.host.HostIcons.Star),
+                contentDescription = DestTitle.Res(R.string.v5_rss_favorite),
+                onClick = {
+                    splitties.init.appCtx.startActivity<io.legado.app.ui.rss.favorites.RssFavoritesActivity>()
+                },
+            ),
+            ChromeAction(
+                id = "manage",
+                icon = DestIcon.Vector(io.legado.app.ui.host.HostIcons.Menu),
+                contentDescription = DestTitle.Res(R.string.v5_rss_manage),
+                onClick = {
+                    splitties.init.appCtx.startActivity<io.legado.app.ui.rss.source.manage.RssSourceActivity>()
+                },
+            ),
+        ),
     )
 
     @Composable

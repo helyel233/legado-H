@@ -46,6 +46,7 @@ import io.legado.app.utils.launch
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
+import io.legado.app.utils.startActivity
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -381,6 +382,10 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
             },
             AppManagementMenuAction(getString(R.string.import_by_qr_code)) {
                 qrCodeResult.launch()
+            },
+            // 2026-10-12 功能盘点修复：规则订阅入口在菜单统一化重构时丢失（孤儿页 RuleSubActivity）
+            AppManagementMenuAction(getString(R.string.rule_subscription)) {
+                startActivity<io.legado.app.ui.rss.subscription.RuleSubActivity>()
             },
             AppManagementMenuAction(getString(R.string.help)) {
                 showHelp("replaceRuleHelp")

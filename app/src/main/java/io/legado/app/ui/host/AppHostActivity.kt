@@ -97,13 +97,16 @@ private fun HostRoot() {
     val colors = ThemeResolver.colors()
     val hazeState = remember { HazeState() }
 
+    val state = remember { HostState(HostDestinations.registry(), "shelf") }
+    val overlay = remember { HostOverlay() }
+
     CompositionLocalProvider(
         LocalVisualSpec provides visual,
         LocalSemanticColors provides colors,
         LocalHazeState provides hazeState,
+        // 页面统一经 LocalHostOverlay 请求 snackbar（带 action），不再各自摸弹层
+        LocalHostOverlay provides overlay,
     ) {
-        val state = remember { HostState(HostDestinations.registry(), "shelf") }
-        val overlay = remember { HostOverlay() }
         HostScaffold(state = state, overlay = overlay, hazeState = hazeState)
     }
 }

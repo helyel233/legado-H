@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -291,5 +293,118 @@ fun AppDangerButton(
     ) {
         // error 底为高饱和红，白字在日夜两套主题下对比度都达标（语义色表无 onError 角色）
         Text(text = text, style = visual.type.label, color = Color.White)
+    }
+}
+
+/** 表单弹窗的单字段规格。 */
+data class AppFormField(
+    val key: String,
+    val label: String,
+    val initial: String = "",
+    val placeholder: String = "",
+    val singleLine: Boolean = true,
+    val keyboardType: androidx.compose.ui.text.input.KeyboardType =
+        androidx.compose.ui.text.input.KeyboardType.Text,
+)
+
+/**
+ * 多字段表单弹窗（书源编辑、替换规则编辑等 4-6 字段场景）。
+ * 值托管在组件内，onConfirm 一次性回传 key→text 映射。
+ */
+@Composable
+fun AppFormDialog(
+    title: String,
+    fields: List<AppFormField>,
+    confirmLabel: String,
+    cancelLabel: String,
+    onConfirm: (values: Map<String, String>) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val values = remember(fields) {
+        androidx.compose.runtime.mutableStateMapOf<String, String>().apply {
+            fields.forEach { put(it.key, it.initial) }
+        }
+    }
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = LocalSemanticColors.current.onSurface,
+            )
+            fields.forEach { field ->
+                AppTextField(
+                    value = values[field.key].orEmpty(),
+                    onValueChange = { values[field.key] = it },
+                    placeholder = field.placeholder,
+                    singleLine = field.singleLine,
+                    keyboardType = field.keyboardType,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
+                AppGhostButton(cancelLabel, modifier = Modifier.weight(1f), onClick = onDismiss)
+                AppFilledButton(confirmLabel, modifier = Modifier.weight(1f)) {
+                    onConfirm(values.toMap())
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 进度弹窗：标题 + 文案 + 不确定/确定进度条 + 取消按钮。
+ * 导入书源（下载→解析→入库多阶段）、批量任务等流程的统一进度形态。
+ * progress = null 显示不确定动画。
+ */
+@Composable
+fun AppProgressDialog(
+    title: String,
+    message: String,
+    cancelLabel: String?,
+    onCancel: (() -> Unit)?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    progress: Float? = null,
+) {
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = LocalSemanticColors.current.onSurface,
+            )
+            Text(
+                text = message,
+                style = visual.type.body,
+                color = LocalSemanticColors.current.onSurfaceVariant,
+            )
+            if (progress != null) {
+                AppProgressBar(progress = progress)
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) { AppLoading() }
+            }
+            if (cancelLabel != null && onCancel != null) {
+                AppGhostButton(cancelLabel, modifier = Modifier.fillMaxWidth(), onClick = onCancel)
+            }
+        }
     }
 }

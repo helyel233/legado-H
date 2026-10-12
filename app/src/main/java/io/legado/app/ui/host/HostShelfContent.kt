@@ -281,6 +281,13 @@ class HostShelfContent : AppContent {
                         "librarySearch" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.librarysearch.LibrarySearchActivity::class.java)
                         )
+                        // 2026-10-12 功能盘点修复：以下三项此前无 handler（点击无响应的死菜单）
+                        "search" -> HostSearchActivity.start(context)
+                        "collection" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookCollectionActivity::class.java)
+                        )
+                        "log" -> io.legado.app.ui.about.AppLogDialog()
+                            .show((context as androidx.appcompat.app.AppCompatActivity).supportFragmentManager, "appLog")
                     }
                 },
             )
