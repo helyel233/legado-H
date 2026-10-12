@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,7 +48,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.legado.app.R
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.LiveData
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
@@ -55,11 +58,19 @@ import dev.chrisbanes.haze.HazeState
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssSource
+import io.legado.app.help.source.removeSortCache
 import io.legado.app.help.source.sortUrls
 import io.legado.app.ui.host.pack.V5PackageStore
 import io.legado.app.ui.rss.article.RssArticlesViewModel
+import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.read.ReadRss
+import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
+import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.resolve.LayoutResolver
@@ -69,10 +80,14 @@ import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.GSONStrict
+import io.legado.app.utils.share
+import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -149,14 +164,28 @@ private fun HostRssSortScreen() {
 
     val sourceUrl = remember { activity.intent.getStringExtra("sourceUrl") ?: "" }
     val sortUrlExtra = remember { activity.intent.getStringExtra("sortUrl") }
-    val searchKey = remember { activity.intent.getStringExtra("key") }
+    // P4-4 补全：源内搜索（旧 RssSortActivity 的 menu_search）改为可交互状态
+    var searchKey by remember { mutableStateOf(activity.intent.getStringExtra("key")) }
+    var sortsReloadKey by remember { mutableIntStateOf(0) }
+    var favorite by remember { mutableStateOf(false) }
+    var compactLayout by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var searchInputOpen by remember { mutableStateOf(false) }
 
     val source by produceState<RssSource?>(null, sourceUrl) {
         value = withContext(Dispatchers.IO) { appDb.rssSourceDao.getByKey(sourceUrl) }
     }
 
+    // 收藏状态（与旧 favoriteCurrentSource 同口径）
+    LaunchedEffect(source) {
+        val s = source ?: return@LaunchedEffect
+        favorite = withContext(Dispatchers.IO) {
+            appDb.rssStarDao.get(s.sourceUrl, s.sourceUrl) != null
+        }
+    }
+
     // 排序列表（与旧 RssSortActivity.upFragments 同逻辑）
-    val sorts by produceState<List<Pair<String, String>>>(emptyList(), sourceUrl) {
+    val sorts by produceState<List<Pair<String, String>>>(emptyList(), sourceUrl, sortsReloadKey, searchKey) {
         val s = source ?: appDb.rssSourceDao.getByKey(sourceUrl) ?: return@produceState
         value = runCatching {
             when {
@@ -219,6 +248,19 @@ private fun HostRssSortScreen() {
         title = source?.sourceName ?: sorts.firstOrNull()?.first?.ifBlank { "订阅" } ?: "订阅",
         subtitle = if (sorts.size > 1) "${sorts.size} 个分类 · ${articles.size} 篇" else null,
         onBack = { activity.finish() },
+        trailing = {
+            Text(
+                text = "\u22EE",
+                style = visual.type.title,
+                color = colors.primary,
+                modifier = Modifier
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) { menuOpen = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        },
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -264,7 +306,7 @@ private fun HostRssSortScreen() {
                     verticalArrangement = Arrangement.spacedBy(density.blockGap),
                 ) {
                     items(articles, key = { it.link }) { article ->
-                        RssArticleCard(article = article) {
+                        RssArticleCard(article = article, compact = compactLayout) {
                             ReadRss.readRss(activity, article, source)
                         }
                     }
@@ -285,18 +327,164 @@ private fun HostRssSortScreen() {
             }
         }
     }
+
+    // ---------------- P4-4 补全：旧 RssSortActivity 的 10 个菜单 ----------------
+    if (menuOpen) {
+        val s = source
+        AppMenuSheet(
+            title = s?.sourceName ?: "订阅",
+            actions = buildList {
+                if (s != null && !s.searchUrl.isNullOrBlank()) {
+                    add("搜索本源内容" to { searchInputOpen = true })
+                }
+                add((if (favorite) "✓ " else "") + "收藏此源" to {
+                    val src = source ?: return@to
+                    activity.lifecycleScope.launch {
+                        val added = withContext(Dispatchers.IO) {
+                            if (appDb.rssStarDao.get(src.sourceUrl, src.sourceUrl) != null) {
+                                appDb.rssStarDao.delete(src.sourceUrl, src.sourceUrl)
+                                false
+                            } else {
+                                appDb.rssStarDao.insert(
+                                    io.legado.app.data.entities.RssStar(
+                                        origin = src.sourceUrl,
+                                        sort = "",
+                                        title = src.sourceName,
+                                        starTime = System.currentTimeMillis(),
+                                        link = src.sourceUrl,
+                                        type = 0,
+                                    )
+                                )
+                                true
+                            }
+                        }
+                        favorite = added
+                        activity.toastOnUi(
+                            if (added) R.string.in_favorites else R.string.out_favorites
+                        )
+                    }
+                })
+                add("分享此源" to {
+                    source?.sourceUrl?.let { context.share(it) }
+                })
+                if (s != null && !s.loginUrl.isNullOrBlank()) {
+                    add("登录此源" to {
+                        context.startActivity<io.legado.app.ui.login.SourceLoginActivity> {
+                            putExtra("type", "rssSource")
+                            putExtra("key", s.sourceUrl)
+                        }
+                    })
+                }
+                add("刷新排序" to {
+                    menuOpen = false
+                    activity.lifecycleScope.launch {
+                        withContext(Dispatchers.IO) { source?.removeSortCache(); Unit }
+                        sortsReloadKey++
+                    }
+                })
+                add("编辑此源" to {
+                    menuOpen = false
+                    context.startActivity<io.legado.app.ui.rss.source.edit.RssSourceEditActivity> {
+                        putExtra("sourceUrl", sourceUrl)
+                    }
+                })
+                add("设置源变量" to {
+                    menuOpen = false
+                    val src = source ?: return@to
+                    activity.lifecycleScope.launch {
+                        val variable = withContext(Dispatchers.IO) { src.getVariable() }
+                        io.legado.app.ui.widget.dialog.VariableDialog(
+                            activity.getString(R.string.set_source_variable),
+                            src.getKey(),
+                            variable,
+                            src.getDisplayVariableComment(
+                                activity.getString(R.string.source_variable_hint)
+                            ),
+                        ).show(activity.supportFragmentManager, "variable")
+                    }
+                })
+                add((if (compactLayout) "✓ " else "") + "切换布局（紧凑/舒适）" to {
+                    compactLayout = !compactLayout
+                    menuOpen = false
+                })
+                add("阅读记录" to {
+                    menuOpen = false
+                    io.legado.app.ui.rss.article.ReadRecordDialog(sourceUrl)
+                        .show(activity.supportFragmentManager, "readRecord")
+                })
+                add("清空文章" to {
+                    menuOpen = false
+                    activity.lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            appDb.rssArticleDao.delete(sourceUrl); Unit
+                        }
+                    }
+                })
+            },
+            onDismiss = { menuOpen = false },
+        )
+    }
+
+    // 源内搜索输入
+    if (searchInputOpen) {
+        var query by remember { mutableStateOf(searchKey ?: "") }
+        AppDialog(onDismiss = { searchInputOpen = false }) {
+            Column(Modifier.padding(density.screenPadding)) {
+                Text("搜索本源内容", style = visual.type.title, color = colors.onSurface)
+                Spacer(Modifier.height(density.blockGap))
+                AppTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = "关键词（留空取消搜索）",
+                )
+                Spacer(Modifier.height(density.blockGap))
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(colors.primary, visual.shape(ShapeKind.BUTTON))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) {
+                                searchKey = query.trim().ifBlank { null }
+                                searchInputOpen = false
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("确定", style = visual.type.label, color = colors.onPrimary)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(colors.surfaceVariant, visual.shape(ShapeKind.BUTTON))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) { searchInputOpen = false }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("取消", style = visual.type.label, color = colors.onSurface)
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** V5 文章卡：缩略图 + 标题 + 元信息，已读弱化。 */
 @Composable
 private fun RssArticleCard(
     article: RssArticle,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = LocalSemanticColors.current
     val visual = LocalVisualSpec.current
     val density = visual.density
-    val hasImage = !article.image.isNullOrBlank()
+    val hasImage = !compact && !article.image.isNullOrBlank()
 
     Row(
         modifier = Modifier
