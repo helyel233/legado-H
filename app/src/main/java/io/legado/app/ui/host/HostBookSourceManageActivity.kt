@@ -140,6 +140,7 @@ private fun HostBookSourceManageScreen() {
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var groupSheetFor by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var moreSelectionOpen by remember { mutableStateOf(false) }
 
     val sources by remember(searchKey) {
         val key = searchKey.trim()
@@ -430,7 +431,9 @@ private fun HostBookSourceManageScreen() {
         }
         }
 
-        // 选择模式操作条
+        // 选择模式操作条：常用 5 项固定可见 + 「更多」收进溢出菜单
+        // （对齐 1.7.3 SelectActionBar 的「主操作 + 溢出」结构；全部平铺在横滑条里
+        //   会导致后半段（校验/区间/分组/导出/分享）滑出屏幕无法发现）
         if (selectionMode) {
             Box(
                 modifier = Modifier
@@ -442,9 +445,8 @@ private fun HostBookSourceManageScreen() {
                         .fillMaxWidth()
                         .clip(visual.shape(ShapeKind.BAR))
                         .background(colors.surface.copy(alpha = 0.85f), visual.shape(ShapeKind.BAR))
-                        .horizontalScroll(rememberScrollState())
                         .padding(horizontal = density.blockGap, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(density.blockGap),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SelectionAction("全选") {
@@ -456,39 +458,50 @@ private fun HostBookSourceManageScreen() {
                     }
                     SelectionAction("启用") { viewModel.enableSelection(selectedSources) }
                     SelectionAction("禁用") { viewModel.disableSelection(selectedSources) }
-                    SelectionAction("选书开") { viewModel.enableSelectExplore(selectedSources) }
-                    SelectionAction("选书关") { viewModel.disableSelectExplore(selectedSources) }
-                    SelectionAction("置顶") {
-                        viewModel.topSource(*selectedSources.toTypedArray())
-                        exitSelection()
-                    }
-                    SelectionAction("置底") {
-                        viewModel.bottomSource(*selectedSources.toTypedArray())
-                        exitSelection()
-                    }
-                    SelectionAction("导出") { exportSelection() }
-                    SelectionAction("分享") { shareSelection() }
-                    SelectionAction("校验") { checkSources() }
-                    SelectionAction("区间") { checkSelectedInterval() }
-                    SelectionAction("加分组") {
-                        groupSheetFor = { text ->
-                            viewModel.selectionAddToGroups(selectedSources, text)
-                            exitSelection()
-                        }
-                    }
-                    SelectionAction("移分组") {
-                        groupSheetFor = { text ->
-                            viewModel.selectionRemoveFromGroups(selectedSources, text)
-                            exitSelection()
-                        }
-                    }
                     SelectionAction("删除", danger = true) {
                         viewModel.del(selectedSources)
                         exitSelection()
                     }
+                    SelectionAction("更多 ⋮") { moreSelectionOpen = true }
                 }
             }
         }
+    }
+
+    // 选择模式「更多」溢出菜单（1.7.3 book_source_sel 全量）
+    if (moreSelectionOpen) {
+        AppMenuSheet(
+            title = "批量操作（已选 ${selected.size} 项）",
+            actions = listOf(
+                "选书开" to { viewModel.enableSelectExplore(selectedSources) },
+                "选书关" to { viewModel.disableSelectExplore(selectedSources) },
+                "置顶" to {
+                    viewModel.topSource(*selectedSources.toTypedArray())
+                    exitSelection()
+                },
+                "置底" to {
+                    viewModel.bottomSource(*selectedSources.toTypedArray())
+                    exitSelection()
+                },
+                "加分组…" to {
+                    groupSheetFor = { text ->
+                        viewModel.selectionAddToGroups(selectedSources, text)
+                        exitSelection()
+                    }
+                },
+                "移出分组…" to {
+                    groupSheetFor = { text ->
+                        viewModel.selectionRemoveFromGroups(selectedSources, text)
+                        exitSelection()
+                    }
+                },
+                "校验书源…" to { checkSources() },
+                "校验选中区间" to { checkSelectedInterval() },
+                "导出…" to { exportSelection() },
+                "分享…" to { shareSelection() },
+            ),
+            onDismiss = { moreSelectionOpen = false },
+        )
     }
 
     // 主溢出菜单（对齐 1.7.3）
