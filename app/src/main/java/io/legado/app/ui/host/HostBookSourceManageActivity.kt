@@ -62,7 +62,10 @@ import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppSearchField
+import io.legado.app.uikit.v5.components.AppSelectionAction
+import io.legado.app.uikit.v5.components.AppSelectionBar
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
@@ -103,14 +106,7 @@ class HostBookSourceManageActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-        setContentView(
-            ComposeView(this).apply {
-                setContent { HostV5ThemeRoot { HostBookSourceManageScreen() } }
-            }
-        )
+        setV5Content { HostBookSourceManageScreen() }
     }
 }
 
@@ -291,31 +287,69 @@ private fun HostBookSourceManageScreen() {
         selected = emptySet()
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxSize(),
-        ) {
-            HostV5Page(
-            title = if (selectionMode) stringResource(R.string.v5_selected_count, selected.size)
-            else stringResource(R.string.v5_source_manage_title),
-            subtitle = if (!selectionMode) stringResource(R.string.v5_source_count, sortedSources.size) else null,
-            onBack = { if (selectionMode) exitSelection() else activity.finish() },
-            trailing = {
-                Text(
-                    text = "⋮",
-                    style = visual.type.title,
-                    color = colors.primary,
-                    modifier = Modifier
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) { menuOpen = true }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            },
-        ) {
+    // 选择模式操作条下沉为 AppSelectionBar（常用 5 项固定 + 「更多」溢出，迁移门 B/D2）
+    val selectionBar: @Composable () -> Unit = {
+        if (selectionMode) {
+            AppSelectionBar(
+                primaryActions = listOf(
+                    AppSelectionAction(stringResource(R.string.v5_select_all)) {
+                        selected = sortedSources.map { it.bookSourceUrl }.toSet()
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_select_invert)) {
+                        val all = sortedSources.map { it.bookSourceUrl }.toSet()
+                        selected = all - selected
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_enable)) { viewModel.enableSelection(selectedSources) },
+                    AppSelectionAction(stringResource(R.string.v5_disable)) { viewModel.disableSelection(selectedSources) },
+                    AppSelectionAction(stringResource(R.string.v5_delete), danger = true) {
+                        viewModel.del(selectedSources)
+                        exitSelection()
+                    },
+                ),
+                overflowActions = listOf(
+                    AppSelectionAction(stringResource(R.string.v5_explore_on)) { viewModel.enableSelectExplore(selectedSources) },
+                    AppSelectionAction(stringResource(R.string.v5_explore_off)) { viewModel.disableSelectExplore(selectedSources) },
+                    AppSelectionAction(stringResource(R.string.v5_move_top)) {
+                        viewModel.topSource(*selectedSources.toTypedArray())
+                        exitSelection()
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_move_bottom)) {
+                        viewModel.bottomSource(*selectedSources.toTypedArray())
+                        exitSelection()
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_add_group)) {
+                        groupSheetFor = { text ->
+                            viewModel.selectionAddToGroups(selectedSources, text)
+                            exitSelection()
+                        }
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_remove_group)) {
+                        groupSheetFor = { text ->
+                            viewModel.selectionRemoveFromGroups(selectedSources, text)
+                            exitSelection()
+                        }
+                    },
+                    AppSelectionAction(stringResource(R.string.v5_check_source)) { checkSources() },
+                    AppSelectionAction(stringResource(R.string.v5_check_interval)) { checkSelectedInterval() },
+                    AppSelectionAction(stringResource(R.string.v5_export)) { exportSelection() },
+                    AppSelectionAction(stringResource(R.string.v5_share)) { shareSelection() },
+                ),
+                overflowTitle = stringResource(R.string.v5_batch_actions_title, selected.size),
+                moreLabel = stringResource(R.string.v5_more),
+            )
+        }
+    }
+
+    HostV5Page(
+        title = if (selectionMode) stringResource(R.string.v5_selected_count, selected.size)
+        else stringResource(R.string.v5_source_manage_title),
+        subtitle = if (!selectionMode) stringResource(R.string.v5_source_count, sortedSources.size) else null,
+        onBack = { if (selectionMode) exitSelection() else activity.finish() },
+        trailing = {
+            AppOverflowMenuButton { menuOpen = true }
+        },
+        bottomBar = selectionBar,
+    ) {
             Column(Modifier.fillMaxSize()) {
                 AppSearchField(
                     value = searchKey,
@@ -386,7 +420,7 @@ private fun HostBookSourceManageScreen() {
                             start = density.screenPadding,
                             end = density.screenPadding,
                             top = density.blockGap / 2,
-                            bottom = if (selectionMode) 96.dp else density.screenPadding,
+                            bottom = density.screenPadding,
                         ),
                         verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                     ) {
@@ -431,80 +465,6 @@ private fun HostBookSourceManageScreen() {
                     }
                 }
             }
-        }
-        }
-
-        // 选择模式操作条：常用 5 项固定可见 + 「更多」收进溢出菜单
-        // （对齐 1.7.3 SelectActionBar 的「主操作 + 溢出」结构；全部平铺在横滑条里
-        //   会导致后半段（校验/区间/分组/导出/分享）滑出屏幕无法发现）
-        if (selectionMode) {
-            Box(
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = density.screenPadding, vertical = density.blockGap / 2),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(visual.shape(ShapeKind.BAR))
-                        .background(colors.surface.copy(alpha = 0.85f), visual.shape(ShapeKind.BAR))
-                        .padding(horizontal = density.blockGap, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SelectionAction(stringResource(R.string.v5_select_all)) {
-                        selected = sortedSources.map { it.bookSourceUrl }.toSet()
-                    }
-                    SelectionAction(stringResource(R.string.v5_select_invert)) {
-                        val all = sortedSources.map { it.bookSourceUrl }.toSet()
-                        selected = all - selected
-                    }
-                    SelectionAction(stringResource(R.string.v5_enable)) { viewModel.enableSelection(selectedSources) }
-                    SelectionAction(stringResource(R.string.v5_disable)) { viewModel.disableSelection(selectedSources) }
-                    SelectionAction(stringResource(R.string.v5_delete), danger = true) {
-                        viewModel.del(selectedSources)
-                        exitSelection()
-                    }
-                    SelectionAction(stringResource(R.string.v5_more)) { moreSelectionOpen = true }
-                }
-            }
-        }
-    }
-
-    // 选择模式「更多」溢出菜单（1.7.3 book_source_sel 全量）
-    if (moreSelectionOpen) {
-        AppMenuSheet(
-            title = stringResource(R.string.v5_batch_actions_title, selected.size),
-            actions = listOf(
-                stringResource(R.string.v5_explore_on) to { viewModel.enableSelectExplore(selectedSources) },
-                stringResource(R.string.v5_explore_off) to { viewModel.disableSelectExplore(selectedSources) },
-                stringResource(R.string.v5_move_top) to {
-                    viewModel.topSource(*selectedSources.toTypedArray())
-                    exitSelection()
-                },
-                stringResource(R.string.v5_move_bottom) to {
-                    viewModel.bottomSource(*selectedSources.toTypedArray())
-                    exitSelection()
-                },
-                stringResource(R.string.v5_add_group) to {
-                    groupSheetFor = { text ->
-                        viewModel.selectionAddToGroups(selectedSources, text)
-                        exitSelection()
-                    }
-                },
-                stringResource(R.string.v5_remove_group) to {
-                    groupSheetFor = { text ->
-                        viewModel.selectionRemoveFromGroups(selectedSources, text)
-                        exitSelection()
-                    }
-                },
-                stringResource(R.string.v5_check_source) to { checkSources() },
-                stringResource(R.string.v5_check_interval) to { checkSelectedInterval() },
-                stringResource(R.string.v5_export) to { exportSelection() },
-                stringResource(R.string.v5_share) to { shareSelection() },
-            ),
-            onDismiss = { moreSelectionOpen = false },
-        )
     }
 
     // 主溢出菜单（对齐 1.7.3）
@@ -552,7 +512,7 @@ private fun HostBookSourceManageScreen() {
             }
         }
         AppMenuSheet(
-            title = "排序方式",
+            title = stringResource(R.string.v5_sort_mode),
             actions = sortActions + listOf(
                 (if (sortAscending) "✓ " else "") + stringResource(R.string.v5_sort_asc) to {
                     sortAscending = true

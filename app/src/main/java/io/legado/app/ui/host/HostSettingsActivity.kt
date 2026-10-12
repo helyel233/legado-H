@@ -45,6 +45,7 @@ import io.legado.app.ui.config.SubscriptionConfigFragment
 import io.legado.app.ui.config.ThemeConfigFragment
 import io.legado.app.ui.config.WelcomeConfigFragment
 import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
@@ -99,10 +100,6 @@ class HostSettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-
         val configTag = intent.getStringExtra(EXTRA_CONFIG_TAG) ?: ConfigTag.OTHER_CONFIG
         val fragmentClass = fragmentFor(configTag)
         if (fragmentClass == null) {
@@ -111,19 +108,13 @@ class HostSettingsActivity : AppCompatActivity() {
         }
         titleText = getString(R.string.setting)
 
-        setContentView(
-            ComposeView(this).apply {
-                setContent {
-                    HostV5ThemeRoot {
-                        HostSettingsScreen(
-                            configTag = configTag,
-                            fragmentClass = fragmentClass,
-                            title = titleText,
-                        )
-                    }
-                }
-            }
-        )
+        setV5Content {
+            HostSettingsScreen(
+                configTag = configTag,
+                fragmentClass = fragmentClass,
+                title = titleText,
+            )
+        }
     }
 
     // ---------------------------------------------------------------- 菜单桥
@@ -203,17 +194,7 @@ private fun HostSettingsScreen(
         onBack = { activity.finish() },
         trailing = {
             if (activity.menuProviders.isNotEmpty()) {
-                Text(
-                    text = "\u22EE",
-                    style = visual.type.title,
-                    color = colors.primary,
-                    modifier = Modifier
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        ) { menuOpen = true }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+                AppOverflowMenuButton { menuOpen = true }
             }
         },
     ) {

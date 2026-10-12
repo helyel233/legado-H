@@ -1,5 +1,8 @@
 package io.legado.app.ui.host
 
+import android.graphics.Color as AndroidColor
+import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -10,12 +13,28 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import dev.chrisbanes.haze.hazeSource
 import io.legado.app.uikit.v5.contract.DestTitle
 import io.legado.app.uikit.v5.contract.TopBarMode
 import io.legado.app.uikit.v5.runtime.LocalHazeState
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+
+/**
+ * V5 二级页 Activity 样板收敛：edge-to-edge + 透明系统栏 + HostV5ThemeRoot 注入。
+ * 此前这套三件套在 4 个二级页 Activity 里逐字重复。
+ */
+internal fun AppCompatActivity.setV5Content(content: @Composable () -> Unit) {
+    enableEdgeToEdge()
+    window.statusBarColor = AndroidColor.TRANSPARENT
+    window.navigationBarColor = AndroidColor.TRANSPARENT
+    setContentView(
+        ComposeView(this).apply {
+            setContent { HostV5ThemeRoot { content() } }
+        }
+    )
+}
 
 /**
  * V5 二级页脚手架（P4 整改④）：给独立 Compose Activity 与主壳一致的视觉环境。
@@ -33,6 +52,8 @@ internal fun HostV5Page(
     onBack: (() -> Unit)?,
     /** 顶栏右侧尾部槽（页面自己的操作入口，如溢出菜单）。 */
     trailing: (@Composable () -> Unit)? = null,
+    /** 底部固定操作区槽（选择操作条等）。给定时内容区自动 weight(1f) 让位（迁移门 D2）。 */
+    bottomBar: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val hazeState = LocalHazeState.current ?: dev.chrisbanes.haze.HazeState()
@@ -53,12 +74,26 @@ internal fun HostV5Page(
                     .statusBarsPadding(),
             ) {
                 Spacer(Modifier.height(hostTopBarHeight(TopBarMode.TITLE, scrolled = false)))
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .navigationBarsPadding(),
-                ) {
-                    content()
+                if (bottomBar == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .navigationBarsPadding(),
+                    ) {
+                        content()
+                    }
+                } else {
+                    // 底部固定操作区走插槽 + weight 让位（迁移门 D2），内容区不再靠 padding 硬撑
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize(),
+                    ) {
+                        content()
+                    }
+                    Box(modifier = Modifier.navigationBarsPadding()) {
+                        bottomBar()
+                    }
                 }
             }
         }

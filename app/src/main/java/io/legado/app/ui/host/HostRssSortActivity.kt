@@ -71,6 +71,7 @@ import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppSkeletonList
@@ -117,14 +118,7 @@ class HostRssSortActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-        setContentView(
-            ComposeView(this).apply {
-                setContent { HostV5ThemeRoot { HostRssSortScreen() } }
-            }
-        )
+        setV5Content { HostRssSortScreen() }
     }
 }
 
@@ -252,17 +246,7 @@ private fun HostRssSortScreen() {
         subtitle = if (sorts.size > 1) stringResource(R.string.v5_rss_sorts_count, sorts.size, articles.size) else null,
         onBack = { activity.finish() },
         trailing = {
-            Text(
-                text = "\u22EE",
-                style = visual.type.title,
-                color = colors.primary,
-                modifier = Modifier
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                    ) { menuOpen = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+            AppOverflowMenuButton { menuOpen = true }
         },
     ) {
         Column(
