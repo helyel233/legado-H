@@ -3,6 +3,7 @@ package io.legado.app.ui.host
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color as AndroidColor
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -24,10 +25,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,39 +42,51 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.utils.ACache
+import io.legado.app.model.CheckSource
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceSort
 import io.legado.app.ui.book.source.manage.BookSourceViewModel
+import io.legado.app.ui.book.source.manage.GroupManageDialog
+import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.widget.compose.showComposeSuggestionTextInputDialog
+import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.v5.components.AppChip
-import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppSearchField
-import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
+import io.legado.app.utils.isAbsUrl
+import io.legado.app.utils.keepScreenOn
+import io.legado.app.utils.share
+import io.legado.app.utils.showHelp
+import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
 
 /**
  * P4-3 管理页原生化①：书源管理 V5 原生。
  *
- * 取代旧 BookSourceActivity 呈现层（1323 行 View 壳 + 选择模式底栏）。
- * 数据层全复用 [BookSourceViewModel]（置顶/置底/启停/分组/导出）与
- * bookSourceDao 的 reactive Flow（全部/启用/禁用/需登录/无分组/选书/分组/搜索）。
+ * 能力对齐 **1.7.3 分支**（origin/archive/pre-1.7.3 的 BookSourceActivity）：
+ *  - 筛选：状态 chips + 分组 chips（含 group: 前缀搜索）
+ *  - 排序：手动(默认)/自动(权重)/名称/URL/更新时间/启用/响应速度 × 升/降序
+ *  - 按域名分组显示（开关）
+ *  - 导入：新建 / 在线（URL 输入 + 历史建议）/ 本地文件（txt/json）/ 扫码
+ *  - 分组管理（GroupManageDialog）
+ *  - 选择模式：全选/反选、启用/禁用、选书开/关、置顶/置底、加分组/移分组、
+ *    导出(SAF)、分享、校验书源（关键词 + 校验配置）、校验选中区间、删除
  *
- * 交互对齐旧壳：
- *  - 状态筛选 chips（全部/已启用/已禁用/需登录/无分组/选书开/选书关）+ 搜索（含 group: 前缀）
- *  - 排序（默认/名称/URL/权重/更新时间/启用/响应速度 × 升降序），默认排序支持升降序
- *  - 长按进选择模式 → 批量：全选/反选、启用/禁用（选书+选发现）、置顶/置底、
- *    加分组/移分组、删除、导出（SAF）
- *  - 单击条目 = 编辑；行内开关 = 启停（选择模式中单击 = 勾选）
+ * 数据层全复用 BookSourceViewModel + bookSourceDao reactive Flow。
  */
 class HostBookSourceManageActivity : AppCompatActivity() {
 
@@ -106,6 +118,8 @@ private enum class StatusFilter(val label: String) {
     LOGIN("需登录"), NO_GROUP("无分组"), EXPLORE_ON("选书开"), EXPLORE_OFF("选书关"),
 }
 
+private const val IMPORT_RECORD_KEY = "bookSourceRecordKey"
+
 @Composable
 private fun HostBookSourceManageScreen() {
     val context = LocalContext.current
@@ -121,6 +135,7 @@ private fun HostBookSourceManageScreen() {
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
     var sort by remember { mutableStateOf(BookSourceSort.Default) }
     var sortAscending by remember { mutableStateOf(true) }
+    var groupByDomain by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -160,10 +175,40 @@ private fun HostBookSourceManageScreen() {
         else sources.sortedWith(comparator).asReversed()
     }
 
+    // 按域名分组（连续同 host 插分组头）
+    val displayRows = remember(sortedSources, groupByDomain) {
+        if (!groupByDomain) {
+            sortedSources.map { DomainRow.Source(it) }
+        } else {
+            val rows = mutableListOf<DomainRow>()
+            var lastHost: String? = null
+            sortedSources.forEach { source ->
+                val host = runCatching { Uri.parse(source.bookSourceUrl).host }.getOrNull()
+                if (host != null && host != lastHost) {
+                    rows.add(DomainRow.Header(host))
+                    lastHost = host
+                }
+                rows.add(DomainRow.Source(source))
+            }
+            rows
+        }
+    }
+
     val selectionMode = selected.isNotEmpty()
     val selectedSources = sortedSources.filter { it.bookSourceUrl in selected }
 
     val exportLauncher = rememberLauncherForActivityResult(HandleFileContract()) {}
+    val importDocLauncher = rememberLauncherForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            ImportBookSourceDialog(uri.toString())
+                .show(activity.supportFragmentManager, "importSource")
+        }
+    }
+    val qrLauncher = rememberLauncherForActivityResult(QrCodeResult()) {
+        it ?: return@rememberLauncherForActivityResult
+        ImportBookSourceDialog(it).show(activity.supportFragmentManager, "importSource")
+    }
+
     fun exportSelection() {
         viewModel.saveToFile(
             selectedSources, sortedSources.size, searchKey.trim().ifBlank { null },
@@ -174,6 +219,69 @@ private fun HostBookSourceManageScreen() {
                 fileData = HandleFileContract.FileData(name, file, "application/json")
             }
         }
+    }
+
+    fun shareSelection() {
+        viewModel.saveToFile(
+            selectedSources, sortedSources.size, searchKey.trim().ifBlank { null },
+            sortAscending, sort,
+        ) { file, _ -> context.share(file, "application/json") }
+    }
+
+    /** 在线导入（URL 输入 + 历史建议，缓存与 1.7.3 同一 key）。 */
+    fun importOnLine() {
+        val aCache = ACache.get(cacheDir = false)
+        val cacheUrls = aCache.getAsString(IMPORT_RECORD_KEY)
+            ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
+        activity.showComposeSuggestionTextInputDialog(
+            title = activity.getString(R.string.import_on_line),
+            hint = "url",
+            suggestions = cacheUrls,
+            deletable = true,
+            onPositive = { text ->
+                if (text.isAbsUrl() && !cacheUrls.contains(text)) {
+                    cacheUrls.add(0, text)
+                    aCache.put(IMPORT_RECORD_KEY, cacheUrls.joinToString(","))
+                }
+                ImportBookSourceDialog(text)
+                    .show(activity.supportFragmentManager, "importSource")
+            },
+            onSuggestionDeleted = { url ->
+                cacheUrls.remove(url)
+                aCache.put(IMPORT_RECORD_KEY, cacheUrls.joinToString(","))
+            },
+        )
+    }
+
+    /** 校验书源（关键词 + 校验配置入口，与 1.7.3 同流程）。 */
+    fun checkSources() {
+        activity.showComposeTextInputDialog(
+            title = activity.getString(R.string.search_book_key),
+            hint = "search word",
+            initialValue = CheckSource.keyword,
+            neutralText = activity.getString(R.string.check_source_config),
+            onPositive = { text ->
+                activity.keepScreenOn(true)
+                if (text.isNotEmpty()) CheckSource.keyword = text
+                CheckSource.start(activity, selectedSources)
+            },
+            onNeutral = {
+                CheckSourceConfig().show(activity.supportFragmentManager, "checkSourceConfig")
+            },
+        )
+    }
+
+    /** 校验选中区间：把首末选中之间的源一并选中。 */
+    fun checkSelectedInterval() {
+        val positions = sortedSources.mapIndexedNotNull { index, source ->
+            if (source.bookSourceUrl in selected) index else null
+        }
+        if (positions.isEmpty()) return
+        val newSelected = selected.toMutableSet()
+        for (index in positions.min()..positions.max()) {
+            newSelected.add(sortedSources[index].bookSourceUrl)
+        }
+        selected = newSelected
     }
 
     fun exitSelection() {
@@ -243,29 +351,43 @@ private fun HostBookSourceManageScreen() {
                         ),
                         verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                     ) {
-                        items(sortedSources, key = { it.bookSourceUrl }) { source ->
-                            val isSelected = source.bookSourceUrl in selected
-                            SourceRow(
-                                source = source,
-                                selected = isSelected,
-                                selectionMode = selectionMode,
-                                onToggle = { on ->
-                                    viewModel.enable(on, listOf(source))
-                                },
-                                onClick = {
-                                    if (selectionMode) {
-                                        selected = if (isSelected) selected - source.bookSourceUrl
-                                        else selected + source.bookSourceUrl
-                                    } else {
-                                        context.startActivity<BookSourceEditActivity> {
-                                            putExtra("bookSourceUrl", source.bookSourceUrl)
-                                        }
-                                    }
-                                },
-                                onLongClick = {
-                                    selected = selected + source.bookSourceUrl
-                                },
-                            )
+                        items(displayRows, key = { row ->
+                            when (row) {
+                                is DomainRow.Header -> "h:${row.host}"
+                                is DomainRow.Source -> row.source.bookSourceUrl
+                            }
+                        }) { row ->
+                            when (row) {
+                                is DomainRow.Header -> Text(
+                                    text = row.host,
+                                    style = visual.type.caption,
+                                    color = colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                )
+                                is DomainRow.Source -> {
+                                    val source = row.source
+                                    val isSelected = source.bookSourceUrl in selected
+                                    SourceRow(
+                                        source = source,
+                                        selected = isSelected,
+                                        selectionMode = selectionMode,
+                                        onToggle = { on -> viewModel.enable(on, listOf(source)) },
+                                        onClick = {
+                                            if (selectionMode) {
+                                                selected = if (isSelected) selected - source.bookSourceUrl
+                                                else selected + source.bookSourceUrl
+                                            } else {
+                                                context.startActivity<BookSourceEditActivity> {
+                                                    putExtra("bookSourceUrl", source.bookSourceUrl)
+                                                }
+                                            }
+                                        },
+                                        onLongClick = {
+                                            selected = selected + source.bookSourceUrl
+                                        },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -289,47 +411,42 @@ private fun HostBookSourceManageScreen() {
                     horizontalArrangement = Arrangement.spacedBy(density.blockGap),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SelectionAction(label = "全选") {
+                    SelectionAction("全选") {
                         selected = sortedSources.map { it.bookSourceUrl }.toSet()
                     }
-                    SelectionAction(label = "反选") {
+                    SelectionAction("反选") {
                         val all = sortedSources.map { it.bookSourceUrl }.toSet()
                         selected = all - selected
                     }
-                    SelectionAction(label = "启用") {
-                        viewModel.enableSelection(selectedSources)
-                    }
-                    SelectionAction(label = "禁用") {
-                        viewModel.disableSelection(selectedSources)
-                    }
-                    SelectionAction(label = "选书开") {
-                        viewModel.enableSelectExplore(selectedSources)
-                    }
-                    SelectionAction(label = "选书关") {
-                        viewModel.disableSelectExplore(selectedSources)
-                    }
-                    SelectionAction(label = "置顶") {
+                    SelectionAction("启用") { viewModel.enableSelection(selectedSources) }
+                    SelectionAction("禁用") { viewModel.disableSelection(selectedSources) }
+                    SelectionAction("选书开") { viewModel.enableSelectExplore(selectedSources) }
+                    SelectionAction("选书关") { viewModel.disableSelectExplore(selectedSources) }
+                    SelectionAction("置顶") {
                         viewModel.topSource(*selectedSources.toTypedArray())
                         exitSelection()
                     }
-                    SelectionAction(label = "置底") {
+                    SelectionAction("置底") {
                         viewModel.bottomSource(*selectedSources.toTypedArray())
                         exitSelection()
                     }
-                    SelectionAction(label = "加分组") {
-                        groupSheetFor = { groupsText ->
-                            viewModel.selectionAddToGroups(selectedSources, groupsText)
+                    SelectionAction("导出") { exportSelection() }
+                    SelectionAction("分享") { shareSelection() }
+                    SelectionAction("校验") { checkSources() }
+                    SelectionAction("区间") { checkSelectedInterval() }
+                    SelectionAction("加分组") {
+                        groupSheetFor = { text ->
+                            viewModel.selectionAddToGroups(selectedSources, text)
                             exitSelection()
                         }
                     }
-                    SelectionAction(label = "移分组") {
-                        groupSheetFor = { groupsText ->
-                            viewModel.selectionRemoveFromGroups(selectedSources, groupsText)
+                    SelectionAction("移分组") {
+                        groupSheetFor = { text ->
+                            viewModel.selectionRemoveFromGroups(selectedSources, text)
                             exitSelection()
                         }
                     }
-                    SelectionAction(label = "导出") { exportSelection() }
-                    SelectionAction(label = "删除", danger = true) {
+                    SelectionAction("删除", danger = true) {
                         viewModel.del(selectedSources)
                         exitSelection()
                     }
@@ -338,41 +455,53 @@ private fun HostBookSourceManageScreen() {
         }
     }
 
-    // 溢出菜单
+    // 主溢出菜单（对齐 1.7.3）
     if (menuOpen) {
         AppMenuSheet(
             title = "书源管理",
-            actions = listOf(
-                "新建书源" to {
-                    context.startActivity<BookSourceEditActivity>()
-                },
-                "导入书源" to {
-                    ImportBookSourceDialog().show(activity.supportFragmentManager, "importSource")
-                },
-                "排序方式…" to { sortOpen = true },
-            ),
+            actions = buildList {
+                add("新建书源" to { context.startActivity<BookSourceEditActivity>() })
+                add("在线导入…" to { importOnLine() })
+                add("本地导入…" to {
+                    importDocLauncher.launch {
+                        mode = HandleFileContract.FILE
+                        allowExtensions = arrayOf("txt", "json")
+                    }
+                })
+                add("扫码导入" to { qrLauncher.launch(null) })
+                add("分组管理…" to {
+                    GroupManageDialog().show(activity.supportFragmentManager, "groupManage")
+                })
+                add("排序方式…" to { sortOpen = true })
+                add((if (groupByDomain) "✓ " else "") + "按域名分组" to {
+                    groupByDomain = !groupByDomain
+                    menuOpen = false
+                })
+                add("帮助" to { activity.showHelp("SourceMBookHelp") })
+            },
             onDismiss = { menuOpen = false },
         )
     }
 
-    // 排序选择
+    // 排序（对齐 1.7.3：手动=默认 / 自动=权重）
     if (sortOpen) {
+        val sortActions = listOf(
+            Triple("手动排序", BookSourceSort.Default) { sort = BookSourceSort.Default },
+            Triple("自动排序（权重）", BookSourceSort.Weight) { sort = BookSourceSort.Weight },
+            Triple("名称", BookSourceSort.Name) { sort = BookSourceSort.Name },
+            Triple("URL", BookSourceSort.Url) { sort = BookSourceSort.Url },
+            Triple("更新时间", BookSourceSort.Update) { sort = BookSourceSort.Update },
+            Triple("启用状态", BookSourceSort.Enable) { sort = BookSourceSort.Enable },
+            Triple("响应速度", BookSourceSort.Respond) { sort = BookSourceSort.Respond },
+        ).map { (label, s, apply) ->
+            (if (sort == s) "✓ " else "") + label to {
+                apply()
+                sortOpen = false
+            }
+        }
         AppMenuSheet(
             title = "排序方式",
-            actions = listOf(
-                BookSourceSort.Default to "默认",
-                BookSourceSort.Name to "名称",
-                BookSourceSort.Url to "URL",
-                BookSourceSort.Weight to "权重",
-                BookSourceSort.Update to "更新时间",
-                BookSourceSort.Enable to "启用状态",
-                BookSourceSort.Respond to "响应速度",
-            ).map { (s, label) ->
-                (if (sort == s) "✓ " else "") + label to {
-                    sort = s
-                    sortOpen = false
-                }
-            } + listOf(
+            actions = sortActions + listOf(
                 (if (sortAscending) "✓ " else "") + "升序" to {
                     sortAscending = true
                     sortOpen = false
@@ -433,6 +562,12 @@ private fun HostBookSourceManageScreen() {
             }
         }
     }
+}
+
+/** 列表行：域名分组头 或 源条目。 */
+private sealed interface DomainRow {
+    data class Header(val host: String) : DomainRow
+    data class Source(val source: BookSourcePart) : DomainRow
 }
 
 @Composable
