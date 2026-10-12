@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -245,8 +246,10 @@ private fun HostRssSortScreen() {
     }
 
     HostV5Page(
-        title = source?.sourceName ?: sorts.firstOrNull()?.first?.ifBlank { "订阅" } ?: "订阅",
-        subtitle = if (sorts.size > 1) "${sorts.size} 个分类 · ${articles.size} 篇" else null,
+        title = source?.sourceName
+            ?: sorts.firstOrNull()?.first?.ifBlank { stringResource(R.string.v5_rss_fallback_title) }
+            ?: stringResource(R.string.v5_rss_fallback_title),
+        subtitle = if (sorts.size > 1) stringResource(R.string.v5_rss_sorts_count, sorts.size, articles.size) else null,
         onBack = { activity.finish() },
         trailing = {
             Text(
@@ -313,7 +316,7 @@ private fun HostRssSortScreen() {
                     if (loadFinally) {
                         item(key = "footer") {
                             Text(
-                                text = "加载中…",
+                                text = stringResource(R.string.v5_rss_loading_more),
                                 style = visual.type.caption,
                                 color = colors.onSurfaceVariant,
                                 modifier = Modifier
@@ -335,9 +338,9 @@ private fun HostRssSortScreen() {
             title = s?.sourceName ?: "订阅",
             actions = buildList {
                 if (s != null && !s.searchUrl.isNullOrBlank()) {
-                    add("搜索本源内容" to { searchInputOpen = true })
+                    add(stringResource(R.string.v5_rss_search_in_source) to { searchInputOpen = true })
                 }
-                add((if (favorite) "✓ " else "") + "收藏此源" to {
+                add((if (favorite) "✓ " else "") + stringResource(R.string.v5_rss_favorite) to {
                     val src = source ?: return@to
                     activity.lifecycleScope.launch {
                         val added = withContext(Dispatchers.IO) {
@@ -364,31 +367,31 @@ private fun HostRssSortScreen() {
                         )
                     }
                 })
-                add("分享此源" to {
+                add(stringResource(R.string.v5_rss_share_source) to {
                     source?.sourceUrl?.let { context.share(it) }
                 })
                 if (s != null && !s.loginUrl.isNullOrBlank()) {
-                    add("登录此源" to {
+                    add(stringResource(R.string.v5_rss_login) to {
                         context.startActivity<io.legado.app.ui.login.SourceLoginActivity> {
                             putExtra("type", "rssSource")
                             putExtra("key", s.sourceUrl)
                         }
                     })
                 }
-                add("刷新排序" to {
+                add(stringResource(R.string.v5_rss_refresh_sort) to {
                     menuOpen = false
                     activity.lifecycleScope.launch {
                         withContext(Dispatchers.IO) { source?.removeSortCache(); Unit }
                         sortsReloadKey++
                     }
                 })
-                add("编辑此源" to {
+                add(stringResource(R.string.v5_rss_edit_source) to {
                     menuOpen = false
                     context.startActivity<io.legado.app.ui.rss.source.edit.RssSourceEditActivity> {
                         putExtra("sourceUrl", sourceUrl)
                     }
                 })
-                add("设置源变量" to {
+                add(stringResource(R.string.v5_rss_set_variable) to {
                     menuOpen = false
                     val src = source ?: return@to
                     activity.lifecycleScope.launch {
@@ -403,16 +406,16 @@ private fun HostRssSortScreen() {
                         ).show(activity.supportFragmentManager, "variable")
                     }
                 })
-                add((if (compactLayout) "✓ " else "") + "切换布局（紧凑/舒适）" to {
+                add((if (compactLayout) "✓ " else "") + stringResource(R.string.v5_rss_switch_layout) to {
                     compactLayout = !compactLayout
                     menuOpen = false
                 })
-                add("阅读记录" to {
+                add(stringResource(R.string.v5_rss_read_record) to {
                     menuOpen = false
                     io.legado.app.ui.rss.article.ReadRecordDialog(sourceUrl)
                         .show(activity.supportFragmentManager, "readRecord")
                 })
-                add("清空文章" to {
+                add(stringResource(R.string.v5_rss_clear_articles) to {
                     menuOpen = false
                     activity.lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
@@ -430,12 +433,12 @@ private fun HostRssSortScreen() {
         var query by remember { mutableStateOf(searchKey ?: "") }
         AppDialog(onDismiss = { searchInputOpen = false }) {
             Column(Modifier.padding(density.screenPadding)) {
-                Text("搜索本源内容", style = visual.type.title, color = colors.onSurface)
+                Text(stringResource(R.string.v5_rss_search_in_source), style = visual.type.title, color = colors.onSurface)
                 Spacer(Modifier.height(density.blockGap))
                 AppTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = "关键词（留空取消搜索）",
+                    placeholder = stringResource(R.string.v5_rss_search_hint),
                 )
                 Spacer(Modifier.height(density.blockGap))
                 Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
@@ -453,7 +456,7 @@ private fun HostRssSortScreen() {
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("确定", style = visual.type.label, color = colors.onPrimary)
+                        Text(stringResource(R.string.v5_ok), style = visual.type.label, color = colors.onPrimary)
                     }
                     Box(
                         modifier = Modifier
@@ -466,7 +469,7 @@ private fun HostRssSortScreen() {
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("取消", style = visual.type.label, color = colors.onSurface)
+                        Text(stringResource(R.string.v5_cancel), style = visual.type.label, color = colors.onSurface)
                     }
                 }
             }

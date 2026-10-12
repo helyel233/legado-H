@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -143,7 +144,7 @@ private fun HostSearchScreen() {
     }
 
     HostV5Page(
-        title = "搜索",
+        title = stringResource(R.string.v5_search),
         subtitle = null,
         onBack = { activity.finish() },
     ) {
@@ -179,7 +180,7 @@ private fun HostSearchScreen() {
                             .focusRequester(focusRequester),
                     )
                     Text(
-                        text = "搜索",
+                        text = stringResource(R.string.v5_search),
                         style = visual.type.label,
                         color = colors.primary,
                         modifier = Modifier.clickable(
@@ -206,8 +207,8 @@ private fun HostSearchScreen() {
 
             // 搜索完成且无结果：空态
             searchFinished == true && results.isEmpty() -> AppEmpty(
-                title = "没有找到「${input.trim()}」",
-                supporting = "换个关键词，或检查书源是否启用",
+                title = stringResource(R.string.v5_search_empty_title, input.trim()),
+                supporting = stringResource(R.string.v5_search_empty_supporting),
             )
 
             // 结果列表
@@ -224,7 +225,7 @@ private fun HostSearchScreen() {
                 if (isSearching) {
                     item(key = "searching") {
                         Text(
-                            text = "正在搜索 ${AppConfig.searchScope}…",
+                            text = stringResource(R.string.v5_search_searching, AppConfig.searchScope),
                             style = visual.type.caption,
                             color = colors.onSurfaceVariant,
                         )
@@ -263,13 +264,13 @@ private fun HistorySection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "搜索历史",
+            text = stringResource(R.string.v5_search_history),
             style = visual.type.caption,
             color = colors.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "清空",
+            text = stringResource(R.string.v5_search_clear),
             style = visual.type.caption,
             color = colors.onSurfaceVariant,
             modifier = Modifier.clickable(
@@ -379,7 +380,7 @@ private fun SearchBookCard(
                     .background(colors.primary.copy(alpha = 0.14f), CircleShape)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                Text("已存", style = visual.type.caption, color = colors.primary)
+                Text(stringResource(R.string.v5_search_in_shelf), style = visual.type.caption, color = colors.primary)
             }
         }
     }

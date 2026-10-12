@@ -57,6 +57,7 @@ import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
 import io.legado.app.uikit.v5.components.AppMenuSheet
+import androidx.compose.ui.res.stringResource
 import io.legado.app.uikit.v5.contract.AppContent
 import io.legado.app.uikit.v5.contract.ContentScope
 import io.legado.app.uikit.v5.contract.DestIcon
@@ -86,15 +87,15 @@ class HostMyContent : AppContent {
 
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
-        title = DestTitle.Text("我的"),
-        subtitle = DestTitle.Text("设置与个人数据"),
+        title = DestTitle.Res(R.string.v5_my),
+        subtitle = DestTitle.Res(R.string.v5_my_subtitle),
         // MySettingsScreen 内部是 LazyColumn（自带滚动），宿主不再包 verticalScroll
         contentOwnsScroll = true,
         actions = listOf(
             io.legado.app.uikit.v5.contract.ChromeAction(
                 id = "help",
                 icon = DestIcon.Vector(HostIcons.Star),
-                contentDescription = DestTitle.Text("帮助"),
+                contentDescription = DestTitle.Res(R.string.v5_help),
                 onClick = {}, // P4 后续接 showHelp
             ),
         ),
@@ -211,13 +212,13 @@ class HostMyContent : AppContent {
             AppBottomSheet(onDismiss = { legacyImportProposal = null }) {
                 Column(Modifier.padding(scope.density.screenPadding)) {
                     Text(
-                        "从旧版本导入",
+                        stringResource(R.string.v5_import_from_old),
                         style = visual.type.title,
                         color = colors.onSurface,
                     )
                     Spacer(Modifier.height(scope.density.blockGap / 2))
                     Text(
-                        "把旧版外观设置翻译成一个新的主题包 + 界面包，可预览后决定。\\n不导入 = 全新开始。",
+                        stringResource(R.string.v5_import_from_old_desc),
                         style = visual.type.caption,
                         color = colors.onSurfaceVariant,
                     )
@@ -249,12 +250,12 @@ class HostMyContent : AppContent {
                             ) {
                                 LegacyAppearanceImporter.commit(context, proposal)
                                 legacyImportProposal = null
-                                context.toastOnUi("已导入：我的主题包 / 我的界面包")
+                                context.toastOnUi(R.string.v5_import_done)
                             }
                             .padding(vertical = 11.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("导入并应用", style = visual.type.label, color = colors.onPrimary)
+                        Text(stringResource(R.string.v5_import_apply), style = visual.type.label, color = colors.onPrimary)
                     }
                     Spacer(Modifier.height(scope.density.blockGap / 2))
                     // 放弃
@@ -269,7 +270,7 @@ class HostMyContent : AppContent {
                             .padding(vertical = 11.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("放弃", style = visual.type.label, color = colors.onSurface)
+                        Text(stringResource(R.string.v5_give_up), style = visual.type.label, color = colors.onSurface)
                     }
                 }
             }
@@ -277,7 +278,7 @@ class HostMyContent : AppContent {
 
         if (themeSheet) {
             AppMenuSheet(
-                title = "主题模式",
+                title = stringResource(R.string.v5_theme_mode),
                 actions = themeOptions.map { opt ->
                     (if (opt.value == themeMode) "✓ " else "") + opt.label to {
                         context.putPrefString(PreferKey.themeMode, opt.value)
@@ -294,10 +295,10 @@ class HostMyContent : AppContent {
         if (webSheet) {
             val url = WebService.hostAddress
             AppMenuSheet(
-                title = "Web 服务",
+                title = stringResource(R.string.v5_web_service),
                 actions = listOf(
-                    "复制地址" to { context.sendToClip(url) },
-                    "浏览器打开" to { context.openUrl(url) },
+                    stringResource(R.string.v5_copy_url) to { context.sendToClip(url) },
+                    stringResource(R.string.v5_open_browser) to { context.openUrl(url) },
                 ),
                 onDismiss = { webSheet = false },
             )
@@ -343,8 +344,8 @@ class HostMyContent : AppContent {
                     if (LegacyAppearanceImporter.hasLegacyAppearance(context)) {
                         MySettingsRowModel(
                             key = "legacyImport",
-                            title = "从旧版本导入外观设置",
-                            summary = "把旧版的主题色/背景图/圆角透明度翻译成 V5 主题包与界面包",
+                            title = context.getString(R.string.v5_import_from_old_row),
+                            summary = context.getString(R.string.v5_import_from_old_row_desc),
                         )
                     } else {
                         null

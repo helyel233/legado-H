@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -113,9 +114,10 @@ class HostBookSourceManageActivity : AppCompatActivity() {
     }
 }
 
-private enum class StatusFilter(val label: String) {
-    ALL("全部"), ENABLED("已启用"), DISABLED("已禁用"),
-    LOGIN("需登录"), NO_GROUP("无分组"), EXPLORE_ON("选书开"), EXPLORE_OFF("选书关"),
+private enum class StatusFilter(val labelRes: Int) {
+    ALL(R.string.v5_all), ENABLED(R.string.v5_enabled), DISABLED(R.string.v5_disabled),
+    LOGIN(R.string.v5_need_login), NO_GROUP(R.string.v5_no_group),
+    EXPLORE_ON(R.string.v5_explore_on), EXPLORE_OFF(R.string.v5_explore_off),
 }
 
 private const val IMPORT_RECORD_KEY = "bookSourceRecordKey"
@@ -296,8 +298,9 @@ private fun HostBookSourceManageScreen() {
                 .fillMaxSize(),
         ) {
             HostV5Page(
-            title = if (selectionMode) "已选 ${selected.size} 项" else "书源管理",
-            subtitle = if (!selectionMode) "${sortedSources.size} 个源" else null,
+            title = if (selectionMode) stringResource(R.string.v5_selected_count, selected.size)
+            else stringResource(R.string.v5_source_manage_title),
+            subtitle = if (!selectionMode) stringResource(R.string.v5_source_count, sortedSources.size) else null,
             onBack = { if (selectionMode) exitSelection() else activity.finish() },
             trailing = {
                 Text(
@@ -318,13 +321,13 @@ private fun HostBookSourceManageScreen() {
                     value = searchKey,
                     onValueChange = { searchKey = it },
                     modifier = Modifier.padding(horizontal = density.screenPadding),
-                    placeholder = "搜索源名称 / group:分组名",
+                    placeholder = stringResource(R.string.v5_search_hint_source),
                 )
                 Spacer(Modifier.height(density.blockGap))
 
                 // 状态筛选（一排）
                 Text(
-                    text = "状态",
+                    text = stringResource(R.string.v5_filter_status),
                     style = visual.type.caption,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = density.screenPadding),
@@ -338,7 +341,7 @@ private fun HostBookSourceManageScreen() {
                     horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                 ) {
                     StatusFilter.entries.forEach { f ->
-                        AppChip(f.label, statusFilter == f, onClick = {
+                        AppChip(stringResource(f.labelRes), statusFilter == f, onClick = {
                             statusFilter = f
                             searchKey = ""
                         })
@@ -349,7 +352,7 @@ private fun HostBookSourceManageScreen() {
                 if (groups.isNotEmpty()) {
                     Spacer(Modifier.height(density.blockGap))
                     Text(
-                        text = "分组",
+                        text = stringResource(R.string.v5_filter_group),
                         style = visual.type.caption,
                         color = colors.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = density.screenPadding),
@@ -362,7 +365,7 @@ private fun HostBookSourceManageScreen() {
                             .padding(horizontal = density.screenPadding),
                         horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                     ) {
-                        AppChip("全部", searchKey.isBlank(), onClick = { searchKey = "" })
+                        AppChip(stringResource(R.string.v5_all), searchKey.isBlank(), onClick = { searchKey = "" })
                         groups.forEach { g ->
                             AppChip(g, searchKey == "group:$g", onClick = {
                                 searchKey = "group:$g"
@@ -374,8 +377,8 @@ private fun HostBookSourceManageScreen() {
 
                 when {
                     sortedSources.isEmpty() -> AppEmpty(
-                        title = "没有书源",
-                        supporting = "右上角 ⋮ → 导入书源，或新建一个",
+                        title = stringResource(R.string.v5_empty_sources_title),
+                        supporting = stringResource(R.string.v5_empty_sources_supporting),
                     )
                     else -> LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -449,20 +452,20 @@ private fun HostBookSourceManageScreen() {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SelectionAction("全选") {
+                    SelectionAction(stringResource(R.string.v5_select_all)) {
                         selected = sortedSources.map { it.bookSourceUrl }.toSet()
                     }
-                    SelectionAction("反选") {
+                    SelectionAction(stringResource(R.string.v5_select_invert)) {
                         val all = sortedSources.map { it.bookSourceUrl }.toSet()
                         selected = all - selected
                     }
-                    SelectionAction("启用") { viewModel.enableSelection(selectedSources) }
-                    SelectionAction("禁用") { viewModel.disableSelection(selectedSources) }
-                    SelectionAction("删除", danger = true) {
+                    SelectionAction(stringResource(R.string.v5_enable)) { viewModel.enableSelection(selectedSources) }
+                    SelectionAction(stringResource(R.string.v5_disable)) { viewModel.disableSelection(selectedSources) }
+                    SelectionAction(stringResource(R.string.v5_delete), danger = true) {
                         viewModel.del(selectedSources)
                         exitSelection()
                     }
-                    SelectionAction("更多 ⋮") { moreSelectionOpen = true }
+                    SelectionAction(stringResource(R.string.v5_more)) { moreSelectionOpen = true }
                 }
             }
         }
@@ -471,34 +474,34 @@ private fun HostBookSourceManageScreen() {
     // 选择模式「更多」溢出菜单（1.7.3 book_source_sel 全量）
     if (moreSelectionOpen) {
         AppMenuSheet(
-            title = "批量操作（已选 ${selected.size} 项）",
+            title = stringResource(R.string.v5_batch_actions_title, selected.size),
             actions = listOf(
-                "选书开" to { viewModel.enableSelectExplore(selectedSources) },
-                "选书关" to { viewModel.disableSelectExplore(selectedSources) },
-                "置顶" to {
+                stringResource(R.string.v5_explore_on) to { viewModel.enableSelectExplore(selectedSources) },
+                stringResource(R.string.v5_explore_off) to { viewModel.disableSelectExplore(selectedSources) },
+                stringResource(R.string.v5_move_top) to {
                     viewModel.topSource(*selectedSources.toTypedArray())
                     exitSelection()
                 },
-                "置底" to {
+                stringResource(R.string.v5_move_bottom) to {
                     viewModel.bottomSource(*selectedSources.toTypedArray())
                     exitSelection()
                 },
-                "加分组…" to {
+                stringResource(R.string.v5_add_group) to {
                     groupSheetFor = { text ->
                         viewModel.selectionAddToGroups(selectedSources, text)
                         exitSelection()
                     }
                 },
-                "移出分组…" to {
+                stringResource(R.string.v5_remove_group) to {
                     groupSheetFor = { text ->
                         viewModel.selectionRemoveFromGroups(selectedSources, text)
                         exitSelection()
                     }
                 },
-                "校验书源…" to { checkSources() },
-                "校验选中区间" to { checkSelectedInterval() },
-                "导出…" to { exportSelection() },
-                "分享…" to { shareSelection() },
+                stringResource(R.string.v5_check_source) to { checkSources() },
+                stringResource(R.string.v5_check_interval) to { checkSelectedInterval() },
+                stringResource(R.string.v5_export) to { exportSelection() },
+                stringResource(R.string.v5_share) to { shareSelection() },
             ),
             onDismiss = { moreSelectionOpen = false },
         )
@@ -507,26 +510,26 @@ private fun HostBookSourceManageScreen() {
     // 主溢出菜单（对齐 1.7.3）
     if (menuOpen) {
         AppMenuSheet(
-            title = "书源管理",
+            title = stringResource(R.string.v5_source_manage_title),
             actions = buildList {
-                add("新建书源" to { context.startActivity<BookSourceEditActivity>() })
-                add("在线导入…" to { importOnLine() })
-                add("本地导入…" to {
+                add(stringResource(R.string.v5_new_source) to { context.startActivity<BookSourceEditActivity>() })
+                add(stringResource(R.string.v5_import_online) to { importOnLine() })
+                add(stringResource(R.string.v5_import_local) to {
                     importDocLauncher.launch {
                         mode = HandleFileContract.FILE
                         allowExtensions = arrayOf("txt", "json")
                     }
                 })
-                add("扫码导入" to { qrLauncher.launch(null) })
-                add("分组管理…" to {
+                add(stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) })
+                add(stringResource(R.string.v5_group_manage) to {
                     GroupManageDialog().show(activity.supportFragmentManager, "groupManage")
                 })
-                add("排序方式…" to { sortOpen = true })
-                add((if (groupByDomain) "✓ " else "") + "按域名分组" to {
+                add(stringResource(R.string.v5_sort_mode) to { sortOpen = true })
+                add((if (groupByDomain) "✓ " else "") + stringResource(R.string.v5_group_by_domain) to {
                     groupByDomain = !groupByDomain
                     menuOpen = false
                 })
-                add("帮助" to { activity.showHelp("SourceMBookHelp") })
+                add(stringResource(R.string.v5_help) to { activity.showHelp("SourceMBookHelp") })
             },
             onDismiss = { menuOpen = false },
         )
@@ -535,13 +538,13 @@ private fun HostBookSourceManageScreen() {
     // 排序（对齐 1.7.3：手动=默认 / 自动=权重）
     if (sortOpen) {
         val sortActions = listOf(
-            Triple("手动排序", BookSourceSort.Default) { sort = BookSourceSort.Default },
-            Triple("自动排序（权重）", BookSourceSort.Weight) { sort = BookSourceSort.Weight },
-            Triple("名称", BookSourceSort.Name) { sort = BookSourceSort.Name },
-            Triple("URL", BookSourceSort.Url) { sort = BookSourceSort.Url },
-            Triple("更新时间", BookSourceSort.Update) { sort = BookSourceSort.Update },
-            Triple("启用状态", BookSourceSort.Enable) { sort = BookSourceSort.Enable },
-            Triple("响应速度", BookSourceSort.Respond) { sort = BookSourceSort.Respond },
+            Triple(stringResource(R.string.v5_sort_manual), BookSourceSort.Default) { sort = BookSourceSort.Default },
+            Triple(stringResource(R.string.v5_sort_auto_weight), BookSourceSort.Weight) { sort = BookSourceSort.Weight },
+            Triple(stringResource(R.string.v5_sort_name), BookSourceSort.Name) { sort = BookSourceSort.Name },
+            Triple(stringResource(R.string.v5_sort_url), BookSourceSort.Url) { sort = BookSourceSort.Url },
+            Triple(stringResource(R.string.v5_sort_update), BookSourceSort.Update) { sort = BookSourceSort.Update },
+            Triple(stringResource(R.string.v5_sort_enable), BookSourceSort.Enable) { sort = BookSourceSort.Enable },
+            Triple(stringResource(R.string.v5_sort_respond), BookSourceSort.Respond) { sort = BookSourceSort.Respond },
         ).map { (label, s, apply) ->
             (if (sort == s) "✓ " else "") + label to {
                 apply()
@@ -551,11 +554,11 @@ private fun HostBookSourceManageScreen() {
         AppMenuSheet(
             title = "排序方式",
             actions = sortActions + listOf(
-                (if (sortAscending) "✓ " else "") + "升序" to {
+                (if (sortAscending) "✓ " else "") + stringResource(R.string.v5_sort_asc) to {
                     sortAscending = true
                     sortOpen = false
                 },
-                (if (!sortAscending) "✓ " else "") + "降序" to {
+                (if (!sortAscending) "✓ " else "") + stringResource(R.string.v5_sort_desc) to {
                     sortAscending = false
                     sortOpen = false
                 },
@@ -569,12 +572,12 @@ private fun HostBookSourceManageScreen() {
         var groupsText by remember { mutableStateOf("") }
         AppDialog(onDismiss = { groupSheetFor = null }) {
             Column(Modifier.padding(density.screenPadding)) {
-                Text("分组（多个用英文逗号分隔）", style = visual.type.title, color = colors.onSurface)
+                Text(stringResource(R.string.v5_group_input_title), style = visual.type.title, color = colors.onSurface)
                 Spacer(Modifier.height(density.blockGap))
                 AppTextField(
                     value = groupsText,
                     onValueChange = { groupsText = it },
-                    placeholder = "如：默认,精品",
+                    placeholder = stringResource(R.string.v5_group_input_hint),
                 )
                 Spacer(Modifier.height(density.blockGap))
                 Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
@@ -592,7 +595,7 @@ private fun HostBookSourceManageScreen() {
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("确定", style = visual.type.label, color = colors.onPrimary)
+                        Text(stringResource(R.string.v5_ok), style = visual.type.label, color = colors.onPrimary)
                     }
                     Box(
                         modifier = Modifier
@@ -605,7 +608,7 @@ private fun HostBookSourceManageScreen() {
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("取消", style = visual.type.label, color = colors.onSurface)
+                        Text(stringResource(R.string.v5_cancel), style = visual.type.label, color = colors.onSurface)
                     }
                 }
             }
