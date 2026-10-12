@@ -70,6 +70,9 @@ interface ContentScope {
      * 且只能按 id 跳注册表里存在的页面，不能携带任何外观指令。
      */
     fun navigate(destinationId: String)
+
+    /** 当前页路由参数（宿主 navigate 的 args；Tab 页为空表）。 */
+    val arguments: Map<String, String> get() = emptyMap()
 }
 
 /** 宿主专用工厂。页面拿不到 [io.legado.app.uikit.v5.token.VisualSpec]，只能拿到窄接口。 */
@@ -78,13 +81,15 @@ object HostScope {
         visual: io.legado.app.uikit.v5.token.VisualSpec,
         colors: AppSemanticColors,
         navigate: (String) -> Unit = {},
-    ): ContentScope = ContentScopeImpl(visual, colors, navigate)
+        arguments: Map<String, String> = emptyMap(),
+    ): ContentScope = ContentScopeImpl(visual, colors, navigate, arguments)
 }
 
 internal class ContentScopeImpl(
     private val visual: io.legado.app.uikit.v5.token.VisualSpec,
     override val color: AppSemanticColors,
     private val nav: (String) -> Unit,
+    override val arguments: Map<String, String>,
 ) : ContentScope {
 
     override fun shape(kind: ShapeKind): Shape = visual.shape(kind)

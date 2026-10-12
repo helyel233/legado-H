@@ -78,6 +78,89 @@ fun AppSelectionBar(
     }
 }
 
+/**
+ * 页级选择模式状态（审计 #28-③ ManageListScaffold 的核心半件）。
+ *
+ * 收编管理页此前每页手搓的选中集合操作：进入/退出、单击切换、全选/反选、
+ * 按已排序列表取选中项。用法：
+ *
+ * ```
+ * val selection = rememberAppSelectionState(idOf = { it.url })
+ * if (selection.selectionMode) {
+ *     AppSelectionBar(
+ *         primaryActions = listOf(
+ *             AppSelectionAction("全选") { selection.selectAll(sources) },
+ *             ...
+ *         ),
+ *         moreLabel = "更多 ⋮",
+ *     )
+ * }
+ * AppSelectionRow(
+ *     selected = selection.isSelected(item),
+ *     onClick = { selection.toggle(item) },   // 选择模式下
+ *     onLongClick = { selection.enter(item) },
+ * )
+ * ```
+ */
+class AppSelectionState<T>(private val idOf: (T) -> String) {
+
+    var selected: Set<String> by mutableStateOf(emptySet())
+        private set
+
+    /** 是否处于选择模式（有任何选中项） */
+    val selectionMode: Boolean get() = selected.isNotEmpty()
+
+    val count: Int get() = selected.size
+
+    fun isSelected(item: T): Boolean = idOf(item) in selected
+
+    /** 长按进入选择模式并选中该项。 */
+    fun enter(item: T) {
+        selected = selected + idOf(item)
+    }
+
+    /** 选择模式下单击切换；非选择模式下返回 false（由页面做正常点击）。 */
+    fun toggle(item: T): Boolean {
+        val id = idOf(item)
+        return if (id in selected) {
+            selected = selected - id
+            true
+        } else if (selectionMode) {
+            selected = selected + id
+            true
+        } else {
+            false
+        }
+    }
+
+    fun selectAll(items: Collection<T>) {
+        selected = items.mapTo(mutableSetOf(), idOf)
+    }
+
+    fun invert(items: Collection<T>) {
+        val all = items.mapTo(mutableSetOf(), idOf)
+        selected = all - selected
+    }
+
+    /** 按当前已排序列表取选中项（保持列表顺序）。 */
+    fun selectedFrom(items: Collection<T>): List<T> =
+        items.filter { idOf(it) in selected }
+
+    /** 退出选择模式。 */
+    fun exit() {
+        selected = emptySet()
+    }
+
+    /** 恢复选中集合（校验选中区间等高级操作用）。 */
+    fun restoreSelected(ids: Set<String>) {
+        selected = ids
+    }
+}
+
+@Composable
+fun <T> rememberAppSelectionState(idOf: (T) -> String): AppSelectionState<T> =
+    remember { AppSelectionState(idOf) }
+
 /** 操作条单项（原 SelectionAction，收敛为共享组件内部实现）。触控区 ≥44dp。 */
 @Composable
 private fun AppSelectionActionItem(action: AppSelectionAction) {

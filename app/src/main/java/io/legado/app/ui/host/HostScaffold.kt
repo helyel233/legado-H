@@ -48,15 +48,22 @@ fun HostScaffold(
     val colors = LocalSemanticColors.current
 
     val registry = state.registry
-    val content = remember(state.currentId) {
+    val content = remember(state.currentId, state.currentArgs) {
         registry.byId(state.currentId)?.factory?.invoke()
     }
     val chrome: ScreenChrome = remember(state.currentId) { content?.chrome() ?: ScreenChrome() }
-    val scope = remember(visual, colors) { HostScope.create(visual, colors, state::navigate) }
+    val scope = remember(visual, colors, state.currentArgs) {
+        HostScope.create(visual, colors, navigate = { id -> state.navigate(id) }, arguments = state.currentArgs)
+    }
 
     val scrollState = rememberScrollState()
     val scrolled by remember { derivedStateOf { scrollState.value > 24 } }
     LaunchedEffect(scrolled) { state.onScrollChanged(scrolled) }
+
+    // 系统返回键：先弹宿主返回栈；页面自己的 BackHandler（如退出选择模式）
+    // 组合顺序在本句之前注册者优先级更高？——Compose 后注册者优先，
+    // 宿主 BackHandler 写在内容组合之前，页面 BackHandler 天然覆盖它。
+    androidx.activity.compose.BackHandler(enabled = state.canBack) { state.back() }
 
     val tabs = remember(registry, state) { registry.visibleTabs() }
     val sideGroups = remember(registry) { registry.sideItems() }
@@ -121,7 +128,7 @@ fun HostScaffold(
                 scrolled = scrolled,
                 showBack = chrome.showBack,
                 actions = chrome.actions,
-                onBack = { state.navigate("shelf") },
+                onBack = { state.back() },
                 showSidebarHandle = visual.navPosition == NavPosition.SIDE,
                 onOpenSidebar = { state.toggleSidebar() },
             )

@@ -57,11 +57,22 @@ internal fun HostV5Page(
     bottomBar: (@Composable () -> Unit)? = null,
     /** 右下角悬浮动作槽（FAB，与 bottomBar 互斥使用）。 */
     floatingAction: (@Composable () -> Unit)? = null,
+    /**
+     * 选择模式：非 null 时标题自动切「已选 N 项」、返回键（顶栏+系统）先退选择模式。
+     * 配合 AppSelectionState 使用（审计 #28-③）。
+     */
+    selectionCount: Int? = null,
+    onExitSelection: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val hazeState = LocalHazeState.current ?: dev.chrisbanes.haze.HazeState()
     val visual = LocalVisualSpec.current
     val activity = LocalContext.current as? androidx.appcompat.app.AppCompatActivity
+
+    // 选择模式接管返回语义（顶栏返回 + 系统返回键）
+    if (selectionCount != null && onExitSelection != null) {
+        androidx.activity.compose.BackHandler { onExitSelection() }
+    }
 
     Box(Modifier.fillMaxSize()) {
         // ① 采样源层：背景 + 内容（AppSurface 的玻璃从这里取样）
@@ -108,13 +119,20 @@ internal fun HostV5Page(
                 .statusBarsPadding(),
         ) {
             HostTopBar(
-                title = DestTitle.Text(title),
-                subtitle = subtitle?.let { DestTitle.Text(it) },
+                title = if (selectionCount != null) {
+                    DestTitle.Res(io.legado.app.R.string.v5_selected_count, listOf(selectionCount))
+                } else {
+                    DestTitle.Text(title)
+                },
+                subtitle = if (selectionCount == null) subtitle?.let { DestTitle.Text(it) } else null,
                 mode = TopBarMode.TITLE,
                 scrolled = false,
                 showBack = onBack != null,
                 actions = emptyList(),
-                onBack = { onBack?.invoke() ?: activity?.finish() },
+                onBack = {
+                    if (selectionCount != null && onExitSelection != null) onExitSelection()
+                    else onBack?.invoke() ?: activity?.finish()
+                },
             )
             if (trailing != null) {
                 Box(

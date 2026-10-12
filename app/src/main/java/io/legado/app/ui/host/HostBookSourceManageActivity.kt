@@ -75,6 +75,7 @@ import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.components.AppSelectionAction
 import io.legado.app.uikit.v5.components.AppSelectionBar
 import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.components.rememberAppSelectionState
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppProgressBar
 import io.legado.app.uikit.v5.components.AppSwitch
@@ -145,7 +146,8 @@ private fun HostBookSourceManageScreen() {
     var sort by remember { mutableStateOf(BookSourceSort.Default) }
     var sortAscending by remember { mutableStateOf(true) }
     var groupByDomain by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf(setOf<String>()) }
+    // 页级选择模式（AppSelectionState：集合操作收编，页面只写业务动作）
+    val selection = rememberAppSelectionState<io.legado.app.data.entities.BookSourcePart>(idOf = { it.bookSourceUrl })
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var groupSheetFor by remember { mutableStateOf<((String) -> Unit)?>(null) }
@@ -207,8 +209,8 @@ private fun HostBookSourceManageScreen() {
         }
     }
 
-    val selectionMode = selected.isNotEmpty()
-    val selectedSources = sortedSources.filter { it.bookSourceUrl in selected }
+    val selectionMode = selection.selectionMode
+    val selectedSources = selection.selectedFrom(sortedSources)
 
     // 首次进入选择模式提示长按多选（每个页面会话只提示一次）
     LaunchedEffect(selectionMode) {
@@ -311,18 +313,18 @@ private fun HostBookSourceManageScreen() {
     /** 校验选中区间：把首末选中之间的源一并选中。 */
     fun checkSelectedInterval() {
         val positions = sortedSources.mapIndexedNotNull { index, source ->
-            if (source.bookSourceUrl in selected) index else null
+            if (source.bookSourceUrl in selection.selected) index else null
         }
         if (positions.isEmpty()) return
-        val newSelected = selected.toMutableSet()
+        val newSelected = selection.selected.toMutableSet()
         for (index in positions.min()..positions.max()) {
             newSelected.add(sortedSources[index].bookSourceUrl)
         }
-        selected = newSelected
+        selection.restoreSelected(newSelected)
     }
 
     fun exitSelection() {
-        selected = emptySet()
+        selection.exit()
     }
 
     // 选择模式操作条下沉为 AppSelectionBar（常用 5 项固定 + 「更多」溢出，迁移门 B/D2）
@@ -331,11 +333,10 @@ private fun HostBookSourceManageScreen() {
             AppSelectionBar(
                 primaryActions = listOf(
                     AppSelectionAction(stringResource(R.string.v5_select_all)) {
-                        selected = sortedSources.map { it.bookSourceUrl }.toSet()
+                        selection.selectAll(sortedSources)
                     },
                     AppSelectionAction(stringResource(R.string.v5_select_invert)) {
-                        val all = sortedSources.map { it.bookSourceUrl }.toSet()
-                        selected = all - selected
+                        selection.invert(sortedSources)
                     },
                     AppSelectionAction(stringResource(R.string.v5_enable)) { viewModel.enableSelection(selectedSources) },
                     AppSelectionAction(stringResource(R.string.v5_disable)) { viewModel.disableSelection(selectedSources) },
@@ -371,17 +372,18 @@ private fun HostBookSourceManageScreen() {
                     AppSelectionAction(stringResource(R.string.v5_export)) { exportSelection() },
                     AppSelectionAction(stringResource(R.string.v5_share)) { shareSelection() },
                 ),
-                overflowTitle = stringResource(R.string.v5_batch_actions_title, selected.size),
+                overflowTitle = stringResource(R.string.v5_batch_actions_title, selection.count),
                 moreLabel = stringResource(R.string.v5_more),
             )
         }
     }
 
     HostV5Page(
-        title = if (selectionMode) stringResource(R.string.v5_selected_count, selected.size)
-        else stringResource(R.string.v5_source_manage_title),
+        title = stringResource(R.string.v5_source_manage_title),
         subtitle = if (!selectionMode) stringResource(R.string.v5_source_count, sortedSources.size) else null,
-        onBack = { if (selectionMode) exitSelection() else activity.finish() },
+        onBack = { activity.finish() },
+        selectionCount = if (selectionMode) selection.count else null,
+        onExitSelection = { selection.exit() },
         trailing = {
             AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
         },
@@ -481,25 +483,21 @@ private fun HostBookSourceManageScreen() {
                                 )
                                 is DomainRow.Source -> {
                                     val source = row.source
-                                    val isSelected = source.bookSourceUrl in selected
                                     SourceRow(
                                         source = source,
-                                        selected = isSelected,
+                                        selected = selection.isSelected(source),
                                         selectionMode = selectionMode,
                                         checkMsg = checkSession.sourceMessages[source.bookSourceUrl],
                                         onToggle = { on -> viewModel.enable(on, listOf(source)) },
                                         onClick = {
-                                            if (selectionMode) {
-                                                selected = if (isSelected) selected - source.bookSourceUrl
-                                                else selected + source.bookSourceUrl
-                                            } else {
+                                            if (!selection.toggle(source)) {
                                                 context.startActivity<BookSourceEditActivity> {
                                                     putExtra("bookSourceUrl", source.bookSourceUrl)
                                                 }
                                             }
                                         },
                                         onLongClick = {
-                                            selected = selected + source.bookSourceUrl
+                                            selection.enter(source)
                                         },
                                     )
                                 }
@@ -592,7 +590,7 @@ private fun HostBookSourceManageScreen() {
     if (confirmDelete) {
         AppConfirmDialog(
             title = stringResource(R.string.v5_delete),
-            message = stringResource(R.string.v5_delete_confirm_message, selected.size),
+            message = stringResource(R.string.v5_delete_confirm_message, selection.count),
             confirmLabel = stringResource(R.string.v5_delete),
             cancelLabel = stringResource(R.string.v5_cancel),
             danger = true,

@@ -56,7 +56,6 @@ import io.legado.app.ui.main.my.MySettingsSubSearchItem
 import io.legado.app.ui.main.my.MySettingsThemeOption
 import io.legado.app.ui.main.my.MyWebServiceUiState
 import io.legado.app.ui.replace.ReplaceRuleActivity
-import io.legado.app.ui.rss.source.manage.RssSourceActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.autoTask.AutoTaskActivity
@@ -207,7 +206,7 @@ class HostMyContent : AppContent {
                     "legacyImport" -> legacyImportProposal = LegacyAppearanceImporter.read(context)
                     // 站外：功能保全，旧 Activity 照常打开
                     "bookSourceManage" -> HostBookSourceManageActivity.start(context)
-                    "rssSourceManage" -> context.startActivity<RssSourceActivity>()
+                    "rssSourceManage" -> HostRssSourceManageActivity.start(context)
                     "replaceManage" -> context.startActivity<ReplaceRuleActivity>()
                     "dictRuleManage" -> context.startActivity<DictRuleActivity>()
                     "txtTocRuleManage" -> context.startActivity<TxtTocRuleActivity>()

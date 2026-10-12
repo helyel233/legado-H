@@ -286,6 +286,9 @@ class HostShelfContent : AppContent {
                         "collection" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookCollectionActivity::class.java)
                         )
+                        "smartGroup" -> context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.smartgroup.SmartGroupRuleActivity::class.java)
+                        )
                         "log" -> io.legado.app.ui.about.AppLogDialog()
                             .show((context as androidx.appcompat.app.AppCompatActivity).supportFragmentManager, "appLog")
                     }
@@ -431,6 +434,8 @@ private fun ShelfMenuSheet(
                 MenuItem(scope, "groupManage", "分组管理") { onAction(it) }
                 MenuItem(scope, "collection", "书架集合") { onAction(it) }
                 MenuItem(scope, "tagManage", "标签管理") { onAction(it) }
+                // 2026-10-12 功能盘点复活：智能分组入口随旧书架菜单丢失（台账 #6b）
+                MenuItem(scope, "smartGroup", "智能分组") { onAction(it) }
             }
             MenuSection(scope, "更新与缓存") {
                 MenuItem(scope, "updateToc", "刷新目录") { onAction(it) }
