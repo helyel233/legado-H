@@ -1,6 +1,8 @@
 package io.legado.app.ui.host
 
 import android.content.Context
+import io.legado.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -244,7 +246,7 @@ private fun HostDiscoverBody(scope: ContentScope) {
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
             Text(
-                text = source?.bookSourceName ?: "选择发现源",
+                text = source?.bookSourceName ?: stringResource(R.string.v5_explore_pick_source),
                 style = visual.type.title,
                 color = colors.onSurface,
                 maxLines = 1,
@@ -256,9 +258,9 @@ private fun HostDiscoverBody(scope: ContentScope) {
 
         when {
             source == null -> AppEmpty(
-                title = "没有启用发现的源",
-                supporting = "给书源勾选「启用发现」，或先导入书源",
-                actionLabel = "书源管理",
+                title = stringResource(R.string.v5_explore_no_sources_title),
+                supporting = stringResource(R.string.v5_explore_no_sources_supporting),
+                actionLabel = stringResource(R.string.v5_explore_manage_sources),
                 onAction = {
                     context.startActivity<io.legado.app.ui.book.source.manage.BookSourceActivity>()
                 },
@@ -468,7 +470,7 @@ private fun SourcePickerSheet(
             AppSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "筛选发现源",
+                placeholder = stringResource(R.string.v5_explore_filter_sources),
             )
             Spacer(Modifier.height(density.blockGap / 2))
             val filtered = if (query.isBlank()) sources else sources.filter {

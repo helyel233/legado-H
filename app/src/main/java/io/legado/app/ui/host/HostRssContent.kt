@@ -1,6 +1,9 @@
 package io.legado.app.ui.host
 
+import io.legado.app.R
+
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -68,7 +71,7 @@ class HostRssContent : AppContent {
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
         title = DestTitle.Text("订阅"),
-        subtitle = DestTitle.Text("RSS 源与订阅内容"),
+        subtitle = DestTitle.Res(R.string.v5_rss_subtitle),
         showBack = false,
         contentOwnsScroll = true,
     )
@@ -135,7 +138,7 @@ class HostRssContent : AppContent {
                         },
                 )
                 Text(
-                    text = "${columns}列",
+                    text = stringResource(R.string.v5_rss_columns, columns),
                     style = scope.type.label,
                     color = colors.primary,
                     modifier = Modifier
@@ -166,9 +169,9 @@ class HostRssContent : AppContent {
 
             if (sources.isEmpty()) {
                 AppEmpty(
-                    title = "还没有订阅源",
-                    supporting = "去添加 RSS 订阅源，或者先关闭筛选",
-                    actionLabel = "源管理",
+                    title = stringResource(R.string.v5_rss_no_sources_title),
+                    supporting = stringResource(R.string.v5_rss_no_sources_supporting),
+                    actionLabel = stringResource(R.string.v5_rss_manage),
                     onAction = {
                         context.startActivity<io.legado.app.ui.rss.source.manage.RssSourceActivity>()
                     },

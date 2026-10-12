@@ -1,6 +1,9 @@
 package io.legado.app.ui.host
 
+import io.legado.app.R
+
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -92,7 +95,7 @@ class HostShelfContent : AppContent {
 
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
-        title = DestTitle.Text("书架"),
+        title = DestTitle.Res(R.string.v5_shelf),
         actions = listOf(
             ChromeAction(
                 id = "search",
@@ -106,7 +109,7 @@ class HostShelfContent : AppContent {
             ChromeAction(
                 id = "menu",
                 icon = DestIcon.Vector(HostIcons.Menu),
-                contentDescription = DestTitle.Text("书架菜单"),
+                contentDescription = DestTitle.Res(R.string.v5_shelf_menu),
                 onClick = { shelfMenuOpen = true },
             ),
         ),
@@ -225,7 +228,7 @@ class HostShelfContent : AppContent {
 
         if (layoutSheetOpen) {
             AppMenuSheet(
-                title = "书架布局",
+                title = stringResource(R.string.v5_shelf_layout),
                 actions = listOf(
                     "极简列表" to { setLayout(context, 0) { layout = it } },
                     "紧凑列表" to { setLayout(context, 1) { layout = it } },
@@ -332,7 +335,7 @@ private fun BackToRootRow(scope: ContentScope, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "↑ 返回书架分组",
+            text = stringResource(R.string.v5_shelf_back_to_groups),
             style = scope.type.label,
             color = colors.primary,
         )
@@ -371,7 +374,7 @@ private fun ContinueReadingCardV5(
             )
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "继续阅读",
+                    text = stringResource(R.string.v5_shelf_continue_read),
                     style = scope.type.caption,
                     color = scope.color.onSurfaceVariant,
                 )

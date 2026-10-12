@@ -1,6 +1,7 @@
 package io.legado.app.ui.host
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -53,8 +54,8 @@ class HostStatsContent : AppContent {
 
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
-        title = DestTitle.Text("统计"),
-        subtitle = DestTitle.Text("阅读时长与记录"),
+        title = DestTitle.Res(R.string.v5_stats),
+        subtitle = DestTitle.Res(R.string.v5_stats_subtitle),
         actions = listOf(
             ChromeAction(
                 id = "yearly",
@@ -101,12 +102,12 @@ class HostStatsContent : AppContent {
         ) {
             // ---- 概览四数字 ----
             Row(horizontalArrangement = Arrangement.spacedBy(d.blockGap)) {
-                StatCell(scope, "今日", fmt(data.todayTime), Modifier.weight(1f))
-                StatCell(scope, "本月", fmt(data.monthTime), Modifier.weight(1f))
+                StatCell(scope, stringResource(R.string.v5_stats_today), fmt(context, data.todayTime), Modifier.weight(1f))
+                StatCell(scope, stringResource(R.string.v5_stats_month), fmt(context, data.monthTime), Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(d.blockGap)) {
-                StatCell(scope, "累计", fmt(data.totalTime), Modifier.weight(1f))
-                StatCell(scope, "读过", "${data.bookCount} 本", Modifier.weight(1f))
+                StatCell(scope, stringResource(R.string.v5_stats_total), fmt(context, data.totalTime), Modifier.weight(1f))
+                StatCell(scope, stringResource(R.string.v5_stats_read), stringResource(R.string.v5_stats_books_count, data.bookCount), Modifier.weight(1f))
             }
 
             // ---- 最近在读 ----
@@ -149,7 +150,7 @@ class HostStatsContent : AppContent {
                                     )
                                 }
                                 Text(
-                                    fmt(book.readTime),
+                                    fmt(context, book.readTime),
                                     style = scope.type.caption,
                                     color = scope.color.primary,
                                 )
@@ -192,7 +193,7 @@ class HostStatsContent : AppContent {
                                     )
                                 }
                                 Text(
-                                    text = fmt(time),
+                                    text = fmt(context, time),
                                     style = scope.type.caption,
                                     color = scope.color.onSurfaceVariant,
                                 )
@@ -236,10 +237,10 @@ class HostStatsContent : AppContent {
         )
     }
 
-    private fun fmt(ms: Long): String = when {
-        ms <= 0 -> "0 分钟"
-        ms < 3_600_000 -> "${ms / 60_000} 分钟"
-        else -> String.format("%.1f 小时", ms / 3_600_000.0)
+    private fun fmt(context: android.content.Context, ms: Long): String = when {
+        ms <= 0 -> context.getString(R.string.v5_stats_zero_minutes)
+        ms < 3_600_000 -> context.getString(R.string.v5_stats_minutes, ms / 60_000)
+        else -> context.getString(R.string.v5_stats_hours, ms / 3_600_000.0)
     }
 }
 

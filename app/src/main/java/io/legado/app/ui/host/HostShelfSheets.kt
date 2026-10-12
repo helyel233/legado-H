@@ -1,6 +1,9 @@
 package io.legado.app.ui.host
 
+import io.legado.app.R
+
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -49,13 +52,15 @@ import kotlinx.coroutines.withContext
 // ---------------------------------------------------------------- 书架设置
 
 private val LAYOUT_OPTIONS = listOf(
-    0 to "极简列表", 1 to "紧凑列表", 2 to "两列网格",
-    3 to "三列网格", 4 to "四列网格", 5 to "五列网格",
+    0 to R.string.v5_shelf_layout_minimal, 1 to R.string.v5_shelf_layout_compact,
+    2 to R.string.v5_shelf_grid_2, 3 to R.string.v5_shelf_grid_3,
+    4 to R.string.v5_shelf_grid_4, 5 to R.string.v5_shelf_grid_5,
 )
 private val SORT_OPTIONS = listOf(
-    0 to "最近阅读", 1 to "更新时间", 2 to "书名", 3 to "手动排序", 4 to "智能",
+    0 to R.string.v5_shelf_sort_recent, 1 to R.string.v5_shelf_sort_update,
+    2 to R.string.v5_shelf_book_name, 3 to R.string.v5_shelf_sort_manual, 4 to R.string.v5_shelf_sort_smart,
 )
-private val LIST_STYLES = listOf(0 to "经典", 1 to "紧凑")
+private val LIST_STYLES = listOf(0 to R.string.v5_shelf_minimal, 1 to R.string.v5_shelf_layout_compact)
 
 /** 书架设置（V5 版，替代旧 BookshelfConfigDialog）。全部改动写回偏好并即时生效。 */
 @Composable
@@ -68,7 +73,7 @@ fun ShelfSettingsSheet(
 ) {
     val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
 
-    AppBottomSheetWrap(scope, title = "书架设置", onDismiss = onDismiss) {
+    AppBottomSheetWrap(scope, title = stringResource(R.string.v5_shelf_settings), onDismiss = onDismiss) {
         SheetSection(scope, "布局") {
             OptionChips(scope, LAYOUT_OPTIONS, layout) { v ->
                 AppConfig.bookshelfLayout = v
@@ -176,7 +181,7 @@ fun GroupManageSheet(
                 }
                 if (!isVirtual) {
                     Text(
-                        "重命名",
+                        stringResource(R.string.v5_shelf_rename),
                         style = scope.type.caption,
                         color = colors.primary,
                         modifier = Modifier
@@ -229,7 +234,7 @@ fun GroupManageSheet(
                 .padding(vertical = 10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("＋ 新建分组", style = scope.type.label, color = colors.primary)
+            Text(stringResource(R.string.v5_shelf_new_group), style = scope.type.label, color = colors.primary)
         }
         Spacer(Modifier.height(scope.density.screenPadding))
     }
@@ -239,7 +244,7 @@ fun GroupManageSheet(
         AppDialog(onDismiss = { creating = false; renameTarget = null }) {
             Column(Modifier.padding(scope.density.screenPadding * 1.2f)) {
                 Text(
-                    if (renameTarget != null) "重命名分组" else "新建分组",
+                    if (renameTarget != null) stringResource(R.string.v5_shelf_rename_group) else stringResource(R.string.v5_shelf_new_group),
                     style = scope.type.title,
                     color = colors.onSurface,
                 )
@@ -262,7 +267,7 @@ fun GroupManageSheet(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("确定", style = scope.type.label, color = colors.onPrimary)
+                        Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
                     }
                     Box(
                         modifier = Modifier
@@ -275,7 +280,7 @@ fun GroupManageSheet(
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("取消", style = scope.type.label, color = colors.onSurface)
+                        Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
                     }
                 }
             }
@@ -320,7 +325,7 @@ fun AddByUrlDialog(
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("确定", style = scope.type.label, color = colors.onPrimary)
+                    Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
                 }
                 Box(
                     modifier = Modifier
@@ -333,7 +338,7 @@ fun AddByUrlDialog(
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("取消", style = scope.type.label, color = colors.onSurface)
+                    Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
                 }
             }
         }
@@ -382,7 +387,7 @@ fun SheetSection(scope: ContentScope, title: String, content: @Composable () -> 
 @Composable
 fun OptionChips(
     scope: ContentScope,
-    items: List<Pair<Int, String>>,
+    items: List<Pair<Int, Int>>,
     selected: Int,
     onSelect: (Int) -> Unit,
 ) {
@@ -390,7 +395,7 @@ fun OptionChips(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.chunked(3).forEach { rowItems ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                rowItems.forEach { (value, label) ->
+                rowItems.forEach { (value, labelRes) ->
                     val on = value == selected
                     Box(
                         modifier = Modifier
@@ -403,7 +408,7 @@ fun OptionChips(
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     ) {
                         Text(
-                            label,
+                            stringResource(labelRes),
                             style = scope.type.caption,
                             color = if (on) colors.onPrimary else colors.onSurfaceVariant,
                         )

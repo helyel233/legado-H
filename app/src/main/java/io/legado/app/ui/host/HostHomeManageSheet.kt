@@ -1,6 +1,9 @@
 package io.legado.app.ui.host
 
+import io.legado.app.R
+
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -139,7 +142,7 @@ private fun SetsPage(
             Column(Modifier.weight(1f)) {
                 Text(set.sourceName, style = scope.type.body, color = colors.onSurface, maxLines = 1)
                 Text(
-                    "${set.moduleCount} 个模块" + if (set.isCustomSet) " · 自定义" else "",
+                    stringResource(R.string.v5_home_manage_modules_count, set.moduleCount) + if (set.isCustomSet) stringResource(R.string.v5_home_manage_custom) else "",
                     style = scope.type.caption,
                     color = colors.onSurfaceVariant,
                 )
@@ -164,7 +167,7 @@ private fun SetsPage(
         }
     }
 
-    SheetActionButton(scope, "＋ 新建自定义集") {
+    SheetActionButton(scope, stringResource(R.string.v5_home_manage_new_set)) {
         creating = true
         name = ""
     }
@@ -201,7 +204,7 @@ private fun SetDetailPage(
 
     if (modules.isEmpty()) {
         Text(
-            "这个集还没有模块，点下面「添加模块」从书源分类里挑",
+            stringResource(R.string.v5_home_manage_no_modules),
             style = scope.type.caption,
             color = colors.onSurfaceVariant,
         )
@@ -274,7 +277,7 @@ private fun SetDetailPage(
         }
     }
 
-    SheetActionButton(scope, "＋ 添加模块", onClick = onAdd)
+    SheetActionButton(scope, stringResource(R.string.v5_home_manage_add_module), onClick = onAdd)
 }
 
 // ---------------------------------------------------------------- 添加模块
@@ -286,7 +289,7 @@ private fun PickSourcePage(
     onPick: (HomepageSourceManageUi) -> Unit,
 ) {
     val colors = LocalSemanticColors.current
-    Text("选一个书源或 RSS 源", style = scope.type.caption, color = colors.onSurfaceVariant)
+    Text(stringResource(R.string.v5_home_manage_pick_hint), style = scope.type.caption, color = colors.onSurfaceVariant)
     Spacer(Modifier.height(scope.density.blockGap / 2))
     (manage.browseSources + manage.rssSources).forEach { src ->
         Row(
@@ -338,7 +341,7 @@ private fun PickKindsPage(
     when {
         loading -> Text("加载分类中…", style = scope.type.caption, color = colors.onSurfaceVariant)
         kinds.isEmpty() -> Text(
-            "这个源没有可用分类（检查书源的探索规则）",
+            stringResource(R.string.v5_home_manage_no_kinds),
             style = scope.type.caption,
             color = colors.onSurfaceVariant,
         )
@@ -417,9 +420,9 @@ private fun SheetHeader(scope: ContentScope, page: ManagePage, canBack: Boolean,
         }
         Text(
             text = when (page) {
-                ManagePage.Sets -> "主页模块管理"
-                is ManagePage.SetDetail -> page.setName.ifBlank { "集详情" }
-                is ManagePage.PickSource -> "选择书源"
+                ManagePage.Sets -> stringResource(R.string.v5_home_manage_title)
+                is ManagePage.SetDetail -> page.setName.ifBlank { stringResource(R.string.v5_home_manage_set_detail) }
+                is ManagePage.PickSource -> stringResource(R.string.v5_home_manage_pick_source)
                 is ManagePage.PickKinds -> page.sourceName
             },
             style = scope.type.title,
@@ -475,7 +478,7 @@ private fun NameInputDialog(
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("确定", style = scope.type.label, color = colors.onPrimary)
+                    Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
                 }
                 Box(
                     modifier = Modifier
@@ -488,7 +491,7 @@ private fun NameInputDialog(
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("取消", style = scope.type.label, color = colors.onSurface)
+                    Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
                 }
             }
         }
