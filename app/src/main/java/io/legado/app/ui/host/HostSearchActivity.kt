@@ -65,6 +65,7 @@ import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -169,40 +170,22 @@ private fun HostSearchScreen() {
         subtitle = null,
         onBack = { activity.finish() },
         trailing = {
-            AppOverflowMenuButton { menuOpen = true }
+            AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
         },
     ) {
         Column(Modifier.fillMaxSize()) {
-            // 搜索框（自动聚焦）
+            // 搜索框（组件化：AppSearchField + onSearch；自动聚焦）
             val focusRequester = remember { FocusRequester() }
             LaunchedEffect(Unit) { focusRequester.requestFocus() }
-            Row(
+            AppSearchField(
+                value = input,
+                onValueChange = { input = it },
+                onSearch = { doSearch(input) },
+                focusRequester = focusRequester,
+                placeholder = stringResource(R.string.v5_search),
                 modifier = Modifier
-                    .fillMaxWidth()
                     .padding(horizontal = density.screenPadding, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(visual.shape(ShapeKind.BUTTON))
-                        .background(colors.surfaceVariant)
-                        .padding(horizontal = density.screenPadding / 1.4f, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    BasicTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        singleLine = true,
-                        textStyle = visual.type.body.copy(color = colors.onSurface),
-                        cursorBrush = SolidColor(colors.primary),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { doSearch(input) }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
-                    )
+                trailing = {
                     Text(
                         text = stringResource(R.string.v5_search),
                         style = visual.type.label,
@@ -212,8 +195,8 @@ private fun HostSearchScreen() {
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         ) { doSearch(input) },
                     )
-                }
-            }
+                },
+            )
 
         when {
             // 无搜索动作：历史

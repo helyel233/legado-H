@@ -4,9 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -73,44 +78,61 @@ fun AppSelectionBar(
     }
 }
 
-/** 操作条单项（原 SelectionAction，收敛为共享组件内部实现）。 */
+/** 操作条单项（原 SelectionAction，收敛为共享组件内部实现）。触控区 ≥44dp。 */
 @Composable
 private fun AppSelectionActionItem(action: AppSelectionAction) {
     val colors = LocalSemanticColors.current
     val visual = LocalVisualSpec.current
-    Text(
-        text = action.label,
-        style = visual.type.label,
-        color = if (action.danger) colors.error else colors.primary,
+    Box(
         modifier = Modifier
+            .heightIn(min = 44.dp)
             .clip(visual.shape(ShapeKind.TAG))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
             ) { action.onClick() }
             .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = action.label,
+            style = visual.type.label,
+            color = if (action.danger) colors.error else colors.primary,
+        )
+    }
 }
 
 /**
  * 顶栏尾部溢出菜单按钮（⋮）。原三个二级页各复制一份，收敛于此。
+ * 无障碍：必须给 [contentDescription]（TalkBack 读得出这是什么按钮）；
+ * 触控区保证 ≥48dp（字形本身很小）。
  */
 @Composable
 fun AppOverflowMenuButton(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
     glyph: String = "⋮",
     onClick: () -> Unit,
 ) {
     val colors = LocalSemanticColors.current
     val visual = LocalVisualSpec.current
-    Text(
-        text = glyph,
-        style = visual.type.title,
-        color = colors.primary,
-        modifier = Modifier
+    Box(
+        modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
-            ) { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-    )
+                onClickLabel = contentDescription,
+            ) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = glyph,
+            style = visual.type.title,
+            color = colors.primary,
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics { this.contentDescription = contentDescription },
+        )
+    }
 }

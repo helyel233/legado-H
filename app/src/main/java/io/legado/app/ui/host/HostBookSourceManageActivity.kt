@@ -30,10 +30,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,14 +60,20 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.compose.showComposeSuggestionTextInputDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterChipRow
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.components.AppSelectionAction
 import io.legado.app.uikit.v5.components.AppSelectionBar
+import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
@@ -139,6 +147,9 @@ private fun HostBookSourceManageScreen() {
     var sortOpen by remember { mutableStateOf(false) }
     var groupSheetFor by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var moreSelectionOpen by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    // 长按多选首次提示（B 门：隐藏操作必须提示）
+    var longPressHintShown by rememberSaveable { mutableStateOf(false) }
 
     val sources by remember(searchKey) {
         val key = searchKey.trim()
@@ -195,6 +206,14 @@ private fun HostBookSourceManageScreen() {
 
     val selectionMode = selected.isNotEmpty()
     val selectedSources = sortedSources.filter { it.bookSourceUrl in selected }
+
+    // 首次进入选择模式提示长按多选（每个页面会话只提示一次）
+    LaunchedEffect(selectionMode) {
+        if (selectionMode && !longPressHintShown) {
+            longPressHintShown = true
+            AppToast.show(context.getString(R.string.v5_hint_long_press))
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(HandleFileContract()) {}
     val importDocLauncher = rememberLauncherForActivityResult(HandleFileContract()) {
@@ -302,8 +321,7 @@ private fun HostBookSourceManageScreen() {
                     AppSelectionAction(stringResource(R.string.v5_enable)) { viewModel.enableSelection(selectedSources) },
                     AppSelectionAction(stringResource(R.string.v5_disable)) { viewModel.disableSelection(selectedSources) },
                     AppSelectionAction(stringResource(R.string.v5_delete), danger = true) {
-                        viewModel.del(selectedSources)
-                        exitSelection()
+                        confirmDelete = true
                     },
                 ),
                 overflowActions = listOf(
@@ -346,7 +364,7 @@ private fun HostBookSourceManageScreen() {
         subtitle = if (!selectionMode) stringResource(R.string.v5_source_count, sortedSources.size) else null,
         onBack = { if (selectionMode) exitSelection() else activity.finish() },
         trailing = {
-            AppOverflowMenuButton { menuOpen = true }
+            AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
         },
         bottomBar = selectionBar,
     ) {
@@ -359,53 +377,29 @@ private fun HostBookSourceManageScreen() {
                 )
                 Spacer(Modifier.height(density.blockGap))
 
-                // 状态筛选（一排）
-                Text(
-                    text = stringResource(R.string.v5_filter_status),
-                    style = visual.type.caption,
-                    color = colors.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = density.screenPadding),
+                // 状态筛选（组件化：AppFilterChipRow）
+                AppFilterChipRow(
+                    label = stringResource(R.string.v5_filter_status),
+                    chips = StatusFilter.entries.map { f ->
+                        AppFilterChip(stringResource(f.labelRes), statusFilter == f)
+                    },
+                    onChipClick = { index ->
+                        statusFilter = StatusFilter.entries[index]
+                        searchKey = ""
+                    },
                 )
-                Spacer(Modifier.height(density.blockGap / 3))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = density.screenPadding),
-                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-                ) {
-                    StatusFilter.entries.forEach { f ->
-                        AppChip(stringResource(f.labelRes), statusFilter == f, onClick = {
-                            statusFilter = f
-                            searchKey = ""
-                        })
-                    }
-                }
 
-                // 分组筛选（一排，独立于状态，与 1.7.3 的 menu_group 对应）
+                // 分组筛选（独立于状态，与 1.7.3 的 menu_group 对应）
                 if (groups.isNotEmpty()) {
                     Spacer(Modifier.height(density.blockGap))
-                    Text(
-                        text = stringResource(R.string.v5_filter_group),
-                        style = visual.type.caption,
-                        color = colors.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = density.screenPadding),
+                    AppFilterChipRow(
+                        label = stringResource(R.string.v5_filter_group),
+                        chips = listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank())) +
+                            groups.map { g -> AppFilterChip(g, searchKey == "group:$g") },
+                        onChipClick = { index ->
+                            searchKey = if (index == 0) "" else "group:${groups[index - 1]}"
+                        },
                     )
-                    Spacer(Modifier.height(density.blockGap / 3))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = density.screenPadding),
-                        horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-                    ) {
-                        AppChip(stringResource(R.string.v5_all), searchKey.isBlank(), onClick = { searchKey = "" })
-                        groups.forEach { g ->
-                            AppChip(g, searchKey == "group:$g", onClick = {
-                                searchKey = "group:$g"
-                            })
-                        }
-                    }
                 }
                 Spacer(Modifier.height(density.blockGap))
 
@@ -527,52 +521,39 @@ private fun HostBookSourceManageScreen() {
         )
     }
 
-    // 分组输入
+    // 分组输入（组件化：AppInputDialog）
     groupSheetFor?.let { onDone ->
         var groupsText by remember { mutableStateOf("") }
-        AppDialog(onDismiss = { groupSheetFor = null }) {
-            Column(Modifier.padding(density.screenPadding)) {
-                Text(stringResource(R.string.v5_group_input_title), style = visual.type.title, color = colors.onSurface)
-                Spacer(Modifier.height(density.blockGap))
-                AppTextField(
-                    value = groupsText,
-                    onValueChange = { groupsText = it },
-                    placeholder = stringResource(R.string.v5_group_input_hint),
-                )
-                Spacer(Modifier.height(density.blockGap))
-                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.primary, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) {
-                                onDone(groupsText.trim())
-                                groupSheetFor = null
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_ok), style = visual.type.label, color = colors.onPrimary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.surfaceVariant, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { groupSheetFor = null }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_cancel), style = visual.type.label, color = colors.onSurface)
-                    }
-                }
-            }
-        }
+        AppInputDialog(
+            title = stringResource(R.string.v5_group_input_title),
+            value = groupsText,
+            onValueChange = { groupsText = it },
+            placeholder = stringResource(R.string.v5_group_input_hint),
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                onDone(text)
+                groupSheetFor = null
+            },
+            onDismiss = { groupSheetFor = null },
+        )
+    }
+
+    // 删除确认（B 门：破坏性操作必须确认）
+    if (confirmDelete) {
+        AppConfirmDialog(
+            title = stringResource(R.string.v5_delete),
+            message = stringResource(R.string.v5_delete_confirm_message, selected.size),
+            confirmLabel = stringResource(R.string.v5_delete),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            danger = true,
+            onConfirm = {
+                confirmDelete = false
+                viewModel.del(selectedSources)
+                exitSelection()
+            },
+            onDismiss = { confirmDelete = false },
+        )
     }
 }
 
@@ -592,64 +573,28 @@ private fun SourceRow(
     onLongClick: () -> Unit,
 ) {
     val colors = LocalSemanticColors.current
-    val visual = LocalVisualSpec.current
-    val density = visual.density
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(visual.shape(ShapeKind.CARD))
-            .background(
-                if (selected) colors.primary.copy(alpha = 0.14f)
-                else colors.surface.copy(alpha = 0.72f),
-                visual.shape(ShapeKind.CARD),
-            )
-            .combinedClickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
-            .padding(horizontal = density.cardPadding, vertical = density.cardPadding / 1.6f),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (selectionMode) {
-            Text(
-                text = if (selected) "☑" else "☐",
-                style = visual.type.title,
-                color = colors.primary,
-                modifier = Modifier.padding(end = density.blockGap),
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = source.bookSourceName,
-                style = visual.type.body,
-                color = colors.onSurface,
-                maxLines = 1,
-            )
-            val group = source.bookSourceGroup
-            if (!group.isNullOrBlank()) {
+    val density = LocalVisualSpec.current.density
+    AppSelectionRow(
+        title = source.bookSourceName,
+        supporting = source.bookSourceGroup?.takeIf { it.isNotBlank() },
+        selected = selected,
+        selectionMode = selectionMode,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        trailing = {
+            if (source.hasLoginUrl) {
                 Text(
-                    text = group,
-                    style = visual.type.caption,
-                    color = colors.onSurfaceVariant,
-                    maxLines = 1,
+                    text = stringResource(R.string.v5_need_login),
+                    style = LocalVisualSpec.current.type.caption,
+                    color = colors.primary,
+                    modifier = Modifier.padding(end = density.blockGap / 2),
                 )
             }
-        }
-        if (source.hasLoginUrl) {
-            Text(
-                text = "登录",
-                style = visual.type.caption,
-                color = colors.primary,
-                modifier = Modifier.padding(end = density.blockGap),
-            )
-        }
-        if (!selectionMode) {
-            AppSwitch(checked = source.enabled, onCheckedChange = onToggle)
-        }
-    }
+            if (!selectionMode) {
+                AppSwitch(checked = source.enabled, onCheckedChange = onToggle)
+            }
+        },
+    )
 }
 
 @Composable

@@ -246,7 +246,7 @@ private fun HostRssSortScreen() {
         subtitle = if (sorts.size > 1) stringResource(R.string.v5_rss_sorts_count, sorts.size, articles.size) else null,
         onBack = { activity.finish() },
         trailing = {
-            AppOverflowMenuButton { menuOpen = true }
+            AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
         },
     ) {
         Column(

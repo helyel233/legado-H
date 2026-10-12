@@ -14,7 +14,7 @@
 | 2 | 管理页未迁移（书源✅已迁 / RSS源/替换/备份/缓存/文件/字典/自动任务/书签/关于/阅读记录/年度报告） | 旧 View + 主题桥（颜色跟随、chrome 旧） | 观感断层 | P4-3 按频率逐个（书源已完成，下一步 RSS 源） |
 | 3 | 详情页弹窗设计语言旧（换源/分组/封面/看图） | ComposeDialogFragment（LegadoComposeTheme），经 V5ThemeSync 染色 | 弹窗风格与 V5 不统一 | P4-7 详情整页 V5 化 |
 | 4 | 主页分源 Tab 布局 / 套件发现模式 / 发现结果内联浏览 | 迁移时降级（跳转/单一模式） | 老用户习惯的发现模式没了 | P4-8（低优先，需用户确认使用率） |
-| 5 | 书源拖拽重排 | 未实现（需 ReorderableLazyColumn 组件） | 手动排序下不能拖 | P2+：组件就位后补 |
+| 5 | 书源拖拽重排 | ✅(2026-10-12) 组件就位：`AppReorderableItem`/`rememberAppReorderableListState`（uikit，封装 sh.calvin.reorderable）；剩余接线：书源页手动排序模式接拖拽（需处理域名分组头跳过） | 手动排序下还不能拖 | P2+：管理页迁移时接线 |
 | 6 | 统计 Tab 精简（热力图/排行/目标卡/年月选择/清空/启用开关缺） | 「我的→阅读记录」完整页仍在 | Tab 内看不到完整统计 | 与 #2 一并评估（ReadRecordActivity 迁移） |
 | 7 | ✅(2026-10-12) 设置主题变更即时生效 | 设置 Fragment 全部 Compose（`rememberThemeUiPalette` 自响应偏好变化）；`ConfigActivity` 的 RECREATE 订阅已移除（免重建刷新，手册 0.3） | 已修 | 已完成 |
 | 8 | ✅(2026-10-12) 我的-帮助按钮空实现 | chrome action 已接 `showHelp("appHelp")`（经 helpRevision 桥） | 已修 | 已完成 |
@@ -35,7 +35,7 @@
 | 13 | V5ThemeSync 无测试锁行为 | 隐式双写（V5→旧键） | P5-3 同批 |
 | 14 | debug 面板无「页面直达」 | 进深层页面（书源管理）要 5 步，测试成本高 | P5-3 小件 |
 | 15 | 状态恢复（当前 Tab/搜索/选择态） | remember 无 Saveable | P5-3 |
-| 16 | 无障碍（⋮ 无 contentDescription、自绘 chips 触控区 <48dp） | 未扫 | P5-4 |
+| 16 | 无障碍（⋮ 无 contentDescription、自绘 chips 触控区 <48dp） | ⏳(2026-10-12) 部分修复：`AppOverflowMenuButton` 已加 contentDescription + 48dp 触控区，`AppSelectionBar` 项 ≥44dp；剩余：AppChip 触控区、各页 Icon 扫描 | 部分修复 | P5-4 全量扫 |
 | 17 | Android 16 兼容清单（后台启动/预测性返回/edge-to-edge） | 仅 NEW_TASK 踩过 | P5-4 统一过清单 |
 
 ## 四、旧栈残留（可物理删除，待排期）

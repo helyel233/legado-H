@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,9 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -40,7 +46,11 @@ import io.legado.app.uikit.v5.token.ShapeKind
  * 页面传值与回调，不传任何外观。
  */
 
-/** 搜索框：胶囊 + 前导图标。 */
+/**
+ * 搜索框：胶囊 + 前导图标。
+ * [onSearch] 给定时回车键变搜索键并触发回调（搜索页不再手搓 BasicTextField 行）；
+ * [trailing] 尾部动作槽（如「搜索」文字按钮）；[focusRequester] 页面自动聚焦用。
+ */
 @Composable
 fun AppSearchField(
     value: String,
@@ -48,6 +58,9 @@ fun AppSearchField(
     modifier: Modifier = Modifier,
     placeholder: String = "",
     enabled: Boolean = true,
+    onSearch: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    focusRequester: FocusRequester? = null,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
@@ -85,9 +98,23 @@ fun AppSearchField(
                 singleLine = true,
                 textStyle = visual.type.body.copy(color = colors.onSurface),
                 cursorBrush = SolidColor(colors.primary),
-                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = if (onSearch != null) ImeAction.Search else ImeAction.Default,
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = if (onSearch != null) {
+                        { onSearch() }
+                    } else null,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (focusRequester != null) Modifier.focusRequester(focusRequester)
+                        else Modifier
+                    ),
             )
         }
+        trailing?.invoke()
     }
 }
 
@@ -233,6 +260,52 @@ fun AppSelectableRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * 标题+摘要+开关行（设置类页面统一件）。
+ * 整行可点（如需跳转详情/弹选择层）；开关自身点击不冒泡到行。
+ */
+@Composable
+fun AppRowWithSwitch(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    onRowClick: (() -> Unit)? = null,
+    enabled: Boolean = true,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(
+                if (onRowClick != null) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onRowClick,
+                ) else Modifier
+            )
+            .padding(horizontal = density.rowPaddingH, vertical = density.rowPaddingV),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(density.screenPadding / 2),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = visual.type.body, color = colors.onSurface)
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+        }
+        AppSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -54,6 +55,8 @@ internal fun HostV5Page(
     trailing: (@Composable () -> Unit)? = null,
     /** 底部固定操作区槽（选择操作条等）。给定时内容区自动 weight(1f) 让位（迁移门 D2）。 */
     bottomBar: (@Composable () -> Unit)? = null,
+    /** 右下角悬浮动作槽（FAB，与 bottomBar 互斥使用）。 */
+    floatingAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val hazeState = LocalHazeState.current ?: dev.chrisbanes.haze.HazeState()
@@ -120,6 +123,18 @@ internal fun HostV5Page(
                 ) {
                     trailing()
                 }
+            }
+        }
+
+        // ③ 悬浮动作槽（FAB）
+        if (floatingAction != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = visual.density.screenPadding, bottom = visual.density.screenPadding),
+            ) {
+                floatingAction()
             }
         }
     }

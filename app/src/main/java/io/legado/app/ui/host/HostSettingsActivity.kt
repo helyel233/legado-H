@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -194,7 +195,7 @@ private fun HostSettingsScreen(
         onBack = { activity.finish() },
         trailing = {
             if (activity.menuProviders.isNotEmpty()) {
-                AppOverflowMenuButton { menuOpen = true }
+                AppOverflowMenuButton(contentDescription = stringResource(R.string.v5_more)) { menuOpen = true }
             }
         },
     ) {

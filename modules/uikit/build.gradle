@@ -32,6 +32,8 @@ dependencies {
     implementation libs.androidx.compose.material3
     implementation libs.core.ktx
     implementation libs.gson
+    // P2 组件库：拖拽重排（书源/RSS源/替换规则等管理页手动排序共用）
+    api libs.reorderable
     // A1-4: uikit reads the theme package layer (plan: uikit depends on theme)
     implementation project(':modules:theme')
     // P2 真玻璃：背景模糊（API<31 由库自动降级为半透明 scrim）

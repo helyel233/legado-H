@@ -1374,4 +1374,6 @@
     <string name="v5_shelf_sort_smart">Inteligente</string>
     <string name="v5_stats_month">Este mês</string>
     <string name="v5_stats_total">Total</string>
+    <string name="v5_hint_long_press">Toque e segure um item para selecionar vários</string>
+    <string name="v5_delete_confirm_message">%1$d fontes selecionadas serão excluídas. Não é possível desfazer.</string>
 </resources>

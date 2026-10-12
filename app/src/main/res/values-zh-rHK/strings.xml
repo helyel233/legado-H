@@ -1644,4 +1644,6 @@
     <string name="v5_shelf_sort_smart">智慧</string>
     <string name="v5_stats_month">本月</string>
     <string name="v5_stats_total">累計</string>
+    <string name="v5_hint_long_press">長按條目可進入多選</string>
+    <string name="v5_delete_confirm_message">將刪除已選取的 %1$d 個書源，操作無法復原。</string>
 </resources>
