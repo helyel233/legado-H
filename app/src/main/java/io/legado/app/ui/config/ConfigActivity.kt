@@ -37,7 +37,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
-import io.legado.app.constant.EventBus
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.observeEvent
@@ -168,12 +167,8 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             .commit()
     }
 
-    override fun observeLiveBus() {
-        super.observeLiveBus()
-        observeEvent<String>(EventBus.RECREATE) {
-            recreate()
-        }
-    }
+    // 免重建刷新（手册 0.3）：本页设置项全部为 Compose（rememberThemeUiPalette 自响应偏好变化），
+    // 不再消费 EventBus.RECREATE —— 主题相关改动即改即生效，不重建 Activity。
 
 }
 

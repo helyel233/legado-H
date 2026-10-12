@@ -52,18 +52,26 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import io.legado.app.R
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
+import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.SearchBookOpenHelper
+import io.legado.app.ui.book.search.SearchScope
+import io.legado.app.ui.book.search.SearchScopeDialog
 import io.legado.app.ui.book.search.SearchViewModel
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.ui.widget.compose.BookCoverImage
+import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.putPrefBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -75,7 +83,16 @@ import kotlinx.coroutines.flow.flowOn
  * 数据层全复用：[SearchViewModel]（多源聚合搜索/书架判定/历史记录）+
  * searchKeywordDao 历史流 + SearchBookOpenHelper 打开书籍（→ V5 详情页）。
  */
-class HostSearchActivity : AppCompatActivity() {
+class HostSearchActivity : AppCompatActivity(), SearchScopeDialog.Callback {
+
+    // 搜索范围对话框只认 Activity 回调，经此桥回 Compose 层（scopeRevision 触发重组）
+    internal var pendingScope: SearchScope? = null
+    internal var scopeRevision by androidx.compose.runtime.mutableStateOf(0)
+
+    override fun onSearchScopeOk(searchScope: SearchScope) {
+        pendingScope = searchScope
+        scopeRevision++
+    }
 
     companion object {
         fun start(context: Context, key: String? = null) {
@@ -91,14 +108,7 @@ class HostSearchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-        setContentView(
-            ComposeView(this).apply {
-                setContent { HostV5ThemeRoot { HostSearchScreen() } }
-            }
-        )
+        setV5Content { HostSearchScreen() }
     }
 }
 
@@ -113,6 +123,8 @@ private fun HostSearchScreen() {
     val vm = remember { ViewModelProvider(activity)[SearchViewModel::class.java] }
     val initialKey = remember { activity.intent.getStringExtra("key") ?: "" }
     var input by remember { mutableStateOf(initialKey) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var scopeOpen by remember { mutableStateOf(false) }
 
     val results by vm.searchBookLiveData.observeAsStateCompat(emptyList())
     val isSearching by vm.isSearchLiveData.observeAsStateCompat(false)
@@ -142,11 +154,23 @@ private fun HostSearchScreen() {
     DisposableEffect(Unit) {
         onDispose { vm.stop() }
     }
+    // 搜索范围对话框确认后：更新范围并重搜（对齐 1.7.3 menu_search_scope）
+    val hostActivity = context as HostSearchActivity
+    LaunchedEffect(hostActivity.scopeRevision) {
+        hostActivity.pendingScope?.let { scope ->
+            hostActivity.pendingScope = null
+            vm.searchScope.update(scope.toString())
+            doSearch(input)
+        }
+    }
 
     HostV5Page(
         title = stringResource(R.string.v5_search),
         subtitle = null,
         onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton { menuOpen = true }
+        },
     ) {
         Column(Modifier.fillMaxSize()) {
             // 搜索框（自动聚焦）
@@ -243,6 +267,43 @@ private fun HostSearchScreen() {
             }
         }
         }
+    }
+
+    // 顶栏溢出菜单（对齐 1.7.3 book_search：精确搜索/搜索范围/书源管理/日志）
+    if (menuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.v5_search),
+            actions = listOf(
+                (if (activity.getPrefBoolean(PreferKey.precisionSearch)) "✓ " else "") +
+                    stringResource(R.string.precision_search) to {
+                    activity.putPrefBoolean(
+                        PreferKey.precisionSearch,
+                        !activity.getPrefBoolean(PreferKey.precisionSearch),
+                    )
+                    doSearch(input)
+                    menuOpen = false
+                },
+                stringResource(R.string.groups_or_source) to {
+                    scopeOpen = true
+                    menuOpen = false
+                },
+                stringResource(R.string.book_source_manage) to {
+                    context.startActivity(
+                        android.content.Intent(context, HostBookSourceManageActivity::class.java),
+                    )
+                    menuOpen = false
+                },
+                stringResource(R.string.log) to {
+                    AppLogDialog().show(activity.supportFragmentManager, "appLog")
+                    menuOpen = false
+                },
+            ),
+            onDismiss = { menuOpen = false },
+        )
+    }
+
+    if (scopeOpen) {
+        SearchScopeDialog().show(activity.supportFragmentManager, "searchScope")
     }
 }
 

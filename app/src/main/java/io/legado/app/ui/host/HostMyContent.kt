@@ -2,6 +2,8 @@ package io.legado.app.ui.host
 
 import android.app.Activity
 import android.content.Context
+import android.content.res.XmlResourceParser
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.Text
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,7 +24,9 @@ import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +52,7 @@ import io.legado.app.ui.main.my.MySettingsRowKind
 import io.legado.app.ui.main.my.MySettingsRowModel
 import io.legado.app.ui.main.my.MySettingsScreen
 import io.legado.app.ui.main.my.MySettingsSectionModel
+import io.legado.app.ui.main.my.MySettingsSubSearchItem
 import io.legado.app.ui.main.my.MySettingsThemeOption
 import io.legado.app.ui.main.my.MyWebServiceUiState
 import io.legado.app.ui.replace.ReplaceRuleActivity
@@ -71,8 +76,10 @@ import io.legado.app.utils.openUrl
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.sendToClip
+import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
+import org.xmlpull.v1.XmlPullParser
 
 /**
  * P4-1「我的」页真业务（第一批搬迁）。
@@ -85,6 +92,11 @@ import io.legado.app.utils.toastOnUi
  */
 class HostMyContent : AppContent {
 
+    companion object {
+        /** 帮助请求桥（chrome() 无 context，经计数器回 Content 消费）。 */
+        internal var helpRevision by mutableIntStateOf(0)
+    }
+
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
         title = DestTitle.Res(R.string.v5_my),
@@ -96,7 +108,7 @@ class HostMyContent : AppContent {
                 id = "help",
                 icon = DestIcon.Vector(HostIcons.Star),
                 contentDescription = DestTitle.Res(R.string.v5_help),
-                onClick = {}, // P4 后续接 showHelp
+                onClick = { helpRevision++ }, // 对齐 1.7.3 menu_help → appHelp
             ),
         ),
     )
@@ -122,6 +134,14 @@ class HostMyContent : AppContent {
             buildThemeOptions(context)
         }
         val sections = remember { buildSections(context) }
+        val subSearchItems = remember { buildSubSearchItems(context) }
+
+        // 帮助（chrome 顶栏动作 → appHelp 文档，与 1.7.3 MyFragment.menu_help 一致）
+        LaunchedEffect(helpRevision) {
+            if (helpRevision > 0) {
+                (context as? AppCompatActivity)?.showHelp("appHelp")
+            }
+        }
 
         fun refreshWebService() {
             webServiceState = MyWebServiceUiState(
@@ -145,7 +165,7 @@ class HostMyContent : AppContent {
 
         MySettingsScreen(
             sections = sections,
-            subSearchItems = emptyList(),
+            subSearchItems = subSearchItems,
             searchQuery = searchQuery,
             themeModeLabel = modeLabel,
             webServiceState = webServiceState,
@@ -408,5 +428,81 @@ class HostMyContent : AppContent {
                 label = label,
             )
         }.ifEmpty { listOf(MySettingsThemeOption("0", context.getString(R.string.theme_mode))) }
+    }
+
+    /** 设置搜索索引：各设置页 pref XML 解析成可搜条目（与 MyFragment.buildSubSearchItems 一致）。 */
+    private fun buildSubSearchItems(context: Context): List<MySettingsSubSearchItem> {
+        return listOf(
+            Triple("theme_setting", R.xml.pref_config_theme, ConfigTag.THEME_CONFIG),
+            Triple("theme_setting", R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
+            Triple("theme_setting", R.xml.pref_config_welcome, ConfigTag.WELCOME_CONFIG),
+            Triple("web_dav_setting", R.xml.pref_config_backup, ConfigTag.BACKUP_CONFIG),
+            Triple("ai_setting", R.xml.pref_config_ai, ConfigTag.AI_CONFIG),
+            Triple("setting", R.xml.pref_config_other, ConfigTag.OTHER_CONFIG),
+            Triple("setting", R.xml.pref_config_network_dns, ConfigTag.NETWORK_DNS_CONFIG),
+            Triple(
+                "theme_setting",
+                R.xml.pref_config_discovery_subscription,
+                ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG
+            )
+        ).flatMap { (ownerKey, xmlRes, ownerConfigTag) ->
+            buildPreferenceXmlSearchItems(context, ownerKey, xmlRes, ownerConfigTag)
+        } + listOf(
+            MySettingsSubSearchItem(
+                ownerKey = "theme_setting",
+                title = context.getString(R.string.welcome_style),
+                summary = context.getString(R.string.welcome_style_summary),
+                key = PreferKey.welcomeShowTime,
+                ownerConfigTag = ConfigTag.WELCOME_CONFIG
+            )
+        )
+    }
+
+    private fun buildPreferenceXmlSearchItems(
+        context: Context,
+        ownerKey: String,
+        xmlRes: Int,
+        ownerConfigTag: String
+    ): List<MySettingsSubSearchItem> {
+        val items = ArrayList<MySettingsSubSearchItem>()
+        val parser: XmlResourceParser = context.resources.getXml(xmlRes)
+        try {
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG) {
+                    val title = collectPreferenceAttr(context, parser, "title").orEmpty()
+                    val key = collectPreferenceAttr(context, parser, "key").orEmpty()
+                    if (title.isNotBlank() && key.isNotBlank()) {
+                        items.add(
+                            MySettingsSubSearchItem(
+                                ownerKey = ownerKey,
+                                title = title,
+                                summary = collectPreferenceAttr(context, parser, "summary").orEmpty(),
+                                key = key.removePrefix("search_jump_"),
+                                ownerConfigTag = ownerConfigTag
+                            )
+                        )
+                    }
+                }
+                eventType = parser.next()
+            }
+        } finally {
+            parser.close()
+        }
+        return items
+    }
+
+    private fun collectPreferenceAttr(context: Context, parser: XmlResourceParser, attrName: String): String? {
+        val namespace = "http://schemas.android.com/apk/res/android"
+        val attrValue = parser.getAttributeValue(namespace, attrName)?.trim().orEmpty()
+        if (attrValue.isBlank()) return null
+        val attrRes = parser.getAttributeResourceValue(namespace, attrName, 0)
+        return if (attrRes != 0) {
+            runCatching {
+                context.getString(attrRes)
+            }.getOrNull()?.trim().orEmpty().takeIf { it.isNotBlank() }
+        } else {
+            attrValue.removePrefix("@").takeIf { it.isNotBlank() }
+        }
     }
 }
