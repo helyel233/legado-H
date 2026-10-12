@@ -218,7 +218,7 @@ class HostMyContent : AppContent {
                     "autoTaskManage" -> context.startActivity<AutoTaskActivity>()
                     "bookmark" -> HostBookmarkActivity.start(context)
                     "setting" -> HostSettingsActivity.start(context, ConfigTag.OTHER_CONFIG)
-                    "web_dav_setting" -> HostSettingsActivity.start(context, ConfigTag.BACKUP_CONFIG)
+                    "web_dav_setting" -> HostBackupActivity.start(context)
                     "publicWebRelay" -> context.startActivity<RelaySettingsActivity>()
                     "cacheManage" -> HostCacheManageActivity.start(context)
                     "sourceRecycleBin" -> context.startActivity<SourceRecycleBinActivity>()
