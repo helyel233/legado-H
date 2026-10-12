@@ -3148,6 +3148,10 @@ Selected text or question:
     <string name="v5_stats_zero_minutes">0 min</string>
     <string name="v5_ok2">OK</string>
     <string name="v5_cancel2">Cancel</string>
+    <string name="v5_save">Save</string>
+    <string name="v5_discard">Discard</string>
+    <string name="v5_unsaved_title">Unsaved changes</string>
+    <string name="v5_unsaved_message">Your changes have not been saved. Discard them?</string>
     <string name="v5_shelf_layout_minimal">Minimal list</string>
     <string name="v5_shelf_layout_compact">Compact list</string>
     <string name="v5_shelf_grid_4">4-column grid</string>

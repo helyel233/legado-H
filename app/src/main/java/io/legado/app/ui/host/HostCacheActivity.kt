@@ -31,7 +31,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
-import io.legado.app.constant.IntentAction
+import io.legado.app.model.BookExport
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -61,7 +61,6 @@ import io.legado.app.utils.enableCustomExport
 import io.legado.app.utils.eventObservableAsState
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.FileDoc
-import io.legado.app.utils.startService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
@@ -402,14 +401,7 @@ private fun HostCacheScreen(initialGroupId: Long) {
                 if (text.isBlank()) {
                     startExportOne(context, book, customExportPath)
                 } else {
-                    context.startService<ExportBookService> {
-                        action = IntentAction.start
-                        putExtra("bookUrl", book.bookUrl)
-                        putExtra("exportType", "epub")
-                        putExtra("exportPath", customExportPath)
-                        putExtra("epubSize", 1)
-                        putExtra("epubScope", text)
-                    }
+                    BookExport.exportEpubScope(context, book.bookUrl, customExportPath, text)
                 }
                 customExportBook = null
             },
@@ -475,13 +467,7 @@ private fun startExportAll(path: String, books: List<Book>) {
 }
 
 private fun startExportOne(context: Context, book: Book, path: String) {
-    val exportType = if (AppConfig.exportType == 1) "epub" else "txt"
-    context.startService<ExportBookService> {
-        action = IntentAction.start
-        putExtra("bookUrl", book.bookUrl)
-        putExtra("exportType", exportType)
-        putExtra("exportPath", path)
-    }
+    BookExport.export(context, book.bookUrl, path)
 }
 
 private fun exportBook(

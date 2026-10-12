@@ -234,13 +234,13 @@ internal fun CacheBookCard(
     }
 }
 
-private fun uploadActionLabelRes(item: CacheBookItem): Int = when {
+internal fun uploadActionLabelRes(item: CacheBookItem): Int = when {
     item.localCachedCount > 0 && item.hasRemoteCache() -> R.string.cache_manage_sync_action
     item.hasRemoteCache() && item.localCachedCount <= 0 -> R.string.action_download
     else -> R.string.cache_manage_upload
 }
 
-private fun cacheStateLabelRes(item: CacheBookItem): Int {
+internal fun cacheStateLabelRes(item: CacheBookItem): Int {
     val local = item.localCachedCount > 0
     val remote = item.hasRemoteCache()
     return when {
@@ -251,7 +251,7 @@ private fun cacheStateLabelRes(item: CacheBookItem): Int {
     }
 }
 
-private fun CacheBookItem.cacheCountText(context: Context): String {
+internal fun CacheBookItem.cacheCountText(context: Context): String {
     return buildCacheCountText(
         context, localCachedCount, remoteCachedCount, totalChapterCount, remoteAvailable
     )
@@ -281,7 +281,7 @@ private fun buildCacheCountText(
         ?: context.getString(R.string.cache_manage_cached_count, localCount)
 }
 
-private fun audioTaskStateFor(
+internal fun audioTaskStateFor(
     item: CacheBookItem,
     taskStates: Map<String, AudioCacheTaskState>
 ): AudioCacheTaskState? {
@@ -293,7 +293,7 @@ private fun audioTaskStateFor(
     return item.taskState
 }
 
-private fun webDavTaskStateFor(
+internal fun webDavTaskStateFor(
     item: CacheBookItem,
     taskStates: Map<String, WebDavTaskState>
 ): WebDavTaskState? {

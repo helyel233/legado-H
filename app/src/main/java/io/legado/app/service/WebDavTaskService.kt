@@ -9,7 +9,7 @@ import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
-import io.legado.app.ui.book.cache.CacheManageActivity
+import io.legado.app.ui.host.HostCacheManageActivity
 import io.legado.app.ui.book.cache.WebDavTaskManager
 import io.legado.app.ui.book.cache.WebDavTaskState
 import io.legado.app.ui.book.cache.WebDavTaskStatus
@@ -89,7 +89,7 @@ class WebDavTaskService : BaseService() {
             .setOngoing(active != null)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(activityPendingIntent<CacheManageActivity>("cacheManage"))
+            .setContentIntent(activityPendingIntent<HostCacheManageActivity>("cacheManage"))
             .apply {
                 if (active != null) {
                     addAction(

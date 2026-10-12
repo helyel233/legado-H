@@ -296,6 +296,9 @@ data class AppFilterChip(val label: String, val selected: Boolean)
  * 筛选 chips 行：caption 标签（可省）+ 横滑 chips。
  * 书源/订阅/发现/书架分组的状态与分组筛选共用这一个零件，
  * "每页自己写一排 Row+horizontalScroll" 到此为止。
+ *
+ * [overflowLabel] 非空 + [onOverflowClick]：选项太多时末尾挂「更多/全部 ⋮」入口，
+ * 由调用方开 [AppFilterDialog] 全量选择（横滑 chips 找不齐选项的解法）。
  */
 @Composable
 fun AppFilterChipRow(
@@ -303,6 +306,8 @@ fun AppFilterChipRow(
     onChipClick: (index: Int) -> Unit,
     modifier: Modifier = Modifier,
     label: String? = null,
+    overflowLabel: String? = null,
+    onOverflowClick: (() -> Unit)? = null,
 ) {
     val visual = LocalVisualSpec.current
     val density = visual.density
@@ -325,6 +330,9 @@ fun AppFilterChipRow(
         ) {
             chips.forEachIndexed { index, chip ->
                 AppChip(chip.label, chip.selected, onClick = { onChipClick(index) })
+            }
+            if (overflowLabel != null && onOverflowClick != null) {
+                AppChip(overflowLabel, false, onClick = onOverflowClick)
             }
         }
     }

@@ -1362,6 +1362,10 @@
     <string name="v5_stats_zero_minutes">0 min</string>
     <string name="v5_ok2">Aceptar</string>
     <string name="v5_cancel2">Cancelar</string>
+    <string name="v5_save">Guardar</string>
+    <string name="v5_discard">Descartar</string>
+    <string name="v5_unsaved_title">Cambios sin guardar</string>
+    <string name="v5_unsaved_message">Tienes cambios sin guardar. ¿Descartarlos?</string>
     <string name="v5_shelf_layout_minimal">Lista mínima</string>
     <string name="v5_shelf_layout_compact">Lista compacta</string>
     <string name="v5_shelf_grid_4">Cuadrícula de 4</string>

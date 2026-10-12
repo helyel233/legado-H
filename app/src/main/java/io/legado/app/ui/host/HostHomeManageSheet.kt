@@ -459,43 +459,16 @@ private fun NameInputDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val colors = LocalSemanticColors.current
-    io.legado.app.uikit.v5.components.AppDialog(onDismiss = onDismiss) {
-        Column(Modifier.padding(scope.density.screenPadding * 1.2f)) {
-            Text(title, style = scope.type.title, color = colors.onSurface)
-            Spacer(Modifier.height(scope.density.blockGap))
-            AppTextField(value = initial, onValueChange = onValueChange, placeholder = "名称")
-            Spacer(Modifier.height(scope.density.blockGap))
-            Row(horizontalArrangement = Arrangement.spacedBy(scope.density.blockGap)) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.primary, scope.shape(ShapeKind.BUTTON))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) { onConfirm() }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.surfaceVariant, scope.shape(ShapeKind.BUTTON))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) { onDismiss() }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
-                }
-            }
-        }
-    }
+    io.legado.app.uikit.v5.components.AppInputDialog(
+        title = title,
+        value = initial,
+        onValueChange = onValueChange,
+        placeholder = "名称",
+        confirmLabel = stringResource(R.string.v5_ok2),
+        cancelLabel = stringResource(R.string.v5_cancel2),
+        onConfirm = { onConfirm() },
+        onDismiss = onDismiss,
+    )
 }
 
 private fun resolveSetUrl(setUrl: String): String =

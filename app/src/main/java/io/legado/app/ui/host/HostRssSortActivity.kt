@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import io.legado.app.R
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -69,7 +70,9 @@ import io.legado.app.ui.rss.read.ReadRss
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppTextField
@@ -281,7 +284,14 @@ private fun HostRssSortScreen() {
                     supporting = loadError?.lineSequence()?.firstOrNull() ?: "源连接失败",
                 )
                 articles.isEmpty() -> AppSkeletonList(rows = 5)
-                else -> LazyColumn(
+                else -> {
+                AppFastScroller(
+                    listState = listState,
+                    topContentPadding = density.blockGap / 2,
+                    bottomContentPadding = density.screenPadding,
+                    endContentPadding = density.screenPadding,
+                ) {
+                LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
@@ -310,6 +320,8 @@ private fun HostRssSortScreen() {
                             )
                         }
                     }
+                }
+                }
                 }
             }
         }
@@ -412,52 +424,22 @@ private fun HostRssSortScreen() {
         )
     }
 
-    // 源内搜索输入
+    // 源内搜索输入（AppInputDialog 统一件）
     if (searchInputOpen) {
         var query by remember { mutableStateOf(searchKey ?: "") }
-        AppDialog(onDismiss = { searchInputOpen = false }) {
-            Column(Modifier.padding(density.screenPadding)) {
-                Text(stringResource(R.string.v5_rss_search_in_source), style = visual.type.title, color = colors.onSurface)
-                Spacer(Modifier.height(density.blockGap))
-                AppTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = stringResource(R.string.v5_rss_search_hint),
-                )
-                Spacer(Modifier.height(density.blockGap))
-                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.primary, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) {
-                                searchKey = query.trim().ifBlank { null }
-                                searchInputOpen = false
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_ok), style = visual.type.label, color = colors.onPrimary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.surfaceVariant, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { searchInputOpen = false }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_cancel), style = visual.type.label, color = colors.onSurface)
-                    }
-                }
-            }
-        }
+        AppInputDialog(
+            title = stringResource(R.string.v5_rss_search_in_source),
+            value = query,
+            onValueChange = { query = it },
+            placeholder = stringResource(R.string.v5_rss_search_hint),
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                searchKey = text.trim().ifBlank { null }
+                searchInputOpen = false
+            },
+            onDismiss = { searchInputOpen = false },
+        )
     }
 }
 

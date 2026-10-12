@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import io.legado.app.uikit.v5.components.AppFastScroller
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
@@ -67,6 +69,7 @@ import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterDialog
 import io.legado.app.uikit.v5.components.AppFilterChipRow
 import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppMenuSheet
@@ -440,16 +443,40 @@ private fun HostBookSourceManageScreen() {
                 )
 
                 // 分组筛选（独立于状态，与 1.7.3 的 menu_group 对应）
+                // 选项 >8 个时 chips 收拢为「全部 + ⋮」，全量选择走弹窗（横滑找不齐的解法）
+                var groupFilterOpen by remember { mutableStateOf(false) }
                 if (groups.isNotEmpty()) {
+                    val manyGroups = groups.size > 8
                     Spacer(Modifier.height(density.blockGap))
                     AppFilterChipRow(
                         label = stringResource(R.string.v5_filter_group),
-                        chips = listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank())) +
-                            groups.map { g -> AppFilterChip(g, searchKey == "group:$g") },
+                        chips = if (manyGroups) {
+                            listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank()))
+                        } else {
+                            listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank())) +
+                                groups.map { g -> AppFilterChip(g, searchKey == "group:$g") }
+                        },
                         onChipClick = { index ->
                             searchKey = if (index == 0) "" else "group:${groups[index - 1]}"
                         },
+                        overflowLabel = if (manyGroups) stringResource(R.string.v5_more) else null,
+                        onOverflowClick = if (manyGroups) {
+                            { groupFilterOpen = true }
+                        } else null,
                     )
+                    if (groupFilterOpen) {
+                        val selectedGroup = searchKey.removePrefix("group:")
+                        AppFilterDialog(
+                            title = stringResource(R.string.v5_filter_group),
+                            options = listOf(stringResource(R.string.v5_all)) + groups,
+                            selectedIndex = if (searchKey.isBlank()) 0
+                            else (groups.indexOfFirst { it == selectedGroup } + 1).coerceAtLeast(0),
+                            onSelect = { index ->
+                                searchKey = if (index == 0) "" else "group:${groups[index - 1]}"
+                            },
+                            onDismiss = { groupFilterOpen = false },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(density.blockGap))
 
@@ -458,16 +485,25 @@ private fun HostBookSourceManageScreen() {
                         title = stringResource(R.string.v5_empty_sources_title),
                         supporting = stringResource(R.string.v5_empty_sources_supporting),
                     )
-                    else -> LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = density.screenPadding,
-                            end = density.screenPadding,
-                            top = density.blockGap / 2,
-                            bottom = density.screenPadding,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-                    ) {
+                    else -> {
+                        val sourceListState = rememberLazyListState()
+                        AppFastScroller(
+                            listState = sourceListState,
+                            topContentPadding = density.blockGap / 2,
+                            bottomContentPadding = density.screenPadding,
+                            endContentPadding = density.screenPadding,
+                        ) {
+                        LazyColumn(
+                            state = sourceListState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = density.screenPadding,
+                                end = density.screenPadding,
+                                top = density.blockGap / 2,
+                                bottom = density.screenPadding,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                        ) {
                         items(displayRows, key = { row ->
                             when (row) {
                                 is DomainRow.Header -> "h:${row.host}"
@@ -503,9 +539,11 @@ private fun HostBookSourceManageScreen() {
                                 }
                             }
                         }
+                        }
                     }
                 }
             }
+    }
     }
 
     // 主溢出菜单（对齐 1.7.3）

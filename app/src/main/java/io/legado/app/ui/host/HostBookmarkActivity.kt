@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelProvider
@@ -32,6 +34,7 @@ import io.legado.app.ui.book.bookmark.AllBookmarkViewModel
 import io.legado.app.ui.book.bookmark.BookmarkDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.components.AppSelectionRow
@@ -122,7 +125,15 @@ private fun HostBookmarkScreen() {
                 AppEmpty(title = stringResource(R.string.empty))
             }
         } else {
+            val fsState125 = rememberLazyListState()
+            AppFastScroller(
+                listState = fsState125,
+                topContentPadding = Dp.Hairline,
+                bottomContentPadding = Dp.Hairline,
+                endContentPadding = Dp.Hairline,
+            ) {
             LazyColumn(
+                state = fsState125,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = density.screenPadding,
@@ -145,6 +156,7 @@ private fun HostBookmarkScreen() {
                         },
                     )
                 }
+            }
             }
         }
     }

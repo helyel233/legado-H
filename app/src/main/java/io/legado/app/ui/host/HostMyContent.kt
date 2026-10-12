@@ -44,7 +44,6 @@ import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.RelaySettingsActivity
 import io.legado.app.ui.book.bookmark.AllBookmarkActivity
-import io.legado.app.ui.book.cache.CacheManageActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
@@ -221,12 +220,12 @@ class HostMyContent : AppContent {
                     "setting" -> HostSettingsActivity.start(context, ConfigTag.OTHER_CONFIG)
                     "web_dav_setting" -> HostSettingsActivity.start(context, ConfigTag.BACKUP_CONFIG)
                     "publicWebRelay" -> context.startActivity<RelaySettingsActivity>()
-                    "cacheManage" -> context.startActivity<CacheManageActivity>()
+                    "cacheManage" -> HostCacheManageActivity.start(context)
                     "sourceRecycleBin" -> context.startActivity<SourceRecycleBinActivity>()
                     "theme_setting" -> HostSettingsActivity.start(context, ConfigTag.THEME_CONFIG)
                     "ai_setting" -> HostSettingsActivity.start(context, ConfigTag.AI_CONFIG)
                     "fileManage" -> HostFileManageActivity.start(context)
-                    "readRecord" -> context.startActivity<ReadRecordActivity>()
+                    "readRecord" -> HostReadRecordActivity.start(context)
                     "about" -> HostAboutActivity.start(context)
                     "exit" -> (context as? Activity)?.finish()
                 }

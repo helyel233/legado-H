@@ -16,13 +16,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -296,8 +304,7 @@ fun AppDangerButton(
     }
 }
 
-/** 表单弹窗的单字段规格。 */
-data class AppFormField(
+/** 表单弹窗的单字段规格。 */data class AppFormField(
     val key: String,
     val label: String,
     val initial: String = "",
@@ -404,6 +411,269 @@ fun AppProgressDialog(
             }
             if (cancelLabel != null && onCancel != null) {
                 AppGhostButton(cancelLabel, modifier = Modifier.fillMaxWidth(), onClick = onCancel)
+            }
+        }
+    }
+}
+
+/**
+ * 筛选弹窗：选项多到横滑 chips 不好用时（分组筛选等）的全量选择形态。
+ * 单选：点行即选并关闭；多选用 [AppMultiFilterDialog]。
+ */
+@Composable
+fun AppFilterDialog(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (index: Int) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visual = LocalVisualSpec.current
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = visual.density.screenPadding),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = LocalSemanticColors.current.onSurface,
+                modifier = Modifier
+                    .padding(horizontal = visual.density.screenPadding)
+                    .padding(bottom = visual.density.blockGap / 2),
+            )
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+            ) {
+                itemsIndexed(options) { index, label ->
+                    AppListItem(
+                        headline = label,
+                        leading = {
+                            Box(modifier = Modifier.size(8.dp))
+                        },
+                        trailing = if (index == selectedIndex) {
+                            {
+                                Icon(
+                                    imageVector = io.legado.app.uikit.v5.components.AppIcons.Check,
+                                    contentDescription = null,
+                                    tint = LocalSemanticColors.current.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        } else null,
+                        onClick = {
+                            onSelect(index)
+                            onDismiss()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 多选筛选弹窗：与 [AppFilterDialog] 同形态，点行切换勾选态、确认后一次性回传。
+ * 分组多选移入/移出、批量筛选等场景。选中集合托管在组件内，首次组合给定。
+ */
+@Composable
+fun AppMultiFilterDialog(
+    title: String,
+    options: List<String>,
+    selectedIndices: Set<Int>,
+    confirmLabel: String,
+    cancelLabel: String,
+    onConfirm: (selected: Set<Int>) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    val checked = remember(options, selectedIndices) {
+        androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(selectedIndices) }
+    }
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = density.screenPadding),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = LocalSemanticColors.current.onSurface,
+                modifier = Modifier
+                    .padding(horizontal = density.screenPadding)
+                    .padding(bottom = density.blockGap / 2),
+            )
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+            ) {
+                itemsIndexed(options) { index, label ->
+                    val isChecked = index in checked
+                    AppListItem(
+                        headline = label,
+                        leading = {
+                            Box(modifier = Modifier.size(8.dp))
+                        },
+                        trailing = {
+                            Icon(
+                                imageVector = AppIcons.Check,
+                                contentDescription = null,
+                                tint = if (isChecked) LocalSemanticColors.current.primary
+                                else LocalSemanticColors.current.outline,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                        onClick = {
+                            if (isChecked) checked.remove(index) else checked.add(index)
+                        },
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap / 2),
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap),
+            ) {
+                AppGhostButton(cancelLabel, modifier = Modifier.weight(1f), onClick = onDismiss)
+                AppFilledButton(confirmLabel, modifier = Modifier.weight(1f)) {
+                    onConfirm(checked.toSortedSet())
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 数字选择弹窗：标题 + 「−/+」步进大按钮 + 当前值 + 取消/确定。
+ * 定时分钟数、并发数等「选一个数」的统一形态（旧 NumberPickerDialog 的 V5 对应件）。
+ */
+@Composable
+fun AppNumberPickerDialog(
+    title: String,
+    value: Int,
+    confirmLabel: String,
+    cancelLabel: String,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    range: IntRange = 0..100,
+    step: Int = 1,
+    valueLabel: String? = null,
+) {
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    val colors = LocalSemanticColors.current
+    var current by remember(value) { mutableStateOf(value.coerceIn(range.first, range.last)) }
+
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = colors.onSurface,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap),
+            ) {
+                AppGhostButton(
+                    "−",
+                    modifier = Modifier.widthIn(min = 56.dp),
+                    enabled = current > range.first,
+                ) { current = (current - step).coerceAtLeast(range.first) }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = current.toString(),
+                        style = visual.type.title,
+                        color = colors.primary,
+                    )
+                    if (valueLabel != null) {
+                        Text(
+                            text = valueLabel,
+                            style = visual.type.caption,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                }
+                AppGhostButton(
+                    "+",
+                    modifier = Modifier.widthIn(min = 56.dp),
+                    enabled = current < range.last,
+                ) { current = (current + step).coerceAtMost(range.last) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
+                AppGhostButton(cancelLabel, modifier = Modifier.weight(1f), onClick = onDismiss)
+                AppFilledButton(confirmLabel, modifier = Modifier.weight(1f)) {
+                    onConfirm(current)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 24 小时制时间选择弹窗（M3 TimePicker 包进 AppDialog；形态参考 legado-with-MD3）。
+ * [currentValue] 与回调值均为 "HH:mm" 字符串，解析失败回落 00:00。
+ * 定时朗读、自动任务定时等场景。
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun AppTimePickerDialog(
+    title: String,
+    currentValue: String,
+    confirmLabel: String,
+    cancelLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    val timePickerState = androidx.compose.material3.rememberTimePickerState(
+        initialHour = currentValue.substringBefore(':').trim().toIntOrNull()?.coerceIn(0, 23) ?: 0,
+        initialMinute = currentValue.substringAfter(':', "").trim().toIntOrNull()?.coerceIn(0, 59) ?: 0,
+        is24Hour = true,
+    )
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap),
+        ) {
+            Text(
+                text = title,
+                style = visual.type.title,
+                color = LocalSemanticColors.current.onSurface,
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.TimePicker(state = timePickerState)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap)) {
+                AppGhostButton(cancelLabel, modifier = Modifier.weight(1f), onClick = onDismiss)
+                AppFilledButton(confirmLabel, modifier = Modifier.weight(1f)) {
+                    onConfirm(
+                        String.format(java.util.Locale.ROOT, "%02d:%02d",
+                            timePickerState.hour, timePickerState.minute)
+                    )
+                }
             }
         }
     }

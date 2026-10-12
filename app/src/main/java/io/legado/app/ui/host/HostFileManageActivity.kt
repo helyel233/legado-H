@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
@@ -33,12 +34,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.ViewModelProvider
 import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.ui.file.FileManageViewModel
 import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppIcons
 import io.legado.app.uikit.v5.components.AppSearchField
@@ -200,7 +203,15 @@ private fun HostFileManageScreen(pageTitle: String, rootPath: String?) {
             if (filtered.isEmpty()) {
                 AppEmpty(title = stringResource(R.string.empty))
             } else {
+                val fsState203 = rememberLazyListState()
+                AppFastScroller(
+                    listState = fsState203,
+                    topContentPadding = Dp.Hairline,
+                    bottomContentPadding = Dp.Hairline,
+                    endContentPadding = Dp.Hairline,
+                ) {
                 LazyColumn(
+                    state = fsState203,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         start = density.screenPadding,
@@ -228,6 +239,7 @@ private fun HostFileManageScreen(pageTitle: String, rootPath: String?) {
                             },
                         )
                     }
+                }
                 }
             }
         }

@@ -36,8 +36,6 @@ import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,9 +51,16 @@ class CacheManageActivity :
     override val binding by viewBinding(ActivityCacheManageBinding::inflate)
     override val viewModel by viewModels<CacheManageViewModel>()
 
-    private var audioTaskReloadJob: Job? = null
-    private var lastMissingTaskReloadAt = 0L
-    private val handledTerminalTaskReloads = hashSetOf<String>()
+    // 任务终态/失踪 → 刷新逻辑已下沉 CacheManageTaskReloadController（V5 壳共用）
+    private val taskReloadController by lazy {
+        CacheManageTaskReloadController(
+            scope = lifecycleScope,
+            audioModeActive = { viewModel.mode == CacheManageMode.AUDIO && !viewModel.isLoading() },
+            currentBookUrls = { screenItems.toVisibleBookUrls() },
+            reloadAudio = { viewModel.load(CacheManageMode.AUDIO) },
+            reloadCurrent = { viewModel.load() },
+        )
+    }
     private var cloudContainerId: String? = null
     private var containerMenuItem: MenuItem? = null
     private var sortMenuItem: MenuItem? = null
@@ -271,68 +276,14 @@ class CacheManageActivity :
             viewModel.audioTaskStateFlow.collectLatest { states ->
                 audioTaskStateMap = states
                 if (viewModel.mode == CacheManageMode.AUDIO) {
-                    reloadAudioItemsWhenNeeded(states)
+                    taskReloadController.onAudioStates(states)
                 }
             }
         }
         lifecycleScope.launch {
             WebDavTaskManager.states.collectLatest { states ->
                 webDavTaskStateMap = states
-                reloadItemsWhenWebDavTaskFinished(states)
-            }
-        }
-    }
-
-    private fun reloadItemsWhenWebDavTaskFinished(states: Map<String, WebDavTaskState>) {
-        states.values
-            .filter { !it.active && it.status.isTerminalForListRefresh() }
-            .forEach { state ->
-                val key = "webdav:${state.key}:${state.type}:${state.status}"
-                if (handledTerminalTaskReloads.add(key)) {
-                    viewModel.load()
-                }
-            }
-    }
-    private fun reloadAudioItemsWhenNeeded(states: Map<String, AudioCacheTaskState>) {
-        val stateValues = states.values
-        val activeTaskBookUrls = stateValues
-            .asSequence()
-            .filter { it.active }
-            .mapTo(hashSetOf<String>()) { it.bookUrl }
-        if (activeTaskBookUrls.isNotEmpty()) {
-            val visibleBookUrls = hashSetOf<String>()
-            screenItems.forEach { item ->
-                if (item.sourceVariants.isEmpty()) {
-                    visibleBookUrls.add(item.book.bookUrl)
-                } else {
-                    item.sourceVariants.forEach { visibleBookUrls.add(it.book.bookUrl) }
-                }
-            }
-            val missingActiveTasks = activeTaskBookUrls - visibleBookUrls
-            if (missingActiveTasks.isNotEmpty()) {
-                val now = System.currentTimeMillis()
-                if (now - lastMissingTaskReloadAt > MISSING_TASK_RELOAD_INTERVAL_MS && !viewModel.isLoading()) {
-                    lastMissingTaskReloadAt = now
-                    scheduleAudioTaskReload(MISSING_TASK_RELOAD_DELAY_MS)
-                }
-            }
-        }
-        stateValues
-            .filter { !it.active && it.status.isTerminalForListRefresh() }
-            .forEach { state ->
-                val key = "${state.bookUrl}:${state.status}:${state.completedChapters}:${state.totalChapters}"
-                if (handledTerminalTaskReloads.add(key)) {
-                    scheduleAudioTaskReload(TERMINAL_TASK_RELOAD_DELAY_MS)
-                }
-            }
-    }
-
-    private fun scheduleAudioTaskReload(delayMs: Long) {
-        if (audioTaskReloadJob?.isActive == true) return
-        audioTaskReloadJob = lifecycleScope.launch {
-            delay(delayMs)
-            if (viewModel.mode == CacheManageMode.AUDIO && !viewModel.isLoading()) {
-                viewModel.load(CacheManageMode.AUDIO)
+                taskReloadController.onWebDavStates(states)
             }
         }
     }
@@ -589,22 +540,6 @@ class CacheManageActivity :
     }
 }
 
-private fun CacheTaskStatus.isTerminalForListRefresh(): Boolean {
-    return this == CacheTaskStatus.COMPLETED ||
-        this == CacheTaskStatus.PAUSED ||
-        this == CacheTaskStatus.CANCELLED ||
-        this == CacheTaskStatus.FAILED
-}
-
-private fun WebDavTaskStatus.isTerminalForListRefresh(): Boolean {
-    return this == WebDavTaskStatus.COMPLETED ||
-        this == WebDavTaskStatus.CANCELLED ||
-        this == WebDavTaskStatus.FAILED
-}
-
-private const val MISSING_TASK_RELOAD_INTERVAL_MS = 2500L
-private const val MISSING_TASK_RELOAD_DELAY_MS = 250L
-private const val TERMINAL_TASK_RELOAD_DELAY_MS = 600L
 private const val MENU_SEARCH = 0x53ff
 private const val MENU_SORT = 0x5400
 private const val MENU_CONTAINER = 0x5401
@@ -637,7 +572,7 @@ enum class CacheManageSortMode(val titleRes: Int) {
     }
 }
 
-private fun CacheBookItem.matchesSearch(key: String): Boolean {
+internal fun CacheBookItem.matchesSearch(key: String): Boolean {
     if (key.isBlank()) return true
     return book.name.contains(key, ignoreCase = true) ||
         book.author.contains(key, ignoreCase = true) ||
@@ -649,14 +584,14 @@ private fun CacheBookItem.matchesSearch(key: String): Boolean {
         }
 }
 
-private fun CacheBookItem.lastCacheUpdatedAt(): Long {
+internal fun CacheBookItem.lastCacheUpdatedAt(): Long {
     val variantTime = sourceVariants.maxOfOrNull {
         maxOf(it.localUpdatedAt, it.remoteUpdatedAt)
     } ?: 0L
     return maxOf(localUpdatedAt, remoteUpdatedAt, variantTime)
 }
 
-private fun CacheBookItem.lastReadAt(): Long {
+internal fun CacheBookItem.lastReadAt(): Long {
     val variantTime = sourceVariants.maxOfOrNull { variant ->
         variant.book.durChapterTime.takeIf { variant.inBookshelf } ?: 0L
     } ?: 0L
@@ -664,7 +599,7 @@ private fun CacheBookItem.lastReadAt(): Long {
     return maxOf(itemTime, variantTime)
 }
 
-private fun CacheBookItem.hasLockedCacheTask(
+internal fun CacheBookItem.hasLockedCacheTask(
     taskStates: Map<String, AudioCacheTaskState>
 ): Boolean {
     if (taskStates[book.bookUrl].locksCacheActions()) return true

@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModelProvider
@@ -40,6 +41,7 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
@@ -183,6 +185,12 @@ private fun HostDictRuleManageScreen() {
                     supporting = stringResource(R.string.import_default_rule),
                 )
             } else {
+                AppFastScroller(
+                    listState = listState,
+                    topContentPadding = density.blockGap / 2,
+                    bottomContentPadding = density.screenPadding,
+                    endContentPadding = density.screenPadding,
+                ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -231,6 +239,7 @@ private fun HostDictRuleManageScreen() {
                             )
                         }
                     }
+                }
                 }
             }
         }

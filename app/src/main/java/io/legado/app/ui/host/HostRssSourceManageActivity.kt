@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.ViewModelProvider
 import io.legado.app.R
 import io.legado.app.constant.AppLog
@@ -41,9 +42,11 @@ import io.legado.app.ui.rss.source.manage.RssSourceViewModel
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterDialog
 import io.legado.app.uikit.v5.components.AppFilterChipRow
 import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppMenuSheet
@@ -270,15 +273,36 @@ private fun HostRssSourceManageScreen() {
             )
 
             if (groups.isNotEmpty()) {
+                var groupFilterOpen by remember { mutableStateOf(false) }
+                val manyGroups = groups.size > 8
                 Spacer(Modifier.height(density.blockGap))
                 AppFilterChipRow(
                     label = stringResource(R.string.v5_filter_group),
-                    chips = listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank())) +
-                        groups.map { g -> AppFilterChip(g, searchKey == "group:$g") },
+                    chips = if (manyGroups) {
+                        listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank()))
+                    } else {
+                        listOf(AppFilterChip(stringResource(R.string.v5_all), searchKey.isBlank())) +
+                            groups.map { g -> AppFilterChip(g, searchKey == "group:$g") }
+                    },
                     onChipClick = { index ->
                         searchKey = if (index == 0) "" else "group:${groups[index - 1]}"
                     },
+                    overflowLabel = if (manyGroups) stringResource(R.string.v5_more) else null,
+                    onOverflowClick = if (manyGroups) { { groupFilterOpen = true } } else null,
                 )
+                if (groupFilterOpen) {
+                    val selectedGroup = searchKey.removePrefix("group:")
+                    AppFilterDialog(
+                        title = stringResource(R.string.v5_filter_group),
+                        options = listOf(stringResource(R.string.v5_all)) + groups,
+                        selectedIndex = if (searchKey.isBlank()) 0
+                        else (groups.indexOfFirst { it == selectedGroup } + 1).coerceAtLeast(0),
+                        onSelect = { index ->
+                            searchKey = if (index == 0) "" else "group:${groups[index - 1]}"
+                        },
+                        onDismiss = { groupFilterOpen = false },
+                    )
+                }
             }
             Spacer(Modifier.height(density.blockGap))
 
@@ -288,6 +312,12 @@ private fun HostRssSourceManageScreen() {
                     supporting = stringResource(R.string.v5_rss_manage),
                 )
             } else if (reorderEnabled) {
+                AppFastScroller(
+                    listState = listState,
+                    topContentPadding = density.blockGap / 2,
+                    bottomContentPadding = density.screenPadding,
+                    endContentPadding = density.screenPadding,
+                ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -323,8 +353,17 @@ private fun HostRssSourceManageScreen() {
                         }
                     }
                 }
+                }
             } else {
+                val fsState349 = rememberLazyListState()
+                AppFastScroller(
+                    listState = fsState349,
+                    topContentPadding = Dp.Hairline,
+                    bottomContentPadding = Dp.Hairline,
+                    endContentPadding = Dp.Hairline,
+                ) {
                 LazyColumn(
+                    state = fsState349,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = density.screenPadding,
@@ -351,6 +390,7 @@ private fun HostRssSourceManageScreen() {
                             onLongClick = { selection.enter(source) },
                         )
                     }
+                }
                 }
             }
         }

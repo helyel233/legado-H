@@ -1652,6 +1652,10 @@
     <string name="v5_stats_zero_minutes">0 分鐘</string>
     <string name="v5_ok2">確定</string>
     <string name="v5_cancel2">取消</string>
+    <string name="v5_save">儲存</string>
+    <string name="v5_discard">放棄</string>
+    <string name="v5_unsaved_title">未儲存的變更</string>
+    <string name="v5_unsaved_message">變更尚未儲存，確定放棄嗎？</string>
     <string name="v5_shelf_layout_minimal">極簡列表</string>
     <string name="v5_shelf_layout_compact">緊湊列表</string>
     <string name="v5_shelf_grid_4">四列網格</string>

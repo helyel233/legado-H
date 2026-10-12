@@ -1356,6 +1356,10 @@
     <string name="v5_stats_zero_minutes">0 phút</string>
     <string name="v5_ok2">Xác nhận</string>
     <string name="v5_cancel2">Hủy</string>
+    <string name="v5_save">Lưu</string>
+    <string name="v5_discard">Bỏ qua</string>
+    <string name="v5_unsaved_title">Thay đổi chưa lưu</string>
+    <string name="v5_unsaved_message">Có thay đổi chưa được lưu. Bỏ qua?</string>
     <string name="v5_shelf_layout_minimal">Danh sách tối giản</string>
     <string name="v5_shelf_layout_compact">Danh sách gọn</string>
     <string name="v5_shelf_grid_4">Lưới 4 cột</string>

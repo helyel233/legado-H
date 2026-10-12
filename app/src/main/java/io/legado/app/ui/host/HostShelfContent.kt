@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.asFlow
 import android.content.Context
 import io.legado.app.constant.PreferKey
@@ -52,6 +54,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfListItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
 import io.legado.app.ui.main.bookshelf.compose.buildBookshelfItems
 import io.legado.app.uikit.v5.components.AppProgressBar
+import io.legado.app.uikit.v5.components.AppFastScroller
 import io.legado.app.uikit.v5.components.AppCover
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.contract.AppContent
@@ -194,7 +197,15 @@ class HostShelfContent : AppContent {
                 }
             }
         } else {
+            val fsState197 = rememberLazyListState()
+            AppFastScroller(
+                listState = fsState197,
+                topContentPadding = Dp.Hairline,
+                bottomContentPadding = Dp.Hairline,
+                endContentPadding = Dp.Hairline,
+            ) {
             LazyColumn(
+                state = fsState197,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = scope.density.screenPadding,
@@ -223,6 +234,7 @@ class HostShelfContent : AppContent {
                         onLongClick = ::openDetail,
                     )
                 }
+            }
             }
         }
 

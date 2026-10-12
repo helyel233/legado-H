@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -155,5 +159,61 @@ internal fun HostV5Page(
                 floatingAction()
             }
         }
+    }
+}
+
+/**
+ * V5 编辑页脚手架（台账 #30-P0①）。
+ *
+ * 在 [HostV5Page] 之上补齐编辑场景三件事：
+ * ① 顶栏右侧固定「保存」按钮；
+ * ② [dirty] 为 true 时系统返回键接管 —— 弹「放弃更改？」确认（B 门红线）；
+ * ③ 未 dirty 时返回直接走 [onDiscard]（页面在此 finish）。
+ *
+ * [onSave] 保存成功后由页面自行关闭；[onDiscard] = 不保存退出（页面 finish）。
+ */
+@Composable
+internal fun HostV5EditPage(
+    title: String,
+    dirty: Boolean,
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+    subtitle: String? = null,
+    content: @Composable () -> Unit,
+) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // dirty 时接管系统返回键，防止误触丢稿
+    androidx.activity.compose.BackHandler(enabled = dirty) {
+        confirmDiscard = true
+    }
+
+    HostV5Page(
+        title = title,
+        subtitle = subtitle,
+        onBack = { if (dirty) confirmDiscard = true else onDiscard() },
+        trailing = {
+            io.legado.app.uikit.v5.components.AppFilledButton(
+                text = context.getString(io.legado.app.R.string.v5_save),
+                onClick = onSave,
+            )
+        },
+        content = content,
+    )
+
+    if (confirmDiscard) {
+        io.legado.app.uikit.v5.components.AppConfirmDialog(
+            title = context.getString(io.legado.app.R.string.v5_unsaved_title),
+            message = context.getString(io.legado.app.R.string.v5_unsaved_message),
+            confirmLabel = context.getString(io.legado.app.R.string.v5_discard),
+            cancelLabel = context.getString(io.legado.app.R.string.v5_cancel),
+            danger = true,
+            onConfirm = {
+                confirmDiscard = false
+                onDiscard()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
     }
 }

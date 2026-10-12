@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import io.legado.app.uikit.v5.components.AppEmpty
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -194,7 +195,10 @@ private fun ModuleCard(
 
                 is io.legado.app.ui.main.homepage.ModuleLoadState.Loaded -> {
                     if (state.books.isEmpty()) {
-                        Text("暂无内容", style = scope.type.caption, color = colors.onSurfaceVariant)
+                        AppEmpty(
+                            title = "暂无内容",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     } else {
                         BookRow(scope, state.books.take(12), onOpenBook, viewModel)
                     }

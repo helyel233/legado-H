@@ -352,15 +352,12 @@ private fun SliderRow(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
 ) {
-    val visual = LocalVisualSpec.current
-    val colors = LocalSemanticColors.current
-    Column {
-        Row {
-            Text(label, style = visual.type.caption, color = colors.onSurface, modifier = Modifier.weight(1f))
-            Text("%.2f".format(value), style = visual.type.caption, color = colors.onSurfaceVariant)
-        }
-        AppSlider(value = value, onValueChange = onChange, valueRange = range)
-    }
+    AppSlider(
+        value = value,
+        onValueChange = onChange,
+        valueRange = range,
+        valueLabel = "$label  %.2f".format(value),
+    )
 }
 
 @Composable

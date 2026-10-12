@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import io.legado.app.uikit.v5.components.AppFastScroller
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -129,7 +130,14 @@ private fun HostLogScreen() {
                     if (logs.isEmpty()) {
                         AppEmpty(title = stringResource(R.string.empty))
                     } else {
+                        val runListState = rememberLazyListState()
+                        AppFastScroller(
+                            listState = runListState,
+                            bottomContentPadding = density.screenPadding,
+                            endContentPadding = density.screenPadding,
+                        ) {
                         LazyColumn(
+                            state = runListState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                                 start = density.screenPadding,
@@ -152,6 +160,7 @@ private fun HostLogScreen() {
                                 )
                             }
                         }
+                        }
                     }
                 }
 
@@ -159,7 +168,14 @@ private fun HostLogScreen() {
                     if (crashLogs.isEmpty()) {
                         AppEmpty(title = stringResource(R.string.empty))
                     } else {
+                        val crashListState = rememberLazyListState()
+                        AppFastScroller(
+                            listState = crashListState,
+                            bottomContentPadding = density.screenPadding,
+                            endContentPadding = density.screenPadding,
+                        ) {
                         LazyColumn(
+                            state = crashListState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                                 start = density.screenPadding,
@@ -181,6 +197,7 @@ private fun HostLogScreen() {
                                     onLongClick = {},
                                 )
                             }
+                        }
                         }
                     }
                 }

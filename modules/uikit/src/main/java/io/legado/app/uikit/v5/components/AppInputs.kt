@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -36,7 +40,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -393,7 +401,11 @@ fun AppRowWithSwitch(
     }
 }
 
-/** 滑块：轨道读 primary 渐变，支持点按与拖动，拇指带弹性。 */
+/**
+ * 滑块：轨道读 primary 渐变，支持点按与拖动，拇指带弹性。
+ * [steps] > 0 时按 steps 等分吸附；[valueLabel] 显示当前值文案（右对齐）；
+ * [onValueChangeFinished] 拖动结束回调（设置类页面保存偏好用）。
+ */
 @Composable
 fun AppSlider(
     value: Float,
@@ -401,65 +413,324 @@ fun AppSlider(
     modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
+    steps: Int = 0,
+    valueLabel: String? = null,
+    onValueChangeFinished: (() -> Unit)? = null,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
-    val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start))
-        .coerceIn(0f, 1f)
     val span = valueRange.endInclusive - valueRange.start
+    val fraction = ((value - valueRange.start) / span).coerceIn(0f, 1f)
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(28.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        val w = maxWidth
-
-        fun update(x: Float, widthPx: Float) {
-            if (!enabled || widthPx <= 0f) return
-            val f = (x / widthPx).coerceIn(0f, 1f)
-            onValueChange(valueRange.start + f * span)
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (valueLabel != null) {
+            Text(
+                text = valueLabel,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(bottom = 2.dp),
+            )
         }
-
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(5.dp)
-                .clip(visual.shape(ShapeKind.TAG))
-                .background(colors.surfaceVariant),
-        )
-        // 触摸层：点按与拖动分别挂 pointerInput（同一块内挂两个检测器只有一个生效）
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(valueRange, enabled) {
-                    detectTapGestures { offset -> update(offset.x, size.width.toFloat()) }
+                .height(28.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val w = maxWidth
+
+            fun update(x: Float, widthPx: Float) {
+                if (!enabled || widthPx <= 0f) return
+                var f = (x / widthPx).coerceIn(0f, 1f)
+                if (steps > 0) {
+                    // 等分吸附：取最近的 1/steps 刻度
+                    f = (f * steps).toFloat().let { kotlin.math.round(it) } / steps
                 }
-                .pointerInput(valueRange, enabled) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        update(change.position.x, size.width.toFloat())
+                onValueChange(valueRange.start + f * span)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(visual.shape(ShapeKind.TAG))
+                    .background(colors.surfaceVariant),
+            )
+            // 触摸层：点按与拖动分别挂 pointerInput（同一块内挂两个检测器只有一个生效）
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(valueRange, enabled, steps) {
+                        detectTapGestures { offset -> update(offset.x, size.width.toFloat()) }
                     }
+                    .pointerInput(valueRange, enabled, steps) {
+                        detectDragGestures(
+                            onDragEnd = { onValueChangeFinished?.invoke() },
+                            onDragCancel = { onValueChangeFinished?.invoke() },
+                        ) { change, _ ->
+                            change.consume()
+                            update(change.position.x, size.width.toFloat())
+                        }
+                    },
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .height(5.dp)
+                    .clip(visual.shape(ShapeKind.TAG))
+                    .background(
+                        if (enabled) Brush.horizontalGradient(listOf(colors.primary, colors.secondary))
+                        else Brush.horizontalGradient(listOf(colors.outline, colors.outline))
+                    ),
+            )
+            val thumbX = w * fraction - 8.dp
+            Box(
+                modifier = Modifier
+                    .offset(x = thumbX.coerceAtLeast(0.dp))
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (enabled) colors.primary else colors.onSurfaceVariant),
+            )
+        }
+    }
+}
+
+/**
+ * 数字输入行：标签 + 「−」步进 + 数字框 + 「+」步进。
+ * 整数区间/步进语义在后端收敛，页面不再手拼三个控件。
+ */
+@Composable
+fun AppNumberField(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    /** 合法区间；null 不限 */
+    range: IntRange? = null,
+    /** ±按钮步长（输入框可任意键入） */
+    step: Int = 1,
+    label: String? = null,
+    enabled: Boolean = true,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+
+    fun coerce(v: Int): Int = if (range != null) v.coerceIn(range.first, range.last) else v
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+    ) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = visual.type.body,
+                color = colors.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        AppStepButton("−", enabled && (range == null || value > range.first)) {
+            onValueChange(coerce(value - step))
+        }
+        var text by remember(value) { mutableStateOf(value.toString()) }
+        Box(
+            modifier = Modifier
+                .widthIn(min = 64.dp)
+                .clip(visual.shape(ShapeKind.FIELD))
+                .background(colors.surfaceVariant)
+                .padding(horizontal = density.screenPadding / 2, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = {
+                    text = it
+                    it.toIntOrNull()?.let { v -> onValueChange(coerce(v)) }
                 },
+                enabled = enabled,
+                singleLine = true,
+                textStyle = visual.type.body.copy(color = colors.onSurface),
+                cursorBrush = SolidColor(colors.primary),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.widthIn(min = 48.dp),
+            )
+        }
+        AppStepButton("+", enabled && (range == null || value < range.last)) {
+            onValueChange(coerce(value + step))
+        }
+    }
+}
+
+/** ±步进小按钮（AppNumberField 内部件，40dp 触控目标）。 */
+@Composable
+private fun AppStepButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(visual.shape(ShapeKind.BUTTON))
+            .background(if (enabled) colors.surfaceVariant else colors.surfaceVariant.copy(alpha = 0.4f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = glyph,
+            style = visual.type.title,
+            color = if (enabled) colors.onSurface else colors.onSurfaceVariant,
         )
-        Box(
+    }
+}
+
+/**
+ * 表单下拉字段（编辑页/筛选表单用；形态对齐 legado-with-MD3 的 ExposedDropdown 用法）。
+ * 与 [AppOptionRow] 的区别：前者是「设置行」（整行点击弹菜单），这里是「表单字段」
+ * （带标签、错误态、内嵌下拉展开）。
+ */
+@Composable
+fun AppDropdownField(
+    label: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (index: Int) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+    errorText: String? = null,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label.isNotEmpty()) {
+            Text(
+                text = label,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        Box {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(visual.shape(ShapeKind.FIELD))
+                    .background(if (errorText != null) colors.error.copy(alpha = 0.10f) else colors.surfaceVariant)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = enabled,
+                    ) { expanded = true }
+                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = options.getOrNull(selectedIndex) ?: placeholder,
+                    style = visual.type.body,
+                    color = if (options.getOrNull(selectedIndex) == null) colors.onSurfaceVariant
+                    else colors.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = AppIcons.Chevron,
+                    contentDescription = null,
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(density.iconSize * 0.72f)
+                        .graphicsLayer { rotationZ = 90f },
+                )
+            }
+            androidx.compose.material3.DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                options.forEachIndexed { index, option ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = option,
+                                style = visual.type.body,
+                                color = if (index == selectedIndex) colors.primary else colors.onSurface,
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(index)
+                        },
+                    )
+                }
+            }
+        }
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = visual.type.caption,
+                color = colors.error,
+                modifier = Modifier.padding(top = 4.dp, start = density.screenPadding / 2),
+            )
+        }
+    }
+}
+
+/**
+ * 竖向滑条（阅读菜单亮度/进度用；移植自 legado-with-MD3 的旋转实现）：
+ * 内部复用 [AppSlider]，graphicsLayer 旋转 -90° 呈竖向。
+ * [accessibilityLabel]/[accessibilityValue] 供无障碍朗读（旋转后语义会乱，
+ * 页面应传入原始语义）。
+ */
+@Composable
+fun AppVerticalSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    height: androidx.compose.ui.unit.Dp = 160.dp,
+    onValueChangeFinished: (() -> Unit)? = null,
+    accessibilityLabel: String? = null,
+    accessibilityValue: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .width(48.dp)
+            .height(height),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppSlider(
+            value = value,
+            onValueChange = onValueChange,
             modifier = Modifier
-                .fillMaxWidth(fraction)
-                .height(5.dp)
-                .clip(visual.shape(ShapeKind.TAG))
-                .background(
-                    if (enabled) Brush.horizontalGradient(listOf(colors.primary, colors.secondary))
-                    else Brush.horizontalGradient(listOf(colors.outline, colors.outline))
+                .requiredWidth(height)
+                .requiredHeight(48.dp)
+                .graphicsLayer { rotationZ = -90f }
+                .then(
+                    if (accessibilityLabel != null || accessibilityValue != null) {
+                        Modifier.semantics {
+                            accessibilityLabel?.let { contentDescription = it }
+                            accessibilityValue?.let { stateDescription = it }
+                        }
+                    } else Modifier
                 ),
-        )
-        val thumbX = w * fraction - 8.dp
-        Box(
-            modifier = Modifier
-                .offset(x = thumbX.coerceAtLeast(0.dp))
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(if (enabled) colors.primary else colors.onSurfaceVariant),
+            enabled = enabled,
+            valueRange = valueRange,
+            steps = steps,
+            onValueChangeFinished = onValueChangeFinished,
         )
     }
 }

@@ -18,8 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -241,6 +243,7 @@ fun AppProgressBar(
 fun AppFilledButton(
     text: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val visual = LocalVisualSpec.current
@@ -248,16 +251,21 @@ fun AppFilledButton(
     Box(
         modifier = modifier
             .clip(visual.shape(ShapeKind.BUTTON))
-            .background(colors.primary)
+            .background(if (enabled) colors.primary else colors.outline)
             .clickable(
                 interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             )
             .padding(horizontal = visual.density.screenPadding * 1.2f, vertical = 11.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = text, style = visual.type.label, color = colors.onPrimary)
+        Text(
+            text = text,
+            style = visual.type.label,
+            color = if (enabled) colors.onPrimary else colors.onSurfaceVariant,
+        )
     }
 }
 
@@ -266,6 +274,7 @@ fun AppFilledButton(
 fun AppGhostButton(
     text: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val visual = LocalVisualSpec.current
@@ -273,16 +282,21 @@ fun AppGhostButton(
     Box(
         modifier = modifier
             .clip(visual.shape(ShapeKind.BUTTON))
-            .background(colors.surfaceVariant)
+            .background(if (enabled) colors.surfaceVariant else colors.surfaceVariant.copy(alpha = 0.4f))
             .clickable(
                 interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             )
             .padding(horizontal = visual.density.screenPadding * 1.2f, vertical = 11.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = text, style = visual.type.label, color = colors.onSurface)
+        Text(
+            text = text,
+            style = visual.type.label,
+            color = if (enabled) colors.onSurface else colors.onSurfaceVariant,
+        )
     }
 }
 
@@ -305,4 +319,23 @@ fun AppSkeletonList(rows: Int = 5, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * 下拉刷新容器：M3 PullToRefreshBox 的 V5 薄壳。
+ * 内容占满剩余空间；[refreshing] 为 true 时顶部出现刷新指示器。
+ */
+@Composable
+fun AppPullRefresh(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier,
+        content = content,
+    )
 }

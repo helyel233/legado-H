@@ -58,7 +58,7 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.model.SourceCallBack
 import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.ui.book.audio.AudioPlayActivity
-import io.legado.app.ui.book.cache.CacheManageActivity
+import io.legado.app.ui.host.HostCacheManageActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
@@ -400,8 +400,8 @@ class BookInfoComposeActivity :
                     BookCloudEntryModeStore.set(book.bookUrl, BookCloudEntryMode.CACHE_PACKAGE)
                     updateUiState()
                     startActivity(
-                        Intent(this, CacheManageActivity::class.java).apply {
-                            putExtra(CacheManageActivity.EXTRA_INITIAL_SEARCH_KEY, book.name)
+                        Intent(this, HostCacheManageActivity::class.java).apply {
+                            putExtra(HostCacheManageActivity.EXTRA_INITIAL_SEARCH_KEY, book.name)
                         }
                     )
                 }

@@ -1365,6 +1365,10 @@
     <string name="v5_stats_zero_minutes">0 分</string>
     <string name="v5_ok2">OK</string>
     <string name="v5_cancel2">キャンセル</string>
+    <string name="v5_save">保存</string>
+    <string name="v5_discard">破棄</string>
+    <string name="v5_unsaved_title">未保存の変更</string>
+    <string name="v5_unsaved_message">変更が保存されていません。破棄しますか？</string>
     <string name="v5_shelf_layout_minimal">ミニマルリスト</string>
     <string name="v5_shelf_layout_compact">コンパクトリスト</string>
     <string name="v5_shelf_grid_4">4 列グリッド</string>

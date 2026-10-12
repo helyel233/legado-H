@@ -32,6 +32,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.contract.ContentScope
@@ -239,52 +240,19 @@ fun GroupManageSheet(
         Spacer(Modifier.height(scope.density.screenPadding))
     }
 
-    // 新建 / 重命名输入
+    // 新建 / 重命名输入（AppInputDialog 统一件）
     if (creating || renameTarget != null) {
-        AppDialog(onDismiss = { creating = false; renameTarget = null }) {
-            Column(Modifier.padding(scope.density.screenPadding * 1.2f)) {
-                Text(
-                    if (renameTarget != null) stringResource(R.string.v5_shelf_rename_group) else stringResource(R.string.v5_shelf_new_group),
-                    style = scope.type.title,
-                    color = colors.onSurface,
-                )
-                Spacer(Modifier.height(scope.density.blockGap))
-                AppTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    placeholder = "分组名称",
-                )
-                Spacer(Modifier.height(scope.density.blockGap))
-                Row(horizontalArrangement = Arrangement.spacedBy(scope.density.blockGap)) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.primary, scope.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { commitName() }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(colors.surfaceVariant, scope.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { creating = false; renameTarget = null }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
-                    }
-                }
-            }
-        }
+        AppInputDialog(
+            title = if (renameTarget != null) stringResource(R.string.v5_shelf_rename_group)
+            else stringResource(R.string.v5_shelf_new_group),
+            value = input,
+            onValueChange = { input = it },
+            placeholder = "分组名称",
+            confirmLabel = stringResource(R.string.v5_ok2),
+            cancelLabel = stringResource(R.string.v5_cancel2),
+            onConfirm = { commitName() },
+            onDismiss = { creating = false; renameTarget = null },
+        )
     }
 }
 
@@ -296,53 +264,22 @@ fun AddByUrlDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
     var input by remember { mutableStateOf("") }
-    AppDialog(onDismiss = onDismiss) {
-        Column(Modifier.padding(scope.density.screenPadding * 1.2f)) {
-            Text("添加网址", style = scope.type.title, color = colors.onSurface)
-            Spacer(Modifier.height(scope.density.blockGap))
-            AppTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = "url",
-            )
-            Spacer(Modifier.height(scope.density.blockGap))
-            Row(horizontalArrangement = Arrangement.spacedBy(scope.density.blockGap)) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.primary, scope.shape(ShapeKind.BUTTON))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) {
-                            if (input.isNotBlank()) {
-                                onConfirm(input.trim())
-                                onDismiss()
-                            }
-                        }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.v5_ok2), style = scope.type.label, color = colors.onPrimary)
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(colors.surfaceVariant, scope.shape(ShapeKind.BUTTON))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) { onDismiss() }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.v5_cancel2), style = scope.type.label, color = colors.onSurface)
-                }
+    AppInputDialog(
+        title = "添加网址",
+        value = input,
+        onValueChange = { input = it },
+        placeholder = "url",
+        confirmLabel = stringResource(R.string.v5_ok2),
+        cancelLabel = stringResource(R.string.v5_cancel2),
+        onConfirm = { text ->
+            if (text.isNotBlank()) {
+                onConfirm(text)
+                onDismiss()
             }
-        }
-    }
+        },
+        onDismiss = onDismiss,
+    )
 }
 
 // ---------------------------------------------------------------- 通用件

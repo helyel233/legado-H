@@ -52,7 +52,7 @@ import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setIconCompat
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.startService
+import io.legado.app.model.BookExport
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.verificationField
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -483,14 +483,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 etInputScope.error = null
                 val epubSize = etEpubSize.text.toString().toIntOrNull() ?: 1
                 adapter.getItem(position)?.let { book ->
-                    startService<ExportBookService> {
-                        action = IntentAction.start
-                        putExtra("bookUrl", book.bookUrl)
-                        putExtra("exportType", "epub")
-                        putExtra("exportPath", path)
-                        putExtra("epubSize", epubSize)
-                        putExtra("epubScope", epubScope)
-                    }
+                    BookExport.exportEpubScope(this@CacheActivity, book.bookUrl, path, epubScope, epubSize)
                 }
                 alertDialog.hide()
             }
@@ -518,24 +511,14 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         if (exportPosition == -10) {
             if (adapter.getItems().isNotEmpty()) {
                 adapter.getItems().forEach { book ->
-                    startService<ExportBookService> {
-                        action = IntentAction.start
-                        putExtra("bookUrl", book.bookUrl)
-                        putExtra("exportType", exportType)
-                        putExtra("exportPath", path)
-                    }
+                    BookExport.export(this, book.bookUrl, path, exportType)
                 }
             } else {
                 toastOnUi(R.string.no_book)
             }
         } else if (exportPosition >= 0) {
             adapter.getItem(exportPosition)?.let { book ->
-                startService<ExportBookService> {
-                    action = IntentAction.start
-                    putExtra("bookUrl", book.bookUrl)
-                    putExtra("exportType", exportType)
-                    putExtra("exportPath", path)
-                }
+                BookExport.export(this, book.bookUrl, path, exportType)
             }
         }
     }
