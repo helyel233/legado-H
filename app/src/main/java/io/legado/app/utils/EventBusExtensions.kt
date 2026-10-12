@@ -98,3 +98,23 @@ inline fun <reified EVENT> LifecycleService.observeEventSticky(
         eventObservable<EVENT>(it).observeSticky(this, o)
     }
 }
+
+/**
+ * Compose 版事件订阅（2026-10-12，#27 会话接入）：把 LiveEventBus 事件转成 State。
+ * 用法：`val msg by eventObservableAsState<String>(EventBus.CHECK_SOURCE, "")`
+ * 生命周期跟随当前 CompositionOwner，销毁自动解绑。
+ */
+@androidx.compose.runtime.Composable
+inline fun <reified EVENT> eventObservableAsState(
+    tag: String,
+    initial: EVENT,
+): androidx.compose.runtime.State<EVENT> {
+    val state = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(initial) }
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(tag) {
+        val observer = Observer<EVENT> { state.value = it }
+        eventObservable<EVENT>(tag).observe(owner, observer)
+        onDispose { }
+    }
+    return state
+}

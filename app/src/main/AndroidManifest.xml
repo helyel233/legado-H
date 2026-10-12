@@ -188,6 +188,12 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
             android:launchMode="standard" />
+        <!-- P4-3 缓存管理（按书缓存/导出）V5 原生（2026-10-12 迁移，进度事件走 eventObservableAsState） -->
+        <activity
+            android:name=".ui.host.HostCacheActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard" />
         <!-- P5-1 设置页 V5 外框（承载旧设置分区 Fragment，含菜单桥） -->
         <activity
             android:name=".ui.host.HostSettingsActivity"

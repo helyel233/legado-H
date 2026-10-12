@@ -11,7 +11,7 @@
 | # | 项 | 现状 | 影响 | 计划期 |
 |---|---|---|---|---|
 | 1 | **AI 悬浮球失效**（`MainAiFloatingBall`） | 旧壳删除后成孤儿代码，无入口驱动 | 用悬浮球快捷 AI 的用户功能没了 | P4-6：新壳重接线（或明确宣布废弃） |
-| 2 | 管理页未迁移（书源✅ / RSS源✅ / 替换规则✅ / 统一日志✅ / 字典规则✅ / TXT目录规则✅ / 书签✅ 均为 2026-10-12 / 剩余：缓存管理/备份/文件管理/关于/阅读记录/年度报告） | 旧 View + 主题桥 | 观感断层 | P4-3 按频率逐个（下一步：缓存管理→接导出进度事件） |
+| 2 | 管理页未迁移（书源✅ / RSS源✅ / 替换规则✅ / 统一日志✅ / 字典规则✅ / TXT目录规则✅ / 书签✅ / 缓存与导出✅2026-10-12 HostCacheActivity / 剩余：缓存与导出管理页(CacheManageActivity 我的页+详情页入口)/备份/文件管理/关于/阅读记录/年度报告） | 旧 View + 主题桥 | 观感断层 | P4-3 按频率逐个 |
 | 3 | 详情页弹窗设计语言旧（换源/分组/封面/看图） | ComposeDialogFragment（LegadoComposeTheme），经 V5ThemeSync 染色 | 弹窗风格与 V5 不统一 | P4-7 详情整页 V5 化 |
 | 4 | 主页分源 Tab 布局 / 套件发现模式 / 发现结果内联浏览 | 迁移时降级（跳转/单一模式） | 老用户习惯的发现模式没了 | P4-8（低优先，需用户确认使用率） |
 | 5 | 书源拖拽重排 | ✅(2026-10-12) 组件就位：`AppReorderableItem`/`rememberAppReorderableListState`（uikit，封装 sh.calvin.reorderable）；剩余接线：书源页手动排序模式接拖拽（需处理域名分组头跳过） | 手动排序下还不能拖 | P2+：管理页迁移时接线 |
@@ -59,7 +59,7 @@
 | 24 | `docs/ui-v5-destinations.md` 分级表与实际迁移进度漂移 | 每轮迁移后更新 |
 | 25 | `docs/ui-v5-impl.md` 文件锚点为 2026-10-11 现状，已漂移 | P4 收尾时重校 |
 | 26 | V5 交互规范一页纸（溢出菜单/选择模式/危险操作/长按提示约定） | P5-2 |
-| 27 | 会话状态下沉（2026-10-12 全量扫描结论：旧 UI 独占消费 service/model 事件）。#1 书源校验 ✅ 已下沉 `model/CheckSourceSession`（服务写、UI collect，keepScreenOn 泄漏已修）；#2 Web服务/自动任务运行态 HostMyContent 只读一次不更新；#3 缓存/导出 4 事件待迁 CacheActivity 时接；#4 书架"单项更新中"状态新书架缺等价物；#5 ExploreFragment 私有 Suite* 预取会话（迁发现页前必须抽 DiscoverSuiteEngine）；死事件 NOTIFY_MAIN / REVIEW_CACHE_SAVED / UP_CONFIG 无消费者可清 | 按各功能迁移期落地 |
+| 27 | 会话状态下沉（2026-10-12 全量扫描结论：旧 UI 独占消费 service/model 事件）。#1 书源校验 ✅ 已下沉 `model/CheckSourceSession`（服务写、UI collect，keepScreenOn 泄漏已修）；#2 Web服务/自动任务运行态 ✅(2026-10-12 `eventObservableAsState` 通用助手 + HostMyContent 接线)；#3 缓存/导出 4 事件 ✅(2026-10-12 同助手，HostCacheActivity 接 EXPORT_BOOK/UP_DOWNLOAD/SAVE_CONTENT)；#4 书架"单项更新中"状态新书架缺等价物；#5 ExploreFragment 私有 Suite* 预取会话（迁发现页前必须抽 DiscoverSuiteEngine）；死事件 NOTIFY_MAIN / REVIEW_CACHE_SAVED / UP_CONFIG 无消费者可清 | 按各功能迁移期落地 |
 | 28 | **V5 框架 P0 缺口**（2026-10-12 组件审计）：①导航返回栈 ✅(2026-10-12 HostState 栈+传参+BackHandler+Tab 清栈语义)；③ManageListScaffold 核心半件 ✅（AppSelectionState + HostV5Page selectionCount 接管标题/返回，RSS 源管理迁移已验证）；②AppWebViewScreen 待做（RSS 阅读/源登录显式跳旧体系）。✅ 前批已补：AppOptionRow/AppTextField 扩展/AppFormDialog/AppProgressDialog/Snackbar+Overlay/AppFilePicker | ②随 RSS/登录迁移清 |
 
 ---

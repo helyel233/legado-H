@@ -273,10 +273,7 @@ class HostShelfContent : AppContent {
                             android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookshelfTagManageActivity::class.java)
                                 .putExtra("groupId", groupId)
                         )
-                        "cache" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.book.cache.CacheActivity::class.java)
-                                .putExtra("groupId", groupId)
-                        )
+                        "cache" -> HostCacheActivity.start(context, groupId)
                         "layoutConfig" -> settingsSheetOpen = true
                         "librarySearch" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.librarysearch.LibrarySearchActivity::class.java)

@@ -158,6 +158,12 @@ class HostMyContent : AppContent {
             )
         }
 
+        // 服务运行态实时刷新（#27-2：此前只读一次，服务异常退出后状态陈旧）
+        val webServiceEvent by io.legado.app.utils.eventObservableAsState<String>(EventBus.WEB_SERVICE, "")
+        LaunchedEffect(webServiceEvent) { refreshWebService() }
+        val autoTaskEvent by io.legado.app.utils.eventObservableAsState<String>(EventBus.AUTO_TASK_SERVICE, "")
+        LaunchedEffect(autoTaskEvent) { refreshAutoTask() }
+
         remember { refreshWebService(); refreshAutoTask(); true }
 
         val modeLabel = themeOptions.firstOrNull { it.value == themeMode }?.label ?: "主题模式"
