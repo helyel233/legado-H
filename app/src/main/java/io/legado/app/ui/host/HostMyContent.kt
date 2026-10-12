@@ -225,9 +225,9 @@ class HostMyContent : AppContent {
                     "sourceRecycleBin" -> context.startActivity<SourceRecycleBinActivity>()
                     "theme_setting" -> HostSettingsActivity.start(context, ConfigTag.THEME_CONFIG)
                     "ai_setting" -> HostSettingsActivity.start(context, ConfigTag.AI_CONFIG)
-                    "fileManage" -> context.startActivity<FileManageActivity>()
+                    "fileManage" -> HostFileManageActivity.start(context)
                     "readRecord" -> context.startActivity<ReadRecordActivity>()
-                    "about" -> context.startActivity<AboutActivity>()
+                    "about" -> HostAboutActivity.start(context)
                     "exit" -> (context as? Activity)?.finish()
                 }
             },

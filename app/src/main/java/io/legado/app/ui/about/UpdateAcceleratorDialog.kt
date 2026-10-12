@@ -83,6 +83,42 @@ object UpdateAcceleratorDialog {
             )
         )
     }
+
+    /** V5 页（AppCompatActivity）复用同一对话框（2026-10-12 关于页迁移）。 */
+    fun show(activity: androidx.appcompat.app.AppCompatActivity, onChanged: () -> Unit) {
+        UpdateAcceleratorComposeDialog.create(
+            initialProxyTemplates = AppUpdateConfig.githubProxyTemplates.toList(),
+            initialProxyIndex = AppUpdateConfig.githubProxyIndex,
+            onProxySelected = { index ->
+                AppUpdateConfig.githubProxyIndex = index
+                onChanged()
+            },
+            onProxyAdded = { value ->
+                val proxies = AppUpdateConfig.githubProxyTemplates.toMutableList()
+                proxies += value
+                AppUpdateConfig.githubProxyTemplates = proxies
+                AppUpdateConfig.githubProxyIndex = AppUpdateConfig.githubProxyTemplates.indexOf(value)
+                onChanged()
+            },
+            onProxyEdited = { index, value ->
+                val proxies = AppUpdateConfig.githubProxyTemplates.toMutableList()
+                proxies[index] = value
+                AppUpdateConfig.githubProxyTemplates = proxies
+                AppUpdateConfig.githubProxyIndex = AppUpdateConfig.githubProxyTemplates.indexOf(value)
+                onChanged()
+            },
+            onProxyDeleted = { index ->
+                val proxies = AppUpdateConfig.githubProxyTemplates.toMutableList()
+                if (index in proxies.indices) {
+                    proxies.removeAt(index)
+                    AppUpdateConfig.githubProxyTemplates = proxies
+                    AppUpdateConfig.githubProxyIndex = -1
+                    onChanged()
+                }
+            },
+            onDismissed = { onChanged() },
+        ).show(activity.supportFragmentManager, "updateAccelerator")
+    }
 }
 
 class UpdateAcceleratorComposeDialog : ComposeDialogFragment() {
