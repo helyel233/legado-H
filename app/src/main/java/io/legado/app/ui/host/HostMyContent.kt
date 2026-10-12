@@ -207,7 +207,7 @@ class HostMyContent : AppContent {
                     // 站外：功能保全，旧 Activity 照常打开
                     "bookSourceManage" -> HostBookSourceManageActivity.start(context)
                     "rssSourceManage" -> HostRssSourceManageActivity.start(context)
-                    "replaceManage" -> context.startActivity<ReplaceRuleActivity>()
+                    "replaceManage" -> HostReplaceRuleManageActivity.start(context)
                     "dictRuleManage" -> context.startActivity<DictRuleActivity>()
                     "txtTocRuleManage" -> context.startActivity<TxtTocRuleActivity>()
                     "autoTaskManage" -> context.startActivity<AutoTaskActivity>()

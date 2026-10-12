@@ -18,6 +18,9 @@ object AppLog {
 
     val logs get() = mLogs.toList()
 
+    /** 修订号（2026-10-12 V5 日志页实时刷新用：put/clear 时自增，UI collectAsState） */
+    val revision = androidx.compose.runtime.mutableStateOf(0)
+
     @Synchronized
     fun put(message: String?, throwable: Throwable? = null, toast: Boolean = false) {
         message ?: return
@@ -33,6 +36,7 @@ object AppLog {
             LogUtils.d("AppLog", "$message\n${throwable.stackTraceToString()}")
         }
         mLogs.add(0, Triple(System.currentTimeMillis(), message, throwable))
+        revision.value++
         if (AppConfig.recordLog) {
             val stackTrace = Thread.currentThread().stackTrace
             Log.e(stackTrace[3].className, message, throwable)
@@ -50,6 +54,7 @@ object AppLog {
             mLogs.removeLastOrNull()
         }
         mLogs.add(0, Triple(System.currentTimeMillis(), message, throwable))
+        revision.value++
         if (AppConfig.recordLog) {
             val stackTrace = Thread.currentThread().stackTrace
             Log.e(stackTrace[3].className, message, throwable)
@@ -60,6 +65,7 @@ object AppLog {
     @Synchronized
     fun clear() {
         mLogs.clear()
+        revision.value++
     }
 
     fun putDebug(message: String?, throwable: Throwable? = null) {

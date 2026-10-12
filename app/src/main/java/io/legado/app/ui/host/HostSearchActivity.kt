@@ -277,7 +277,7 @@ private fun HostSearchScreen() {
                     menuOpen = false
                 },
                 stringResource(R.string.log) to {
-                    AppLogDialog().show(activity.supportFragmentManager, "appLog")
+                    HostLogActivity.start(context)
                     menuOpen = false
                 },
             ),

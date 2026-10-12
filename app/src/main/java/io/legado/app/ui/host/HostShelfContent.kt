@@ -289,8 +289,7 @@ class HostShelfContent : AppContent {
                         "smartGroup" -> context.startActivity(
                             android.content.Intent(context, io.legado.app.ui.main.bookshelf.smartgroup.SmartGroupRuleActivity::class.java)
                         )
-                        "log" -> io.legado.app.ui.about.AppLogDialog()
-                            .show((context as androidx.appcompat.app.AppCompatActivity).supportFragmentManager, "appLog")
+                        "log" -> HostLogActivity.start(context)
                     }
                 },
             )
