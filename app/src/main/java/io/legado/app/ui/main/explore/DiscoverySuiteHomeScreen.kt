@@ -1330,6 +1330,4 @@ private fun DiscoverySuiteWidget.displayTitle(context: Context): String {
     return title
 }
 
-private fun DiscoverySuiteWidgetTarget.deckKey(): String {
-    return "$sourceUrl\n$tagUrl"
-}
+// deckKey() 已统一到 DiscoverSuiteRuntime（旧壳曾与本文件各定义一份，合并避免语义漂移）
