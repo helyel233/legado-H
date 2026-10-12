@@ -185,7 +185,7 @@ class HostMyContent : AppContent {
                     "museum" -> scope.navigate("museum")
                     "legacyImport" -> legacyImportProposal = LegacyAppearanceImporter.read(context)
                     // 站外：功能保全，旧 Activity 照常打开
-                    "bookSourceManage" -> context.startActivity<BookSourceActivity>()
+                    "bookSourceManage" -> HostBookSourceManageActivity.start(context)
                     "rssSourceManage" -> context.startActivity<RssSourceActivity>()
                     "replaceManage" -> context.startActivity<ReplaceRuleActivity>()
                     "dictRuleManage" -> context.startActivity<DictRuleActivity>()
