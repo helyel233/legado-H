@@ -289,7 +289,12 @@ private fun HostBookSourceManageScreen() {
     }
 
     Column(Modifier.fillMaxSize()) {
-        HostV5Page(
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxSize(),
+        ) {
+            HostV5Page(
             title = if (selectionMode) "已选 ${selected.size} 项" else "书源管理",
             subtitle = if (!selectionMode) "${sortedSources.size} 个源" else null,
             onBack = { if (selectionMode) exitSelection() else activity.finish() },
@@ -314,7 +319,16 @@ private fun HostBookSourceManageScreen() {
                     modifier = Modifier.padding(horizontal = density.screenPadding),
                     placeholder = "搜索源名称 / group:分组名",
                 )
-                Spacer(Modifier.height(density.blockGap / 2))
+                Spacer(Modifier.height(density.blockGap))
+
+                // 状态筛选（一排）
+                Text(
+                    text = "状态",
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = density.screenPadding),
+                )
+                Spacer(Modifier.height(density.blockGap / 3))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -328,13 +342,34 @@ private fun HostBookSourceManageScreen() {
                             searchKey = ""
                         })
                     }
-                    groups.take(8).forEach { g ->
-                        AppChip("分组:$g", searchKey == "group:$g", onClick = {
-                            searchKey = "group:$g"
-                        })
+                }
+
+                // 分组筛选（一排，独立于状态，与 1.7.3 的 menu_group 对应）
+                if (groups.isNotEmpty()) {
+                    Spacer(Modifier.height(density.blockGap))
+                    Text(
+                        text = "分组",
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = density.screenPadding),
+                    )
+                    Spacer(Modifier.height(density.blockGap / 3))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = density.screenPadding),
+                        horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                    ) {
+                        AppChip("全部", searchKey.isBlank(), onClick = { searchKey = "" })
+                        groups.forEach { g ->
+                            AppChip(g, searchKey == "group:$g", onClick = {
+                                searchKey = "group:$g"
+                            })
+                        }
                     }
                 }
-                Spacer(Modifier.height(density.blockGap / 2))
+                Spacer(Modifier.height(density.blockGap))
 
                 when {
                     sortedSources.isEmpty() -> AppEmpty(
@@ -392,6 +427,7 @@ private fun HostBookSourceManageScreen() {
                     }
                 }
             }
+        }
         }
 
         // 选择模式操作条
