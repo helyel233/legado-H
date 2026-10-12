@@ -50,6 +50,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.utils.ACache
 import io.legado.app.model.CheckSource
+import io.legado.app.model.CheckSourceSession
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceSort
@@ -74,6 +75,8 @@ import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.components.AppSelectionAction
 import io.legado.app.uikit.v5.components.AppSelectionBar
 import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppProgressBar
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
@@ -215,6 +218,23 @@ private fun HostBookSourceManageScreen() {
         }
     }
 
+    // 校验会话（后端 CheckSourceSession，UI 只 collect）
+    val checkSession by CheckSourceSession.state.collectAsState()
+    // keepScreenOn 跟随会话（此前写在 onPositive 里永不复位 —— 泄漏，已修）
+    LaunchedEffect(checkSession.running) {
+        activity.keepScreenOn(checkSession.running)
+    }
+    // 完成/中断提示（running true→false 边沿）
+    var wasRunning by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(checkSession.running) {
+        if (wasRunning && !checkSession.running && checkSession.finishCount > 0) {
+            AppToast.show(
+                context.getString(R.string.progress_show, "", checkSession.finishCount, checkSession.originSize),
+            )
+        }
+        wasRunning = checkSession.running
+    }
+
     val exportLauncher = rememberLauncherForActivityResult(HandleFileContract()) {}
     val importDocLauncher = rememberLauncherForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
@@ -279,7 +299,6 @@ private fun HostBookSourceManageScreen() {
             initialValue = CheckSource.keyword,
             neutralText = activity.getString(R.string.check_source_config),
             onPositive = { text ->
-                activity.keepScreenOn(true)
                 if (text.isNotEmpty()) CheckSource.keyword = text
                 CheckSource.start(activity, selectedSources)
             },
@@ -377,6 +396,35 @@ private fun HostBookSourceManageScreen() {
                 )
                 Spacer(Modifier.height(density.blockGap))
 
+                // 校验进度横幅（会话来自 CheckSourceSession）
+                if (checkSession.running) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = density.screenPadding),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = checkSession.progressText,
+                                style = visual.type.caption,
+                                color = colors.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            AppGhostButton(
+                                text = stringResource(R.string.cancel),
+                                onClick = { CheckSource.stop(context) },
+                            )
+                        }
+                        Spacer(Modifier.height(density.blockGap / 3))
+                        AppProgressBar(
+                            progress = if (checkSession.originSize > 0)
+                                checkSession.finishCount.toFloat() / checkSession.originSize
+                            else 0f,
+                        )
+                    }
+                    Spacer(Modifier.height(density.blockGap))
+                }
+
                 // 状态筛选（组件化：AppFilterChipRow）
                 AppFilterChipRow(
                     label = stringResource(R.string.v5_filter_status),
@@ -438,6 +486,7 @@ private fun HostBookSourceManageScreen() {
                                         source = source,
                                         selected = isSelected,
                                         selectionMode = selectionMode,
+                                        checkMsg = checkSession.sourceMessages[source.bookSourceUrl],
                                         onToggle = { on -> viewModel.enable(on, listOf(source)) },
                                         onClick = {
                                             if (selectionMode) {
@@ -568,6 +617,7 @@ private fun SourceRow(
     source: BookSourcePart,
     selected: Boolean,
     selectionMode: Boolean,
+    checkMsg: String?,
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -577,6 +627,7 @@ private fun SourceRow(
     AppSelectionRow(
         title = source.bookSourceName,
         supporting = source.bookSourceGroup?.takeIf { it.isNotBlank() },
+        supportingSecondary = checkMsg,
         selected = selected,
         selectionMode = selectionMode,
         onClick = onClick,

@@ -66,6 +66,8 @@ object Debug {
                 printMsg = printMsg.replace(AppPattern.debugMessageSymbolRegex, "")
 
                 debugMessageMap[sourceUrl] = "$time $printMsg"
+                // 会话状态下沉（CheckSourceSession）：UI 不再轮询 debugMessageMap
+                CheckSourceSession.onSourceMessage(sourceUrl, "$time $printMsg")
             }
         }
     }
@@ -124,6 +126,7 @@ object Debug {
                 if (state == "校验成功") spendingTime else CheckSource.timeout + spendingTime
             val printTime = debugTimeFormat.format(Date(spendingTime))
             debugMessageMap[sourceUrl] = "$printTime $state"
+            CheckSourceSession.onSourceMessage(sourceUrl, "$printTime $state")
         }
     }
 

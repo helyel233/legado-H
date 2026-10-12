@@ -20,6 +20,7 @@ import io.legado.app.exception.TocEmptyException
 import io.legado.app.help.IntentData
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.model.CheckSource
+import io.legado.app.model.CheckSourceSession
 import io.legado.app.model.Debug
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.source.manage.BookSourceActivity
@@ -95,6 +96,8 @@ class CheckSourceService : BaseService() {
     override fun onDestroy() {
         super.onDestroy()
         Debug.finishChecking()
+        // 会话状态下沉：无论正常完成还是被停止，服务销毁即会话结束
+        CheckSourceSession.onStop()
         searchCoroutine.close()
         postEvent(EventBus.CHECK_SOURCE_DONE, 0)
         notificationManager.cancel(NotificationId.CheckSourceService)
@@ -117,6 +120,7 @@ class CheckSourceService : BaseService() {
                 originSize = ids.size
                 finishCount = 0
                 notificationMsg = getString(R.string.progress_show, "", 0, originSize)
+                CheckSourceSession.onStart(originSize)
                 upNotification()
             }.onEachParallel(threadCount) {
                 checkSource(it)
@@ -128,6 +132,7 @@ class CheckSourceService : BaseService() {
                     finishCount,
                     originSize
                 )
+                CheckSourceSession.onProgress(finishCount, originSize, notificationMsg)
                 upNotification()
                 appDb.bookSourceDao.update(it)
             }.onCompletion {

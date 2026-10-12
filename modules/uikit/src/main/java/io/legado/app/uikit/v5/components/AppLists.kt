@@ -210,6 +210,8 @@ fun AppSelectionRow(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     supporting: String? = null,
+    /** 第二行辅助文本（如书源校验的实时结果消息）。 */
+    supportingSecondary: String? = null,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -267,6 +269,15 @@ fun AppSelectionRow(
             if (supporting != null) {
                 Text(
                     text = supporting,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (supportingSecondary != null) {
+                Text(
+                    text = supportingSecondary,
                     style = visual.type.caption,
                     color = colors.onSurfaceVariant,
                     maxLines = 1,

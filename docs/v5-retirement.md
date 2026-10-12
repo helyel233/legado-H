@@ -56,6 +56,7 @@
 | 24 | `docs/ui-v5-destinations.md` 分级表与实际迁移进度漂移 | 每轮迁移后更新 |
 | 25 | `docs/ui-v5-impl.md` 文件锚点为 2026-10-11 现状，已漂移 | P4 收尾时重校 |
 | 26 | V5 交互规范一页纸（溢出菜单/选择模式/危险操作/长按提示约定） | P5-2 |
+| 27 | 会话状态下沉（2026-10-12 全量扫描结论：旧 UI 独占消费 service/model 事件）。#1 书源校验 ✅ 已下沉 `model/CheckSourceSession`（服务写、UI collect，keepScreenOn 泄漏已修）；#2 Web服务/自动任务运行态 HostMyContent 只读一次不更新；#3 缓存/导出 4 事件待迁 CacheActivity 时接；#4 书架"单项更新中"状态新书架缺等价物；#5 ExploreFragment 私有 Suite* 预取会话（迁发现页前必须抽 DiscoverSuiteEngine）；死事件 NOTIFY_MAIN / REVIEW_CACHE_SAVED / UP_CONFIG 无消费者可清 | 按各功能迁移期落地 |
 
 ---
 
