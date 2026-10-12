@@ -23,7 +23,7 @@ import androidx.documentfile.provider.DocumentFile
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.BackupRestoreController
 import io.legado.app.help.storage.BackupConfig
 import io.legado.app.help.storage.BackupProgress
 import io.legado.app.help.storage.BackupProgressHolder
@@ -505,24 +505,15 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         )
     }
 
-    private fun hasCloudStorageAccount(): Boolean {
-        return when (CloudStorageType.from(getPrefString(PreferKey.cloudStorageType))) {
-            CloudStorageType.WEBDAV -> hasWebDavAccount()
-            CloudStorageType.S3 -> hasS3Account()
-        }
-    }
+    // 配置完备性判定下沉 BackupRestoreController（台账 #29-B7）
+    private fun hasCloudStorageAccount(): Boolean =
+        BackupRestoreController.hasCloudStorageAccount()
 
-    private fun hasWebDavAccount(): Boolean {
-        return !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
-                && !getPrefString(PreferKey.webDavPassword).isNullOrBlank()
-    }
+    private fun hasWebDavAccount(): Boolean =
+        BackupRestoreController.hasWebDavAccount()
 
-    private fun hasS3Account(): Boolean {
-        return AppCloudStorage.listContainers().any {
-            it.enabled && it.endpoint.isNotBlank() && it.bucket.isNotBlank()
-                    && it.accessKey.isNotBlank() && it.secretKey.isNotBlank()
-        }
-    }
+    private fun hasS3Account(): Boolean =
+        BackupRestoreController.hasS3Account()
 
     private fun webDavAccountSummary(): String {
         val url = getPrefString(PreferKey.webDavUrl).orEmpty()
@@ -620,38 +611,35 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             showS3FullWebDavFallbackDialog(backupPath)
             return
         }
-        if (BackupProgressHolder.isRunning) {
+        if (BackupRestoreController.isBackupRunning()) {
             // 已有备份任务在后台进行，仅重新打开进度界面
             showBackupProgressDialog()
             return
         }
         activeBackupPath = backupPath
-        BackupProgressHolder.update(BackupProgress(BackupStage.PREPARING))
         showBackupProgressDialog()
-        val appContext = requireContext().applicationContext
-        // 使用全局协程：点「后台继续」或离开页面不会中断备份
-        Coroutine.async(Coroutine.defaultScope) {
-            Backup.backupLocked(appContext, backupPath, uploadCloud, uploadWebDavFallback) { progress ->
-                BackupProgressHolder.update(progress)
-            }
-        }.onSuccess {
-            BackupProgressHolder.update(null)
+        // 编排（含进度写入与全局协程）下沉 BackupRestoreController
+        BackupRestoreController.startBackup(
+            backupPath = backupPath,
+            uploadCloud = uploadCloud,
+            uploadWebDavFallback = uploadWebDavFallback,
+        ) { e ->
             dismissBackupProgressDialog()
-            appCtx.toastOnUi(R.string.backup_success)
-        }.onError { e ->
-            BackupProgressHolder.update(null)
-            dismissBackupProgressDialog()
-            if (e is S3CapacityFullException && isAdded && showS3FullFallbackAfterFailure(backupPath)) {
-                return@onError
-            }
-            AppLog.put("备份出错\n${e.localizedMessage}", e)
-            appCtx.toastOnUi(
-                appCtx.getString(
-                    R.string.backup_fail,
-                    e.localizedMessage
+            if (e == null) {
+                appCtx.toastOnUi(R.string.backup_success)
+            } else if (BackupRestoreController.isS3CapacityFull(e) && isAdded
+                && showS3FullFallbackAfterFailure(backupPath)
+            ) {
+                return@startBackup
+            } else {
+                AppLog.put("备份出错\n${e.localizedMessage}", e)
+                appCtx.toastOnUi(
+                    appCtx.getString(
+                        R.string.backup_fail,
+                        e.localizedMessage
+                    )
                 )
-            )
-        }.onFinally {
+            }
             activeBackupPath = null
         }
     }
@@ -691,19 +679,11 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         return dialog
     }
 
-    private fun shouldShowS3FullWebDavFallback(): Boolean {
-        if (CloudStorageType.from(getPrefString(PreferKey.cloudStorageType)) != CloudStorageType.S3) {
-            return false
-        }
-        if (appCtx.defaultSharedPreferences.getBoolean(PreferKey.s3FullWebDavFallbackNeverRemind, false)) {
-            return false
-        }
-        val items = AppCloudStorage.listContainers().filter { it.enabled }
-        return items.isNotEmpty() && items.all { it.isFull }
-    }
+    private fun shouldShowS3FullWebDavFallback(): Boolean =
+        BackupRestoreController.shouldShowS3FullWebDavFallback()
 
     private fun showS3FullFallbackAfterFailure(backupPath: String): Boolean {
-        if (appCtx.defaultSharedPreferences.getBoolean(PreferKey.s3FullWebDavFallbackNeverRemind, false)) {
+        if (!BackupRestoreController.shouldShowS3FullFallbackAfterFailure()) {
             return false
         }
         showS3FullWebDavFallbackDialog(backupPath)
@@ -807,8 +787,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private suspend fun showRestoreDialog(context: Context) {
         val names = withContext(IO) {
-            ensureCloudStorageForRestore()
-            AppCloudStorage.getBackupNames()
+            BackupRestoreController.listCloudBackups()
         }
         if (AppCloudStorage.isJianGuoYun && names.size > 700) {
             context.toastOnUi("由于坚果云限制列出文件数量，部分备份可能未显示，请及时清理旧备份")
@@ -832,33 +811,20 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }
     }
 
+    /** 云存储类型回退下沉 BackupRestoreController；偏好改写后由本页刷新设置树。 */
     private suspend fun ensureCloudStorageForRestore() {
-        val currentType = CloudStorageType.from(getPrefString(PreferKey.cloudStorageType))
-        if (currentType == CloudStorageType.S3 && hasS3Account()) {
-            AppCloudStorage.upConfig()
-            return
+        val typeBefore = BackupRestoreController.currentCloudStorageType()
+        val typeAfter = BackupRestoreController.ensureCloudStorageForRestore()
+        if (typeAfter != typeBefore) {
+            withContext(Main) {
+                refreshSettings()
+            }
         }
-        if (currentType == CloudStorageType.WEBDAV && hasWebDavAccount()) {
-            AppCloudStorage.upConfig()
-            return
-        }
-        val fallbackType = when {
-            hasS3Account() -> CloudStorageType.S3
-            hasWebDavAccount() -> CloudStorageType.WEBDAV
-            else -> throw NoStackTraceException("Cloud storage is not configured")
-        }
-        appCtx.defaultSharedPreferences.edit {
-            putString(PreferKey.cloudStorageType, fallbackType.name)
-        }
-        withContext(Main) {
-            refreshSettings()
-        }
-        AppCloudStorage.upConfig()
     }
 
     private fun restoreWebDav(name: String) {
         Coroutine.async(Coroutine.defaultScope) {
-            AppCloudStorage.listAssetsBackupNames()
+            BackupRestoreController.listCloudAssetNames()
         }.onError {
             startCloudRestore(name, emptyList())
         }.onSuccess { assetsNames ->
@@ -881,7 +847,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         obtainWaitDialog().setText(R.string.restore)
         obtainWaitDialog().show()
         val task = Coroutine.async(Coroutine.defaultScope) {
-            AppCloudStorage.restore(name, assetsFileNames)
+            BackupRestoreController.restoreFromCloud(name, assetsFileNames)
         }.onError {
             AppLog.put("云端恢复出错\n${it.localizedMessage}", it)
             appCtx.toastOnUi("云端恢复出错\n${it.localizedMessage}")
@@ -906,23 +872,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
      * 从该目录枚举 backup_assets 前缀的 zip（附带显示名供弹窗确认）；
      * 目录不可枚举时返回空。
      */
-    private suspend fun findLocalAssetsUris(): List<Pair<Uri, String>> {
-        val path = AppConfig.backupPath
-        if (path.isNullOrBlank()) return emptyList()
-        return runCatching {
-            if (path.isContentScheme()) {
-                DocumentFile.fromTreeUri(appCtx, Uri.parse(path))?.listFiles()
-                    ?.filter { it.isFile && it.name?.startsWith("backup_assets") == true }
-                    ?.mapNotNull { doc -> doc.name?.let { doc.uri to it } }
-                    .orEmpty()
-            } else {
-                java.io.File(path).listFiles()
-                    ?.filter { it.isFile && it.name.startsWith("backup_assets") }
-                    ?.map { Uri.fromFile(it) to it.name }
-                    .orEmpty()
-            }
-        }.getOrDefault(emptyList())
-    }
+    private suspend fun findLocalAssetsUris(): List<Pair<Uri, String>> =
+        BackupRestoreController.findLocalAssetsUris()
 
     private fun askLocalRestore(uri: Uri, assetsUris: List<Pair<Uri, String>>) {
         if (assetsUris.isEmpty()) {
@@ -943,7 +894,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         obtainWaitDialog().setText(R.string.restore)
         obtainWaitDialog().show()
         val task = Coroutine.async(Coroutine.defaultScope) {
-            Restore.restore(appCtx, uri, assetsUris)
+            BackupRestoreController.restoreFromLocal(uri, assetsUris)
         }.onFinally {
             _waitDialog?.dismiss()
         }

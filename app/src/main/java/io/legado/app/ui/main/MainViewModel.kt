@@ -254,7 +254,8 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
 
     fun restoreWebDav(name: String, assetsFileNames: List<String> = emptyList()) {
         execute {
-            AppCloudStorage.restore(name, assetsFileNames)
+            // 与备份/恢复页同一条恢复链（台账 #29-B7）
+            io.legado.app.help.storage.BackupRestoreController.restoreFromCloud(name, assetsFileNames)
         }
     }
 
