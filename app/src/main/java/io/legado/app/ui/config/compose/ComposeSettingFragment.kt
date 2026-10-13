@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.edit
 import androidx.fragment.app.Fragment
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.host.HostV5ThemeRoot
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
@@ -54,7 +54,9 @@ abstract class ComposeSettingFragment : Fragment(),
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 refreshTick.intValue
-                LegadoComposeTheme {
+                // V5 取值环境（LocalVisualSpec/LocalSemanticColors）：P5-1 设置渲染 V5 化的前置。
+                // HostV5ThemeRoot 与新壳同源（主题/界面包 + 字体），internal 同模块可见。
+                HostV5ThemeRoot {
                     SettingSpecScreen(
                         page = buildPageSpec(),
                         scrollTargetKey = scrollTargetKey.value,

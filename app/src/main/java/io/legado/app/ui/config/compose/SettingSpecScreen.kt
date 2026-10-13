@@ -1,11 +1,5 @@
 package io.legado.app.ui.config.compose
 
-import android.view.View
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,17 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,42 +24,44 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.AppSettingPalette
-import io.legado.app.ui.widget.compose.AppSettingSectionTitle
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.LegadoResourceIcon
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.appSettingPanelBackground
-import io.legado.app.ui.widget.compose.appSettingRowDecoration
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.rememberAppSettingPalette
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppSectionHeader
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import kotlin.math.roundToInt
 
-private val PanelHorizontalPadding = 12.dp
+/**
+ * 设置页 V5 渲染（P5-1，台账 #2 最后一块）。
+ *
+ * Spec 契约（SettingPageSpec/Section/Item）不变，只把渲染从旧 palette 换成 V5
+ * 组件 —— 全部 10 个设置分区页面单点生效。搜索定位（targetKey 滚动估算）、
+ * 菜单桥、refreshSettings 机制均不受影响。
+ *
+ * 行型映射：
+ * - SettingSwitchSpec → AppRowWithSwitch
+ * - SettingChoiceSpec → AppSelectionRow + AppFilterDialog（弹单选）
+ * - SettingActionSpec → AppListItem（带长按走 AppSelectionRow）
+ * - SettingSliderSpec → AppSlider（step 尺寸换算成刻度数）
+ *
+ * 前置：Fragment 的 ComposeView 需包在 HostV5ThemeRoot 里（V5 取值环境），
+ * 见 ComposeSettingFragment.onCreateView。
+ */
 
 @Composable
 fun SettingSpecScreen(
     page: SettingPageSpec,
     scrollTargetKey: String?,
-    drawPanelImage: Boolean = true,
+    @Suppress("UNUSED_PARAMETER") drawPanelImage: Boolean = true,
     onTargetReady: (String) -> Unit,
     onTargetMissing: () -> Unit,
     onItemClick: (SettingItemSpec) -> Unit
 ) {
-    val colors = rememberAppSettingPalette()
-    val panelRadiusPx = colors.panelRadiusPx
     val sections = remember(page) {
         page.sections.mapNotNull { section ->
             val rows = section.items.filter { it.visible }
@@ -80,7 +71,7 @@ fun SettingSpecScreen(
         }
     }
     val listState = rememberLazyListState()
-    val density = LocalDensity.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val targetTitleOffsetPx = with(density) { 38.dp.roundToPx() }
     val targetRowOffsetPx = with(density) { 72.dp.roundToPx() }
     LaunchedEffect(scrollTargetKey, sections) {
@@ -108,333 +99,189 @@ fun SettingSpecScreen(
         }
     }
 
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = colors.bodyFontFamily)
+    // Choice 行的单选弹层（V5：AppFilterDialog）
+    var choiceItem by remember { mutableStateOf<SettingChoiceSpec?>(null) }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.page)
-                .navigationBarsPadding(),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            itemsIndexed(
-                sections,
-                key = { index, section -> "${index}:${section.title}:${section.items.firstOrNull()?.key}" }
-            ) { _, section ->
-                SettingSectionPanel(
-                    section = section,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    drawPanelImage = drawPanelImage,
-                    onItemClick = onItemClick
-                )
+        itemsIndexed(
+            sections,
+            key = { index, section -> "${index}:${section.title}:${section.items.firstOrNull()?.key}" }
+        ) { _, section ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                val sectionTitle = section.title
+                if (!sectionTitle.isNullOrBlank()) {
+                    AppSectionHeader(title = sectionTitle.toString())
+                }
+                section.items.forEach { item ->
+                    SettingRowV5(
+                        item = item,
+                        onItemClick = onItemClick,
+                        onOpenChoice = { choiceItem = it }
+                    )
+                }
             }
         }
     }
-}
 
-@Composable
-private fun SettingSectionPanel(
-    section: SettingSectionSpec,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
-    drawPanelImage: Boolean,
-    onItemClick: (SettingItemSpec) -> Unit
-) {
-    val context = LocalContext.current
-    val panelImage = if (drawPanelImage) {
-        remember(context, panelRadiusPx, colors.themeSignature) {
-            UiCorner.panelImageDrawable(context, panelRadiusPx)
-        }
-    } else {
-        null
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = PanelHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
-            )
-    ) {
-        AppSettingSectionTitle(title = section.title, palette = colors)
-        section.items.forEachIndexed { index, item ->
-            SettingRow(
-                item = item,
-                colors = colors,
-                panelRadiusPx = panelRadiusPx,
-                showDivider = index != section.items.lastIndex,
-                isLast = index == section.items.lastIndex,
-                onItemClick = onItemClick
-            )
-        }
+    choiceItem?.let { choice ->
+        AppFilterDialog(
+            title = choice.title.toString(),
+            options = choice.options.map { option ->
+                option.label.toString() + (option.description?.let { " · $it" } ?: "")
+            },
+            selectedIndex = choice.options.indexOfFirst { it.value == choice.selectedValue },
+            onSelect = { index ->
+                choiceItem = null
+                choice.options.getOrNull(index)?.let { option ->
+                    if (choice.enabled) choice.onSelected(option.value)
+                }
+            },
+            onDismiss = { choiceItem = null },
+        )
     }
 }
 
 @Composable
-private fun SettingRow(
+private fun SettingRowV5(
     item: SettingItemSpec,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
-    showDivider: Boolean,
-    isLast: Boolean,
-    onItemClick: (SettingItemSpec) -> Unit
+    onItemClick: (SettingItemSpec) -> Unit,
+    onOpenChoice: (SettingChoiceSpec) -> Unit
 ) {
     if (item is SettingSliderSpec) {
-        SettingSliderRow(
-            item = item,
-            colors = colors,
-            panelRadiusPx = panelRadiusPx,
-            showDivider = showDivider,
-            isLast = isLast
-        )
+        SettingSliderRowV5(item)
         return
     }
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val dialogStyle = rememberAppDialogStyle()
-    var choiceAnchor by remember(item.key) { mutableStateOf<View?>(null) }
-    var choicePopupHandle by remember(item.key) { mutableStateOf<ModernActionPopup.Handle?>(null) }
-    DisposableEffect(Unit) {
-        onDispose {
-            choicePopupHandle?.dismiss()
-            choicePopupHandle = null
-        }
-    }
-    fun openChoicePopup(choice: SettingChoiceSpec) {
-        val anchor = choiceAnchor
-        if (anchor == null) {
-            onItemClick(choice)
-            return
-        }
-        choicePopupHandle = ModernActionPopup.show(
-            anchor = anchor,
-            actions = choice.toPopupActions(),
-            previousPopup = choicePopupHandle
-        )
-    }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
-            .appSettingRowDecoration(
-                pressed = pressed,
-                pressedColor = colors.rowPressed,
-                dividerColor = colors.divider,
-                showDivider = showDivider,
-                radiusPx = panelRadiusPx,
-                isLast = isLast
+    when (item) {
+        is SettingSwitchSpec -> {
+            AppRowWithSwitch(
+                title = item.title.toString(),
+                summary = item.summary?.toString(),
+                checked = item.checked,
+                onCheckedChange = item.onCheckedChange,
+                enabled = item.enabled
             )
-            .settingRowClick(
-                item = item,
-                interactionSource = interactionSource,
-                onItemClick = { clickedItem ->
-                    if (clickedItem is SettingChoiceSpec) {
-                        openChoicePopup(clickedItem)
-                    } else {
-                        onItemClick(clickedItem)
-                    }
-                }
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        SettingText(
-            item = item,
-            colors = colors,
-            modifier = Modifier.weight(1f)
-        )
-        when (item) {
-            is SettingSwitchSpec -> {
-                Spacer(modifier = Modifier.width(12.dp))
-                val palette = dialogStyle.toMiuixPalette()
-                LegadoMiuixSwitch(
-                    checked = item.checked,
-                    onCheckedChange = item.onCheckedChange,
-                    palette = palette,
-                    enabled = item.enabled
-                )
-            }
+        }
 
-            is SettingChoiceSpec -> {
-                Spacer(modifier = Modifier.width(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(dialogStyle.actionRadius))
-                        .background(colors.accent.copy(alpha = if (item.enabled) 0.10f else 0.05f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    item.selectedOption?.iconName?.let { iconName ->
-                        LegadoResourceIcon(
-                            iconName = iconName,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
+        is SettingChoiceSpec -> {
+            val colors = LocalSemanticColors.current
+            val visual = LocalVisualSpec.current
+            AppSelectionRow(
+                title = item.title.toString(),
+                supporting = item.summary?.toString(),
+                selected = false,
+                selectionMode = false,
+                onClick = { if (item.enabled) onOpenChoice(item) },
+                onLongClick = {},
+                trailing = {
                     Text(
                         text = item.selectedLabel.toString(),
-                        color = if (item.enabled) colors.accent else colors.disabledText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
+                        style = visual.type.caption,
+                        color = if (item.enabled) colors.primary else colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    AndroidView(
-                        factory = { context ->
-                            View(context).apply {
-                                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                                isClickable = false
-                                isFocusable = false
-                            }
-                        },
-                        update = { view -> choiceAnchor = view },
-                        modifier = Modifier.size(1.dp)
-                    )
                 }
+            )
+        }
+
+        is SettingActionSpec -> {
+            val action = item
+            val click: (() -> Unit)? = if (action.enabled) {
+                { onItemClick(action) }
+            } else null
+            if (action.onLongClick != null) {
+                val longClick: (() -> Unit)? = if (action.enabled) {
+                    { action.onLongClick.invoke() }
+                } else null
+                AppSelectionRow(
+                    title = action.title.toString(),
+                    supporting = action.summary?.toString(),
+                    selected = false,
+                    selectionMode = false,
+                    onClick = click ?: {},
+                    onLongClick = longClick ?: {}
+                )
+            } else {
+                AppListItem(
+                    headline = action.title.toString(),
+                    supporting = action.summary?.toString(),
+                    onClick = click
+                )
             }
-
-            is SettingSliderSpec -> Unit
-            is SettingActionSpec -> Unit
         }
-    }
-}
 
-private fun SettingChoiceSpec.toPopupActions(): List<ModernActionPopup.Action> {
-    return options.map { option ->
-        ModernActionPopup.Action(
-            title = option.label.toString(),
-            description = option.description?.toString(),
-            iconName = option.iconName,
-            checked = option.value == selectedValue,
-            enabled = enabled
-        ) {
-            onSelected(option.value)
-        }
-    }
-}
-
-private fun Modifier.settingRowClick(
-    item: SettingItemSpec,
-    interactionSource: MutableInteractionSource,
-    onItemClick: (SettingItemSpec) -> Unit
-): Modifier {
-    val action = item as? SettingActionSpec
-    val onLongClick = action?.onLongClick
-    return if (onLongClick != null) {
-        combinedClickable(
-            enabled = item.enabled,
-            interactionSource = interactionSource,
-            indication = null,
-            role = item.clickRole(),
-            onClick = { onItemClick(item) },
-            onLongClick = onLongClick
-        )
-    } else {
-        clickable(
-            enabled = item.enabled,
-            interactionSource = interactionSource,
-            indication = null,
-            role = item.clickRole(),
-            onClick = { onItemClick(item) }
-        )
-    }
-}
-
-private fun SettingItemSpec.clickRole(): Role {
-    return when (this) {
-        is SettingSwitchSpec -> Role.Switch
-        is SettingActionSpec,
-        is SettingChoiceSpec -> Role.Button
-        is SettingSliderSpec -> Role.Button
+        else -> Unit
     }
 }
 
 @Composable
-private fun SettingSliderRow(
-    item: SettingSliderSpec,
-    colors: AppSettingPalette,
-    panelRadiusPx: Float,
-    showDivider: Boolean,
-    isLast: Boolean
-) {
-    val palette = rememberAppDialogStyle().toMiuixPalette()
-    val sliderValue = item.value.coerceIn(item.valueRange)
+private fun SettingSliderRowV5(item: SettingSliderSpec) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val sliderValue = item.value.coerceIn(item.valueRange.first, item.valueRange.last)
+    // 旧 step 是「步长尺寸」（Int），V5 AppSlider 的 steps 是「刻度数」，换算一次
+    val steps = ((item.valueRange.last - item.valueRange.first) / item.step)
+        .coerceAtLeast(1) - 1
+    val range = item.valueRange.first.toFloat()..item.valueRange.last.toFloat()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 72.dp)
-            .appSettingRowDecoration(
-                pressed = false,
-                pressedColor = colors.rowPressed,
-                dividerColor = colors.divider,
-                showDivider = showDivider,
-                radiusPx = panelRadiusPx,
-                isLast = isLast
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingText(
-                item = item,
-                colors = colors,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title.toString(),
+                    style = visual.type.body,
+                    color = if (item.enabled) colors.onSurface else colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                item.summary?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        text = it.toString(),
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = item.valueFormatter(sliderValue),
-                color = if (item.enabled) colors.accent else colors.disabledText,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = visual.type.caption,
+                color = if (item.enabled) colors.primary else colors.onSurfaceVariant,
+                maxLines = 1
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
-        AppThemedStepperSlider(
-            value = sliderValue,
-            range = item.valueRange,
-            onValueChange = { item.onValueChange(it.coerceIn(item.valueRange)) },
-            palette = palette,
-            modifier = Modifier.fillMaxWidth(),
+        AppSlider(
+            value = sliderValue.toFloat(),
+            onValueChange = { raw ->
+                val snapped = if (item.step > 1) {
+                    (item.valueRange.first + ((raw - item.valueRange.first) / item.step).roundToInt() * item.step)
+                } else {
+                    raw.roundToInt()
+                }
+                item.onValueChange(snapped.coerceIn(item.valueRange.first, item.valueRange.last))
+            },
+            valueRange = range,
+            steps = steps,
             enabled = item.enabled,
-            step = item.step,
             onValueChangeFinished = item.onValueChangeFinished
         )
-    }
-}
-
-@Composable
-private fun SettingText(
-    item: SettingItemSpec,
-    colors: AppSettingPalette,
-    modifier: Modifier = Modifier
-) {
-    val titleColor = if (item.enabled) colors.primaryText else colors.disabledText
-    val summaryColor = if (item.enabled) colors.secondaryText else colors.disabledText
-    Column(modifier = modifier) {
-        Text(
-            text = item.title.toString(),
-            color = titleColor,
-            fontSize = 16.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        item.summary?.takeIf { it.isNotBlank() }?.let {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = it.toString(),
-                color = summaryColor,
-                fontSize = 14.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
