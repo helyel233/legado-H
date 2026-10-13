@@ -5,6 +5,9 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.GSON
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.model.webBook.WebBook
@@ -474,6 +477,56 @@ class DiscoverSuiteEngine(
             // 封面失败不应阻塞控件刷新
         } finally {
             runCatching { Glide.with(context).clear(target) }
+        }
+    }
+
+    // ---------------------------------------------------------------- 快照缓存
+
+    fun snapshotCacheKey(suiteId: String, signature: String): String {
+        return "$DISCOVERY_SUITE_CACHE_PREFIX${MD5Utils.md5Encode16("$suiteId\u001F$signature")}"
+    }
+
+    /** 读磁盘快照：签名不符/内容无效都会清理并返回 null（调用方回退到重新加载）。 */
+    fun readSnapshotCache(
+        suiteId: String,
+        signature: String
+    ): DiscoverySuitePageSnapshot? {
+        val key = snapshotCacheKey(suiteId, signature)
+        val raw = DiscoveryCachePolicy.readBoundedCache(key, "套件发现缓存") ?: return null
+        val snapshot = GSON.fromJsonObject<DiscoverySuitePageSnapshot>(raw)
+            .getOrNull()
+            ?.takeIf { it.suiteId == suiteId && it.signature == signature }
+            ?.compactForCache()
+            ?.takeIf { it.hasBooks() }
+        if (snapshot == null) {
+            appDb.cacheDao.deleteIfValueMatches(key, raw)
+            AppLog.put("套件发现缓存内容无效，已清理并重新加载")
+        }
+        return snapshot
+    }
+
+    /** 异步落盘快照（全局单写入作用域 + 版本戳防竞态）。 */
+    fun saveSnapshotCacheAsync(snapshot: DiscoverySuitePageSnapshot) {
+        if (snapshot.widgetBooks.isEmpty() && snapshot.rankedWidgetBooks.isEmpty()) return
+        DiscoveryCacheWriteScope.launchLatest { saveVersion ->
+            runCatching {
+                val compactSnapshot = snapshot.compactForCache()
+                if (!compactSnapshot.hasBooks()) return@runCatching
+                val value = DiscoveryCachePolicy.toBoundedJson(compactSnapshot)
+                if (value == null) {
+                    AppLog.put("套件发现缓存超过安全大小，跳过内存和磁盘快照")
+                    return@runCatching
+                }
+                if (!DiscoveryCacheWriteScope.isLatest(saveVersion)) return@runCatching
+                DiscoverySuitePageSnapshotStore.put(compactSnapshot)
+                DiscoveryCachePolicy.writeBoundedCache(
+                    key = snapshotCacheKey(compactSnapshot.suiteId, compactSnapshot.signature),
+                    value = value,
+                    cacheName = "套件发现缓存"
+                )
+            }.onFailure {
+                AppLog.put("套件发现缓存写入失败", it)
+            }
         }
     }
 

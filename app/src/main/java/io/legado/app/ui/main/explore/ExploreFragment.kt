@@ -644,49 +644,16 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         suiteId: String,
         signature: String
     ): DiscoverySuitePageSnapshot? {
-        val key = suiteSnapshotCacheKey(suiteId, signature)
-        val raw = readBoundedDiscoveryCache(
-            key = key,
-            cacheName = "套件发现缓存"
-        ) ?: return null
-        val snapshot = GSON.fromJsonObject<DiscoverySuitePageSnapshot>(raw)
-            .getOrNull()
-            ?.takeIf { it.suiteId == suiteId && it.signature == signature }
-            ?.compactForCache()
-            ?.takeIf { it.hasBooks() }
-        if (snapshot == null) {
-            appDb.cacheDao.deleteIfValueMatches(key, raw)
-            AppLog.put("套件发现缓存内容无效，已清理并重新加载")
-        }
-        return snapshot
+        return suiteEngine.readSnapshotCache(suiteId, signature)
     }
 
     private fun saveSuiteSnapshotCacheAsync(snapshot: DiscoverySuitePageSnapshot) {
         if (snapshot.widgetBooks.isEmpty() && snapshot.rankedWidgetBooks.isEmpty()) return
-        DiscoveryCacheWriteScope.launchLatest { saveVersion ->
-            runCatching {
-                val compactSnapshot = snapshot.compactForCache()
-                if (!compactSnapshot.hasBooks()) return@runCatching
-                val value = DiscoveryCachePolicy.toBoundedJson(compactSnapshot)
-                if (value == null) {
-                    AppLog.put("套件发现缓存超过安全大小，跳过内存和磁盘快照")
-                    return@runCatching
-                }
-                if (!DiscoveryCacheWriteScope.isLatest(saveVersion)) return@runCatching
-                DiscoverySuitePageSnapshotStore.put(compactSnapshot)
-                writeBoundedDiscoveryCache(
-                    key = suiteSnapshotCacheKey(compactSnapshot.suiteId, compactSnapshot.signature),
-                    value = value,
-                    cacheName = "套件发现缓存"
-                )
-            }.onFailure {
-                AppLog.put("套件发现缓存写入失败", it)
-            }
-        }
+        suiteEngine.saveSnapshotCacheAsync(snapshot)
     }
 
     private fun suiteSnapshotCacheKey(suiteId: String, signature: String): String {
-        return "$DISCOVERY_SUITE_CACHE_PREFIX${MD5Utils.md5Encode16("$suiteId\u001F$signature")}"
+        return suiteEngine.snapshotCacheKey(suiteId, signature)
     }
 
     private suspend fun loadSuiteWidgetBooks(widget: DiscoverySuiteWidget): List<SearchBook> {
@@ -1431,51 +1398,13 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun readBoundedDiscoveryCache(key: String, cacheName: String): String? {
-        val now = System.currentTimeMillis()
-        return try {
-            val result = appDb.cacheDao.getBoundedValue(
-                key = key,
-                now = now,
-                maxBytes = DiscoveryCachePolicy.MAX_SQLITE_VALUE_BYTES
-            ) ?: return null
-            if (!DiscoveryCachePolicy.canRead(result.byteCount)) {
-                appDb.cacheDao.deleteIfValueOversized(
-                    key,
-                    DiscoveryCachePolicy.MAX_SQLITE_VALUE_BYTES
-                )
-                AppLog.put("$cacheName 已超过安全大小并清理：${result.byteCount} 字节")
-                return null
-            }
-            if (result.value == null) {
-                appDb.cacheDao.deleteIfValueMatches(key, null)
-                AppLog.put("$cacheName 内容为空，已清理并重新加载")
-                return null
-            }
-            result.value
-        } catch (e: SQLiteBlobTooBigException) {
-            runCatching {
-                appDb.cacheDao.deleteIfValueOversized(
-                    key,
-                    DiscoveryCachePolicy.MAX_SQLITE_VALUE_BYTES
-                )
-            }
-            AppLog.put("$cacheName 行过大，已清理并重新加载", e)
-            null
-        }
+        // 下沉到 DiscoveryCachePolicy（现代发现与套件两域共用，台账 #29-B13）
+        return DiscoveryCachePolicy.readBoundedCache(key, cacheName)
     }
 
     private fun writeBoundedDiscoveryCache(key: String, value: String, cacheName: String) {
-        if (!DiscoveryCachePolicy.canStore(value)) {
-            AppLog.put("$cacheName 超过安全大小，跳过磁盘缓存")
-            return
-        }
-        appDb.cacheDao.insert(
-            Cache(
-                key = key,
-                value = value,
-                deadline = System.currentTimeMillis() + DISCOVERY_CACHE_TTL_MS
-            )
-        )
+        // 下沉到 DiscoveryCachePolicy（现代发现与套件两域共用，台账 #29-B13）
+        DiscoveryCachePolicy.writeBoundedCache(key, value, cacheName)
     }
 
     private fun bindDiscoverSourceSelector() {

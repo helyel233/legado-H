@@ -1,5 +1,9 @@
 package io.legado.app.ui.main.explore
 
+import android.database.sqlite.SQLiteBlobTooBigException
+import io.legado.app.constant.AppLog
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.utils.GSON
 import java.io.ByteArrayOutputStream
@@ -121,4 +125,51 @@ internal object DiscoveryCachePolicy {
     }
 
     private class CacheSizeLimitExceededException : RuntimeException()
+
+    /**
+     * 带安全上限的缓存读取（超限/为空/行过大都会清理并返回 null）。
+     * 此前是 ExploreFragment 的 file-private 方法，现代发现与套件两域共用，故下沉至此。
+     */
+    fun readBoundedCache(key: String, cacheName: String): String? {
+        val now = System.currentTimeMillis()
+        return try {
+            val result = appDb.cacheDao.getBoundedValue(
+                key = key,
+                now = now,
+                maxBytes = MAX_SQLITE_VALUE_BYTES
+            ) ?: return null
+            if (!canRead(result.byteCount)) {
+                appDb.cacheDao.deleteIfValueOversized(key, MAX_SQLITE_VALUE_BYTES)
+                AppLog.put("$cacheName 已超过安全大小并清理：${result.byteCount} 字节")
+                return null
+            }
+            if (result.value == null) {
+                appDb.cacheDao.deleteIfValueMatches(key, null)
+                AppLog.put("$cacheName 内容为空，已清理并重新加载")
+                return null
+            }
+            result.value
+        } catch (e: SQLiteBlobTooBigException) {
+            runCatching {
+                appDb.cacheDao.deleteIfValueOversized(key, MAX_SQLITE_VALUE_BYTES)
+            }
+            AppLog.put("$cacheName 行过大，已清理并重新加载", e)
+            null
+        }
+    }
+
+    /** 带安全上限的缓存写入（超限直接跳过磁盘）。 */
+    fun writeBoundedCache(key: String, value: String, cacheName: String) {
+        if (!canStore(value)) {
+            AppLog.put("$cacheName 超过安全大小，跳过磁盘缓存")
+            return
+        }
+        appDb.cacheDao.insert(
+            Cache(
+                key = key,
+                value = value,
+                deadline = System.currentTimeMillis() + DISCOVERY_CACHE_TTL_MS
+            )
+        )
+    }
 }

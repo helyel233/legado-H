@@ -109,7 +109,7 @@ internal data class ModernDiscoverResultCache(
     val savedAt: Long = 0L
 )
 
-internal data class DiscoverySuitePageSnapshot(
+data class DiscoverySuitePageSnapshot(
     val suiteId: String,
     val signature: String,
     val widgetBooks: Map<String, List<SearchBook>>,
