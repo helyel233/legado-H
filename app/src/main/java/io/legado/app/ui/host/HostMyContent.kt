@@ -58,7 +58,6 @@ import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.autoTask.AutoTaskActivity
-import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import androidx.compose.ui.res.stringResource
 import io.legado.app.uikit.v5.contract.AppContent
@@ -221,7 +220,7 @@ class HostMyContent : AppContent {
                     "web_dav_setting" -> HostBackupActivity.start(context)
                     "publicWebRelay" -> context.startActivity<RelaySettingsActivity>()
                     "cacheManage" -> HostCacheManageActivity.start(context)
-                    "sourceRecycleBin" -> context.startActivity<SourceRecycleBinActivity>()
+                    "sourceRecycleBin" -> context.startActivity<HostSourceRecycleBinActivity>()
                     "theme_setting" -> HostSettingsActivity.start(context, ConfigTag.THEME_CONFIG)
                     "ai_setting" -> HostSettingsActivity.start(context, ConfigTag.AI_CONFIG)
                     "fileManage" -> HostFileManageActivity.start(context)

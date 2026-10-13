@@ -144,6 +144,16 @@
         <!-- 主界面由 .ui.host.AppHostActivity 承担（P4-5b 旧 MainActivity 已删除） -->
         <!-- 主界面（V5 骨架宿主）：P4-5a 起为唯一入口，旧 MainActivity 已退役删除 -->
         <activity
+            android:name=".ui.host.HostSourceRecycleBinActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard" />
+        <activity
+            android:name=".ui.host.HostBookCacheExportActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard" />
+        <activity
             android:name=".ui.host.AppHostActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
@@ -424,17 +434,7 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 规则回收站 -->
-        <activity
-            android:name=".ui.source.recycle.SourceRecycleBinActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 书籍缓存导出 -->
-        <activity
-            android:name=".ui.book.cache.BookCacheExportActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 全库搜索 -->
         <activity
             android:name=".ui.main.librarysearch.LibrarySearchActivity"

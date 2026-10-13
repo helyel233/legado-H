@@ -1,24 +1,29 @@
-package io.legado.app.ui.book.cache
+package io.legado.app.ui.host
 
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityBookCacheExportBinding
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import io.legado.app.R
+import io.legado.app.ui.book.cache.BookCacheExportScreen
+import io.legado.app.ui.book.cache.BookCacheExportViewModel
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.utils.isContentScheme
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
- * 书籍缓存单独导出（移植自 Legado_Max）
+ * 书籍缓存单独导出（V5 换壳）。
+ *
+ * 内容 UI 本就是 Compose（[BookCacheExportScreen]），导出/导入的两个文件选择器属于
+ * ActivityResult 契约，必须留在宿主上，故只换壳、不动业务。
  */
-class BookCacheExportActivity :
-    BaseActivity<ActivityBookCacheExportBinding>() {
+class HostBookCacheExportActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityBookCacheExportBinding::inflate)
     private val viewModel by viewModels<BookCacheExportViewModel>()
 
     private val selectDir = registerForActivityResult(
@@ -49,11 +54,23 @@ class BookCacheExportActivity :
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.composeView.setContent {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { HostBookCacheExportScreen() }
+    }
+
+    @Composable
+    private fun HostBookCacheExportScreen() {
+        val activity = LocalContext.current as AppCompatActivity
+        val items by viewModel.items.collectAsState()
+        val state by viewModel.state.collectAsState()
+
+        HostV5Page(
+            title = stringResource(R.string.export_book),
+            subtitle = stringResource(R.string.cache_export),
+            onBack = { activity.finish() },
+        ) {
             LegadoComposeTheme {
-                val items by viewModel.items.collectAsState()
-                val state by viewModel.state.collectAsState()
                 BookCacheExportScreen(
                     items = items,
                     state = state,
@@ -63,7 +80,7 @@ class BookCacheExportActivity :
                     onImport = {
                         selectZip.launch(arrayOf("application/zip", "application/octet-stream"))
                     },
-                    onDismiss = { finish() }
+                    onDismiss = { activity.finish() },
                 )
             }
         }

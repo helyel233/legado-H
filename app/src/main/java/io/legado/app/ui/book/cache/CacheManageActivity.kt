@@ -39,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.ui.host.HostBookCacheExportActivity
 
 class CacheManageActivity :
     VMBaseActivity<ActivityCacheManageBinding, CacheManageViewModel>(),
@@ -148,7 +149,7 @@ class CacheManageActivity :
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == MENU_BOOK_CACHE_EXPORT) {
-            startActivity<BookCacheExportActivity>()
+            startActivity<HostBookCacheExportActivity>()
             return true
         }
         if (item.itemId == MENU_SORT) {

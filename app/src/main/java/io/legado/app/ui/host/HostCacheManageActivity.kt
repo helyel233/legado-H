@@ -44,7 +44,6 @@ import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.ui.book.cache.ReviewSnapshotStatusDialog
 import io.legado.app.ui.book.cache.AudioCacheTaskState
-import io.legado.app.ui.book.cache.BookCacheExportActivity
 import io.legado.app.ui.book.cache.CacheBookItem
 import io.legado.app.ui.book.cache.CacheChapterDialog
 import io.legado.app.ui.book.cache.CacheDeleteTarget
@@ -582,7 +581,7 @@ private fun HostCacheManageScreen(initialSearchKey: String?) {
                 add(stringResource(R.string.s3_bucket) to { openContainerChooser() })
             }
             add(stringResource(R.string.book_cache_export_title) to {
-                activity.startActivity<BookCacheExportActivity>()
+                activity.startActivity<HostBookCacheExportActivity>()
             })
         }
         AppMenuSheet(
