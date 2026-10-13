@@ -25,6 +25,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.appcompat.widget.AppCompatSpinner
 import androidx.core.widget.NestedScrollView
@@ -189,12 +192,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private val composeDiscoverListStyle = mutableIntStateOf(AppConfig.bookshelfListItemStyle)
     private val composeDiscoverScrollToTopSignal = mutableIntStateOf(0)
     private val composeSuiteScrollToTopSignal = mutableIntStateOf(0)
-    private val composeSuiteConfig = mutableStateOf(DiscoverySuiteStore.load())
-    private val composeSelectedSuiteId = mutableStateOf(DiscoverySuiteStore.selectedSuiteId())
-    private val composeSuiteWidgetBooks = mutableStateMapOf<String, List<SearchBook>>()
-    private val composeSuiteRankedWidgetBooks = mutableStateMapOf<String, Map<String, List<SearchBook>>>()
-    private val composeSuiteLoadingWidgets = mutableStateMapOf<String, Boolean>()
-    private val suiteWidgetSignatures = hashMapOf<String, String>()
     private val suiteWidgetLoadSemaphore = Semaphore(SUITE_WIDGET_LOAD_PARALLELISM)
     private var composeDiscoverCanScrollBackward = false
     private var composeSuiteCanScrollBackward = false
@@ -279,17 +276,20 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         )
         binding.composeDiscoverySuite.setContent {
             LegadoComposeTheme {
-                val suiteConfig = composeSuiteConfig.value
+                // 状态统一来自 DiscoverSuiteSession（台账 #29-B13：编排下沉，旧壳只渲染）
+                val suiteConfig by DiscoverSuiteSession.config.collectAsState()
+                val selectedSuiteId by DiscoverSuiteSession.selectedSuiteId.collectAsState()
+                val sessionWidgetBooks by DiscoverSuiteSession.widgetBooks.collectAsState()
+                val sessionRankedBooks by DiscoverSuiteSession.rankedWidgetBooks.collectAsState()
+                val sessionLoadingIds by DiscoverSuiteSession.loadingWidgetIds.collectAsState()
                 val selectedSuite = selectedSuite(suiteConfig)
                 DiscoverySuiteHomeScreen(
                     selectedSuite = selectedSuite,
                     suites = suiteConfig.suites,
-                    selectedSuiteId = composeSelectedSuiteId.value,
-                    widgetBooks = composeSuiteWidgetBooks,
-                    rankedWidgetBooks = composeSuiteRankedWidgetBooks,
-                    loadingWidgetIds = composeSuiteLoadingWidgets
-                        .filterValues { it }
-                        .keys,
+                    selectedSuiteId = selectedSuiteId,
+                    widgetBooks = sessionWidgetBooks,
+                    rankedWidgetBooks = sessionRankedBooks,
+                    loadingWidgetIds = sessionLoadingIds,
                     scrollToTopSignal = composeSuiteScrollToTopSignal.intValue,
                     onSearchClick = { SearchActivity.start(requireContext(), key = null) },
                     onSuiteClick = ::openSuiteManagePage,
@@ -406,30 +406,18 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun initSuiteMode() {
-        refreshSuiteConfig()
+        // 编排下沉 DiscoverSuiteSession（台账 #29-B13）：绑定即刷新配置+恢复快照+批量加载
+        DiscoverSuiteSession.bind()
         binding.swipeRefreshLayout.isRefreshing = false
     }
 
     private fun stopSuiteMode() {
-        saveCurrentSuiteSnapshot()
-        suiteLoadJob?.cancel()
-        suiteLoadJob = null
-        clearSuiteRuntimeState()
-    }
-
-    private fun clearSuiteRuntimeState() {
-        composeSuiteLoadingWidgets.clear()
-        composeSuiteWidgetBooks.clear()
-        composeSuiteRankedWidgetBooks.clear()
-        suiteWidgetSignatures.clear()
-        // 牌堆/批次/分页态与在途预取任务由引擎持有（台账 #29-B13）
-        suiteEngine.cancelAll()
-        suiteEngine.clearRuntimeState()
+        DiscoverSuiteSession.stop()
         composeSuiteCanScrollBackward = false
     }
 
-    private fun selectedSuite(config: DiscoverySuiteConfig = composeSuiteConfig.value): DiscoverySuite? {
-        val selectedId = composeSelectedSuiteId.value
+    private fun selectedSuite(config: DiscoverySuiteConfig = DiscoverSuiteSession.config.value): DiscoverySuite? {
+        val selectedId = DiscoverSuiteSession.selectedSuiteId.value
         return config.suites.firstOrNull { it.id == selectedId }
             ?: config.suites.firstOrNull()
     }
@@ -446,198 +434,19 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun refreshSuiteConfig() {
-        val config = DiscoverySuiteStore.load()
-        val selectedId = DiscoverySuiteStore.selectedSuiteId()
-            .takeIf { id -> config.suites.any { it.id == id } }
-            ?: config.suites.firstOrNull()?.id.orEmpty()
-        if (selectedId != DiscoverySuiteStore.selectedSuiteId()) {
-            DiscoverySuiteStore.setSelectedSuiteId(selectedId)
-        }
-        composeSuiteConfig.value = config
-        composeSelectedSuiteId.value = selectedId
-        restoreSuiteSnapshot(selectedSuite(config))
-        loadSelectedSuiteWidgets()
+        DiscoverSuiteSession.refreshConfig()
     }
 
     private fun loadSelectedSuiteWidgets() {
-        suiteLoadJob?.cancel()
-        suiteLoadJob = null
-        composeSuiteLoadingWidgets.clear()
-        // 切换/刷新套件时重置分页状态，避免旧套件残留的 exhausted/loading 永久阻塞加载更多
-        suiteEngine.clearRuntimeState()
-        val suite = selectedSuite() ?: run {
-            composeSuiteWidgetBooks.clear()
-            composeSuiteRankedWidgetBooks.clear()
-            suiteWidgetSignatures.clear()
-            return
-        }
-        val widgetIds = suite.widgets.map { it.id }.toSet()
-        composeSuiteWidgetBooks.keys
-            .filterNot { it in widgetIds }
-            .forEach { composeSuiteWidgetBooks.remove(it) }
-        composeSuiteRankedWidgetBooks.keys
-            .filterNot { it in widgetIds }
-            .forEach { composeSuiteRankedWidgetBooks.remove(it) }
-        suiteWidgetSignatures.keys
-            .filterNot { it in widgetIds }
-            .forEach { suiteWidgetSignatures.remove(it) }
-        // 牌堆/批次/预取任务/分页态的淘汰由引擎负责（台账 #29-B13）
-        suiteEngine.retainWidgets(widgetIds)
-        val widgetsToLoad = suite.widgets.filterNot { widget ->
-            val signature = widget.cacheSignature()
-            when {
-                widget.isSuiteButtonOnlyWidget() || widget.targets.isEmpty() -> {
-                    composeSuiteWidgetBooks[widget.id] = emptyList()
-                    composeSuiteRankedWidgetBooks.remove(widget.id)
-                    suiteWidgetSignatures[widget.id] = signature
-                    true
-                }
-                suiteWidgetSignatures[widget.id] == signature &&
-                    composeSuiteWidgetBooks.containsKey(widget.id) &&
-                    (widget.type != DiscoverySuiteWidgetType.RankedList.value ||
-                        composeSuiteRankedWidgetBooks.containsKey(widget.id)) -> {
-                    prefetchSuiteCovers(composeSuiteWidgetBooks[widget.id].orEmpty())
-                    true
-                }
-                else -> false
-            }
-        }
-        if (widgetsToLoad.isEmpty()) {
-            suite.widgets.forEach { widget ->
-                // 横排控件改为触底懒加载，不在首屏主动预取下一页，减少无用户行为的请求。
-                if (widget.type != DiscoverySuiteWidgetType.HorizontalBooks.value) {
-                    prepareSuiteNextRandomBatch(widget)
-                }
-            }
-            saveCurrentSuiteSnapshot()
-            return
-        }
-        suiteLoadJob = viewLifecycleOwner.lifecycleScope.launch {
-            coroutineScope {
-                widgetsToLoad.map { widget ->
-                    async {
-                        suiteWidgetLoadSemaphore.withPermit {
-                if (widget.isSuiteButtonOnlyWidget() || widget.targets.isEmpty()) {
-                    composeSuiteWidgetBooks[widget.id] = emptyList()
-                    composeSuiteRankedWidgetBooks.remove(widget.id)
-                    suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                    return@withPermit
-                }
-                composeSuiteLoadingWidgets[widget.id] = true
-                if (widget.type == DiscoverySuiteWidgetType.RankedList.value) {
-                    val rankedBooks = try {
-                        withContext(IO) { loadSuiteRankedListWidgetBooks(widget) }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        AppLog.put("套件发现排行榜控件加载失败", e)
-                        emptyMap()
-                    }
-                    if (!isCurrentSuiteWidget(widget)) {
-                        composeSuiteLoadingWidgets[widget.id] = false
-                        return@async
-                    }
-                    composeSuiteRankedWidgetBooks[widget.id] = rankedBooks
-                    composeSuiteWidgetBooks[widget.id] = rankedBooks.values.flatten()
-                    suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                    composeSuiteLoadingWidgets[widget.id] = false
-                    prefetchSuiteCovers(rankedBooks.values.flatten())
-                    return@withPermit
-                }
-                composeSuiteRankedWidgetBooks.remove(widget.id)
-                val books = try {
-                    withContext(IO) { loadSuiteWidgetBooks(widget) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    AppLog.put("套件发现控件加载失败", e)
-                    emptyList()
-                }
-                if (!isCurrentSuiteWidget(widget)) {
-                    composeSuiteLoadingWidgets[widget.id] = false
-                    return@async
-                }
-                composeSuiteWidgetBooks[widget.id] = books
-                suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                composeSuiteLoadingWidgets[widget.id] = false
-                prefetchSuiteCovers(books)
-                if (widget.type == DiscoverySuiteWidgetType.HorizontalBooks.value) {
-                    prefetchSuiteCovers(books.drop(HORIZONTAL_SUITE_VISIBLE_COVER_COUNT))
-                    // 不主动预取下一页，交给横排触底 onHorizontalLoadMore 懒加载。
-                } else {
-                    prepareSuiteNextRandomBatch(widget)
-                }
-                        }
-                    }
-                }.awaitAll()
-            }
-            saveCurrentSuiteSnapshot()
-        }
+        // 首屏批量加载已由会话的 refreshConfig 内部完成
     }
 
     private fun restoreSuiteSnapshot(suite: DiscoverySuite?) {
-        if (suite == null) return
-        val snapshot = DiscoverySuitePageSnapshotStore.get(
-            suiteId = suite.id,
-            signature = suite.cacheSignature()
-        )
-        if (snapshot != null) {
-            applySuiteSnapshot(snapshot)
-            return
-        }
-        val suiteId = suite.id
-        val signature = suite.cacheSignature()
-        viewLifecycleOwner.lifecycleScope.launch {
-            val diskSnapshot = withContext(IO) {
-                readSuiteSnapshotCache(suiteId, signature)
-            } ?: return@launch
-            if (!isAdded ||
-                !usingSuiteDiscovery ||
-                selectedSuite()?.id != suiteId ||
-                selectedSuite()?.cacheSignature() != signature
-            ) {
-                return@launch
-            }
-            applySuiteSnapshot(diskSnapshot)
-            DiscoverySuitePageSnapshotStore.put(diskSnapshot)
-        }
-    }
-
-    private fun applySuiteSnapshot(snapshot: DiscoverySuitePageSnapshot) {
-        composeSuiteWidgetBooks.clear()
-        composeSuiteWidgetBooks.putAll(snapshot.widgetBooks)
-        composeSuiteRankedWidgetBooks.clear()
-        composeSuiteRankedWidgetBooks.putAll(snapshot.rankedWidgetBooks)
-        suiteWidgetSignatures.clear()
-        suiteWidgetSignatures.putAll(snapshot.widgetSignatures)
-        prefetchSuiteCovers(snapshot.widgetBooks.values.flatten())
+        // 快照恢复已内嵌在会话的 refreshConfig 中
     }
 
     private fun saveCurrentSuiteSnapshot() {
-        val suite = selectedSuite() ?: return
-        if (composeSuiteWidgetBooks.isEmpty() && composeSuiteRankedWidgetBooks.isEmpty()) return
-        val snapshotWidgets = suite.widgets.take(DISCOVERY_SUITE_SNAPSHOT_WIDGET_LIMIT)
-        val snapshot = DiscoverySuitePageSnapshot(
-            suiteId = suite.id,
-            signature = suite.cacheSignature(),
-            widgetBooks = snapshotWidgets.associate { widget ->
-                widget.id to composeSuiteWidgetBooks[widget.id]
-                    .orEmpty()
-                    .take(widget.snapshotBookLimit())
-            }.filterValues { it.isNotEmpty() },
-            rankedWidgetBooks = snapshotWidgets
-                .filter { it.type == DiscoverySuiteWidgetType.RankedList.value }
-                .associate { widget ->
-                    widget.id to composeSuiteRankedWidgetBooks[widget.id]
-                        .orEmpty()
-                        .mapValues { entry -> entry.value.take(RANKED_SUITE_SNAPSHOT_BOOK_LIMIT) }
-                }
-                .filterValues { it.isNotEmpty() },
-            widgetSignatures = suiteWidgetSignatures.filterKeys { key ->
-                snapshotWidgets.any { it.id == key }
-            }
-        )
-        saveSuiteSnapshotCacheAsync(snapshot)
+        // 快照保存已内嵌在会话各编排步骤中，此方法保留以兼容旧调用点
     }
 
     private fun readSuiteSnapshotCache(
@@ -687,74 +496,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun refreshSuiteWidget(widget: DiscoverySuiteWidget) {
-        if (!usingSuiteDiscovery || widget.isSuiteButtonOnlyWidget()) return
-        if (composeSuiteLoadingWidgets[widget.id] == true) return
-        if (widget.type == DiscoverySuiteWidgetType.RankedList.value) {
-            viewLifecycleOwner.lifecycleScope.launch {
-                composeSuiteLoadingWidgets[widget.id] = true
-                try {
-                val rankedBooks = try {
-                    withContext(IO) { loadSuiteRankedListWidgetBooks(widget) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    AppLog.put("套件发现排行榜控件刷新失败", e)
-                    emptyMap()
-                }
-                if (!isCurrentSuiteWidget(widget)) return@launch
-                if (rankedBooks.isNotEmpty()) {
-                    composeSuiteRankedWidgetBooks[widget.id] = rankedBooks
-                    composeSuiteWidgetBooks[widget.id] = rankedBooks.values.flatten()
-                    suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                    prefetchSuiteCovers(rankedBooks.values.flatten())
-                    saveCurrentSuiteSnapshot()
-                }
-                } finally {
-                    composeSuiteLoadingWidgets[widget.id] = false
-                }
-            }
-            return
-        }
-        if (widget.type != DiscoverySuiteWidgetType.HorizontalBooks.value) {
-            val signature = widget.deckSignature()
-            val prepared = suiteEngine.takePreparedBatch(widget)
-            if (prepared != null) {
-                composeSuiteWidgetBooks[widget.id] = prepared
-                suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                prefetchSuiteCovers(prepared)
-                saveCurrentSuiteSnapshot()
-                prepareSuiteNextRandomBatch(widget)
-                return
-            }
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            composeSuiteLoadingWidgets[widget.id] = true
-            try {
-            val books = try {
-                withContext(IO) { loadSuiteWidgetBooks(widget) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                AppLog.put("套件发现控件刷新失败", e)
-                emptyList()
-            }
-            if (!isCurrentSuiteWidget(widget)) return@launch
-            if (books.isNotEmpty()) {
-                composeSuiteWidgetBooks[widget.id] = books
-                suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                prefetchSuiteCovers(books)
-                saveCurrentSuiteSnapshot()
-            }
-            if (widget.type == DiscoverySuiteWidgetType.HorizontalBooks.value) {
-                prefetchSuiteCovers(books.drop(HORIZONTAL_SUITE_VISIBLE_COVER_COUNT))
-                // 不主动预取下一页，交给横排触底 onHorizontalLoadMore 懒加载。
-            } else {
-                prepareSuiteNextRandomBatch(widget)
-            }
-            } finally {
-                composeSuiteLoadingWidgets[widget.id] = false
-            }
-        }
+        DiscoverSuiteSession.refreshWidget(widget)
     }
 
     private fun prepareSuiteNextRandomBatch(widget: DiscoverySuiteWidget) {
@@ -763,108 +505,14 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun loadMoreSuiteHorizontalWidget(widget: DiscoverySuiteWidget) {
-        if (!usingSuiteDiscovery || widget.type != DiscoverySuiteWidgetType.HorizontalBooks.value) return
-        val state = suiteHorizontalPagingState(widget)
-        if (state.loading || state.exhausted) return
-        val currentBooks = composeSuiteWidgetBooks[widget.id].orEmpty()
-        if (currentBooks.size >= HORIZONTAL_SUITE_MAX_BOOKS) {
-            state.exhausted = true
-            return
-        }
-        val page = state.nextPage
-        state.loading = true
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-            val books = try {
-                withContext(IO) { loadSuiteHorizontalWidgetPage(widget, page) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                AppLog.put("套件发现横排控件加载下一页失败", e)
-                emptyList()
-            }
-            if (!isCurrentSuiteWidget(widget)) {
-                state.loading = false
-                return@launch
-            }
-            val latestState = suiteHorizontalPagingState(widget)
-            if (latestState.signature != state.signature) {
-                state.loading = false
-                return@launch
-            }
-            val current = composeSuiteWidgetBooks[widget.id].orEmpty()
-            val merged = (current + books)
-                .distinctBy { it.suiteDeckKey() }
-                .take(HORIZONTAL_SUITE_MAX_BOOKS)
-            if (merged.size > current.size) {
-                composeSuiteWidgetBooks[widget.id] = merged
-                suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                prefetchSuiteCovers(books)
-                latestState.nextPage = page + 1
-                latestState.exhausted = merged.size >= HORIZONTAL_SUITE_MAX_BOOKS
-                saveCurrentSuiteSnapshot()
-            } else {
-                latestState.exhausted = true
-            }
-            latestState.loading = false
-            } finally {
-                state.loading = false
-            }
-        }
+        DiscoverSuiteSession.loadMoreHorizontal(widget)
     }
 
     private fun loadMoreSuiteRankedWidget(
         widget: DiscoverySuiteWidget,
         target: DiscoverySuiteWidgetTarget
     ) {
-        if (!usingSuiteDiscovery || widget.type != DiscoverySuiteWidgetType.RankedList.value) return
-        if (target.sourceUrl.isBlank() || target.tagUrl.isBlank()) return
-        val state = suiteRankedPagingState(widget, target)
-        if (state.loading || state.exhausted) return
-        val page = state.nextPage
-        state.loading = true
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-            val books = try {
-                withContext(IO) { loadSuiteRankedWidgetPage(target, page) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                AppLog.put("套件发现排行榜控件加载下一页失败", e)
-                emptyList()
-            }
-            if (!isCurrentSuiteWidget(widget)) {
-                state.loading = false
-                return@launch
-            }
-            val latestState = suiteRankedPagingState(widget, target)
-            if (latestState.signature != state.signature) {
-                state.loading = false
-                return@launch
-            }
-            val targetKey = target.deckKey()
-            val currentMap = composeSuiteRankedWidgetBooks[widget.id].orEmpty()
-            val currentBooks = currentMap[targetKey].orEmpty()
-            val mergedBooks = (currentBooks + books).distinctBy { it.suiteDeckKey() }
-            if (mergedBooks.size > currentBooks.size) {
-                val mergedMap = currentMap.toMutableMap().apply {
-                    put(targetKey, mergedBooks)
-                }
-                composeSuiteRankedWidgetBooks[widget.id] = mergedMap
-                composeSuiteWidgetBooks[widget.id] = mergedMap.values.flatten()
-                suiteWidgetSignatures[widget.id] = widget.cacheSignature()
-                prefetchSuiteCovers(books)
-                latestState.nextPage = page + 1
-                latestState.exhausted = books.isEmpty()
-                saveCurrentSuiteSnapshot()
-            } else {
-                latestState.exhausted = true
-            }
-            latestState.loading = false
-            } finally {
-                state.loading = false
-            }
-        }
+        DiscoverSuiteSession.loadMoreRanked(widget, target)
     }
 
     private suspend fun loadSuiteHorizontalWidgetPage(
@@ -902,10 +550,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun selectDiscoverySuite(suite: DiscoverySuite) {
-        if (suite.id.isBlank() || suite.id == composeSelectedSuiteId.value) return
-        saveCurrentSuiteSnapshot()
-        DiscoverySuiteStore.setSelectedSuiteId(suite.id)
-        refreshSuiteConfig()
+        DiscoverSuiteSession.selectSuite(suite)
     }
 
     private fun openSuiteTarget(target: DiscoverySuiteWidgetTarget) {
@@ -928,7 +573,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun showSuiteSelector() {
-        val config = composeSuiteConfig.value
+        val config = DiscoverSuiteSession.config.value
         if (config.suites.isEmpty()) {
             showCreateSuiteDialog()
             return
@@ -938,7 +583,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             addAll(config.suites.map { it.displayName })
             add(getString(R.string.discovery_suite_create))
         }
-        val selectedIndex = config.suites.indexOfFirst { it.id == composeSelectedSuiteId.value }
+        val selectedIndex = config.suites.indexOfFirst { it.id == DiscoverSuiteSession.selectedSuiteId.value }
             .takeIf { it >= 0 }
             ?.plus(1)
             ?: -1
@@ -1184,10 +829,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             onPositive = {
                 saveSuiteConfig { config ->
                     val suites = config.suites.filterNot { it.id == suite.id }
-                    val selectedId = if (composeSelectedSuiteId.value == suite.id) {
+                    val selectedId = if (DiscoverSuiteSession.selectedSuiteId.value == suite.id) {
                         suites.firstOrNull()?.id.orEmpty()
                     } else {
-                        composeSelectedSuiteId.value
+                        DiscoverSuiteSession.selectedSuiteId.value
                     }
                     DiscoverySuiteStore.setSelectedSuiteId(selectedId)
                     config.copy(suites = suites)
