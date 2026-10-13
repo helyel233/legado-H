@@ -151,6 +151,7 @@ class HostMuseumContent : AppContent {
                         AppListItem(
                             headline = "双行列表项",
                             supporting = "辅助说明一行",
+                            card = false,
                             leading = { AppIconBox(ImageVectorHolder(HostIcons.Stats)) },
                             trailing = { AppBadge(3) },
                         )
@@ -159,11 +160,12 @@ class HostMuseumContent : AppContent {
                             headline = "带 overline 的项",
                             overline = "OVERLINE",
                             supporting = "第三行文本",
+                            card = false,
                             leading = { AppIconBox(ImageVectorHolder(HostIcons.Rss)) },
                             trailing = { AppGhostButton("打开") {} },
                         )
                         AppDivider()
-                        AppListItem(headline = "单行紧凑项", dense = true)
+                        AppListItem(headline = "单行紧凑项", dense = true, card = false)
                     }
                 }
             }

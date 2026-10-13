@@ -840,6 +840,13 @@
     <string name="bookshelf_tag_reusable_summary">可复用 %1$d 个 · 已选择 %2$d 个</string>
     <string name="bookshelf_tag_no_reusable">没有可复用的已有标签，可直接输入新标签</string>
     <string name="bookshelf_tag_no_matching_existing">没有匹配的已有标签</string>
+    <string name="bookshelf_tag_add_hint">输入标签，多个用逗号或空格分隔</string>
+    <string name="bookshelf_tag_reusable">可复用标签（来自其他分组）</string>
+    <string name="bookshelf_tag_assign_title">分配书籍 · %1$s（%2$s）</string>
+    <string name="bookshelf_tag_select_current">选中当前结果</string>
+    <string name="bookshelf_tag_unselect_current">取消当前结果</string>
+    <string name="bookshelf_tag_empty">暂无标签</string>
+    <string name="bookshelf_tag_no_groups">暂无分组</string>
     <string name="bookshelf_tag_delete_title">删除标签</string>
     <string name="bookshelf_tag_delete_message">确定从“%2$s”分组的所有书籍中移除“%1$s”标签吗？不会删除书籍。</string>
     <string name="bookshelf_tag_group_summary">%1$d 本书 · %2$d 个标签</string>

@@ -1,20 +1,27 @@
 package io.legado.app.ui.book.source.edit
 
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.tabs.TabLayout
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.textfield.TextInputLayout
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookSourceType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
@@ -23,19 +30,19 @@ import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.data.entities.rule.ExploreRule
 import io.legado.app.data.entities.rule.SearchRule
 import io.legado.app.data.entities.rule.TocRule
-import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.source.SourceApiField
+import io.legado.app.help.source.SourceApiUsageScanner
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
@@ -48,8 +55,6 @@ import io.legado.app.utils.imeHeight
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.launch
 import io.legado.app.utils.navigationBarHeight
-import io.legado.app.help.source.SourceApiField
-import io.legado.app.help.source.SourceApiUsageScanner
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
@@ -59,19 +64,17 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.views.bottomPadding
 
 class BookSourceEditActivity :
-    VMBaseActivity<ActivityBookSourceEditBinding, BookSourceEditViewModel>(),
+    AppCompatActivity(),
     KeyboardToolPop.CallBack,
     VariableDialog.Callback {
 
-    override val binding by viewBinding(ActivityBookSourceEditBinding::inflate)
-    override val viewModel by viewModels<BookSourceEditViewModel>()
+    private val viewModel by viewModels<BookSourceEditViewModel>()
 
     private val adapter by lazy { BookSourceEditAdapter() }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
@@ -80,6 +83,20 @@ class BookSourceEditActivity :
     private val infoEntities: ArrayList<EditEntity> = ArrayList()
     private val tocEntities: ArrayList<EditEntity> = ArrayList()
     private val contentEntities: ArrayList<EditEntity> = ArrayList()
+
+    // 顶部配置状态（原 binding 上的 checkbox/spinner 状态字段化）
+    private var enabled by mutableStateOf(true)
+    private var enabledExplore by mutableStateOf(true)
+    private var enabledCookieJar by mutableStateOf(false)
+    private var bookTypeIndex by mutableIntStateOf(0)
+    private var eventListener by mutableStateOf(false)
+    private var customButton by mutableStateOf(false)
+
+    // 当前选中的 tab
+    private var selectedTab by mutableIntStateOf(0)
+
+    // AndroidView 创建的 RecyclerView 引用（原 binding.recyclerView）
+    private var recyclerView: RecyclerView? = null
 
     //    private val reviewEntities: ArrayList<EditEntity> = ArrayList()
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
@@ -98,15 +115,80 @@ class BookSourceEditActivity :
         }
     }
 
-    private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, lifecycleScope, binding.root, this)
-    }
+    private lateinit var softKeyboardTool: KeyboardToolPop
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            BookSourceEditScreen(
+                title = getString(R.string.edit_book_source),
+                bookTypeOptions = resources.getStringArray(R.array.book_type).toList(),
+                enabled = enabled,
+                enabledExplore = enabledExplore,
+                enabledCookieJar = enabledCookieJar,
+                bookTypeIndex = bookTypeIndex,
+                eventListener = eventListener,
+                customButton = customButton,
+                selectedTab = selectedTab,
+                onBack = { finish() },
+                onEnabledChange = { enabled = it },
+                onEnabledExploreChange = { enabledExplore = it },
+                onEnabledCookieJarChange = { enabledCookieJar = it },
+                onBookTypeChange = { bookTypeIndex = it },
+                onEventListenerChange = { eventListener = it },
+                onCustomButtonChange = { customButton = it },
+                onTabSelected = ::onTabSelected,
+                onSave = ::save,
+                buildMenuActions = ::buildMenuActions,
+                recyclerViewFactory = ::createRecyclerView,
+            )
+        }
+        // softKeyboardTool 依赖 setContentView 后的 content 根，须在 setV5Content 之后初始化
+        softKeyboardTool = KeyboardToolPop(
+            this,
+            lifecycleScope,
+            findViewById<ViewGroup>(android.R.id.content),
+            this
+        )
         softKeyboardTool.attachToWindow(window)
-        initView()
         viewModel.initData(intent) {
             upSourceView(viewModel.bookSource)
+        }
+    }
+
+    private fun onTabSelected(index: Int) {
+        selectedTab = index
+        setEditEntities(index)
+    }
+
+    private fun createRecyclerView(context: Context): RecyclerView {
+        return RecyclerView(context).apply {
+            setEdgeEffectColor(context.primaryColor)
+            if (adapter.editEntityMaxLine < 999) {
+                layoutManager = NoChildScrollLinearLayoutManager(context)
+            } else {
+                layoutManager = LinearLayoutManager(context)
+            }
+            adapter = this@BookSourceEditActivity.adapter
+            val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+                if (newFocus is EditText) {
+                    newFocus.postDelayed({
+                        if (!isDestroyed && !isFinishing) {
+                            sendText("")
+                        }
+                    }, 120)
+                }
+            }
+            globalFocusChangeListener = focusListener
+            viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
+            setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+                val navigationBarHeight = windowInsets.navigationBarHeight
+                val imeHeight = windowInsets.imeHeight
+                view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
+                softKeyboardTool.initialPadding = imeHeight
+                windowInsets
+            }
+            this@BookSourceEditActivity.recyclerView = this
         }
     }
 
@@ -115,17 +197,6 @@ class BookSourceEditActivity :
         if (!LocalConfig.ruleHelpVersionIsLast) {
             showHelp("ruleHelp")
         }
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.source_edit, menu)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !getSource().loginUrl.isNullOrBlank()
-        menu.findItem(R.id.menu_auto_complete)?.isChecked = viewModel.autoComplete
-        return super.onMenuOpened(featureId, menu)
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -161,109 +232,79 @@ class BookSourceEditActivity :
         }
     }
 
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_fullscreen_edit -> onFullEditClicked()
+    private fun findParentTextInputLayout(view: View): TextInputLayout? {
+        var parent = view.parent
+        while (parent != null && parent !is TextInputLayout) {
+            parent = parent.parent
+        }
+        return parent
+    }
 
-            R.id.menu_save -> viewModel.save(getSource()) {
-                setResult(RESULT_OK, Intent().putExtra("origin", it.bookSourceUrl))
-                finish()
+    private fun save() {
+        viewModel.save(getSource()) {
+            setResult(RESULT_OK, Intent().putExtra("origin", it.bookSourceUrl))
+            finish()
+        }
+    }
+
+    private fun debugSource() {
+        viewModel.save(getSource()) { source ->
+            startActivity<BookSourceDebugActivity> {
+                putExtra("key", source.bookSourceUrl)
             }
+        }
+    }
 
-            R.id.menu_debug_source -> viewModel.save(getSource()) { source ->
-                startActivity<BookSourceDebugActivity> {
-                    putExtra("key", source.bookSourceUrl)
-                }
+    private fun login() {
+        viewModel.save(getSource()) { source ->
+            startActivity<SourceLoginActivity> {
+                putExtra("type", "bookSource")
+                putExtra("key", source.bookSourceUrl)
             }
+        }
+    }
 
-            R.id.menu_clear_cookie -> viewModel.clearCookie(getSource().bookSourceUrl)
-            R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
-            R.id.menu_copy_source -> sendToClip(GSON.toJson(getSource()))
-            R.id.menu_paste_source -> viewModel.pasteSource { upSourceView(it) }
-            R.id.menu_qr_code_camera -> qrCodeResult.launch()
-            R.id.menu_share_str -> share(GSON.toJson(getSource()))
-            R.id.menu_share_qr -> shareWithQr(
+    private fun search() {
+        viewModel.save(getSource()) { source ->
+            SearchActivity.start(this, source)
+        }
+    }
+
+    /**
+     * 构建溢出菜单动作。每次点开菜单时重新构建，保证「登录」可见性与「自动补全」勾选态最新。
+     */
+    private fun buildMenuActions(): List<Pair<String, () -> Unit>> {
+        val list = ArrayList<Pair<String, () -> Unit>>()
+        list.add(getString(R.string.edit_content) to ::onFullEditClicked)
+        list.add(getString(R.string.debug_source) to ::debugSource)
+        if (!getSource().loginUrl.isNullOrBlank()) {
+            list.add(getString(R.string.login) to ::login)
+        }
+        list.add(getString(R.string.search) to ::search)
+        list.add(getString(R.string.source_api_usage) to ::showSourceApiUsage)
+        list.add(getString(R.string.cookie) to {
+            viewModel.clearCookie(getSource().bookSourceUrl)
+        })
+        list.add(
+            getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "" to {
+                viewModel.autoComplete = !viewModel.autoComplete
+            }
+        )
+        list.add(getString(R.string.copy_source) to { sendToClip(GSON.toJson(getSource())) })
+        list.add(getString(R.string.paste_source) to { viewModel.pasteSource { upSourceView(it) } })
+        list.add(getString(R.string.set_source_variable) to ::setSourceVariable)
+        list.add(getString(R.string.import_by_qr_code) to { qrCodeResult.launch() })
+        list.add(getString(R.string.qr_share) to {
+            shareWithQr(
                 GSON.toJson(getSource()),
                 getString(R.string.share_book_source),
                 ErrorCorrectionLevel.L
             )
-
-            R.id.menu_log -> showDialogFragment<AppLogDialog>()
-            R.id.menu_help -> showHelp("ruleHelp")
-            R.id.menu_login -> viewModel.save(getSource()) { source ->
-                startActivity<SourceLoginActivity> {
-                    putExtra("type", "bookSource")
-                    putExtra("key", source.bookSourceUrl)
-                }
-            }
-
-            R.id.menu_set_source_variable -> setSourceVariable()
-            R.id.menu_source_api -> showSourceApiUsage()
-            R.id.menu_search -> viewModel.save(getSource()) { source ->
-                SearchActivity.start(this, source)
-            }
-
-        }
-        return super.onCompatOptionsItemSelected(item)
-    }
-
-    private fun initView() {
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_base)
         })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_search)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_find)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_info)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_toc)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_content)
-        })
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        if (adapter.editEntityMaxLine < 999) {
-            binding.recyclerView.layoutManager = NoChildScrollLinearLayoutManager(this) //启用后会阻止RecyclerView跟随光标滚动,行数少时,用的TextView跟随
-        }
-        binding.recyclerView.adapter = adapter
-        val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
-            if (newFocus is EditText) {
-                newFocus.postDelayed({
-                    if (!isDestroyed && !isFinishing) {
-                        sendText("")
-                    }
-                }, 120)
-            }
-        }
-        globalFocusChangeListener = focusListener
-        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
-        binding.tabLayout.setBackgroundColor(backgroundColor)
-        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
-        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabReselected(tab: TabLayout.Tab?) {
-
-            }
-
-            override fun onTabUnselected(tab: TabLayout.Tab?) {
-
-            }
-
-            override fun onTabSelected(tab: TabLayout.Tab?) {
-                setEditEntities(tab?.position)
-            }
-        })
-        binding.recyclerView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
-            val navigationBarHeight = windowInsets.navigationBarHeight
-            val imeHeight = windowInsets.imeHeight
-            view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
-            softKeyboardTool.initialPadding = imeHeight
-            windowInsets
-        }
+        list.add(getString(R.string.str_share) to { share(GSON.toJson(getSource())) })
+        list.add(getString(R.string.log) to { showDialogFragment<AppLogDialog>() })
+        list.add(getString(R.string.help) to { showHelp("ruleHelp") })
+        return list
     }
 
     override fun finish() {
@@ -285,7 +326,7 @@ class BookSourceEditActivity :
 
     override fun onDestroy() {
         globalFocusChangeListener?.let {
-            binding.recyclerView.viewTreeObserver.removeOnGlobalFocusChangeListener(it)
+            recyclerView?.viewTreeObserver?.removeOnGlobalFocusChangeListener(it)
         }
         globalFocusChangeListener = null
         super.onDestroy()
@@ -302,27 +343,25 @@ class BookSourceEditActivity :
 //            6 -> reviewEntities
             else -> sourceEntities
         }
-        binding.recyclerView.scrollToPosition(0)
+        recyclerView?.scrollToPosition(0)
         window.decorView.rootView.clearFocus()
     }
 
     private fun upSourceView(bookSource: BookSource?) {
         val bs = bookSource ?: BookSource()
         bs.let {
-            binding.cbIsEnable.isChecked = it.enabled
-            binding.cbIsEnableExplore.isChecked = it.enabledExplore
-            binding.cbIsEnableCookie.isChecked = it.enabledCookieJar ?: false
-            binding.spType.setSelection(
-                when (it.bookSourceType) {
-                    BookSourceType.video -> 4
-                    BookSourceType.file -> 3
-                    BookSourceType.image -> 2
-                    BookSourceType.audio -> 1
-                    else -> 0
-                }
-            )
-            binding.cbIsEventListener.isChecked = it.eventListener
-            binding.cbIsCustomButton.isChecked = it.customButton
+            enabled = it.enabled
+            enabledExplore = it.enabledExplore
+            enabledCookieJar = it.enabledCookieJar ?: false
+            bookTypeIndex = when (it.bookSourceType) {
+                BookSourceType.video -> 4
+                BookSourceType.file -> 3
+                BookSourceType.image -> 2
+                BookSourceType.audio -> 1
+                else -> 0
+            }
+            eventListener = it.eventListener
+            customButton = it.customButton
         }
         // 基本信息
         sourceEntities.clear()
@@ -435,24 +474,24 @@ class BookSourceEditActivity :
 //            add(EditEntity("postQuoteUrl", rr.postQuoteUrl, R.string.post_quote_url))
 //            add(EditEntity("deleteUrl", rr.deleteUrl, R.string.delete_review_url))
 //        }
-        binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
+        selectedTab = 0
         setEditEntities(0)
     }
 
     private fun getSource(): BookSource {
         val source = viewModel.bookSource?.copy() ?: BookSource()
-        source.enabled = binding.cbIsEnable.isChecked
-        source.enabledExplore = binding.cbIsEnableExplore.isChecked
-        source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.bookSourceType = when (binding.spType.selectedItemPosition) {
+        source.enabled = enabled
+        source.enabledExplore = enabledExplore
+        source.enabledCookieJar = enabledCookieJar
+        source.bookSourceType = when (bookTypeIndex) {
             4 -> BookSourceType.video
             3 -> BookSourceType.file
             2 -> BookSourceType.image
             1 -> BookSourceType.audio
             else -> BookSourceType.default
         }
-        source.eventListener = binding.cbIsEventListener.isChecked
-        source.customButton = binding.cbIsCustomButton.isChecked
+        source.eventListener = eventListener
+        source.customButton = customButton
         val searchRule = SearchRule()
         val exploreRule = ExploreRule()
         val bookInfoRule = BookInfoRule()
@@ -687,14 +726,15 @@ class BookSourceEditActivity :
 
     private fun jumpToField(tabIndex: Int, fieldKey: String) {
         if (tabIndex !in 0..5) return
-        binding.tabLayout.getTabAt(tabIndex)?.select()
+        selectedTab = tabIndex
         setEditEntities(tabIndex)
         val index = adapter.editEntities.indexOfFirst { it.key == fieldKey }
         if (index < 0) return
-        binding.recyclerView.post {
-            binding.recyclerView.scrollToPosition(index)
-            binding.recyclerView.postDelayed({
-                val holder = binding.recyclerView.findViewHolderForAdapterPosition(index)
+        val rv = recyclerView ?: return
+        rv.post {
+            rv.scrollToPosition(index)
+            rv.postDelayed({
+                val holder = rv.findViewHolderForAdapterPosition(index)
                 holder?.itemView?.findViewById<EditText>(R.id.editText)?.requestFocus()
             }, 200)
         }
@@ -770,10 +810,11 @@ class BookSourceEditActivity :
             }
             if (adapter.editEntityMaxLine >= 999) {
                 view.post {
+                    val rv = recyclerView ?: return@post
                     val editTextLocation = IntArray(2)
                     view.getLocationOnScreen(editTextLocation)
                     val recyclerViewLocation = IntArray(2)
-                    binding.recyclerView.getLocationOnScreen(recyclerViewLocation)
+                    rv.getLocationOnScreen(recyclerViewLocation)
                     val layout = view.layout
                     if (layout != null) {
                         val line = layout.getLineForOffset(end)
@@ -782,12 +823,12 @@ class BookSourceEditActivity :
                         val cursorYOnScreen = editTextLocation[1] + cursorYInEditText
                         // 光标相对于RecyclerView的位置
                         val cursorYInRecyclerView = cursorYOnScreen - recyclerViewLocation[1]
-                        val recyclerViewBottom = binding.recyclerView.height - 120 //考虑键盘的经验值
+                        val recyclerViewBottom = rv.height - 120 //考虑键盘的经验值
                         // 如果光标不在可见范围内，则滚动到光标位置
                         if (cursorYInRecyclerView !in 0..recyclerViewBottom) {
                             val scrollDistance = cursorYInRecyclerView - recyclerViewBottom / 3
-                            if (scrollDistance > 0 && binding.recyclerView.canScrollVertically(1) || scrollDistance < 0 && binding.recyclerView.canScrollVertically(-1)) {
-                                binding.recyclerView.smoothScrollBy(0, scrollDistance)
+                            if (scrollDistance > 0 && rv.canScrollVertically(1) || scrollDistance < 0 && rv.canScrollVertically(-1)) {
+                                rv.smoothScrollBy(0, scrollDistance)
                             }
                         }
                     }

@@ -5,18 +5,16 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
-import io.legado.app.databinding.ActivityAutoTaskEditBinding
 import io.legado.app.help.CacheManager
 import io.legado.app.model.AutoTaskRule
 import io.legado.app.model.AutoTask
@@ -35,14 +33,13 @@ import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.login.SourceLoginActivity
 import kotlinx.coroutines.launch
 
-class AutoTaskEditActivity : VMBaseActivity<ActivityAutoTaskEditBinding, AutoTaskEditViewModel>() {
+class AutoTaskEditActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityAutoTaskEditBinding::inflate)
-    override val viewModel by viewModels<AutoTaskEditViewModel>()
+    private val viewModel by viewModels<AutoTaskEditViewModel>()
 
     private var taskId: String? = null
     private var loaded = false
@@ -79,12 +76,10 @@ class AutoTaskEditActivity : VMBaseActivity<ActivityAutoTaskEditBinding, AutoTas
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         taskId = intent.getStringExtra(EXTRA_TASK_ID)
-        binding.composeRoot.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-        )
-        binding.composeRoot.setContent {
+        setV5Content {
             val style = rememberAppDialogStyle()
             AppManagementScaffold(
                 title = getString(

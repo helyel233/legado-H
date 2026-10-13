@@ -2,15 +2,13 @@ package io.legado.app.ui.autoTask
 
 import android.os.Bundle
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
-import io.legado.app.databinding.ActivityAutoTaskBinding
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskRule
 import io.legado.app.ui.widget.dialog.TextDialog
@@ -24,17 +22,16 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.CronSchedule
 import kotlinx.coroutines.launch
 
-class AutoTaskActivity : VMBaseActivity<ActivityAutoTaskBinding, AutoTaskViewModel>() {
+class AutoTaskActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityAutoTaskBinding::inflate)
-    override val viewModel by viewModels<AutoTaskViewModel>()
+    private val viewModel by viewModels<AutoTaskViewModel>()
 
     private val rulesState = mutableStateListOf<AutoTaskRule>()
     private val selectedIds = mutableStateOf<Set<String>>(emptySet())
@@ -57,11 +54,9 @@ class AutoTaskActivity : VMBaseActivity<ActivityAutoTaskBinding, AutoTaskViewMod
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.composeRoot.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-        )
-        binding.composeRoot.setContent {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
             AppManagementScaffold(
                 title = getString(R.string.auto_task_manage),
                 selectedCount = selectedIds.value.size,

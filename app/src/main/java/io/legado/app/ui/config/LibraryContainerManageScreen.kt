@@ -1,6 +1,5 @@
 package io.legado.app.ui.config
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,37 +8,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import io.legado.app.R
 import io.legado.app.help.book.library.LibraryContainerConfig
 import io.legado.app.help.book.library.LibraryContainerManager
-import io.legado.app.ui.widget.compose.AppManagementCard
-import io.legado.app.ui.widget.compose.AppListSpacing
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
 @Composable
 internal fun LibraryContainerManageScreen(
@@ -47,118 +38,64 @@ internal fun LibraryContainerManageScreen(
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onItemClick: (LibraryContainerConfig) -> Unit,
-    pageMenuActions: () -> List<AppManagementMenuAction>,
-    onMoreActions: (LibraryContainerConfig) -> List<AppManagementMenuAction>
+    pageMenuActions: () -> List<Pair<String, () -> Unit>>,
+    onMoreActions: (LibraryContainerConfig) -> List<Pair<String, () -> Unit>>
 ) {
-    val palette = rememberAppManagementPalette()
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    val colors = LocalSemanticColors.current
+    var pageMenuOpen by remember { mutableStateOf(false) }
+
+    HostV5Page(
+        title = "书库容器",
+        onBack = onBack,
+        trailing = {
+            AppOverflowMenuButton(
+                contentDescription = "更多",
+                onClick = { pageMenuOpen = true }
+            )
+        }
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = palette.settings.page,
-            contentColor = palette.settings.primaryText
-        ) {
-            Column(
+        Column(Modifier.fillMaxSize()) {
+            Text(
+                text = "书库容器只用于同步阅读章节缓存，不参与备份、主题、气泡或缓存包同步。阅读时会先读取目录索引，只有命中缓存章节才请求正文。",
+                color = colors.onSurfaceVariant,
+                style = visual.type.caption,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap / 2)
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = density.blockGap / 2),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
             ) {
-                LibraryContainerTopBar(
-                    onBack = onBack,
-                    pageMenuActions = pageMenuActions
-                )
-                Text(
-                    text = "书库容器只用于同步阅读章节缓存，不参与备份、主题、气泡或缓存包同步。阅读时会先读取目录索引，只有命中缓存章节才请求正文。",
-                    color = palette.settings.secondaryText,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, top = 6.dp, end = 16.dp)
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
-                ) {
-                    items(containers, key = { it.id }) { item ->
-                        LibraryContainerCard(
-                            item = item,
-                            isDefault = LibraryContainerManager.selectedId() == item.id,
-                            onClick = { onItemClick(item) },
-                            moreActions = onMoreActions(item)
-                        )
-                    }
+                items(containers, key = { it.id }) { item ->
+                    LibraryContainerCard(
+                        item = item,
+                        isDefault = LibraryContainerManager.selectedId() == item.id,
+                        onClick = { onItemClick(item) },
+                        moreActions = onMoreActions(item)
+                    )
                 }
-                LegadoMiuixActionButton(
-                    text = "添加书库容器",
-                    palette = palette.miuix,
-                    onClick = onAdd,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    primary = true,
-                    cornerRadius = palette.miuix.actionRadius,
-                    minHeight = 46.dp
-                )
             }
+            AppFilledButton(
+                text = "添加书库容器",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap / 2),
+                onClick = onAdd
+            )
         }
     }
-}
 
-@Composable
-private fun LibraryContainerTopBar(
-    onBack: () -> Unit,
-    pageMenuActions: () -> List<AppManagementMenuAction>
-) {
-    val palette = rememberAppManagementPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-            color = Color.Transparent,
-            contentColor = palette.settings.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.settings.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = "书库容器",
-            color = palette.settings.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = palette.settings.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        AppManagementMoreActionButton(
-            actionsProvider = pageMenuActions,
-            palette = palette,
-            contentDescription = "更多"
+    if (pageMenuOpen) {
+        AppMenuSheet(
+            title = "更多",
+            actions = pageMenuActions(),
+            onDismiss = { pageMenuOpen = false }
         )
     }
 }
@@ -168,9 +105,12 @@ private fun LibraryContainerCard(
     item: LibraryContainerConfig,
     isDefault: Boolean,
     onClick: () -> Unit,
-    moreActions: List<AppManagementMenuAction>
+    moreActions: List<Pair<String, () -> Unit>>
 ) {
-    val palette = rememberAppManagementPalette()
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    val colors = LocalSemanticColors.current
+    var menuOpen by remember { mutableStateOf(false) }
     val container = item.container
     val displayName = LibraryContainerManager.displayLabel(item)
     val capacityMb = container.capacityMb.coerceAtLeast(0)
@@ -186,19 +126,23 @@ private fun LibraryContainerCard(
     val lockState = if (item.lockedImported) " · 加密导入" else ""
     val stateText = "状态：${if (container.enabled) "启用" else "禁用"}$lockState · 书源优先 · ${item.sourceUrls.size} 个书源 · $minUpload · $dailyLimit"
 
-    AppManagementCard(
-        palette = palette,
+    AppCard(
         modifier = Modifier
-            .fillMaxWidth(),
-        onClick = onClick,
-        insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+            .fillMaxWidth()
+            .padding(horizontal = density.screenPadding),
+        onClick = onClick
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(density.screenPadding)
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = displayName,
-                    color = palette.settings.primaryText,
-                    fontSize = 16.sp,
+                    color = colors.onSurface,
+                    style = visual.type.body,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -206,24 +150,24 @@ private fun LibraryContainerCard(
                 Spacer(modifier = Modifier.height(5.dp))
                 Text(
                     text = "${container.bucket}/${container.prefix.trim('/')}",
-                    color = palette.settings.secondaryText,
-                    fontSize = 13.sp,
+                    color = colors.onSurfaceVariant,
+                    style = visual.type.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = capacityText,
-                    color = palette.settings.secondaryText,
-                    fontSize = 13.sp,
+                    color = colors.onSurfaceVariant,
+                    style = visual.type.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = stateText,
-                    color = if (container.enabled) palette.settings.accent else palette.settings.secondaryText,
-                    fontSize = 12.sp,
+                    color = if (container.enabled) colors.primary else colors.onSurfaceVariant,
+                    style = visual.type.caption,
                     fontWeight = if (container.enabled) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -233,17 +177,24 @@ private fun LibraryContainerCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "✓",
-                    color = palette.settings.accent,
-                    fontSize = 18.sp,
+                    color = colors.primary,
+                    style = visual.type.body,
                     fontWeight = FontWeight.Bold
                 )
             }
             Spacer(modifier = Modifier.width(10.dp))
-            AppManagementMoreActionButton(
-                actionsProvider = { moreActions },
-                palette = palette,
-                contentDescription = "更多"
+            AppOverflowMenuButton(
+                contentDescription = "更多",
+                onClick = { menuOpen = true }
             )
         }
+    }
+
+    if (menuOpen) {
+        AppMenuSheet(
+            title = displayName,
+            actions = moreActions,
+            onDismiss = { menuOpen = false }
+        )
     }
 }

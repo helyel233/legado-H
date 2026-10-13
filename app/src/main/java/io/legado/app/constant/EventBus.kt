@@ -16,7 +16,6 @@ object EventBus {
     const val APP_FOREGROUND_CHANGED = "appForegroundChanged"
     const val BATTERY_CHANGED = "batteryChanged"
     const val TIME_CHANGED = "timeChanged"
-    const val UP_CONFIG = "upConfig"
     const val VIDEO_SUB_TITLE = "VideoSubTitle"
     const val AUDIO_SUB_TITLE = "audioSubTitle"
     const val AUDIO_STATE = "audioState"
@@ -24,7 +23,6 @@ object EventBus {
     const val AUDIO_BUFFER_PROGRESS = "audioBufferProgress"
     const val AUDIO_SIZE = "audioSize"
     const val AUDIO_SPEED = "audioSpeed"
-    const val NOTIFY_MAIN = "notifyMain"
     const val MAIN_APPEARANCE_KIT_CHANGED = "mainAppearanceKitChanged"
     const val MAIN_THEME_BACKGROUND_CHANGED = "mainThemeBackgroundChanged"
     const val NAVIGATION_BAR_CHANGED = "navigationBarChanged"
@@ -60,5 +58,4 @@ object EventBus {
     const val LIBRARY_CONTAINER_CHANGED = "libraryContainerChanged"
     const val UP_VIDEO_INFO = "upVideoInfo"
     const val AUTO_TASK_SERVICE = "autoTaskService"
-    const val REVIEW_CACHE_SAVED = "reviewCacheSaved"
 }

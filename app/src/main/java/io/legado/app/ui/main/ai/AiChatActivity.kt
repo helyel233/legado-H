@@ -40,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,11 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.lifecycleScope
+import androidx.appcompat.app.AppCompatActivity
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookCharacter
-import io.legado.app.databinding.ActivityAiChatBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.book.characterBookKey
@@ -60,7 +58,9 @@ import io.legado.app.help.character.BookCharacterProfileMeta
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.ui.config.AiWorldBookManageActivity
+import io.legado.app.ui.host.HostAiImageGalleryActivity
+import io.legado.app.ui.host.HostAiWorldBookManageActivity
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.book.character.BookCharacterEditActivity
@@ -72,7 +72,6 @@ import io.legado.app.ui.book.character.compose.CharacterAvatar
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -80,12 +79,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
-    fullScreen = false,
-    imageBg = false
-) {
-
-    override val binding by viewBinding(ActivityAiChatBinding::inflate)
+class AiChatActivity : AppCompatActivity() {
 
     private val viewModel by viewModels<AiChatViewModel>()
     private val historyTimeFormat by lazy { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
@@ -93,11 +87,9 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private var characterPickerGroups by mutableStateOf<List<CharacterPickGroup>>(emptyList())
     private var characterPickerVisible by mutableStateOf(false)
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.composeRoot.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-        )
-        binding.composeRoot.setContent {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
             AiChatRoute(
                 viewModel = viewModel,
                 lifecycleOwner = this,
@@ -275,7 +267,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     }
 
     private fun openImageGallery() {
-        startActivity(android.content.Intent(this, AiImageGalleryActivity::class.java))
+        startActivity(android.content.Intent(this, HostAiImageGalleryActivity::class.java))
     }
 
     private fun selectCompanion(companionId: String) {
@@ -589,7 +581,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     }
 
     private fun openWorldBookManage() {
-        startActivity(Intent(this, AiWorldBookManageActivity::class.java))
+        startActivity(Intent(this, HostAiWorldBookManageActivity::class.java))
     }
 
     private fun activeCompanionWorldBookCount(): Int {

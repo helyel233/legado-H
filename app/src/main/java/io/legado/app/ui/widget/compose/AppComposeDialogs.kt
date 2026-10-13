@@ -142,6 +142,20 @@ fun rememberAppDialogStyle(): AppDialogStyle {
             UiCorner.effectStrokeColor(surfaceBase)
         }
     // 文字色按对话框实际背景明暗推导，而非全局 night 标志，避免深底深字/浅底白字
+    // 形状跟随 V5 形状包（V5 包库是主题唯一真相，颜色已由 V5ThemeSync 同步，
+    // 这里补齐形状）：面板取卡片角、动作按钮取按钮角；胶囊→大半径近似，
+    // 斜切角对对话框形态畸变，回落旧半径。
+    val v5Spec = io.legado.app.uikit.v5.resolve.LayoutResolver.current
+    val v5Scale = v5Spec.shapeScale.coerceIn(io.legado.app.uikit.v5.token.SHAPE_SCALE_RANGE)
+    val panelRadius = when (val c = v5Spec.shapeFamily.card) {
+        is io.legado.app.uikit.v5.token.CornerSpec.Radius -> c.dp * v5Scale
+        else -> context.composePanelRadius()
+    }
+    val actionRadius = when (val c = v5Spec.shapeFamily.button) {
+        is io.legado.app.uikit.v5.token.CornerSpec.Radius -> c.dp * v5Scale
+        is io.legado.app.uikit.v5.token.CornerSpec.Pill -> 100.dp
+        else -> context.composeActionRadius()
+    }
     return AppDialogStyle(
         accent = Color(accent),
         onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
@@ -151,8 +165,8 @@ fun rememberAppDialogStyle(): AppDialogStyle {
         secondaryText = Color(context.secondaryTextColor),
         stroke = Color(stroke),
         danger = Color(ContextCompat.getColor(context, R.color.md_red_500)),
-        panelRadius = context.composePanelRadius(),
-        actionRadius = context.composeActionRadius(),
+        panelRadius = panelRadius,
+        actionRadius = actionRadius,
         bodyFontFamily = FontFamily(context.uiTypeface()),
         titleFontFamily = FontFamily(context.titleTypeface())
     )

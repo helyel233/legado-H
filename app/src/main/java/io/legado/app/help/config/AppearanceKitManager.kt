@@ -521,7 +521,6 @@ object AppearanceKitManager {
                     .getOrDefault(emptyList())
                 if (states.isNotEmpty()) {
                     MainBottomNavConfig.save(states)
-                    postEvent(EventBus.NOTIFY_MAIN, true)
                 }
             }
         }

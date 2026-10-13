@@ -1,35 +1,37 @@
 package io.legado.app.ui.rss.source.edit
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.tabs.TabLayout
+import com.google.android.material.textfield.TextInputLayout
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.RssSource
-import io.legado.app.databinding.ActivityRssSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
@@ -52,7 +54,6 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,20 +61,34 @@ import splitties.views.bottomPadding
 import kotlin.text.isNotEmpty
 
 class RssSourceEditActivity :
-    VMBaseActivity<ActivityRssSourceEditBinding, RssSourceEditViewModel>(),
+    AppCompatActivity(),
     KeyboardToolPop.CallBack,
     VariableDialog.Callback {
 
-    override val binding by viewBinding(ActivityRssSourceEditBinding::inflate)
-    override val viewModel by viewModels<RssSourceEditViewModel>()
-    private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, lifecycleScope, binding.root, this)
-    }
+    private val viewModel by viewModels<RssSourceEditViewModel>()
     private val adapter by lazy { RssSourceEditAdapter() }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val listEntities: ArrayList<EditEntity> = ArrayList()
     private val webViewEntities: ArrayList<EditEntity> = ArrayList()
     private val startEntities: ArrayList<EditEntity> = ArrayList()
+
+    // 顶部配置状态（原 binding 上的 checkbox/spinner 状态字段化）
+    private var enabled by mutableStateOf(true)
+    private var singleUrl by mutableStateOf(false)
+    private var enabledCookieJar by mutableStateOf(false)
+    private var preload by mutableStateOf(false)
+    private var typeIndex by mutableIntStateOf(0)
+    private var articleStyleIndex by mutableIntStateOf(0)
+
+    // 当前选中的 tab
+    private var selectedTab by mutableIntStateOf(0)
+
+    // AndroidView 创建的 RecyclerView 引用（原 binding.recyclerView）
+    private var recyclerView: RecyclerView? = null
+
+    private val rssTypeOptions by lazy { resources.getStringArray(R.array.rss_type).toList() }
+    private val layoutTypeOptions by lazy { resources.getStringArray(R.array.layout_type).toList() }
+
     private val selectDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -91,11 +106,95 @@ class RssSourceEditActivity :
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    private lateinit var softKeyboardTool: KeyboardToolPop
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            RssSourceEditScreen(
+                title = getString(R.string.rss_source_edit),
+                rssTypeOptions = rssTypeOptions,
+                layoutTypeOptions = layoutTypeOptions,
+                enabled = enabled,
+                singleUrl = singleUrl,
+                enabledCookieJar = enabledCookieJar,
+                preload = preload,
+                typeIndex = typeIndex,
+                articleStyleIndex = articleStyleIndex,
+                selectedTab = selectedTab,
+                onBack = { finish() },
+                onEnabledChange = { enabled = it },
+                onSingleUrlChange = { singleUrl = it },
+                onEnabledCookieJarChange = { enabledCookieJar = it },
+                onPreloadChange = { preload = it },
+                onTypeChange = { typeIndex = it },
+                onArticleStyleChange = { articleStyleIndex = it },
+                onTabSelected = ::onTabSelected,
+                onSave = ::save,
+                buildMenuActions = ::buildMenuActions,
+                recyclerViewFactory = ::createRecyclerView,
+            )
+        }
+        // softKeyboardTool 依赖 setContentView 后的 content 根，须在 setV5Content 之后初始化
+        softKeyboardTool = KeyboardToolPop(
+            this,
+            lifecycleScope,
+            findViewById<ViewGroup>(android.R.id.content),
+            this
+        )
         softKeyboardTool.attachToWindow(window)
-        initView()
         viewModel.initData(intent) {
             upSourceView(viewModel.rssSource)
+        }
+    }
+
+    private fun onTabSelected(index: Int) {
+        selectedTab = index
+        setEditEntities(index)
+    }
+
+    private fun createRecyclerView(context: Context): RecyclerView {
+        return RecyclerView(context).apply {
+            setEdgeEffectColor(context.primaryColor)
+            val createSpanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int = when (adapter.getItemViewType(position)) {
+                    EditEntity.ViewType.checkBox -> 1
+                    else -> 2
+                }
+            }
+            if (adapter.editEntityMaxLine < 999) {
+                layoutManager = object : GridLayoutManager(context, 2) {
+                    init {
+                        spanSizeLookup = createSpanSizeLookup
+                    }
+                    override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean, focusedChildVisible: Boolean) = false
+                    override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean) = false
+                }
+            } else {
+                layoutManager = GridLayoutManager(context, 2).apply {
+                    spanSizeLookup = createSpanSizeLookup
+                }
+            }
+            adapter = this@RssSourceEditActivity.adapter
+            val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+                if (newFocus is EditText) {
+                    newFocus.postDelayed({
+                        if (!isDestroyed && !isFinishing) {
+                            sendText("")
+                        }
+                    }, 120)
+                }
+            }
+            globalFocusChangeListener = focusListener
+            viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
+            setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+                val navigationBarHeight = windowInsets.navigationBarHeight
+                val imeHeight = windowInsets.imeHeight
+                view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
+                softKeyboardTool.initialPadding = imeHeight
+                windowInsets
+            }
+            this@RssSourceEditActivity.recyclerView = this
         }
     }
 
@@ -104,6 +203,105 @@ class RssSourceEditActivity :
         if (!LocalConfig.ruleHelpVersionIsLast) {
             showHelp("rssRuleHelp")
         }
+    }
+
+    private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val view = window.decorView.findFocus()
+            if (view is EditText) {
+                result.data?.getStringExtra("text")?.let {
+                    view.setText(it)
+                }
+                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
+                    view.setSelection(it)
+                }
+            } else {
+                toastOnUi(R.string.focus_lost_on_textbox)
+            }
+        }
+    }
+
+    private fun onFullEditClicked() {
+        val view = window.decorView.findFocus()
+        if (view is EditText) {
+            val hint = findParentTextInputLayout(view)?.hint?.toString()
+            val currentText = view.text.toString()
+            val intent = Intent(this, CodeEditActivity::class.java).apply {
+                putExtra("text", currentText)
+                putExtra("title", hint)
+                putExtra("cursorPosition", view.selectionStart)
+            }
+            textEditLauncher.launch(intent)
+        } else {
+            toastOnUi(R.string.please_focus_cursor_on_textbox)
+        }
+    }
+
+    private fun findParentTextInputLayout(view: View): TextInputLayout? {
+        var parent = view.parent
+        while (parent != null && parent !is TextInputLayout) {
+            parent = parent.parent
+        }
+        return parent
+    }
+
+    private fun save() {
+        viewModel.save(getRssSource()) {
+            setResult(RESULT_OK)
+            finish()
+        }
+    }
+
+    private fun debugSource() {
+        viewModel.save(getRssSource()) { source ->
+            startActivity<RssSourceDebugActivity> {
+                putExtra("key", source.sourceUrl)
+            }
+        }
+    }
+
+    private fun login() {
+        viewModel.save(getRssSource()) { source ->
+            startActivity<SourceLoginActivity> {
+                putExtra("type", "rssSource")
+                putExtra("key", source.sourceUrl)
+            }
+        }
+    }
+
+    /**
+     * 构建溢出菜单动作。每次点开菜单时重新构建，保证「登录」可见性与「自动补全」勾选态最新。
+     */
+    private fun buildMenuActions(): List<Pair<String, () -> Unit>> {
+        val list = ArrayList<Pair<String, () -> Unit>>()
+        list.add(getString(R.string.edit_content) to ::onFullEditClicked)
+        list.add(getString(R.string.debug_source) to ::debugSource)
+        if (!getRssSource().loginUrl.isNullOrBlank()) {
+            list.add(getString(R.string.login) to ::login)
+        }
+        list.add(getString(R.string.set_source_variable) to ::setSourceVariable)
+        list.add(getString(R.string.cookie) to {
+            viewModel.clearCookie(getRssSource().sourceUrl)
+        })
+        list.add(
+            getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "" to {
+                viewModel.autoComplete = !viewModel.autoComplete
+            }
+        )
+        list.add(getString(R.string.copy_source) to { sendToClip(GSON.toJson(getRssSource())) })
+        list.add(getString(R.string.paste_source) to { viewModel.pasteSource { upSourceView(it) } })
+        list.add(getString(R.string.import_by_qr_code) to { qrCodeResult.launch() })
+        list.add(getString(R.string.str_share) to { share(GSON.toJson(getRssSource())) })
+        list.add(getString(R.string.qr_share) to {
+            shareWithQr(
+                GSON.toJson(getRssSource()),
+                getString(R.string.share_rss_source),
+                ErrorCorrectionLevel.L
+            )
+        })
+        list.add(getString(R.string.log) to { showDialogFragment<AppLogDialog>() })
+        list.add(getString(R.string.help) to { showHelp("rssRuleHelp") })
+        return list
     }
 
     override fun finish() {
@@ -125,194 +323,32 @@ class RssSourceEditActivity :
 
     override fun onDestroy() {
         globalFocusChangeListener?.let {
-            binding.recyclerView.viewTreeObserver.removeOnGlobalFocusChangeListener(it)
+            recyclerView?.viewTreeObserver?.removeOnGlobalFocusChangeListener(it)
         }
         globalFocusChangeListener = null
         super.onDestroy()
         softKeyboardTool.dismiss()
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.source_edit, menu)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.rssSource?.loginUrl.isNullOrBlank()
-        menu.findItem(R.id.menu_auto_complete)?.isChecked = viewModel.autoComplete
-        return super.onMenuOpened(featureId, menu)
-    }
-
-    private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val view = window.decorView.findFocus()
-            if (view is EditText) {
-                result.data?.getStringExtra("text")?.let {
-                    view.setText(it)
-                }
-                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
-                    view.setSelection(it)
-                }
-            } else {
-                toastOnUi(R.string.focus_lost_on_textbox)
-            }
-        }
-    }
-    private fun onFullEditClicked() {
-        val view = window.decorView.findFocus()
-        if (view is EditText) {
-            val hint = findParentTextInputLayout(view)?.hint?.toString()
-            val currentText = view.text.toString()
-            val intent = Intent(this, CodeEditActivity::class.java).apply {
-                putExtra("text", currentText)
-                putExtra("title", hint)
-                putExtra("cursorPosition", view.selectionStart)
-            }
-            textEditLauncher.launch(intent)
-        }
-        else {
-            toastOnUi(R.string.please_focus_cursor_on_textbox)
-        }
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_fullscreen_edit -> onFullEditClicked()
-
-            R.id.menu_save -> viewModel.save(getRssSource()) {
-                setResult(RESULT_OK)
-                finish()
-            }
-
-            R.id.menu_debug_source -> viewModel.save(getRssSource()) { source ->
-                startActivity<RssSourceDebugActivity> {
-                    putExtra("key", source.sourceUrl)
-                }
-            }
-
-            R.id.menu_login -> viewModel.save(getRssSource()) {
-                startActivity<SourceLoginActivity> {
-                    putExtra("type", "rssSource")
-                    putExtra("key", it.sourceUrl)
-                }
-            }
-
-            R.id.menu_set_source_variable -> setSourceVariable()
-            R.id.menu_clear_cookie -> viewModel.clearCookie(getRssSource().sourceUrl)
-            R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
-            R.id.menu_copy_source -> sendToClip(GSON.toJson(getRssSource()))
-            R.id.menu_qr_code_camera -> qrCodeResult.launch()
-            R.id.menu_paste_source -> viewModel.pasteSource { upSourceView(it) }
-            R.id.menu_share_str -> share(GSON.toJson(getRssSource()))
-            R.id.menu_share_qr -> shareWithQr(
-                GSON.toJson(getRssSource()),
-                getString(R.string.share_rss_source),
-                ErrorCorrectionLevel.L
-            )
-
-            R.id.menu_log -> showDialogFragment<AppLogDialog>()
-            R.id.menu_help -> showHelp("rssRuleHelp")
-        }
-        return super.onCompatOptionsItemSelected(item)
-    }
-
-    private fun initView() {
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_base)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_start)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            setText(R.string.source_tab_list)
-        })
-        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
-            text = "WEB_VIEW"
-        })
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        val createSpanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-            override fun getSpanSize(position: Int): Int = when (adapter.getItemViewType(position)) {
-                EditEntity.ViewType.checkBox -> 1 //CheckBox 占1个span
-                else -> 2 //占2个span（整行）
-            }
-        }
-        val gridLayoutManager = if (adapter.editEntityMaxLine < 999) {
-            object : GridLayoutManager(this, 2) {
-                init {
-                    spanSizeLookup = createSpanSizeLookup
-                }
-                override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean, focusedChildVisible: Boolean) = false
-                override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean) = false
-            }
-        } else {
-            GridLayoutManager(this, 2).apply {
-                spanSizeLookup = createSpanSizeLookup
-            }
-        }
-        binding.recyclerView.layoutManager = gridLayoutManager
-        binding.recyclerView.adapter = adapter
-        val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
-            if (newFocus is EditText) {
-                newFocus.postDelayed({
-                    if (!isDestroyed && !isFinishing) {
-                        sendText("")
-                    }
-                }, 120)
-            }
-        }
-        globalFocusChangeListener = focusListener
-        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
-        binding.tabLayout.setBackgroundColor(backgroundColor)
-        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
-        binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabReselected(tab: TabLayout.Tab?) {
-
-            }
-
-            override fun onTabUnselected(tab: TabLayout.Tab?) {
-
-            }
-
-            override fun onTabSelected(tab: TabLayout.Tab?) {
-                setEditEntities(tab?.position)
-            }
-        })
-        binding.recyclerView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
-            val navigationBarHeight = windowInsets.navigationBarHeight
-            val imeHeight = windowInsets.imeHeight
-            view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
-            softKeyboardTool.initialPadding = imeHeight
-            windowInsets
-        }
-    }
-
     private fun setEditEntities(tabPosition: Int?) {
-        when (tabPosition) {
-            1 -> adapter.editEntities = startEntities
-            2 -> adapter.editEntities = listEntities
-            3 -> adapter.editEntities = webViewEntities
-            else -> adapter.editEntities = sourceEntities
+        adapter.editEntities = when (tabPosition) {
+            1 -> startEntities
+            2 -> listEntities
+            3 -> webViewEntities
+            else -> sourceEntities
         }
-        binding.recyclerView.scrollToPosition(0)
+        recyclerView?.scrollToPosition(0)
         window.decorView.rootView.clearFocus()
     }
 
     private fun upSourceView(rssSource: RssSource?) {
         val rs = rssSource ?: RssSource()
-        rs.let {
-            binding.cbIsEnable.isChecked = rs.enabled
-            binding.cbSingleUrl.isChecked = rs.singleUrl
-            binding.cbIsEnableCookie.isChecked = rs.enabledCookieJar == true
-            binding.cbIsEnablePreload.isChecked = rs.preload
-            if (rs.type !in 0..<binding.spType.count) {
-                rs.type = 0
-            }
-            binding.spType.setSelection(rs.type)
-            if (rs.articleStyle !in 0..<binding.lyType.count) {
-                rs.articleStyle = 0
-            }
-            binding.lyType.setSelection(rs.articleStyle)
-        }
+        enabled = rs.enabled
+        singleUrl = rs.singleUrl
+        enabledCookieJar = rs.enabledCookieJar == true
+        preload = rs.preload
+        typeIndex = if (rs.type in 0..<rssTypeOptions.size) rs.type else 0
+        articleStyleIndex = if (rs.articleStyle in 0..<layoutTypeOptions.size) rs.articleStyle else 0
         sourceEntities.clear()
         sourceEntities.apply {
             add(EditEntity("sourceName", rs.sourceName, R.string.source_name))
@@ -367,13 +403,13 @@ class RssSourceEditActivity :
                 )
             )
             add(
-                 EditEntity(
-                     "showWebLog",
-                     rs.showWebLog.toString(),
-                     R.string.load_with_web_log,
-                     EditEntity.ViewType.checkBox
-                 )
-             )
+                EditEntity(
+                    "showWebLog",
+                    rs.showWebLog.toString(),
+                    R.string.load_with_web_log,
+                    EditEntity.ViewType.checkBox
+                )
+            )
             add(
                 EditEntity(
                     "cacheFirst",
@@ -395,18 +431,18 @@ class RssSourceEditActivity :
                 )
             )
         }
-        binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
+        selectedTab = 0
         setEditEntities(0)
     }
 
     private fun getRssSource(): RssSource {
         val source = viewModel.rssSource?.copy() ?: RssSource()
-        source.enabled = binding.cbIsEnable.isChecked
-        source.singleUrl = binding.cbSingleUrl.isChecked
-        source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.preload = binding.cbIsEnablePreload.isChecked
-        source.type = binding.spType.selectedItemPosition
-        source.articleStyle = binding.lyType.selectedItemPosition
+        source.enabled = enabled
+        source.singleUrl = singleUrl
+        source.enabledCookieJar = enabledCookieJar
+        source.preload = preload
+        source.type = typeIndex
+        source.articleStyle = articleStyleIndex
         sourceEntities.forEach {
             it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {
@@ -546,10 +582,11 @@ class RssSourceEditActivity :
             }
             if (adapter.editEntityMaxLine >= 999) {
                 view.post {
+                    val rv = recyclerView ?: return@post
                     val editTextLocation = IntArray(2)
                     view.getLocationOnScreen(editTextLocation)
                     val recyclerViewLocation = IntArray(2)
-                    binding.recyclerView.getLocationOnScreen(recyclerViewLocation)
+                    rv.getLocationOnScreen(recyclerViewLocation)
                     val layout = view.layout
                     if (layout != null) {
                         val line = layout.getLineForOffset(end)
@@ -558,12 +595,12 @@ class RssSourceEditActivity :
                         val cursorYOnScreen = editTextLocation[1] + cursorYInEditText
                         // 光标相对于RecyclerView的位置
                         val cursorYInRecyclerView = cursorYOnScreen - recyclerViewLocation[1]
-                        val recyclerViewBottom = binding.recyclerView.height - 120 //考虑键盘的经验值
+                        val recyclerViewBottom = rv.height - 120 //考虑键盘的经验值
                         // 如果光标不在可见范围内，则滚动到光标位置
                         if (cursorYInRecyclerView !in 0..recyclerViewBottom) {
                             val scrollDistance = cursorYInRecyclerView - recyclerViewBottom / 3
-                            if (scrollDistance > 0 && binding.recyclerView.canScrollVertically(1) || scrollDistance < 0 && binding.recyclerView.canScrollVertically(-1)) {
-                                binding.recyclerView.smoothScrollBy(0, scrollDistance)
+                            if (scrollDistance > 0 && rv.canScrollVertically(1) || scrollDistance < 0 && rv.canScrollVertically(-1)) {
+                                rv.smoothScrollBy(0, scrollDistance)
                             }
                         }
                     }

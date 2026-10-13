@@ -410,7 +410,11 @@ private fun DiscoverySuiteEmptyState(
 }
 
 @Composable
-private fun DiscoverySuiteWidgetSection(
+/**
+ * 单个套件控件渲染（标题 + 按类型分发）。自包含、无滚动容器依赖，
+ * internal 供主页 V5 壳（HostHomeSuiteSection）按控件粒度复用。
+ */
+internal fun DiscoverySuiteWidgetSection(
     widget: DiscoverySuiteWidget,
     books: List<SearchBook>,
     rankedBooks: Map<String, List<SearchBook>>,
@@ -1270,7 +1274,8 @@ private fun SearchBook.suiteStableKey(): String {
     }
 }
 
-private fun BookshelfListRenderConfig.withSuiteOpacityMultiplier(
+/** 套件透明度倍率换算（internal 供主页 V5 壳的控件渲染复用）。 */
+internal fun BookshelfListRenderConfig.withSuiteOpacityMultiplier(
     context: Context,
     multiplier: Float
 ): BookshelfListRenderConfig {

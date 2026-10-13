@@ -10,7 +10,6 @@ import android.view.animation.Interpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.isVisible
 import androidx.core.view.doOnLayout
 import io.legado.app.R
@@ -72,7 +71,9 @@ internal class MainAiFloatingBallController(
         return FrameLayout(context).apply {
             elevation = context.resources.getDimension(R.dimen.main_search_button_elevation)
             background = shellDrawable(true)
-            layoutParams = ConstraintLayout.LayoutParams(size, size)
+            // 旧壳容器是 ConstraintLayout；新壳（AppHostActivity）用 FrameLayout 覆盖层，
+            // 统一用通用 LayoutParams（定位全靠 x/y，不依赖父容器约束）
+            layoutParams = ViewGroup.LayoutParams(size, size)
             addView(ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(iconPadding, iconPadding, iconPadding, iconPadding)

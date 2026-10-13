@@ -1,21 +1,14 @@
 package io.legado.app.ui.rss.subscription
 
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RuleSub
-import io.legado.app.databinding.ActivityRuleSubBinding
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
@@ -27,7 +20,7 @@ import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.host.setV5Content
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
@@ -38,81 +31,51 @@ import kotlinx.coroutines.withContext
 /**
  * 规则订阅管理界面
  */
-class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
+class RuleSubActivity : AppCompatActivity(),
     RuleSubEditComposeDialog.Callback {
-
-    override val binding by viewBinding(ActivityRuleSubBinding::inflate)
 
     private val ruleSubsState = mutableStateListOf<RuleSub>()
     private val searchQueryState = mutableStateOf("")
     private val typeLabels by lazy { resources.getStringArray(R.array.rule_type).toList() }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initComposeContent()
-        initData()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.source_subscription, menu)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_add -> addSubscription()
-        }
-        return super.onCompatOptionsItemSelected(item)
-    }
-
-    private fun initComposeContent() {
-        binding.titleBar.visibility = View.GONE
-        val container = binding.recyclerView.parent as? ViewGroup ?: return
-        val index = container.indexOfChild(binding.recyclerView)
-        container.removeView(binding.recyclerView)
-        container.removeView(binding.tvEmptyMsg)
-        val cv = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setContent {
-                val filteredItems = filterRuleSubs(searchQueryState.value)
-                AppManagementScaffold(
-                    title = getString(R.string.rule_subscription),
-                    selectedCount = 0,
-                    totalCount = filteredItems.size,
-                    searchQuery = searchQueryState.value,
-                    searchHint = getString(R.string.search),
-                    onSearchChange = { searchQueryState.value = it },
-                    topActions = listOf(
-                        AppManagementAction(
-                            text = getString(R.string.add),
-                            iconRes = R.drawable.ic_add,
-                            onClick = ::addSubscription
-                        )
-                    ),
-                    onBack = { finish() }
-                ) {
-                    RuleSubScreen(
-                        subscriptions = filteredItems,
-                        typeLabels = typeLabels,
-                        emptyMessage = if (searchQueryState.value.isBlank()) {
-                            getString(R.string.rule_sub_empty_msg)
-                        } else {
-                            getString(R.string.search_result)
-                        },
-                        dragEnabled = searchQueryState.value.isBlank(),
-                        onOpen = ::openSubscription,
-                        onEdit = ::editSubscription,
-                        ruleSubMenuActions = ::ruleSubMenuActions,
-                        onMoveBy = ::moveSubscriptionBy,
-                        onMoveFinished = ::persistSubscriptionOrder
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            val filteredItems = filterRuleSubs(searchQueryState.value)
+            AppManagementScaffold(
+                title = getString(R.string.rule_subscription),
+                selectedCount = 0,
+                totalCount = filteredItems.size,
+                searchQuery = searchQueryState.value,
+                searchHint = getString(R.string.search),
+                onSearchChange = { searchQueryState.value = it },
+                topActions = listOf(
+                    AppManagementAction(
+                        text = getString(R.string.add),
+                        iconRes = R.drawable.ic_add,
+                        onClick = ::addSubscription
                     )
-                }
+                ),
+                onBack = { finish() }
+            ) {
+                RuleSubScreen(
+                    subscriptions = filteredItems,
+                    typeLabels = typeLabels,
+                    emptyMessage = if (searchQueryState.value.isBlank()) {
+                        getString(R.string.rule_sub_empty_msg)
+                    } else {
+                        getString(R.string.search_result)
+                    },
+                    dragEnabled = searchQueryState.value.isBlank(),
+                    onOpen = ::openSubscription,
+                    onEdit = ::editSubscription,
+                    ruleSubMenuActions = ::ruleSubMenuActions,
+                    onMoveBy = ::moveSubscriptionBy,
+                    onMoveFinished = ::persistSubscriptionOrder
+                )
             }
         }
-        container.addView(cv, index)
+        initData()
     }
 
     private fun initData() {

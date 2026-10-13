@@ -1,25 +1,20 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
-import android.view.ViewGroup
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityS3ContainerManageBinding
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.lib.cloud.S3CloudStorageBackend
 import io.legado.app.lib.cloud.S3Config
 import io.legado.app.lib.cloud.S3Container
 import io.legado.app.lib.cloud.S3ContainerScope
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,45 +22,30 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
 
-class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>() {
-
-    override val binding by viewBinding(ActivityS3ContainerManageBinding::inflate)
+class S3ContainerManageActivity : AppCompatActivity() {
 
     private val containersState = mutableStateOf<List<S3Container>>(emptyList())
     private var _waitDialog: WaitDialog? = null
     private val waitDialog: WaitDialog
         get() = _waitDialog ?: WaitDialog(this).also { _waitDialog = it }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initComposeContent()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            S3ContainerManageScreen(
+                containers = containersState.value,
+                onBack = { finish() },
+                onAdd = { showEditDialog(null) },
+                onItemClick = { showEditDialog(it) },
+                onMoreActions = ::containerActions
+            )
+        }
         reload()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         _waitDialog?.dismiss()
-    }
-
-    private fun initComposeContent() {
-        val container = binding.root as? ViewGroup ?: return
-        container.removeAllViews()
-        val cv = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setContent {
-                S3ContainerManageScreen(
-                    containers = containersState.value,
-                    onBack = { finish() },
-                    onAdd = { showEditDialog(null) },
-                    onItemClick = { showEditDialog(it) },
-                    onMoreActions = ::containerActions
-                )
-            }
-        }
-        container.addView(cv)
     }
 
     private fun reload() {
@@ -163,7 +143,7 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
         return newItem
     }
 
-    private fun containerActions(item: S3Container): List<AppManagementMenuAction> {
+    private fun containerActions(item: S3Container): List<Pair<String, () -> Unit>> {
         val actions = listOf(
             Action.EDIT,
             Action.TEST,
@@ -173,10 +153,7 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
             Action.DELETE
         )
         return actions.map { action ->
-            AppManagementMenuAction(
-                text = getString(action.titleRes),
-                danger = action == Action.DELETE
-            ) {
+            getString(action.titleRes) to {
                 when (action) {
                     Action.EDIT -> showEditDialog(item)
                     Action.TEST -> testConnection(item)

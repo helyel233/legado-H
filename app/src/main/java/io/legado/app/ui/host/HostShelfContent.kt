@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.border
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.asFlow
@@ -123,6 +124,10 @@ class HostShelfContent : AppContent {
     override fun Content(scope: ContentScope) {
         val context = LocalContext.current
         var groupId by remember { mutableStateOf(BookGroup.IdRoot) }
+        // 分组页系统返回键先回到分组列表，而不是退出到桌面（台账 #35-4）
+        androidx.activity.compose.BackHandler(enabled = groupId != BookGroup.IdRoot) {
+            groupId = BookGroup.IdRoot
+        }
         var layout by remember { mutableStateOf(context.getPrefInt(PreferKey.bookshelfLayout, 3)) }
         // 设置弹层改动（排序/样式等非 state 偏好）后触发数据重查与重组
         var refresh by remember { mutableStateOf(0) }
@@ -269,35 +274,19 @@ class HostShelfContent : AppContent {
                                 .map { it.display.toMinimalBook() },
                             onlyUpdateRead = false,
                         )
-                        "addLocal" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.book.import.local.ImportBookActivity::class.java)
-                        )
-                        "addRemote" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.book.import.remote.RemoteBookActivity::class.java)
-                        )
+                        "addLocal" -> HostImportBookActivity.start(context)
+                        "addRemote" -> HostRemoteBookActivity.start(context)
                         "addUrl" -> addUrlOpen = true
-                        "manage" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.book.manage.BookshelfManageActivity::class.java)
-                                .putExtra("groupId", groupId)
-                        )
+                        "manage" -> HostBookshelfManageActivity.start(context, groupId)
                         "groupManage" -> groupSheetOpen = true
-                        "tagManage" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookshelfTagManageActivity::class.java)
-                                .putExtra("groupId", groupId)
-                        )
+                        "tagManage" -> HostBookshelfTagManageActivity.start(context, groupId)
                         "cache" -> HostCacheActivity.start(context, groupId)
                         "layoutConfig" -> settingsSheetOpen = true
-                        "librarySearch" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.main.librarysearch.LibrarySearchActivity::class.java)
-                        )
+                        "librarySearch" -> HostLibrarySearchActivity.start(context)
                         // 2026-10-12 功能盘点修复：以下三项此前无 handler（点击无响应的死菜单）
                         "search" -> HostSearchActivity.start(context)
-                        "collection" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.BookCollectionActivity::class.java)
-                        )
-                        "smartGroup" -> context.startActivity(
-                            android.content.Intent(context, io.legado.app.ui.main.bookshelf.smartgroup.SmartGroupRuleActivity::class.java)
-                        )
+                        "collection" -> HostBookCollectionActivity.start(context, 0L)
+                        "smartGroup" -> HostSmartGroupRuleActivity.start(context)
                         "log" -> HostLogActivity.start(context)
                     }
                 },
@@ -343,11 +332,14 @@ class HostShelfContent : AppContent {
 @Composable
 private fun BackToRootRow(scope: ContentScope, onClick: () -> Unit) {
     val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
+    val shape = scope.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .background(colors.primary.copy(alpha = 0.12f), scope.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON))
+            // 背景 图主题下 0.12 太透（台账 #35-2）：实底 + 描边 + 保留主题色文字
+            .background(colors.surface.copy(alpha = 0.82f), shape)
+            .border(1.dp, colors.primary.copy(alpha = 0.45f), shape)
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() }
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center,
@@ -431,13 +423,13 @@ private fun ShelfMenuSheet(
             Text("书架菜单", style = scope.type.title, color = colors.onSurface)
             Spacer(Modifier.height(d.blockGap))
 
-            MenuSection(scope, "书籍") {
+            MenuSection(scope, "书籍", tint = colors.primary) {
                 MenuItem(scope, "search", "搜索") { onAction(it) }
                 MenuItem(scope, "addLocal", "导入本地书籍") { onAction(it) }
                 MenuItem(scope, "addRemote", "添加远程书籍") { onAction(it) }
                 MenuItem(scope, "addUrl", "添加网址") { onAction(it) }
             }
-            MenuSection(scope, "管理") {
+            MenuSection(scope, "管理", tint = colors.secondary) {
                 MenuItem(scope, "manage", "书架管理") { onAction(it) }
                 MenuItem(scope, "groupManage", "分组管理") { onAction(it) }
                 MenuItem(scope, "collection", "书架集合") { onAction(it) }
@@ -445,11 +437,11 @@ private fun ShelfMenuSheet(
                 // 2026-10-12 功能盘点复活：智能分组入口随旧书架菜单丢失（台账 #6b）
                 MenuItem(scope, "smartGroup", "智能分组") { onAction(it) }
             }
-            MenuSection(scope, "更新与缓存") {
+            MenuSection(scope, "更新与缓存", tint = colors.warning) {
                 MenuItem(scope, "updateToc", "刷新目录") { onAction(it) }
                 MenuItem(scope, "cache", "缓存与导出") { onAction(it) }
             }
-            MenuSection(scope, "布局与工具") {
+            MenuSection(scope, "布局与工具", tint = colors.success) {
                 MenuItem(scope, "layoutConfig", "布局设置") { onAction(it) }
                 MenuItem(scope, "librarySearch", "书库搜索") { onAction(it) }
                 MenuItem(scope, "log", "运行日志") { onAction(it) }
@@ -458,10 +450,22 @@ private fun ShelfMenuSheet(
     }
 }
 
+/** 分节色块（台账 #35-3）：每类区域一块低透明度彩色圆角卡，与弹层底区分。 */
 @Composable
-private fun MenuSection(scope: ContentScope, title: String, content: @Composable () -> Unit) {
+private fun MenuSection(
+    scope: ContentScope,
+    title: String,
+    tint: androidx.compose.ui.graphics.Color,
+    content: @Composable () -> Unit,
+) {
     val colors = io.legado.app.uikit.v5.runtime.LocalSemanticColors.current
-    Column {
+    val shape = scope.shape(io.legado.app.uikit.v5.token.ShapeKind.CARD)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint.copy(alpha = 0.14f), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
         Text(
             title,
             style = scope.type.caption,
@@ -469,8 +473,8 @@ private fun MenuSection(scope: ContentScope, title: String, content: @Composable
             modifier = Modifier.padding(bottom = 4.dp),
         )
         content()
-        Spacer(Modifier.height(8.dp))
     }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable

@@ -81,7 +81,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_HOMEPAGE),
                             onCheckedChange = { checked ->
                                 MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_HOMEPAGE, checked)
-                                postEvent(EventBus.NOTIFY_MAIN, true)
                             },
                             searchKeys = listOf("首页", "homepage", "底部导航", "底部导航栏")
                         ),
@@ -92,7 +91,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_READ_RECORD),
                             onCheckedChange = { checked ->
                                 MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_READ_RECORD, checked)
-                                postEvent(EventBus.NOTIFY_MAIN, true)
                             },
                             searchKeys = listOf("统计", "stats", "底部导航", "底部导航栏")
                         ),
@@ -103,7 +101,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_RSS),
                             onCheckedChange = { checked ->
                                 MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_RSS, checked)
-                                postEvent(EventBus.NOTIFY_MAIN, true)
                             },
                             searchKeys = listOf("订阅", "rss", "底部导航", "底部导航栏")
                         )

@@ -98,6 +98,18 @@ fun ThemeEditorSheet(
     val texturePicker = picker { path ->
         onUpdate(spec.copy(texture = io.legado.app.theme.pack.ThemeTexture(path = path, opacity = spec.texture?.opacity ?: 0.06f)))
     }
+    // 分组封面库：多选图片批量拷入（kind=groupcover），启用后书架分组封面随机取图
+    val groupCoverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        val paths = uris.mapNotNull { uri ->
+            io.legado.app.ui.host.pack.V5PackageStore.importAsset(uri, spec.id, "groupcover")
+        }
+        if (paths.isNotEmpty()) {
+            onUpdate(spec.copy(groupCovers = spec.groupCovers + paths, groupCoversEnabled = true))
+        }
+    }
 
     AppBottomSheet(onDismiss = onDismiss) {
         Column(
@@ -159,6 +171,36 @@ fun ThemeEditorSheet(
                         onUpdate(spec.copy(texture = tex.copy(opacity = it)))
                     }
                 }
+            }
+            EditSection("分组封面库") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("启用分组封面随机", style = visual.type.body, color = colors.onSurface)
+                        Text(
+                            "书架各分组封面从库内图片按分组固定分配",
+                            style = visual.type.caption,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    AppSwitch(
+                        checked = spec.groupCoversEnabled && spec.groupCovers.isNotEmpty(),
+                        onCheckedChange = { checked ->
+                            if (spec.groupCovers.isNotEmpty()) {
+                                onUpdate(spec.copy(groupCoversEnabled = checked))
+                            }
+                        },
+                    )
+                }
+                AssetRow(
+                    "封面库",
+                    if (spec.groupCovers.isEmpty()) "空（点此多选图片添加）" else "${spec.groupCovers.size} 张（点此继续添加）",
+                    onClick = { groupCoverPicker.launch("image/*") },
+                    onClear = { onUpdate(spec.copy(groupCovers = emptyList(), groupCoversEnabled = false)) },
+                )
             }
             Spacer(Modifier.height(d.screenPadding))
         }

@@ -145,7 +145,7 @@ private fun HostDiscoverBody(scope: ContentScope) {
 
     fun openExplore(targetSourceUrl: String, title: String, exploreUrl: String) {
         if (exploreUrl.isBlank()) return
-        context.startActivity<io.legado.app.ui.book.explore.ExploreShowActivity> {
+        context.startActivity<HostExploreShowActivity> {
             putExtra("exploreName", title)
             putExtra("sourceUrl", targetSourceUrl)
             putExtra("exploreUrl", exploreUrl)
@@ -264,7 +264,7 @@ private fun HostDiscoverBody(scope: ContentScope) {
                 supporting = stringResource(R.string.v5_explore_no_sources_supporting),
                 actionLabel = stringResource(R.string.v5_explore_manage_sources),
                 onAction = {
-                    context.startActivity<io.legado.app.ui.book.source.manage.BookSourceActivity>()
+                    io.legado.app.ui.host.HostBookSourceManageActivity.start(context)
                 },
             )
 
@@ -398,7 +398,7 @@ private fun HostDiscoverBody(scope: ContentScope) {
             },
             onManage = {
                 HostExploreContentStatic.openPicker = false
-                context.startActivity<io.legado.app.ui.book.source.manage.BookSourceActivity>()
+                io.legado.app.ui.host.HostBookSourceManageActivity.start(context)
             },
             onDismiss = { HostExploreContentStatic.openPicker = false },
         )

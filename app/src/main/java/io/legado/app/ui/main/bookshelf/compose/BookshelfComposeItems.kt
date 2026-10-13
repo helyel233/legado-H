@@ -35,6 +35,7 @@ import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
+import io.legado.app.uikit.v5.components.appRowCard
 import io.legado.app.utils.toTimeAgo
 
 sealed interface BookshelfItemUi {
@@ -160,14 +161,17 @@ fun BookshelfGridItem(
     val showBookName = AppConfig.showBookname
     val titleFontFamily = visual.type.title.fontFamily ?: FontFamily.Default
     val titleColor = v5Colors.onSurface
+    // 分组卡：封面多为浅色占位图，加半透明卡片底与背景图区分（台账 #35-1）
+    val isFolder = item is BookshelfFolderItemUi
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (isFolder) Modifier.appRowCard() else Modifier)
             .combinedClickable(
                 onClick = { onClick(item) },
                 onLongClick = { onLongClick(item) }
             )
-            .padding(4.dp),
+            .padding(if (isFolder) 6.dp else 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(

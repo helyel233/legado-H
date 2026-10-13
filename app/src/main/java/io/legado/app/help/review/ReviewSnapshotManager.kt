@@ -707,10 +707,6 @@ object ReviewSnapshotManager {
         val chapterHasSnapshot = buttons.any { ReviewSnapshotStore.has(book, chapter, it.src) }
         if (chapterHasSnapshot) {
             cachedReviewChaptersMap.computeIfAbsent(bookUrl) { mutableSetOf() }.add(chapter.url)
-            io.legado.app.utils.postEvent(
-                io.legado.app.constant.EventBus.REVIEW_CACHE_SAVED,
-                Triple(book.bookUrl, chapter.url, true)
-            )
         }
         // 章评/书评 tab 补充快照：每章一份章评、整本一份书评；失败只记日志不影响任务结论
         captureSupplementTabs(

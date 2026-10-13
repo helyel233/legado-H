@@ -27,7 +27,6 @@ import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityAppUiConfigBinding
 import io.legado.app.lib.theme.UiKitThemeBridge
 import io.legado.app.ui.book.read.config.ReaderAssetManageActivity
-import io.legado.app.ui.navigation.AppRoute
 import io.legado.app.uikit.components.AppButton
 import io.legado.app.uikit.components.AppButtonSize
 import io.legado.app.uikit.components.AppButtonStyle

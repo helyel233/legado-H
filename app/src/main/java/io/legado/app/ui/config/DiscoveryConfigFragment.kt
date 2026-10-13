@@ -72,7 +72,7 @@ class DiscoveryConfigFragment : ComposeSettingFragment() {
         when (key) {
             PreferKey.discoveryPageMode,
             PreferKey.modernDiscoveryPage,
-            PreferKey.discoveryPageLayout -> postEvent(EventBus.NOTIFY_MAIN, false)
+            PreferKey.discoveryPageLayout -> Unit
         }
     }
 

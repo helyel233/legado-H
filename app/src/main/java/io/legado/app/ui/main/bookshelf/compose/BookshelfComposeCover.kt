@@ -38,8 +38,21 @@ fun BookshelfComposeCover(
         )
         return
     }
-    val coverRequest = remember(item.coverIdentityKey()) {
-        item.toCoverRequest()
+    // 分组封面库（主题包字段）：启用且库非空时，按分组 ID 稳定随机取一张
+    val themeSpec = io.legado.app.uikit.v5.resolve.ThemeResolver.activeTheme
+    val groupCoverOverride = if (
+        item is BookshelfFolderItemUi &&
+        themeSpec.groupCoversEnabled &&
+        themeSpec.groupCovers.isNotEmpty()
+    ) {
+        themeSpec.groupCovers[
+            kotlin.math.abs(item.group.groupId.hashCode()) % themeSpec.groupCovers.size
+        ]
+    } else {
+        null
+    }
+    val coverRequest = remember(item.coverIdentityKey(), groupCoverOverride) {
+        item.toCoverRequest(overridePath = groupCoverOverride)
     }
     BookCoverImage(
         path = coverRequest.path,
@@ -68,9 +81,13 @@ private data class BookshelfCoverRequest(
 )
 
 private fun BookshelfItemUi.toCoverRequest(): BookshelfCoverRequest {
+    return toCoverRequest(overridePath = null)
+}
+
+private fun BookshelfItemUi.toCoverRequest(overridePath: String?): BookshelfCoverRequest {
     return when (this) {
         is BookshelfBookItemUi -> display.toCoverRequest()
-        is BookshelfFolderItemUi -> group.toCoverRequest()
+        is BookshelfFolderItemUi -> group.toCoverRequest(overridePath)
         else -> throw IllegalStateException()
     }
 }
@@ -140,14 +157,15 @@ private fun BookShelfDisplay.toCoverRequest(): BookshelfCoverRequest {
     )
 }
 
-private fun BookGroup.toCoverRequest(): BookshelfCoverRequest {
+private fun BookGroup.toCoverRequest(overridePath: String? = null): BookshelfCoverRequest {
     return buildCoverRequest(
-        path = cover,
+        path = overridePath ?: cover,
         name = groupName,
         author = null,
         sourceOrigin = null,
         preferThumb = true,
-        forcePath = false,
+        // 库图是本地文件，走 forcePath 直读；分组自身封面保持原判定
+        forcePath = overridePath != null,
         allowNameOverlay = true,
     )
 }

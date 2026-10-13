@@ -29,6 +29,9 @@ data class ThemePackageSpec(
     val basedOn: String? = null,
     /** V5 P3: 纸张/噪点纹理叠层（可选）。缺字段 = 无纹理，v1 包解析不受影响。 */
     val texture: ThemeTexture? = null,
+    /** 分组封面库：启用后书架分组封面从库中按分组稳定随机取图（缺字段 = 未启用）。 */
+    val groupCovers: List<String> = emptyList(),
+    val groupCoversEnabled: Boolean = false,
 ) {
 
     val strategy: PaletteStrategy

@@ -23,9 +23,12 @@ import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.ui.main.ai.AiModelConfig
 import io.legado.app.ui.main.ai.AiMcpServerConfig
-import io.legado.app.ui.main.ai.AiImageGalleryActivity
+import io.legado.app.ui.host.HostAiImageGalleryActivity
 import io.legado.app.ui.main.ai.AiSkillConfig
 import io.legado.app.ui.file.FileManageActivity
+import io.legado.app.ui.host.HostAiImageProviderManageActivity
+import io.legado.app.ui.host.HostAiProviderManageActivity
+import io.legado.app.ui.host.HostAiWorldBookManageActivity
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
@@ -177,7 +180,7 @@ class AiConfigFragment : ComposeSettingFragment() {
                                 "${worldBooks.count { it.enabled }}/${worldBooks.size} 启用 · ${worldBooks.sumOf { it.entries.size }} 条目"
                             },
                             onClick = {
-                                startActivity(Intent(requireContext(), AiWorldBookManageActivity::class.java))
+                                startActivity(Intent(requireContext(), HostAiWorldBookManageActivity::class.java))
                             }
                         ),
                         SettingActionSpec(
@@ -203,7 +206,7 @@ class AiConfigFragment : ComposeSettingFragment() {
                             title = getString(R.string.ai_image_gallery),
                             summary = getString(R.string.ai_image_gallery_summary),
                             onClick = {
-                                startActivity(Intent(requireContext(), AiImageGalleryActivity::class.java))
+                                startActivity(Intent(requireContext(), HostAiImageGalleryActivity::class.java))
                             }
                         ),
                         SettingActionSpec(
@@ -219,7 +222,7 @@ class AiConfigFragment : ComposeSettingFragment() {
                                 )
                             },
                             onClick = {
-                                startActivity(Intent(requireContext(), AiImageProviderManageActivity::class.java))
+                                startActivity(Intent(requireContext(), HostAiImageProviderManageActivity::class.java))
                             }
                         )
                     )
@@ -240,7 +243,7 @@ class AiConfigFragment : ComposeSettingFragment() {
                                 }
                             },
                             onClick = {
-                                startActivity(Intent(requireContext(), AiProviderManageActivity::class.java))
+                                startActivity(Intent(requireContext(), HostAiProviderManageActivity::class.java))
                             }
                         )
                     )
@@ -339,10 +342,11 @@ class AiConfigFragment : ComposeSettingFragment() {
 
     private fun openAiWorkspace() {
         val root = File(requireContext().filesDir, "ai_workspace").apply { mkdirs() }
-        startActivity(
-            Intent(requireContext(), FileManageActivity::class.java)
-                .putExtra(FileManageActivity.EXTRA_ROOT_PATH, root.absolutePath)
-                .putExtra(FileManageActivity.EXTRA_TITLE, "AI 工作区")
+        // P4-3 迁移：AI 工作区走 V5 文件管理页（HostFileManageActivity）
+        io.legado.app.ui.host.HostFileManageActivity.start(
+            requireContext(),
+            rootPath = root.absolutePath,
+            title = "AI 工作区",
         )
     }
 
@@ -1009,9 +1013,6 @@ class AiConfigFragment : ComposeSettingFragment() {
             AppConfig.aiAssistantEnabled = false
         }
         refreshSettings()
-        if (notifyMain || (!canEnable && storedEnabled)) {
-            postEvent(EventBus.NOTIFY_MAIN, false)
-        }
     }
 
 }

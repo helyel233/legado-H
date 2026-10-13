@@ -1,7 +1,6 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context=".ui.main.MainActivity"
     tools:ignore="AlwaysShowAction">
 
     <group android:id="@+id/menu_group_on_line">

@@ -53,6 +53,8 @@ fun AppListItem(
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     dense: Boolean = false,
+    /** 行卡片底（surface 72%）。已在卡片/弹窗面板内时传 false 避免双层底。 */
+    card: Boolean = true,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
@@ -64,6 +66,7 @@ fun AppListItem(
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
+            .then(if (card) Modifier.appRowCard() else Modifier)
             .then(
                 if (onClick != null) Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },

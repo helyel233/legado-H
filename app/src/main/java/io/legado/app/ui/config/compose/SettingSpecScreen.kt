@@ -32,6 +32,7 @@ import io.legado.app.uikit.v5.components.AppSectionHeader
 import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppRowWithSwitch
 import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.components.appRowCard
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import kotlin.math.roundToInt
@@ -237,6 +238,7 @@ private fun SettingSliderRowV5(item: SettingSliderSpec) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .appRowCard()
             .defaultMinSize(minHeight = 72.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {

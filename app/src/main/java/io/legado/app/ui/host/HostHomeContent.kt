@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +39,9 @@ import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.main.homepage.HomepageModuleUi
 import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppGroup
+import io.legado.app.uikit.v5.components.AppPullRefresh
 import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.contract.AppContent
 import io.legado.app.uikit.v5.contract.ContentScope
@@ -46,6 +49,9 @@ import io.legado.app.uikit.v5.contract.DestTitle
 import io.legado.app.uikit.v5.contract.ScreenChrome
 import io.legado.app.uikit.v5.contract.TopBarMode
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 
 /**
@@ -55,7 +61,9 @@ import splitties.init.appCtx
  * 书源探索/排行榜/RSS 模块/自定义集，加载与分页全在 VM）。
  * UI 重写为 V5：模块卡 + 横向封面行 + 分类芯片 + 排行榜 Tab。
  *
- * 精简范围（相对旧 405 行 Fragment）：下拉刷新与模块内"加载更多"暂缺，
+ * 精简范围（相对旧 405 行 Fragment）：下拉刷新 ✅(2026-10-13 AppPullRefresh)、
+ * 模块内"加载更多" ✅(2026-10-13 BookRow 尾格 + 排行榜按钮)；发现套件 ✅(2026-10-13
+ * DiscoverSuiteSession bind/stop + hostHomeSuiteItems，B13 裁决套件归主页)。
  * 模块管理面板/布局切换留在旧主页（我的 → 主页管理入口，P4-4 长尾并入）。
  */
 class HostHomeContent : AppContent {
@@ -94,6 +102,45 @@ class HostHomeContent : AppContent {
         }
         val uiState by viewModel.uiState.collectAsState()
 
+        // 发现套件会话（B13 裁决：套件聚合归主页域）——随主页进出 bind/stop
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            io.legado.app.ui.main.explore.DiscoverSuiteSession.bind()
+            onDispose { io.legado.app.ui.main.explore.DiscoverSuiteSession.stop() }
+        }
+        val suiteConfig by io.legado.app.ui.main.explore.DiscoverSuiteSession
+            .config.collectAsState()
+        val suiteSelectedId by io.legado.app.ui.main.explore.DiscoverSuiteSession
+            .selectedSuiteId.collectAsState()
+        val suiteBooks by io.legado.app.ui.main.explore.DiscoverSuiteSession
+            .widgetBooks.collectAsState()
+        val suiteRanked by io.legado.app.ui.main.explore.DiscoverSuiteSession
+            .rankedWidgetBooks.collectAsState()
+        val suiteLoading by io.legado.app.ui.main.explore.DiscoverSuiteSession
+            .loadingWidgetIds.collectAsState()
+        val selectedSuite = remember(suiteConfig, suiteSelectedId) {
+            suiteConfig.suites.firstOrNull { it.id == suiteSelectedId }
+                ?: suiteConfig.suites.firstOrNull()
+        }
+        val suiteScope = rememberCoroutineScope()
+        fun openSuiteBook(book: SearchBook) {
+            // 与 ExploreFragment.showBookInfo 同链路：先落搜索历史，再按视频类型兜底跳详情
+            suiteScope.launch {
+                val isVideo = withContext(Dispatchers.IO) {
+                    appDb.searchBookDao.insert(book)
+                    io.legado.app.ui.book.SearchBookOpenHelper.isVideoResult(book)
+                }
+                io.legado.app.ui.book.SearchBookOpenHelper.open(context, book, isVideo)
+            }
+        }
+        fun openSuiteManage() {
+            context.startActivity(
+                android.content.Intent(
+                    context,
+                    io.legado.app.ui.main.explore.DiscoverySuiteManageActivity::class.java
+                )
+            )
+        }
+
         androidx.compose.runtime.LaunchedEffect(moduleSheetOpen) {
             if (moduleSheetOpen) {
                 moduleSheetOpen = false
@@ -108,38 +155,49 @@ class HostHomeContent : AppContent {
                 return
             }
             if (exploreUrl.isNullOrBlank()) return
-            context.startActivity(
-                android.content.Intent(context, io.legado.app.ui.book.explore.ExploreShowActivity::class.java)
-                    .putExtra("exploreName", title ?: "")
-                    .putExtra("sourceUrl", sourceUrl)
-                    .putExtra("exploreUrl", exploreUrl)
-            )
+            HostExploreShowActivity.start(context, title ?: "", sourceUrl, exploreUrl)
         }
 
         fun openBook(book: SearchBook) {
             SearchBookOpenHelper.open(context, book, false)
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = scope.density.screenPadding,
-                end = scope.density.screenPadding,
-                bottom = 104.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(scope.density.blockGap),
+        AppPullRefresh(
+            refreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.onRefresh() },
         ) {
-            if (uiState.modules.isEmpty()) {
-                item { AppSkeletonList(rows = 4) }
-            }
-            items(uiState.modules, key = { it.globalId }) { module ->
-                ModuleCard(
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = scope.density.screenPadding,
+                    end = scope.density.screenPadding,
+                    bottom = 104.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(scope.density.blockGap),
+            ) {
+                hostHomeSuiteItems(
                     scope = scope,
-                    viewModel = viewModel,
-                    module = module,
-                    onOpenBook = ::openBook,
-                    onExplore = { url, title -> navigateToExplore(module.sourceUrl, url, title) },
+                    suites = suiteConfig.suites,
+                    selectedSuite = selectedSuite,
+                    widgetBooks = suiteBooks,
+                    rankedWidgetBooks = suiteRanked,
+                    loadingWidgetIds = suiteLoading,
+                    onSuiteSelect = { io.legado.app.ui.main.explore.DiscoverSuiteSession.selectSuite(it) },
+                    onManage = ::openSuiteManage,
+                    onOpenBook = ::openSuiteBook,
                 )
+                if (uiState.modules.isEmpty()) {
+                    item(key = "home_modules_skeleton") { AppSkeletonList(rows = 4) }
+                }
+                items(uiState.modules, key = { it.globalId }) { module ->
+                    ModuleCard(
+                        scope = scope,
+                        viewModel = viewModel,
+                        module = module,
+                        onOpenBook = ::openBook,
+                        onExplore = { url, title -> navigateToExplore(module.sourceUrl, url, title) },
+                    )
+                }
             }
         }
 
@@ -200,7 +258,15 @@ private fun ModuleCard(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
-                        BookRow(scope, state.books.take(12), onOpenBook, viewModel)
+                        BookRow(
+                            scope,
+                            state.books,
+                            state.hasMore,
+                            state.isLoadingMore,
+                            loadMore = { viewModel.loadMoreModule(module.globalId) },
+                            onOpenBook = onOpenBook,
+                            viewModel = viewModel,
+                        )
                     }
                 }
 
@@ -231,6 +297,16 @@ private fun ModuleCard(
                     tab?.books?.take(8)?.forEach { item ->
                         BookLine(scope, item.book) { onOpenBook(item.book) }
                     }
+                    if (tab != null && tab.hasMore) {
+                        Spacer(Modifier.height(scope.density.blockGap / 2))
+                        AppGhostButton(
+                            text = if (tab.isLoadingMore) "加载中…" else "加载更多",
+                            enabled = !tab.isLoadingMore,
+                            onClick = {
+                                viewModel.loadMoreRankingTab(module.globalId, state.selectedIndex)
+                            },
+                        )
+                    }
                 }
 
                 is io.legado.app.ui.main.homepage.ModuleLoadState.Error ->
@@ -244,6 +320,9 @@ private fun ModuleCard(
 private fun BookRow(
     scope: ContentScope,
     books: List<io.legado.app.ui.main.homepage.HomepageBookItemUi>,
+    hasMore: Boolean,
+    isLoadingMore: Boolean,
+    loadMore: () -> Unit,
     onOpenBook: (SearchBook) -> Unit,
     viewModel: HomepageViewModel,
 ) {
@@ -270,6 +349,22 @@ private fun BookRow(
                     maxLines = 2,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+        }
+        if (hasMore) {
+            item(key = "load_more") {
+                Column(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(118.dp),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    AppGhostButton(
+                        text = if (isLoadingMore) "…" else "更多",
+                        enabled = !isLoadingMore,
+                        onClick = loadMore,
+                    )
+                }
             }
         }
     }

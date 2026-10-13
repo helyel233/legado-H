@@ -83,7 +83,7 @@ import io.legado.app.help.ai.AiToolRegistry
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.ui.config.AiWorldBookManageActivity
+import io.legado.app.ui.host.HostAiWorldBookManageActivity
 import io.legado.app.ui.main.ai.AiChatMessage
 import io.legado.app.ui.main.ai.AiWorldBookBinding
 import io.legado.app.ui.main.ai.compose.AiComposeMarkdownText
@@ -844,7 +844,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
 
     private fun openWorldBookManage() {
         context.startActivity(
-            Intent(context, AiWorldBookManageActivity::class.java)
+            Intent(context, HostAiWorldBookManageActivity::class.java)
         )
     }
 

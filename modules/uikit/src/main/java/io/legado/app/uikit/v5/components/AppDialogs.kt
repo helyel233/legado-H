@@ -12,13 +12,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -105,7 +111,7 @@ fun AppBottomSheet(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.46f))
@@ -116,6 +122,9 @@ fun AppBottomSheet(
                 ),
             contentAlignment = Alignment.BottomCenter,
         ) {
+            // 内容超高时顶部避让状态栏：限制最大高度，超出部分交回内部滚动容器
+            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            val maxSheetHeight = maxHeight - statusBarTop
             AnimatedVisibility(
                 visible = true,
                 enter = slideInVertically(visual.motion.longSpec()) { it },
@@ -127,7 +136,12 @@ fun AppBottomSheet(
                     onClick = {},
                 )) {
                     AppSurface(level = MaterialLevel.FLOATING, modifier = Modifier.fillMaxWidth(), backgroundBlur = true) {
-                        Column(modifier = Modifier.fillMaxWidth()) { content() }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .heightIn(max = maxSheetHeight),
+                        ) { content() }
                     }
                 }
             }
@@ -172,6 +186,7 @@ fun AppMenuSheet(
             actions.forEach { (label, action) ->
                 AppListItem(
                     headline = label,
+                    card = false,
                     leading = {
                         Box(modifier = Modifier.size(8.dp))
                     },
@@ -450,6 +465,7 @@ fun AppFilterDialog(
                 itemsIndexed(options) { index, label ->
                     AppListItem(
                         headline = label,
+                        card = false,
                         leading = {
                             Box(modifier = Modifier.size(8.dp))
                         },
@@ -515,6 +531,7 @@ fun AppMultiFilterDialog(
                     val isChecked = index in checked
                     AppListItem(
                         headline = label,
+                        card = false,
                         leading = {
                             Box(modifier = Modifier.size(8.dp))
                         },

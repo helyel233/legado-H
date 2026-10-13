@@ -63,7 +63,7 @@ class SubscriptionConfigFragment : ComposeSettingFragment() {
 
     override fun onSettingPreferenceChanged(key: String) {
         when (key) {
-            PreferKey.modernRssPage -> postEvent(EventBus.NOTIFY_MAIN, false)
+            PreferKey.modernRssPage -> Unit
         }
     }
 

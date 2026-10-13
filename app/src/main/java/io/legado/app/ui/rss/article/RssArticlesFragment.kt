@@ -77,8 +77,9 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
     private var topOverlaySpace = 0
     private var topOverlayEnabled = false
     private var externalRefreshFinish: (() -> Unit)? = null
-    private val embeddedInModernRss: Boolean
-        get() = parentFragment is io.legado.app.ui.main.rss.RssFragment
+    // 旧"现代订阅"嵌入宿主 RssFragment 已随旧壳退役（死代码清理 2026-10-13），
+    // 本 Fragment 现只被独立 Activity 宿主（RssSortActivity/RssSearchActivity）
+    private val embeddedInModernRss: Boolean = false
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         viewModel.init(arguments)

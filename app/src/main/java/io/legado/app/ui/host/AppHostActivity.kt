@@ -1,16 +1,35 @@
 package io.legado.app.ui.host
 
+import android.content.Intent
 import android.os.Bundle
 import android.graphics.Color as AndroidColor
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewConfiguration
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.FrameLayout
+import android.widget.ImageView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.chrisbanes.haze.HazeState
+import io.legado.app.R
 import io.legado.app.help.AppBootstrap
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.NavigationBarIconConfig
+import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.ui.host.pack.V5PackageStore
+import io.legado.app.ui.main.MainAiFloatingBallController
+import io.legado.app.ui.main.ai.AiChatActivity
+import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.dpToPx
 import io.legado.app.uikit.v5.resolve.LayoutResolver
 import io.legado.app.uikit.v5.resolve.ThemeResolver
 import io.legado.app.uikit.v5.runtime.LocalHazeState
@@ -43,6 +62,12 @@ class AppHostActivity : AppCompatActivity() {
 
     private var bootstrap: AppBootstrap? = null
 
+    // ---- AI 悬浮球（旧壳拆出的控制器，本壳重接线）----
+    private var aiFloatingBallController: MainAiFloatingBallController? = null
+    private var aiBallContainer: FrameLayout? = null
+    private var bottomNavigationInset = 0
+    private val aiBallPulseInterpolator by lazy { AccelerateDecelerateInterpolator() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 边缘到边缘：背景层画满全屏，避让由 HostInsets 统一处理
@@ -50,11 +75,35 @@ class AppHostActivity : AppCompatActivity() {
         window.statusBarColor = AndroidColor.TRANSPARENT
         window.navigationBarColor = AndroidColor.TRANSPARENT
 
-        setContentView(
+        val root = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        root.addView(
             ComposeView(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 setContent { HostRoot() }
             }
         )
+        // 悬浮球容器：不拦截自身之外的触摸，球体由控制器内部处理拖拽/点击
+        aiBallContainer = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }.also { root.addView(it) }
+        setContentView(root)
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            bottomNavigationInset =
+                insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            insets
+        }
 
         // P4-5a 转正：接管旧壳的应用级启动职责
         bootstrap = AppBootstrap(this).also { it.onCreated(savedInstanceState) }
@@ -63,11 +112,61 @@ class AppHostActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         bootstrap?.onResumed()
+        updateAiFloatingBall()
     }
 
     override fun onPause() {
         bootstrap?.onPaused()
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        aiFloatingBallController?.cancel()
+        aiFloatingBallController = null
+        super.onDestroy()
+    }
+
+    private fun updateAiFloatingBall() {
+        val container = aiBallContainer ?: return
+        (aiFloatingBallController ?: MainAiFloatingBallController(
+            context = this,
+            container = container,
+            touchSlopPx = ViewConfiguration.get(this).scaledTouchSlop.toFloat(),
+            pulseInterpolator = aiBallPulseInterpolator,
+            shellDrawable = { oval ->
+                android.graphics.drawable.GradientDrawable().apply {
+                    shape = if (oval) android.graphics.drawable.GradientDrawable.OVAL
+                    else android.graphics.drawable.GradientDrawable.RECTANGLE
+                    setColor(
+                        ColorUtils.withAlpha(
+                            bottomBackground,
+                            if (AppConfig.isEInkMode) 1f else 0.92f
+                        )
+                    )
+                    setStroke(1.dpToPx(), 0x1F888888)
+                }
+            },
+            iconSync = { ball -> syncAiFloatingBallIcon(ball) },
+            visibleProbe = { AppConfig.aiAssistantEnabled },
+            bottomInset = { bottomNavigationInset },
+            openAiChat = { startActivity(Intent(this, AiChatActivity::class.java)) }
+        ).also { aiFloatingBallController = it }).update()
+    }
+
+    private fun syncAiFloatingBallIcon(ball: View) {
+        val imageView = (ball as? ViewGroup)?.getChildAt(0) as? ImageView ?: return
+        val hasCustomSearchIcon =
+            NavigationBarIconConfig.hasCurrentSingleIcon(NavigationBarIconConfig.EXTRA_SEARCH)
+        imageView.setImageDrawable(
+            NavigationBarIconConfig.currentSingleDrawable(
+                this, NavigationBarIconConfig.EXTRA_SEARCH
+            ) ?: ContextCompat.getDrawable(this, R.drawable.ic_search)
+        )
+        imageView.imageTintList = if (hasCustomSearchIcon) {
+            null
+        } else {
+            android.content.res.ColorStateList.valueOf(this.accentColor)
+        }
     }
 }
 

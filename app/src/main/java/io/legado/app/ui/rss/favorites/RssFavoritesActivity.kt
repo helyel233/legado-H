@@ -1,184 +1,250 @@
-@file:Suppress("DEPRECATION")
-
 package io.legado.app.ui.rss.favorites
 
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.SubMenu
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentStatePagerAdapter
-import androidx.lifecycle.lifecycleScope
-import androidx.viewpager.widget.ViewPager
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
-import io.legado.app.databinding.ActivityRssFavoritesBinding
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.utils.gone
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
-import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.delay
+import io.legado.app.data.entities.RssStar
+import io.legado.app.ui.host.AppAsyncImage
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.ui.rss.read.ReadRss
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterChipRow
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.launch
 
 /**
- * 收藏夹
+ * 收藏夹（RSS 收藏文章）。
+ *
+ * 自旧 View 体系（ViewPager + TabLayout + Fragment + Glide 列表）迁至 V5：
+ * 分组切换用 AppFilterChipRow（横滑 chips），列表用 LazyColumn + AppAsyncImage，
+ * 阅读跳旧 ReadRssActivity/VideoPlayer 体系，长按删单条、溢出菜单删当前组/删全部。
  */
-class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
+class RssFavoritesActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityRssFavoritesBinding::inflate)
-    private val adapter by lazy { TabFragmentPageAdapter() }
-    private var groupList = mutableListOf<String>()
-    private var groupsMenu: SubMenu? = null
-    private var currentGroup = ""
-
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initView()
-        upFragments()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { RssFavoritesScreen() }
     }
+}
 
-    override fun onResume() {
-        super.onResume()
-        //从ReadRssActivity退出时，判断是否需要重新定位tabLayout选中项
-        if (currentGroup.isNotEmpty() && groupList.isNotEmpty()) {
-            var item = groupList.indexOf(currentGroup)
-            val currentItem = binding.viewPager.currentItem
-            //如果坐标没有变化，则结束
-            if (item == currentItem) {
-                return
-            }
-            if (item == -1) {
-                item = currentItem
-            }
-            lifecycleScope.launch {
-                delay(100)
-                binding.tabLayout.getTabAt(item)?.select()
-            }
-        }
-    }
+@Composable
+private fun RssFavoritesScreen() {
+    val context = LocalContext.current
+    val activity = context as AppCompatActivity
+    val visual = LocalVisualSpec.current
+    val density = visual.density
 
-    private fun initView() {
-        binding.viewPager.adapter = adapter
-        binding.viewPager.addOnPageChangeListener(object : ViewPager.OnPageChangeListener {
-            override fun onPageScrolled(
-                position: Int,
-                positionOffset: Float,
-                positionOffsetPixels: Int
-            ) {
-            }
+    val groups by remember { appDb.rssStarDao.flowGroups() }
+        .collectAsState(initial = emptyList())
 
-            override fun onPageSelected(position: Int) {
-                currentGroup = groupList[position]
-            }
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+    // 选中分组被删后自动回退到第一个；无任何分组时 currentGroup 为 null
+    val currentGroup = selectedGroup?.takeIf { it in groups } ?: groups.firstOrNull()
 
-            override fun onPageScrollStateChanged(state: Int) {}
-
-        })
-        binding.tabLayout.setupWithViewPager(binding.viewPager)
-        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.rss_favorites, menu)
-        groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
-        upGroupsMenu()
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    private fun upGroupsMenu() = groupsMenu?.let { subMenu ->
-        subMenu.removeGroup(R.id.menu_group)
-        groupList.forEachIndexed { index, it ->
-            subMenu.add(R.id.menu_group, Menu.NONE, index, it)
-        }
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.groupId == R.id.menu_group) {
-            binding.viewPager.setCurrentItem(item.order)
+    val articles by remember(currentGroup) {
+        if (currentGroup == null) {
+            flowOf(emptyList())
         } else {
-            when (item.itemId) {
-                R.id.menu_del_group -> deleteGroup()
-                R.id.menu_del_all -> deleteAll()
-            }
+            appDb.rssStarDao.flowByGroup(currentGroup).catch {
+                AppLog.put("订阅收藏获取数据失败\n${it.localizedMessage}", it)
+            }.flowOn(Dispatchers.IO)
         }
-        return super.onCompatOptionsItemSelected(item)
-    }
+    }.collectAsState(initial = emptyList())
 
-    private fun upFragments() {
-        lifecycleScope.launch {
-            appDb.rssStarDao.flowGroups().catch {
-                AppLog.put("订阅分组数据获取失败\n${it.localizedMessage}", it)
-            }.distinctUntilChanged().flowOn(IO).collect {
-                groupList.clear()
-                groupList.addAll(it)
-                if (groupList.size == 1) {
-                    binding.tabLayout.gone()
-                } else {
-                    binding.tabLayout.visible()
+    var menuOpen by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<DeleteTarget?>(null) }
+
+    HostV5Page(
+        title = context.getString(R.string.favorites),
+        onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton(contentDescription = context.getString(R.string.v5_more)) {
+                menuOpen = true
+            }
+        },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            if (groups.size > 1) {
+                AppFilterChipRow(
+                    chips = groups.map { g -> AppFilterChip(g, g == currentGroup) },
+                    onChipClick = { index -> selectedGroup = groups[index] },
+                )
+                Spacer(Modifier.height(density.blockGap))
+            }
+            if (articles.isEmpty()) {
+                AppEmpty(title = context.getString(R.string.favorites))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = density.screenPadding,
+                        end = density.screenPadding,
+                        top = density.blockGap / 2,
+                        bottom = density.screenPadding,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    items(articles, key = { "${it.origin}|${it.link}" }) { article ->
+                        RssStarRow(
+                            article = article,
+                            onClick = { ReadRss.readRss(activity, article.toRssArticle()) },
+                            onLongClick = { deleteTarget = DeleteTarget.Single(article) },
+                        )
+                    }
                 }
-                if (groupsMenu != null) {
-                    upGroupsMenu()
+            }
+        }
+    }
+
+    if (menuOpen) {
+        AppMenuSheet(
+            title = context.getString(R.string.favorites),
+            actions = buildList {
+                currentGroup?.let { group ->
+                    add(
+                        context.getString(R.string.delete_select_group) to {
+                            deleteTarget = DeleteTarget.Group(group)
+                        }
+                    )
                 }
-                adapter.notifyDataSetChanged()
-            }
-        }
+                add(context.getString(R.string.delete_all) to { deleteTarget = DeleteTarget.All })
+            },
+            onDismiss = { menuOpen = false },
+        )
     }
 
-    private fun deleteGroup() {
-        if (groupList.isEmpty()) {
-            return
+    deleteTarget?.let { target ->
+        val message = when (target) {
+            is DeleteTarget.Single ->
+                context.getString(R.string.sure_del) + "\n<" + target.item.title + ">"
+
+            is DeleteTarget.Group ->
+                context.getString(R.string.sure_del) + "\n<" + target.group + ">" +
+                    context.getString(R.string.group)
+
+            DeleteTarget.All ->
+                context.getString(R.string.sure_del) + "\n<" + context.getString(R.string.all) +
+                    ">" + context.getString(R.string.favorite)
         }
-        alert(R.string.draw) {
-            val item = binding.viewPager.currentItem
-            val group = groupList[item]
-            setMessage(
-                getString(R.string.sure_del) + "\n<" + group + ">" + getString(R.string.group)
+        AppConfirmDialog(
+            title = context.getString(R.string.v5_delete),
+            message = message,
+            confirmLabel = context.getString(R.string.v5_delete),
+            cancelLabel = context.getString(R.string.v5_cancel),
+            danger = true,
+            onConfirm = {
+                when (target) {
+                    is DeleteTarget.Single ->
+                        appDb.rssStarDao.delete(target.item.origin, target.item.link)
+
+                    is DeleteTarget.Group -> appDb.rssStarDao.deleteByGroup(target.group)
+                    DeleteTarget.All -> appDb.rssStarDao.deleteAll()
+                }
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun RssStarRow(
+    article: RssStar,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(visual.shape(ShapeKind.CARD))
+            .background(colors.surface.copy(alpha = 0.72f), visual.shape(ShapeKind.CARD))
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
             )
-            noButton()
-            yesButton {
-                appDb.rssStarDao.deleteByGroup(group)
-            }
-        }
-    }
-
-    private fun deleteAll() {
-        alert(R.string.draw) {
-            setMessage(
-                getString(R.string.sure_del) + "\n<" + getString(R.string.all) + ">"
-                        + getString(R.string.favorite)
+            .padding(density.cardPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(density.blockGap),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = article.title,
+                style = visual.type.body,
+                color = colors.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            noButton()
-            yesButton {
-                appDb.rssStarDao.deleteAll()
+            val pubDate = article.pubDate
+            if (!pubDate.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = pubDate,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
+        if (!article.image.isNullOrBlank()) {
+            AppAsyncImage(
+                model = article.image,
+                contentDescription = null,
+                sourceOrigin = article.origin,
+                cornerRadius = 8.dp,
+                modifier = Modifier.size(width = 96.dp, height = 64.dp),
+            )
+        }
     }
+}
 
-    private inner class TabFragmentPageAdapter :
-        FragmentStatePagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
-
-        override fun getItemPosition(`object`: Any): Int {
-            return POSITION_NONE
-        }
-
-        override fun getPageTitle(position: Int): CharSequence {
-            return groupList[position]
-        }
-
-        override fun getItem(position: Int): Fragment {
-            val group = groupList[position]
-            return RssFavoritesFragment(group)
-        }
-
-        override fun getCount(): Int {
-            return groupList.size
-        }
-
-    }
+private sealed class DeleteTarget {
+    class Single(val item: RssStar) : DeleteTarget()
+    class Group(val group: String) : DeleteTarget()
+    object All : DeleteTarget()
 }

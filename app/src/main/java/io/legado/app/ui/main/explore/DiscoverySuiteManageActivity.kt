@@ -6,8 +6,6 @@ import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
@@ -16,6 +14,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.addCallback
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -56,8 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -69,11 +66,9 @@ import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.flexbox.FlexboxLayout
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
-import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.databinding.ItemFilletCompleteTextBinding
 import io.legado.app.databinding.ItemFilletSelectorSingleBinding
 import io.legado.app.databinding.ItemFilletTextBinding
@@ -84,6 +79,8 @@ import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.help.source.exploreKinds
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
@@ -93,18 +90,16 @@ import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() {
-
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
+class DiscoverySuiteManageActivity : AppCompatActivity() {
 
     private var configState by mutableStateOf(DiscoverySuiteStore.load())
     private var selectedSuiteIdState by mutableStateOf(DiscoverySuiteStore.selectedSuiteId())
@@ -114,72 +109,53 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
     private var loadedSourceTagUrlsState by mutableStateOf<Set<String>>(emptySet())
     private var screenModeState by mutableStateOf<DiscoverySuiteManageMode>(DiscoverySuiteManageMode.List)
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.setNavigationOnClickListener { handleBackNavigation() }
-        onBackPressedDispatcher.addCallback(this) {
-            handleBackNavigation()
-        }
-        initComposeContent()
-        refreshConfig()
-        updateTitleBar()
-        loadSourceOptions()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        when (val mode = screenModeState) {
-            DiscoverySuiteManageMode.List -> {
-                menu.add(0, MENU_CREATE_SUITE, 0, R.string.discovery_suite_create).apply {
-                    setIcon(R.drawable.ic_add)
-                    setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-                }
-            }
-            is DiscoverySuiteManageMode.Detail -> {
-                if (configState.suites.any { it.id == mode.suiteId }) {
-                    menu.add(0, MENU_ADD_WIDGET, 0, R.string.discovery_suite_add_widget).apply {
-                        setIcon(R.drawable.ic_add)
-                        setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            val mode = screenModeState
+            HostV5Page(
+                title = when (mode) {
+                    DiscoverySuiteManageMode.List -> getString(R.string.discovery_suite_manage_title)
+                    is DiscoverySuiteManageMode.Detail -> getString(R.string.discovery_suite_manage)
+                    is DiscoverySuiteManageMode.WidgetEditor -> {
+                        val suite = configState.suites.firstOrNull { it.id == mode.suiteId }
+                        val widget = suite?.widgets?.firstOrNull { it.id == mode.widgetId }
+                        if (widget == null) {
+                            getString(R.string.discovery_suite_add_widget)
+                        } else {
+                            getString(R.string.edit)
+                        }
+                    }
+                },
+                onBack = ::handleBackNavigation,
+                trailing = {
+                    when (mode) {
+                        DiscoverySuiteManageMode.List -> {
+                            AppOverflowMenuButton(
+                                contentDescription = getString(R.string.discovery_suite_create),
+                                glyph = "+",
+                                onClick = ::showCreateSuiteDialog
+                            )
+                        }
+                        is DiscoverySuiteManageMode.Detail -> {
+                            if (configState.suites.any { it.id == mode.suiteId }) {
+                                AppOverflowMenuButton(
+                                    contentDescription = getString(R.string.discovery_suite_add_widget),
+                                    glyph = "+",
+                                    onClick = {
+                                        configState.suites.firstOrNull { it.id == mode.suiteId }?.let {
+                                            openWidgetEditor(it, null)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        is DiscoverySuiteManageMode.WidgetEditor -> Unit
                     }
                 }
-            }
-            is DiscoverySuiteManageMode.WidgetEditor -> Unit
-        }
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            MENU_CREATE_SUITE -> {
-                showCreateSuiteDialog()
-                return true
-            }
-            MENU_ADD_WIDGET -> {
-                val mode = screenModeState as? DiscoverySuiteManageMode.Detail ?: return true
-                configState.suites.firstOrNull { it.id == mode.suiteId }?.let {
-                    openWidgetEditor(it, null)
-                }
-                return true
-            }
-        }
-        return super.onCompatOptionsItemSelected(item)
-    }
-
-    private fun initComposeContent() {
-        val container = binding.recyclerView.parent as? ViewGroup ?: return
-        val index = container.indexOfChild(binding.recyclerView)
-        container.removeView(binding.recyclerView)
-        container.removeView(binding.tabBar)
-        container.removeView(binding.tvSummary)
-        container.removeView(binding.btnAdd)
-        val composeView = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-            setContent {
+            ) {
                 LegadoComposeTheme {
-                    when (val mode = screenModeState) {
+                    when (mode) {
                         is DiscoverySuiteManageMode.WidgetEditor -> {
                             val suite = configState.suites.firstOrNull { it.id == mode.suiteId }
                             val widget = suite?.widgets?.firstOrNull { it.id == mode.widgetId }
@@ -230,7 +206,11 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
                 }
             }
         }
-        container.addView(composeView, index.coerceAtMost(container.childCount))
+        onBackPressedDispatcher.addCallback(this) {
+            handleBackNavigation()
+        }
+        refreshConfig()
+        loadSourceOptions()
     }
 
     private fun handleBackNavigation() {
@@ -251,24 +231,6 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
 
     private fun setScreenMode(mode: DiscoverySuiteManageMode) {
         screenModeState = mode.validatedAgainst(configState)
-        updateTitleBar()
-        invalidateOptionsMenu()
-    }
-
-    private fun updateTitleBar() {
-        binding.titleBar.title = when (val mode = screenModeState) {
-            DiscoverySuiteManageMode.List -> getString(R.string.discovery_suite_manage_title)
-            is DiscoverySuiteManageMode.Detail -> getString(R.string.discovery_suite_manage)
-            is DiscoverySuiteManageMode.WidgetEditor -> {
-                val suite = configState.suites.firstOrNull { it.id == mode.suiteId }
-                val widget = suite?.widgets?.firstOrNull { it.id == mode.widgetId }
-                if (widget == null) {
-                    getString(R.string.discovery_suite_add_widget)
-                } else {
-                    getString(R.string.edit)
-                }
-            }
-        }
     }
 
     private fun refreshConfig() {
@@ -282,8 +244,6 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
         configState = config
         selectedSuiteIdState = selectedId
         screenModeState = screenModeState.validatedAgainst(config)
-        updateTitleBar()
-        invalidateOptionsMenu()
     }
 
     private fun loadSourceOptions() {
@@ -580,8 +540,6 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
 
     companion object {
         private const val MAX_MANAGER_SOURCES = 200
-        private const val MENU_CREATE_SUITE = 1
-        private const val MENU_ADD_WIDGET = 2
     }
 }
 

@@ -366,7 +366,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
         MainBottomNavConfig.save(normalized)
         bottomNavItemsState = MainBottomNavConfig.items()
-        postEvent(EventBus.NOTIFY_MAIN, true)
     }
 
     private fun bottomNavSummary(items: List<MainBottomNavConfig.ItemState>): String {

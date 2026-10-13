@@ -89,7 +89,7 @@ class HostRssContent : AppContent {
                 icon = DestIcon.Vector(io.legado.app.ui.host.HostIcons.Menu),
                 contentDescription = DestTitle.Res(R.string.v5_rss_manage),
                 onClick = {
-                    splitties.init.appCtx.startActivity<io.legado.app.ui.rss.source.manage.RssSourceActivity>()
+                    io.legado.app.ui.host.HostRssSourceManageActivity.start(splitties.init.appCtx)
                 },
             ),
         ),
@@ -192,7 +192,7 @@ class HostRssContent : AppContent {
                     supporting = stringResource(R.string.v5_rss_no_sources_supporting),
                     actionLabel = stringResource(R.string.v5_rss_manage),
                     onAction = {
-                        context.startActivity<io.legado.app.ui.rss.source.manage.RssSourceActivity>()
+                        io.legado.app.ui.host.HostRssSourceManageActivity.start(context)
                     },
                 )
             } else {
@@ -214,7 +214,7 @@ class HostRssContent : AppContent {
                             compact = columns >= 3,
                             onClick = { openRssSource(context, viewModel, source) },
                             onManage = {
-                                context.startActivity<io.legado.app.ui.rss.source.manage.RssSourceActivity>()
+                                io.legado.app.ui.host.HostRssSourceManageActivity.start(context)
                             },
                         )
                     }

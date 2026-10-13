@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -145,6 +146,8 @@ fun AppTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     /** 错误态（边框色走 error 语义 + 错误说明文字） */
     errorText: String? = null,
+    /** 输入变换（如密码掩码 PasswordVisualTransformation） */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
@@ -168,6 +171,7 @@ fun AppTextField(
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 textStyle = visual.type.body.copy(color = colors.onSurface),
                 cursorBrush = SolidColor(if (errorText != null) colors.error else colors.primary),
+                visualTransformation = visualTransformation,
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { inner ->
                     if (value.isEmpty() && placeholder.isNotEmpty()) {
@@ -368,6 +372,8 @@ fun AppRowWithSwitch(
     summary: String? = null,
     onRowClick: (() -> Unit)? = null,
     enabled: Boolean = true,
+    /** 行卡片底（surface 72%）。已在卡片/弹窗面板内时传 false 避免双层底。 */
+    card: Boolean = true,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
@@ -376,6 +382,7 @@ fun AppRowWithSwitch(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .then(if (card) Modifier.appRowCard() else Modifier)
             .then(
                 if (onRowClick != null) Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },

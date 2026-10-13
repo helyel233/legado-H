@@ -74,8 +74,5 @@ object MainLayoutPresetConfig {
         if (bottomLayoutMode == "sidebar") {
             context.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }
-        if (notify) {
-            postEvent(EventBus.NOTIFY_MAIN, true)
-        }
     }
 }

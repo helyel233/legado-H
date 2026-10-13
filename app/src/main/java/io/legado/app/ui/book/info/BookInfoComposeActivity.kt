@@ -75,7 +75,7 @@ import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.main.ai.AiImageGalleryActivity
+import io.legado.app.ui.host.HostAiImageGalleryActivity
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
@@ -818,9 +818,9 @@ class BookInfoComposeActivity :
     private fun openBookAiImageGallery() {
         val book = viewModel.getBook(false) ?: return
         val key = AiImageGalleryManager.buildBookKey(book.name, book.author)
-        startActivity(Intent(this, AiImageGalleryActivity::class.java).apply {
-            putExtra(AiImageGalleryActivity.EXTRA_BOOK_KEY, key)
-            putExtra(AiImageGalleryActivity.EXTRA_TITLE, getString(R.string.book_info_component_ai_images))
+        startActivity(Intent(this, HostAiImageGalleryActivity::class.java).apply {
+            putExtra(HostAiImageGalleryActivity.EXTRA_BOOK_KEY, key)
+            putExtra(HostAiImageGalleryActivity.EXTRA_TITLE, getString(R.string.book_info_component_ai_images))
         })
     }
 

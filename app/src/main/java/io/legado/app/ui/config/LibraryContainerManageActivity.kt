@@ -1,17 +1,11 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.ViewGroup
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
-import io.legado.app.databinding.ActivityS3ContainerManageBinding
 import io.legado.app.help.book.library.LibraryCloudBackend
 import io.legado.app.help.book.library.LibraryContainerConfig
 import io.legado.app.help.book.library.LibraryContainerExportCrypto
@@ -21,7 +15,7 @@ import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.lib.cloud.S3Config
 import io.legado.app.lib.cloud.S3Container
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeMultiChoiceDialog
@@ -34,7 +28,6 @@ import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.readText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,9 +35,7 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.max
 
-class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>() {
-
-    override val binding by viewBinding(ActivityS3ContainerManageBinding::inflate)
+class LibraryContainerManageActivity : AppCompatActivity() {
 
     private val containersState = mutableStateOf<List<LibraryContainerConfig>>(emptyList())
     private var _waitDialog: WaitDialog? = null
@@ -72,57 +63,24 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initComposeContent()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
+            LibraryContainerManageScreen(
+                containers = containersState.value,
+                onBack = { finish() },
+                onAdd = { showEditDialog(null) },
+                onItemClick = { showEditDialog(it) },
+                pageMenuActions = ::pageMenuActions,
+                onMoreActions = ::containerActions
+            )
+        }
         reload()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         _waitDialog?.dismiss()
-    }
-
-    private fun initComposeContent() {
-        val container = binding.root as? ViewGroup ?: return
-        container.removeAllViews()
-        val cv = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setContent {
-                LibraryContainerManageScreen(
-                    containers = containersState.value,
-                    onBack = { finish() },
-                    onAdd = { showEditDialog(null) },
-                    onItemClick = { showEditDialog(it) },
-                    pageMenuActions = ::pageMenuActions,
-                    onMoreActions = ::containerActions
-                )
-            }
-        }
-        container.addView(cv)
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, MENU_IMPORT, 0, R.string.import_str).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_EXPORT_ALL, 1, "导出全部").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_IMPORT -> {
-                showImportActions()
-                true
-            }
-            MENU_EXPORT_ALL -> {
-                exportContainers(LibraryContainerManager.containers(), "library-containers.json")
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
-        }
     }
 
     private fun reload() {
@@ -150,12 +108,12 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         )
     }
 
-    private fun pageMenuActions(): List<AppManagementMenuAction> {
+    private fun pageMenuActions(): List<Pair<String, () -> Unit>> {
         return listOf(
-            AppManagementMenuAction(getString(R.string.import_str)) {
+            getString(R.string.import_str) to {
                 showImportActions()
             },
-            AppManagementMenuAction("导出全部") {
+            "导出全部" to {
                 exportContainers(LibraryContainerManager.containers(), "library-containers.json")
             }
         )
@@ -497,7 +455,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         return saved
     }
 
-    private fun containerActions(item: LibraryContainerConfig): List<AppManagementMenuAction> {
+    private fun containerActions(item: LibraryContainerConfig): List<Pair<String, () -> Unit>> {
         val actions = if (item.lockedImported) {
             listOf(Action.EDIT, Action.DELETE)
         } else {
@@ -512,10 +470,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
             )
         }
         return actions.map { action ->
-            AppManagementMenuAction(
-                text = action.title,
-                danger = action == Action.DELETE
-            ) {
+            action.title to {
                 when (action) {
                     Action.EDIT -> showEditDialog(item)
                     Action.EXPORT -> exportContainers(
@@ -621,8 +576,6 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         private const val FIELD_DAILY_UPLOAD_LIMIT = 11
         private const val CHECK_ENABLED = 0
         private const val CHECK_PATH_STYLE = 1
-        private const val MENU_IMPORT = 1
-        private const val MENU_EXPORT_ALL = 2
 
         private fun List<String>.fieldAt(index: Int): String = getOrNull(index).orEmpty()
 
