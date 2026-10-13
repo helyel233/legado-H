@@ -96,8 +96,8 @@ fun DiscoverySuiteHomeScreen(
     onHorizontalLoadMore: (DiscoverySuiteWidget) -> Unit,
     onRankedLoadMore: (DiscoverySuiteWidget, DiscoverySuiteWidgetTarget) -> Unit,
     onCanScrollBackwardChanged: (Boolean) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle,
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -422,8 +422,8 @@ private fun DiscoverySuiteWidgetSection(
     onRefreshWidget: (DiscoverySuiteWidget) -> Unit,
     onHorizontalLoadMore: (DiscoverySuiteWidget) -> Unit,
     onRankedLoadMore: (DiscoverySuiteWidget, DiscoverySuiteWidgetTarget) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val context = LocalContext.current
     val palette = renderConfig.palette
@@ -558,8 +558,8 @@ private fun DiscoverySuiteWaterfallBooksWidget(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val displayBooks = remember(widget.id, books) {
         books.take(WATERFALL_WIDGET_DISPLAY_COUNT)
@@ -600,8 +600,8 @@ private fun DiscoverySuiteWaterfallBookCard(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val palette = renderConfig.palette
     var coverBounds by remember(book.displayKey()) { mutableStateOf<Rect?>(null) }
@@ -668,8 +668,8 @@ private fun DiscoverySuiteHorizontalBooksWidget(
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
     onLoadMore: () -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val rowState = rememberLazyListState()
     val displayBooks = remember(widget.id, books) {
@@ -718,8 +718,8 @@ private fun DiscoverySuiteRandomBooksWidget(
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
     onRefreshClick: () -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val displayBooks = remember(widget.id, books) {
         books.take(RANDOM_WIDGET_DISPLAY_COUNT)
@@ -844,8 +844,8 @@ private fun DiscoverySuiteRankedListWidget(
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
     onLoadMore: (DiscoverySuiteWidgetTarget) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val palette = renderConfig.palette
     val targets = remember(widget.targets) {
@@ -983,8 +983,8 @@ private fun DiscoverySuiteRankedListBookRow(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val palette = renderConfig.palette
     var coverBounds by remember(book.displayKey()) { mutableStateOf<Rect?>(null) }
@@ -1067,8 +1067,8 @@ private fun DiscoverySuiteCoverGrid(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val displayBooks = books.take(maxCount)
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -1106,8 +1106,8 @@ private fun DiscoverySuiteFlippingCoverBookItem(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     var frontBook by remember { mutableStateOf(book) }
     var backBook by remember { mutableStateOf<SearchBook?>(null) }
@@ -1189,8 +1189,8 @@ private fun DiscoverySuiteCoverBookItem(
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
-    fragment: Fragment,
-    lifecycle: Lifecycle
+    fragment: Fragment? = null,
+    lifecycle: Lifecycle? = null
 ) {
     val palette = renderConfig.palette
     var coverBounds by remember(book.displayKey()) { mutableStateOf<Rect?>(null) }
