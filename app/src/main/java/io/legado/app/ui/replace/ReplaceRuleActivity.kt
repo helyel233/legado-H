@@ -27,7 +27,7 @@ import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.showShibbolethDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
-import io.legado.app.ui.replace.edit.ReplaceEditActivity
+import io.legado.app.ui.host.HostReplaceEditActivity
 import io.legado.app.ui.widget.SelectActionBar
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -147,7 +147,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
                             iconRes = R.drawable.ic_add,
                             onClick = {
                                 editActivity.launch(
-                                    ReplaceEditActivity.startIntent(this@ReplaceRuleActivity)
+                                    HostReplaceEditActivity.startIntent(this@ReplaceRuleActivity)
                                 )
                             }
                         ),
@@ -317,7 +317,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_add_replace_rule ->
-                editActivity.launch(ReplaceEditActivity.startIntent(this))
+                editActivity.launch(HostReplaceEditActivity.startIntent(this))
 
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_enabled_group -> {
@@ -479,7 +479,7 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
 
     private fun edit(rule: ReplaceRule) {
         setResult(RESULT_OK)
-        editActivity.launch(ReplaceEditActivity.startIntent(this, rule.id))
+        editActivity.launch(HostReplaceEditActivity.startIntent(this, rule.id))
     }
 
     private fun ruleMenuActions(rule: ReplaceRule): List<AppManagementMenuAction> {

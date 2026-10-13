@@ -37,7 +37,6 @@ import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.replace.GroupManageDialog
 import io.legado.app.ui.replace.ReplaceRuleViewModel
-import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.facade.AppToast
@@ -166,7 +165,7 @@ private fun HostReplaceRuleManageScreen() {
     }
 
     fun editRule(rule: ReplaceRule?) {
-        activity.startActivity(ReplaceEditActivity.startIntent(activity, rule?.id ?: -1))
+        activity.startActivity(HostReplaceEditActivity.startIntent(activity, rule?.id ?: -1))
     }
 
     val selectionBar: @Composable () -> Unit = {

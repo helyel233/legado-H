@@ -238,7 +238,7 @@ import io.legado.app.ui.dict.DictDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
-import io.legado.app.ui.replace.edit.ReplaceEditActivity
+import io.legado.app.ui.host.HostReplaceEditActivity
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.PopupAction
 import io.legado.app.ui.widget.dialog.PhotoDialog
@@ -1928,7 +1928,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 }
                 val text = selectedText.lineSequence().map { it.trim() }.joinToString("\n")
                 replaceActivity.launch(
-                    ReplaceEditActivity.startIntent(
+                    HostReplaceEditActivity.startIntent(
                         this,
                         pattern = text,
                         scope = scopes.joinToString(";")

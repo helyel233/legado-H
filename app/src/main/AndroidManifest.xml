@@ -242,6 +242,12 @@
             android:launchMode="standard" />
         <!-- P4-3 替换规则管理 V5 原生（2026-10-12 迁移，复用 ReplaceRuleViewModel） -->
         <activity
+            android:name=".ui.host.HostReplaceEditActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
             android:name=".ui.host.HostReplaceRuleManageActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
@@ -405,11 +411,6 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 替换规则编辑 -->
-        <activity
-            android:name=".ui.replace.edit.ReplaceEditActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 代码文本编辑 -->
         <activity
             android:name=".ui.code.CodeEditActivity"

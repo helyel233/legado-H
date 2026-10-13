@@ -3,6 +3,7 @@ package io.legado.app.ui.host
 import android.graphics.Color as AndroidColor
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.hazeSource
 import io.legado.app.uikit.v5.contract.DestTitle
 import io.legado.app.uikit.v5.contract.TopBarMode
@@ -179,9 +182,15 @@ internal fun HostV5EditPage(
     onSave: () -> Unit,
     onDiscard: () -> Unit,
     subtitle: String? = null,
+    /**
+     * 溢出菜单动作（标题 → 动作）。给定时顶栏右侧在「保存」左边多一个溢出菜单按钮。
+     * 对应旧 Activity 的 optionsMenu —— V5 编辑页统一收敛到溢出菜单。
+     */
+    menuActions: List<Pair<String, () -> Unit>>? = null,
     content: @Composable () -> Unit,
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // dirty 时接管系统返回键，防止误触丢稿
@@ -194,13 +203,32 @@ internal fun HostV5EditPage(
         subtitle = subtitle,
         onBack = { if (dirty) confirmDiscard = true else onDiscard() },
         trailing = {
-            io.legado.app.uikit.v5.components.AppFilledButton(
-                text = context.getString(io.legado.app.R.string.v5_save),
-                onClick = onSave,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (menuActions != null) {
+                    io.legado.app.uikit.v5.components.AppOverflowMenuButton(
+                        contentDescription = context.getString(io.legado.app.R.string.more),
+                        onClick = { menuOpen = true },
+                    )
+                }
+                io.legado.app.uikit.v5.components.AppFilledButton(
+                    text = context.getString(io.legado.app.R.string.v5_save),
+                    onClick = onSave,
+                )
+            }
         },
         content = content,
     )
+
+    if (menuActions != null && menuOpen) {
+        io.legado.app.uikit.v5.components.AppMenuSheet(
+            title = title,
+            actions = menuActions,
+            onDismiss = { menuOpen = false },
+        )
+    }
 
     if (confirmDiscard) {
         io.legado.app.uikit.v5.components.AppConfirmDialog(
