@@ -56,13 +56,6 @@ import io.legado.app.uikit.v5.contract.TopBarMode
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
-import io.legado.app.ui.book.explore.ExploreShowActivity
-import io.legado.app.ui.book.search.SearchActivity
-import io.legado.app.ui.book.SearchBookOpenHelper
-import io.legado.app.ui.main.explore.DiscoverySuiteHomeScreen
-import io.legado.app.ui.main.explore.DiscoverySuiteManageActivity
-import io.legado.app.ui.main.explore.DiscoverSuiteSession
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.utils.startActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,13 +90,9 @@ class HostExploreContent : AppContent {
 
     @Composable
     override fun Content(scope: ContentScope) {
-        if (AppConfig.discoveryPageMode == AppConfig.DISCOVERY_PAGE_MODE_SUITE) {
-            // 套件发现模式（台账 #2 发现页）：渲染复用旧壳 Compose 件，
-            // 状态与编排全部来自 DiscoverSuiteSession（#29-B13 已下沉，零拷贝）
-            HostSuiteDiscoverBody()
-        } else {
-            HostDiscoverBody(scope)
-        }
+        // 产品裁决（2026-10-13）：发现 Tab 专注「选源→看该源发现分类」；
+        // 套件聚合归主页域 —— DiscoverSuiteEngine/Session 已就绪，主页 V5 化时接回
+        HostDiscoverBody(scope)
     }
 }
 
@@ -536,78 +525,5 @@ private fun SourcePickerSheet(
                     ) { onManage() },
             )
         }
-    }
-}
-
-/**
- * 套件发现模式（V5 分支）。
- * 状态/编排全走 DiscoverSuiteSession（#29-B13），渲染暂复用旧壳的
- * DiscoverySuiteHomeScreen（旧配色岛，包 LegadoComposeTheme）；
- * 观感统一待后续按 V5 组件重画。
- */
-@Composable
-private fun HostSuiteDiscoverBody() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // 绑定会话：进入刷新配置+恢复快照+批量加载；离开存快照+取消在途任务
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        DiscoverSuiteSession.bind()
-        onDispose { DiscoverSuiteSession.stop() }
-    }
-
-    val config by DiscoverSuiteSession.config.collectAsState()
-    val selectedSuiteId by DiscoverSuiteSession.selectedSuiteId.collectAsState()
-    val widgetBooks by DiscoverSuiteSession.widgetBooks.collectAsState()
-    val rankedWidgetBooks by DiscoverSuiteSession.rankedWidgetBooks.collectAsState()
-    val loadingWidgetIds by DiscoverSuiteSession.loadingWidgetIds.collectAsState()
-
-    LegadoComposeTheme {
-        DiscoverySuiteHomeScreen(
-            selectedSuite = DiscoverSuiteSession.selectedSuite(config),
-            suites = config.suites,
-            selectedSuiteId = selectedSuiteId,
-            widgetBooks = widgetBooks,
-            rankedWidgetBooks = rankedWidgetBooks,
-            loadingWidgetIds = loadingWidgetIds,
-            scrollToTopSignal = 0,
-            onSearchClick = { SearchActivity.start(context, key = null) },
-            onSuiteClick = { context.startActivity<DiscoverySuiteManageActivity>() },
-            onSuiteSelect = { DiscoverSuiteSession.selectSuite(it) },
-            onBookClick = { book -> openSuiteBook(scope, context, book) },
-            onBookPreviewOpen = { book -> openSuiteBook(scope, context, book) },
-            onTagClick = { target ->
-                if (target.sourceUrl.isNotBlank() && target.tagUrl.isNotBlank()) {
-                    context.startActivity<ExploreShowActivity> {
-                        putExtra("exploreName", target.title.substringAfter(" - ", target.title))
-                        putExtra("sourceUrl", target.sourceUrl)
-                        putExtra("exploreUrl", target.tagUrl)
-                    }
-                }
-            },
-            onRefreshWidget = DiscoverSuiteSession::refreshWidget,
-            onHorizontalLoadMore = DiscoverSuiteSession::loadMoreHorizontal,
-            onRankedLoadMore = { widget, target ->
-                DiscoverSuiteSession.loadMoreRanked(widget, target)
-            },
-            onCanScrollBackwardChanged = { },
-        )
-    }
-}
-
-/** 点开套件里的书：落库后按视频/文本类型打开（与旧壳 showBookInfo 同语义）。 */
-private fun openSuiteBook(
-    scope: kotlinx.coroutines.CoroutineScope,
-    context: Context,
-    book: io.legado.app.data.entities.SearchBook,
-) {
-    scope.launch {
-        withContext(Dispatchers.IO) {
-            appDb.searchBookDao.insert(book)
-        }
-        val isVideo = withContext(Dispatchers.IO) {
-            SearchBookOpenHelper.isVideoResult(book, null)
-        }
-        SearchBookOpenHelper.open(context, book, isVideo)
     }
 }
