@@ -40,7 +40,6 @@ import io.legado.app.help.config.V5ThemeSync
 import io.legado.app.model.AutoTask
 import io.legado.app.service.WebService
 import io.legado.app.ui.about.AboutActivity
-import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.RelaySettingsActivity
 import io.legado.app.ui.book.bookmark.AllBookmarkActivity
@@ -54,7 +53,6 @@ import io.legado.app.ui.main.my.MySettingsSectionModel
 import io.legado.app.ui.main.my.MySettingsSubSearchItem
 import io.legado.app.ui.main.my.MySettingsThemeOption
 import io.legado.app.ui.main.my.MyWebServiceUiState
-import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.autoTask.AutoTaskActivity

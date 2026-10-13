@@ -237,7 +237,7 @@ import io.legado.app.ui.config.ShareNoteTemplateManageActivity
 import io.legado.app.ui.dict.DictDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.replace.ReplaceRuleActivity
+import io.legado.app.ui.host.HostReplaceRuleManageActivity
 import io.legado.app.ui.host.HostReplaceEditActivity
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.PopupAction
@@ -4443,7 +4443,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun openReplaceRule() {
         if (!supportsReplaceRules()) return
-        replaceActivity.launch(Intent(this, ReplaceRuleActivity::class.java))
+        replaceActivity.launch(Intent(this, HostReplaceRuleManageActivity::class.java))
     }
 
     /**

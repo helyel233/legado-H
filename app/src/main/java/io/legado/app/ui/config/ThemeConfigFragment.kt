@@ -25,6 +25,7 @@ import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startActivity
+import io.legado.app.ui.host.HostSettingsActivity
 
 class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
 
@@ -126,9 +127,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             title = getString(R.string.discovery_subscription_settings_title),
                             summary = getString(R.string.discovery_subscription_settings_summary),
                             onClick = {
-                                startActivity<ConfigActivity> {
-                                    putExtra("configTag", ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG)
-                                }
+                                HostSettingsActivity.start(requireContext(), ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG)
                             }
                         ),
                         SettingActionSpec(
@@ -136,9 +135,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             title = getString(R.string.cover_config),
                             summary = getString(R.string.cover_config_summary),
                             onClick = {
-                                startActivity<ConfigActivity> {
-                                    putExtra("configTag", ConfigTag.COVER_CONFIG)
-                                }
+                                HostSettingsActivity.start(requireContext(), ConfigTag.COVER_CONFIG)
                             }
                         )
                     )

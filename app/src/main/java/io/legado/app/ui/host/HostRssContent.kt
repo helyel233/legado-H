@@ -286,7 +286,7 @@ private fun openRssSource(
     if (source.singleUrl) {
         viewModel.getSingleUrl(source) { url ->
             if (url.startsWith("http", true)) {
-                io.legado.app.ui.rss.read.ReadRssActivity.start(
+                HostReadRssActivity.start(
                     context, true, source.sourceUrl, source.sourceName, url,
                 )
             } else {
@@ -298,7 +298,7 @@ private fun openRssSource(
             // V5 原生排序页（P4 第二阶段）；仅当源带 startHtml 时直接进旧阅读页
             HostRssSortActivity.start(context, source.sourceUrl)
         }) { html ->
-            io.legado.app.ui.rss.read.ReadRssActivity.start(
+            HostReadRssActivity.start(
                 context, true, source.sourceUrl, source.sourceName, startHtml = html,
             )
         }

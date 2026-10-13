@@ -309,6 +309,12 @@
             android:launchMode="standard" />
         <!-- P4 订阅排序页 V5 原生实现（取代旧 RssSortActivity 的呈现层） -->
         <activity
+            android:name=".ui.host.HostReadRssActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:launchMode="standard" />
+        <activity
             android:name=".ui.host.HostRssSortActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
@@ -442,9 +448,6 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 配置界面 -->
-        <activity
-            android:name=".ui.config.ConfigActivity"
-            android:launchMode="standard" />
         <activity
             android:name=".ui.autoTask.AutoTaskActivity"
             android:launchMode="singleTop"
@@ -611,10 +614,6 @@
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
         <!-- 替换规则界面 -->
-        <activity
-            android:name=".ui.replace.ReplaceRuleActivity"
-            android:launchMode="singleTop"
-            android:screenOrientation="behind" />
         <!-- 书籍管理 -->
         <activity
             android:name=".ui.book.manage.BookshelfManageActivity"

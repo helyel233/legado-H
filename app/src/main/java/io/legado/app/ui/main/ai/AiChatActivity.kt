@@ -61,7 +61,6 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.ui.host.HostAiImageGalleryActivity
 import io.legado.app.ui.host.HostAiWorldBookManageActivity
 import io.legado.app.ui.host.setV5Content
-import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.book.character.BookCharacterEditActivity
 import io.legado.app.ui.book.character.BookCharacterManageActivity
@@ -78,6 +77,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.ui.host.HostSettingsActivity
 
 class AiChatActivity : AppCompatActivity() {
 
@@ -261,9 +261,7 @@ class AiChatActivity : AppCompatActivity() {
     }
 
     private fun openAiSettings() {
-        android.content.Intent(this, ConfigActivity::class.java).apply {
-            putExtra("configTag", ConfigTag.AI_CONFIG)
-        }.also(::startActivity)
+        HostSettingsActivity.start(this, ConfigTag.AI_CONFIG)
     }
 
     private fun openImageGallery() {

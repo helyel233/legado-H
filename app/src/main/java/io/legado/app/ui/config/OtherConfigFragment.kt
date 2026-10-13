@@ -43,6 +43,7 @@ import io.legado.app.utils.restart
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import splitties.init.appCtx
+import io.legado.app.ui.host.HostSettingsActivity
 
 /**
  * 其它设置
@@ -341,9 +342,7 @@ class OtherConfigFragment : ComposeSettingFragment() {
                 title = getString(R.string.network_dns_title),
                 summary = getString(R.string.network_dns_summary),
                 onClick = {
-                    startActivity<ConfigActivity> {
-                        putExtra("configTag", ConfigTag.NETWORK_DNS_CONFIG)
-                    }
+                    HostSettingsActivity.start(requireContext(), ConfigTag.NETWORK_DNS_CONFIG)
                 }
             ),
             switch(
