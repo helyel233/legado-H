@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import io.legado.app.ui.host.HostAiImageProviderEditActivity
 
 class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>() {
 
@@ -84,7 +85,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
                 onExportRules = { exportAllRules() },
                 onAdd = { showAddSelector() },
                 onOpenProvider = { provider ->
-                    openEdit(AiImageProviderEditActivity.newIntent(this, provider.id, provider.type))
+                    openEdit(HostAiImageProviderEditActivity.newIntent(this, provider.id, provider.type))
                 },
                 providerActions = ::providerActions
             )
@@ -118,7 +119,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
                 return@showComposeActionListDialog
             }
             val type = if (index == 0) AiImageProviderConfig.TYPE_OPENAI else AiImageProviderConfig.TYPE_JS
-            openEdit(AiImageProviderEditActivity.newIntent(this, null, type))
+            openEdit(HostAiImageProviderEditActivity.newIntent(this, null, type))
         }
     }
 
@@ -176,7 +177,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
             add(
                 AppManagementMenuAction(getString(R.string.edit)) {
                     openEdit(
-                        AiImageProviderEditActivity.newIntent(
+                        HostAiImageProviderEditActivity.newIntent(
                             this@AiImageProviderManageActivity,
                             provider.id,
                             provider.type

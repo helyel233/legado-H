@@ -1,4 +1,4 @@
-package io.legado.app.ui.config
+package io.legado.app.ui.host
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,38 +56,6 @@ import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
-
-// ── Title Bar ────────────────────────────────────────────────────────────────
-
-@Composable
-fun AppDialogTitleBar(title: String) {
-    val style = rememberAppDialogStyle()
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .height(56.dp)
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                color = style.primaryText,
-                fontFamily = style.titleFontFamily,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
-            )
-        }
-    }
-}
 
 // ── Tab Bar ──────────────────────────────────────────────────────────────────
 
@@ -159,9 +125,8 @@ fun AiProviderConfigTab(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .navigationBarsPadding(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         AiProviderTextField(
             value = name,
@@ -312,14 +277,14 @@ fun AiModelManageTab(
     providerName: String,
     onModelClick: (AiModelConfig) -> Unit,
     onAddModel: () -> Unit,
-    onFetchModels: () -> Unit
+    onFetchModels: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val style = rememberAppDialogStyle()
     val palette = style.toMiuixPalette()
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .navigationBarsPadding()
     ) {
         // Summary
         Text(

@@ -55,6 +55,7 @@ import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.host.HostAiProviderEditActivity
 
 class AiProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>() {
 
@@ -94,9 +95,7 @@ class AiProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>()
     }
 
     private fun openEdit(provider: AiProviderConfig?) {
-        startActivity(Intent(this, AiProviderEditActivity::class.java).apply {
-            provider?.id?.let { putExtra(AiProviderEditActivity.EXTRA_PROVIDER_ID, it) }
-        })
+        HostAiProviderEditActivity.start(this, provider?.id)
     }
 
     private fun providerActions(provider: AiProviderConfig): List<AppManagementMenuAction> {

@@ -27,7 +27,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.help.config.AppConfig
-import io.legado.app.ui.config.AiProviderEditActivity
 import io.legado.app.ui.main.ai.AiProviderConfig
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppConfirmDialog
@@ -41,7 +40,7 @@ import io.legado.app.utils.postEvent
 
 /**
  * AI 服务商管理（V5）。
- * 业务逻辑从旧 AiProviderManageActivity 搬运；编辑仍指向旧 AiProviderEditActivity（待迁）。
+ * 业务逻辑从旧 AiProviderManageActivity 搬运；编辑页已迁为 V5（HostAiProviderEditActivity）。
  */
 class HostAiProviderManageActivity : AppCompatActivity() {
 
@@ -91,9 +90,7 @@ private fun HostAiProviderManageScreen() {
     }
 
     fun openEdit(provider: AiProviderConfig?) {
-        context.startActivity(Intent(context, AiProviderEditActivity::class.java).apply {
-            provider?.id?.let { putExtra(AiProviderEditActivity.EXTRA_PROVIDER_ID, it) }
-        })
+        HostAiProviderEditActivity.start(context, provider?.id)
     }
 
     fun removeProvider(provider: AiProviderConfig) {

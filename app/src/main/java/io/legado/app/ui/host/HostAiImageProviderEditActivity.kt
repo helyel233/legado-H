@@ -1,34 +1,36 @@
-package io.legado.app.ui.config
+package io.legado.app.ui.host
 
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.constant.EventBus
-import io.legado.app.databinding.ActivityAiImageProviderEditBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.main.ai.AiImageProviderConfig
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
-class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBinding>() {
+/**
+ * 生图供应商编辑（V5）。
+ *
+ * 业务逻辑从旧 AiImageProviderEditActivity 逐行搬运；表单 UI 复用
+ * [AiImageProviderEditForm]（已去掉自带顶栏/保存按钮）。
+ * 顶栏标题/返回/保存与 dirty 返回确认由 [HostV5EditPage] 提供。
+ */
+class HostAiImageProviderEditActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityAiImageProviderEditBinding::inflate)
     private var providerId: String? = null
 
-    // Compose state
     private var nameText by mutableStateOf("")
     private var baseUrlText by mutableStateOf("")
     private var apiKeyText by mutableStateOf("")
@@ -41,11 +43,15 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
     private var stylePromptText by mutableStateOf("")
     private var scriptText by mutableStateOf("")
     private var jsLibText by mutableStateOf("")
+    private var dirty by mutableStateOf(false)
     private var editingField: Field = Field.PARAMS
 
-    private val codeEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private val codeEditLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
         val text = result.data?.getStringExtra("text") ?: return@registerForActivityResult
+        dirty = true
         when (editingField) {
             Field.PARAMS -> paramsText = text
             Field.STYLE_PROMPT -> stylePromptText = text
@@ -54,82 +60,80 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         providerId = intent.getStringExtra(EXTRA_PROVIDER_ID)
-        providerType = intent.getStringExtra(EXTRA_PROVIDER_TYPE) ?: AiImageProviderConfig.TYPE_OPENAI
+        providerType = intent.getStringExtra(EXTRA_PROVIDER_TYPE)
+            ?: AiImageProviderConfig.TYPE_OPENAI
         val provider = currentProvider()
         if (provider != null) providerType = provider.type
         bind(provider)
-        initComposeContent()
+        setV5Content { HostAiImageProviderEditScreen() }
     }
 
-    private fun initComposeContent() {
-        val container = binding.root as? ViewGroup ?: return
-        val titleBar = binding.titleBar
-        val index = container.indexOfChild(titleBar)
-        // Remove all children after the title bar (the ScrollView and save button)
-        while (container.childCount > index + 1) {
-            container.removeViewAt(index + 1)
-        }
-        // Also remove the title bar itself since Compose handles the top bar
-        container.removeView(titleBar)
-        val cv = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+    @Composable
+    private fun HostAiImageProviderEditScreen() {
+        val isOpenAi = providerType == AiImageProviderConfig.TYPE_OPENAI
+        HostV5EditPage(
+            title = stringResource(R.string.ai_image_provider_manage),
+            dirty = dirty,
+            onSave = { save() },
+            onDiscard = { finish() },
+        ) {
+            AiImageProviderEditForm(
+                name = nameText,
+                onNameChange = { nameText = it; dirty = true },
+                baseUrl = baseUrlText,
+                onBaseUrlChange = { baseUrlText = it; dirty = true },
+                apiKey = apiKeyText,
+                onApiKeyChange = { apiKeyText = it; dirty = true },
+                model = modelText,
+                onModelChange = { modelText = it; dirty = true },
+                headers = headersText,
+                onHeadersChange = { headersText = it; dirty = true },
+                timeout = timeoutText,
+                onTimeoutChange = { timeoutText = it; dirty = true },
+                enabled = enabledState,
+                onEnabledChange = { enabledState = it; dirty = true },
+                isOpenAi = isOpenAi,
+                onTypeClick = { selectType() },
+                stylePromptSummary = "${
+                    stringResource(R.string.ai_image_style_prompt)
+                }: ${summary(stylePromptText)}",
+                onStylePromptClick = {
+                    openCodeEditor(
+                        Field.STYLE_PROMPT,
+                        getString(R.string.ai_image_style_prompt),
+                        stylePromptText,
+                        "text.html.markdown"
+                    )
+                },
+                paramsSummary = "${
+                    stringResource(R.string.ai_image_params)
+                }: ${summary(paramsText.ifBlank { defaultParams() })}",
+                onParamsClick = {
+                    openCodeEditor(
+                        Field.PARAMS,
+                        getString(R.string.ai_image_params),
+                        paramsText.ifBlank { defaultParams() }
+                    )
+                },
+                scriptSummary = "${
+                    stringResource(R.string.ai_image_script)
+                }: ${summary(scriptText)}",
+                onScriptClick = {
+                    openCodeEditor(
+                        Field.SCRIPT,
+                        getString(R.string.ai_image_script),
+                        scriptText
+                    )
+                },
+                jsLibSummary = "jsLib: ${summary(jsLibText)}",
+                onJsLibClick = {
+                    openCodeEditor(Field.JS_LIB, "jsLib", jsLibText)
+                },
             )
-            setContent {
-                val isOpenAi = providerType == AiImageProviderConfig.TYPE_OPENAI
-                AiImageProviderEditScreen(
-                    name = nameText,
-                    onNameChange = { nameText = it },
-                    baseUrl = baseUrlText,
-                    onBaseUrlChange = { baseUrlText = it },
-                    apiKey = apiKeyText,
-                    onApiKeyChange = { apiKeyText = it },
-                    model = modelText,
-                    onModelChange = { modelText = it },
-                    headers = headersText,
-                    onHeadersChange = { headersText = it },
-                    timeout = timeoutText,
-                    onTimeoutChange = { timeoutText = it },
-                    enabled = enabledState,
-                    onEnabledChange = { enabledState = it },
-                    providerType = providerType,
-                    isOpenAi = isOpenAi,
-                    onTypeClick = { selectType() },
-                    stylePromptSummary = "${getString(R.string.ai_image_style_prompt)}: ${summary(stylePromptText)}",
-                    onStylePromptClick = {
-                        openCodeEditor(
-                            Field.STYLE_PROMPT,
-                            getString(R.string.ai_image_style_prompt),
-                            stylePromptText,
-                            "text.html.markdown"
-                        )
-                    },
-                    paramsSummary = "${getString(R.string.ai_image_params)}: ${summary(paramsText.ifBlank { defaultParams() })}",
-                    onParamsClick = {
-                        openCodeEditor(
-                            Field.PARAMS,
-                            getString(R.string.ai_image_params),
-                            paramsText.ifBlank { defaultParams() }
-                        )
-                    },
-                    scriptSummary = "${getString(R.string.ai_image_script)}: ${summary(scriptText)}",
-                    onScriptClick = {
-                        openCodeEditor(Field.SCRIPT, getString(R.string.ai_image_script), scriptText)
-                    },
-                    jsLibSummary = "jsLib: ${summary(jsLibText)}",
-                    onJsLibClick = {
-                        openCodeEditor(Field.JS_LIB, "jsLib", jsLibText)
-                    },
-                    onSave = { save() },
-                    onBack = { finish() }
-                )
-            }
         }
-        container.addView(cv)
     }
 
     private fun bind(provider: AiImageProviderConfig?) {
@@ -159,6 +163,7 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
             } else {
                 AiImageProviderConfig.TYPE_JS
             }
+            dirty = true
         }
     }
 
@@ -239,7 +244,7 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
         private const val EXTRA_PROVIDER_TYPE = "providerType"
 
         fun newIntent(context: Context, providerId: String?, type: String): Intent {
-            return Intent(context, AiImageProviderEditActivity::class.java).apply {
+            return Intent(context, HostAiImageProviderEditActivity::class.java).apply {
                 putExtra(EXTRA_PROVIDER_TYPE, type)
                 providerId?.let { putExtra(EXTRA_PROVIDER_ID, it) }
             }

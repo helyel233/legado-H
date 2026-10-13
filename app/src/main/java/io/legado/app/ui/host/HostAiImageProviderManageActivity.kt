@@ -31,7 +31,6 @@ import io.legado.app.constant.EventBus
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.help.http.newCallResponseBody
-import io.legado.app.ui.config.AiImageProviderEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.main.ai.AiImageProviderConfig
 import io.legado.app.uikit.facade.AppToast
@@ -56,7 +55,7 @@ import java.util.UUID
 
 /**
  * AI 生图供应商管理（V5）。
- * 业务逻辑从旧 AiImageProviderManageActivity 搬运；编辑仍指向旧 AiImageProviderEditActivity（待迁）。
+ * 业务逻辑从旧 AiImageProviderManageActivity 搬运；编辑页已迁为 V5（HostAiImageProviderEditActivity）。
  */
 class HostAiImageProviderManageActivity : AppCompatActivity() {
 
@@ -101,7 +100,7 @@ private fun HostAiImageProviderManageScreen() {
     }
 
     fun openEdit(providerId: String?, type: String) {
-        context.startActivity(AiImageProviderEditActivity.newIntent(context, providerId, type))
+        context.startActivity(HostAiImageProviderEditActivity.newIntent(context, providerId, type))
     }
 
     fun importRules(rules: List<AiImageProviderConfig>) {

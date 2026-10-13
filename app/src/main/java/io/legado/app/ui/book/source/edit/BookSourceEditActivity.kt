@@ -164,7 +164,7 @@ class BookSourceEditActivity :
     private fun createRecyclerView(context: Context): RecyclerView {
         return RecyclerView(context).apply {
             setEdgeEffectColor(context.primaryColor)
-            if (adapter.editEntityMaxLine < 999) {
+            if (this@BookSourceEditActivity.adapter.editEntityMaxLine < 999) {
                 layoutManager = NoChildScrollLinearLayoutManager(context)
             } else {
                 layoutManager = LinearLayoutManager(context)
@@ -286,7 +286,7 @@ class BookSourceEditActivity :
             viewModel.clearCookie(getSource().bookSourceUrl)
         })
         list.add(
-            getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "" to {
+            (getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "") to {
                 viewModel.autoComplete = !viewModel.autoComplete
             }
         )

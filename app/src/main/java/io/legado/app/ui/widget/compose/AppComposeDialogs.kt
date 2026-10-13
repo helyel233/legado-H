@@ -2129,7 +2129,7 @@ class ComposeFetchedModelDialog : ComposeDialogFragment() {
                 val existingIds = remember {
                     args.getStringArrayList(ARG_EXISTING_IDS)?.toSet().orEmpty()
                 }
-                io.legado.app.ui.config.FetchedModelSelectorContent(
+                io.legado.app.ui.host.FetchedModelSelectorContent(
                     modelIds = modelIds,
                     existingIds = existingIds,
                     onAddSingle = { modelId ->

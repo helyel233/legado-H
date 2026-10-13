@@ -31,6 +31,7 @@ import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun LibraryContainerManageScreen(

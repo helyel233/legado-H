@@ -157,12 +157,12 @@ class RssSourceEditActivity :
         return RecyclerView(context).apply {
             setEdgeEffectColor(context.primaryColor)
             val createSpanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int = when (adapter.getItemViewType(position)) {
+                override fun getSpanSize(position: Int): Int = when (this@RssSourceEditActivity.adapter.getItemViewType(position)) {
                     EditEntity.ViewType.checkBox -> 1
                     else -> 2
                 }
             }
-            if (adapter.editEntityMaxLine < 999) {
+            if (this@RssSourceEditActivity.adapter.editEntityMaxLine < 999) {
                 layoutManager = object : GridLayoutManager(context, 2) {
                     init {
                         spanSizeLookup = createSpanSizeLookup
@@ -284,7 +284,7 @@ class RssSourceEditActivity :
             viewModel.clearCookie(getRssSource().sourceUrl)
         })
         list.add(
-            getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "" to {
+            (getString(R.string.auto_complete) + if (viewModel.autoComplete) " ✓" else "") to {
                 viewModel.autoComplete = !viewModel.autoComplete
             }
         )

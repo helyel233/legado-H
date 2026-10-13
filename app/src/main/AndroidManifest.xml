@@ -194,6 +194,18 @@
             android:exported="false"
             android:launchMode="standard" />
         <activity
+            android:name=".ui.host.HostAiProviderEditActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".ui.host.HostAiImageProviderEditActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
             android:name=".ui.host.HostBookSourceManageActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
@@ -536,16 +548,8 @@
             android:name=".ui.config.AiProviderManageActivity"
             android:launchMode="standard" />
         <activity
-            android:name=".ui.config.AiProviderEditActivity"
-            android:launchMode="standard"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
-        <activity
             android:name=".ui.config.AiImageProviderManageActivity"
             android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.AiImageProviderEditActivity"
-            android:launchMode="standard"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity
             android:name=".ui.config.CoverCollectionManageActivity"
             android:launchMode="standard" />
