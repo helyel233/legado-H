@@ -61,7 +61,7 @@ internal const val DISCOVERY_SUITE_CACHE_PREFIX = "discovery_suite_snapshot_"
 
 // ---------------------------------------------------------------- 运行时状态
 
-internal data class SuiteRandomDeck(
+data class SuiteRandomDeck(
     val signature: String,
     val mutex: Mutex = Mutex(),
     val queue: ArrayDeque<SearchBook> = ArrayDeque(),
@@ -84,7 +84,7 @@ internal data class SuiteDeckPageRequest(
     val seed: Int
 )
 
-internal data class SuiteHorizontalPagingState(
+data class SuiteHorizontalPagingState(
     val signature: String,
     // nextPage/loading/exhausted 会被 Main(loadMore) 与 IO(首页加载) 访问，加 @Volatile 保证可见性。
     @Volatile var nextPage: Int = 2,
@@ -92,7 +92,7 @@ internal data class SuiteHorizontalPagingState(
     @Volatile var exhausted: Boolean = false
 )
 
-internal data class SuiteRankedPagingState(
+data class SuiteRankedPagingState(
     val signature: String,
     // nextPage/loading/exhausted 会被 Main(loadMore) 与 IO(首页加载) 访问，加 @Volatile 保证可见性。
     @Volatile var nextPage: Int = 2,
