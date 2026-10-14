@@ -25,7 +25,6 @@ import io.legado.app.ui.main.ai.AiModelConfig
 import io.legado.app.ui.main.ai.AiMcpServerConfig
 import io.legado.app.ui.host.HostAiImageGalleryActivity
 import io.legado.app.ui.main.ai.AiSkillConfig
-import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.host.HostAiImageProviderManageActivity
 import io.legado.app.ui.host.HostAiProviderManageActivity
 import io.legado.app.ui.host.HostAiWorldBookManageActivity

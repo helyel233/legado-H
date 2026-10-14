@@ -39,13 +39,8 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.V5ThemeSync
 import io.legado.app.model.AutoTask
 import io.legado.app.service.WebService
-import io.legado.app.ui.about.AboutActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.RelaySettingsActivity
-import io.legado.app.ui.book.bookmark.AllBookmarkActivity
-import io.legado.app.ui.book.source.manage.BookSourceActivity
-import io.legado.app.ui.dict.rule.DictRuleActivity
-import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.main.my.MySettingsRowKind
 import io.legado.app.ui.main.my.MySettingsRowModel
 import io.legado.app.ui.main.my.MySettingsScreen
@@ -53,8 +48,6 @@ import io.legado.app.ui.main.my.MySettingsSectionModel
 import io.legado.app.ui.main.my.MySettingsSubSearchItem
 import io.legado.app.ui.main.my.MySettingsThemeOption
 import io.legado.app.ui.main.my.MyWebServiceUiState
-import io.legado.app.ui.about.ReadRecordActivity
-import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.uikit.v5.components.AppMenuSheet
 import androidx.compose.ui.res.stringResource

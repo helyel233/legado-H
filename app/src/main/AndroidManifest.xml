@@ -331,12 +331,6 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
             android:launchMode="standard" />
-        <!-- 主框架页面独立宿主（RSS/首页聚合） -->
-        <activity
-            android:name=".ui.config.AppUiConfigActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
-            android:exported="false"
-            android:launchMode="standard" />
         <activity
             android:name=".ui.config.LayoutCenterActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
@@ -389,9 +383,6 @@
         <!-- 书籍信息编辑 -->
         <activity
             android:name=".ui.book.info.edit.BookInfoEditActivity"
-            android:launchMode="singleTask" />
-        <activity
-            android:name=".ui.main.bookshelf.BookshelfTagManageActivity"
             android:launchMode="singleTask" />
         <activity
             android:name=".ui.main.bookshelf.BookCollectionActivity"
@@ -510,9 +501,6 @@
             android:launchMode="standard"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity
-            android:name=".ui.config.AppearanceKitActivity"
-            android:launchMode="standard" />
-        <activity
             android:name=".ui.config.AppearanceKitEditActivity"
             android:launchMode="standard" />
         <activity
@@ -555,12 +543,6 @@
             android:name=".ui.config.LibraryContainerManageActivity"
             android:launchMode="standard" />
         <activity
-            android:name=".ui.config.AiProviderManageActivity"
-            android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.AiImageProviderManageActivity"
-            android:launchMode="standard" />
-        <activity
             android:name=".ui.config.CoverCollectionManageActivity"
             android:launchMode="standard" />
         <activity
@@ -572,13 +554,6 @@
             android:theme="@style/AppTheme.Light" />
         <activity
             android:name=".ui.main.ai.AiChatActivity"
-            android:launchMode="standard"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
-        <activity
-            android:name=".ui.main.ai.AiImageGalleryActivity"
-            android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.AiWorldBookManageActivity"
             android:launchMode="standard"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity
@@ -599,24 +574,9 @@
             android:name=".ui.book.search.SearchActivity"
             android:launchMode="standard"
             android:windowSoftInputMode="adjustResize|stateHidden" />
-        <!-- 关于界面 -->
-        <activity
-            android:name=".ui.about.AboutActivity"
-            android:launchMode="singleTask"
-            android:screenOrientation="behind" />
         <!-- 书源管理 -->
         <activity
             android:name=".ui.book.source.manage.BookSourceActivity"
-            android:launchMode="singleTop"
-            android:screenOrientation="behind" />
-        <!-- 订阅源管理 -->
-        <activity
-            android:name=".ui.rss.source.manage.RssSourceActivity"
-            android:launchMode="singleTop"
-            android:screenOrientation="behind" />
-        <!-- txt目录规则管理 -->
-        <activity
-            android:name=".ui.book.toc.rule.TxtTocRuleActivity"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
         <!-- 替换规则界面 -->
@@ -644,9 +604,6 @@
         <activity
             android:name=".ui.rss.article.RssSortActivity"
             android:launchMode="singleTop" />
-        <activity
-            android:name=".ui.rss.article.RssSearchActivity"
-            android:launchMode="singleTop" />
         <!-- RSS阅读 -->
         <activity
             android:name=".ui.rss.read.ReadRssActivity"
@@ -673,10 +630,6 @@
         <activity
             android:name=".ui.rss.favorites.RssFavoritesActivity"
             android:launchMode="singleTop" />
-        <!-- 书签 -->
-        <activity
-            android:name=".ui.book.bookmark.AllBookmarkActivity"
-            android:launchMode="singleTop" />
         <!-- 缓存界面 -->
         <activity
             android:name=".ui.book.cache.CacheActivity"
@@ -698,16 +651,6 @@
         <!-- 阅读年度报告 -->
         <activity
             android:name=".ui.main.readrecord.YearlyReportActivity"
-            android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true" />
-        <!-- 字典管理 -->
-        <activity
-            android:name=".ui.dict.rule.DictRuleActivity"
-            android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true" />
-        <!-- 文件管理 -->
-        <activity
-            android:name=".ui.file.FileManageActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true" />
         <!-- 选择文件 -->
