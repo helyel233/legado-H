@@ -1,55 +1,43 @@
 package io.legado.app.ui.about
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
+import io.legado.app.R
 import io.legado.app.help.update.AppUpdateConfig
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.showDialogFragment
 
 object UpdateAcceleratorDialog {
 
     fun show(fragment: Fragment, onChanged: () -> Unit) {
         // 更新通道固定为 GitHub Releases 单通道，此处仅管理 GitHub 加速代理
-        val initialProxyIndex = AppUpdateConfig.githubProxyIndex
-        val initialProxyTemplates = AppUpdateConfig.githubProxyTemplates.toList()
-
         fragment.showDialogFragment(
             UpdateAcceleratorComposeDialog.create(
-                initialProxyTemplates = initialProxyTemplates,
-                initialProxyIndex = initialProxyIndex,
+                initialProxyTemplates = AppUpdateConfig.githubProxyTemplates.toList(),
+                initialProxyIndex = AppUpdateConfig.githubProxyIndex,
                 onProxySelected = { index ->
                     AppUpdateConfig.githubProxyIndex = index
                     onChanged()
@@ -121,9 +109,10 @@ object UpdateAcceleratorDialog {
     }
 }
 
-class UpdateAcceleratorComposeDialog : ComposeDialogFragment() {
+internal class UpdateAcceleratorComposeDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Form
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
     private var onProxySelected: ((Int) -> Unit)? = null
     private var onProxyAdded: ((String) -> Unit)? = null
@@ -131,156 +120,125 @@ class UpdateAcceleratorComposeDialog : ComposeDialogFragment() {
     private var onProxyDeleted: ((Int) -> Unit)? = null
     private var onDismissed: (() -> Unit)? = null
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val args = arguments ?: Bundle()
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                val palette = style.toMiuixPalette()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        proxyTemplates = arguments?.getStringArrayList(ARG_PROXY_TEMPLATES)?.toList().orEmpty()
+        selectedProxyIndex = arguments?.getInt(ARG_PROXY_INDEX) ?: -1
+    }
 
-                var proxyTemplates by rememberSaveable {
-                    mutableStateOf(
-                        args.getStringArrayList(ARG_PROXY_TEMPLATES)?.toList().orEmpty()
+    @Composable
+    override fun Content() {
+        val density = LocalVisualSpec.current.density
+
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                Text(
+                    text = "加速管理",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "代理模板支持 \${url} 占位符。未填写占位符时，会自动把原始 GitHub 地址拼到代理地址后面。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 4),
+                ) {
+                    item(key = "proxy_none") {
+                        ProxyRow(text = "不使用代理", selected = selectedProxyIndex < 0) {
+                            selectedProxyIndex = -1
+                            onProxySelected?.invoke(-1)
+                        }
+                    }
+                    itemsIndexed(
+                        proxyTemplates,
+                        key = { index, _ -> "proxy_$index" }
+                    ) { index, template ->
+                        ProxyRow(text = template, selected = selectedProxyIndex == index) {
+                            selectedProxyIndex = index
+                            onProxySelected?.invoke(index)
+                        }
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = "添加代理",
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            showProxyEditDialog(oldValue = null) { value ->
+                                proxyTemplates = proxyTemplates + value
+                                selectedProxyIndex = proxyTemplates.indexOf(value)
+                                onProxyAdded?.invoke(value)
+                            }
+                        },
+                    )
+                    AppGhostButton(
+                        text = "编辑",
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val index = selectedProxyIndex
+                            val oldValue = proxyTemplates.getOrNull(index) ?: return@AppGhostButton
+                            showProxyEditDialog(oldValue = oldValue) { value ->
+                                proxyTemplates = proxyTemplates.toMutableList().apply {
+                                    set(index, value)
+                                }
+                                selectedProxyIndex = proxyTemplates.indexOf(value)
+                                onProxyEdited?.invoke(index, value)
+                            }
+                        },
+                    )
+                    AppGhostButton(
+                        text = "删除",
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val index = selectedProxyIndex
+                            if (index !in proxyTemplates.indices) return@AppGhostButton
+                            proxyTemplates = proxyTemplates.toMutableList().apply {
+                                removeAt(index)
+                            }
+                            selectedProxyIndex = -1
+                            onProxyDeleted?.invoke(index)
+                        },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
                     )
                 }
-                var selectedProxyIndex by rememberSaveable {
-                    mutableIntStateOf(args.getInt(ARG_PROXY_INDEX))
-                }
-
-                AppDialogFrame(
-                    title = "加速管理",
-                    scrollContent = true,
-                    content = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // -- Proxy section --
-                            Text(
-                                text = "GitHub 加速代理",
-                                color = style.accent,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Text(
-                                text = "代理模板支持 \${url} 占位符。未填写占位符时，会自动把原始 GitHub 地址拼到代理地址后面。",
-                                color = style.secondaryText,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            // Proxy radio list
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 260.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                item(key = "proxy_none") {
-                                    LegadoMiuixChoiceRow(
-                                        text = "不使用代理",
-                                        selected = selectedProxyIndex < 0,
-                                        palette = palette,
-                                        onClick = {
-                                            selectedProxyIndex = -1
-                                            onProxySelected?.invoke(-1)
-                                        },
-                                        minHeight = 40.dp
-                                    )
-                                }
-                                itemsIndexed(
-                                    proxyTemplates,
-                                    key = { index, _ -> "proxy_$index" }
-                                ) { index, template ->
-                                    LegadoMiuixChoiceRow(
-                                        text = template,
-                                        selected = selectedProxyIndex == index,
-                                        palette = palette,
-                                        onClick = {
-                                            selectedProxyIndex = index
-                                            onProxySelected?.invoke(index)
-                                        },
-                                        minHeight = 40.dp
-                                    )
-                                }
-                            }
-
-                            // Action buttons row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                LegadoMiuixActionButton(
-                                    text = "添加代理",
-                                    palette = palette,
-                                    onClick = {
-                                        showProxyEditDialog(oldValue = null) { value ->
-                                            proxyTemplates = proxyTemplates + value
-                                            selectedProxyIndex = proxyTemplates.indexOf(value)
-                                            onProxyAdded?.invoke(value)
-                                        }
-                                    },
-                                    cornerRadius = style.actionRadius
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                LegadoMiuixActionButton(
-                                    text = "编辑",
-                                    palette = palette,
-                                    onClick = {
-                                        val index = selectedProxyIndex
-                                        val oldValue = proxyTemplates.getOrNull(index)
-                                            ?: return@LegadoMiuixActionButton
-                                        showProxyEditDialog(oldValue = oldValue) { value ->
-                                            proxyTemplates = proxyTemplates.toMutableList().apply {
-                                                set(index, value)
-                                            }
-                                            selectedProxyIndex = proxyTemplates.indexOf(value)
-                                            onProxyEdited?.invoke(index, value)
-                                        }
-                                    },
-                                    cornerRadius = style.actionRadius
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                LegadoMiuixActionButton(
-                                    text = "删除",
-                                    palette = palette,
-                                    onClick = {
-                                        val index = selectedProxyIndex
-                                        if (index !in proxyTemplates.indices) return@LegadoMiuixActionButton
-                                        proxyTemplates = proxyTemplates.toMutableList().apply {
-                                            removeAt(index)
-                                        }
-                                        selectedProxyIndex = -1
-                                        onProxyDeleted?.invoke(index)
-                                    },
-                                    danger = true,
-                                    cornerRadius = style.actionRadius
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        LegadoMiuixActionButton(
-                            text = "确定",
-                            palette = palette,
-                            onClick = {
-                                dismissAllowingStateLoss()
-                            },
-                            primary = true,
-                            cornerRadius = style.actionRadius
-                        )
-                    }
-                )
             }
         }
+
+        if (proxyEditOpen) {
+            AppInputDialog(
+                title = if (proxyEditOldValue == null) "添加代理" else "编辑代理",
+                value = proxyEditText,
+                onValueChange = { proxyEditText = it },
+                placeholder = "https://proxy.example/\${url}",
+                confirmLabel = "确定",
+                cancelLabel = "取消",
+                onConfirm = { onProxyEditConfirmed(proxyEditText) },
+                onDismiss = { proxyEditOpen = false },
+            )
+        }
+    }
+
+    @Composable
+    private fun ProxyRow(text: String, selected: Boolean, onClick: () -> Unit) {
+        AppListItem(
+            headline = if (selected) "✓ $text" else text,
+            card = false,
+            onClick = onClick,
+        )
     }
 
     override fun onDismiss(dialog: android.content.DialogInterface) {
@@ -288,21 +246,30 @@ class UpdateAcceleratorComposeDialog : ComposeDialogFragment() {
         onDismissed?.invoke()
     }
 
+    private var proxyTemplates by mutableStateOf<List<String>>(emptyList())
+    private var selectedProxyIndex by mutableIntStateOf(-1)
+    private var proxyEditOpen by mutableStateOf(false)
+    private var proxyEditOldValue by mutableStateOf<String?>(null)
+    private var proxyEditText by mutableStateOf("")
+    private var proxyEditOnSaved by mutableStateOf<((String) -> Unit)?>(null)
+
     private fun showProxyEditDialog(
         oldValue: String?,
         onSaved: (String) -> Unit
     ) {
-        showComposeTextInputDialog(
-            title = if (oldValue == null) "添加代理" else "编辑代理",
-            hint = "https://proxy.example/\${url}",
-            initialValue = oldValue.orEmpty(),
-            onPositive = { value ->
-                val trimmed = value.trim()
-                if (trimmed.isNotBlank()) {
-                    onSaved(trimmed)
-                }
-            }
-        )
+        proxyEditOldValue = oldValue
+        proxyEditText = oldValue.orEmpty()
+        proxyEditOnSaved = onSaved
+        proxyEditOpen = true
+    }
+
+    private fun onProxyEditConfirmed(value: String) {
+        proxyEditOpen = false
+        val trimmed = value.trim()
+        if (trimmed.isNotBlank()) {
+            proxyEditOnSaved?.invoke(trimmed)
+        }
+        proxyEditOnSaved = null
     }
 
     companion object {

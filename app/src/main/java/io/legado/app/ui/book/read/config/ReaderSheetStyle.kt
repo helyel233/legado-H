@@ -2,6 +2,12 @@ package io.legado.app.ui.book.read.config
 
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.toColorInt
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryColor
@@ -83,4 +89,25 @@ object ReaderSheetStyle {
             setStroke(1.dpToPx(), strokeColor)
         }
     }
+}
+
+/**
+ * 阅读页底部面板取色（V5 迁移期共享入口）：**跟随阅读页当前背景色**，这是功能特性，勿改成固定主题色。
+ *
+ * 与旧 `ReaderComposeComponents.rememberReaderMenuDialogStyle()` 同源同逻辑：
+ * `AppConfig.readBarStyleFollowPage` 且当前背景为纯色时取 `ReadBookConfig.durConfig.curBgStr()`，
+ * 否则退回 `context.bottomBackground`，再交给 [ReaderSheetStyle.resolve] 解析出面板配色。
+ * 迁移期由 `ui/book/read/config` 域各面板共用（共享容器签名被 11 个文件消费，暂不改动它）。
+ */
+@Composable
+internal fun rememberReaderPagePalette(): ReaderSheetStyle.Palette {
+    val context = LocalContext.current
+    val bgColor = if (AppConfig.readBarStyleFollowPage && ReadBookConfig.durConfig.curBgType() == 0) {
+        runCatching {
+            ReadBookConfig.durConfig.curBgStr().toColorInt()
+        }.getOrDefault(context.bottomBackground)
+    } else {
+        context.bottomBackground
+    }
+    return remember(bgColor) { ReaderSheetStyle.resolve(context, bgColor) }
 }

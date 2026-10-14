@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,7 +40,6 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceViewModel
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppFastScroller
@@ -114,7 +114,10 @@ private fun HostRssSourceManageScreen() {
     var statusFilter by rememberSaveable { mutableStateOf(RssStatusFilter.ALL) }
     val selection = rememberAppSelectionState<RssSource>(idOf = { it.sourceUrl })
     var menuOpen by remember { mutableStateOf(false) }
+    var groupManageOpen by remember { mutableStateOf(false) }
     var groupSheetFor by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var importUrlOpen by remember { mutableStateOf(false) }
+    var importUrlText by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var longPressHintShown by rememberSaveable { mutableStateOf(false) }
 
@@ -406,21 +409,8 @@ private fun HostRssSourceManageScreen() {
                 },
                 stringResource(R.string.v5_import_online) to {
                     // 在线导入（缓存历史与旧页同 key）
-                    val aCache = ACache.get(cacheDir = false)
-                    val cacheUrls = aCache.getAsString("rssSourceRecordKey")
-                        ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
-                    activity.showComposeTextInputDialog(
-                        title = activity.getString(R.string.import_on_line),
-                        hint = "url",
-                        onPositive = { text ->
-                            if (text.isAbsUrl() && !cacheUrls.contains(text)) {
-                                cacheUrls.add(0, text)
-                                aCache.put("rssSourceRecordKey", cacheUrls.joinToString(","))
-                            }
-                            ImportRssSourceDialog(text)
-                                .show(activity.supportFragmentManager, "importRssSource")
-                        },
-                    )
+                    importUrlText = ""
+                    importUrlOpen = true
                 },
                 stringResource(R.string.v5_import_local) to {
                     importDocLauncher.launch {
@@ -429,10 +419,7 @@ private fun HostRssSourceManageScreen() {
                     }
                 },
                 stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) },
-                stringResource(R.string.v5_group_manage) to {
-                    io.legado.app.ui.rss.source.manage.GroupManageDialog()
-                        .show(activity.supportFragmentManager, "groupManage")
-                },
+                stringResource(R.string.v5_group_manage) to { groupManageOpen = true },
                 stringResource(R.string.v5_help) to { activity.showHelp("SourceMRssHelp") },
             ),
             onDismiss = { menuOpen = false },
@@ -454,6 +441,46 @@ private fun HostRssSourceManageScreen() {
                 groupSheetFor = null
             },
             onDismiss = { groupSheetFor = null },
+        )
+    }
+
+    // 分组管理（V5 组件化，替代旧 GroupManageDialog DialogFragment）
+    if (groupManageOpen) {
+        val groups by produceState<List<String>>(emptyList()) {
+            appDb.rssSourceDao.flowGroups().collect { value = it }
+        }
+        GroupManageDialogContent(
+            groups = groups,
+            onAddGroup = { viewModel.addGroup(it) },
+            onRenameGroup = { old, new -> viewModel.upGroup(old, new) },
+            onDeleteGroup = { viewModel.delGroup(it) },
+            onDismiss = { groupManageOpen = false },
+        )
+    }
+
+    // 在线导入 URL 输入（AppInputDialog）
+    if (importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = importUrlText,
+            onValueChange = { importUrlText = it },
+            placeholder = "url",
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                importUrlOpen = false
+                // 缓存历史与旧页同 key
+                val aCache = ACache.get(cacheDir = false)
+                val cacheUrls = aCache.getAsString("rssSourceRecordKey")
+                    ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
+                if (text.isAbsUrl() && !cacheUrls.contains(text)) {
+                    cacheUrls.add(0, text)
+                    aCache.put("rssSourceRecordKey", cacheUrls.joinToString(","))
+                }
+                ImportRssSourceDialog(text)
+                    .show(activity.supportFragmentManager, "importRssSource")
+            },
+            onDismiss = { importUrlOpen = false },
         )
     }
 

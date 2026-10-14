@@ -21,11 +21,12 @@ import io.legado.app.ui.main.ai.AI_API_MODE_CHAT_COMPLETIONS
 import io.legado.app.ui.main.ai.AI_API_MODE_RESPONSES
 import io.legado.app.ui.main.ai.AiModelConfig
 import io.legado.app.ui.main.ai.AiProviderConfig
-import io.legado.app.ui.widget.compose.ComposeActionListDialog
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
 import io.legado.app.ui.widget.compose.ComposeFetchedModelDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
@@ -52,6 +53,15 @@ class HostAiProviderEditActivity : AppCompatActivity() {
     private var modelList by mutableStateOf<List<AiModelConfig>>(emptyList())
     private var modelSummary by mutableStateOf("")
     private var dirty by mutableStateOf(false)
+
+    // Model 编辑弹窗（AppInputDialog）
+    internal var modelEditOpen by mutableStateOf(false)
+    internal var apiModeOpen by mutableStateOf(false)
+    internal var modelActionsTarget by mutableStateOf<AiModelConfig?>(null)
+    internal var removeModelTarget by mutableStateOf<AiModelConfig?>(null)
+    internal var modelEditText by mutableStateOf("")
+    internal var editingModel: AiModelConfig? = null
+    internal var modelEditProviderId: String = ""
 
     private var _waitDialog: WaitDialog? = null
     private val waitDialog: WaitDialog
@@ -131,6 +141,84 @@ class HostAiProviderEditActivity : AppCompatActivity() {
                 }
             }
         }
+
+        if (modelEditOpen) {
+            AppInputDialog(
+                title = stringResource(
+                    if (editingModel == null) R.string.ai_add_model else R.string.ai_edit_model
+                ),
+                value = modelEditText,
+                onValueChange = { modelEditText = it },
+                placeholder = stringResource(R.string.ai_model_input_hint),
+                confirmLabel = stringResource(R.string.v5_ok),
+                cancelLabel = stringResource(R.string.v5_cancel),
+                onConfirm = { onModelEditConfirm(modelEditText) },
+                onDismiss = { modelEditOpen = false },
+            )
+        }
+
+        if (apiModeOpen) {
+            AppFilterDialog(
+                title = stringResource(R.string.ai_api_mode),
+                options = listOf(
+                    stringResource(R.string.ai_provider_mode_chat),
+                    stringResource(R.string.ai_provider_mode_responses)
+                ),
+                selectedIndex = if (apiMode == AI_API_MODE_RESPONSES) 1 else 0,
+                onSelect = { index ->
+                    apiModeOpen = false
+                    if (index == 1) {
+                        apiMode = AI_API_MODE_RESPONSES
+                    } else {
+                        apiMode = AI_API_MODE_CHAT_COMPLETIONS
+                    }
+                    dirty = true
+                },
+                onDismiss = { apiModeOpen = false },
+            )
+        }
+
+        modelActionsTarget?.let { model ->
+            AppMenuSheet(
+                title = model.modelId,
+                actions = listOf(
+                    getString(R.string.ai_set_current) to {
+                        modelActionsTarget = null
+                        AppConfig.aiCurrentModelId = model.id
+                        notifyAiConfigChanged()
+                        reloadModels()
+                    },
+                    getString(R.string.edit) to {
+                        modelActionsTarget = null
+                        showEditModelDialog(model)
+                    },
+                    getString(R.string.delete) to {
+                        modelActionsTarget = null
+                        confirmRemoveModel(model)
+                    },
+                ),
+                onDismiss = { modelActionsTarget = null },
+            )
+        }
+
+        removeModelTarget?.let { model ->
+            AppConfirmDialog(
+                title = model.modelId,
+                message = stringResource(R.string.ai_remove_model_confirm),
+                confirmLabel = stringResource(R.string.delete),
+                cancelLabel = stringResource(R.string.cancel),
+                danger = true,
+                onConfirm = {
+                    removeModelTarget = null
+                    AppConfig.aiModelConfigList =
+                        AppConfig.aiModelConfigList.filterNot { it.id == model.id }
+                    notifyAiConfigChanged()
+                    reloadModels()
+                    toastOnUi(R.string.ai_model_removed)
+                },
+                onDismiss = { removeModelTarget = null },
+            )
+        }
     }
 
     // ── Tab switching ────────────────────────────────────────────────────────
@@ -159,24 +247,7 @@ class HostAiProviderEditActivity : AppCompatActivity() {
     // ── API mode ─────────────────────────────────────────────────────────────
 
     private fun showApiModeSelector() {
-        val modes = listOf(AI_API_MODE_CHAT_COMPLETIONS, AI_API_MODE_RESPONSES)
-        val labels = listOf(
-            getString(R.string.ai_provider_mode_chat),
-            getString(R.string.ai_provider_mode_responses)
-        )
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = getString(R.string.ai_api_mode),
-                labels = labels,
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    modes.getOrNull(index)?.let { selectedMode ->
-                        apiMode = selectedMode
-                        dirty = true
-                    }
-                }
-            )
-        )
+        apiModeOpen = true
     }
 
     // ── Save / load ──────────────────────────────────────────────────────────
@@ -249,12 +320,18 @@ class HostAiProviderEditActivity : AppCompatActivity() {
 
     private fun showEditModelDialog(model: AiModelConfig? = null) {
         val provider = currentProviderOrSave() ?: return
-        showComposeTextInputDialog(
-            title = getString(if (model == null) R.string.ai_add_model else R.string.ai_edit_model),
-            hint = getString(R.string.ai_model_input_hint),
-            initialValue = model?.modelId.orEmpty(),
-            onPositive = { saveModel(provider.id, model, it) }
-        )
+        editingModel = model
+        modelEditProviderId = provider.id
+        modelEditText = model?.modelId.orEmpty()
+        modelEditOpen = true
+    }
+
+    internal fun onModelEditConfirm(modelId: String) {
+        modelEditOpen = false
+        val model = editingModel
+        val providerId = modelEditProviderId
+        editingModel = null
+        if (providerId.isNotBlank()) saveModel(providerId, model, modelId)
     }
 
     private fun saveModel(providerId: String, oldModel: AiModelConfig?, modelId: String) {
@@ -280,49 +357,11 @@ class HostAiProviderEditActivity : AppCompatActivity() {
     }
 
     private fun showModelActions(model: AiModelConfig) {
-        val actions = listOf(
-            getString(R.string.ai_set_current),
-            getString(R.string.edit),
-            getString(R.string.delete)
-        )
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = model.modelId,
-                labels = actions,
-                dangerIndices = setOf(2),
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    when (index) {
-                        0 -> {
-                            AppConfig.aiCurrentModelId = model.id
-                            notifyAiConfigChanged()
-                            reloadModels()
-                        }
-                        1 -> showEditModelDialog(model)
-                        2 -> confirmRemoveModel(model)
-                    }
-                }
-            )
-        )
+        modelActionsTarget = model
     }
 
     private fun confirmRemoveModel(model: AiModelConfig) {
-        showDialogFragment(
-            ComposeConfirmDialog.create(
-                title = model.modelId,
-                message = getString(R.string.ai_remove_model_confirm),
-                positiveText = getString(R.string.delete),
-                negativeText = getString(R.string.cancel),
-                dangerPositive = true,
-                onPositive = {
-                    AppConfig.aiModelConfigList =
-                        AppConfig.aiModelConfigList.filterNot { it.id == model.id }
-                    notifyAiConfigChanged()
-                    reloadModels()
-                    toastOnUi(R.string.ai_model_removed)
-                }
-            )
-        )
+        removeModelTarget = model
     }
 
     // ── Fetch remote models ──────────────────────────────────────────────────

@@ -1,5 +1,11 @@
 package io.legado.app.ui.config
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.help.http.dns.DnsScope
 import android.net.Uri
 import androidx.lifecycle.lifecycleScope
@@ -18,7 +24,6 @@ import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSliderSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.externalFiles
@@ -171,23 +176,33 @@ class WelcomeConfigFragment : ComposeSettingFragment() {
             launchImagePicker(requestCode)
             return
         }
-        showComposeActionListDialog(
-            title = getString(R.string.select_image),
-            labels = listOf(
-                getString(R.string.delete),
-                getString(R.string.select_image)
-            ),
-            dangerIndices = setOf(0),
-            negativeText = getString(R.string.cancel),
-            onSelected = { index ->
-                if (index == 0) {
-                    removePref(key)
-                    BookCover.upDefaultCover()
-                } else {
-                    launchImagePicker(requestCode)
-                }
-            }
-        )
+        imageActionKey = key
+        imageActionRequestCode = requestCode
+        imageActionOpen = true
+    }
+
+    internal var imageActionOpen by mutableStateOf(false)
+    internal var imageActionKey by mutableStateOf("")
+    internal var imageActionRequestCode by mutableStateOf(0)
+
+    override val extraDialogs: @Composable () -> Unit = {
+        if (imageActionOpen) {
+            AppMenuSheet(
+                title = getString(R.string.select_image),
+                actions = listOf(
+                    getString(R.string.delete) to {
+                        imageActionOpen = false
+                        removePref(imageActionKey)
+                        BookCover.upDefaultCover()
+                    },
+                    getString(R.string.select_image) to {
+                        imageActionOpen = false
+                        launchImagePicker(imageActionRequestCode)
+                    },
+                ),
+                onDismiss = { imageActionOpen = false },
+            )
+        }
     }
 
     private fun launchImagePicker(requestCode: Int) {

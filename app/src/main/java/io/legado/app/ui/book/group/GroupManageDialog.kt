@@ -1,15 +1,10 @@
 package io.legado.app.ui.book.group
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,9 +12,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,9 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,205 +34,155 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.legado.app.R
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.BookGroup
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppListSpacing
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.Dispatchers.IO
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-class GroupManageDialog : ComposeDialogFragment() {
+/**
+ * 书籍分组管理弹窗（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 保留旧版 `dialogWindowAnimations = R.style.AnimDialogFade`（V5 基座同名 open val 直接对应）；
+ * 内容由旧 AppDialogFrame + LegadoComposeTheme + LegadoMiuixCard + LegadoMiuixSwitch 换为
+ * V5 AppDialog + AppCard + M3 Switch（套 V5 语义色，基座已提供 M3 主题桥）。
+ * **关键行为保留**：拖拽排序仍走 sh.calvin.reorderable（`rememberReorderableLazyListState` +
+ * `draggableHandle(onDragStopped = { onReorder(orderedGroups) })`），组分变化时用
+ * `referentialEqualityPolicy` + `LaunchedEffect(groupsSignature)` 重置本地顺序快照；
+ * 「分组达上限(64)则 toast 不新增」「切换 show 走 viewModel.upGroup」等语义不变。
+ */
+internal class GroupManageDialog : V5DialogFragment() {
+
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
+    override val dialogWindowAnimations: Int = R.style.AnimDialogFade
 
     private val viewModel: GroupViewModel by viewModels()
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
-    override val dialogWindowAnimations: Int = R.style.AnimDialogFade
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                LegadoComposeTheme {
-                    val groups by appDb.bookGroupDao.flowAll()
-                        .catch { }
-                        .flowOn(IO)
-                        .conflate()
-                        .collectAsStateWithLifecycle(initialValue = emptyList())
-                    GroupManageContent(
-                        groups = groups,
-                        onAddGroup = {
-                            if (appDb.bookGroupDao.canAddGroup) {
-                                showDialogFragment(GroupEditDialog())
-                            } else {
-                                requireContext().toastOnUi("分组已达上限(64个)")
-                            }
-                        },
-                        onEditGroup = { group ->
-                            showDialogFragment(GroupEditDialog(group))
-                        },
-                        onToggleShow = { group ->
-                            viewModel.upGroup(group.copy(show = !group.show))
-                        },
-                        onReorder = viewModel::upOrder,
-                        onDismiss = { dismiss() }
-                    )
-                }
+    @Composable
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+        val context = LocalContext.current
+        val groups by appDb.bookGroupDao.flowAll()
+            .catch { }
+            .flowOn(IO)
+            .conflate()
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+        val lazyListState = rememberLazyListState()
+        val groupsSnapshot = groups.toList()
+        val groupsSignature = groupsSnapshot.joinToString(separator = "\u001F") { it.toString() }
+        var orderedGroups by remember {
+            mutableStateOf(groupsSnapshot, referentialEqualityPolicy())
+        }
+        LaunchedEffect(groupsSignature) {
+            orderedGroups = groupsSnapshot
+        }
+        val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+            orderedGroups = orderedGroups.toMutableList().apply {
+                add(to.index, removeAt(from.index))
             }
         }
-    }
-}
 
-@Composable
-private fun GroupManageContent(
-    groups: List<BookGroup>,
-    onAddGroup: () -> Unit,
-    onEditGroup: (BookGroup) -> Unit,
-    onToggleShow: (BookGroup) -> Unit,
-    onReorder: (List<BookGroup>) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    val context = LocalContext.current
-    val lazyListState = rememberLazyListState()
-    val groupsSnapshot = groups.toList()
-    val groupsSignature = groupsSnapshot.joinToString(separator = "\u001F") { it.toString() }
-    var orderedGroups by remember {
-        mutableStateOf(groupsSnapshot, referentialEqualityPolicy())
-    }
-    LaunchedEffect(groupsSignature) {
-        orderedGroups = groupsSnapshot
-    }
-    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        orderedGroups = orderedGroups.toMutableList().apply {
-            add(to.index, removeAt(from.index))
-        }
-    }
-    AppDialogFrame(
-        title = stringResource(R.string.group_manage),
-        scrollContent = false,
-        content = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+        AppDialog(onDismiss = { dismiss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.group_manage),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    LegadoMiuixActionButton(
+                    AppGhostButton(
                         text = stringResource(R.string.add_group),
-                        palette = palette,
-                        onClick = onAddGroup,
-                        cornerRadius = style.actionRadius
+                        onClick = {
+                            if (appDb.bookGroupDao.canAddGroup) {
+                                showDialogFragment(GroupEditDialog())
+                            } else {
+                                context.toastOnUi("分组已达上限(64个)")
+                            }
+                        },
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 LazyColumn(
                     state = lazyListState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 240.dp, max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(orderedGroups, key = { it.groupId }) { group ->
                         ReorderableItem(reorderState, key = group.groupId) {
-                            GroupManageRow(
-                                group = group,
-                                onEdit = { onEditGroup(group) },
-                                onToggleShow = { onToggleShow(group) },
-                                style = style,
-                                displayName = group.getManageName(context),
-                                dragHandle = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_drag_handle),
+                                    contentDescription = stringResource(R.string.sort),
+                                    tint = colors.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .size(22.dp)
+                                        .draggableHandle(
+                                            onDragStopped = { viewModel.upOrder(orderedGroups) }
+                                        )
+                                )
+                                Text(
+                                    text = group.getManageName(context),
+                                    style = visual.type.body,
+                                    color = colors.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Switch(
+                                    checked = group.show,
+                                    onCheckedChange = {
+                                        viewModel.upGroup(group.copy(show = !group.show))
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = colors.onPrimary,
+                                        checkedTrackColor = colors.primary,
+                                        uncheckedThumbColor = colors.outline,
+                                        uncheckedTrackColor = colors.surfaceVariant
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(onClick = { showDialogFragment(GroupEditDialog(group)) }) {
                                     Icon(
-                                        painter = painterResource(R.drawable.ic_drag_handle),
-                                        contentDescription = stringResource(R.string.sort),
-                                        tint = style.secondaryText,
-                                        modifier = Modifier
-                                            .padding(end = 8.dp)
-                                            .size(22.dp)
-                                            .draggableHandle(
-                                                onDragStopped = { onReorder(orderedGroups) }
-                                            )
+                                        painter = painterResource(R.drawable.ic_edit),
+                                        contentDescription = stringResource(R.string.edit),
+                                        tint = colors.primary
                                     )
                                 }
-                            )
+                            }
                         }
                     }
                 }
-            }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.ok),
-                palette = palette,
-                onClick = onDismiss,
-                primary = true,
-                cornerRadius = style.actionRadius
-            )
-        }
-    )
-}
-
-@Composable
-private fun GroupManageRow(
-    group: BookGroup,
-    onEdit: () -> Unit,
-    onToggleShow: () -> Unit,
-    style: io.legado.app.ui.widget.compose.AppDialogStyle,
-    displayName: String,
-    dragHandle: @Composable () -> Unit
-) {
-    LegadoMiuixCard(
-        modifier = Modifier.fillMaxWidth(),
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = androidx.compose.foundation.layout.PaddingValues(
-            horizontal = 12.dp,
-            vertical = 8.dp
-        )
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            dragHandle()
-            Text(
-                text = displayName,
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily,
-                modifier = Modifier.weight(1f)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LegadoMiuixSwitch(
-                    checked = group.show,
-                    onCheckedChange = { onToggleShow() },
-                    palette = style.toMiuixPalette()
+                AppFilledButton(
+                    text = stringResource(R.string.ok),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { dismiss() },
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_edit),
-                        contentDescription = stringResource(R.string.edit),
-                        tint = style.accent
-                    )
-                }
             }
         }
     }

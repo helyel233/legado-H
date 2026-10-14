@@ -1,9 +1,5 @@
 package io.legado.app.ui.book.read.config
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,17 +7,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,32 +22,38 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.ui.book.read.ContentSelectConfig
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.putPrefStringSet
 
-class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
+/**
+ * 「选中菜单配置」弹窗（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Form` 映射为 widthFraction 0.94f / maxWidthDp 660；
+ * 内容由旧 AppDialogFrame + LegadoMiuixActionButton 换为 V5 AppDialog + AppGhostButton/AppFilledButton。
+ * **保留 M3 Checkbox / RadioButton 控件**（V5 暂无多选/单选 tortoise 等价组件，且多选项与单默认的语义必须区分），
+ * 仅把配色改为 V5 语义色；`toggleable/selectable` 的 accessibility Role 原样保留。
+ * 「默认打开项必须包含在已选动作集合里 + 空则兜底 COPY + 保存后 postEvent」的校验逻辑不变。
+ */
+internal class ContentSelectMenuConfigDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Form
+    /** 旧 AppDialogSize.Form(widthFraction = 0.94f, maxWidthDp = 660) */
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
     private data class ActionItem(
         val id: String,
@@ -66,74 +65,66 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
         val titleRes: Int
     )
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val initialSelected = remember {
-                    sanitizeActionIds(ContentSelectConfig.selectedActionIds(requireContext()))
-                        .toList()
-                }
-                var selectedActions by rememberSaveable {
-                    mutableStateOf(initialSelected)
-                }
-                val initialDefaultOpen = remember {
-                    requireContext()
-                        .getPrefString(PreferKey.contentSelectDefaultOpen, "")
-                        .orEmpty()
-                        .takeIf { it in defaultOpenValues }
-                        .orEmpty()
-                }
-                var defaultOpen by rememberSaveable {
-                    mutableStateOf(initialDefaultOpen)
-                }
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    AppDialogFrame(
-                        title = stringResource(R.string.content_select_menu_config),
-                        content = {
-                            ContentSelectMenuContent(
-                                selectedActions = selectedActions.toSet(),
-                                defaultOpen = defaultOpen,
-                                style = style,
-                                onActionToggle = { actionId ->
-                                    selectedActions = selectedActions
-                                        .toMutableSet()
-                                        .apply {
-                                            if (!add(actionId)) {
-                                                remove(actionId)
-                                            }
-                                        }
-                                        .toList()
-                                },
-                                onDefaultOpenChange = { defaultOpen = it }
-                            )
+    @Composable
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+        val initialSelected = remember {
+            sanitizeActionIds(ContentSelectConfig.selectedActionIds(requireContext()))
+                .toList()
+        }
+        var selectedActions by rememberSaveable {
+            mutableStateOf(initialSelected)
+        }
+        val initialDefaultOpen = remember {
+            requireContext()
+                .getPrefString(PreferKey.contentSelectDefaultOpen, "")
+                .orEmpty()
+                .takeIf { it in defaultOpenValues }
+                .orEmpty()
+        }
+        var defaultOpen by rememberSaveable {
+            mutableStateOf(initialDefaultOpen)
+        }
+
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.content_select_menu_config),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+                ContentSelectMenuContent(
+                    selectedActions = selectedActions.toSet(),
+                    defaultOpen = defaultOpen,
+                    onActionToggle = { actionId ->
+                        selectedActions = selectedActions
+                            .toMutableSet()
+                            .apply {
+                                if (!add(actionId)) {
+                                    remove(actionId)
+                                }
+                            }
+                            .toList()
+                    },
+                    onDefaultOpenChange = { defaultOpen = it }
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            saveConfig(selectedActions.toSet(), defaultOpen)
                         },
-                        actions = {
-                            val palette = style.toMiuixPalette()
-                            LegadoMiuixActionButton(
-                                text = stringResource(R.string.cancel),
-                                palette = palette,
-                                onClick = { dismissAllowingStateLoss() },
-                                cornerRadius = style.actionRadius
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            LegadoMiuixActionButton(
-                                text = stringResource(R.string.ok),
-                                palette = palette,
-                                primary = true,
-                                onClick = {
-                                    saveConfig(selectedActions.toSet(), defaultOpen)
-                                },
-                                cornerRadius = style.actionRadius
-                            )
-                        }
                     )
                 }
             }
@@ -161,7 +152,6 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
     private fun ContentSelectMenuContent(
         selectedActions: Set<String>,
         defaultOpen: String,
-        style: AppDialogStyle,
         onActionToggle: (String) -> Unit,
         onDefaultOpenChange: (String) -> Unit
     ) {
@@ -169,28 +159,20 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SectionTitle(
-                title = stringResource(R.string.content_select_actions),
-                style = style
-            )
+            SectionTitle(title = stringResource(R.string.content_select_actions))
             actionItems.forEach { item ->
                 CheckRow(
                     title = stringResource(item.titleRes),
                     checked = item.id in selectedActions,
-                    style = style,
                     onClick = { onActionToggle(item.id) }
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
-            SectionTitle(
-                title = stringResource(R.string.content_select_default_open),
-                style = style
-            )
+            SectionTitle(title = stringResource(R.string.content_select_default_open))
             defaultOpenItems.forEach { item ->
                 RadioRow(
                     title = stringResource(item.titleRes),
                     selected = defaultOpen == item.id,
-                    style = style,
                     onClick = { onDefaultOpenChange(item.id) }
                 )
             }
@@ -198,16 +180,13 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
     }
 
     @Composable
-    private fun SectionTitle(
-        title: String,
-        style: AppDialogStyle
-    ) {
+    private fun SectionTitle(title: String) {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         Text(
             text = title,
-            color = style.accent,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = style.titleFontFamily,
+            style = visual.type.body,
+            color = colors.primary,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 2.dp, bottom = 2.dp)
@@ -218,9 +197,10 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
     private fun CheckRow(
         title: String,
         checked: Boolean,
-        style: AppDialogStyle,
         onClick: () -> Unit
     ) {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -234,17 +214,17 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
         ) {
             Text(
                 text = title,
-                color = style.primaryText,
-                fontSize = 15.sp,
+                style = visual.type.body,
+                color = colors.onSurface,
                 modifier = Modifier.weight(1f)
             )
             Checkbox(
                 checked = checked,
                 onCheckedChange = null,
                 colors = CheckboxDefaults.colors(
-                    checkedColor = style.accent,
-                    uncheckedColor = style.secondaryText,
-                    checkmarkColor = style.surface
+                    checkedColor = colors.primary,
+                    uncheckedColor = colors.onSurfaceVariant,
+                    checkmarkColor = colors.surface
                 )
             )
         }
@@ -254,9 +234,10 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
     private fun RadioRow(
         title: String,
         selected: Boolean,
-        style: AppDialogStyle,
         onClick: () -> Unit
     ) {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -270,16 +251,16 @@ class ContentSelectMenuConfigDialog : ComposeDialogFragment() {
         ) {
             Text(
                 text = title,
-                color = style.primaryText,
-                fontSize = 15.sp,
+                style = visual.type.body,
+                color = colors.onSurface,
                 modifier = Modifier.weight(1f)
             )
             RadioButton(
                 selected = selected,
                 onClick = null,
                 colors = RadioButtonDefaults.colors(
-                    selectedColor = style.accent,
-                    unselectedColor = style.secondaryText
+                    selectedColor = colors.primary,
+                    unselectedColor = colors.onSurfaceVariant
                 )
             )
         }

@@ -88,9 +88,9 @@ import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
@@ -100,6 +100,14 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 class DiscoverySuiteManageActivity : AppCompatActivity() {
+
+    internal var createSuiteOpen by mutableStateOf(false)
+    internal var renameSuiteTarget by mutableStateOf<DiscoverySuite?>(null)
+    internal var renameSuiteText by mutableStateOf("")
+    internal var aliasSuiteTarget by mutableStateOf<DiscoverySuite?>(null)
+    internal var aliasSuiteText by mutableStateOf("")
+    internal var deleteSuiteTarget by mutableStateOf<DiscoverySuite?>(null)
+    internal var deleteWidgetTarget by mutableStateOf<Pair<String, DiscoverySuiteWidget>?>(null)
 
     private var configState by mutableStateOf(DiscoverySuiteStore.load())
     private var selectedSuiteIdState by mutableStateOf(DiscoverySuiteStore.selectedSuiteId())
@@ -205,6 +213,7 @@ class DiscoverySuiteManageActivity : AppCompatActivity() {
                     }
                 }
             }
+            DiscoverySuiteManageDialogs(this@DiscoverySuiteManageActivity)
         }
         onBackPressedDispatcher.addCallback(this) {
             handleBackNavigation()
@@ -361,60 +370,60 @@ class DiscoverySuiteManageActivity : AppCompatActivity() {
     }
 
     private fun showCreateSuiteDialog() {
-        showComposeTextInputDialog(
-            title = getString(R.string.discovery_suite_create),
-            hint = getString(R.string.discovery_suite_name),
-            validateInput = { it.trim().isNotEmpty() },
-            onPositive = { name ->
-                val suite = DiscoverySuiteStore.newSuite(name)
-                DiscoverySuiteStore.setSelectedSuiteId(suite.id)
-                saveConfig { config -> config.copy(suites = config.suites + suite) }
-                setScreenMode(DiscoverySuiteManageMode.Detail(suite.id))
-            }
-        )
+        createSuiteOpen = true
+    }
+
+    internal fun onCreateSuiteConfirm(name: String) {
+        createSuiteOpen = false
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        val suite = DiscoverySuiteStore.newSuite(trimmed)
+        DiscoverySuiteStore.setSelectedSuiteId(suite.id)
+        saveConfig { config -> config.copy(suites = config.suites + suite) }
+        setScreenMode(DiscoverySuiteManageMode.Detail(suite.id))
     }
 
     private fun showRenameSuiteDialog(suite: DiscoverySuite) {
-        showComposeTextInputDialog(
-            title = getString(R.string.discovery_suite_rename),
-            hint = getString(R.string.discovery_suite_name),
-            initialValue = suite.name,
-            validateInput = { it.trim().isNotEmpty() },
-            onPositive = { name ->
-                updateSuite(suite.id) { it.copy(name = name.trim()) }
-            }
-        )
+        renameSuiteTarget = suite
+        renameSuiteText = suite.name
+    }
+
+    internal fun onRenameSuiteConfirm(name: String) {
+        val suite = renameSuiteTarget ?: return
+        renameSuiteTarget = null
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        updateSuite(suite.id) { it.copy(name = trimmed) }
     }
 
     private fun showSuiteAliasDialog(suite: DiscoverySuite) {
-        showComposeTextInputDialog(
-            title = getString(R.string.discovery_suite_alias),
-            hint = getString(R.string.discovery_suite_alias),
-            initialValue = suite.alias,
-            onPositive = { alias ->
-                updateSuite(suite.id) { it.copy(alias = alias.trim()) }
-            }
-        )
+        aliasSuiteTarget = suite
+        aliasSuiteText = suite.alias
+    }
+
+    internal fun onAliasSuiteConfirm(alias: String) {
+        val suite = aliasSuiteTarget ?: return
+        aliasSuiteTarget = null
+        updateSuite(suite.id) { it.copy(alias = alias.trim()) }
     }
 
     private fun confirmDeleteSuite(suite: DiscoverySuite) {
-        showComposeConfirmDialog(
-            title = getString(R.string.discovery_suite_delete),
-            message = suite.displayName,
-            dangerPositive = true,
-            onPositive = {
-                if (screenModeState.belongsToSuite(suite.id)) {
-                    setScreenMode(DiscoverySuiteManageMode.List)
-                }
-                saveConfig { config ->
-                    val suites = config.suites.filterNot { it.id == suite.id }
-                    if (selectedSuiteIdState == suite.id) {
-                        DiscoverySuiteStore.setSelectedSuiteId(suites.firstOrNull()?.id.orEmpty())
-                    }
-                    config.copy(suites = suites)
-                }
+        deleteSuiteTarget = suite
+    }
+
+    internal fun onDeleteSuiteConfirmed() {
+        val suite = deleteSuiteTarget ?: return
+        deleteSuiteTarget = null
+        if (screenModeState.belongsToSuite(suite.id)) {
+            setScreenMode(DiscoverySuiteManageMode.List)
+        }
+        saveConfig { config ->
+            val suites = config.suites.filterNot { it.id == suite.id }
+            if (selectedSuiteIdState == suite.id) {
+                DiscoverySuiteStore.setSelectedSuiteId(suites.firstOrNull()?.id.orEmpty())
             }
-        )
+            config.copy(suites = suites)
+        }
     }
 
     private fun openWidgetEditor(suite: DiscoverySuite, widget: DiscoverySuiteWidget?) {
@@ -507,16 +516,15 @@ class DiscoverySuiteManageActivity : AppCompatActivity() {
     }
 
     private fun confirmDeleteWidget(suite: DiscoverySuite, widget: DiscoverySuiteWidget) {
-        showComposeConfirmDialog(
-            title = getString(R.string.delete),
-            message = widget.title.ifBlank { getString(R.string.discovery_suite_add_widget) },
-            dangerPositive = true,
-            onPositive = {
-                updateSuite(suite.id) { current ->
-                    current.copy(widgets = current.widgets.filterNot { it.id == widget.id })
-                }
-            }
-        )
+        deleteWidgetTarget = suite.id to widget
+    }
+
+    internal fun onDeleteWidgetConfirmed() {
+        val (suiteId, widget) = deleteWidgetTarget ?: return
+        deleteWidgetTarget = null
+        updateSuite(suiteId) { current ->
+            current.copy(widgets = current.widgets.filterNot { it.id == widget.id })
+        }
     }
 
     private fun updateSuiteOpacityMultiplier(suite: DiscoverySuite, value: Float) {
@@ -1889,4 +1897,66 @@ private fun ExploreKind.isSuiteFullWidthKind(): Boolean {
     val style = style()
     return style.layout_flexBasisPercent >= 0.95f ||
         (style.layout_flexGrow >= 1f && style.layout_flexBasisPercent < 0f)
+}
+
+@Composable
+private fun DiscoverySuiteManageDialogs(activity: DiscoverySuiteManageActivity) {
+    if (activity.createSuiteOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.discovery_suite_create),
+            value = "",
+            onValueChange = {},
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = stringResource(R.string.discovery_suite_name),
+            onConfirm = { activity.onCreateSuiteConfirm(it) },
+            onDismiss = { activity.createSuiteOpen = false },
+        )
+    }
+    activity.renameSuiteTarget?.let {
+        AppInputDialog(
+            title = stringResource(R.string.discovery_suite_rename),
+            value = activity.renameSuiteText,
+            onValueChange = { text -> activity.renameSuiteText = text },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = stringResource(R.string.discovery_suite_name),
+            onConfirm = { activity.onRenameSuiteConfirm(activity.renameSuiteText) },
+            onDismiss = { activity.renameSuiteTarget = null },
+        )
+    }
+    activity.aliasSuiteTarget?.let {
+        AppInputDialog(
+            title = stringResource(R.string.discovery_suite_alias),
+            value = activity.aliasSuiteText,
+            onValueChange = { text -> activity.aliasSuiteText = text },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = stringResource(R.string.discovery_suite_alias),
+            onConfirm = { activity.onAliasSuiteConfirm(activity.aliasSuiteText) },
+            onDismiss = { activity.aliasSuiteTarget = null },
+        )
+    }
+    activity.deleteSuiteTarget?.let { suite ->
+        AppConfirmDialog(
+            title = stringResource(R.string.discovery_suite_delete),
+            message = suite.displayName,
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteSuiteConfirmed() },
+            onDismiss = { activity.deleteSuiteTarget = null },
+        )
+    }
+    activity.deleteWidgetTarget?.let { (_, widget) ->
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = widget.title.ifBlank { stringResource(R.string.discovery_suite_add_widget) },
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteWidgetConfirmed() },
+            onDismiss = { activity.deleteWidgetTarget = null },
+        )
+    }
 }

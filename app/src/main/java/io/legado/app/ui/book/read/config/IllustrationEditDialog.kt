@@ -2,13 +2,11 @@ package io.legado.app.ui.book.read.config
 
 import android.net.Uri
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,18 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -37,15 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
 import io.legado.app.data.appDb
@@ -57,26 +44,36 @@ import io.legado.app.help.illustration.IllustrationAnchor
 import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.help.illustration.imageSrcsToJson
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.SelectImagesContract
 import io.legado.app.utils.toastOnUi
 import org.json.JSONObject
 
 /**
- * 插入媒体面板（P3-d 面板化：原 dialog_illustration_edit.xml 迁移为 Compose）。
- * 选择图片、视频或音频，设置显示高度、布局、独占一页、备注。
- * 备注默认统一填写（本次插入的所有记录共用）；取消"统一备注"后按媒体逐条填写，
- * 排版只管显示分组，不管备注条数，两者解构。
+ * 插入媒体面板（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Form` 映射为 widthFraction 0.94f / maxWidthDp 660；
+ * 内容高度上限 screenHeightDp*0.72 + verticalScroll 保留。
+ * 组件替换：`ReaderSectionCard` → Box+shape+`colors.surfaceVariant`，`ReaderSegmentedOptions`（5 个布局）
+ * → `LazyRow` + `AppChip(selected)`（等价单选且可横向滚动），自定义 `SwitchRow` → `AppRowWithSwitch(card = false)`，
+ * 自定义 OutlinedTextField(outlinedColors) → AppTextField，自定义 subtleButton → AppGhostButton/AppFilledButton。
+ * **业务逻辑逐行保留**：选中时统一读字节并解析类型（`IllustrationHelp.resolveMediaExt`）、
+ * `computeUnits()` 按布局分块（音频永不参与宫格、单独成格并按原始顺序排序）、
+ * 「统一备注 vs 逐条备注」双分支（多媒体组 note 置空、逐图备注进 srcNotes）、`save()` 落库与回调。
  */
-class IllustrationEditDialog : ComposeDialogFragment() {
+internal class IllustrationEditDialog : V5DialogFragment() {
 
     companion object {
-        fun newInstance(anchor: IllustrationAnchor): IllustrationEditDialog {
+        internal fun newInstance(anchor: IllustrationAnchor): IllustrationEditDialog {
             return IllustrationEditDialog().apply {
                 arguments = Bundle().apply {
                     putString("anchorType", anchor.anchorType)
@@ -99,11 +96,13 @@ class IllustrationEditDialog : ComposeDialogFragment() {
 
     private var insertedCallback: (() -> Unit)? = null
 
-    fun setOnInserted(callback: () -> Unit) {
+    internal fun setOnInserted(callback: () -> Unit) {
         insertedCallback = callback
     }
 
-    override val dialogSize: AppDialogSize? = AppDialogSize.Form
+    /** 旧 AppDialogSize.Form(widthFraction = 0.94f, maxWidthDp = 660) */
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
     // 选择时统一读取字节并解析类型，保存与逐条备注分组共用这份结果
     private val mediaState = mutableStateListOf<Pair<ByteArray, String>>() // bytes to ext
@@ -144,26 +143,12 @@ class IllustrationEditDialog : ComposeDialogFragment() {
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    IllustrationEditContent(style)
-                }
-            }
-        }
-    }
-
     @Composable
-    private fun IllustrationEditContent(style: AppDialogStyle) {
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+
         var selectedLayout by remember { mutableStateOf(BookIllustration.LAYOUT_SINGLE) }
         var heightText by remember { mutableStateOf("") }
         var pageBreak by remember { mutableStateOf(false) }
@@ -172,147 +157,141 @@ class IllustrationEditDialog : ComposeDialogFragment() {
         val unitNotes = remember { mutableStateMapOf<Int, String>() }
         val expandedNotes = remember { mutableStateMapOf<Int, Boolean>() }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.illustration_title),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = style.primaryText,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = stringResource(R.string.illustration_pick_images),
-                    color = style.accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(style.actionRadius))
-                        .clickable { selectImages.launch(0) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                )
-            }
-            if (uriState.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.height(72.dp)
-                ) {
-                    items(uriState.size) { index ->
-                        ThumbCell(style, uriState[index])
-                    }
-                }
-            }
-
-            ReaderSectionCard(style = style, title = stringResource(R.string.illustration_layout)) {
-                ReaderSegmentedOptions(
-                    options = listOf(
-                        ReaderOption(
-                            BookIllustration.LAYOUT_SINGLE,
-                            stringResource(R.string.illustration_layout_single)
-                        ),
-                        ReaderOption(
-                            BookIllustration.LAYOUT_DOUBLE,
-                            stringResource(R.string.illustration_layout_double)
-                        ),
-                        ReaderOption(
-                            BookIllustration.LAYOUT_TRIPLE,
-                            stringResource(R.string.illustration_layout_triple)
-                        ),
-                        ReaderOption(
-                            BookIllustration.LAYOUT_QUAD,
-                            stringResource(R.string.illustration_layout_quad)
-                        ),
-                        ReaderOption(
-                            BookIllustration.LAYOUT_QUAD_GRID,
-                            stringResource(R.string.illustration_layout_quad_grid)
-                        )
-                    ),
-                    selectedValue = selectedLayout,
-                    style = style,
-                    scrollable = true,
-                    onSelected = { selectedLayout = it }
-                )
-            }
-
-            ReaderSectionCard(style = style) {
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = stringResource(R.string.illustration_height),
-                        color = style.secondaryText,
-                        fontSize = 14.sp
+                        text = stringResource(R.string.illustration_title),
+                        style = visual.type.title,
+                        color = colors.onSurface,
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    OutlinedTextField(
-                        value = heightText,
-                        onValueChange = { heightText = it.filter(Char::isDigit).take(5) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text(stringResource(R.string.illustration_height_hint)) },
-                        colors = outlinedColors(style)
+                    Text(
+                        text = stringResource(R.string.illustration_pick_images),
+                        style = visual.type.caption,
+                        color = colors.primary,
+                        modifier = Modifier
+                            .clip(visual.shape(ShapeKind.BUTTON))
+                            .clickable { selectImages.launch(0) }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                     )
                 }
-                SwitchRow(
-                    title = stringResource(R.string.illustration_page_break),
-                    checked = pageBreak,
-                    style = style,
-                    onCheckedChange = { pageBreak = it }
-                )
-                SwitchRow(
-                    title = stringResource(R.string.illustration_unified_note),
-                    checked = unifiedNote,
-                    style = style,
-                    onCheckedChange = { unifiedNote = it }
-                )
-                if (unifiedNote) {
-                    OutlinedTextField(
-                        value = unifiedNoteText,
-                        onValueChange = { unifiedNoteText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.illustration_note_hint)) },
-                        colors = outlinedColors(style)
-                    )
-                } else {
-                    mediaState.forEachIndexed { mediaIndex, media ->
-                        NoteRow(
-                            style = style,
-                            label = if (media.second in IllustrationHelp.AUDIO_EXTS) {
-                                stringResource(R.string.illustration_note_audio_unit, mediaIndex + 1)
-                            } else {
-                                stringResource(R.string.illustration_note_image_unit, mediaIndex + 1, 1)
-                            },
-                            text = unitNotes[mediaIndex].orEmpty(),
-                            expanded = expandedNotes[mediaIndex] == true,
-                            onTextChange = { unitNotes[mediaIndex] = it },
-                            onToggle = {
-                                expandedNotes[mediaIndex] = !(expandedNotes[mediaIndex] ?: false)
-                            }
-                        )
+                if (uriState.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.height(72.dp)
+                    ) {
+                        items(uriState.size) { index ->
+                            ThumbCell(uriState[index])
+                        }
                     }
                 }
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                subtleButton(stringResource(R.string.cancel), style, Modifier.weight(1f)) {
-                    dismissAllowingStateLoss()
+                val layoutOptions = listOf(
+                    BookIllustration.LAYOUT_SINGLE to stringResource(R.string.illustration_layout_single),
+                    BookIllustration.LAYOUT_DOUBLE to stringResource(R.string.illustration_layout_double),
+                    BookIllustration.LAYOUT_TRIPLE to stringResource(R.string.illustration_layout_triple),
+                    BookIllustration.LAYOUT_QUAD to stringResource(R.string.illustration_layout_quad),
+                    BookIllustration.LAYOUT_QUAD_GRID to stringResource(R.string.illustration_layout_quad_grid)
+                )
+                SectionCard(title = stringResource(R.string.illustration_layout)) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(layoutOptions.size) { index ->
+                            val (value, label) = layoutOptions[index]
+                            AppChip(
+                                text = label,
+                                selected = value == selectedLayout,
+                                onClick = { selectedLayout = value },
+                            )
+                        }
+                    }
                 }
-                subtleButton(stringResource(R.string.ok), style, Modifier.weight(1f)) {
-                    save(
-                        selectedLayout = selectedLayout,
-                        heightText = heightText,
-                        pageBreak = pageBreak,
-                        unifiedNote = unifiedNote,
-                        unifiedNoteText = unifiedNoteText,
-                        unitNotes = unitNotes.toMap()
+
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.illustration_height),
+                            style = visual.type.body,
+                            color = colors.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        AppTextField(
+                            value = heightText,
+                            onValueChange = { heightText = it.filter(Char::isDigit).take(5) },
+                            placeholder = stringResource(R.string.illustration_height_hint),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    AppRowWithSwitch(
+                        title = stringResource(R.string.illustration_page_break),
+                        checked = pageBreak,
+                        onCheckedChange = { pageBreak = it },
+                        card = false,
+                    )
+                    AppRowWithSwitch(
+                        title = stringResource(R.string.illustration_unified_note),
+                        checked = unifiedNote,
+                        onCheckedChange = { unifiedNote = it },
+                        card = false,
+                    )
+                    if (unifiedNote) {
+                        AppTextField(
+                            value = unifiedNoteText,
+                            onValueChange = { unifiedNoteText = it },
+                            placeholder = stringResource(R.string.illustration_note_hint),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        mediaState.forEachIndexed { mediaIndex, media ->
+                            NoteRow(
+                                label = if (media.second in IllustrationHelp.AUDIO_EXTS) {
+                                    stringResource(R.string.illustration_note_audio_unit, mediaIndex + 1)
+                                } else {
+                                    stringResource(R.string.illustration_note_image_unit, mediaIndex + 1, 1)
+                                },
+                                text = unitNotes[mediaIndex].orEmpty(),
+                                expanded = expandedNotes[mediaIndex] == true,
+                                onTextChange = { unitNotes[mediaIndex] = it },
+                                onToggle = {
+                                    expandedNotes[mediaIndex] = !(expandedNotes[mediaIndex] ?: false)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            save(
+                                selectedLayout = selectedLayout,
+                                heightText = heightText,
+                                pageBreak = pageBreak,
+                                unifiedNote = unifiedNote,
+                                unifiedNoteText = unifiedNoteText,
+                                unitNotes = unitNotes.toMap()
+                            )
+                        },
                     )
                 }
             }
@@ -320,7 +299,36 @@ class IllustrationEditDialog : ComposeDialogFragment() {
     }
 
     @Composable
-    private fun ThumbCell(style: AppDialogStyle, uri: Uri) {
+    private fun SectionCard(
+        title: String? = null,
+        content: @Composable () -> Unit
+    ) {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(colors.surfaceVariant)
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (!title.isNullOrBlank()) {
+                Text(
+                    text = title,
+                    style = visual.type.caption,
+                    color = colors.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            content()
+        }
+    }
+
+    @Composable
+    private fun ThumbCell(uri: Uri) {
+        val visual = LocalVisualSpec.current
         AndroidView(
             factory = { ctx ->
                 ImageView(ctx).apply {
@@ -332,78 +340,50 @@ class IllustrationEditDialog : ComposeDialogFragment() {
                 ImageLoader.load(view.context, uri).into(view)
             },
             modifier = Modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(style.actionRadius))
+                .then(Modifier.height(72.dp).width(72.dp))
+                .clip(visual.shape(ShapeKind.TAG))
         )
     }
 
     @Composable
-    private fun SwitchRow(
-        title: String,
-        checked: Boolean,
-        style: AppDialogStyle,
-        onCheckedChange: (Boolean) -> Unit
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onCheckedChange(!checked) }
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                color = style.primaryText,
-                fontSize = 14.sp,
-                modifier = Modifier.weight(1f)
-            )
-            LegadoMiuixSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                palette = style.toMiuixPalette()
-            )
-        }
-    }
-
-    @Composable
     private fun NoteRow(
-        style: AppDialogStyle,
         label: String,
         text: String,
         expanded: Boolean,
         onTextChange: (String) -> Unit,
         onToggle: () -> Unit
     ) {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(style.actionRadius))
-                .background(style.fieldSurface)
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(colors.surface)
                 .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             Text(
                 text = label,
-                color = style.primaryText,
-                fontSize = 14.sp,
+                style = visual.type.body,
+                color = colors.onSurface,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onToggle)
             )
             if (expanded) {
-                OutlinedTextField(
+                AppTextField(
                     value = text,
                     onValueChange = onTextChange,
+                    placeholder = stringResource(R.string.illustration_note_hint),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    placeholder = { Text(stringResource(R.string.illustration_note_hint)) },
-                    colors = outlinedColors(style)
                 )
             } else {
                 Text(
                     text = previewTextOf(text),
-                    color = style.secondaryText,
-                    fontSize = 13.sp,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -419,38 +399,6 @@ class IllustrationEditDialog : ComposeDialogFragment() {
     private fun previewTextOf(text: String): String {
         val first = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
         return first.ifBlank { "" }
-    }
-
-    @Composable
-    private fun outlinedColors(style: AppDialogStyle) = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = style.primaryText,
-        unfocusedTextColor = style.primaryText,
-        cursorColor = style.accent,
-        focusedBorderColor = style.accent,
-        unfocusedBorderColor = style.stroke,
-        focusedContainerColor = style.fieldSurface,
-        unfocusedContainerColor = style.fieldSurface
-    )
-
-    @Composable
-    private fun subtleButton(
-        text: String,
-        style: AppDialogStyle,
-        modifier: Modifier = Modifier,
-        onClick: () -> Unit
-    ) {
-        Text(
-            text = text,
-            color = style.primaryText,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            modifier = modifier
-                .clip(RoundedCornerShape(style.actionRadius))
-                .background(style.fieldSurface, RoundedCornerShape(style.actionRadius))
-                .clickable(onClick = onClick)
-                .padding(vertical = 10.dp)
-        )
     }
 
     private fun layoutCellCount(layout: String): Int {

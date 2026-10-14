@@ -1,17 +1,10 @@
 package io.legado.app.ui.book.bookmark
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,28 +12,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Bookmark
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BookmarkDialog() : ComposeDialogFragment() {
+/**
+ * 书签编辑弹窗（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Form` 映射为 widthFraction 0.94f / maxWidthDp 660；
+ * 内容由旧 AppDialogFrame + LegadoComposeTheme 包裹 + 自定义 OutlinedTextField(label) 换为
+ * V5 AppDialog + AppTextField（label 降级为 placeholder）；删除/取消/保存三按钮等分。
+ * 「bookmark 为空则直接关闭」「IO 线程落库后 dismiss」「showDelete = editPos >= 0」等语义不变。
+ */
+internal class BookmarkDialog() : V5DialogFragment() {
 
     constructor(bookmark: Bookmark, editPos: Int = -1) : this() {
         arguments = Bundle().apply {
@@ -49,30 +46,78 @@ class BookmarkDialog() : ComposeDialogFragment() {
         }
     }
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Form
+    /** 旧 AppDialogSize.Form(widthFraction = 0.94f, maxWidthDp = 660) */
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    private var bookmark: Bookmark? = null
+    private var editPos: Int = -1
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         @Suppress("DEPRECATION")
-        val bookmark = arguments?.getParcelable<Bookmark>("bookmark")
+        bookmark = arguments?.getParcelable("bookmark")
+        editPos = arguments?.getInt("editPos", -1) ?: -1
         if (bookmark == null) {
             dismiss()
-            return View(requireContext())
         }
-        val editPos = arguments?.getInt("editPos", -1) ?: -1
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                LegadoComposeTheme {
-                    BookmarkContent(
-                        chapterName = bookmark.chapterName,
-                        initialBookText = bookmark.bookText,
-                        initialContent = bookmark.content,
-                        showDelete = editPos >= 0,
-                        onSave = { bookText, content ->
+    }
+
+    @Composable
+    override fun Content() {
+        val bookmark = this.bookmark ?: return
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+        var bookText by remember { mutableStateOf(bookmark.bookText) }
+        var content by remember { mutableStateOf(bookmark.content) }
+
+        AppDialog(onDismiss = { dismiss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = bookmark.chapterName.ifBlank { stringResource(R.string.bookmark) },
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+                AppTextField(
+                    value = bookText,
+                    onValueChange = { bookText = it },
+                    placeholder = stringResource(R.string.bookmark),
+                    singleLine = false,
+                    maxLines = 6,
+                )
+                AppTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    placeholder = stringResource(R.string.content),
+                    singleLine = false,
+                    maxLines = 6,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (editPos >= 0) {
+                        AppGhostButton(
+                            text = stringResource(R.string.delete),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                lifecycleScope.launch {
+                                    withContext(IO) { appDb.bookmarkDao.delete(bookmark) }
+                                    dismiss()
+                                }
+                            },
+                        )
+                    }
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismiss() },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
                             bookmark.bookText = bookText
                             bookmark.content = content
                             lifecycleScope.launch {
@@ -80,106 +125,9 @@ class BookmarkDialog() : ComposeDialogFragment() {
                                 dismiss()
                             }
                         },
-                        onDelete = {
-                            lifecycleScope.launch {
-                                withContext(IO) { appDb.bookmarkDao.delete(bookmark) }
-                                dismiss()
-                            }
-                        },
-                        onCancel = { dismiss() }
                     )
                 }
             }
         }
     }
-}
-
-@Composable
-private fun BookmarkContent(
-    chapterName: String,
-    initialBookText: String,
-    initialContent: String,
-    showDelete: Boolean,
-    onSave: (String, String) -> Unit,
-    onDelete: () -> Unit,
-    onCancel: () -> Unit
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    var bookText by remember { mutableStateOf(initialBookText) }
-    var content by remember { mutableStateOf(initialContent) }
-    AppDialogFrame(
-        title = chapterName.ifBlank { stringResource(R.string.bookmark) },
-        content = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                BookmarkField(
-                    label = stringResource(R.string.bookmark),
-                    value = bookText,
-                    onValueChange = { bookText = it },
-                    style = style
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                BookmarkField(
-                    label = stringResource(R.string.content),
-                    value = content,
-                    onValueChange = { content = it },
-                    style = style
-                )
-            }
-        },
-        actions = {
-            if (showDelete) {
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.delete),
-                    palette = palette,
-                    onClick = onDelete,
-                    cornerRadius = style.actionRadius
-                )
-            }
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.cancel),
-                palette = palette,
-                onClick = onCancel,
-                cornerRadius = style.actionRadius
-            )
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.ok),
-                palette = palette,
-                onClick = { onSave(bookText, content) },
-                primary = true,
-                cornerRadius = style.actionRadius
-            )
-        }
-    )
-}
-
-@Composable
-private fun BookmarkField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    style: AppDialogStyle
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        shape = RoundedCornerShape(style.actionRadius),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = style.primaryText,
-            unfocusedTextColor = style.primaryText,
-            focusedContainerColor = style.fieldSurface,
-            unfocusedContainerColor = style.fieldSurface,
-            cursorColor = style.accent,
-            focusedBorderColor = Color.Transparent,
-            unfocusedBorderColor = Color.Transparent,
-            focusedLabelColor = style.accent,
-            unfocusedLabelColor = style.secondaryText
-        ),
-        textStyle = LocalTextStyle.current.copy(
-            color = style.primaryText,
-            fontFamily = style.bodyFontFamily
-        )
-    )
 }

@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
@@ -77,8 +79,11 @@ import io.legado.app.ui.association.ImportHttpTtsDialog
 import io.legado.app.ui.association.showShibbolethDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.HostSourceLoginActivity
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.ACache
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileUtils
@@ -114,6 +119,16 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
     private var httpTtsList by mutableStateOf<List<HttpTTS>>(emptyList())
     private var pickerGroupKey by mutableStateOf<String?>(null)
 
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var exportResult by mutableStateOf<ExportResult?>(null)
+    private var deleteTtsTarget by mutableStateOf<HttpTTS?>(null)
+
+    private data class ExportResult(
+        val url: String,
+        val message: String?,
+        val canShibboleth: Boolean
+    )
+
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri -> showDialogFragment(ImportHttpTtsDialog(uri.toString())) }
     }
@@ -121,17 +136,10 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
     private val exportDirResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             val url = uri.toString()
-            showComposeTextInputDialog(
-                title = getString(R.string.export_success),
-                hint = getString(R.string.path),
-                initialValue = url,
+            exportResult = ExportResult(
+                url = url,
                 message = DirectLinkUpload.getSummary().takeIf { url.isAbsUrl() },
-                readOnly = true,
-                positiveText = getString(R.string.copy_text),
-                neutralText = getString(R.string.shibboleth)
-                    .takeIf { ShibbolethCodec.canEncodeUrl(url) },
-                onPositive = { requireContext().sendToClip(url) },
-                onNeutral = { showShibbolethDialog(url, ShibbolethCodec.TTS_RULE) }
+                canShibboleth = ShibbolethCodec.canEncodeUrl(url)
             )
         }
     }
@@ -155,6 +163,7 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
                     pickerGroupKey = pickerGroupKey,
                     actions = this@SpeakEngineDialog
                 )
+                SpeakEngineDialogs()
             }
         }
     }
@@ -206,32 +215,92 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
     }
 
     override fun deleteHttpTts(httpTTS: HttpTTS) {
-        showComposeConfirmDialog(
-            title = getString(R.string.draw),
-            message = getString(R.string.sure_del) + "\n" + httpTTS.name,
-            positiveText = getString(R.string.yes),
-            negativeText = getString(R.string.no),
-            onPositive = {
-                val appContext = requireContext().applicationContext
-                lifecycleScope.launch(IO) {
-                    appDb.runInTransaction {
-                        SourceRecycleBinHelp.recycleHttpTtsRules(listOf(httpTTS))
-                        appDb.httpTTSDao.delete(httpTTS)
+        deleteTtsTarget = httpTTS
+    }
+
+    @Composable
+    private fun SpeakEngineDialogs() {
+        val density = LocalVisualSpec.current.density
+
+        exportResult?.let { result ->
+            AppDialog(onDismiss = { exportResult = null }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = stringResource(R.string.export_success),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    result.message?.let { message ->
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    val result = SpeechRouteSanitizer.cleanDeletedHttpTts(httpTTS)
-                    if (result.changed) {
-                        val message = buildList {
-                            if (result.characterCount > 0) add("${result.characterCount} 个角色")
-                            if (result.bookCount > 0) add("${result.bookCount} 本书")
-                            if (result.speakerGroupItemCount > 0) add("${result.speakerGroupItemCount} 个发言人分组条目")
-                            if (result.globalCleared) add("通用朗读引擎")
-                        }.joinToString("、")
-                        appContext.toastOnUi("已清理 $message 的失效朗读配置")
+                    Text(
+                        text = result.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppFilledButton(
+                            text = stringResource(R.string.copy_text),
+                            modifier = Modifier.weight(1f),
+                            onClick = { requireContext().sendToClip(result.url) },
+                        )
+                        if (result.canShibboleth) {
+                            AppGhostButton(
+                                text = stringResource(R.string.shibboleth),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    exportResult = null
+                                    showShibbolethDialog(result.url, ShibbolethCodec.TTS_RULE)
+                                },
+                            )
+                        }
                     }
-                    notifyReadAloudEngineChanged()
                 }
             }
-        )
+        }
+
+        deleteTtsTarget?.let { httpTTS ->
+            AppConfirmDialog(
+                title = stringResource(R.string.draw),
+                message = stringResource(R.string.sure_del) + "\n" + httpTTS.name,
+                confirmLabel = stringResource(R.string.yes),
+                cancelLabel = stringResource(R.string.no),
+                danger = true,
+                onConfirm = {
+                    deleteTtsTarget = null
+                    deleteHttpTtsConfirmed(httpTTS)
+                },
+                onDismiss = { deleteTtsTarget = null },
+            )
+        }
+    }
+
+    private fun deleteHttpTtsConfirmed(httpTTS: HttpTTS) {
+        val appContext = requireContext().applicationContext
+        lifecycleScope.launch(IO) {
+            appDb.runInTransaction {
+                SourceRecycleBinHelp.recycleHttpTtsRules(listOf(httpTTS))
+                appDb.httpTTSDao.delete(httpTTS)
+            }
+            val result = SpeechRouteSanitizer.cleanDeletedHttpTts(httpTTS)
+            if (result.changed) {
+                val message = buildList {
+                    if (result.characterCount > 0) add("${result.characterCount} 个角色")
+                    if (result.bookCount > 0) add("${result.bookCount} 本书")
+                    if (result.speakerGroupItemCount > 0) add("${result.speakerGroupItemCount} 个发言人分组条目")
+                    if (result.globalCleared) add("通用朗读引擎")
+                }.joinToString("、")
+                appContext.toastOnUi("已清理 $message 的失效朗读配置")
+            }
+            notifyReadAloudEngineChanged()
+        }
     }
 
     private fun notifyReadAloudEngineChanged() {

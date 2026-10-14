@@ -1,5 +1,11 @@
 package io.legado.app.ui.book.read.config
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import io.legado.app.uikit.v5.components.AppNumberPickerDialog
 import io.legado.app.reader.config.ReadConfigEvent
 import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
 import io.legado.app.reader.config.ReadConfigEvent.PageClick
@@ -30,7 +36,6 @@ import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
-import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
 import io.legado.app.lib.theme.dialogSurfaceBackground
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.dpToPx
@@ -82,6 +87,65 @@ class MoreConfigDialog : BasePrefDialogFragment() {
     class ReadPreferenceFragment : ComposeSettingFragment() {
 
         private val slopSquare by lazy { ViewConfiguration.get(requireContext()).scaledTouchSlop }
+
+        // ── V5 弹窗状态 ─────────────────────────────────────────
+        internal var slopPickerOpen by mutableStateOf(false)
+        internal var clickPickerOpen by mutableStateOf(false)
+        internal var menuAlphaPickerOpen by mutableStateOf(false)
+
+        override val extraDialogs: @Composable () -> Unit = {
+            if (slopPickerOpen) {
+                AppNumberPickerDialog(
+                    title = stringResource(R.string.page_touch_slop_dialog_title),
+                    value = AppConfig.pageTouchSlop,
+                    confirmLabel = stringResource(R.string.ok),
+                    cancelLabel = stringResource(R.string.cancel),
+                    range = 0..9999,
+                    step = 1,
+                    valueLabel = AppConfig.pageTouchSlop.toString(),
+                    onConfirm = { value ->
+                        slopPickerOpen = false
+                        AppConfig.pageTouchSlop = value
+                        ReadConfigEvent.post(PageTouchSlop)
+                    },
+                    onDismiss = { slopPickerOpen = false },
+                )
+            }
+            if (clickPickerOpen) {
+                AppNumberPickerDialog(
+                    title = stringResource(R.string.page_touch_click_dialog_title),
+                    value = AppConfig.pageTouchClick,
+                    confirmLabel = stringResource(R.string.ok),
+                    cancelLabel = stringResource(R.string.cancel),
+                    range = 0..399,
+                    step = 1,
+                    valueLabel = AppConfig.pageTouchClick.toString(),
+                    onConfirm = { value ->
+                        clickPickerOpen = false
+                        AppConfig.pageTouchClick = value
+                        ReadConfigEvent.post(PageClick)
+                    },
+                    onDismiss = { clickPickerOpen = false },
+                )
+            }
+            if (menuAlphaPickerOpen) {
+                AppNumberPickerDialog(
+                    title = stringResource(R.string.read_menu_alpha),
+                    value = AppConfig.readMenuAlpha,
+                    confirmLabel = stringResource(R.string.ok),
+                    cancelLabel = stringResource(R.string.cancel),
+                    range = 35..100,
+                    step = 1,
+                    valueLabel = AppConfig.readMenuAlpha.toString(),
+                    onConfirm = { value ->
+                        menuAlphaPickerOpen = false
+                        AppConfig.readMenuAlpha = value
+                        refreshSettings()
+                    },
+                    onDismiss = { menuAlphaPickerOpen = false },
+                )
+            }
+        }
 
         override val titleRes: Int = R.string.setting
 
@@ -421,49 +485,15 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         }
 
         private fun showPageTouchSlopDialog() {
-            showComposeNumberPickerDialog(
-                title = getString(R.string.page_touch_slop_dialog_title),
-                value = AppConfig.pageTouchSlop,
-                minValue = 0,
-                maxValue = 9999,
-                onValue = {
-                    AppConfig.pageTouchSlop = it
-                    ReadConfigEvent.post(PageTouchSlop)
-                }
-            )
+            slopPickerOpen = true
         }
 
         private fun showPageTouchClickDialog() {
-            showComposeNumberPickerDialog(
-                title = getString(R.string.page_touch_click_dialog_title),
-                value = AppConfig.pageTouchClick,
-                minValue = 0,
-                maxValue = 399,
-                onValue = {
-                    AppConfig.pageTouchClick = it
-                    ReadConfigEvent.post(PageClick)
-                }
-            )
+            clickPickerOpen = true
         }
 
         private fun showReadMenuAlphaDialog() {
-            showComposeNumberPickerDialog(
-                title = getString(R.string.read_menu_alpha),
-                value = AppConfig.readMenuAlpha,
-                minValue = 35,
-                maxValue = 100,
-                customText = getString(R.string.btn_default_s),
-                onCustom = {
-                    AppConfig.readMenuAlpha = 100
-                    refreshSettings()
-                    postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
-                },
-                onValue = {
-                    AppConfig.readMenuAlpha = it.coerceIn(35, 100)
-                    refreshSettings()
-                    postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
-                }
-            )
+            menuAlphaPickerOpen = true
         }
 
         companion object {

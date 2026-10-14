@@ -3,6 +3,31 @@ package io.legado.app.ui.about
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.lifecycle.lifecycleScope
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.R
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
@@ -20,7 +45,6 @@ import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.createFileIfNotExist
@@ -185,33 +209,85 @@ class AboutFragment : ComposeSettingFragment() {
     }
 
     private fun showInternalBetaDialog() {
-        showComposeTextFormDialogWithChecks(
-            title = "内测版更新",
-            labels = listOf("下载密钥", "下载地址"),
-            initialValues = listOf(
-                AppUpdateConfig.internalBetaKey.orEmpty(),
-                AppUpdateConfig.internalBetaUrl.orEmpty()
-            ),
-            passwordFields = setOf(0),
-            checkboxLabels = listOf("启用内测版更新"),
-            checkedIndices = if (AppUpdateConfig.internalBetaEnabled) setOf(0) else emptySet(),
-            message = "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
-            validateInput = { values ->
-                val key = values.getOrNull(0).orEmpty().trim()
-                val url = values.getOrNull(1).orEmpty().trim()
-                val hasAny = key.isNotBlank() || url.isNotBlank()
-                !hasAny || (key.isNotBlank() && (url.startsWith("https://") || url.startsWith("http://")))
-            },
-            onPositive = { values, checked ->
-                val key = values.getOrNull(0).orEmpty().trim()
-                val url = values.getOrNull(1).orEmpty().trim()
-                val valid = key.isNotBlank() && (url.startsWith("https://") || url.startsWith("http://"))
-                AppUpdateConfig.internalBetaKey = key
-                AppUpdateConfig.internalBetaUrl = url
-                AppUpdateConfig.internalBetaEnabled = checked.getOrNull(0) == true && valid
-                refreshSettings()
+        betaKeyText = AppUpdateConfig.internalBetaKey.orEmpty()
+        betaUrlText = AppUpdateConfig.internalBetaUrl.orEmpty()
+        betaEnabled = AppUpdateConfig.internalBetaEnabled
+        betaDialogOpen = true
+    }
+
+    internal var betaDialogOpen by mutableStateOf(false)
+    internal var betaKeyText by mutableStateOf("")
+    internal var betaUrlText by mutableStateOf("")
+    internal var betaEnabled by mutableStateOf(false)
+
+    override val extraDialogs: @Composable () -> Unit = {
+        if (betaDialogOpen) {
+            val density = LocalVisualSpec.current.density
+            AppDialog(onDismiss = { betaDialogOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "内测版更新",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = betaKeyText,
+                        onValueChange = { betaKeyText = it },
+                        placeholder = "下载密钥",
+                        singleLine = true,
+                    )
+                    AppTextField(
+                        value = betaUrlText,
+                        onValueChange = { betaUrlText = it },
+                        placeholder = "下载地址",
+                        singleLine = true,
+                    )
+                    AppRowWithSwitch(
+                        title = "启用内测版更新",
+                        checked = betaEnabled,
+                        onCheckedChange = { betaEnabled = it },
+                        card = false,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { betaDialogOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val key = betaKeyText.trim()
+                                val url = betaUrlText.trim()
+                                val valid = key.isNotBlank() &&
+                                    (url.startsWith("https://") || url.startsWith("http://"))
+                                val hasAny = key.isNotBlank() || url.isNotBlank()
+                                if (hasAny && !valid) {
+                                    return@AppFilledButton
+                                }
+                                betaDialogOpen = false
+                                AppUpdateConfig.internalBetaKey = key
+                                AppUpdateConfig.internalBetaUrl = url
+                                AppUpdateConfig.internalBetaEnabled = betaEnabled && valid
+                                refreshSettings()
+                            },
+                        )
+                    }
+                }
             }
-        )
+        }
     }
 
     @Suppress("SameParameterValue")

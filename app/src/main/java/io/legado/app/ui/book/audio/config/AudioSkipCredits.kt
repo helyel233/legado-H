@@ -1,42 +1,34 @@
 package io.legado.app.ui.book.audio.config
 
 import android.content.DialogInterface
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.data.entities.Book
-import io.legado.app.ui.widget.compose.AppDialogSliderRow
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import java.lang.ref.WeakReference
 
-class AudioSkipCredits : ComposeDialogFragment() {
+/**
+ * 音频跳过片头片尾（V5 基座版）。
+ *
+ * 保持 [newInstance] 入口、无遮罩（FLAG_DIM_BEHIND 清除）与 dismiss 时保存
+ * 的行为不变；内容由旧 LegadoMiuixCard/AppDialogSliderRow 桥换为 V5 AppDialog + AppSlider。
+ */
+internal class AudioSkipCredits : V5DialogFragment() {
 
     companion object {
         private var bookRef: WeakReference<Book>? = null
@@ -62,68 +54,54 @@ class AudioSkipCredits : ComposeDialogFragment() {
         book.save()
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    AudioSkipCreditsContent(style = style)
-                }
-            }
-        }
-    }
-
     @Composable
-    private fun AudioSkipCreditsContent(style: AppDialogStyle) {
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         var openCredits by rememberSaveable { mutableIntStateOf(book.getOpenCredits()) }
         var closeCredits by rememberSaveable { mutableIntStateOf(book.getCloseCredits()) }
 
-        LegadoMiuixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
-        ) {
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(visual.density.blockGap),
             ) {
                 Text(
                     text = stringResource(R.string.skip_book_credits),
-                    color = style.accent,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = style.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    style = visual.type.title,
+                    color = colors.primary,
                 )
-                AppDialogSliderRow(
-                    title = stringResource(R.string.opening_credits),
-                    value = openCredits,
-                    range = 0..180,
-                    onValueChange = { value ->
-                        openCredits = value
-                        book.setOpenCredits(value)
-                    }
+                Text(
+                    text = stringResource(R.string.opening_credits),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
                 )
-                AppDialogSliderRow(
-                    title = stringResource(R.string.closing_credits),
-                    value = closeCredits,
-                    range = 0..180,
+                AppSlider(
+                    value = openCredits.toFloat(),
                     onValueChange = { value ->
-                        closeCredits = value
-                        book.setCloseCredits(value)
-                    }
+                        val intValue = value.toInt()
+                        openCredits = intValue
+                        book.setOpenCredits(intValue)
+                    },
+                    valueRange = 0f..180f,
+                    steps = 179,
+                    valueLabel = openCredits.toString(),
+                )
+                Text(
+                    text = stringResource(R.string.closing_credits),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                )
+                AppSlider(
+                    value = closeCredits.toFloat(),
+                    onValueChange = { value ->
+                        val intValue = value.toInt()
+                        closeCredits = intValue
+                        book.setCloseCredits(intValue)
+                    },
+                    valueRange = 0f..180f,
+                    steps = 179,
+                    valueLabel = closeCredits.toString(),
                 )
             }
         }

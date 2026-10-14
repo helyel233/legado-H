@@ -6,6 +6,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -14,7 +17,8 @@ import androidx.core.content.edit
 import androidx.fragment.app.Fragment
 import io.legado.app.R
 import io.legado.app.ui.host.HostV5ThemeRoot
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
@@ -33,6 +37,12 @@ abstract class ComposeSettingFragment : Fragment(),
     protected open val autoOpenTargetItem: Boolean = true
 
     protected open val drawPanelImage: Boolean = true
+
+    /**
+     * V5 弹窗插槽：子类 override 提供 AppDialog/AppMenuSheet 等弹窗 Composable，
+     * 由基类在 SettingSpecScreen 之后统一挂载（替代旧 showComposeXxx 命令式弹窗）。
+     */
+    protected open val extraDialogs: (@Composable () -> Unit)? = null
 
     private val refreshTick = mutableIntStateOf(0)
     private val scrollTargetKey = mutableStateOf<String?>(null)
@@ -65,6 +75,23 @@ abstract class ComposeSettingFragment : Fragment(),
                         onTargetMissing = ::consumeMissingTarget,
                         onItemClick = ::handleItemClick
                     )
+                    extraDialogs?.invoke()
+                    choiceTarget?.let { item ->
+                        val density = LocalVisualSpec.current.density
+                        AppFilterDialog(
+                            title = item.title.toString(),
+                            options = item.options.map { option ->
+                                val desc = option.description?.toString().orEmpty()
+                                if (desc.isBlank()) option.label.toString() else "${option.label} · $desc"
+                            },
+                            selectedIndex = item.options.indexOfFirst { it.value == item.selectedValue },
+                            onSelect = { index ->
+                                choiceTarget = null
+                                item.options.getOrNull(index)?.value?.let(item.onSelected)
+                            },
+                            onDismiss = { choiceTarget = null },
+                        )
+                    }
                 }
             }
         }
@@ -196,16 +223,8 @@ abstract class ComposeSettingFragment : Fragment(),
     }
 
     private fun showChoiceDialog(item: SettingChoiceSpec) {
-        showComposeChoiceListDialog(
-            title = item.title,
-            labels = item.options.map { it.label },
-            selectedIndex = item.options.indexOfFirst { it.value == item.selectedValue },
-            descriptions = item.options.map { it.description?.toString().orEmpty() },
-            iconNames = item.options.map { it.iconName.orEmpty() },
-            negativeText = getString(R.string.cancel),
-            onSelected = { index ->
-                item.options.getOrNull(index)?.value?.let(item.onSelected)
-            }
-        )
+        choiceTarget = item
     }
+
+    internal var choiceTarget by mutableStateOf<SettingChoiceSpec?>(null)
 }

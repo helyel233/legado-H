@@ -14,6 +14,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.R
 import io.legado.app.help.CacheManager
 import io.legado.app.model.AutoTaskRule
@@ -24,7 +27,6 @@ import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.CronSchedule
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -48,6 +50,7 @@ class AutoTaskEditActivity : AppCompatActivity() {
     private var editorState by mutableStateOf(AutoTaskEditorState())
     private var editingField: AutoTaskEditorField? = null
     private var editingCacheKey: String? = null
+    internal var exitConfirmOpen by mutableStateOf(false)
 
     private val codeEditorLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -113,6 +116,20 @@ class AutoTaskEditActivity : AppCompatActivity() {
                     style = style,
                     onOpenEditor = ::openCodeEditor,
                     onLogin = ::openLogin
+                )
+            }
+            if (exitConfirmOpen) {
+                AppConfirmDialog(
+                    title = getString(R.string.exit),
+                    message = getString(R.string.exit_no_save),
+                    confirmLabel = getString(R.string.yes),
+                    cancelLabel = getString(R.string.no),
+                    onConfirm = {
+                        exitConfirmOpen = false
+                        finishAfterSave = true
+                        super.finish()
+                    },
+                    onDismiss = { exitConfirmOpen = false },
                 )
             }
         }
@@ -313,13 +330,7 @@ class AutoTaskEditActivity : AppCompatActivity() {
         }
         val current = buildDraft()
         if (origin != null && current != origin) {
-            showComposeConfirmDialog(
-                title = getString(R.string.exit),
-                message = getString(R.string.exit_no_save),
-                positiveText = getString(R.string.yes),
-                negativeText = getString(R.string.no),
-                onPositive = { super.finish() }
-            )
+            exitConfirmOpen = true
         } else {
             super.finish()
         }

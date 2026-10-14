@@ -1,79 +1,90 @@
 package io.legado.app.ui.config
 
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.lifecycleScope
-import com.jaredrummler.android.colorpicker.ColorPickerDialog
-import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.constant.EventBus
-import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.MainBottomNavConfig
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.lib.cloud.CloudStorageType
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.lib.cloud.S3Container
 import io.legado.app.ui.book.cache.WebDavTaskManager
 import io.legado.app.ui.book.cache.WebDavTaskStatus
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.image.ImageCropContract
-import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
-import io.legado.app.ui.widget.compose.AppPackageManageItemCard
-import io.legado.app.ui.widget.compose.AppPackageManageScreen
-import io.legado.app.ui.widget.compose.AppPackageManageSettingCard
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
-import io.legado.app.ui.widget.number.NumberPickerDialog
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppColorPickerDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppNumberPickerDialog
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.ImageCropHelper
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getFile
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -86,28 +97,63 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), ColorPickerDialogListener {
+internal const val NAV_COLOR_BORDER = 7002
+private const val NAV_REQUEST_SIDEBAR_BACKGROUND = 7001
+private const val NAV_REQUEST_BOTTOM_WALLPAPER = 7003
+private const val NAV_REQUEST_SINGLE_ICON_BASE = 7100
 
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
+private val navDateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
-    private var entriesState by mutableStateOf<List<NavigationBarIconConfig.Entry>>(emptyList())
-    private var activeDirNameState by mutableStateOf(NavigationBarIconConfig.DEFAULT_DIR_NAME)
-    private var summaryTextState by mutableStateOf("")
-    private var isNightMode by mutableStateOf(false)
-    private var bottomNavItemsState by mutableStateOf(MainBottomNavConfig.items())
-    private var editingEntry: NavigationBarIconConfig.Entry? = null
-    private var editingDialog: LinearLayout? = null
-    private var pendingConfig: NavigationBarIconConfig.Config? = null
-    private var pendingColorTarget = 0
+internal data class NavIconMenuRequest(
+    val item: NavigationBarIconConfig.NavItem,
+    val selected: Boolean,
+    val single: Boolean,
+)
+
+class NavigationBarManageActivity : AppCompatActivity() {
+
+    internal var entries by mutableStateOf<List<NavigationBarIconConfig.Entry>>(emptyList())
+    internal var activeDirName by mutableStateOf(NavigationBarIconConfig.DEFAULT_DIR_NAME)
+    internal var summaryText by mutableStateOf("")
+    internal var isNightMode by mutableStateOf(false)
+    internal var bottomNavItems by mutableStateOf(MainBottomNavConfig.items())
+    internal var pendingConfig by mutableStateOf<NavigationBarIconConfig.Config?>(null)
+    internal var editDialogOpen by mutableStateOf(false)
+    internal var layoutModeSelectorOpen by mutableStateOf(false)
+    internal var effectModeSelectorOpen by mutableStateOf(false)
+    internal var wallpaperMenuOpen by mutableStateOf(false)
+    internal var sidebarBgMenuOpen by mutableStateOf(false)
+    internal var opacityPickerOpen by mutableStateOf(false)
+    internal var borderAlphaPickerOpen by mutableStateOf(false)
+    internal var borderColorMenuOpen by mutableStateOf(false)
+    internal var colorPickerTarget by mutableIntStateOf(0)
+    internal var iconMenuRequest by mutableStateOf<NavIconMenuRequest?>(null)
+    internal var bottomNavItemsDialogOpen by mutableStateOf(false)
+    internal var addMenuOpen by mutableStateOf(false)
+    internal var itemMenuEntry by mutableStateOf<NavigationBarIconConfig.Entry?>(null)
+    internal var deleteRequest by mutableStateOf<Pair<String, suspend () -> Unit>?>(null)
+    internal var containerButtonVisible by mutableStateOf(false)
+    internal var containerButtonLabel by mutableStateOf("")
+    internal var containerSelectorOpen by mutableStateOf(false)
+    internal var containerLabels by mutableStateOf<List<String>>(emptyList())
+    internal var containerSelectedIndex by mutableIntStateOf(0)
+
+    internal var editingEntry: NavigationBarIconConfig.Entry? = null
     private var pendingIconRequest: IconRequest? = null
     private var pendingSidebarBackgroundEntry: NavigationBarIconConfig.Entry? = null
     private var pendingBottomWallpaperCropRequest: ImageCropHelper.Request? = null
+    private var cloudContainerId: String? = null
+    private var containers: List<S3Container> = emptyList()
     private val handledWebDavTasks = mutableSetOf<String>()
     private var loadVersion = 0
-    private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
-    private var containerMenuPopup: ModernActionPopup.Handle? = null
-    private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+
+    private data class IconRequest(
+        val code: Int,
+        val entry: NavigationBarIconConfig.Entry,
+        val item: NavigationBarIconConfig.NavItem,
+        val selected: Boolean,
+        val single: Boolean = false
+    )
 
     private val selectIcon = registerForActivityResult(HandleFileContract()) { result ->
         val request = pendingIconRequest?.takeIf { it.code == result.requestCode } ?: return@registerForActivityResult
@@ -135,10 +181,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                     }
                 }
             }.onSuccess {
-                editingEntry = it
-                pendingConfig = it.config.copy(icons = it.config.icons.toMutableMap())
-                notifyAppliedIfNeeded(it)
-                refreshEditDialog()
+                applyIconResult(it)
                 loadPackages()
                 toastOnUi(R.string.success)
             }.onFailure {
@@ -170,7 +213,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         val request = ImageCropHelper.buildRequest(
             context = this,
             sourceUri = uri,
-            requestCode = requestSidebarBackground,
+            requestCode = NAV_REQUEST_SIDEBAR_BACKGROUND,
             aspectWidth = sidebarWidth,
             aspectHeight = metrics.heightPixels.coerceAtLeast(1),
             dirName = "navigationBarSidebarBackground",
@@ -202,106 +245,12 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                     )
                 }
             }.onSuccess {
-                editingEntry = it
-                pendingConfig = it.config.copy(icons = it.config.icons.toMutableMap())
-                notifyAppliedIfNeeded(it)
-                refreshEditDialog()
+                applyIconResult(it)
                 loadPackages()
                 toastOnUi(R.string.success)
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.navigation_icon_decode_failed))
             }
-        }
-    }
-
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.navigation_bar_manage)
-        initView()
-        loadPackages()
-        observeWebDavTasks()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        bottomNavItemsState = MainBottomNavConfig.items()
-        invalidateOptionsMenu()
-    }
-
-    override fun observeLiveBus() {
-        observeEvent<String>(EventBus.RECREATE) {
-            loadPackages()
-        }
-    }
-
-    private fun initView() {
-        val container = binding.recyclerView.parent as? ViewGroup ?: return
-        val index = container.indexOfChild(binding.recyclerView)
-        container.removeView(binding.recyclerView)
-        container.removeView(binding.tabBar)
-        container.removeView(binding.tvSummary)
-        container.removeView(binding.btnAdd)
-        val cv = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-            setContent {
-                NavigationBarPackageManageScreen(
-                    entries = entriesState,
-                    activeDirName = activeDirNameState,
-                    isNightMode = isNightMode,
-                    summaryText = summaryTextState,
-                    bottomNavSummary = bottomNavSummary(bottomNavItemsState),
-                    onSwitchDayNight = { night ->
-                        if (night != isNightMode) {
-                            isNightMode = night
-                            loadPackages()
-                        }
-                    },
-                    onAdd = ::showAddDialog,
-                    onManageBottomNavItems = ::showBottomNavItemsDialog,
-                    onApply = ::applyPackage,
-                    onEdit = { entry -> showEditDialog(entry) },
-                    entryInfo = ::entryInfo,
-                    entryActions = ::entryActions
-                )
-            }
-        }
-        container.addView(cv, index.coerceAtMost(container.childCount))
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.s3_bucket).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setActionView(R.layout.view_action_button)
-            actionView?.let { view ->
-                view.contentDescription = title
-                view.findViewById<ImageButton>(R.id.item)?.setImageDrawable(icon)
-                view.setOnClickListener { showContainerSelector(view) }
-            }
-        }
-        menu.add(0, MENU_SYNC_TASKS, 1, R.string.package_sync_task_menu).apply {
-            setIcon(R.drawable.ic_history)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerMenu()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_CONTAINER -> {
-                showContainerSelector(item.actionView)
-                true
-            }
-            MENU_SYNC_TASKS -> {
-                showNavigationBarSyncTasks()
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
         }
     }
 
@@ -313,107 +262,82 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         pendingBottomWallpaperCropRequest = null
         if (result == null) return@registerForActivityResult
         if (File(result.path).exists()) {
-            pendingConfig?.wallpaperPath = result.path
-            refreshEditDialog()
+            updatePendingConfig { it.copy(wallpaperPath = result.path) }
         } else {
             toastOnUi(getString(R.string.image_crop_failed, getString(R.string.unknown)))
         }
     }
-    private fun showAddDialog() {
-        showComposeActionListDialog(
-            title = getString(R.string.theme_add),
-            labels = listOf(
-                getString(R.string.theme_manual_config),
-                getString(R.string.theme_import_zip)
-            )
-        ) { index ->
-            when (index) {
-                0 -> showEditDialog(null)
-                1 -> importPackage.launch {
-                    mode = HandleFileContract.FILE
-                    title = getString(R.string.theme_import_zip)
-                    allowExtensions = arrayOf("zip")
-                }
-            }
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { NavigationBarManageContent(this@NavigationBarManageActivity) }
+        updateContainerMenu()
+        loadPackages()
+        observeWebDavTasks()
+        observeEvent<String>(EventBus.RECREATE) {
+            loadPackages()
         }
     }
 
-    private fun showBottomNavItemsDialog() {
-        alert(R.string.bottom_bar_items_manage) {
-            customView {
-                ComposeView(this@NavigationBarManageActivity).apply {
-                    setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                    setContent {
-                        BottomNavItemsManageContent(
-                            initialItems = bottomNavItemsState,
-                            onItemsChange = ::saveBottomNavItems
-                        )
-                    }
-                }
-            }
-            okButton()
-        }
+    override fun onResume() {
+        super.onResume()
+        bottomNavItems = MainBottomNavConfig.items()
+        updateContainerMenu()
     }
 
-    private fun saveBottomNavItems(items: List<MainBottomNavConfig.ItemState>) {
-        val normalized = items.map { item ->
-            val spec = MainBottomNavConfig.spec(item.key)
-            if (spec?.lockedVisible == true) {
-                item.copy(visible = true)
-            } else {
-                item
-            }
-        }
-        MainBottomNavConfig.save(normalized)
-        bottomNavItemsState = MainBottomNavConfig.items()
+    internal fun updatePendingConfig(transform: (NavigationBarIconConfig.Config) -> NavigationBarIconConfig.Config) {
+        pendingConfig = pendingConfig?.let { normalizeStandardBottomConfig(transform(it)) }
     }
 
-    private fun bottomNavSummary(items: List<MainBottomNavConfig.ItemState>): String {
-        val visible = items.filter { it.visible || MainBottomNavConfig.spec(it.key)?.lockedVisible == true }
-        return visible.joinToString(" / ") { item ->
-            MainBottomNavConfig.spec(item.key)?.let { getString(it.titleRes) } ?: item.key
+    private fun normalizeStandardBottomConfig(config: NavigationBarIconConfig.Config): NavigationBarIconConfig.Config {
+        if (config.layoutMode == "standard") {
+            return config.copy(effectMode = "solid")
         }
+        return config
     }
 
     private fun updateContainerMenu() {
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
-        val item = containerMenuItem ?: return
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            item.isVisible = false
+            containerButtonVisible = false
             return
         }
         cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
             ?: containers.firstOrNull()?.id
-        item.isVisible = true
-        val title = containers.firstOrNull { it.id == cloudContainerId }
+        containerButtonVisible = true
+        containerButtonLabel = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
-        item.title = title
-        item.actionView?.contentDescription = title
     }
 
-    private fun showContainerSelector(anchor: View? = null) {
+    internal fun showContainerSelector() {
         lifecycleScope.launch {
-            val containers = withContext(Dispatchers.IO) { AppCloudStorage.listContainers().filter { it.enabled } }
-            if (containers.isEmpty()) {
+            val list = withContext(Dispatchers.IO) { AppCloudStorage.listContainers().filter { it.enabled } }
+            if (list.isEmpty()) {
                 toastOnUi(R.string.cloud_storage_config_required)
                 return@launch
             }
+            containers = list
+            containerLabels = list.map(AppCloudStorage::containerDisplayLabel)
             val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-            val popupAnchor = anchor ?: containerMenuItem?.actionView ?: binding.titleBar.toolbar
-            val actions = containers.map { container ->
-                ModernActionPopup.Action(AppCloudStorage.containerDisplayLabel(container)) {
-                    if (container.id == selected) return@Action
-                    AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
-                    cloudContainerId = container.id
-                    updateContainerMenu()
-                    loadPackages()
-                }
-            }
-            containerMenuPopup = ModernActionPopup.show(popupAnchor, actions, containerMenuPopup)
+            containerSelectedIndex = list.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+            containerSelectorOpen = true
         }
     }
+
+    internal fun onContainerSelected(index: Int) {
+        containerSelectorOpen = false
+        val container = containers.getOrNull(index) ?: return
+        if (container.id != cloudContainerId) {
+            AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
+            cloudContainerId = container.id
+            updateContainerMenu()
+            loadPackages()
+        }
+    }
+
     private fun loadPackages() {
         val version = ++loadVersion
         lifecycleScope.launch {
@@ -423,21 +347,49 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                 }
             }.onSuccess {
                 if (version != loadVersion || isFinishing || isDestroyed) return@onSuccess
-                entriesState = it
-                activeDirNameState = NavigationBarIconConfig.activeDirName(isNightMode)
-                summaryTextState = if (it.size <= 1) {
+                entries = it
+                activeDirName = NavigationBarIconConfig.activeDirName(isNightMode)
+                summaryText = if (it.size <= 1) {
                     getString(R.string.navigation_bar_package_empty)
                 } else {
                     getString(R.string.navigation_bar_package_summary)
                 }
             }.onFailure {
                 if (version != loadVersion || isFinishing || isDestroyed) return@onFailure
-                summaryTextState = it.localizedMessage.orEmpty()
+                summaryText = it.localizedMessage.orEmpty()
             }
         }
     }
 
-    private fun showEditDialog(entry: NavigationBarIconConfig.Entry?) {
+    internal fun switchDayNight(night: Boolean) {
+        if (night != isNightMode) {
+            isNightMode = night
+            loadPackages()
+        }
+    }
+
+    internal fun launchImport() {
+        importPackage.launch {
+            mode = HandleFileContract.FILE
+            title = getString(R.string.theme_import_zip)
+            allowExtensions = arrayOf("zip")
+        }
+    }
+
+    internal fun saveBottomNavItems(items: List<MainBottomNavConfig.ItemState>) {
+        val normalized = items.map { item ->
+            val spec = MainBottomNavConfig.spec(item.key)
+            if (spec?.lockedVisible == true) {
+                item.copy(visible = true)
+            } else {
+                item
+            }
+        }
+        MainBottomNavConfig.save(normalized)
+        bottomNavItems = MainBottomNavConfig.items()
+    }
+
+    internal fun showEditDialog(entry: NavigationBarIconConfig.Entry?) {
         val base = entry ?: NavigationBarIconConfig.Entry(
             NavigationBarIconConfig.Config(
                 name = nextPackageName(),
@@ -467,194 +419,120 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
             return
         }
         editingEntry = base
-        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-        val root = buildEditView()
-        editingDialog = root
-        alert(R.string.navigation_bar_edit) {
-            customView { editDialogScrollContainer(root) }
-            okButton {
-                saveEditingPackage()
-            }
-            cancelButton()
-        }
+        pendingConfig = normalizeStandardBottomConfig(base.config.copy(icons = base.config.icons.toMutableMap()))
+        editDialogOpen = true
     }
 
-    private fun editDialogScrollContainer(content: View): ScrollView {
-        return object : ScrollView(this) {
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val maxHeight = (resources.displayMetrics.heightPixels * 0.68f).toInt()
-                    .coerceAtLeast(320.dp)
-                val limitedHeightSpec = View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST)
-                super.onMeasure(widthMeasureSpec, limitedHeightSpec)
-            }
-        }.apply {
-            isFillViewport = false
-            isVerticalScrollBarEnabled = true
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(
-                content,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
+    internal fun onEditNameChanged(name: String) {
+        pendingConfig = pendingConfig?.copy(name = name)
+    }
+
+    internal fun onEditSave() {
+        editDialogOpen = false
+        val config = pendingConfig ?: return
+        pendingConfig = normalizeStandardBottomConfig(config.copy(name = config.name.trim()))
+        saveEditingPackage()
+    }
+
+    internal fun onLayoutModeSelected(index: Int) {
+        layoutModeSelectorOpen = false
+        updatePendingConfig {
+            it.copy(
+                layoutMode = when (index) {
+                    1 -> "standard"
+                    2 -> "sidebar"
+                    else -> "floating"
+                }
             )
         }
     }
 
-    private fun buildEditView(): LinearLayout {
-        val config = pendingConfig!!
-        normalizeStandardBottomConfig(config)
+    internal fun onEffectModeSelected(index: Int) {
+        effectModeSelectorOpen = false
+        updatePendingConfig {
+            it.copy(
+                effectMode = when (index) {
+                    0 -> "solid"
+                    2 -> "frosted"
+                    else -> "glass"
+                }
+            )
+        }
+    }
+
+    internal fun onWallpaperMenuAction(index: Int) {
+        wallpaperMenuOpen = false
+        if (index == 0) {
+            selectBottomWallpaper.launch {
+                mode = HandleFileContract.IMAGE
+                title = getString(R.string.bottom_bar_wallpaper)
+            }
+        } else {
+            updatePendingConfig { it.copy(wallpaperPath = null) }
+        }
+    }
+
+    internal fun onSidebarBgMenuAction(index: Int) {
+        sidebarBgMenuOpen = false
         val currentEntry = editingEntry
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(2, 2, 2, 4)
-            applyUiBodyTypefaceDeep(this@NavigationBarManageActivity.uiTypeface())
-            addView(PackageManageUi.nameInput(this@NavigationBarManageActivity, config.name, getString(R.string.navigation_bar_name)))
-            addView(optionRow(getString(R.string.bottom_bar_layout_mode), layoutModeLabel(config.layoutMode)) {
-                selector(
-                    getString(R.string.bottom_bar_layout_mode),
-                    listOf(
-                        getString(R.string.bottom_bar_layout_floating),
-                        getString(R.string.bottom_bar_layout_standard),
-                        getString(R.string.bottom_bar_layout_sidebar)
-                    )
-                ) { _, index ->
-                    config.layoutMode = when (index) {
-                        1 -> "standard"
-                        2 -> "sidebar"
-                        else -> "floating"
-                    }
-                    normalizeStandardBottomConfig(config)
-                    refreshEditDialog()
-                }
-            })
-            if (config.layoutMode != "sidebar") {
-                if (config.layoutMode == "floating") {
-                    addView(optionRow(getString(R.string.bottom_bar_material_mode), effectModeLabel(config.effectMode)) {
-                        selector(
-                            getString(R.string.bottom_bar_material_mode),
-                            listOf(
-                                getString(R.string.bottom_bar_effect_solid),
-                                getString(R.string.bottom_bar_effect_glass),
-                                getString(R.string.bottom_bar_effect_frosted)
-                            )
-                        ) { _, index ->
-                            config.effectMode = when (index) {
-                                0 -> "solid"
-                                2 -> "frosted"
-                                else -> "glass"
-                            }
-                            refreshEditDialog()
-                        }
-                    })
-                    addView(optionRow(
-                        getString(R.string.search),
-                        getString(if (config.hideSearchInFloatingStyle) R.string.disabled else R.string.enabled)
-                    ) {
-                        config.hideSearchInFloatingStyle = !config.hideSearchInFloatingStyle
-                        refreshEditDialog()
-                    })
-                }
-                if (config.layoutMode == "standard") {
-                    addView(optionRow(getString(R.string.bottom_bar_wallpaper), wallpaperLabel(config.wallpaperPath)) {
-                        showBottomWallpaperSelector()
-                    })
-                }
-                addView(optionRow(getString(R.string.bottom_bar_opacity), "${config.opacity}%") {
-                    showAlphaPicker(getString(R.string.bottom_bar_opacity), config.opacity) {
-                        config.opacity = it
-                    }
-                })
-                addView(optionRow(
-                    getString(R.string.bottom_bar_border_color),
-                    config.borderColor?.let(::colorLabel) ?: getString(R.string.disable)
-                ) {
-                    showOptionalColorSelector(
-                        getString(R.string.bottom_bar_border_color),
-                        config.borderColor,
-                        COLOR_BORDER
-                    )
-                })
-                addView(optionRow(getString(R.string.bottom_bar_border_alpha), "${config.borderAlpha}%") {
-                    showAlphaPicker(getString(R.string.bottom_bar_border_alpha), config.borderAlpha) {
-                        config.borderAlpha = it
-                    }
-                })
-            } else {
-                addView(optionRow(
-                    getString(R.string.navigation_bar_sidebar_background),
-                    if (config.sidebarBackgroundPath.isNullOrBlank()) {
-                        getString(R.string.select_image)
-                    } else {
-                        getString(R.string.theme_image_selected)
-                    }
-                ) {
-                    selector(
-                        getString(R.string.navigation_bar_sidebar_background),
-                        buildList {
-                            add(getString(R.string.select_image))
-                            if (!config.sidebarBackgroundPath.isNullOrBlank()) {
-                                add(getString(R.string.delete))
-                            }
-                        }
-                    ) { _, index ->
-                        if (index == 0) {
-                            pendingSidebarBackgroundEntry = currentEntry
-                            selectSidebarBackground.launch {
-                                mode = HandleFileContract.IMAGE
-                                title = getString(R.string.navigation_bar_sidebar_background)
-                            }
-                        } else if (currentEntry != null) {
-                            editingEntry = NavigationBarIconConfig.clearSidebarBackground(currentEntry)
-                            pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                            notifyAppliedIfNeeded(editingEntry!!)
-                            refreshEditDialog()
-                            loadPackages()
-                        }
-                    }
-                })
+        if (index == 0) {
+            pendingSidebarBackgroundEntry = currentEntry
+            selectSidebarBackground.launch {
+                mode = HandleFileContract.IMAGE
+                title = getString(R.string.navigation_bar_sidebar_background)
             }
-            NavigationBarIconConfig.items
-                .filter { config.layoutMode == "sidebar" || it.key != "ai" }
-                .let { NavigationBarIconConfig.extraItems + it }
-                .forEach { item ->
-                    if (item.menuId == 0) {
-                        addView(singleIconRow(item))
-                    } else {
-                        addView(iconRow(item))
-                    }
-                }
+        } else if (currentEntry != null) {
+            applyIconResult(NavigationBarIconConfig.clearSidebarBackground(currentEntry))
+            loadPackages()
         }
     }
 
-    private fun refreshEditDialog() {
-        val root = editingDialog ?: return
-        root.removeAllViews()
-        buildEditView().let { rebuilt ->
-            while (rebuilt.childCount > 0) {
-                root.addView(rebuilt.getChildAt(0).also { rebuilt.removeView(it) })
-            }
+    internal fun onBorderColorMenuAction(index: Int) {
+        borderColorMenuOpen = false
+        if (index == 0) {
+            updatePendingConfig { it.copy(borderColor = null) }
+        } else {
+            colorPickerTarget = NAV_COLOR_BORDER
         }
     }
 
-    private fun showBottomWallpaperSelector() {
-        val hasWallpaper = !pendingConfig?.wallpaperPath.isNullOrBlank()
-        selector(
-            getString(R.string.bottom_bar_wallpaper),
-            buildList {
-                add(getString(R.string.theme_image_select))
-                if (hasWallpaper) add(getString(R.string.theme_image_delete))
-            }
-        ) { _, index ->
-            if (index == 0) {
-                selectBottomWallpaper.launch {
-                    mode = HandleFileContract.IMAGE
-                    title = getString(R.string.bottom_bar_wallpaper)
-                }
+    internal fun onBorderColorConfirmed(color: Int) {
+        colorPickerTarget = 0
+        updatePendingConfig { it.copy(borderColor = color) }
+    }
+
+    internal fun applyIconResult(entry: NavigationBarIconConfig.Entry) {
+        editingEntry = entry
+        pendingConfig = entry.config.copy(icons = entry.config.icons.toMutableMap())
+        notifyAppliedIfNeeded(entry)
+    }
+
+    internal fun onIconMenuAction(index: Int) {
+        val request = iconMenuRequest ?: return
+        iconMenuRequest = null
+        val entry = editingEntry ?: return
+        if (index == 0) {
+            val code = if (request.single) {
+                NAV_REQUEST_SINGLE_ICON_BASE + NavigationBarIconConfig.extraItems.indexOf(request.item)
             } else {
-                pendingConfig?.wallpaperPath = null
-                refreshEditDialog()
+                NavigationBarIconConfig.items.indexOf(request.item) * 2 + if (request.selected) 1 else 0
             }
+            pendingIconRequest = IconRequest(code, entry, request.item, request.selected, request.single)
+            selectIcon.launch {
+                mode = HandleFileContract.FILE
+                requestCode = code
+                title = getString(R.string.navigation_icon_select_file)
+                allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
+            }
+        } else {
+            val cleared = if (request.single) {
+                NavigationBarIconConfig.clearSingleIcon(entry, request.item.key)
+            } else {
+                NavigationBarIconConfig.clearIcon(entry, request.item.key, request.selected)
+            }
+            applyIconResult(cleared)
+            loadPackages()
+            toastOnUi(R.string.success)
         }
     }
 
@@ -663,7 +541,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         val request = ImageCropHelper.buildRequest(
             context = this,
             sourceUri = uri,
-            requestCode = requestBottomWallpaper,
+            requestCode = NAV_REQUEST_BOTTOM_WALLPAPER,
             aspectWidth = metrics.widthPixels.coerceAtLeast(1),
             aspectHeight = (96 * metrics.density).toInt().coerceAtLeast(1),
             dirName = "bottomBarWallpapers",
@@ -674,195 +552,24 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         cropBottomWallpaper.launch(request.params)
     }
 
-    private fun normalizeStandardBottomConfig(config: NavigationBarIconConfig.Config) {
-        if (config.layoutMode == "standard") {
-            config.effectMode = "solid"
+    private fun nextPackageName(): String {
+        val base = getString(R.string.navigation_bar_custom_name)
+        val usedNames = entries.map { it.config.name }.toSet()
+        if (base !in usedNames) return base
+        for (index in 2..999) {
+            val name = "$base $index"
+            if (name !in usedNames) return name
         }
-    }
-
-    private fun optionRow(title: String, value: String, onClick: () -> Unit): View {
-        return PackageManageUi.optionRow(this, title, value, onClick)
-    }
-
-    private fun showAlphaPicker(title: String, value: Int, apply: (Int) -> Unit) {
-        NumberPickerDialog(this)
-            .setTitle(title)
-            .setMinValue(0)
-            .setMaxValue(100)
-            .setValue(value)
-            .show {
-                apply(it.coerceIn(0, 100))
-                refreshEditDialog()
-            }
-    }
-
-    private fun showOptionalColorSelector(title: String, color: Int?, target: Int) {
-        selector(title, listOf(getString(R.string.disable), getString(R.string.select_color))) { _, index ->
-            if (index == 0) {
-                if (target == COLOR_BORDER) {
-                    pendingConfig?.borderColor = null
-                }
-                refreshEditDialog()
-            } else {
-                showColorPicker(target, color ?: ContextCompat.getColor(this, R.color.accent))
-            }
-        }
-    }
-
-    private fun showColorPicker(target: Int, color: Int) {
-        pendingColorTarget = target
-        ColorPickerDialog.newBuilder()
-            .setDialogId(target)
-            .setColor(color)
-            .setShowAlphaSlider(false)
-            .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-            .show(this)
-    }
-
-    override fun onColorSelected(dialogId: Int, color: Int) {
-        if (dialogId == COLOR_BORDER) {
-            pendingConfig?.borderColor = color
-            refreshEditDialog()
-        }
-    }
-
-    override fun onDialogDismissed(dialogId: Int) {
-        pendingColorTarget = 0
-    }
-
-    private fun iconRow(item: NavigationBarIconConfig.NavItem): View {
-        val entry = editingEntry ?: return View(this)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(14.dp, 8.dp, 14.dp, 8.dp)
-            background = UiCorner.opaqueRounded(
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 8.dp
-            }
-            addView(TextView(context).apply {
-                setText(item.titleRes)
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = this@NavigationBarManageActivity.uiTypeface()
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(previewButton(entry, item, false))
-            addView(previewButton(entry, item, true))
-        }
-    }
-
-    private fun singleIconRow(item: NavigationBarIconConfig.NavItem): View {
-        val entry = editingEntry ?: return View(this)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(14.dp, 8.dp, 14.dp, 8.dp)
-            background = UiCorner.opaqueRounded(
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 8.dp
-            }
-            addView(TextView(context).apply {
-                setText(item.titleRes)
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = this@NavigationBarManageActivity.uiTypeface()
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(singlePreviewButton(entry, item))
-        }
-    }
-
-    private fun singlePreviewButton(entry: NavigationBarIconConfig.Entry, item: NavigationBarIconConfig.NavItem): ImageView {
-        return ImageView(this).apply {
-            contentDescription = getString(item.titleRes)
-            setPadding(8.dp, 8.dp, 8.dp, 8.dp)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setImageDrawable(NavigationBarIconConfig.previewSingleDrawable(this@NavigationBarManageActivity, entry, item))
-            background = UiCorner.actionSelector(
-                context.themeMutedColorOrDefault(),
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(44.dp, 44.dp).apply { marginStart = 8.dp }
-            setOnClickListener {
-                selector(
-                    contentDescription,
-                    listOf(getString(R.string.select_image), getString(R.string.delete))
-                ) { _, index ->
-                    if (index == 0) {
-                        val code = requestSingleIconBase + NavigationBarIconConfig.extraItems.indexOf(item)
-                        pendingIconRequest = IconRequest(code, entry, item, selected = false, single = true)
-                        selectIcon.launch {
-                            mode = HandleFileContract.FILE
-                            requestCode = code
-                            title = getString(R.string.navigation_icon_select_file)
-                            allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
-                        }
-                    } else {
-                        editingEntry = NavigationBarIconConfig.clearSingleIcon(entry, item.key)
-                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                        notifyAppliedIfNeeded(editingEntry!!)
-                        refreshEditDialog()
-                        loadPackages()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun previewButton(entry: NavigationBarIconConfig.Entry, item: NavigationBarIconConfig.NavItem, selected: Boolean): ImageView {
-        return ImageView(this).apply {
-            contentDescription = getString(if (selected) R.string.navigation_icon_selected else R.string.navigation_icon_normal)
-            setPadding(8.dp, 8.dp, 8.dp, 8.dp)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setImageDrawable(NavigationBarIconConfig.previewDrawable(this@NavigationBarManageActivity, entry, item, selected))
-            background = UiCorner.actionSelector(
-                context.themeMutedColorOrDefault(),
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(44.dp, 44.dp).apply { marginStart = 8.dp }
-            setOnClickListener {
-                selector(
-                    contentDescription,
-                    listOf(getString(R.string.select_image), getString(R.string.delete))
-                ) { _, index ->
-                    if (index == 0) {
-                        val code = NavigationBarIconConfig.items.indexOf(item) * 2 + if (selected) 1 else 0
-                        pendingIconRequest = IconRequest(code, entry, item, selected)
-                        selectIcon.launch {
-                            mode = HandleFileContract.FILE
-                            requestCode = code
-                            title = getString(R.string.navigation_icon_select_file)
-                            allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
-                        }
-                    } else {
-                        editingEntry = NavigationBarIconConfig.clearIcon(entry, item.key, selected)
-                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                        notifyAppliedIfNeeded(editingEntry!!)
-                        refreshEditDialog()
-                        loadPackages()
-                    }
-                }
-            }
-        }
+        return "$base ${System.currentTimeMillis()}"
     }
 
     private fun saveEditingPackage() {
         val config = pendingConfig ?: return
-        normalizeStandardBottomConfig(config)
-        val name = editingDialog?.findViewWithTag<EditText>("name")?.text?.toString()?.trim().orEmpty()
+        val oldEntry = editingEntry
         lifecycleScope.launch {
             kotlin.runCatching {
                 withContext(Dispatchers.IO) {
-                    NavigationBarIconConfig.addOrUpdate(config.copy(name = name), editingEntry)
+                    NavigationBarIconConfig.addOrUpdate(config, oldEntry)
                 }
             }.onSuccess {
                 if (notifyAppliedIfNeeded(it)) {
@@ -879,7 +586,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun entryActions(entry: NavigationBarIconConfig.Entry): List<AppManagementMenuAction> {
+    internal fun actionsFor(entry: NavigationBarIconConfig.Entry): List<Pair<String, () -> Unit>> {
         val actions = buildList {
             add(NavAction.APPLY)
             if (entry.dirName != NavigationBarIconConfig.DEFAULT_DIR_NAME) {
@@ -893,10 +600,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
             }
         }
         return actions.map { action ->
-            AppManagementMenuAction(
-                text = getString(action.titleRes),
-                danger = action.name.startsWith("DELETE")
-            ) {
+            getString(action.titleRes) to {
                 when (action) {
                     NavAction.APPLY -> applyPackage(entry)
                     NavAction.EDIT -> showEditDialog(entry)
@@ -906,20 +610,17 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                         NavigationBarIconConfig.download(entry, cloudContainerId, CLOUD_SCOPE)
                     }
                     NavAction.DELETE_LOCAL -> confirmDelete(
-                        entry,
                         getString(R.string.navigation_bar_delete_local_confirm)
                     ) {
                         NavigationBarIconConfig.deleteLocal(entry)
                         postEvent(EventBus.NAVIGATION_BAR_CHANGED, entry.config.isNightMode)
                     }
                     NavAction.DELETE_REMOTE -> confirmDelete(
-                        entry,
                         getString(R.string.navigation_bar_delete_remote_confirm)
                     ) {
                         NavigationBarIconConfig.deleteRemote(entry, cloudContainerId, CLOUD_SCOPE)
                     }
                     NavAction.DELETE_BOTH -> confirmDelete(
-                        entry,
                         getString(R.string.navigation_bar_delete_both_confirm)
                     ) {
                         NavigationBarIconConfig.delete(entry, cloudContainerId, CLOUD_SCOPE)
@@ -930,23 +631,20 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun confirmDelete(
-        entry: NavigationBarIconConfig.Entry,
-        message: String,
-        block: suspend () -> Unit
-    ) {
-        alert(getString(R.string.delete), message) {
-            yesButton {
-                runAction(block)
-            }
-            noButton()
-        }
+    private fun confirmDelete(message: String, block: suspend () -> Unit) {
+        deleteRequest = message to block
     }
 
-    private fun applyPackage(entry: NavigationBarIconConfig.Entry) {
+    internal fun applyPackage(entry: NavigationBarIconConfig.Entry) {
         lifecycleScope.launch {
             kotlin.runCatching {
-                withContext(Dispatchers.IO) { if (entry.source == NavigationBarIconConfig.Source.REMOTE) NavigationBarIconConfig.download(entry, cloudContainerId, CLOUD_SCOPE) else entry }
+                withContext(Dispatchers.IO) {
+                    if (entry.source == NavigationBarIconConfig.Source.REMOTE) {
+                        NavigationBarIconConfig.download(entry, cloudContainerId, CLOUD_SCOPE)
+                    } else {
+                        entry
+                    }
+                }
             }.onSuccess {
                 NavigationBarIconConfig.apply(it)
                 AppearanceKitManager.syncCurrentNavigationBarRef(it.config.isNightMode, it)
@@ -1018,7 +716,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         return "$key:$status"
     }
 
-    private fun showNavigationBarSyncTasks() {
+    internal fun showNavigationBarSyncTasks() {
         showPackageSyncTaskDialog(setOf(WebDavTaskType.NAVIGATION_BAR_PACKAGE_UPLOAD))
     }
 
@@ -1059,13 +757,13 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun runAction(block: suspend () -> Unit) {
+    internal fun runAction(block: suspend () -> Unit) {
         lifecycleScope.launch {
             kotlin.runCatching { withContext(Dispatchers.IO) { block() } }
-                .onSuccess {
-                    toastOnUi(R.string.success)
+                .onSuccess { toastOnUi(R.string.success) }
+                .onFailure {
+                    if (it is CancellationException) throw it else toastOnUi(it.localizedMessage)
                 }
-                .onFailure { toastOnUi(it.localizedMessage) }
             loadPackages()
         }
     }
@@ -1079,7 +777,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         return false
     }
 
-    private fun effectModeLabel(value: String): String {
+    internal fun effectModeLabel(value: String): String {
         return when (value) {
             "solid" -> getString(R.string.bottom_bar_effect_solid)
             "frosted" -> getString(R.string.bottom_bar_effect_frosted)
@@ -1087,7 +785,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun layoutModeLabel(value: String): String {
+    internal fun layoutModeLabel(value: String): String {
         return when (value) {
             "sidebar" -> getString(R.string.bottom_bar_layout_sidebar)
             "standard" -> getString(R.string.bottom_bar_layout_standard)
@@ -1095,15 +793,14 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun colorLabel(color: Int): String {
-        return "#${Integer.toHexString(color).takeLast(6).uppercase(Locale.ROOT)}"
+    internal fun bottomNavSummary(items: List<MainBottomNavConfig.ItemState>): String {
+        val visible = items.filter { it.visible || MainBottomNavConfig.spec(it.key)?.lockedVisible == true }
+        return visible.joinToString(" / ") { item ->
+            MainBottomNavConfig.spec(item.key)?.let { getString(it.titleRes) } ?: item.key
+        }
     }
 
-    private fun wallpaperLabel(path: String?): String {
-        return if (path.isNullOrBlank()) getString(R.string.theme_image_select) else getString(R.string.theme_image_selected)
-    }
-
-    private fun entryInfo(entry: NavigationBarIconConfig.Entry): String {
+    internal fun entryInfo(entry: NavigationBarIconConfig.Entry): String {
         return buildString {
             append(layoutModeLabel(entry.config.layoutMode))
             if (entry.config.layoutMode == "floating") {
@@ -1123,38 +820,9 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
             }
             if (entry.config.updatedAt > 0) {
                 append(" \u00B7 ")
-                append(dateFormat.format(Date(maxOf(entry.config.updatedAt, entry.remoteUpdatedAt))))
+                append(navDateFormat.format(Date(maxOf(entry.config.updatedAt, entry.remoteUpdatedAt))))
             }
         }
-    }
-
-    private fun nextPackageName(): String {
-        val base = getString(R.string.navigation_bar_custom_name)
-        val usedNames = entriesState.map { it.config.name }.toSet()
-        if (base !in usedNames) return base
-        for (index in 2..999) {
-            val name = "$base $index"
-            if (name !in usedNames) return name
-        }
-        return "$base ${System.currentTimeMillis()}"
-    }
-
-    private data class IconRequest(
-        val code: Int,
-        val entry: NavigationBarIconConfig.Entry,
-        val item: NavigationBarIconConfig.NavItem,
-        val selected: Boolean,
-        val single: Boolean = false
-    )
-
-    private companion object {
-        private const val CLOUD_SCOPE = "theme"
-        private const val MENU_CONTAINER = 0x5401
-        private const val MENU_SYNC_TASKS = 0x5402
-        const val requestSidebarBackground = 7001
-        const val COLOR_BORDER = 7002
-        const val requestBottomWallpaper = 7003
-        const val requestSingleIconBase = 7100
     }
 
     private enum class NavAction(val titleRes: Int) {
@@ -1167,63 +835,595 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         DELETE_REMOTE(R.string.theme_delete_remote),
         DELETE_BOTH(R.string.theme_delete_both)
     }
-    private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        private const val CLOUD_SCOPE = "theme"
+    }
 }
 
 @Composable
-private fun NavigationBarPackageManageScreen(
-    entries: List<NavigationBarIconConfig.Entry>,
-    activeDirName: String,
-    isNightMode: Boolean,
-    summaryText: String,
-    bottomNavSummary: String,
-    onSwitchDayNight: (Boolean) -> Unit,
-    onAdd: () -> Unit,
-    onManageBottomNavItems: () -> Unit,
-    onApply: (NavigationBarIconConfig.Entry) -> Unit,
-    onEdit: (NavigationBarIconConfig.Entry) -> Unit,
-    entryInfo: (NavigationBarIconConfig.Entry) -> String,
-    entryActions: (NavigationBarIconConfig.Entry) -> List<AppManagementMenuAction>
-) {
-    val applyText = stringResource(R.string.theme_apply)
-    val appliedText = stringResource(R.string.theme_applied_state)
-    val editText = stringResource(R.string.edit)
-    AppPackageManageScreen(
-        isNightMode = isNightMode,
-        summaryText = summaryText,
-        addText = stringResource(R.string.theme_add),
-        onSwitchDayNight = onSwitchDayNight,
-        onAdd = onAdd,
-        headerContent = { palette ->
-            item(key = "main_bottom_bar_items") {
-                AppPackageManageSettingCard(
-                    title = stringResource(R.string.bottom_bar_items_manage),
-                    info = bottomNavSummary,
-                    valueText = stringResource(R.string.edit),
-                    palette = palette,
-                    onClick = onManageBottomNavItems
+private fun NavigationBarManageContent(activity: NavigationBarManageActivity) {
+    val density = LocalVisualSpec.current.density
+
+    HostV5Page(
+        title = stringResource(R.string.navigation_bar_manage),
+        onBack = { activity.finish() },
+        trailing = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (activity.containerButtonVisible) {
+                    AppGhostButton(
+                        text = activity.containerButtonLabel,
+                        onClick = { activity.showContainerSelector() },
+                    )
+                }
+                AppOverflowMenuButton(
+                    contentDescription = stringResource(R.string.package_sync_task_menu),
+                    glyph = "⟳",
+                    onClick = { activity.showNavigationBarSyncTasks() },
+                )
+            }
+        },
+        bottomBar = {
+            AppFilledButton(
+                text = stringResource(R.string.theme_add),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 2,
+                    ),
+                onClick = { activity.addMenuOpen = true },
+            )
+        },
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (activity.summaryText.isNotEmpty()) {
+                Text(
+                    text = activity.summaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 2,
+                    ),
+                )
+            }
+            Row(
+                modifier = Modifier.padding(horizontal = density.screenPadding),
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                AppChip(
+                    text = stringResource(R.string.day),
+                    selected = !activity.isNightMode,
+                    onClick = { activity.switchDayNight(false) },
+                )
+                AppChip(
+                    text = stringResource(R.string.night),
+                    selected = activity.isNightMode,
+                    onClick = { activity.switchDayNight(true) },
+                )
+            }
+            Spacer(Modifier.height(density.blockGap / 2))
+            if (activity.entries.isEmpty()) {
+                AppEmpty(
+                    title = "暂无导航栏配置",
+                    supporting = "点击下方「添加」创建或导入导航栏包",
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 4,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    item(key = "main_bottom_bar_items") {
+                        AppCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { activity.bottomNavItemsDialogOpen = true },
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                                Text(
+                                    text = stringResource(R.string.bottom_bar_items_manage),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = activity.bottomNavSummary(activity.bottomNavItems),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                    items(
+                        activity.entries,
+                        key = { "${it.dirName}_${it.config.isNightMode}" }
+                    ) { entry ->
+                        NavItemRow(activity, entry)
+                    }
+                }
+            }
+        }
+    }
+
+    if (activity.addMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.theme_add),
+            actions = listOf(
+                stringResource(R.string.theme_manual_config) to {
+                    activity.addMenuOpen = false
+                    activity.showEditDialog(null)
+                },
+                stringResource(R.string.theme_import_zip) to {
+                    activity.addMenuOpen = false
+                    activity.launchImport()
+                },
+            ),
+            onDismiss = { activity.addMenuOpen = false },
+        )
+    }
+
+    activity.itemMenuEntry?.let { entry ->
+        AppMenuSheet(
+            title = entry.config.name,
+            actions = activity.actionsFor(entry),
+            onDismiss = { activity.itemMenuEntry = null },
+        )
+    }
+
+    if (activity.containerSelectorOpen) {
+        AppFilterDialog(
+            title = stringResource(R.string.s3_bucket),
+            options = activity.containerLabels,
+            selectedIndex = activity.containerSelectedIndex,
+            onSelect = { activity.onContainerSelected(it) },
+            onDismiss = { activity.containerSelectorOpen = false },
+        )
+    }
+
+    activity.deleteRequest?.let { (message, block) ->
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = message,
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.deleteRequest = null
+                activity.runAction(block)
+            },
+            onDismiss = { activity.deleteRequest = null },
+        )
+    }
+
+    if (activity.bottomNavItemsDialogOpen) {
+        AppDialog(onDismiss = { activity.bottomNavItemsDialogOpen = false }) {
+            Column(Modifier.fillMaxWidth().padding(density.screenPadding)) {
+                Text(
+                    text = stringResource(R.string.bottom_bar_items_manage),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(density.blockGap / 2))
+                BottomNavItemsManageContent(
+                    initialItems = activity.bottomNavItems,
+                    onItemsChange = { activity.saveBottomNavItems(it) },
                 )
             }
         }
-    ) { palette ->
-        items(
-            entries,
-            key = { "${it.dirName}_${it.config.isNightMode}" }
-        ) { entry ->
-            val isActive = entry.dirName == activeDirName
-            AppPackageManageItemCard(
-                title = entry.config.name,
-                info = entryInfo(entry),
-                isActive = isActive,
-                canEdit = entry.dirName != NavigationBarIconConfig.DEFAULT_DIR_NAME,
-                applyText = if (isActive) appliedText else applyText,
-                editText = editText,
-                moreActions = entryActions(entry),
-                palette = palette,
-                onApply = { onApply(entry) },
-                onEdit = { onEdit(entry) }
+    }
+
+    NavEditDialogHost(activity)
+}
+
+@Composable
+private fun NavEditDialogHost(activity: NavigationBarManageActivity) {
+    val config = activity.pendingConfig ?: return
+    val density = LocalVisualSpec.current.density
+    val context = LocalContext.current
+
+    AppDialog(onDismiss = { activity.editDialogOpen = false }) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+        ) {
+            Text(
+                text = stringResource(R.string.navigation_bar_edit),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
             )
+            AppTextField(
+                value = config.name,
+                onValueChange = { activity.onEditNameChanged(it) },
+                placeholder = stringResource(R.string.navigation_bar_name),
+                singleLine = true,
+            )
+            AppListItem(
+                headline = stringResource(R.string.bottom_bar_layout_mode),
+                supporting = activity.layoutModeLabel(config.layoutMode),
+                card = false,
+                onClick = { activity.layoutModeSelectorOpen = true },
+            )
+            if (config.layoutMode != "sidebar") {
+                if (config.layoutMode == "floating") {
+                    AppListItem(
+                        headline = stringResource(R.string.bottom_bar_material_mode),
+                        supporting = activity.effectModeLabel(config.effectMode),
+                        card = false,
+                        onClick = { activity.effectModeSelectorOpen = true },
+                    )
+                    AppRowWithSwitch(
+                        title = stringResource(R.string.search),
+                        checked = !config.hideSearchInFloatingStyle,
+                        onCheckedChange = { enabled ->
+                            activity.updatePendingConfig {
+                                it.copy(hideSearchInFloatingStyle = !enabled)
+                            }
+                        },
+                        card = false,
+                    )
+                }
+                if (config.layoutMode == "standard") {
+                    AppListItem(
+                        headline = stringResource(R.string.bottom_bar_wallpaper),
+                        supporting = if (config.wallpaperPath.isNullOrBlank()) {
+                            stringResource(R.string.theme_image_select)
+                        } else {
+                            stringResource(R.string.theme_image_selected)
+                        },
+                        card = false,
+                        onClick = { activity.wallpaperMenuOpen = true },
+                    )
+                }
+                AppListItem(
+                    headline = stringResource(R.string.bottom_bar_opacity),
+                    supporting = "${config.opacity}%",
+                    card = false,
+                    onClick = { activity.opacityPickerOpen = true },
+                )
+                AppListItem(
+                    headline = stringResource(R.string.bottom_bar_border_color),
+                    supporting = config.borderColor?.let { colorLabel(it) }
+                        ?: stringResource(R.string.disable),
+                    card = false,
+                    onClick = { activity.borderColorMenuOpen = true },
+                )
+                AppListItem(
+                    headline = stringResource(R.string.bottom_bar_border_alpha),
+                    supporting = "${config.borderAlpha}%",
+                    card = false,
+                    onClick = { activity.borderAlphaPickerOpen = true },
+                )
+            } else {
+                AppListItem(
+                    headline = stringResource(R.string.navigation_bar_sidebar_background),
+                    supporting = if (config.sidebarBackgroundPath.isNullOrBlank()) {
+                        stringResource(R.string.select_image)
+                    } else {
+                        stringResource(R.string.theme_image_selected)
+                    },
+                    card = false,
+                    onClick = { activity.sidebarBgMenuOpen = true },
+                )
+            }
+            val navItems = NavigationBarIconConfig.extraItems +
+                NavigationBarIconConfig.items.filter {
+                    config.layoutMode == "sidebar" || it.key != "ai"
+                }
+            val entry = activity.editingEntry
+            navItems.forEach { item ->
+                if (entry == null) return@forEach
+                if (item.menuId == 0) {
+                    NavSingleIconRow(activity, entry, item)
+                } else {
+                    NavPairIconRow(activity, entry, item)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                AppGhostButton(
+                    text = stringResource(R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = { activity.editDialogOpen = false },
+                )
+                AppFilledButton(
+                    text = stringResource(R.string.ok),
+                    modifier = Modifier.weight(1f),
+                    onClick = { activity.onEditSave() },
+                )
+            }
         }
+    }
+
+    if (activity.layoutModeSelectorOpen) {
+        AppFilterDialog(
+            title = stringResource(R.string.bottom_bar_layout_mode),
+            options = listOf(
+                stringResource(R.string.bottom_bar_layout_floating),
+                stringResource(R.string.bottom_bar_layout_standard),
+                stringResource(R.string.bottom_bar_layout_sidebar)
+            ),
+            selectedIndex = when (config.layoutMode) {
+                "standard" -> 1
+                "sidebar" -> 2
+                else -> 0
+            },
+            onSelect = { activity.onLayoutModeSelected(it) },
+            onDismiss = { activity.layoutModeSelectorOpen = false },
+        )
+    }
+
+    if (activity.effectModeSelectorOpen) {
+        AppFilterDialog(
+            title = stringResource(R.string.bottom_bar_material_mode),
+            options = listOf(
+                stringResource(R.string.bottom_bar_effect_solid),
+                stringResource(R.string.bottom_bar_effect_glass),
+                stringResource(R.string.bottom_bar_effect_frosted)
+            ),
+            selectedIndex = when (config.effectMode) {
+                "solid" -> 0
+                "frosted" -> 2
+                else -> 1
+            },
+            onSelect = { activity.onEffectModeSelected(it) },
+            onDismiss = { activity.effectModeSelectorOpen = false },
+        )
+    }
+
+    if (activity.wallpaperMenuOpen) {
+        val hasWallpaper = !config.wallpaperPath.isNullOrBlank()
+        val options = buildList {
+            add(stringResource(R.string.theme_image_select))
+            if (hasWallpaper) add(stringResource(R.string.theme_image_delete))
+        }
+        AppMenuSheet(
+            title = stringResource(R.string.bottom_bar_wallpaper),
+            actions = options.mapIndexed { index, label ->
+                label to { activity.onWallpaperMenuAction(index) }
+            },
+            onDismiss = { activity.wallpaperMenuOpen = false },
+        )
+    }
+
+    if (activity.sidebarBgMenuOpen) {
+        val hasBg = !config.sidebarBackgroundPath.isNullOrBlank()
+        val options = buildList {
+            add(stringResource(R.string.select_image))
+            if (hasBg) add(stringResource(R.string.delete))
+        }
+        AppMenuSheet(
+            title = stringResource(R.string.navigation_bar_sidebar_background),
+            actions = options.mapIndexed { index, label ->
+                label to { activity.onSidebarBgMenuAction(index) }
+            },
+            onDismiss = { activity.sidebarBgMenuOpen = false },
+        )
+    }
+
+    if (activity.opacityPickerOpen) {
+        AppNumberPickerDialog(
+            title = stringResource(R.string.bottom_bar_opacity),
+            value = config.opacity,
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            range = 0..100,
+            step = 1,
+            valueLabel = "${config.opacity}%",
+            onConfirm = { value ->
+                activity.opacityPickerOpen = false
+                activity.updatePendingConfig { it.copy(opacity = value.coerceIn(0, 100)) }
+            },
+            onDismiss = { activity.opacityPickerOpen = false },
+        )
+    }
+
+    if (activity.borderAlphaPickerOpen) {
+        AppNumberPickerDialog(
+            title = stringResource(R.string.bottom_bar_border_alpha),
+            value = config.borderAlpha,
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            range = 0..100,
+            step = 1,
+            valueLabel = "${config.borderAlpha}%",
+            onConfirm = { value ->
+                activity.borderAlphaPickerOpen = false
+                activity.updatePendingConfig { it.copy(borderAlpha = value.coerceIn(0, 100)) }
+            },
+            onDismiss = { activity.borderAlphaPickerOpen = false },
+        )
+    }
+
+    if (activity.borderColorMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.bottom_bar_border_color),
+            actions = listOf(
+                stringResource(R.string.disable) to { activity.onBorderColorMenuAction(0) },
+                stringResource(R.string.select_color) to { activity.onBorderColorMenuAction(1) },
+            ),
+            onDismiss = { activity.borderColorMenuOpen = false },
+        )
+    }
+
+    if (activity.colorPickerTarget == NAV_COLOR_BORDER) {
+        AppColorPickerDialog(
+            title = stringResource(R.string.bottom_bar_border_color),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = { activity.onBorderColorConfirmed(it) },
+            onDismiss = { activity.colorPickerTarget = 0 },
+            initialColor = config.borderColor
+                ?: ContextCompat.getColor(context, R.color.accent),
+        )
+    }
+
+    activity.iconMenuRequest?.let { request ->
+        AppMenuSheet(
+            title = stringResource(request.item.titleRes),
+            actions = listOf(
+                stringResource(R.string.select_image) to { activity.onIconMenuAction(0) },
+                stringResource(R.string.delete) to { activity.onIconMenuAction(1) },
+            ),
+            onDismiss = { activity.iconMenuRequest = null },
+        )
+    }
+}
+
+private fun colorLabel(color: Int): String {
+    return "#${Integer.toHexString(color).takeLast(6).uppercase(Locale.ROOT)}"
+}
+
+@Composable
+private fun NavItemRow(
+    activity: NavigationBarManageActivity,
+    entry: NavigationBarIconConfig.Entry,
+) {
+    val active = activity.activeDirName == entry.dirName
+
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { activity.itemMenuEntry = entry },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+        ) {
+            Text(
+                text = entry.config.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+            Text(
+                text = activity.entryInfo(entry),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppChip(
+                    text = if (active) {
+                        stringResource(R.string.theme_applied_state)
+                    } else {
+                        stringResource(R.string.theme_apply)
+                    },
+                    selected = active,
+                    onClick = { activity.applyPackage(entry) },
+                )
+                if (entry.dirName != NavigationBarIconConfig.DEFAULT_DIR_NAME) {
+                    AppChip(
+                        text = stringResource(R.string.edit),
+                        selected = false,
+                        onClick = { activity.showEditDialog(entry) },
+                    )
+                }
+                AppOverflowMenuButton(
+                    contentDescription = stringResource(R.string.more),
+                    onClick = { activity.itemMenuEntry = entry },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavIconPreviewButton(
+    activity: NavigationBarManageActivity,
+    entry: NavigationBarIconConfig.Entry,
+    item: NavigationBarIconConfig.NavItem,
+    selected: Boolean,
+    single: Boolean,
+) {
+    val context = LocalContext.current
+    // pendingConfig 变化（图标写入/清除）后重新生成预览
+    val bitmap = remember(entry, item, selected, single, activity.pendingConfig) {
+        val drawable: Drawable? = if (single) {
+            NavigationBarIconConfig.previewSingleDrawable(context, entry, item)
+        } else {
+            NavigationBarIconConfig.previewDrawable(context, entry, item, selected)
+        }
+        runCatching { drawable?.toBitmap()?.asImageBitmap() }.getOrNull()
+    }
+    val description = stringResource(
+        when {
+            single -> item.titleRes
+            selected -> R.string.navigation_icon_selected
+            else -> R.string.navigation_icon_normal
+        }
+    )
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = description,
+            modifier = Modifier
+                .size(44.dp)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { activity.iconMenuRequest = NavIconMenuRequest(item, selected, single) },
+        )
+    }
+}
+
+@Composable
+private fun NavPairIconRow(
+    activity: NavigationBarManageActivity,
+    entry: NavigationBarIconConfig.Entry,
+    item: NavigationBarIconConfig.NavItem,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(item.titleRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        NavIconPreviewButton(activity, entry, item, selected = false, single = false)
+        NavIconPreviewButton(activity, entry, item, selected = true, single = false)
+    }
+}
+
+@Composable
+private fun NavSingleIconRow(
+    activity: NavigationBarManageActivity,
+    entry: NavigationBarIconConfig.Entry,
+    item: NavigationBarIconConfig.NavItem,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(item.titleRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        NavIconPreviewButton(activity, entry, item, selected = false, single = true)
     }
 }
 

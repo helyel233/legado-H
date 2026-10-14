@@ -5,13 +5,19 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.help.book.TextBookImporter
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.host.AppHostActivity
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
@@ -26,11 +32,44 @@ class SharedReceiverActivity : AppCompatActivity() {
 
     private val receivingType = "text/plain"
 
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var textToBookTarget by mutableStateOf<TextToBookRequest?>(null)
+
+    private data class TextToBookRequest(val text: String, val bookName: String)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setV5Content { SharedReceiverDialogs() }
         // 文本成书弹窗展示时不能立即 finish，否则 dialog 随之销毁
         if (!initIntent()) {
             finish()
+        }
+    }
+
+    @Composable
+    private fun SharedReceiverDialogs() {
+        textToBookTarget?.let { req ->
+            AppConfirmDialog(
+                title = stringResource(R.string.text_to_book),
+                message = stringResource(
+                    R.string.text_to_book_message,
+                    req.text.length,
+                    req.bookName
+                ),
+                confirmLabel = stringResource(R.string.text_to_book_confirm),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    textToBookTarget = null
+                    importingAsBook = true
+                    importAsBook(req.text, req.bookName)
+                },
+                onDismiss = {
+                    textToBookTarget = null
+                    if (!importingAsBook) {
+                        finish()
+                    }
+                },
+            )
         }
     }
 
@@ -87,20 +126,7 @@ class SharedReceiverActivity : AppCompatActivity() {
         val firstLine = text.lines().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         val defaultName = firstLine.takeIf { it.isNotBlank() && it.length <= 30 }
             ?: "分享文本_${SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())}"
-        showComposeConfirmDialog(
-            title = getString(R.string.text_to_book),
-            message = getString(R.string.text_to_book_message, text.length, defaultName),
-            positiveText = getString(R.string.text_to_book_confirm),
-            onPositive = {
-                importingAsBook = true
-                importAsBook(text, defaultName)
-            },
-            onDismissAction = {
-                if (!importingAsBook) {
-                    finish()
-                }
-            }
-        )
+        textToBookTarget = TextToBookRequest(text, defaultName)
     }
 
     private fun importAsBook(text: String, bookName: String) {

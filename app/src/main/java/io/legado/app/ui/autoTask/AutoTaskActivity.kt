@@ -8,6 +8,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.R
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskRule
@@ -15,8 +20,6 @@ import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementScaffold
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.utils.startActivity
@@ -37,20 +40,24 @@ class AutoTaskActivity : AppCompatActivity() {
     private val selectedIds = mutableStateOf<Set<String>>(emptySet())
     private val searchQuery = mutableStateOf("")
 
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    internal var exportResultOpen by mutableStateOf(false)
+    internal var exportResultUri by mutableStateOf("")
+    internal var deleteSelectedOpen by mutableStateOf(false)
+    internal var deleteRuleTarget by mutableStateOf<AutoTaskRule?>(null)
+    internal var batchCronOpen by mutableStateOf(false)
+    internal var batchCronText by mutableStateOf("")
+    internal var onlineImportOpen by mutableStateOf(false)
+    internal var onlineImportText by mutableStateOf("")
+
     private val importDoc = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri -> showDialogFragment(ImportAutoTaskDialog(uri.toString())) }
     }
 
     private val exportResult = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            showComposeConfirmDialog(
-                title = getString(R.string.export_success),
-                message = uri.toString(),
-                positiveText = getString(R.string.copy_text),
-                negativeText = getString(R.string.ok),
-                onPositive = { sendToClip(uri.toString()) },
-                onNegative = {}
-            )
+            exportResultUri = uri.toString()
+            exportResultOpen = true
         }
     }
 
@@ -129,6 +136,65 @@ class AutoTaskActivity : AppCompatActivity() {
                     onDelete = ::confirmDelete
                 )
             }
+            if (exportResultOpen) {
+                AppConfirmDialog(
+                    title = getString(R.string.export_success),
+                    message = exportResultUri,
+                    confirmLabel = getString(R.string.copy_text),
+                    cancelLabel = getString(R.string.ok),
+                    onConfirm = {
+                        exportResultOpen = false
+                        sendToClip(exportResultUri)
+                    },
+                    onDismiss = { exportResultOpen = false },
+                )
+            }
+            if (deleteSelectedOpen) {
+                AppConfirmDialog(
+                    title = getString(R.string.delete),
+                    message = getString(R.string.sure_del),
+                    confirmLabel = getString(R.string.ok),
+                    cancelLabel = getString(R.string.cancel),
+                    danger = true,
+                    onConfirm = { onDeleteSelectedConfirmed() },
+                    onDismiss = { deleteSelectedOpen = false },
+                )
+            }
+            deleteRuleTarget?.let { rule ->
+                AppConfirmDialog(
+                    title = getString(R.string.auto_task_delete),
+                    message = rule.name.ifBlank { rule.id },
+                    confirmLabel = getString(R.string.delete),
+                    cancelLabel = getString(R.string.cancel),
+                    danger = true,
+                    onConfirm = { onDeleteRuleConfirmed() },
+                    onDismiss = { deleteRuleTarget = null },
+                )
+            }
+            if (batchCronOpen) {
+                AppInputDialog(
+                    title = getString(R.string.auto_task_batch_cron),
+                    value = batchCronText,
+                    onValueChange = { batchCronText = it },
+                    placeholder = getString(R.string.auto_task_cron),
+                    confirmLabel = getString(R.string.ok),
+                    cancelLabel = getString(R.string.cancel),
+                    onConfirm = { onBatchCronConfirm(batchCronText) },
+                    onDismiss = { batchCronOpen = false },
+                )
+            }
+            if (onlineImportOpen) {
+                AppInputDialog(
+                    title = getString(R.string.import_on_line),
+                    value = onlineImportText,
+                    onValueChange = { onlineImportText = it },
+                    placeholder = "https://...",
+                    confirmLabel = getString(R.string.ok),
+                    cancelLabel = getString(R.string.cancel),
+                    onConfirm = { onOnlineImportConfirm(onlineImportText) },
+                    onDismiss = { onlineImportOpen = false },
+                )
+            }
         }
         observeRules()
         supportFragmentManager.setFragmentResultListener(
@@ -186,47 +252,41 @@ class AutoTaskActivity : AppCompatActivity() {
     private fun deleteSelected() {
         val ids = selectedIds.value.toList()
         if (ids.isEmpty()) return
-        showComposeConfirmDialog(
-            title = getString(R.string.delete),
-            message = getString(R.string.sure_del),
-            positiveText = getString(R.string.ok),
-            negativeText = getString(R.string.cancel),
-            dangerPositive = true,
-            onPositive = {
-                viewModel.delete(ids)
-                selectedIds.value = emptySet()
-            }
-        )
+        deleteSelectedOpen = true
     }
 
     private fun confirmDelete(rule: AutoTaskRule) {
-        showComposeConfirmDialog(
-            title = getString(R.string.auto_task_delete),
-            message = rule.name.ifBlank { rule.id },
-            positiveText = getString(R.string.delete),
-            negativeText = getString(R.string.cancel),
-            dangerPositive = true,
-            onPositive = { viewModel.delete(listOf(rule.id)) }
-        )
+        deleteRuleTarget = rule
+    }
+
+    internal fun onDeleteSelectedConfirmed() {
+        deleteSelectedOpen = false
+        val ids = selectedIds.value.toList()
+        if (ids.isEmpty()) return
+        viewModel.delete(ids)
+        selectedIds.value = emptySet()
+    }
+
+    internal fun onDeleteRuleConfirmed() {
+        val rule = deleteRuleTarget ?: return
+        deleteRuleTarget = null
+        viewModel.delete(listOf(rule.id))
     }
 
     private fun showBatchCronDialog() {
-        showComposeTextInputDialog(
-            title = getString(R.string.auto_task_batch_cron),
-            hint = getString(R.string.auto_task_cron),
-            initialValue = "",
-            positiveText = getString(R.string.ok),
-            negativeText = getString(R.string.cancel),
-            validateInput = { CronSchedule.parse(it.trim()) != null },
-            onPositive = { cron ->
-                if (CronSchedule.parse(cron.trim()) == null) {
-                    toastOnUi(R.string.auto_task_cron_invalid)
-                } else {
-                    viewModel.updateCron(selectedIds.value, cron.trim())
-                    selectedIds.value = emptySet()
-                }
-            }
-        )
+        batchCronText = ""
+        batchCronOpen = true
+    }
+
+    internal fun onBatchCronConfirm(cron: String) {
+        batchCronOpen = false
+        val trimmed = cron.trim()
+        if (CronSchedule.parse(trimmed) == null) {
+            toastOnUi(R.string.auto_task_cron_invalid)
+        } else {
+            viewModel.updateCron(selectedIds.value, trimmed)
+            selectedIds.value = emptySet()
+        }
     }
 
     private fun showTaskLog(rule: AutoTaskRule) {
@@ -279,21 +339,18 @@ class AutoTaskActivity : AppCompatActivity() {
     )
 
     private fun showOnlineImportDialog() {
-        showComposeTextInputDialog(
-            title = getString(R.string.import_on_line),
-            hint = "https://...",
-            positiveText = getString(R.string.ok),
-            negativeText = getString(R.string.cancel),
-            validateInput = { it.trim().isAbsUrl() },
-            onPositive = { value ->
-                val url = value.trim()
-                if (url.isAbsUrl()) {
-                    showDialogFragment(ImportAutoTaskDialog(url))
-                } else {
-                    toastOnUi(R.string.wrong_format)
-                }
-            }
-        )
+        onlineImportText = ""
+        onlineImportOpen = true
+    }
+
+    internal fun onOnlineImportConfirm(value: String) {
+        onlineImportOpen = false
+        val url = value.trim()
+        if (url.isAbsUrl()) {
+            showDialogFragment(ImportAutoTaskDialog(url))
+        } else {
+            toastOnUi(R.string.wrong_format)
+        }
     }
 
     private fun exportSelected() {

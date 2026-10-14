@@ -2,10 +2,32 @@ package io.legado.app.ui.config
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.book.library.LibraryCloudBackend
 import io.legado.app.help.book.library.LibraryContainerConfig
 import io.legado.app.help.book.library.LibraryContainerExportCrypto
@@ -16,12 +38,17 @@ import io.legado.app.lib.cloud.S3Config
 import io.legado.app.lib.cloud.S3Container
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.setV5Content
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeMultiChoiceDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
-import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -37,12 +64,42 @@ import kotlin.math.max
 
 class LibraryContainerManageActivity : AppCompatActivity() {
 
-    private val containersState = mutableStateOf<List<LibraryContainerConfig>>(emptyList())
+    internal val containersState = mutableStateOf<List<LibraryContainerConfig>>(emptyList())
     private var _waitDialog: WaitDialog? = null
     private val waitDialog: WaitDialog
         get() = _waitDialog ?: WaitDialog(this).also { _waitDialog = it }
     private var editingSourceUrls: MutableSet<String> = mutableSetOf()
     private var pendingExportDecryptKey: String? = null
+
+    // V5 弹窗状态
+    internal var editDialogOpen by mutableStateOf(false)
+    internal var editingItem by mutableStateOf<LibraryContainerConfig?>(null)
+    internal var editingTitle by mutableStateOf("")
+    internal var fieldName by mutableStateOf("")
+    internal var fieldEndpoint by mutableStateOf("")
+    internal var fieldBucket by mutableStateOf("")
+    internal var fieldAccessKey by mutableStateOf("")
+    internal var fieldSecretKey by mutableStateOf("")
+    internal var fieldCapacity by mutableStateOf("")
+    internal var fieldPrefix by mutableStateOf("")
+    internal var fieldRegion by mutableStateOf("")
+    internal var fieldSessionToken by mutableStateOf("")
+    internal var fieldPassword by mutableStateOf("")
+    internal var fieldMinUploadChars by mutableStateOf("")
+    internal var fieldDailyUploadLimit by mutableStateOf("")
+    internal var checkEnabled by mutableStateOf(true)
+    internal var checkPathStyle by mutableStateOf(true)
+    internal var importMenuOpen by mutableStateOf(false)
+    internal var importUrlOpen by mutableStateOf(false)
+    internal var importUrlText by mutableStateOf("")
+    internal var decryptOpen by mutableStateOf(false)
+    internal var decryptText by mutableStateOf("")
+    private var decryptTargetText: String = ""
+    internal var exportResult by mutableStateOf<Pair<String, String?>?>(null)
+    internal var sourcePickerOpen by mutableStateOf(false)
+    internal var sourcePickerSources by mutableStateOf<List<BookSource>>(emptyList())
+    internal var sourcePickerChecked by mutableStateOf<Set<Int>>(emptySet())
+    internal var deleteTarget by mutableStateOf<LibraryContainerConfig?>(null)
     private val importJson = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
             lifecycleScope.launch {
@@ -65,16 +122,7 @@ class LibraryContainerManageActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setV5Content {
-            LibraryContainerManageScreen(
-                containers = containersState.value,
-                onBack = { finish() },
-                onAdd = { showEditDialog(null) },
-                onItemClick = { showEditDialog(it) },
-                pageMenuActions = ::pageMenuActions,
-                onMoreActions = ::containerActions
-            )
-        }
+        setV5Content { LibraryContainerManageHost(this@LibraryContainerManageActivity) }
         reload()
     }
 
@@ -88,27 +136,24 @@ class LibraryContainerManageActivity : AppCompatActivity() {
     }
 
     private fun showImportActions() {
-        showComposeActionListDialog(
-            title = getString(R.string.import_str),
-            labels = listOf(
-                getString(R.string.import_str) as CharSequence,
-                getString(R.string.import_on_line) as CharSequence
-            ),
-            negativeText = getString(R.string.cancel),
-            onSelected = { index ->
-                when (index) {
-                    0 -> importJson.launch {
-                        mode = HandleFileContract.FILE
-                        title = getString(R.string.import_str)
-                        allowExtensions = arrayOf("json")
-                    }
-                    1 -> showImportUrlDialog()
-                }
-            }
-        )
+        importMenuOpen = true
     }
 
-    private fun pageMenuActions(): List<Pair<String, () -> Unit>> {
+    internal fun onImportMenuAction(index: Int) {
+        importMenuOpen = false
+        when (index) {
+            0 -> importJson.launch {
+                mode = HandleFileContract.FILE
+                title = getString(R.string.import_str)
+                allowExtensions = arrayOf("json")
+            }
+            1 -> importUrlText = ""
+            else -> Unit
+        }
+        if (index == 1) importUrlOpen = true
+    }
+
+    internal fun pageMenuActions(): List<Pair<String, () -> Unit>> {
         return listOf(
             getString(R.string.import_str) to {
                 showImportActions()
@@ -120,16 +165,14 @@ class LibraryContainerManageActivity : AppCompatActivity() {
     }
 
     private fun showImportUrlDialog() {
-        showComposeTextInputDialog(
-            title = getString(R.string.import_on_line),
-            hint = "https://...",
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.cancel),
-            onPositive = { url ->
-                val trimmed = url.trim()
-                if (trimmed.isNotEmpty()) importContainersFromUrl(trimmed)
-            }
-        )
+        importUrlText = ""
+        importUrlOpen = true
+    }
+
+    internal fun onImportUrlConfirm(url: String) {
+        importUrlOpen = false
+        val trimmed = url.trim()
+        if (trimmed.isNotEmpty()) importContainersFromUrl(trimmed)
     }
 
     private fun importContainersFromUrl(url: String) {
@@ -148,6 +191,7 @@ class LibraryContainerManageActivity : AppCompatActivity() {
 
     private fun handleImportText(text: String) {
         if (LibraryContainerExportCrypto.isEncrypted(text)) {
+            decryptTargetText = text
             showDecryptImportDialog(text)
             return
         }
@@ -157,23 +201,20 @@ class LibraryContainerManageActivity : AppCompatActivity() {
     }
 
     private fun showDecryptImportDialog(text: String) {
-        showComposeTextInputDialog(
-            title = "导入加密书库容器",
-            hint = "请输入解密密钥",
-            minLines = 2,
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.cancel),
-            onPositive = { key ->
-                val trimmed = key.trim()
-                runCatching {
-                    val decrypted = LibraryContainerExportCrypto.decrypt(text, trimmed)
-                    importContainers(decrypted, lockedImported = true)
-                }.onSuccess(::showImportResult)
-                    .onFailure { error ->
-                        toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
-                    }
+        decryptText = ""
+        decryptOpen = true
+    }
+
+    internal fun onDecryptConfirm(key: String) {
+        decryptOpen = false
+        val trimmed = key.trim()
+        runCatching {
+            val decrypted = LibraryContainerExportCrypto.decrypt(decryptTargetText.orEmpty(), trimmed)
+            importContainers(decrypted, lockedImported = true)
+        }.onSuccess(::showImportResult)
+            .onFailure { error ->
+                toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
             }
-        )
     }
 
     private fun showImportResult(count: Int) {
@@ -259,40 +300,18 @@ class LibraryContainerManageActivity : AppCompatActivity() {
     }
 
     private fun showExportResult(value: String, decryptKey: String?) {
-        val isUrl = value.startsWith("http://", true) || value.startsWith("https://", true)
-        val keyText = decryptKey.orEmpty()
-        val message = buildString {
-            if (isUrl) {
-                append(value)
-                append("\n\n")
-            }
-            append("解密密钥：\n")
-            append(keyText)
-        }
-        showComposeConfirmDialog(
-            title = if (isUrl) getString(R.string.upload_url) else getString(R.string.export_success),
-            message = message,
-            positiveText = "复制密钥",
-            negativeText = getString(R.string.cancel),
-            neutralText = if (isUrl) "复制URL" else null,
-            onPositive = {
-                sendToClip(keyText)
-                toastOnUi(R.string.copy_complete)
-            },
-            onNeutral = if (isUrl) {
-                {
-                    sendToClip(value)
-                    toastOnUi(R.string.copy_complete)
-                }
-            } else null
-        )
+        exportResult = value to decryptKey
     }
 
-    private fun showEditDialog(item: LibraryContainerConfig?) {
+    internal fun onExportResultDismiss() {
+        exportResult = null
+    }
+
+    internal fun showEditDialog(item: LibraryContainerConfig?) {
         val locked = item?.lockedImported == true
         editingSourceUrls = item?.sourceUrls.orEmpty().toMutableSet()
 
-        val title = when {
+        editingTitle = when {
             item == null -> "添加书库容器"
             locked -> "编辑同步书源"
             else -> "编辑书库容器"
@@ -308,91 +327,64 @@ class LibraryContainerManageActivity : AppCompatActivity() {
         val minUploadChars = item?.minUploadChars ?: 1500
         val dailyUploadLimit = item?.dailyUploadLimit ?: 0
 
-        val labels = listOf(
-            getString(R.string.s3_container_name) as CharSequence,
-            getString(R.string.s3_endpoint) as CharSequence,
-            getString(R.string.s3_bucket) as CharSequence,
-            getString(R.string.s3_access_key) as CharSequence,
-            getString(R.string.s3_secret_key) as CharSequence,
-            getString(R.string.s3_container_capacity_gb) as CharSequence,
-            getString(R.string.s3_prefix) as CharSequence,
-            getString(R.string.s3_region) as CharSequence,
-            getString(R.string.s3_session_token) as CharSequence,
-            "书库加密密码" as CharSequence,
-            "最少自动上传字数" as CharSequence,
-            "每日自动上传章节上限" as CharSequence
-        )
-        val initialValues = listOf(
-            container?.name.orEmpty(),
-            container?.endpoint.orEmpty(),
-            container?.bucket.orEmpty(),
-            container?.accessKey.orEmpty(),
-            container?.secretKey.orEmpty(),
-            capacityMbToGbText(container?.capacityMb ?: DEFAULT_CAPACITY_MB),
-            container?.prefix ?: "Library",
-            container?.region ?: "auto",
-            container?.sessionToken.orEmpty(),
-            password,
-            minUploadChars.toString(),
-            dailyUploadLimit.toString()
-        )
-        val checkboxLabels = listOf(
-            getString(R.string.s3_container_enabled) as CharSequence,
-            getString(R.string.s3_path_style) as CharSequence
-        )
-        val checkedIndices = listOfNotNull(
-            if (container?.enabled ?: true) CHECK_ENABLED else null,
-            if (container?.pathStyle ?: true) CHECK_PATH_STYLE else null
-        ).toSet()
+        editingItem = item
+        fieldName = container?.name.orEmpty()
+        fieldEndpoint = container?.endpoint.orEmpty()
+        fieldBucket = container?.bucket.orEmpty()
+        fieldAccessKey = container?.accessKey.orEmpty()
+        fieldSecretKey = container?.secretKey.orEmpty()
+        fieldCapacity = capacityMbToGbText(container?.capacityMb ?: DEFAULT_CAPACITY_MB)
+        fieldPrefix = container?.prefix ?: "Library"
+        fieldRegion = container?.region ?: "auto"
+        fieldSessionToken = container?.sessionToken.orEmpty()
+        fieldPassword = password
+        fieldMinUploadChars = minUploadChars.toString()
+        fieldDailyUploadLimit = dailyUploadLimit.toString()
+        checkEnabled = container?.enabled ?: true
+        checkPathStyle = container?.pathStyle ?: true
+        editDialogOpen = true
+    }
 
-        showComposeTextFormDialogWithChecks(
-            title = title,
-            labels = labels,
-            initialValues = initialValues,
-            passwordFields = setOf(FIELD_SECRET_KEY, FIELD_SESSION_TOKEN),
-            checkboxLabels = checkboxLabels,
-            checkedIndices = checkedIndices,
-            positiveText = getString(R.string.dialog_confirm),
-            negativeText = getString(R.string.dialog_cancel),
-            onPositive = { values, checks ->
-                saveDialogItem(item, values, checks)?.let { saved ->
-                    if (item == null) refreshCapacity(saved, showWait = false)
-                }
-            }
+    internal fun onEditSave() {
+        editDialogOpen = false
+        val item = editingItem
+        val fields = listOf(
+            fieldName, fieldEndpoint, fieldBucket, fieldAccessKey, fieldSecretKey,
+            fieldCapacity, fieldPrefix, fieldRegion, fieldSessionToken,
+            fieldPassword, fieldMinUploadChars, fieldDailyUploadLimit
         )
+        val checks = booleanArrayOf(checkEnabled, checkPathStyle)
+        saveDialogItem(item, fields, checks)?.let { saved ->
+            if (item == null) refreshCapacity(saved, showWait = false)
+        }
     }
 
     private fun showLockedSourcePicker(item: LibraryContainerConfig) {
         lifecycleScope.launch {
             val sources = withContext(Dispatchers.IO) { appDb.bookSourceDao.allEnabled }
-            val labels = sources.map { source ->
-                val group = source.bookSourceGroup
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { " · $it" }
-                    .orEmpty()
-                "${source.bookSourceName}$group"
-            }
-            val checkedIndices = sources.mapIndexedNotNull { index, source ->
+            sourcePickerSources = sources
+            sourcePickerChecked = sources.mapIndexedNotNull { index, source ->
                 index.takeIf { editingSourceUrls.contains(source.bookSourceUrl) }
             }.toSet()
-            showComposeMultiChoiceDialog(
-                title = "指定书源",
-                labels = labels,
-                checkedIndices = checkedIndices,
-                positiveText = getString(android.R.string.ok),
-                negativeText = getString(R.string.cancel),
-                onPositive = { checked ->
-                    val selected = sources.mapIndexedNotNull { index, source ->
-                        source.bookSourceUrl.takeIf { checked.getOrNull(index) == true }
-                    }.toSet()
-                    editingSourceUrls = selected.toMutableSet()
-                    LibraryContainerManager.upsert(
-                        item.copy(sourceUrls = selected, lockedImported = true)
-                    )
-                    reload()
-                    toastOnUi("已保存指定书源")
-                }
+            sourcePickerOpen = true
+        }
+    }
+
+    internal fun onSourcePickerConfirm(checked: Set<Int>) {
+        val sources = sourcePickerSources
+        sourcePickerOpen = false
+        val item = editingItem
+        val selected = sources.mapIndexedNotNull { index, source ->
+            source.bookSourceUrl.takeIf { index in checked }
+        }.toSet()
+        editingSourceUrls = selected.toMutableSet()
+        val target = item?.takeIf { it.lockedImported }
+        if (target != null) {
+            LibraryContainerManager.upsert(
+                target.copy(sourceUrls = selected, lockedImported = true)
             )
+            reload()
+            toastOnUi("已保存指定书源")
         }
     }
 
@@ -455,7 +447,7 @@ class LibraryContainerManageActivity : AppCompatActivity() {
         return saved
     }
 
-    private fun containerActions(item: LibraryContainerConfig): List<Pair<String, () -> Unit>> {
+    internal fun containerActions(item: LibraryContainerConfig): List<Pair<String, () -> Unit>> {
         val actions = if (item.lockedImported) {
             listOf(Action.EDIT, Action.DELETE)
         } else {
@@ -502,17 +494,14 @@ class LibraryContainerManageActivity : AppCompatActivity() {
     }
 
     private fun confirmDelete(item: LibraryContainerConfig) {
-        showComposeConfirmDialog(
-            title = "删除书库容器",
-            message = "确认删除 ${LibraryContainerManager.displayLabel(item)}？",
-            positiveText = getString(R.string.delete),
-            negativeText = getString(R.string.cancel),
-            dangerPositive = true,
-            onPositive = {
-                LibraryContainerManager.delete(item.id)
-                reload()
-            }
-        )
+        deleteTarget = item
+    }
+
+    internal fun onDeleteConfirmed() {
+        val item = deleteTarget ?: return
+        deleteTarget = null
+        LibraryContainerManager.delete(item.id)
+        reload()
     }
 
     private fun testConnection(item: LibraryContainerConfig) {
@@ -632,3 +621,317 @@ class LibraryContainerManageActivity : AppCompatActivity() {
         val containers: List<LibraryContainerConfig> = emptyList()
     )
 }
+
+@Composable
+private fun LibraryContainerManageHost(activity: LibraryContainerManageActivity) {
+    LibraryContainerManageScreen(
+        containers = activity.containersState.value,
+        onBack = { activity.finish() },
+        onAdd = { activity.showEditDialog(null) },
+        onItemClick = { activity.showEditDialog(it) },
+        pageMenuActions = { activity.pageMenuActions() },
+        onMoreActions = { activity.containerActions(it) },
+    )
+
+    if (activity.editDialogOpen) {
+        val density = LocalVisualSpec.current.density
+        AppDialog(onDismiss = { activity.editDialogOpen = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(density.screenPadding),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                Text(
+                    text = activity.editingTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                AppTextField(
+                    value = activity.fieldName,
+                    onValueChange = { activity.fieldName = it },
+                    placeholder = stringResource(R.string.s3_container_name),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldEndpoint,
+                    onValueChange = { activity.fieldEndpoint = it },
+                    placeholder = stringResource(R.string.s3_endpoint),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldBucket,
+                    onValueChange = { activity.fieldBucket = it },
+                    placeholder = stringResource(R.string.s3_bucket),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldAccessKey,
+                    onValueChange = { activity.fieldAccessKey = it },
+                    placeholder = stringResource(R.string.s3_access_key),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldSecretKey,
+                    onValueChange = { activity.fieldSecretKey = it },
+                    placeholder = stringResource(R.string.s3_secret_key),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldCapacity,
+                    onValueChange = { activity.fieldCapacity = it },
+                    placeholder = stringResource(R.string.s3_container_capacity_gb),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldPrefix,
+                    onValueChange = { activity.fieldPrefix = it },
+                    placeholder = stringResource(R.string.s3_prefix),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldRegion,
+                    onValueChange = { activity.fieldRegion = it },
+                    placeholder = stringResource(R.string.s3_region),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldSessionToken,
+                    onValueChange = { activity.fieldSessionToken = it },
+                    placeholder = stringResource(R.string.s3_session_token),
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldPassword,
+                    onValueChange = { activity.fieldPassword = it },
+                    placeholder = "书库加密密码",
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldMinUploadChars,
+                    onValueChange = { activity.fieldMinUploadChars = it },
+                    placeholder = "最少自动上传字数",
+                    singleLine = true,
+                )
+                AppTextField(
+                    value = activity.fieldDailyUploadLimit,
+                    onValueChange = { activity.fieldDailyUploadLimit = it },
+                    placeholder = "每日自动上传章节上限",
+                    singleLine = true,
+                )
+                AppRowWithSwitch(
+                    title = stringResource(R.string.s3_container_enabled),
+                    checked = activity.checkEnabled,
+                    onCheckedChange = { activity.checkEnabled = it },
+                    card = false,
+                )
+                AppRowWithSwitch(
+                    title = stringResource(R.string.s3_path_style),
+                    checked = activity.checkPathStyle,
+                    onCheckedChange = { activity.checkPathStyle = it },
+                    card = false,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    AppGhostButton(
+                        text = stringResource(R.string.dialog_cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { activity.editDialogOpen = false },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.dialog_confirm),
+                        modifier = Modifier.weight(1f),
+                        onClick = { activity.onEditSave() },
+                    )
+                }
+            }
+        }
+    }
+
+    if (activity.importMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.import_str),
+            actions = listOf(
+                stringResource(R.string.import_str) to { activity.onImportMenuAction(0) },
+                stringResource(R.string.import_on_line) to { activity.onImportMenuAction(1) },
+            ),
+            onDismiss = { activity.importMenuOpen = false },
+        )
+    }
+
+    if (activity.importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = activity.importUrlText,
+            onValueChange = { activity.importUrlText = it },
+            confirmLabel = stringResource(R.string.dialog_confirm),
+            cancelLabel = stringResource(R.string.dialog_cancel),
+            placeholder = "https://...",
+            onConfirm = { activity.onImportUrlConfirm(activity.importUrlText) },
+            onDismiss = { activity.importUrlOpen = false },
+        )
+    }
+
+    if (activity.decryptOpen) {
+        AppInputDialog(
+            title = "导入加密书库容器",
+            value = activity.decryptText,
+            onValueChange = { activity.decryptText = it },
+            confirmLabel = stringResource(R.string.dialog_confirm),
+            cancelLabel = stringResource(R.string.dialog_cancel),
+            placeholder = "请输入解密密钥",
+            onConfirm = { activity.onDecryptConfirm(activity.decryptText) },
+            onDismiss = { activity.decryptOpen = false },
+        )
+    }
+
+    activity.exportResult?.let { (value, keyText) ->
+        val isUrl = value.startsWith("http://", true) || value.startsWith("https://", true)
+        val density = LocalVisualSpec.current.density
+        AppDialog(onDismiss = { activity.onExportResultDismiss() }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(density.screenPadding),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                Text(
+                    text = stringResource(if (isUrl) R.string.upload_url else R.string.export_success),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = buildString {
+                        if (isUrl) {
+                            append(value)
+                            append("\n\n")
+                        }
+                        append("解密密钥：\n")
+                        append(keyText.orEmpty())
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    if (isUrl) {
+                        AppGhostButton(
+                            text = "复制URL",
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                activity.onExportResultDismiss()
+                                activity.sendToClip(value)
+                                activity.toastOnUi(R.string.copy_complete)
+                            },
+                        )
+                    }
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { activity.onExportResultDismiss() },
+                    )
+                    AppFilledButton(
+                        text = "复制密钥",
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            activity.onExportResultDismiss()
+                            activity.sendToClip(keyText.orEmpty())
+                            activity.toastOnUi(R.string.copy_complete)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    if (activity.sourcePickerOpen) {
+        var checked by remember { mutableStateOf(activity.sourcePickerChecked) }
+        AppDialog(onDismiss = { activity.sourcePickerOpen = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(densityScreenPadding()),
+            ) {
+                Text(
+                    text = "指定书源",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                ) {
+                    items(activity.sourcePickerSources) { source ->
+                        val index = activity.sourcePickerSources.indexOf(source)
+                        val group = source.bookSourceGroup
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { " · $it" }
+                            .orEmpty()
+                        AppListItem(
+                            headline = "${source.bookSourceName}$group",
+                            card = false,
+                            leading = {
+                                Checkbox(
+                                    checked = index in checked,
+                                    onCheckedChange = { isChecked ->
+                                        checked = if (isChecked) {
+                                            checked + index
+                                        } else {
+                                            checked - index
+                                        }
+                                    },
+                                )
+                            },
+                            onClick = {
+                                checked = if (index in checked) {
+                                    checked - index
+                                } else {
+                                    checked + index
+                                }
+                            },
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(densityBlockGapHalf()),
+                ) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { activity.sourcePickerOpen = false },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = { activity.onSourcePickerConfirm(checked) },
+                    )
+                }
+            }
+        }
+    }
+
+    activity.deleteTarget?.let { item ->
+        AppConfirmDialog(
+            title = "删除书库容器",
+            message = "确认删除 ${LibraryContainerManager.displayLabel(item)}？",
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteConfirmed() },
+            onDismiss = { activity.deleteTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun densityScreenPadding() = LocalVisualSpec.current.density.screenPadding
+
+@Composable
+private fun densityBlockGapHalf() = LocalVisualSpec.current.density.blockGap / 2

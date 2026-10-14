@@ -1,24 +1,16 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,35 +19,33 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import io.legado.app.R
 import io.legado.app.data.entities.HttpTTS
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppListSpacing
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.GSON
 import io.legado.app.utils.showDialogFragment
 
 /**
- * 导入HttpTTS弹出窗口
+ * 导入 HttpTTS 弹出窗口（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + LegadoMiuixActionButton 换为 V5 AppDialog + AppGhostButton/AppFilledButton；
+ * 列表行沿用本批已 V5 化的 ImportSourceItemRow。
+ * 全选切换、导入等待框、编辑回写 allSources、finishOnDismiss 等语义不变。
  */
-class ImportHttpTtsDialog() : ComposeDialogFragment(),
+internal class ImportHttpTtsDialog() : V5DialogFragment(),
     CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
@@ -65,9 +55,21 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
         }
     }
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     private val viewModel by viewModels<ImportHttpTtsViewModel>()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val source = arguments?.getString("source")
+        if (source.isNullOrEmpty()) {
+            dismissAllowingStateLoss()
+        } else {
+            viewModel.importSource(source)
+        }
+    }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
@@ -76,30 +78,11 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val source = arguments?.getString("source")
-        if (source.isNullOrEmpty()) {
-            dismissAllowingStateLoss()
-        } else {
-            viewModel.importSource(source)
-        }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                ImportHttpTtsContent()
-            }
-        }
-    }
-
     @Composable
-    private fun ImportHttpTtsContent() {
-        val style = rememberAppDialogStyle()
-        val palette = style.toMiuixPalette()
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
         var loadState by remember { mutableStateOf(ImportLoadState.LOADING) }
         var errorMsg by remember { mutableStateOf("") }
         var refreshTrigger by remember { mutableIntStateOf(0) }
@@ -126,16 +109,23 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
             }
         }
 
-        AppDialogFrame(
-            title = stringResource(R.string.import_tts),
-            scrollContent = false,
-            content = {
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.import_tts),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+
                 when (loadState) {
                     ImportLoadState.LOADING -> {
                         Text(
                             text = getString(R.string.loading),
-                            color = style.secondaryText,
-                            fontSize = 14.sp,
+                            style = visual.type.body,
+                            color = colors.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 24.dp)
@@ -144,8 +134,8 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                     ImportLoadState.ERROR -> {
                         Text(
                             text = errorMsg,
-                            color = style.primaryText,
-                            fontSize = 14.sp,
+                            style = visual.type.body,
+                            color = colors.onSurface,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 24.dp)
@@ -164,9 +154,8 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                         }
                         Text(
                             text = selectAllText,
-                            color = style.accent,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
+                            style = visual.type.caption,
+                            color = colors.primary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -185,7 +174,7 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 420.dp),
-                            verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             itemsIndexed(
                                 allSources,
@@ -202,7 +191,6 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                                     name = item.name ?: "",
                                     isChecked = isChecked,
                                     stateText = stateText,
-                                    style = style,
                                     onCodeView = {
                                         showDialogFragment(
                                             CodeDialog(
@@ -223,33 +211,30 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                         }
                     }
                 }
-            },
-            actions = {
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.cancel),
-                    palette = palette,
-                    onClick = { dismissAllowingStateLoss() },
-                    cornerRadius = style.actionRadius
-                )
-                if (loadState == ImportLoadState.SUCCESS) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.ok),
-                        palette = palette,
-                        onClick = {
-                            val waitDialog = WaitDialog(requireContext())
-                            waitDialog.show()
-                            viewModel.importSelect {
-                                waitDialog.dismiss()
-                                dismissAllowingStateLoss()
-                            }
-                        },
-                        primary = true,
-                        cornerRadius = style.actionRadius
+
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() }
                     )
+                    if (loadState == ImportLoadState.SUCCESS) {
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val waitDialog = WaitDialog(requireContext())
+                                waitDialog.show()
+                                viewModel.importSelect {
+                                    waitDialog.dismiss()
+                                    dismissAllowingStateLoss()
+                                }
+                            }
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 
     override fun onCodeSave(code: String, requestId: String?) {

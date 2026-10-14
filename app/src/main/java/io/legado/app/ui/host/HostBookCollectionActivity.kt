@@ -59,7 +59,7 @@ import io.legado.app.uikit.v5.components.AppSelectionAction
 import io.legado.app.uikit.v5.components.AppSelectionBar
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startActivityForBook
@@ -122,6 +122,8 @@ private fun HostBookCollectionScreen(collectionId: Long) {
     var collectionName by remember { mutableStateOf("") }
     var cells by remember { mutableStateOf<List<CollectionCell>>(emptyList()) }
     var menuOpen by remember { mutableStateOf(false) }
+    var renameOpen by remember { mutableStateOf(false) }
+    var renameText by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var deleteOriginal by remember { mutableStateOf(false) }
     val selectedBooks = remember { mutableStateOf(setOf<String>()) }
@@ -333,26 +335,37 @@ private fun HostBookCollectionScreen(collectionId: Long) {
             title = collectionName.ifBlank { stringResource(R.string.book_collection) },
             actions = listOf(
                 stringResource(R.string.rename) to {
-                    activity.showComposeTextInputDialog(
-                        title = activity.getString(R.string.rename),
-                        initialValue = collectionName,
-                        onPositive = { text ->
-                            if (text.isNotBlank()) {
-                                scope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        appDb.bookCollectionDao.getCollection(collectionId)?.let {
-                                            appDb.bookCollectionDao.update(it.copy(name = text.trim()))
-                                        }
-                                    }
-                                    collectionName = text.trim()
-                                    postEvent(EventBus.BOOKSHELF_REFRESH, "")
-                                }
-                            }
-                        },
-                    )
+                    renameText = collectionName
+                    renameOpen = true
                 },
             ),
             onDismiss = { menuOpen = false },
+        )
+    }
+
+    // 重命名（AppInputDialog）
+    if (renameOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.rename),
+            value = renameText,
+            onValueChange = { renameText = it },
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                renameOpen = false
+                if (text.isNotBlank()) {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            appDb.bookCollectionDao.getCollection(collectionId)?.let {
+                                appDb.bookCollectionDao.update(it.copy(name = text.trim()))
+                            }
+                        }
+                        collectionName = text.trim()
+                        postEvent(EventBus.BOOKSHELF_REFRESH, "")
+                    }
+                }
+            },
+            onDismiss = { renameOpen = false },
         )
     }
 

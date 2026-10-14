@@ -1,149 +1,116 @@
 package io.legado.app.ui.book.read.config
 
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.text.InputFilter
-import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
-import androidx.appcompat.widget.SearchView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ItemTouchHelper
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.SimpleItemAnimator
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityHighlightRuleManageBinding
-import io.legado.app.databinding.ItemThemePackageBinding
 import io.legado.app.help.book.highlight.HighlightImport
 import io.legado.app.help.book.highlight.HighlightMatcher
 import io.legado.app.help.book.highlight.HighlightRule
 import io.legado.app.help.book.highlight.HighlightRuleSearch
 import io.legado.app.help.book.highlight.HighlightRules
 import io.legado.app.help.source.SourceRecycleBinHelp
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.applyUiLabelStyle
-import io.legado.app.lib.theme.applyUiSectionTitleStyle
-import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.secondaryTextColor
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
-/** Uses the same cards, action buttons and drag ordering as paragraph-rule management. */
-class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBinding>() {
-    override val binding by viewBinding(ActivityHighlightRuleManageBinding::inflate)
-    private val adapter = RuleAdapter()
-    private var allRules: List<HighlightRule> = emptyList()
-    private var query = ""
+class HighlightRuleManageActivity : AppCompatActivity() {
+
+    internal var allRules by mutableStateOf<List<HighlightRule>>(emptyList())
+    internal var visibleRules by mutableStateOf<List<HighlightRule>>(emptyList())
+    internal var query by mutableStateOf("")
+    internal var loaded by mutableStateOf(false)
+    internal var loading by mutableStateOf(true)
+    internal var busy by mutableStateOf(false)
+    internal var dragging by mutableStateOf(false)
+    internal var summaryText by mutableStateOf("")
+    internal var emptyText by mutableStateOf("")
+
+    internal var addMenuOpen by mutableStateOf(false)
+    internal var trailingMenuOpen by mutableStateOf(false)
+    internal var menuRule by mutableStateOf<HighlightRule?>(null)
+    internal var scopeRequest by mutableStateOf<HighlightRule?>(null)
+    internal var exportMenuOpen by mutableStateOf(false)
+    internal var noticeRule by mutableStateOf<HighlightRule?>(null)
+    internal var helpOpen by mutableStateOf(false)
+    internal var importReport by mutableStateOf<String?>(null)
+    internal var uploadResult by mutableStateOf<String?>(null)
+    internal var deleteRequest by mutableStateOf<HighlightRule?>(null)
+
     private var bookUrl: String? = null
-    private var busy = false
-    private var loaded = false
-    private var loading = true
-    private var dragging = false
     private var orderChanged = false
     private var loadVersion = 0
     private var loadJob: Job? = null
-    private val canInteract get() = loaded && !loading && !busy && !dragging
-    private val dragCallback = object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
-        override fun isLongPressDragEnabled() = canInteract
-        override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) =
-            if (loaded && !loading && !busy) super.getMovementFlags(recyclerView, viewHolder) else 0
 
-        override fun onMove(recyclerView: RecyclerView, source: RecyclerView.ViewHolder,
-                            target: RecyclerView.ViewHolder) = swap(source.bindingAdapterPosition, target.bindingAdapterPosition)
+    internal val canInteract: Boolean
+        get() = loaded && !loading && !busy && !dragging
 
-        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) = Unit
+    internal val bookUrlForPreview: String? get() = bookUrl
 
-        override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
-            super.onSelectedChanged(viewHolder, actionState)
-            if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
-                dragging = true
-                orderChanged = false
-                cancelLoad()
-                binding.searchView.clearFocus()
-                updateControls()
-            }
-        }
-
-        override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-            super.clearView(recyclerView, viewHolder)
-            finishDrag()
-        }
-    }
     private val importFile = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let(::importUri)
     }
     private val exportFile = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
             if (uri.scheme == "http" || uri.scheme == "https") {
-                showComposeConfirmDialog(getString(R.string.upload_url), uri.toString(),
-                    positiveText = getString(R.string.copy_text), onPositive = { sendToClip(uri.toString()) })
+                uploadResult = uri.toString()
             } else toastOnUi(R.string.export_success)
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         bookUrl = intent.getStringExtra("bookUrl") ?: ReadBook.book?.bookUrl
         query = savedInstanceState?.getString("query").orEmpty()
-        binding.run {
-            titleBar.title = getString(R.string.highlight_rule_manage)
-            searchView.maxWidth = Int.MAX_VALUE
-            searchView.findViewById<TextView>(androidx.appcompat.R.id.search_src_text).filters =
-                arrayOf(InputFilter.LengthFilter(512))
-            searchView.setQuery(query, false)
-            searchView.clearFocus()
-            searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-                override fun onQueryTextSubmit(value: String?): Boolean {
-                    searchView.clearFocus()
-                    return true
-                }
-                override fun onQueryTextChange(value: String?): Boolean {
-                    query = value.orEmpty()
-                    if (!dragging && !busy) {
-                        renderRules()
-                        recyclerView.scrollToPosition(0)
-                    }
-                    return true
-                }
-            })
-            btnAdd.text = getString(R.string.add)
-            btnAdd.background = UiCorner.actionSelector(themeCardColorOrDefault(), themeMutedColorOrDefault(),
-                UiCorner.actionRadius(this@HighlightRuleManageActivity))
-            btnAdd.setOnClickListener { addActions() }
-            tvSummary.applyUiLabelStyle(this@HighlightRuleManageActivity)
-            tvSummary.setTextColor(secondaryTextColor)
-            tvEmpty.applyUiLabelStyle(this@HighlightRuleManageActivity)
-            tvEmpty.setTextColor(secondaryTextColor)
-            recyclerView.layoutManager = LinearLayoutManager(this@HighlightRuleManageActivity)
-            recyclerView.adapter = adapter
-            (recyclerView.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
-            ItemTouchHelper(dragCallback).attachToRecyclerView(recyclerView)
-            root.applyUiBodyTypefaceDeep(this@HighlightRuleManageActivity.uiTypeface())
-        }
-        updateControls()
+        setV5Content { HighlightRuleManageContent(this@HighlightRuleManageActivity) }
         if (savedInstanceState == null) intent.data?.let(::importUri)
     }
 
@@ -152,30 +119,31 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         load()
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, 1, 0, R.string.import_str)
-        menu.add(0, 2, 1, R.string.export_str)
-        menu.add(0, 3, 2, R.string.help)
-        menu.add(0, 4, 3, R.string.reader_assets_title)
-        return super.onCompatCreateOptionsMenu(menu)
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("query", query)
+        super.onSaveInstanceState(outState)
     }
 
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            1 -> pickFile()
-            2 -> exportCurrentRules()
-            3 -> showComposeConfirmDialog(getString(R.string.highlight_rule_manage),
-                getString(R.string.highlight_rule_help) + "\n\n" + getString(R.string.highlight_rule_render_hint),
-                positiveText = getString(R.string.ok), showNegative = false, onPositive = {})
-            4 -> startActivity<ReaderAssetManageActivity>()
-            else -> return super.onCompatOptionsItemSelected(item)
+    internal fun onQueryChanged(value: String) {
+        query = value
+        if (!dragging && !busy) {
+            renderRules()
         }
-        return true
     }
 
-    private fun addActions() = showComposeChoiceListDialog(getString(R.string.highlight_rule_manage),
-        listOf(getString(R.string.add), getString(R.string.import_str))) {
-        when (it) { 0 -> edit(null); 1 -> pickFile() }
+    internal fun launchExportTrailing() {
+        trailingMenuOpen = false
+        if (canInteract) exportCurrentRules()
+    }
+
+    internal fun launchAssetManage() {
+        trailingMenuOpen = false
+        startActivity<ReaderAssetManageActivity>()
+    }
+
+    internal fun showHelp() {
+        trailingMenuOpen = false
+        helpOpen = true
     }
 
     private fun pickFile() {
@@ -187,15 +155,22 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         }
     }
 
-    private fun importUri(uri: Uri) {
-        work {
-            val report = withContext(Dispatchers.IO) { HighlightImport.importUri(uri, bookUrl) }
-            showComposeConfirmDialog(getString(R.string.import_str), report.summary(),
-                positiveText = getString(R.string.ok), showNegative = false, onPositive = {})
+    internal fun onAddAction(index: Int) {
+        addMenuOpen = false
+        when (index) {
+            0 -> edit(null)
+            1 -> pickFile()
         }
     }
 
-    private fun edit(rule: HighlightRule?) {
+    private fun importUri(uri: Uri) {
+        work {
+            val report = withContext(Dispatchers.IO) { HighlightImport.importUri(uri, bookUrl) }
+            importReport = report.summary()
+        }
+    }
+
+    internal fun edit(rule: HighlightRule?) {
         if (!canInteract) return
         startActivity<HighlightRuleEditActivity> {
             rule?.let { putExtra("id", it.id) }
@@ -203,7 +178,7 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         }
     }
 
-    private fun toggle(rule: HighlightRule) {
+    internal fun toggle(rule: HighlightRule) {
         if (!canInteract) return
         val bindHint = getString(R.string.highlight_rule_bind_hint)
         work { withContext(Dispatchers.IO) {
@@ -217,42 +192,21 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         } }
     }
 
-    private fun actions(rule: HighlightRule) {
-        if (!canInteract) return
-        val labels = listOf(getString(R.string.edit), getString(R.string.highlight_rule_scope),
-            getString(R.string.export_str), getString(R.string.highlight_rule_notice), getString(R.string.delete))
-        showComposeChoiceListDialog(rule.displayName(), labels) { index ->
-            when (index) {
-                0 -> edit(rule)
-                1 -> showComposeChoiceListDialog(getString(R.string.highlight_rule_scope),
-                    listOf(getString(R.string.highlight_rule_global), getString(R.string.highlight_rule_this_book))) {
-                    if (it == 1 && bookUrl == null) toastOnUi(R.string.highlight_rule_bind_hint)
-                    else work { withContext(Dispatchers.IO) {
-                        val global = it == 0
-                        HighlightRules.store.update(rule.id) { current ->
-                            current.copy(global = global, bookUrl = if (global) null else bookUrl)
-                        }
-                    } }
-                }
-                2 -> exportRules(listOf(rule))
-                3 -> showComposeConfirmDialog(rule.displayName(),
-                    listOfNotNull(rule.importWarning.takeIf { it.isNotBlank() }, HighlightMatcher.validationError(rule),
-                        getString(R.string.highlight_rule_render_hint)).joinToString("\n\n"),
-                    positiveText = getString(R.string.ok), showNegative = false, onPositive = {})
-                4 -> showComposeConfirmDialog(getString(R.string.delete), getString(R.string.sure_del) + "\n" + rule.displayName(),
-                    onPositive = {
-                        work {
-                            withContext(Dispatchers.IO) {
-                                SourceRecycleBinHelp.recycleHighlightRules(listOf(rule))
-                                HighlightRules.store.delete(rule.id)
-                            }
-                        }
-                    })
-            }
+    internal fun onScopeSelected(global: Boolean) {
+        val rule = scopeRequest ?: return
+        scopeRequest = null
+        if (!global && bookUrl == null) {
+            toastOnUi(R.string.highlight_rule_bind_hint)
+            return
         }
+        work { withContext(Dispatchers.IO) {
+            HighlightRules.store.update(rule.id) { current ->
+                current.copy(global = global, bookUrl = if (global) null else bookUrl)
+            }
+        } }
     }
 
-    private fun exportRules(rules: List<HighlightRule>) {
+    internal fun exportRules(rules: List<HighlightRule>) {
         if (!canInteract || rules.isEmpty()) return
         work(changesRules = false) {
             val bytes = withContext(Dispatchers.IO) { HighlightRules.store.export(rules) }
@@ -263,29 +217,41 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         }
     }
 
-    private fun exportCurrentRules() {
+    internal fun exportCurrentRules() {
         if (!canInteract || allRules.isEmpty()) return
         if (query.isBlank()) {
             exportRules(allRules)
             return
         }
-        val all = allRules
-        val results = adapter.items
-        showComposeChoiceListDialog(getString(R.string.export_str), listOf(
-            getString(R.string.highlight_rule_export_all, all.size),
-            getString(R.string.highlight_rule_export_results, results.size)
-        )) { index ->
-            if (index == 0) exportRules(all)
-            else if (results.isEmpty()) toastOnUi(R.string.highlight_rule_search_empty)
-            else exportRules(results)
+        exportMenuOpen = true
+    }
+
+    internal fun onExportSelected(index: Int) {
+        exportMenuOpen = false
+        if (index == 0) {
+            exportRules(allRules)
+        } else if (visibleRules.isEmpty()) {
+            toastOnUi(R.string.highlight_rule_search_empty)
+        } else {
+            exportRules(visibleRules)
         }
     }
 
-    private fun work(changesRules: Boolean = true, block: suspend () -> Unit) {
+    internal fun onDeleteConfirmed() {
+        val rule = deleteRequest ?: return
+        deleteRequest = null
+        work {
+            withContext(Dispatchers.IO) {
+                SourceRecycleBinHelp.recycleHighlightRules(listOf(rule))
+                HighlightRules.store.delete(rule.id)
+            }
+        }
+    }
+
+    internal fun work(changesRules: Boolean = true, block: suspend () -> Unit) {
         if (busy || dragging) return
         busy = true
         cancelLoad()
-        updateControls()
         lifecycleScope.launch {
             try {
                 block()
@@ -302,7 +268,6 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
                     toastOnUi(error.localizedMessage)
                 } finally {
                     busy = false
-                    updateControls()
                 }
             }
         }
@@ -312,7 +277,6 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         if (busy || dragging) return
         cancelLoad()
         loading = true
-        updateControls()
         val version = loadVersion
         loadJob = lifecycleScope.launch {
             try {
@@ -325,7 +289,6 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
                 if (version == loadVersion) {
                     loading = false
                     renderRules()
-                    updateControls()
                 }
             }
         }
@@ -344,15 +307,16 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         renderRules()
     }
 
-    private fun renderRules() {
+    internal fun renderRules() {
         if (isDestroyed || dragging) return
         val visible = HighlightRuleSearch.filter(allRules, query)
-        adapter.submit(visible)
-        binding.tvSummary.text = if (query.isBlank()) getString(R.string.highlight_rule_summary,
-            allRules.size, allRules.count { it.enabled }) else
+        visibleRules = visible
+        summaryText = if (query.isBlank()) {
+            getString(R.string.highlight_rule_summary, allRules.size, allRules.count { it.enabled })
+        } else {
             getString(R.string.highlight_rule_search_summary, visible.size, allRules.size)
-        binding.tvEmpty.visibility = if (visible.isEmpty()) View.VISIBLE else View.GONE
-        binding.tvEmpty.setText(when {
+        }
+        emptyText = getString(when {
             !loaded && loading -> R.string.highlight_rule_loading
             !loaded -> R.string.highlight_rule_load_failed
             query.isNotBlank() -> R.string.highlight_rule_search_empty
@@ -360,93 +324,327 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         })
     }
 
-    private fun updateControls() {
-        if (isDestroyed) return
-        binding.btnAdd.isEnabled = canInteract
-    }
-
-    private fun swap(srcPosition: Int, targetPosition: Int): Boolean {
-        if (busy || loading || srcPosition !in adapter.items.indices || targetPosition !in adapter.items.indices) return false
-        if (srcPosition == targetPosition) return false
-        adapter.items = adapter.items.toMutableList().apply { add(targetPosition, removeAt(srcPosition)) }
+    internal fun moveRule(fromIndex: Int, toIndex: Int) {
+        if (busy || loading) return
+        if (fromIndex !in visibleRules.indices || toIndex !in visibleRules.indices) return
+        if (fromIndex == toIndex) return
+        visibleRules = visibleRules.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
         orderChanged = true
-        adapter.notifyItemMoved(srcPosition, targetPosition)
-        return true
     }
 
-    private fun finishDrag() {
+    internal fun finishDrag() {
         dragging = false
         if (!orderChanged) {
             load()
             return
         }
         orderChanged = false
-        val ids = adapter.items.map { it.id }
+        val ids = visibleRules.map { it.id }
         work { withContext(Dispatchers.IO) { HighlightRules.store.reorder(ids) } }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString("query", query)
-        super.onSaveInstanceState(outState)
+    internal fun launchImport() {
+        trailingMenuOpen = false
+        if (canInteract) pickFile()
+    }
+}
+
+@Composable
+private fun HighlightRuleManageContent(activity: HighlightRuleManageActivity) {
+    val density = LocalVisualSpec.current.density
+    val listState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        activity.moveRule(from.index, to.index)
     }
 
-    private inner class RuleAdapter : RecyclerView.Adapter<RuleAdapter.Holder>() {
-        init { stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY }
-        var items: List<HighlightRule> = emptyList()
-        fun submit(next: List<HighlightRule>) {
-            val previous = items
-            val changes = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-                override fun getOldListSize() = previous.size
-                override fun getNewListSize() = next.size
-                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
-                    previous[oldItemPosition].id == next[newItemPosition].id
-                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) =
-                    previous[oldItemPosition] == next[newItemPosition]
-            })
-            items = next
-            changes.dispatchUpdatesTo(this)
+    HostV5Page(
+        title = stringResource(R.string.highlight_rule_manage),
+        onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.trailingMenuOpen = true },
+            )
+        },
+        bottomBar = {
+            AppFilledButton(
+                text = stringResource(R.string.add),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 2,
+                    ),
+                enabled = activity.canInteract,
+                onClick = { activity.addMenuOpen = true },
+            )
+        },
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            AppTextField(
+                value = activity.query,
+                onValueChange = { activity.onQueryChanged(it) },
+                modifier = Modifier.padding(horizontal = density.screenPadding),
+                placeholder = stringResource(R.string.search),
+                singleLine = true,
+            )
+            if (activity.summaryText.isNotEmpty()) {
+                Text(
+                    text = activity.summaryText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 2,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(density.blockGap / 2))
+            if (activity.visibleRules.isEmpty()) {
+                AppEmpty(
+                    title = activity.emptyText,
+                    supporting = if (activity.loading) null else stringResource(R.string.highlight_rule_manage),
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 4,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    items(activity.visibleRules, key = { it.id }) { rule ->
+                        ReorderableItem(reorderState, key = rule.id) {
+                            HighlightRuleRow(
+                                activity,
+                                rule,
+                                Modifier.draggableHandle(onDragStopped = { activity.finishDrag() }),
+                            )
+                        }
+                    }
+                }
+            }
         }
-        override fun getItemCount() = items.size
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-            Holder(ItemThemePackageBinding.inflate(LayoutInflater.from(parent.context), parent, false))
-        override fun onBindViewHolder(holder: Holder, position: Int) = holder.bind(items[position])
+    }
 
-        inner class Holder(private val row: ItemThemePackageBinding) : RecyclerView.ViewHolder(row.root) {
-            fun bind(rule: HighlightRule) = row.run {
-                root.background = UiCorner.panelRounded(this@HighlightRuleManageActivity,
-                    themeCardColorOrDefault(), UiCorner.panelRadius(this@HighlightRuleManageActivity))
-                cardPreview.visibility = View.GONE
-                tvSource.visibility = View.GONE
-                (layInfo.layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.marginStart = 0; layInfo.layoutParams = it }
-                tvName.text = rule.displayName()
-                val scope = when {
-                    rule.global -> getString(R.string.highlight_rule_global)
-                    rule.bookUrl == bookUrl && bookUrl != null -> getString(R.string.highlight_rule_this_book)
-                    rule.bookUrl == null -> getString(R.string.highlight_rule_unbound)
-                    else -> getString(R.string.highlight_rule_other_book)
-                }
-                tvInfo.text = listOf(rule.groupName, scope,
-                    if (rule.titleOnly) getString(R.string.highlight_rule_title) else "",
-                    if (rule.importWarning.isNotBlank()) getString(R.string.highlight_rule_has_notice) else "")
-                    .filter { it.isNotBlank() }.joinToString(" · ")
-                tvName.applyUiSectionTitleStyle(this@HighlightRuleManageActivity)
-                tvInfo.applyUiLabelStyle(this@HighlightRuleManageActivity)
-                tvInfo.setTextColor(secondaryTextColor)
-                listOf(btnApply, btnEdit, btnMore).forEach {
-                    it.background = UiCorner.actionSelector(Color.TRANSPARENT, themeMutedColorOrDefault(),
-                        UiCorner.actionRadius(this@HighlightRuleManageActivity))
-                    it.typeface = this@HighlightRuleManageActivity.uiTypeface()
-                }
-                btnApply.text = getString(if (rule.enabled) R.string.disable else R.string.enable)
-                btnApply.setTextColor(accentColor)
-                btnEdit.text = getString(R.string.edit)
-                btnEdit.setTextColor(primaryTextColor)
-                btnMore.text = getString(R.string.more)
-                btnMore.setTextColor(primaryTextColor)
-                btnApply.setOnClickListener { toggle(rule) }
-                btnEdit.setOnClickListener { edit(rule) }
-                btnMore.setOnClickListener { actions(rule) }
-                root.setOnClickListener { actions(rule) }
+    if (activity.addMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.highlight_rule_manage),
+            actions = listOf(
+                stringResource(R.string.add) to { activity.onAddAction(0) },
+                stringResource(R.string.import_str) to { activity.onAddAction(1) },
+            ),
+            onDismiss = { activity.addMenuOpen = false },
+        )
+    }
+
+    if (activity.trailingMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.highlight_rule_manage),
+            actions = listOf(
+                stringResource(R.string.import_str) to { activity.launchImport() },
+                stringResource(R.string.export_str) to { activity.launchExportTrailing() },
+                stringResource(R.string.help) to { activity.showHelp() },
+                stringResource(R.string.reader_assets_title) to { activity.launchAssetManage() },
+            ),
+            onDismiss = { activity.trailingMenuOpen = false },
+        )
+    }
+
+    activity.menuRule?.let { rule ->
+        AppMenuSheet(
+            title = rule.displayName(),
+            actions = listOf(
+                stringResource(R.string.edit) to {
+                    activity.menuRule = null
+                    activity.edit(rule)
+                },
+                stringResource(R.string.highlight_rule_scope) to {
+                    activity.menuRule = null
+                    activity.scopeRequest = rule
+                },
+                stringResource(R.string.export_str) to {
+                    activity.menuRule = null
+                    activity.exportRules(listOf(rule))
+                },
+                stringResource(R.string.highlight_rule_notice) to {
+                    activity.menuRule = null
+                    activity.noticeRule = rule
+                },
+                stringResource(R.string.delete) to {
+                    activity.menuRule = null
+                    activity.deleteRequest = rule
+                },
+            ),
+            onDismiss = { activity.menuRule = null },
+        )
+    }
+
+    activity.scopeRequest?.let { rule ->
+        AppFilterDialog(
+            title = stringResource(R.string.highlight_rule_scope),
+            options = listOf(
+                stringResource(R.string.highlight_rule_global),
+                stringResource(R.string.highlight_rule_this_book)
+            ),
+            selectedIndex = if (rule.global) 0 else 1,
+            onSelect = { activity.onScopeSelected(it == 0) },
+            onDismiss = { activity.scopeRequest = null },
+        )
+    }
+
+    if (activity.exportMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.export_str),
+            actions = listOf(
+                stringResource(R.string.highlight_rule_export_all, activity.allRules.size) to {
+                    activity.onExportSelected(0)
+                },
+                stringResource(R.string.highlight_rule_export_results, activity.visibleRules.size) to {
+                    activity.onExportSelected(1)
+                },
+            ),
+            onDismiss = { activity.exportMenuOpen = false },
+        )
+    }
+
+    activity.noticeRule?.let { rule ->
+        AppConfirmDialog(
+            title = rule.displayName(),
+            message = listOfNotNull(
+                rule.importWarning.takeIf { it.isNotBlank() },
+                HighlightMatcher.validationError(rule),
+                stringResource(R.string.highlight_rule_render_hint)
+            ).joinToString("\n\n"),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = { activity.noticeRule = null },
+            onDismiss = { activity.noticeRule = null },
+        )
+    }
+
+    if (activity.helpOpen) {
+        AppConfirmDialog(
+            title = stringResource(R.string.highlight_rule_manage),
+            message = stringResource(R.string.highlight_rule_help) + "\n\n" +
+                stringResource(R.string.highlight_rule_render_hint),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = { activity.helpOpen = false },
+            onDismiss = { activity.helpOpen = false },
+        )
+    }
+
+    activity.importReport?.let { report ->
+        AppConfirmDialog(
+            title = stringResource(R.string.import_str),
+            message = report,
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = { activity.importReport = null },
+            onDismiss = { activity.importReport = null },
+        )
+    }
+
+    activity.uploadResult?.let { value ->
+        AppConfirmDialog(
+            title = stringResource(R.string.upload_url),
+            message = value,
+            confirmLabel = stringResource(R.string.copy_text),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = {
+                activity.uploadResult = null
+                activity.sendToClip(value)
+                activity.toastOnUi(R.string.copy_complete)
+            },
+            onDismiss = { activity.uploadResult = null },
+        )
+    }
+
+    activity.deleteRequest?.let { rule ->
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = stringResource(R.string.sure_del) + "\n" + rule.displayName(),
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteConfirmed() },
+            onDismiss = { activity.deleteRequest = null },
+        )
+    }
+}
+
+@Composable
+private fun HighlightRuleRow(
+    activity: HighlightRuleManageActivity,
+    rule: HighlightRule,
+    dragHandleModifier: Modifier,
+) {
+    val bookUrl = activity.bookUrlForPreview
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { activity.menuRule = rule },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = rule.displayName(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_drag_handle),
+                    contentDescription = stringResource(R.string.sort),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = dragHandleModifier.padding(start = 8.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            val scope = when {
+                rule.global -> stringResource(R.string.highlight_rule_global)
+                rule.bookUrl == bookUrl && bookUrl != null -> stringResource(R.string.highlight_rule_this_book)
+                rule.bookUrl == null -> stringResource(R.string.highlight_rule_unbound)
+                else -> stringResource(R.string.highlight_rule_other_book)
+            }
+            Text(
+                text = listOf(
+                    rule.groupName,
+                    scope,
+                    if (rule.titleOnly) stringResource(R.string.highlight_rule_title) else "",
+                    if (rule.importWarning.isNotBlank()) stringResource(R.string.highlight_rule_has_notice) else ""
+                ).filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppChip(
+                    text = stringResource(if (rule.enabled) R.string.disable else R.string.enable),
+                    selected = rule.enabled,
+                    onClick = { activity.toggle(rule) },
+                )
+                AppChip(
+                    text = stringResource(R.string.edit),
+                    selected = false,
+                    onClick = { activity.edit(rule) },
+                )
+                AppOverflowMenuButton(
+                    contentDescription = stringResource(R.string.more),
+                    onClick = { activity.menuRule = rule },
+                )
             }
         }
     }

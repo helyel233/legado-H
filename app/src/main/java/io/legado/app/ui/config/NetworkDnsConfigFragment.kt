@@ -3,6 +3,29 @@ package io.legado.app.ui.config
 import android.os.Bundle
 import android.view.View
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.http.dns.DnsBenchmark
@@ -20,11 +43,7 @@ import io.legado.app.ui.config.compose.SettingItemSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeTextFormDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.restart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -40,6 +59,27 @@ import java.util.Locale
 class NetworkDnsConfigFragment : ComposeSettingFragment() {
     override val titleRes: Int = R.string.network_dns_title
     override val autoOpenTargetItem: Boolean = false
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    internal var restartConfirmOpen by mutableStateOf(false)
+    internal var providerPickerOpen by mutableStateOf(false)
+    internal var endpointEditOpen by mutableStateOf(false)
+    internal var endpointUrlText by mutableStateOf("")
+    internal var endpointIpText by mutableStateOf("")
+    internal var ruleEditOpen by mutableStateOf(false)
+    internal var ruleEditText by mutableStateOf("")
+    internal var ruleEditOriginal by mutableStateOf<DnsDomainRule?>(null)
+    internal var ruleDohOpen by mutableStateOf(false)
+    internal var ruleDohPattern by mutableStateOf("")
+    internal var ruleDohOriginal by mutableStateOf<DnsDomainRule?>(null)
+    internal var ruleDohIndex by mutableStateOf(0)
+    internal var hostsEditOpen by mutableStateOf(false)
+    internal var hostsText by mutableStateOf("")
+    internal var testHostOpen by mutableStateOf(false)
+    internal var testHostText by mutableStateOf("")
+    internal var resultDialogTarget by mutableStateOf<DnsProbeResult?>(null)
+    internal var helpOpen by mutableStateOf(false)
+
     private var benchmarkJob: Job? = null
     private var benchmarkGeneration = 0L
     private var results = emptyList<DnsProbeResult>()
@@ -75,7 +115,7 @@ class NetworkDnsConfigFragment : ComposeSettingFragment() {
                 action("dns_provider", "DoH 服务", selected?.name ?: "自定义服务", ::chooseProvider),
                 action("dns_custom", "服务地址与启动 IP", selected?.url ?: "已保存自定义 HTTPS 地址", ::editEndpoint),
                 action("dns_restart", "重启并应用", lastError ?: "分流规则、Hosts 和网络组件在重启后一起生效") {
-                    showComposeConfirmDialog("重启应用", "已保存的网络设置将在重启后生效。", onPositive = ::restartWithSavedSettings)
+                    restartConfirmOpen = true
                 }
             )),
             SettingSectionSpec(title = "按功能选择", items = DnsScope.entries.map { scope ->
@@ -140,63 +180,96 @@ class NetworkDnsConfigFragment : ComposeSettingFragment() {
     }
 
     private fun chooseProvider() {
+        providerPickerOpen = true
+    }
+
+    internal fun onProviderSelected(index: Int) {
+        providerPickerOpen = false
         val config = NetworkDnsStore.load(requireContext())
-        showComposeChoiceListDialog("DoH 服务", DohProvider.presets.map { it.name } + "自定义",
-            selectedIndex = DohProvider.presets.indexOfFirst { it.url == config.endpoint && it.bootstrap == config.bootstrap }
-                .let { if (it < 0) DohProvider.presets.size else it },
-            onSelected = { index ->
-                DohProvider.presets.getOrNull(index)?.let { save(config.copy(endpoint = it.url, bootstrap = it.bootstrap)) } ?: editEndpoint()
-            })
+        DohProvider.presets.getOrNull(index)?.let { save(config.copy(endpoint = it.url, bootstrap = it.bootstrap)) }
+            ?: editEndpoint()
     }
 
     private fun editEndpoint() {
         val config = NetworkDnsStore.load(requireContext())
-        fun candidate(values: List<String>): NetworkDnsConfig = config.copy(endpoint = values[0].trim(),
-            bootstrap = values[1].split(Regex("[,，\\s]+")).filter { it.isNotBlank() })
-        showComposeTextFormDialog("DoH 服务", labels = listOf("HTTPS 查询地址", "启动 IP（可选，多个用逗号分隔）"),
-            initialValues = listOf(config.endpoint, config.bootstrap.joinToString(", ")),
-            message = "启动 IP 用于连接 DoH 服务，仍校验原域名证书；留空时可能先由系统解析服务域名。",
-            validateInput = { values -> runCatching { candidate(values).validated() }.isSuccess },
-            onPositive = { save(candidate(it)) })
+        endpointUrlText = config.endpoint
+        endpointIpText = config.bootstrap.joinToString(", ")
+        endpointEditOpen = true
+    }
+
+    internal fun onEndpointConfirm() {
+        val config = NetworkDnsStore.load(requireContext())
+        val candidate = config.copy(
+            endpoint = endpointUrlText.trim(),
+            bootstrap = endpointIpText.split(Regex("[,，\\s]+")).filter { it.isNotBlank() }
+        )
+        if (runCatching { candidate.validated() }.isFailure) {
+            toastOnUi("DNS 配置无效")
+            return
+        }
+        endpointEditOpen = false
+        save(candidate)
     }
 
     private fun editRule(original: DnsDomainRule?) {
-        showComposeTextInputDialog("域名规则", hint = "example.com 或 *.example.com", initialValue = original?.pattern.orEmpty(),
-            message = "精确域名优先；通配符只匹配子域名。DoH 总开关关闭时全部跟随系统。",
-            validateInput = { runCatching { DnsDomainRule(it, false).normalized() }.isSuccess },
-            neutralText = if (original == null) null else "删除规则",
-            onNeutral = if (original == null) null else { {
-                val config = NetworkDnsStore.load(requireContext())
-                save(config.copy(rules = config.rules.filterNot { it.pattern == original.pattern }))
-            } },
-            onPositive = { pattern ->
-                showComposeChoiceListDialog("${pattern.trim()} 使用", listOf("DoH", "系统 DNS"),
-                    selectedIndex = if (original?.doh != false) 0 else 1,
-                    onSelected = { index ->
-                        val rule = DnsDomainRule(pattern, index == 0).normalized()
-                        val config = NetworkDnsStore.load(requireContext())
-                        save(config.copy(rules = config.rules.filterNot { it.pattern == original?.pattern || it.pattern == rule.pattern } + rule))
-                    })
-            })
+        ruleEditOriginal = original
+        ruleEditText = original?.pattern.orEmpty()
+        ruleEditOpen = true
+    }
+
+    internal fun onRuleEditDelete() {
+        val original = ruleEditOriginal ?: return
+        ruleEditOpen = false
+        val config = NetworkDnsStore.load(requireContext())
+        save(config.copy(rules = config.rules.filterNot { it.pattern == original.pattern }))
+    }
+
+    internal fun onRuleEditConfirm(pattern: String) {
+        ruleEditOpen = false
+        ruleDohOriginal = ruleEditOriginal
+        ruleDohPattern = pattern
+        ruleDohIndex = if (ruleEditOriginal?.doh != false) 0 else 1
+        ruleDohOpen = true
+    }
+
+    internal fun onRuleDohSelected(index: Int) {
+        ruleDohOpen = false
+        val pattern = ruleDohPattern
+        val original = ruleDohOriginal
+        val rule = DnsDomainRule(pattern, index == 0).normalized()
+        val config = NetworkDnsStore.load(requireContext())
+        save(config.copy(rules = config.rules.filterNot { it.pattern == original?.pattern || it.pattern == rule.pattern } + rule))
     }
 
     private fun editHosts() {
-        showComposeTextInputDialog("自定义 Hosts", initialValue = stringSetting(PreferKey.customHosts, ""),
-            hint = "{\"example.com\": [\"192.0.2.1\"]}", minLines = 4, maxLines = 12,
-            message = "保存后重启生效，保留已有 Hosts 格式。",
-            validateInput = { runCatching { DnsHosts.parse(it, strict = true) }.isSuccess },
-            onPositive = { updateStringSetting(PreferKey.customHosts, it.trim()) })
+        hostsText = stringSetting(PreferKey.customHosts, "")
+        hostsEditOpen = true
+    }
+
+    internal fun onHostsConfirm(text: String) {
+        if (runCatching { DnsHosts.parse(text, strict = true) }.isFailure) {
+            toastOnUi("Hosts 格式无效")
+            return
+        }
+        hostsEditOpen = false
+        updateStringSetting(PreferKey.customHosts, text.trim())
     }
 
     private fun editTestHost() {
-        showComposeTextInputDialog("测试域名", initialValue = stringSetting(TEST_HOST, "example.com"),
-            validateInput = { DnsNames.host(it)?.let { host -> DnsNames.literal(host) == null } == true },
-            onPositive = {
-                cancelBenchmark()
-                updateStringSetting(TEST_HOST, requireNotNull(DnsNames.host(it)))
-                results = emptyList()
-                refreshSettings()
-            })
+        testHostText = stringSetting(TEST_HOST, "example.com")
+        testHostOpen = true
+    }
+
+    internal fun onTestHostConfirm(text: String) {
+        val host = DnsNames.host(text)?.takeIf { DnsNames.literal(it) == null } ?: run {
+            toastOnUi("测试域名无效")
+            return
+        }
+        testHostOpen = false
+        cancelBenchmark()
+        updateStringSetting(TEST_HOST, host)
+        results = emptyList()
+        refreshSettings()
     }
 
     private fun startBenchmark() {
@@ -229,28 +302,279 @@ class NetworkDnsConfigFragment : ComposeSettingFragment() {
     }
 
     private fun showResult(result: DnsProbeResult) {
-        val details = "测试域名：${result.hostname}\n" + result.samples.mapIndexed { index, sample ->
-            "第 ${index + 1} 次：${sample.milliseconds?.let { "${ms(it)}，${sample.addressCount} 个地址" } ?: sample.error}"
-        }.joinToString("\n")
+        resultDialogTarget = result
+    }
+
+    internal fun onResultAction(index: Int) {
+        val result = resultDialogTarget ?: return
+        resultDialogTarget = null
         val provider = result.provider
-        showComposeActionListDialog(result.name, if (provider == null) listOf("关闭") else listOf("选为 DoH 服务", "关闭"),
-            message = details, onSelected = { index ->
-                if (index == 0 && provider != null) {
-                    val config = NetworkDnsStore.load(requireContext())
-                    save(config.copy(endpoint = provider.url, bootstrap = provider.bootstrap))
-                }
-            })
+        if (index == 0 && provider != null) {
+            val config = NetworkDnsStore.load(requireContext())
+            save(config.copy(endpoint = provider.url, bootstrap = provider.bootstrap))
+        }
     }
 
     private fun showHelp() {
-        showComposeConfirmDialog("覆盖范围与测速说明", message =
-            "书源指定 IP、Hosts 优先于域名规则，域名规则优先于功能选择。\n\n" +
-            "分流只控制应用实际发起的原生请求。登录页、WebView 子资源、模板的外部脚本请求、系统或第三方 TTS 不会自动跟随。代理通常负责目标域名解析；应用可能只解析代理服务器。\n\n" +
-            "测速使用当前保存的服务与 IPv6 选项，直接查询域名，不使用 Hosts、业务分流或系统回退。DoH 不使用本地 HTTP 缓存，首次包含建连，复测可复用连接；系统 DNS 的缓存由系统控制。结果是 DNS 查询耗时，不代表下载速度。\n\n" +
-            "网络设置、Hosts、Cronet 保存后重启生效；测速结果不会自动更换服务商。",
-            showNegative = false, onPositive = {})
+        helpOpen = true
     }
 
     private fun ms(value: Double?): String = value?.let { String.format(Locale.ROOT, "%.1f ms", it) } ?: "失败"
+
+    // ── V5 弹窗挂载 ─────────────────────────────────────────────
+    override val extraDialogs: @Composable () -> Unit = {
+        val density = LocalVisualSpec.current.density
+        if (restartConfirmOpen) {
+            AppConfirmDialog(
+                title = "重启应用",
+                message = "已保存的网络设置将在重启后生效。",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { restartConfirmOpen = false; restartWithSavedSettings() },
+                onDismiss = { restartConfirmOpen = false },
+            )
+        }
+        if (providerPickerOpen) {
+            val config = NetworkDnsStore.load(requireContext())
+            AppFilterDialog(
+                title = "DoH 服务",
+                options = DohProvider.presets.map { it.name } + "自定义",
+                selectedIndex = DohProvider.presets.indexOfFirst { it.url == config.endpoint && it.bootstrap == config.bootstrap }
+                    .let { if (it < 0) DohProvider.presets.size else it },
+                onSelect = { onProviderSelected(it) },
+                onDismiss = { providerPickerOpen = false },
+            )
+        }
+        if (endpointEditOpen) {
+            AppDialog(onDismiss = { endpointEditOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "DoH 服务",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "启动 IP 用于连接 DoH 服务，仍校验原域名证书；留空时可能先由系统解析服务域名。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = endpointUrlText,
+                        onValueChange = { endpointUrlText = it },
+                        placeholder = "HTTPS 查询地址",
+                        singleLine = true,
+                    )
+                    AppTextField(
+                        value = endpointIpText,
+                        onValueChange = { endpointIpText = it },
+                        placeholder = "启动 IP（可选，多个用逗号分隔）",
+                        singleLine = true,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { endpointEditOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = { onEndpointConfirm() },
+                        )
+                    }
+                }
+            }
+        }
+        if (ruleEditOpen) {
+            AppDialog(onDismiss = { ruleEditOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "域名规则",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "精确域名优先；通配符只匹配子域名。DoH 总开关关闭时全部跟随系统。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = ruleEditText,
+                        onValueChange = { ruleEditText = it },
+                        placeholder = "example.com 或 *.example.com",
+                        singleLine = true,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        if (ruleEditOriginal != null) {
+                            AppGhostButton(
+                                text = "删除规则",
+                                modifier = Modifier.weight(1f),
+                                onClick = { onRuleEditDelete() },
+                            )
+                        }
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { ruleEditOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val pattern = ruleEditText.trim()
+                                if (runCatching { DnsDomainRule(pattern, false).normalized() }.isFailure) {
+                                    toastOnUi("域名规则无效")
+                                } else {
+                                    onRuleEditConfirm(pattern)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (ruleDohOpen) {
+            AppFilterDialog(
+                title = "${ruleDohPattern.trim()} 使用",
+                options = listOf("DoH", "系统 DNS"),
+                selectedIndex = ruleDohIndex,
+                onSelect = { onRuleDohSelected(it) },
+                onDismiss = { ruleDohOpen = false },
+            )
+        }
+        if (hostsEditOpen) {
+            AppDialog(onDismiss = { hostsEditOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "自定义 Hosts",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "保存后重启生效，保留已有 Hosts 格式。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = hostsText,
+                        onValueChange = { hostsText = it },
+                        placeholder = "{\"example.com\": [\"192.0.2.1\"]}",
+                        singleLine = false,
+                        minLines = 4,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { hostsEditOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = { onHostsConfirm(hostsText) },
+                        )
+                    }
+                }
+            }
+        }
+        if (testHostOpen) {
+            AppInputDialog(
+                title = "测试域名",
+                value = testHostText,
+                onValueChange = { testHostText = it },
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { onTestHostConfirm(testHostText) },
+                onDismiss = { testHostOpen = false },
+            )
+        }
+        resultDialogTarget?.let { result ->
+            val provider = result.provider
+            val details = "测试域名：${result.hostname}\n" + result.samples.mapIndexed { index, sample ->
+                "第 ${index + 1} 次：${sample.milliseconds?.let { "${ms(it)}，${sample.addressCount} 个地址" } ?: sample.error}"
+            }.joinToString("\n")
+            AppDialog(onDismiss = { resultDialogTarget = null }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = result.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = details,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        if (provider != null) {
+                            AppFilledButton(
+                                text = "选为 DoH 服务",
+                                modifier = Modifier.weight(1f),
+                                onClick = { onResultAction(0) },
+                            )
+                        }
+                        AppGhostButton(
+                            text = "关闭",
+                            modifier = Modifier.weight(1f),
+                            onClick = { resultDialogTarget = null },
+                        )
+                    }
+                }
+            }
+        }
+        if (helpOpen) {
+            AppDialog(onDismiss = { helpOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "覆盖范围与测速说明",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "书源指定 IP、Hosts 优先于域名规则，域名规则优先于功能选择。\n\n" +
+                            "分流只控制应用实际发起的原生请求。登录页、WebView 子资源、模板的外部脚本请求、系统或第三方 TTS 不会自动跟随。代理通常负责目标域名解析；应用可能只解析代理服务器。\n\n" +
+                            "测速使用当前保存的服务与 IPv6 选项，直接查询域名，不使用 Hosts、业务分流或系统回退。DoH 不使用本地 HTTP 缓存，首次包含建连，复测可复用连接；系统 DNS 的缓存由系统控制。结果是 DNS 查询耗时，不代表下载速度。\n\n" +
+                            "网络设置、Hosts、Cronet 保存后重启生效；测速结果不会自动更换服务商。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { helpOpen = false },
+                    )
+                }
+            }
+        }
+    }
+
     companion object { private const val TEST_HOST = "networkDnsTestHost" }
 }

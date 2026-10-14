@@ -6,6 +6,21 @@ import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.core.content.edit
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.activityViewModels
@@ -43,11 +58,15 @@ import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.dialog.BackupProgressDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeMultiChoiceDialog
-import io.legado.app.ui.widget.compose.showComposeTextFormDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.checkWrite
@@ -189,6 +208,259 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
         }
         return false
+    }
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var textSettingKey by mutableStateOf<String?>(null)
+    private var textSettingTitle by mutableStateOf("")
+    private var textSettingValue by mutableStateOf("")
+    private var ignoreOpen by mutableStateOf(false)
+    private var ignoreChecked by mutableStateOf<Set<String>>(emptySet())
+    private var webDavFormOpen by mutableStateOf(false)
+    private var webDavUrlText by mutableStateOf("")
+    private var webDavAccountText by mutableStateOf("")
+    private var webDavPasswordText by mutableStateOf("")
+    private var s3FullFallbackOpen by mutableStateOf(false)
+    private var restoreErrorText by mutableStateOf<String?>(null)
+    private var restoreFileCandidates by mutableStateOf<List<String>?>(null)
+    private var cloudAssetsConfirm by mutableStateOf<Pair<String, List<String>>?>(null)
+    private var localAssetsConfirm by mutableStateOf<LocalAssetsConfirm?>(null)
+
+    private data class LocalAssetsConfirm(
+        val uri: Uri,
+        val assets: List<Pair<Uri, String>>
+    )
+
+    override val extraDialogs: @Composable () -> Unit = {
+        val density = LocalVisualSpec.current.density
+
+        textSettingKey?.let { key ->
+            AppInputDialog(
+                title = textSettingTitle,
+                value = textSettingValue,
+                onValueChange = { textSettingValue = it },
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { text ->
+                    textSettingKey = null
+                    appCtx.defaultSharedPreferences.edit {
+                        putString(key, text.trim())
+                    }
+                },
+                onDismiss = { textSettingKey = null },
+            )
+        }
+
+        if (ignoreOpen) {
+            AppDialog(onDismiss = { ignoreOpen = false }) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    BackupConfig.ignoreKeys.forEachIndexed { index, key ->
+                        AppListItem(
+                            headline = BackupConfig.ignoreTitle.getOrNull(index) ?: key,
+                            card = false,
+                            leading = {
+                                Checkbox(
+                                    checked = key in ignoreChecked,
+                                    onCheckedChange = { checked -> toggleIgnoreKey(key, checked) },
+                                )
+                            },
+                            onClick = { toggleIgnoreKey(key, key !in ignoreChecked) },
+                        )
+                    }
+                    AppFilledButton(
+                        text = stringResource(android.R.string.ok),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { ignoreOpen = false },
+                    )
+                }
+            }
+        }
+
+        if (webDavFormOpen) {
+            AppDialog(onDismiss = { webDavFormOpen = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    AppTextField(
+                        value = webDavUrlText,
+                        onValueChange = { webDavUrlText = it },
+                        placeholder = getString(R.string.web_dav_url),
+                    )
+                    AppTextField(
+                        value = webDavAccountText,
+                        onValueChange = { webDavAccountText = it },
+                        placeholder = getString(R.string.web_dav_account),
+                    )
+                    AppTextField(
+                        value = webDavPasswordText,
+                        onValueChange = { webDavPasswordText = it },
+                        placeholder = getString(R.string.web_dav_pw),
+                        keyboardType = KeyboardType.Password,
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { webDavFormOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                webDavFormOpen = false
+                                appCtx.defaultSharedPreferences.edit {
+                                    putString(PreferKey.webDavUrl, webDavUrlText.trim())
+                                    putString(PreferKey.webDavAccount, webDavAccountText.trim())
+                                    putString(PreferKey.webDavPassword, webDavPasswordText)
+                                }
+                                refreshSettings()
+                                viewModel.upCloudStorageConfig()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (s3FullFallbackOpen) {
+            val hasWebDav = hasWebDavAccount()
+            AppDialog(onDismiss = { s3FullFallbackOpen = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = getString(R.string.s3_full_webdav_fallback_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = getString(
+                            if (hasWebDav) R.string.s3_full_webdav_fallback_message
+                            else R.string.s3_full_no_webdav_fallback_message
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        if (hasWebDav) {
+                            AppFilledButton(
+                                text = stringResource(R.string.s3_full_webdav_fallback_upload),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    s3FullFallbackOpen = false
+                                    retryActiveBackup(uploadCloud = true, uploadWebDavFallback = true)
+                                },
+                            )
+                            AppGhostButton(
+                                text = stringResource(R.string.s3_full_webdav_fallback_ignore),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    s3FullFallbackOpen = false
+                                    retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
+                                },
+                            )
+                            AppGhostButton(
+                                text = stringResource(R.string.s3_full_webdav_fallback_never),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    s3FullFallbackOpen = false
+                                    neverRemindS3FullFallback()
+                                },
+                            )
+                        } else {
+                            AppFilledButton(
+                                text = stringResource(R.string.s3_full_webdav_fallback_ignore),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    s3FullFallbackOpen = false
+                                    retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
+                                },
+                            )
+                            AppGhostButton(
+                                text = stringResource(R.string.s3_full_webdav_fallback_never),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    s3FullFallbackOpen = false
+                                    neverRemindS3FullFallback()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        restoreErrorText?.let { message ->
+            AppConfirmDialog(
+                title = stringResource(R.string.restore),
+                message = message,
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    restoreErrorText = null
+                    restoreFromLocal()
+                },
+                onDismiss = { restoreErrorText = null },
+            )
+        }
+
+        restoreFileCandidates?.let { names ->
+            AppFilterDialog(
+                title = getString(R.string.select_restore_file),
+                options = names,
+                selectedIndex = -1,
+                onSelect = { index ->
+                    restoreFileCandidates = null
+                    names.getOrNull(index)?.let { name ->
+                        view?.post { restoreWebDav(name) }
+                    }
+                },
+                onDismiss = { restoreFileCandidates = null },
+            )
+        }
+
+        cloudAssetsConfirm?.let { (name, assetsNames) ->
+            AppConfirmDialog(
+                title = stringResource(R.string.restore),
+                message = "检测到资源文件包\n${assetsNames.joinToString("\n")}\n是否一并恢复字体、背景图等资源？",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    cloudAssetsConfirm = null
+                    startCloudRestore(name, assetsNames)
+                },
+                onDismiss = {
+                    cloudAssetsConfirm = null
+                    startCloudRestore(name, emptyList())
+                },
+            )
+        }
+
+        localAssetsConfirm?.let { req ->
+            AppConfirmDialog(
+                title = stringResource(R.string.restore),
+                message = "备份路径下检测到资源文件包\n${req.assets.joinToString("\n") { it.second }}\n是否一并恢复字体、背景图等资源？",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    localAssetsConfirm = null
+                    startLocalRestore(req.uri, req.assets.map { it.first })
+                },
+                onDismiss = {
+                    localAssetsConfirm = null
+                    startLocalRestore(req.uri, emptyList())
+                },
+            )
+        }
+    }
+
+    private fun toggleIgnoreKey(key: String, checked: Boolean) {
+        BackupConfig.ignoreConfig[key] = checked
+        BackupConfig.saveIgnoreConfig()
+        ignoreChecked = if (checked) ignoreChecked + key else ignoreChecked - key
     }
 
     override fun buildPageSpec(): SettingPageSpec {
@@ -493,16 +765,9 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         title: String,
         initialValue: String
     ) {
-        showComposeTextInputDialog(
-            title = title,
-            hint = title,
-            initialValue = initialValue,
-            onPositive = {
-                appCtx.defaultSharedPreferences.edit {
-                    putString(key, it.trim())
-                }
-            }
-        )
+        textSettingKey = key
+        textSettingTitle = title
+        textSettingValue = initialValue
     }
 
     // 配置完备性判定下沉 BackupRestoreController（台账 #29-B7）
@@ -535,47 +800,18 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
      * 备份忽略设置
      */
     private fun backupIgnore() {
-        val checkedIndices = BackupConfig.ignoreKeys.indices
+        ignoreChecked = BackupConfig.ignoreKeys.indices
             .filter { BackupConfig.ignoreConfig[BackupConfig.ignoreKeys[it]] ?: false }
+            .mapNotNull { BackupConfig.ignoreKeys.getOrNull(it) }
             .toSet()
-        showComposeMultiChoiceDialog(
-            title = getString(R.string.restore_ignore),
-            labels = BackupConfig.ignoreTitle.toList(),
-            checkedIndices = checkedIndices,
-            negativeText = getString(android.R.string.ok),
-            onItemCheckedChange = { which, isChecked ->
-                BackupConfig.ignoreKeys.getOrNull(which)?.let { key ->
-                    BackupConfig.ignoreConfig[key] = isChecked
-                    BackupConfig.saveIgnoreConfig()
-                }
-            }
-        )
+        ignoreOpen = true
     }
 
     private fun showWebDavAccountDialog() {
-        showComposeTextFormDialog(
-            title = getString(R.string.webdav_account_manage),
-            labels = listOf(
-                getString(R.string.web_dav_url),
-                getString(R.string.web_dav_account),
-                getString(R.string.web_dav_pw)
-            ),
-            initialValues = listOf(
-                getPrefString(PreferKey.webDavUrl).orEmpty(),
-                getPrefString(PreferKey.webDavAccount).orEmpty(),
-                getPrefString(PreferKey.webDavPassword).orEmpty()
-            ),
-            passwordFields = setOf(2),
-            onPositive = { values ->
-                appCtx.defaultSharedPreferences.edit {
-                    putString(PreferKey.webDavUrl, values.getOrNull(0).orEmpty().trim())
-                    putString(PreferKey.webDavAccount, values.getOrNull(1).orEmpty().trim())
-                    putString(PreferKey.webDavPassword, values.getOrNull(2).orEmpty())
-                }
-                refreshSettings()
-                viewModel.upCloudStorageConfig()
-            }
-        )
+        webDavUrlText = getPrefString(PreferKey.webDavUrl).orEmpty()
+        webDavAccountText = getPrefString(PreferKey.webDavAccount).orEmpty()
+        webDavPasswordText = getPrefString(PreferKey.webDavPassword).orEmpty()
+        webDavFormOpen = true
     }
 
 
@@ -692,47 +928,14 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun showS3FullWebDavFallbackDialog(backupPath: String) {
         pendingS3FullBackupPath = backupPath
-        val hasWebDav = !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
-                && !getPrefString(PreferKey.webDavPassword).isNullOrBlank()
-        val messageRes = if (hasWebDav) {
-            R.string.s3_full_webdav_fallback_message
-        } else {
-            R.string.s3_full_no_webdav_fallback_message
+        s3FullFallbackOpen = true
+    }
+
+    private fun neverRemindS3FullFallback() {
+        appCtx.defaultSharedPreferences.edit {
+            putBoolean(PreferKey.s3FullWebDavFallbackNeverRemind, true)
         }
-        val neverRemind = {
-            appCtx.defaultSharedPreferences.edit {
-                putBoolean(PreferKey.s3FullWebDavFallbackNeverRemind, true)
-            }
-            retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
-        }
-        if (hasWebDav) {
-            showComposeConfirmDialog(
-                title = getString(R.string.s3_full_webdav_fallback_title),
-                message = getString(messageRes),
-                positiveText = getString(R.string.s3_full_webdav_fallback_upload),
-                negativeText = getString(R.string.s3_full_webdav_fallback_ignore),
-                neutralText = getString(R.string.s3_full_webdav_fallback_never),
-                onPositive = {
-                    retryActiveBackup(uploadCloud = true, uploadWebDavFallback = true)
-                },
-                onNegative = {
-                    retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
-                },
-                onNeutral = neverRemind
-            )
-        } else {
-            showComposeConfirmDialog(
-                title = getString(R.string.s3_full_webdav_fallback_title),
-                message = getString(messageRes),
-                positiveText = getString(R.string.s3_full_webdav_fallback_ignore),
-                neutralText = getString(R.string.s3_full_webdav_fallback_never),
-                showNegative = false,
-                onPositive = {
-                    retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
-                },
-                onNeutral = neverRemind
-            )
-        }
+        retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
     }
 
     private fun retryActiveBackup(uploadCloud: Boolean, uploadWebDavFallback: Boolean) {
@@ -773,13 +976,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             if (context == null) {
                 return@onError
             }
-            showComposeConfirmDialog(
-                title = getString(R.string.restore),
-                message = "Cloud storage error\n${it.localizedMessage}\nRestore from local backup?",
-                onPositive = {
-                    restoreFromLocal()
-                }
-            )
+            restoreErrorText = "Cloud storage error\n${it.localizedMessage}\nRestore from local backup?"
         }.onFinally {
             _waitDialog?.dismiss()
         }
@@ -794,18 +991,9 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }
         if (names.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
-                withContext(Main) {
-                    context.showComposeChoiceListDialog(
-                        title = context.getString(R.string.select_restore_file),
-                        labels = names
-                    ) { index ->
-                        if (index in 0 until names.size) {
-                            view?.post {
-                                restoreWebDav(names[index])
-                            }
-                        }
-                    }
-                }
+            withContext(Main) {
+                restoreFileCandidates = names
+            }
         } else {
             throw NoStackTraceException("Cloud storage backup file not found")
         }
@@ -831,14 +1019,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             if (assetsNames.isEmpty()) {
                 startCloudRestore(name, emptyList())
             } else {
-                view?.post {
-                    showComposeConfirmDialog(
-                        title = getString(R.string.restore),
-                        message = "检测到资源文件包\n${assetsNames.joinToString("\n")}\n是否一并恢复字体、背景图等资源？",
-                        onPositive = { startCloudRestore(name, assetsNames) },
-                        onNegative = { startCloudRestore(name, emptyList()) }
-                    )
-                }
+                cloudAssetsConfirm = name to assetsNames
             }
         }
     }
@@ -880,14 +1061,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             startLocalRestore(uri, emptyList())
             return
         }
-        view?.post {
-            showComposeConfirmDialog(
-                title = getString(R.string.restore),
-                message = "备份路径下检测到资源文件包\n${assetsUris.joinToString("\n") { it.second }}\n是否一并恢复字体、背景图等资源？",
-                onPositive = { startLocalRestore(uri, assetsUris.map { it.first }) },
-                onNegative = { startLocalRestore(uri, emptyList()) }
-            )
-        }
+        localAssetsConfirm = LocalAssetsConfirm(uri, assetsUris)
     }
 
     private fun startLocalRestore(uri: Uri, assetsUris: List<Uri>) {

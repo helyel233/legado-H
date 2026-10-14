@@ -5,6 +5,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
@@ -16,8 +19,6 @@ import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.replaceByIndex
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.host.setV5Content
@@ -37,6 +38,7 @@ class RuleSubActivity : AppCompatActivity(),
     private val ruleSubsState = mutableStateListOf<RuleSub>()
     private val searchQueryState = mutableStateOf("")
     private val typeLabels by lazy { resources.getStringArray(R.array.rule_type).toList() }
+    internal val deleteTargetState = mutableStateOf<RuleSub?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +74,17 @@ class RuleSubActivity : AppCompatActivity(),
                     ruleSubMenuActions = ::ruleSubMenuActions,
                     onMoveBy = ::moveSubscriptionBy,
                     onMoveFinished = ::persistSubscriptionOrder
+                )
+            }
+            deleteTargetState.value?.let { ruleSub ->
+                AppConfirmDialog(
+                    title = getString(R.string.draw),
+                    message = getString(R.string.sure_del) + "\n" + ruleSub.name.ifBlank { ruleSub.url },
+                    confirmLabel = getString(R.string.yes),
+                    cancelLabel = getString(R.string.no),
+                    danger = true,
+                    onConfirm = { onDeleteConfirmed() },
+                    onDismiss = { deleteTargetState.value = null },
                 )
             }
         }
@@ -166,17 +179,15 @@ class RuleSubActivity : AppCompatActivity(),
     }
 
     private fun delSubscription(ruleSub: RuleSub) {
-        showComposeConfirmDialog(
-            title = getString(R.string.draw),
-            message = getString(R.string.sure_del) + "\n" + ruleSub.name.ifBlank { ruleSub.url },
-            positiveText = getString(R.string.yes),
-            negativeText = getString(R.string.no),
-            onPositive = {
-                lifecycleScope.launch(IO) {
-                    appDb.ruleSubDao.delete(ruleSub)
-                }
-            }
-        )
+        deleteTargetState.value = ruleSub
+    }
+
+    internal fun onDeleteConfirmed() {
+        val ruleSub = deleteTargetState.value ?: return
+        deleteTargetState.value = null
+        lifecycleScope.launch(IO) {
+            appDb.ruleSubDao.delete(ruleSub)
+        }
     }
 
     private fun moveSubscription(ruleSub: RuleSub, targetIndex: Int) {

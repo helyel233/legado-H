@@ -5,11 +5,36 @@ import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
 import io.legado.app.reader.config.ReadConfigEvent.TipStyle
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import android.app.Activity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
@@ -19,35 +44,43 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.constant.EventBus
-import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AdvancedTipSlot
 import io.legado.app.help.config.ReadTipConfig
 import io.legado.app.help.config.AdvancedTipPackageManager
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.book.read.page.LottieImageBitmapCache
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
-import io.legado.app.ui.widget.compose.ComposeTextInputDialog
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.readBytes
 import io.legado.app.utils.readBytesLimited
 import io.legado.app.utils.sendToClip
-import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
+private val advancedTipDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+class AdvancedTipManageActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_SLOT = "slot"
@@ -60,20 +93,26 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private val slot: AdvancedTipSlot by lazy {
+    internal val slot: AdvancedTipSlot by lazy {
         val raw = intent.getStringExtra(EXTRA_SLOT).orEmpty()
         runCatching { AdvancedTipSlot.valueOf(raw) }.getOrDefault(AdvancedTipSlot.HEADER)
     }
     private val manager: AdvancedTipPackageManager by lazy { AdvancedTipPackageManager.of(slot) }
 
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
+    internal val entriesState = mutableStateOf<List<AdvancedTipPackageManager.Entry>>(emptyList())
+    internal val activeIdState = mutableStateOf(AdvancedTipPackageManager.BUILTIN_ID)
+    internal val loadingState = mutableStateOf(false)
+    internal var addMenuOpen by mutableStateOf(false)
+    internal var itemMenuTarget by mutableStateOf<AdvancedTipPackageManager.Entry?>(null)
+    internal var confirmDeleteTarget by mutableStateOf<AdvancedTipPackageManager.Entry?>(null)
+    internal var importDialogOpen by mutableStateOf(false)
+    internal var importUrlText by mutableStateOf("")
+    internal var exportUrl by mutableStateOf<String?>(null)
+    internal var renameTarget by mutableStateOf<AdvancedTipPackageManager.Entry?>(null)
+    internal var renameText by mutableStateOf("")
 
-    private val entriesState = mutableStateOf<List<AdvancedTipPackageManager.Entry>>(emptyList())
-    private val activeIdState = mutableStateOf(AdvancedTipPackageManager.BUILTIN_ID)
-    private val loadingState = mutableStateOf(false)
     private var loadJob: Job? = null
     private var loadVersion: Int = 0
-
     private var editingEntryId: String? = null
 
     private val jsonEditor = registerForActivityResult(
@@ -100,7 +139,7 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private val importJson = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
             if (uri.path == "/$importFromNet") {
-                showNetworkImportDialog()
+                openImportDialog()
             } else {
                 importUri(uri)
             }
@@ -111,64 +150,23 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         result.uri?.let { uri ->
             val value = uri.toString()
             if (value.startsWith("http://", true) || value.startsWith("https://", true)) {
-                showDialogFragment(
-                    ComposeConfirmDialog.create(
-                        title = getString(R.string.advanced_title_exported),
-                        message = value,
-                        positiveText = getString(R.string.copy_text),
-                        negativeText = getString(R.string.cancel),
-                        onPositive = {
-                            sendToClip(value)
-                            toastOnUi(R.string.copy_complete)
-                        }
-                    )
-                )
+                exportUrl = value
             } else {
                 toastOnUi(R.string.advanced_title_exported)
             }
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(slot.manageTitleRes)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         activeIdState.value = manager.activeId()
-        initComposeContent()
+        setV5Content { AdvancedTipManageScreen(this) }
         loadEntries()
     }
 
     override fun onDestroy() {
         loadJob?.cancel()
         super.onDestroy()
-    }
-
-    private fun initComposeContent() {
-        val container = binding.recyclerView.parent as? ViewGroup ?: return
-        val index = container.indexOfChild(binding.recyclerView)
-        container.removeView(binding.recyclerView)
-        binding.tabBar.visibility = View.GONE
-        binding.tvSummary.visibility = View.GONE
-        binding.btnAdd.visibility = View.GONE
-        container.addView(
-            ComposeView(this).apply {
-                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                setContent {
-                    AdvancedTipManageScreen(
-                        entries = entriesState.value,
-                        activeId = activeIdState.value,
-                        loading = loadingState.value,
-                        summaryRes = slot.manageSummaryRes,
-                        onApply = ::applyEntry,
-                        onMoreActions = ::entryActions,
-                        onImport = ::showAddMenu
-                    )
-                }
-            },
-            index
-        )
     }
 
     private fun loadEntries() {
@@ -192,41 +190,30 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun entryActions(
+    internal fun entryActions(
         entry: AdvancedTipPackageManager.Entry
-    ): List<AppManagementMenuAction> = buildList {
+    ): List<Pair<String, () -> Unit>> = buildList {
         if (!entry.isBuiltin && entry.isUsable) {
-            add(AppManagementMenuAction(getString(R.string.advanced_title_open_editor)) { editJsonEntry(entry) })
-            add(AppManagementMenuAction(getString(R.string.advanced_title_name)) { renameEntry(entry) })
+            add(getString(R.string.advanced_title_open_editor) to { editJsonEntry(entry) })
+            add(getString(R.string.advanced_title_name) to { openRenameDialog(entry) })
         }
         if (entry.isUsable) {
-            add(AppManagementMenuAction(getString(R.string.export_str)) { exportEntry(entry) })
+            add(getString(R.string.export_str) to { exportEntry(entry) })
         }
         if (!entry.isBuiltin) {
-            add(
-                AppManagementMenuAction(
-                    text = getString(R.string.delete),
-                    danger = true
-                ) { confirmDelete(entry) }
-            )
+            add(getString(R.string.delete) to { confirmDelete(entry) })
         }
     }
 
-    private fun showAddMenu() {
-        alert(getString(R.string.advanced_title_add)) {
-            items(
-                listOf(
-                    getString(R.string.advanced_title_add_from_builtin),
-                    getString(R.string.advanced_title_import_from_file),
-                    getString(R.string.advanced_title_import_from_net),
-                )
-            ) { _, _, index ->
-                when (index) {
-                    0 -> addFromBuiltin()
-                    1 -> showImportPicker()
-                    2 -> showNetworkImportDialog()
-                }
-            }
+    internal fun openAddMenu() {
+        addMenuOpen = true
+    }
+
+    internal fun onAddAction(index: Int) {
+        when (index) {
+            0 -> addFromBuiltin()
+            1 -> showImportPicker()
+            2 -> openImportDialog()
         }
     }
 
@@ -278,22 +265,12 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun showNetworkImportDialog() {
-        showDialogFragment(
-            ComposeTextInputDialog.create(
-                title = getString(R.string.advanced_title_input_url),
-                hint = "https://...",
-                initialValue = "https://skybook.qzz.io/file/json/19hMepHey95bDYaFXJfq89.json",
-                positiveText = getString(R.string.ok),
-                negativeText = getString(R.string.cancel),
-                onPositive = { value ->
-                    value.trim().takeIf { it.isNotEmpty() }?.let(::importNetwork)
-                }
-            )
-        )
+    internal fun openImportDialog() {
+        importUrlText = "https://skybook.qzz.io/file/json/19hMepHey95bDYaFXJfq89.json"
+        importDialogOpen = true
     }
 
-    private fun importNetwork(url: String) {
+    internal fun importNetwork(url: String) {
         lifecycleScope.launch {
             runCatching {
                 val bytes = withContext(Dispatchers.IO) {
@@ -322,39 +299,33 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
 
-    private fun renameEntry(entry: AdvancedTipPackageManager.Entry) {
+    internal fun openRenameDialog(entry: AdvancedTipPackageManager.Entry) {
         if (entry.isBuiltin || !entry.isUsable) {
             if (!entry.isBuiltin) toastOnUi(R.string.advanced_title_invalid_json)
             return
         }
-        showDialogFragment(
-            ComposeTextInputDialog.create(
-                title = getString(R.string.advanced_title_name),
-                hint = getString(R.string.advanced_title_name),
-                initialValue = entry.name,
-                positiveText = getString(R.string.ok),
-                negativeText = getString(R.string.cancel),
-                onPositive = rename@{ text ->
-                    val name = text.trim()
-                    if (name.isEmpty()) {
-                        toastOnUi(R.string.advanced_title_name_required)
-                        return@rename
-                    }
-                    lifecycleScope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                val json = manager.readTemplate(entry)
-                                val updated = manager.addOrUpdate(name, json, entry)
-                                if (manager.activeId() == updated.id) manager.apply(updated)
-                            }
-                        }.onSuccess {
-                            toastOnUi(R.string.success)
-                            loadEntries()
-                        }.onFailure { toastOnUi(it.localizedMessage) }
-                    }
+        renameTarget = entry
+        renameText = entry.name
+    }
+
+    internal fun confirmRename(entry: AdvancedTipPackageManager.Entry, rawName: String) {
+        val name = rawName.trim()
+        if (name.isEmpty()) {
+            toastOnUi(R.string.advanced_title_name_required)
+            return
+        }
+        lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val json = manager.readTemplate(entry)
+                    val updated = manager.addOrUpdate(name, json, entry)
+                    if (manager.activeId() == updated.id) manager.apply(updated)
                 }
-            )
-        )
+            }.onSuccess {
+                toastOnUi(R.string.success)
+                loadEntries()
+            }.onFailure { toastOnUi(it.localizedMessage) }
+        }
     }
 
     private fun editJsonEntry(entry: AdvancedTipPackageManager.Entry) {
@@ -449,29 +420,22 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun confirmDelete(entry: AdvancedTipPackageManager.Entry) {
-        showDialogFragment(
-            ComposeConfirmDialog.create(
-                title = getString(R.string.delete),
-                message = getString(R.string.sure_del),
-                positiveText = getString(R.string.ok),
-                negativeText = getString(R.string.cancel),
-                dangerPositive = true,
-                onPositive = {
-                    lifecycleScope.launch {
-                        runCatching {
-                            withContext(Dispatchers.IO) { manager.delete(entry) }
-                        }.onSuccess {
-                            activeIdState.value = manager.activeId()
-                            notifyReader()
-                            loadEntries()
-                        }.onFailure { toastOnUi(it.localizedMessage) }
-                    }
-                }
-            )
-        )
+        confirmDeleteTarget = entry
     }
 
-    private fun applyEntry(entry: AdvancedTipPackageManager.Entry) {
+    internal fun deleteEntry(entry: AdvancedTipPackageManager.Entry) {
+        lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { manager.delete(entry) }
+            }.onSuccess {
+                activeIdState.value = manager.activeId()
+                notifyReader()
+                loadEntries()
+            }.onFailure { toastOnUi(it.localizedMessage) }
+        }
+    }
+
+    internal fun applyEntry(entry: AdvancedTipPackageManager.Entry) {
         if (!entry.isUsable) {
             toastOnUi(R.string.advanced_title_invalid_json)
             return
@@ -494,5 +458,232 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun notifyReader() {
         LottieImageBitmapCache.clear()
         ReadConfigEvent.post(HeaderFooterTips, TipStyle)
+    }
+}
+
+@Composable
+private fun AdvancedTipManageScreen(activity: AdvancedTipManageActivity) {
+    BackHandler { activity.finish() }
+
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    val entries = activity.entriesState.value
+    val activeId = activity.activeIdState.value
+    val loading = activity.loadingState.value
+
+    HostV5Page(
+        title = stringResource(activity.slot.manageTitleRes),
+        onBack = { activity.finish() },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Text(
+                text = stringResource(if (loading) R.string.loading else activity.slot.manageSummaryRes),
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = density.screenPadding, top = density.blockGap, end = density.screenPadding),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    start = density.screenPadding,
+                    end = density.screenPadding,
+                    top = density.blockGap,
+                    bottom = density.blockGap / 2,
+                ),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                items(entries, key = { it.id }) { entry ->
+                    AdvancedTipItem(activity, entry, active = entry.id == activeId)
+                }
+            }
+            AppFilledButton(
+                text = stringResource(R.string.advanced_title_add),
+                onClick = { activity.openAddMenu() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap),
+            )
+        }
+    }
+
+    if (activity.addMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.advanced_title_add),
+            actions = listOf(
+                stringResource(R.string.advanced_title_add_from_builtin) to { activity.onAddAction(0) },
+                stringResource(R.string.advanced_title_import_from_file) to { activity.onAddAction(1) },
+                stringResource(R.string.advanced_title_import_from_net) to { activity.onAddAction(2) },
+            ),
+            onDismiss = { activity.addMenuOpen = false },
+        )
+    }
+
+    activity.itemMenuTarget?.let { entry ->
+        AppMenuSheet(
+            title = entry.name,
+            actions = activity.entryActions(entry),
+            onDismiss = { activity.itemMenuTarget = null },
+        )
+    }
+
+    activity.confirmDeleteTarget?.let { entry ->
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = stringResource(R.string.sure_del),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.confirmDeleteTarget = null
+                activity.deleteEntry(entry)
+            },
+            onDismiss = { activity.confirmDeleteTarget = null },
+        )
+    }
+
+    if (activity.importDialogOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.advanced_title_input_url),
+            value = activity.importUrlText,
+            onValueChange = { activity.importUrlText = it },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = "https://...",
+            onConfirm = { text ->
+                activity.importDialogOpen = false
+                text.trim().takeIf { it.isNotEmpty() }?.let(activity::importNetwork)
+            },
+            onDismiss = { activity.importDialogOpen = false },
+        )
+    }
+
+    activity.renameTarget?.let { entry ->
+        AppInputDialog(
+            title = stringResource(R.string.advanced_title_name),
+            value = activity.renameText,
+            onValueChange = { activity.renameText = it },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = stringResource(R.string.advanced_title_name),
+            onConfirm = { text ->
+                activity.renameTarget = null
+                activity.confirmRename(entry, text)
+            },
+            onDismiss = { activity.renameTarget = null },
+        )
+    }
+
+    activity.exportUrl?.let { url ->
+        AppConfirmDialog(
+            title = stringResource(R.string.advanced_title_exported),
+            message = url,
+            confirmLabel = stringResource(R.string.copy_text),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = {
+                activity.sendToClip(url)
+                activity.toastOnUi(R.string.copy_complete)
+                activity.exportUrl = null
+            },
+            onDismiss = { activity.exportUrl = null },
+        )
+    }
+}
+
+@Composable
+private fun AdvancedTipItem(
+    activity: AdvancedTipManageActivity,
+    entry: AdvancedTipPackageManager.Entry,
+    active: Boolean,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    AppCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 112.dp, height = 72.dp)
+                    .clip(visual.shape(ShapeKind.CARD))
+                    .background(colors.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (entry.isUsable) "Lottie" else stringResource(R.string.advanced_title_invalid_json),
+                    style = visual.type.caption,
+                    color = if (entry.isUsable) colors.onSurfaceVariant else colors.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = entry.name,
+                    style = visual.type.body,
+                    color = colors.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = buildEntryInfo(entry, active),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppChip(
+                        text = stringResource(
+                            if (active) R.string.advanced_title_applied else R.string.advanced_title_apply
+                        ),
+                        selected = active,
+                        onClick = { if (entry.isUsable && !active) activity.applyEntry(entry) },
+                    )
+                    AppOverflowMenuButton(
+                        contentDescription = stringResource(R.string.more),
+                        onClick = { activity.itemMenuTarget = entry },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun buildEntryInfo(
+    entry: AdvancedTipPackageManager.Entry,
+    active: Boolean,
+): String = buildString {
+    if (active) {
+        append(stringResource(R.string.advanced_title_current))
+        append(" · ")
+    }
+    append(
+        stringResource(
+            if (entry.isBuiltin) R.string.advanced_title_source_builtin
+            else R.string.advanced_title_source_local
+        )
+    )
+    if (entry.updatedAt > 0L) {
+        append(" · ")
+        append(advancedTipDateFormat.format(Date(entry.updatedAt)))
+    }
+    if (!entry.isUsable) {
+        append(" [")
+        append(stringResource(R.string.advanced_title_invalid_json))
+        append("]")
     }
 }

@@ -1,5 +1,20 @@
 package io.legado.app.ui.book.read.config
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -43,10 +58,13 @@ import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSliderSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppNumberPickerDialog
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.setLayout
@@ -242,6 +260,161 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
         SpeakEngineDialog.CallBack {
 
         private var selectedGroup = ReadAloudConfigGroup.Base
+
+        // ── V5 弹窗状态 ─────────────────────────────────────────
+        private var choiceRequest by mutableStateOf<ChoiceRequest?>(null)
+        private var numberRequest by mutableStateOf<NumberRequest?>(null)
+        private var inputRequest by mutableStateOf<InputRequest?>(null)
+        private var resultText by mutableStateOf<String?>(null)
+
+        private class ChoiceRequest(
+            val title: String,
+            val options: List<String>,
+            val selectedIndex: Int,
+            val onPick: (Int) -> Unit
+        )
+
+        private class NumberRequest(
+            val title: String,
+            val value: Int,
+            val min: Int,
+            val max: Int,
+            val onValue: (Int) -> Unit
+        )
+
+        private class InputRequest(
+            val title: String,
+            val hint: String,
+            val initial: String,
+            val minLines: Int,
+            val maxLength: Int?,
+            val maxLengthMessage: String,
+            val neutralText: String?,
+            val onNeutral: (() -> Unit)?,
+            val validate: ((String) -> Boolean)?,
+            val onPositive: (String) -> Unit
+        )
+
+        override val extraDialogs: @Composable () -> Unit = {
+            val density = LocalVisualSpec.current.density
+
+            choiceRequest?.let { req ->
+                AppFilterDialog(
+                    title = req.title,
+                    options = req.options,
+                    selectedIndex = req.selectedIndex,
+                    onSelect = { index ->
+                        choiceRequest = null
+                        req.onPick(index)
+                    },
+                    onDismiss = { choiceRequest = null },
+                )
+            }
+
+            numberRequest?.let { req ->
+                AppNumberPickerDialog(
+                    title = req.title,
+                    value = req.value,
+                    range = req.min..req.max,
+                    confirmLabel = stringResource(R.string.ok),
+                    cancelLabel = stringResource(R.string.cancel),
+                    onConfirm = { value ->
+                        numberRequest = null
+                        req.onValue(value)
+                    },
+                    onDismiss = { numberRequest = null },
+                )
+            }
+
+            inputRequest?.let { req ->
+                var text by remember(req) { mutableStateOf(req.initial) }
+                AppDialog(onDismiss = { inputRequest = null }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                    ) {
+                        Text(
+                            text = req.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        AppTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            placeholder = req.hint,
+                            singleLine = req.minLines <= 1,
+                            minLines = req.minLines,
+                            maxLines = maxOf(req.minLines, 10),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                            if (req.neutralText != null) {
+                                AppGhostButton(
+                                    text = req.neutralText,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        inputRequest = null
+                                        req.onNeutral?.invoke()
+                                    },
+                                )
+                            }
+                            AppGhostButton(
+                                text = stringResource(R.string.cancel),
+                                modifier = Modifier.weight(1f),
+                                onClick = { inputRequest = null },
+                            )
+                            AppFilledButton(
+                                text = stringResource(R.string.ok),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    val value = text
+                                    val valid = when {
+                                        req.maxLength != null && value.length > req.maxLength -> {
+                                            toastOnUi(req.maxLengthMessage)
+                                            false
+                                        }
+                                        req.validate?.invoke(value) == false -> false
+                                        else -> true
+                                    }
+                                    if (valid) {
+                                        inputRequest = null
+                                        req.onPositive(value)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            resultText?.let { message ->
+                AppDialog(onDismiss = { resultText = null }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                    ) {
+                        Text(
+                            text = "试运行结果",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { resultText = null },
+                        )
+                    }
+                }
+            }
+        }
 
         override val titleRes: Int = R.string.aloud_config
 
@@ -841,7 +1014,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 "智能音频模型：${optionalModelLabel(AppConfig.aiReadAloudAudioModelId, "跟随多角色")}",
                 "智能音频备用：${optionalModelLabel(AppConfig.aiReadAloudAudioBackupModelId, "跟随多角色备用")}"
             )
-            showComposeChoiceListDialog("AI 模型与超时", options) { index ->
+            choiceRequest = ChoiceRequest("AI 模型与超时", options, -1) { index ->
                 when (index) {
                     0 -> showAiModelPicker(
                         title = "多角色主模型",
@@ -920,7 +1093,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                     ?.plus(offset)
                     ?: -1
             }
-            showComposeChoiceListDialog(title, labels, selectedIndex = selectedIndex) { index ->
+            choiceRequest = ChoiceRequest(title, labels, selectedIndex) { index ->
                 if (index < offset) {
                     onSelected(null)
                 } else {
@@ -967,13 +1140,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 40 -> "每批段落数"
                 else -> title
             }
-            showComposeNumberPickerDialog(
-                title = displayTitle,
-                value = value,
-                minValue = min,
-                maxValue = max,
-                onValue = onValue
-            )
+            numberRequest = NumberRequest(displayTitle, value, min, max, onValue)
         }
 
         private fun showLongTextInputDialog(
@@ -988,25 +1155,17 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
             onNeutral: (() -> Unit)? = null,
             validateContent: ((String) -> Boolean)? = null
         ) {
-            showComposeTextInputDialog(
+            inputRequest = InputRequest(
                 title = title,
                 hint = hint,
-                initialValue = initialValue,
-                neutralText = neutralText,
+                initial = initialValue,
                 minLines = minLines,
-                maxLines = maxOf(minLines, 10),
-                validateInput = { value ->
-                    when {
-                        maxLength != null && value.length > maxLength -> {
-                            toastOnUi(maxLengthMessage)
-                            false
-                        }
-                        validateContent?.invoke(value) == false -> false
-                        else -> true
-                    }
-                },
-                onPositive = onValue,
-                onNeutral = onNeutral
+                maxLength = maxLength,
+                maxLengthMessage = maxLengthMessage,
+                neutralText = neutralText,
+                onNeutral = onNeutral,
+                validate = validateContent,
+                onPositive = onValue
             )
         }
 
@@ -1100,7 +1259,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 "试运行预处理",
                 "恢复默认"
             )
-            showComposeChoiceListDialog("预处理规则", items) { index ->
+            choiceRequest = ChoiceRequest("预处理规则", items, -1) { index ->
                 when (index) {
                     0 -> showPreprocessQuoteDialog(config)
                     1 -> showRuleListEditor(
@@ -1144,13 +1303,16 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
         }
 
         private fun showSentencePunctuationDialog(config: ReadAloudPreprocessRuleConfig) {
-            showComposeTextInputDialog(
+            inputRequest = InputRequest(
                 title = "句末符号",
                 hint = "直接填写句末符号，例如：。！？…!?",
-                initialValue = config.sentencePunctuation,
+                initial = config.sentencePunctuation,
                 minLines = 1,
-                maxLines = 1,
-                validateInput = { value ->
+                maxLength = null,
+                maxLengthMessage = "",
+                neutralText = null,
+                onNeutral = null,
+                validate = { value ->
                     if (value.trim().isBlank()) {
                         toastOnUi("句末符号不能为空")
                         false
@@ -1172,7 +1334,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 "跨段引号合并 · ${if (config.mergeCrossParagraphQuote) "开启" else "关闭"}",
                 "音效上下文字符数 · ${config.soundEffectContextChars}"
             )
-            showComposeChoiceListDialog("判断阈值", items) { index ->
+            choiceRequest = ChoiceRequest("判断阈值", items, -1) { index ->
                 when (index) {
                     0 -> showPreprocessNumberDialog("台词最短长度", config.dialogueMinLength, 1, 80) {
                         savePreprocessConfig(config.copy(dialogueMinLength = it))
@@ -1197,7 +1359,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 "音效排除词 · ${config.soundEffectExcludePatterns.size} 条",
                 "上下文字符数 · ${config.soundEffectContextChars}"
             )
-            showComposeChoiceListDialog("音效预筛规则", items) { index ->
+            choiceRequest = ChoiceRequest("音效预筛规则", items, -1) { index ->
                 when (index) {
                     0 -> showRuleListEditor(
                         title = "音效预筛触发词",
@@ -1248,13 +1410,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
             max: Int,
             onValue: (Int) -> Unit
         ) {
-            showComposeNumberPickerDialog(
-                title = title,
-                value = value,
-                minValue = min,
-                maxValue = max,
-                onValue = onValue
-            )
+            numberRequest = NumberRequest(title, value, min, max, onValue)
         }
 
         private fun showPreprocessTrialDialog() {
@@ -1264,13 +1420,16 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 门轴忽然吱呀一声响了起来。
                 他心道：“事情不太对。”
             """.trimIndent()
-            showComposeTextInputDialog(
+            inputRequest = InputRequest(
                 title = "预处理试运行",
                 hint = "粘贴几段正文，试运行当前预处理规则。",
-                initialValue = sample,
+                initial = sample,
                 minLines = 10,
-                maxLines = 14,
-                validateInput = { value ->
+                maxLength = null,
+                maxLengthMessage = "",
+                neutralText = null,
+                onNeutral = null,
+                validate = { value ->
                     if (value.isBlank()) {
                         toastOnUi("请先输入正文")
                         false
@@ -1312,13 +1471,7 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                     appendLine(item.context.take(80))
                 }
             }.take(6000)
-            showComposeConfirmDialog(
-                title = "试运行结果",
-                message = message,
-                showNegative = false,
-                messageInContent = true,
-                onPositive = {}
-            )
+            resultText = message
         }
 
         private fun savePreprocessConfig(config: ReadAloudPreprocessRuleConfig) {

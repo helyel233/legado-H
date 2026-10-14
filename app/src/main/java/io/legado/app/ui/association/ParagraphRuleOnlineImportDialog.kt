@@ -2,44 +2,45 @@ package io.legado.app.ui.association
 
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
-class ParagraphRuleOnlineImportDialog : ComposeDialogFragment() {
+/**
+ * 段落规则在线导入确认（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + LegadoMiuixChoiceRow + LegadoMiuixActionButton 换为
+ * V5 AppDialog + AppSelectionRow（selectionMode=true 单选高亮）+ AppGhostButton/AppFilledButton。
+ * 冲突策略选择与「未确认即取消」的 onDismiss 回调语义不变。
+ */
+internal class ParagraphRuleOnlineImportDialog : V5DialogFragment() {
 
     interface Callback {
         fun onParagraphRuleImportConfirmed(strategy: ParagraphRuleConflictStrategy)
         fun onParagraphRuleImportCancelled()
     }
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     private var confirmed = false
 
@@ -48,96 +49,96 @@ class ParagraphRuleOnlineImportDialog : ComposeDialogFragment() {
         if (!confirmed) (activity as? Callback)?.onParagraphRuleImportCancelled()
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    @Composable
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
         val args = arguments ?: Bundle()
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                val palette = style.toMiuixPalette()
-                val conflictCount = args.getInt(ARG_CONFLICT_COUNT)
-                var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
-                val strategies = listOf(
-                    ParagraphRuleConflictStrategy.RENAME,
-                    ParagraphRuleConflictStrategy.OVERWRITE,
-                    ParagraphRuleConflictStrategy.SKIP
-                )
-                val labels = listOf(
-                    stringResource(R.string.paragraph_import_conflict_rename),
-                    stringResource(R.string.paragraph_import_conflict_overwrite),
-                    stringResource(R.string.paragraph_import_conflict_skip)
-                )
-                val descriptions = listOf(
-                    stringResource(R.string.paragraph_import_conflict_rename_description),
-                    stringResource(R.string.paragraph_import_conflict_overwrite_description),
-                    stringResource(R.string.paragraph_import_conflict_skip_description)
-                )
+        val conflictCount = args.getInt(ARG_CONFLICT_COUNT)
+        val message = args.getString(ARG_MESSAGE)
+        var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+        val strategies = listOf(
+            ParagraphRuleConflictStrategy.RENAME,
+            ParagraphRuleConflictStrategy.OVERWRITE,
+            ParagraphRuleConflictStrategy.SKIP
+        )
+        val labels = listOf(
+            stringResource(R.string.paragraph_import_conflict_rename),
+            stringResource(R.string.paragraph_import_conflict_overwrite),
+            stringResource(R.string.paragraph_import_conflict_skip)
+        )
+        val descriptions = listOf(
+            stringResource(R.string.paragraph_import_conflict_rename_description),
+            stringResource(R.string.paragraph_import_conflict_overwrite_description),
+            stringResource(R.string.paragraph_import_conflict_skip_description)
+        )
 
-                AppDialogFrame(
-                    title = stringResource(R.string.paragraph_import_title),
-                    message = args.getString(ARG_MESSAGE),
-                    messageInContent = true,
-                    content = {
-                        if (conflictCount > 0) {
-                            Text(
-                                text = stringResource(
-                                    R.string.paragraph_import_conflict_message,
-                                    conflictCount
-                                ),
-                                color = style.primaryText,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(7.dp)
-                            ) {
-                                labels.forEachIndexed { index, label ->
-                                    LegadoMiuixChoiceRow(
-                                        text = label,
-                                        description = descriptions[index],
-                                        selected = selectedIndex == index,
-                                        palette = palette,
-                                        onClick = { selectedIndex = index }
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    actions = {
-                        LegadoMiuixActionButton(
-                            text = stringResource(R.string.cancel),
-                            palette = palette,
-                            onClick = { dismissAllowingStateLoss() },
-                            cornerRadius = style.actionRadius
-                        )
-                        if (activity is Callback) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            LegadoMiuixActionButton(
-                                text = stringResource(R.string.import_),
-                                palette = palette,
-                                onClick = {
-                                    val strategy = if (conflictCount > 0) {
-                                        strategies[selectedIndex]
-                                    } else {
-                                        ParagraphRuleConflictStrategy.RENAME
-                                    }
-                                    confirmed = true
-                                    (activity as? Callback)
-                                        ?.onParagraphRuleImportConfirmed(strategy)
-                                    dismissAllowingStateLoss()
-                                },
-                                primary = true,
-                                cornerRadius = style.actionRadius
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(visual.density.blockGap),
+            ) {
+                Text(
+                    text = stringResource(R.string.paragraph_import_title),
+                    style = visual.type.title,
+                    color = colors.onSurface,
+                )
+                if (!message.isNullOrBlank()) {
+                    Text(
+                        text = message,
+                        style = visual.type.body,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                if (conflictCount > 0) {
+                    Text(
+                        text = stringResource(
+                            R.string.paragraph_import_conflict_message,
+                            conflictCount
+                        ),
+                        style = visual.type.body,
+                        color = colors.onSurface,
+                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(visual.density.blockGap / 3),
+                    ) {
+                        labels.forEachIndexed { index, label ->
+                            AppSelectionRow(
+                                title = label,
+                                supporting = descriptions[index],
+                                selected = selectedIndex == index,
+                                selectionMode = true,
+                                onClick = { selectedIndex = index },
+                                onLongClick = {},
                             )
                         }
                     }
-                )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(visual.density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
+                    )
+                    if (activity is Callback) {
+                        AppFilledButton(
+                            text = stringResource(R.string.import_),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val strategy = if (conflictCount > 0) {
+                                    strategies[selectedIndex]
+                                } else {
+                                    ParagraphRuleConflictStrategy.RENAME
+                                }
+                                confirmed = true
+                                (activity as? Callback)
+                                    ?.onParagraphRuleImportConfirmed(strategy)
+                                dismissAllowingStateLoss()
+                            },
+                        )
+                    }
+                }
             }
         }
     }

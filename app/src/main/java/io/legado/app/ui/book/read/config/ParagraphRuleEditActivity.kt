@@ -3,64 +3,101 @@ package io.legado.app.ui.book.read.config
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
-import io.legado.app.data.entities.ParagraphRule
-import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.Book
-import io.legado.app.databinding.ActivityParagraphRuleEditBinding
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.ParagraphRule
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.model.ReadBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.utils.stackTraceStr
-import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.association.ParagraphRuleImportPolicy
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.code.addJsPattern
+import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showHelp
+import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>() {
+// __CLASS__
 
-    override val binding by viewBinding(ActivityParagraphRuleEditBinding::inflate)
-    private var rule = ParagraphRule()
-    private var focusedEditText: EditText? = null
-    private var bindToken = 0
-    private var bindingLargeRuleFields = false
+/**
+ * 段落规则编辑 V5 化。
+ * 旧版 BaseActivity + ViewBinding + optionsMenu + 旧弹窗，全部替换为
+ * setV5Content + HostV5Page + Compose 表单 + v5 弹窗。
+ * 业务逻辑（DAO/调试/剪贴板/校验）逐行保留，仅换 UI 承载。
+ */
+class ParagraphRuleEditActivity : AppCompatActivity() {
 
-    private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val view = focusedEditText ?: return@registerForActivityResult
-            result.data?.getStringExtra("text")?.let { view.setText(it) }
-            result.data?.getIntExtra("cursorPosition", -1)
-                ?.takeIf { it in 0..view.text.length }
-                ?.let { view.setSelection(it) }
+    internal var meta by mutableStateOf(ParagraphRule())
+    internal var name by mutableStateOf("")
+    internal var loginUrl by mutableStateOf("")
+    internal var loginUi by mutableStateOf("")
+    internal var timeout by mutableStateOf("")
+    internal var script by mutableStateOf("")
+    internal var jsLib by mutableStateOf("")
+    internal var enabledCookieJar by mutableStateOf(false)
+    internal var loading by mutableStateOf(true)
+    internal var focusedTag by mutableStateOf("script")
+
+    internal var overflowMenuOpen by mutableStateOf(false)
+    internal var debugMenuOpen by mutableStateOf(false)
+    internal var debugCandidates by mutableStateOf<Pair<ParagraphRule, List<BookChapter>>?>(null)
+    internal var debugResult by mutableStateOf<String?>(null)
+
+    private val textEditLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.getStringExtra("text")?.let { text ->
+                    applyFocusedEdit(text)
+                }
+            }
         }
-    }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initView()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { ParagraphRuleEditContent(this@ParagraphRuleEditActivity) }
         val id = intent.getLongExtra("id", 0L)
         lifecycleScope.launch {
-            rule = withContext(Dispatchers.IO) { appDb.paragraphRuleDao.get(id) } ?: ParagraphRule()
-            if (id > 0L && !ParagraphRuleImportPolicy.isEditable(rule)) {
+            meta = withContext(Dispatchers.IO) {
+                appDb.paragraphRuleDao.get(id)
+            } ?: ParagraphRule()
+            if (id > 0L && !ParagraphRuleImportPolicy.isEditable(meta)) {
                 toastOnUi(R.string.large_config_read_only)
                 finish()
                 return@launch
@@ -69,122 +106,60 @@ class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>
         }
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.paragraph_rule_edit, menu)
-        updateActionItems(menu)
-        return super.onCompatCreateOptionsMenu(menu)
+    private fun bindRule() {
+        name = meta.name
+        loginUrl = meta.loginUrl
+        loginUi = meta.loginUi
+        enabledCookieJar = meta.enabledCookieJar
+        timeout = meta.validTimeout().toString()
+        // 大字段一次性绑定；旧版分帧填充仅为避免卡顿，Compose 状态一次到位
+        script = meta.script
+        jsLib = meta.jsLib
+        loading = false
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        updateActionItems(menu)
-        return super.onPrepareOptionsMenu(menu)
+    internal fun applyFocusedEdit(text: String) {
+        when (focusedTag) {
+            "name" -> name = text
+            "loginUrl" -> loginUrl = text
+            "loginUi" -> loginUi = text
+            "timeout" -> timeout = text
+            "jsLib" -> jsLib = text
+            else -> script = text
+        }
     }
 
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        if (bindingLargeRuleFields && item.itemId != R.id.menu_help) {
+    internal fun onFullEditClicked() {
+        if (loading) {
             toastOnUi(R.string.data_loading)
-            return true
-        }
-        when (item.itemId) {
-            R.id.menu_fullscreen_edit -> onFullEditClicked()
-            R.id.menu_save -> save()
-            R.id.menu_debug_rule -> debugRule()
-            R.id.menu_copy_rule -> sendToClip(GSON.toJson(getRule()))
-            R.id.menu_paste_rule -> pasteRule()
-            R.id.menu_help -> showHelp("paragraphRuleHelp")
-        }
-        return true
-    }
-
-    private fun updateActionItems(menu: Menu) {
-        val enabled = !bindingLargeRuleFields
-        listOf(
-            R.id.menu_fullscreen_edit,
-            R.id.menu_save,
-            R.id.menu_debug_rule,
-            R.id.menu_copy_rule,
-            R.id.menu_paste_rule
-        ).forEach { id ->
-            menu.findItem(id)?.isEnabled = enabled
-        }
-    }
-
-    private fun initView() = binding.run {
-        listOf(etLoginUrl, etLoginUi, etScript, etJsLib).forEach { codeView ->
-            codeView.addJsPattern()
-            codeView.setOnFocusChangeListener { v, hasFocus ->
-                if (hasFocus && v is EditText) focusedEditText = v
-            }
-        }
-        etName.setOnFocusChangeListener { v, hasFocus ->
-            if (hasFocus && v is EditText) focusedEditText = v
-        }
-        etTimeout.setOnFocusChangeListener { v, hasFocus ->
-            if (hasFocus && v is EditText) focusedEditText = v
-        }
-    }
-
-    private fun bindRule() = binding.run {
-        val token = ++bindToken
-        bindingLargeRuleFields = true
-        setLargeEditorsEnabled(false)
-        invalidateOptionsMenu()
-        etName.setText(rule.name)
-        etLoginUrl.setText(rule.loginUrl)
-        etLoginUi.setText(rule.loginUi)
-        cbIsEnableCookie.isChecked = rule.enabledCookieJar
-        etTimeout.setText(rule.validTimeout().toString())
-        etScript.setText("")
-        etJsLib.setText("")
-        val script = rule.script
-        val jsLib = rule.jsLib
-        root.post {
-            if (!isActiveBind(token)) return@post
-            etScript.setText(script)
-            etScript.post {
-                if (!isActiveBind(token)) return@post
-                etJsLib.setText(jsLib)
-                bindingLargeRuleFields = false
-                setLargeEditorsEnabled(true)
-                invalidateOptionsMenu()
-            }
-        }
-    }
-
-    private fun isActiveBind(token: Int): Boolean {
-        return token == bindToken && !isFinishing && !isDestroyed
-    }
-
-    private fun setLargeEditorsEnabled(enabled: Boolean) = binding.run {
-        etScript.isEnabled = enabled
-        etJsLib.isEnabled = enabled
-    }
-
-    private fun onFullEditClicked() {
-        val view = (window.decorView.findFocus() as? EditText) ?: focusedEditText
-        if (view == null) {
-            toastOnUi(R.string.please_focus_cursor_on_textbox)
             return
         }
-        focusedEditText = view
         textEditLauncher.launch(Intent(this, CodeEditActivity::class.java).apply {
-            putExtra("text", view.text.toString())
-            putExtra("title", hintFor(view))
-            putExtra("cursorPosition", view.selectionStart)
+            putExtra("text", focusedText())
+            putExtra("title", hintFor(focusedTag))
         })
     }
 
-    private fun hintFor(view: View): String? = when (view.id) {
-        R.id.et_name -> getString(R.string.name)
-        R.id.et_login_url -> getString(R.string.login_url)
-        R.id.et_login_ui -> getString(R.string.login_ui)
-        R.id.et_timeout -> getString(R.string.timeout_millisecond)
-        R.id.et_script -> getString(R.string.paragraph_rule_script)
-        R.id.et_js_lib -> "jsLib"
+    private fun focusedText(): String = when (focusedTag) {
+        "name" -> name
+        "loginUrl" -> loginUrl
+        "loginUi" -> loginUi
+        "timeout" -> timeout
+        "jsLib" -> jsLib
+        else -> script
+    }
+
+    private fun hintFor(tag: String): String? = when (tag) {
+        "name" -> getString(R.string.name)
+        "loginUrl" -> getString(R.string.login_url)
+        "loginUi" -> getString(R.string.login_ui)
+        "timeout" -> getString(R.string.timeout_millisecond)
+        "script" -> getString(R.string.paragraph_rule_script)
+        "jsLib" -> "jsLib"
         else -> null
     }
 
-    private fun debugRule() {
+    internal fun debugRule() {
         val debugRule = getRule()
         lifecycleScope.launch {
             val pair = withContext(Dispatchers.IO) {
@@ -205,15 +180,15 @@ class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>
             val current = ReadBook.durChapterIndex
             val start = (current - 20).coerceAtLeast(0)
             val candidates = chapters.drop(start).take(80)
-            val labels = candidates.map { chapter ->
-                "${chapter.index + 1}. ${chapter.title}"
-            }
-            showComposeChoiceListDialog(getString(R.string.debug), labels) { index ->
-                candidates.getOrNull(index)?.let { chapter ->
-                    runDebugRule(debugRule, book, chapter)
-                }
-            }
+            debugCandidates = debugRule to candidates
+            debugMenuOpen = true
         }
+    }
+
+    internal fun onDebugChapterSelected(chapter: BookChapter) {
+        val debugRule = debugCandidates?.first ?: return
+        debugMenuOpen = false
+        runDebugRule(debugRule, ReadBook.book ?: return, chapter)
     }
 
     private fun runDebugRule(debugRule: ParagraphRule, book: Book, chapter: BookChapter) {
@@ -221,7 +196,8 @@ class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>
             val message = kotlin.runCatching {
                 withContext(Dispatchers.IO) {
                     val content = BookHelp.getContent(book, chapter) ?: run {
-                        val source = ReadBook.bookSource ?: throw IllegalStateException("No book source and no local cache")
+                        val source = ReadBook.bookSource
+                            ?: throw IllegalStateException("No book source and no local cache")
                         WebBook.getContentAwait(source, book, chapter, needSave = false)
                     }
                     val debug = ParagraphRuleProcessor.debug(debugRule, book, chapter, content)
@@ -249,41 +225,37 @@ class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>
             }.getOrElse {
                 "Paragraph rule debug failed:\n${it.localizedMessage ?: it}\n\n${it.stackTraceStr}"
             }
-            showComposeConfirmDialog(
-                title = getString(R.string.debug),
-                message = message,
-                showNegative = false,
-                messageInContent = true,
-                onPositive = {}
-            )
+            debugResult = message
         }
     }
 
-    private fun pasteRule() {
+    internal fun pasteRule() {
         val raw = getClipText()
         val imported = GSON.fromJsonObject<ParagraphRule>(raw).getOrNull()
         if (imported == null) {
             toastOnUi(R.string.wrong_format)
             return
         }
-        rule = imported.copy(id = rule.id, order = rule.order, updateTime = System.currentTimeMillis())
+        meta = imported.copy(id = meta.id, order = meta.order, updateTime = System.currentTimeMillis())
         bindRule()
     }
 
-    private fun getRule(): ParagraphRule = binding.run {
-        rule.copy(
-            name = etName.text?.toString().orEmpty().trim(),
-            loginUrl = etLoginUrl.text?.toString().orEmpty(),
-            loginUi = etLoginUi.text?.toString().orEmpty(),
-            enabledCookieJar = cbIsEnableCookie.isChecked,
-            timeoutMillisecond = etTimeout.text?.toString()?.toLongOrNull() ?: 3000L,
-            script = etScript.text?.toString().orEmpty(),
-            jsLib = etJsLib.text?.toString().orEmpty(),
-            updateTime = System.currentTimeMillis()
-        )
-    }
+    internal fun getRule(): ParagraphRule = meta.copy(
+        name = name.trim(),
+        loginUrl = loginUrl,
+        loginUi = loginUi,
+        enabledCookieJar = enabledCookieJar,
+        timeoutMillisecond = timeout.toLongOrNull() ?: 3000L,
+        script = script,
+        jsLib = jsLib,
+        updateTime = System.currentTimeMillis()
+    )
 
-    private fun save() {
+    internal fun save() {
+        if (loading) {
+            toastOnUi(R.string.data_loading)
+            return
+        }
         val edited = getRule()
         if (edited.name.isBlank() || edited.script.isBlank()) {
             toastOnUi(R.string.paragraph_rule_save_invalid)
@@ -301,5 +273,159 @@ class ParagraphRuleEditActivity : BaseActivity<ActivityParagraphRuleEditBinding>
             setResult(Activity.RESULT_OK)
             finish()
         }
+    }
+}
+
+@Composable
+private fun ParagraphRuleEditContent(activity: ParagraphRuleEditActivity) {
+    val density = LocalVisualSpec.current.density
+    val enabled = !activity.loading
+
+    HostV5Page(
+        title = stringResource(R.string.paragraph_rule_edit),
+        onBack = { activity.finish() },
+        trailing = {
+            AppFilledButton(
+                text = stringResource(R.string.action_save),
+                enabled = enabled,
+                onClick = { activity.save() },
+            )
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.overflowMenuOpen = true },
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(density.screenPadding),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+        ) {
+            fun tag(tagName: String) = Modifier.onFocusChanged {
+                if (it.isFocused) activity.focusedTag = tagName
+            }
+            AppTextField(
+                value = activity.name,
+                onValueChange = { activity.name = it },
+                modifier = tag("name"),
+                placeholder = stringResource(R.string.name),
+                enabled = enabled,
+                singleLine = true,
+            )
+            AppTextField(
+                value = activity.loginUrl,
+                onValueChange = { activity.loginUrl = it },
+                modifier = tag("loginUrl"),
+                placeholder = stringResource(R.string.login_url),
+                enabled = enabled,
+                singleLine = false,
+            )
+            AppTextField(
+                value = activity.loginUi,
+                onValueChange = { activity.loginUi = it },
+                modifier = tag("loginUi"),
+                placeholder = stringResource(R.string.login_ui),
+                enabled = enabled,
+                singleLine = false,
+            )
+            AppRowWithSwitch(
+                title = "启用 Cookie",
+                checked = activity.enabledCookieJar,
+                onCheckedChange = { activity.enabledCookieJar = it },
+                card = false,
+                enabled = enabled,
+            )
+            AppTextField(
+                value = activity.timeout,
+                onValueChange = { activity.timeout = it },
+                modifier = tag("timeout"),
+                placeholder = stringResource(R.string.timeout_millisecond),
+                enabled = enabled,
+                singleLine = true,
+            )
+            Text(
+                text = stringResource(R.string.paragraph_rule_script),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            AppTextField(
+                value = activity.script,
+                onValueChange = { activity.script = it },
+                modifier = tag("script"),
+                placeholder = stringResource(R.string.paragraph_rule_script),
+                enabled = enabled,
+                singleLine = false,
+            )
+            Text(
+                text = "jsLib",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            AppTextField(
+                value = activity.jsLib,
+                onValueChange = { activity.jsLib = it },
+                modifier = tag("jsLib"),
+                placeholder = "jsLib",
+                enabled = enabled,
+                singleLine = false,
+            )
+        }
+    }
+
+    if (activity.overflowMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.paragraph_rule_edit),
+            actions = listOf(
+                stringResource(R.string.edit_content) to {
+                    activity.overflowMenuOpen = false
+                    activity.onFullEditClicked()
+                },
+                stringResource(R.string.debug) to {
+                    activity.overflowMenuOpen = false
+                    activity.debugRule()
+                },
+                stringResource(R.string.copy_text) to {
+                    activity.overflowMenuOpen = false
+                    activity.sendToClip(GSON.toJson(activity.getRule()))
+                },
+                stringResource(R.string.paste_rule) to {
+                    activity.overflowMenuOpen = false
+                    activity.pasteRule()
+                },
+                stringResource(R.string.help) to {
+                    activity.overflowMenuOpen = false
+                    activity.showHelp("paragraphRuleHelp")
+                },
+            ),
+            onDismiss = { activity.overflowMenuOpen = false },
+        )
+    }
+
+    if (activity.debugMenuOpen) {
+        val candidates = activity.debugCandidates
+        if (candidates != null) {
+            AppFilterDialog(
+                title = stringResource(R.string.debug),
+                options = candidates.second.map { "${it.index + 1}. ${it.title}" },
+                selectedIndex = 0,
+                onSelect = { index ->
+                    candidates.second.getOrNull(index)?.let { activity.onDebugChapterSelected(it) }
+                },
+                onDismiss = { activity.debugMenuOpen = false },
+            )
+        }
+    }
+
+    activity.debugResult?.let { message ->
+        AppConfirmDialog(
+            title = stringResource(R.string.debug),
+            message = message,
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            onConfirm = { activity.debugResult = null },
+            onDismiss = { activity.debugResult = null },
+        )
     }
 }

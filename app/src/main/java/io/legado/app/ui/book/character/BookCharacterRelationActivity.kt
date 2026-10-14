@@ -1,14 +1,11 @@
 package io.legado.app.ui.book.character
 
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
-import androidx.viewbinding.ViewBinding
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookCharacter
 import io.legado.app.data.entities.BookCharacterRelation
@@ -16,22 +13,17 @@ import io.legado.app.help.character.BookCharacterIdentityMigrator
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.book.character.compose.CharacterRelationScreen
 import io.legado.app.ui.book.character.compose.RelationEditDraft
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
-    fullScreen = false,
-    imageBg = false
-) {
-
-    private lateinit var composeView: ComposeView
-    override val binding: ViewBinding by lazy {
-        composeView = ComposeView(this)
-        SimpleViewBinding(composeView)
-    }
+/**
+ * 关系网 V5 脚手架迁移：BaseActivity+ComposeView → AppCompatActivity+setV5Content。
+ */
+class BookCharacterRelationActivity : AppCompatActivity() {
 
     private var bookUrl: String = ""
     private var characterBookKey: String = ""
@@ -41,11 +33,11 @@ class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
     private var selectedRelation by mutableStateOf<BookCharacterRelation?>(null)
     private var editingRelation by mutableStateOf<RelationEditDraft?>(null)
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         bookUrl = intent.getStringExtra(BookCharacterManageActivity.EXTRA_BOOK_URL).orEmpty()
         characterBookKey = intent.getStringExtra(BookCharacterManageActivity.EXTRA_CHARACTER_BOOK_KEY).orEmpty()
-        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        composeView.setContent {
+        setV5Content {
             CharacterRelationScreen(
                 characters = characters,
                 relations = relations,

@@ -30,12 +30,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import io.legado.app.uikit.v5.components.AppFastScroller
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -57,12 +59,9 @@ import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceSort
 import io.legado.app.ui.book.source.manage.BookSourceViewModel
-import io.legado.app.ui.book.source.manage.GroupManageDialog
 import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
-import io.legado.app.ui.widget.compose.showComposeSuggestionTextInputDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppConfirmDialog
@@ -80,6 +79,7 @@ import io.legado.app.uikit.v5.components.AppSelectionBar
 import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.rememberAppSelectionState
 import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppProgressBar
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
@@ -153,7 +153,12 @@ private fun HostBookSourceManageScreen() {
     val selection = rememberAppSelectionState<io.legado.app.data.entities.BookSourcePart>(idOf = { it.bookSourceUrl })
     var menuOpen by remember { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
+    var groupManageOpen by remember { mutableStateOf(false) }
     var groupSheetFor by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var importUrlOpen by remember { mutableStateOf(false) }
+    var importUrlText by remember { mutableStateOf("") }
+    var checkKeyOpen by remember { mutableStateOf(false) }
+    var checkKeyText by remember { mutableStateOf("") }
     var moreSelectionOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     // 长按多选首次提示（B 门：隐藏操作必须提示）
@@ -273,44 +278,38 @@ private fun HostBookSourceManageScreen() {
 
     /** 在线导入（URL 输入 + 历史建议，缓存与 1.7.3 同一 key）。 */
     fun importOnLine() {
+        importUrlText = ""
+        importUrlOpen = true
+    }
+
+    fun onImportUrlConfirm(text: String) {
+        importUrlOpen = false
         val aCache = ACache.get(cacheDir = false)
         val cacheUrls = aCache.getAsString(IMPORT_RECORD_KEY)
             ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
-        activity.showComposeSuggestionTextInputDialog(
-            title = activity.getString(R.string.import_on_line),
-            hint = "url",
-            suggestions = cacheUrls,
-            deletable = true,
-            onPositive = { text ->
-                if (text.isAbsUrl() && !cacheUrls.contains(text)) {
-                    cacheUrls.add(0, text)
-                    aCache.put(IMPORT_RECORD_KEY, cacheUrls.joinToString(","))
-                }
-                ImportBookSourceDialog(text)
-                    .show(activity.supportFragmentManager, "importSource")
-            },
-            onSuggestionDeleted = { url ->
-                cacheUrls.remove(url)
-                aCache.put(IMPORT_RECORD_KEY, cacheUrls.joinToString(","))
-            },
-        )
+        if (text.isAbsUrl() && !cacheUrls.contains(text)) {
+            cacheUrls.add(0, text)
+            aCache.put(IMPORT_RECORD_KEY, cacheUrls.joinToString(","))
+        }
+        ImportBookSourceDialog(text)
+            .show(activity.supportFragmentManager, "importSource")
     }
 
     /** 校验书源（关键词 + 校验配置入口，与 1.7.3 同流程）。 */
     fun checkSources() {
-        activity.showComposeTextInputDialog(
-            title = activity.getString(R.string.search_book_key),
-            hint = "search word",
-            initialValue = CheckSource.keyword,
-            neutralText = activity.getString(R.string.check_source_config),
-            onPositive = { text ->
-                if (text.isNotEmpty()) CheckSource.keyword = text
-                CheckSource.start(activity, selectedSources)
-            },
-            onNeutral = {
-                CheckSourceConfig().show(activity.supportFragmentManager, "checkSourceConfig")
-            },
-        )
+        checkKeyText = CheckSource.keyword
+        checkKeyOpen = true
+    }
+
+    fun onCheckKeyConfirm(text: String) {
+        checkKeyOpen = false
+        if (text.isNotEmpty()) CheckSource.keyword = text
+        CheckSource.start(activity, selectedSources)
+    }
+
+    fun onCheckKeyNeutral() {
+        checkKeyOpen = false
+        CheckSourceConfig().show(activity.supportFragmentManager, "checkSourceConfig")
     }
 
     /** 校验选中区间：把首末选中之间的源一并选中。 */
@@ -560,9 +559,7 @@ private fun HostBookSourceManageScreen() {
                     }
                 })
                 add(stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) })
-                add(stringResource(R.string.v5_group_manage) to {
-                    GroupManageDialog().show(activity.supportFragmentManager, "groupManage")
-                })
+                add(stringResource(R.string.v5_group_manage) to { groupManageOpen = true })
                 add(stringResource(R.string.v5_sort_mode) to { sortOpen = true })
                 add((if (groupByDomain) "✓ " else "") + stringResource(R.string.v5_group_by_domain) to {
                     groupByDomain = !groupByDomain
@@ -622,6 +619,73 @@ private fun HostBookSourceManageScreen() {
             },
             onDismiss = { groupSheetFor = null },
         )
+    }
+
+    // 分组管理（V5 组件化，替代旧 GroupManageDialog DialogFragment）
+    if (groupManageOpen) {
+        val groups by produceState<List<String>>(emptyList()) {
+            appDb.bookSourceDao.flowGroups().collect { value = it }
+        }
+        GroupManageDialogContent(
+            groups = groups,
+            onAddGroup = { viewModel.addGroup(it) },
+            onRenameGroup = { old, new -> viewModel.upGroup(old, new) },
+            onDeleteGroup = { viewModel.delGroup(it) },
+            onDismiss = { groupManageOpen = false },
+        )
+    }
+
+    // 在线导入 URL 输入（AppInputDialog；历史建议能力降级，见台账）
+    if (importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = importUrlText,
+            onValueChange = { importUrlText = it },
+            placeholder = "url",
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { onImportUrlConfirm(importUrlText) },
+            onDismiss = { importUrlOpen = false },
+        )
+    }
+
+    // 校验关键词 + 校验配置入口（AppDialog 三按钮，保留 neutral 能力）
+    if (checkKeyOpen) {
+        AppDialog(onDismiss = { checkKeyOpen = false }) {
+            Column(
+                modifier = Modifier.padding(density.screenPadding),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                Text(
+                    text = stringResource(R.string.search_book_key),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                AppTextField(
+                    value = checkKeyText,
+                    onValueChange = { checkKeyText = it },
+                    placeholder = "search word",
+                    singleLine = true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { checkKeyOpen = false },
+                    )
+                    AppGhostButton(
+                        text = stringResource(R.string.check_source_config),
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCheckKeyNeutral() },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCheckKeyConfirm(checkKeyText) },
+                    )
+                }
+            }
+        }
     }
 
     // 删除确认（B 门：破坏性操作必须确认）

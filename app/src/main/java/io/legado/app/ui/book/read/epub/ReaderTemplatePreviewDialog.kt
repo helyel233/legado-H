@@ -6,8 +6,6 @@ import android.content.DialogInterface
 import android.os.Bundle
 import android.text.TextPaint
 import android.view.KeyEvent
-import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentDialog
 import androidx.activity.OnBackPressedCallback
@@ -32,14 +30,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
@@ -52,11 +48,10 @@ import io.legado.app.model.localBook.epubcore.layout.EpubCoreLayoutConfig
 import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeData
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplate
 import io.legado.app.model.localBook.epubcore.template.EpubTemplateLayoutPolicy
-import io.legado.app.ui.book.read.config.rememberReaderMenuDialogStyle
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.book.read.config.rememberReaderPagePalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -64,11 +59,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.UUID
 
 /** A real reader surface whose position and lifetime are independent of the main reader. */
-class ReaderTemplatePreviewDialog : ComposeDialogFragment() {
+internal class ReaderTemplatePreviewDialog : V5DialogFragment() {
+
     override val dialogWidth = ViewGroup.LayoutParams.MATCH_PARENT
     override val dialogHeight = ViewGroup.LayoutParams.MATCH_PARENT
 
@@ -121,61 +116,100 @@ class ReaderTemplatePreviewDialog : ComposeDialogFragment() {
         }
     }
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        val current = request?.takeUnless { it.session.isClosed }
-        if (dismissRequested || current == null) {
-            if (!dismissRequested) {
-                context?.toastOnUi(R.string.reader_template_preview_session_missing)
-                closePreview()
-            }
-            return View(requireContext())
-        }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent { MiuixTheme { PreviewContent(current) } }
-        }
-    }
-
     @Composable
-    private fun PreviewContent(current: ReaderTemplatePreviewRequest) {
-        val style = rememberReaderMenuDialogStyle()
+    override fun Content() {
+        val current = request?.takeUnless { it.session.isClosed } ?: return
+        val visual = LocalVisualSpec.current
+        val palette = rememberReaderPagePalette()
+        val surface = Color(palette.surface)
+        val textColor = Color(palette.textColor)
+        val secondaryText = Color(palette.secondaryTextColor)
+        val danger = Color(0xFFE5484D)
+
         DisposableEffect(Unit) { onDispose { releaseLayer() } }
         Column(
-            modifier = Modifier.fillMaxSize().background(style.surface)
-                .statusBarsPadding().navigationBarsPadding().padding(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(surface)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(stringResource(R.string.reader_template_preview_title), color = style.primaryText, fontSize = 17.sp)
-            Text(current.template.name, color = style.secondaryText, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = stringResource(R.string.reader_template_preview_title),
+                color = textColor,
+                style = visual.type.title
+            )
+            Text(
+                text = current.template.name,
+                color = secondaryText,
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             AndroidView(
                 factory = { createLayer(it, current) },
-                modifier = Modifier.fillMaxWidth().weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
             // Reserve a constant status height: an error must not resize the viewport and restart pagination.
-            Box(modifier = Modifier.fillMaxWidth().height(58.dp).verticalScroll(rememberScrollState())) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 val position = position
                 Text(
                     text = errorMessage ?: if (ready && position != null) {
-                        stringResource(R.string.reader_template_preview_position, position.pageIndex + 1, position.pageCount)
+                        stringResource(
+                            R.string.reader_template_preview_position,
+                            position.pageIndex + 1,
+                            position.pageCount
+                        )
                     } else stringResource(R.string.reader_template_preview_loading),
-                    color = if (errorMessage != null) style.danger else style.secondaryText,
-                    fontSize = 13.sp
+                    color = if (errorMessage != null) danger else secondaryText,
+                    style = visual.type.caption
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PreviewAction(R.string.reader_template_preview_previous, style, Modifier.weight(1f), ready && (position?.pageIndex ?: 0) > 0) { turnPage(-1) }
-                PreviewAction(R.string.reader_template_preview_next, style, Modifier.weight(1f), ready && (position?.let { it.pageIndex + 1 < it.pageCount } == true)) { turnPage(1) }
-                PreviewAction(R.string.reader_template_preview_close, style, Modifier.weight(1f)) { closePreview() }
+                PreviewAction(
+                    label = stringResource(R.string.reader_template_preview_previous),
+                    modifier = Modifier.weight(1f),
+                    enabled = ready && (position?.pageIndex ?: 0) > 0,
+                    onClick = { turnPage(-1) }
+                )
+                PreviewAction(
+                    label = stringResource(R.string.reader_template_preview_next),
+                    modifier = Modifier.weight(1f),
+                    enabled = ready && (position?.let { it.pageIndex + 1 < it.pageCount } == true),
+                    onClick = { turnPage(1) }
+                )
+                PreviewAction(
+                    label = stringResource(R.string.reader_template_preview_close),
+                    modifier = Modifier.weight(1f),
+                    onClick = { closePreview() }
+                )
             }
         }
     }
 
     @Composable
-    private fun PreviewAction(label: Int, style: AppDialogStyle, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-        LegadoMiuixActionButton(
-            text = stringResource(label), palette = style.toMiuixPalette(),
-            modifier = modifier.alpha(if (enabled) 1f else .45f).semantics { if (!enabled) disabled() },
-            onClick = { if (enabled) onClick() }
+    private fun PreviewAction(
+        label: String,
+        modifier: Modifier,
+        enabled: Boolean = true,
+        onClick: () -> Unit
+    ) {
+        AppGhostButton(
+            text = label,
+            modifier = modifier
+                .alpha(if (enabled) 1f else .45f)
+                .semantics { if (!enabled) disabled() },
+            enabled = enabled,
+            onClick = onClick,
         )
     }
 
@@ -251,7 +285,7 @@ class ReaderTemplatePreviewDialog : ComposeDialogFragment() {
                 if (sequence == prepareSequence && layer === preview) {
                     preparing = false
                     errorMessage = if (current.session.isClosed) getString(R.string.reader_template_preview_session_missing)
-                        else error.localizedMessage ?: error.javaClass.simpleName
+                    else error.localizedMessage ?: error.javaClass.simpleName
                     ready = false
                 }
             }
@@ -359,7 +393,7 @@ class ReaderTemplatePreviewDialog : ComposeDialogFragment() {
         private const val TAG = "readerTemplatePreview"
         private const val BACK_CHECK_TIMEOUT_MS = 700L
 
-        fun show(activity: FragmentActivity, session: EpubDirectSession, chapterIndex: Int,
+        internal fun show(activity: FragmentActivity, session: EpubDirectSession, chapterIndex: Int,
                  template: EpubReaderTemplate, config: EpubCoreLayoutConfig, fields: EpubReaderChromeData) {
             val manager = activity.supportFragmentManager
             if (activity.isFinishing || activity.isDestroyed || manager.isStateSaved) return

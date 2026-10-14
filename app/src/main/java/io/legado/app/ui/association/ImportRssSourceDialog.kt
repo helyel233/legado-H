@@ -1,26 +1,18 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,40 +21,39 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import io.legado.app.R
-import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.config.AppConfig
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppListSpacing
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
-import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.showDialogFragment
 
 /**
- * 导入rss源弹出窗口
+ * 导入 rss 源弹出窗口（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + LegadoMiuixActionButton + KeepOptionChip(palette) 换为
+ * V5 AppDialog + AppGhostButton/AppFilledButton + AppChip(selected)；
+ * 列表行改用 V5 版 ImportSourceItemRow（不再吃 AppDialogStyle）。
+ * 保留选项落盘、自定义分组、编辑直接回写 allSources（不触发刷新）等语义不变。
  */
-class ImportRssSourceDialog() : ComposeDialogFragment(),
+internal class ImportRssSourceDialog() : V5DialogFragment(),
     CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
@@ -72,9 +63,21 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
         }
     }
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     private val viewModel by viewModels<ImportRssSourceViewModel>()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val source = arguments?.getString("source")
+        if (source.isNullOrEmpty()) {
+            dismissAllowingStateLoss()
+        } else {
+            viewModel.importSource(source)
+        }
+    }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
@@ -83,92 +86,12 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val source = arguments?.getString("source")
-        if (source.isNullOrEmpty()) {
-            dismissAllowingStateLoss()
-        } else {
-            viewModel.importSource(source)
-        }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                ImportRssSourceContent()
-            }
-        }
-    }
-
-    private fun showGroupDialog(onOptionsChanged: () -> Unit = {}) {
-        showComposeTextFormDialogWithChecks(
-            title = getString(R.string.diy_edit_source_group),
-            labels = listOf(getString(R.string.group_name)),
-            initialValues = listOf(viewModel.groupName ?: ""),
-            checkboxLabels = listOf(getString(R.string.custom_group_summary)),
-            checkedIndices = if (viewModel.isAddGroup) setOf(0) else emptySet(),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.cancel),
-            onPositive = { values, checked ->
-                viewModel.isAddGroup = checked.getOrNull(0) ?: false
-                viewModel.groupName = values.getOrNull(0)
-                onOptionsChanged()
-            }
-        )
-    }
-
-    private fun showMenuDialog(onOptionsChanged: () -> Unit = {}) {
-        val labels = mutableListOf(
-            getString(R.string.diy_source_group),
-            getString(R.string.keep_original_name),
-            getString(R.string.keep_group),
-            getString(R.string.keep_enable),
-            getString(R.string.show_source_comment)
-        )
-        val descriptions = List(labels.size) { index ->
-            if (index == 0) {
-                viewModel.groupName?.takeIf { it.isNotBlank() } ?: ""
-            } else {
-                ""
-            }
-        }
-        showComposeActionListDialog(
-            title = getString(R.string.import_rss_source),
-            labels = labels,
-            descriptions = descriptions,
-            toggleIndices = setOf(1, 2, 3, 4),
-            isChecked = { index ->
-                when (index) {
-                    1 -> AppConfig.importKeepName
-                    2 -> AppConfig.importKeepGroup
-                    3 -> AppConfig.importKeepEnable
-                    4 -> AppConfig.importShowComment
-                    else -> false
-                }
-            },
-            onSelected = { index ->
-                when (index) {
-                    0 -> showGroupDialog(onOptionsChanged)
-                    1 -> AppConfig.importKeepName = !AppConfig.importKeepName
-                    2 -> AppConfig.importKeepGroup = !AppConfig.importKeepGroup
-                    3 -> AppConfig.importKeepEnable = !AppConfig.importKeepEnable
-                    4 -> AppConfig.importShowComment = !AppConfig.importShowComment
-                }
-                if (index >= 1) {
-                    onOptionsChanged()
-                }
-            }
-        )
-    }
-
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
-    private fun ImportRssSourceContent() {
-        val style = rememberAppDialogStyle()
-        val palette = style.toMiuixPalette()
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
         var loadState by remember { mutableStateOf(ImportLoadState.LOADING) }
         var errorMsg by remember { mutableStateOf("") }
         var refreshTrigger by remember { mutableIntStateOf(0) }
@@ -178,6 +101,10 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
         var showComment by remember { mutableStateOf(AppConfig.importShowComment) }
         var customGroup by remember { mutableStateOf(viewModel.groupName) }
         var addGroup by remember { mutableStateOf(viewModel.isAddGroup) }
+        var groupDialogOpen by remember { mutableStateOf(false) }
+        var groupText by remember { mutableStateOf("") }
+        var groupAddChecked by remember { mutableStateOf(false) }
+        var menuOpen by remember { mutableStateOf(false) }
         val syncOptions = {
             keepName = AppConfig.importKeepName
             keepGroup = AppConfig.importKeepGroup
@@ -185,6 +112,11 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
             showComment = AppConfig.importShowComment
             customGroup = viewModel.groupName
             addGroup = viewModel.isAddGroup
+        }
+        val openGroupDialog = {
+            groupText = viewModel.groupName ?: ""
+            groupAddChecked = viewModel.isAddGroup
+            groupDialogOpen = true
         }
 
         DisposableEffect(Unit) {
@@ -209,71 +141,59 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
             }
         }
 
-        AppDialogFrame(
-            title = stringResource(R.string.import_rss_source),
-            scrollContent = false,
-            content = {
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.import_rss_source),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+
                 // Menu row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LegadoMiuixActionButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
                         text = getString(R.string.diy_source_group),
-                        palette = palette,
-                        onClick = { showGroupDialog(syncOptions) },
-                        cornerRadius = style.actionRadius
+                        onClick = openGroupDialog
                     )
-                    LegadoMiuixActionButton(
+                    AppGhostButton(
                         text = getString(R.string.more),
-                        palette = palette,
-                        onClick = { showMenuDialog(syncOptions) },
-                        cornerRadius = style.actionRadius
+                        onClick = { menuOpen = true }
                     )
                 }
 
                 // 保留选项状态一览，可直接点按切换，高亮为已开启
                 FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 3)
                 ) {
                     KeepOptionChip(
                         text = getString(R.string.keep_original_name),
-                        checked = keepName,
-                        palette = palette,
-                        cornerRadius = style.actionRadius
+                        checked = keepName
                     ) {
                         AppConfig.importKeepName = it
                         keepName = it
                     }
                     KeepOptionChip(
                         text = getString(R.string.keep_group),
-                        checked = keepGroup,
-                        palette = palette,
-                        cornerRadius = style.actionRadius
+                        checked = keepGroup
                     ) {
                         AppConfig.importKeepGroup = it
                         keepGroup = it
                     }
                     KeepOptionChip(
                         text = getString(R.string.keep_enable),
-                        checked = keepEnable,
-                        palette = palette,
-                        cornerRadius = style.actionRadius
+                        checked = keepEnable
                     ) {
                         AppConfig.importKeepEnable = it
                         keepEnable = it
                     }
                     KeepOptionChip(
                         text = getString(R.string.show_source_comment),
-                        checked = showComment,
-                        palette = palette,
-                        cornerRadius = style.actionRadius
+                        checked = showComment
                     ) {
                         AppConfig.importShowComment = it
                         showComment = it
@@ -283,9 +203,8 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                 if (!customGroup.isNullOrBlank()) {
                     Text(
                         text = customGroup + if (addGroup) stringResource(R.string.custom_group_add_suffix) else "",
-                        color = style.secondaryText,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant
                     )
                 }
 
@@ -293,8 +212,8 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                     ImportLoadState.LOADING -> {
                         Text(
                             text = getString(R.string.loading),
-                            color = style.secondaryText,
-                            fontSize = 14.sp,
+                            style = visual.type.body,
+                            color = colors.onSurfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 24.dp)
@@ -303,8 +222,8 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                     ImportLoadState.ERROR -> {
                         Text(
                             text = errorMsg,
-                            color = style.primaryText,
-                            fontSize = 14.sp,
+                            style = visual.type.body,
+                            color = colors.onSurface,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 24.dp)
@@ -323,9 +242,8 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                         }
                         Text(
                             text = selectAllText,
-                            color = style.accent,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
+                            style = visual.type.caption,
+                            color = colors.primary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -344,7 +262,7 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 420.dp),
-                            verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             itemsIndexed(
                                 allSources,
@@ -366,7 +284,6 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                                     name = item.sourceName ?: "",
                                     isChecked = isChecked,
                                     stateText = stateText,
-                                    style = style,
                                     comment = comment,
                                     onCodeView = {
                                         showDialogFragment(
@@ -388,33 +305,97 @@ class ImportRssSourceDialog() : ComposeDialogFragment(),
                         }
                     }
                 }
-            },
-            actions = {
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.cancel),
-                    palette = palette,
-                    onClick = { dismissAllowingStateLoss() },
-                    cornerRadius = style.actionRadius
-                )
-                if (loadState == ImportLoadState.SUCCESS) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.ok),
-                        palette = palette,
-                        onClick = {
-                            val waitDialog = WaitDialog(requireContext())
-                            waitDialog.show()
-                            viewModel.importSelect {
-                                waitDialog.dismiss()
-                                dismissAllowingStateLoss()
-                            }
-                        },
-                        primary = true,
-                        cornerRadius = style.actionRadius
+
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() }
                     )
+                    if (loadState == ImportLoadState.SUCCESS) {
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val waitDialog = WaitDialog(requireContext())
+                                waitDialog.show()
+                                viewModel.importSelect {
+                                    waitDialog.dismiss()
+                                    dismissAllowingStateLoss()
+                                }
+                            }
+                        )
+                    }
                 }
             }
-        )
+        }
+
+        if (groupDialogOpen) {
+            AppDialog(onDismiss = { groupDialogOpen = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    AppTextField(
+                        value = groupText,
+                        onValueChange = { groupText = it },
+                        placeholder = getString(R.string.group_name),
+                    )
+                    AppRowWithSwitch(
+                        title = stringResource(R.string.custom_group_summary),
+                        checked = groupAddChecked,
+                        onCheckedChange = { groupAddChecked = it },
+                        card = false,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { groupDialogOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(android.R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                groupDialogOpen = false
+                                viewModel.isAddGroup = groupAddChecked
+                                viewModel.groupName = groupText
+                                syncOptions()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (menuOpen) {
+            AppMenuSheet(
+                title = stringResource(R.string.import_rss_source),
+                actions = listOf(
+                    getString(R.string.diy_source_group) +
+                        customGroup?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty() to {
+                            openGroupDialog()
+                        },
+                    (if (keepName) "✓ " else "") + getString(R.string.keep_original_name) to {
+                        AppConfig.importKeepName = !AppConfig.importKeepName
+                        syncOptions()
+                    },
+                    (if (keepGroup) "✓ " else "") + getString(R.string.keep_group) to {
+                        AppConfig.importKeepGroup = !AppConfig.importKeepGroup
+                        syncOptions()
+                    },
+                    (if (keepEnable) "✓ " else "") + getString(R.string.keep_enable) to {
+                        AppConfig.importKeepEnable = !AppConfig.importKeepEnable
+                        syncOptions()
+                    },
+                    (if (showComment) "✓ " else "") + getString(R.string.show_source_comment) to {
+                        AppConfig.importShowComment = !AppConfig.importShowComment
+                        syncOptions()
+                    },
+                ),
+                onDismiss = { menuOpen = false },
+            )
+        }
     }
 
     override fun onCodeSave(code: String, requestId: String?) {

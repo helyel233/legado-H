@@ -1,6 +1,13 @@
 package io.legado.app.ui.book.read.config
 
 import com.google.gson.JsonObject
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
 import io.legado.app.reader.aloud.ReadAloudConfig
 import io.legado.app.reader.config.ReadConfigEvent
@@ -51,7 +58,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -100,8 +106,6 @@ import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
@@ -201,7 +205,69 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 ) {
                     BgTextConfigContent(style = style)
                 }
+                BgTextConfigDialogs()
             }
+        }
+    }
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    internal var styleNameOpen by mutableStateOf(false)
+    internal var styleNameText by mutableStateOf("")
+    internal var presetOpen by mutableStateOf(false)
+    internal var netUrlOpen by mutableStateOf(false)
+    internal var netUrlText by mutableStateOf("")
+
+    @Composable
+    private fun BgTextConfigDialogs() {
+        if (styleNameOpen) {
+            AppInputDialog(
+                title = getString(R.string.style_name),
+                value = styleNameText,
+                onValueChange = { styleNameText = it },
+                placeholder = "name",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { text ->
+                    styleNameOpen = false
+                    ReadBookConfig.durConfig.name = text
+                    refreshTick++
+                },
+                onDismiss = { styleNameOpen = false },
+            )
+        }
+        if (presetOpen) {
+            val layoutNames = DefaultData.readConfigs.map { it.name }
+            AppMenuSheet(
+                title = "选择预设布局",
+                actions = layoutNames.mapIndexed { index, name ->
+                    name to {
+                        presetOpen = false
+                        if (index >= 0) {
+                            ReadBookConfig.durConfig = DefaultData.readConfigs[index].copy()
+                            refreshTick++
+                            postReadConfigChanged(Background, HeaderFooterTips, Relayout)
+                        }
+                    }
+                },
+                onDismiss = { presetOpen = false },
+            )
+        }
+        if (netUrlOpen) {
+            AppInputDialog(
+                title = "输入地址",
+                value = netUrlText,
+                onValueChange = { netUrlText = it },
+                placeholder = "https://...",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { url ->
+                    netUrlOpen = false
+                    if (url.isNotBlank()) {
+                        importNetConfig(url.trim())
+                    }
+                },
+                onDismiss = { netUrlOpen = false },
+            )
         }
     }
 
@@ -745,27 +811,12 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     }
 
     private fun editStyleName() {
-        showComposeTextInputDialog(
-            title = getString(R.string.style_name),
-            hint = "name",
-            initialValue = ReadBookConfig.durConfig.name,
-            onPositive = {
-                ReadBookConfig.durConfig.name = it
-                refreshTick++
-            }
-        )
+        styleNameText = ReadBookConfig.durConfig.name
+        styleNameOpen = true
     }
 
     private fun restorePreset() {
-        val defaultConfigs = DefaultData.readConfigs
-        val layoutNames = defaultConfigs.map { it.name }
-        showComposeChoiceListDialog("选择预设布局", layoutNames) { i ->
-            if (i >= 0) {
-                ReadBookConfig.durConfig = defaultConfigs[i].copy()
-                refreshTick++
-                postReadConfigChanged(Background, HeaderFooterTips, Relayout)
-            }
-        }
+        presetOpen = true
     }
 
     private fun showTextColorPicker() {
@@ -914,14 +965,8 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     }
 
     private fun importNetConfigAlert() {
-        showComposeTextInputDialog(
-            title = "输入地址",
-            onPositive = { url ->
-                if (url.isNotBlank()) {
-                    importNetConfig(url)
-                }
-            }
-        )
+        netUrlText = ""
+        netUrlOpen = true
     }
 
     private fun importNetConfig(url: String) {

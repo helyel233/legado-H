@@ -1,6 +1,12 @@
 package io.legado.app.ui.config
 
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
@@ -16,7 +22,6 @@ import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.config.coverhtml.CoverHtmlActivity
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
@@ -234,25 +239,50 @@ class CoverConfigFragment : ComposeSettingFragment() {
                 if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay,
                 ""
             )
-            showComposeChoiceListDialog(
-                title = getString(R.string.cover_collection_select),
-                labels = labels,
-                selectedIndex = if (selectedId.isBlank()) {
-                    0
-                } else {
-                    collections.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 }
-                        ?.plus(1)
-                        ?: -1
-                }
-            ) { index ->
-                val selected = if (index <= 0) null else collections.getOrNull(index - 1)
-                CoverCollectionManager.setSelected(isNight, selected?.id)
-                lifecycleScope.launch {
-                    AppearanceKitManager.syncCurrentCoverCollectionRef(isNight, selected)
-                }
-                refreshSettings()
-                refreshCoverCollection()
+            coverCollectionOpen = true
+            coverCollectionIsNight = isNight
+            coverCollectionLabels = labels
+            coverCollectionIds = listOf(null) + collections.map { it.id }
+            coverCollectionSelectedIndex = if (selectedId.isBlank()) {
+                0
+            } else {
+                collections.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 }
+                    ?.plus(1)
+                    ?: -1
             }
+        }
+    }
+
+    internal var coverCollectionOpen by mutableStateOf(false)
+    internal var coverCollectionIsNight by mutableStateOf(false)
+    internal var coverCollectionLabels by mutableStateOf<List<String>>(emptyList())
+    internal var coverCollectionIds by mutableStateOf<List<String?>>(emptyList())
+    internal var coverCollectionSelectedIndex by mutableStateOf(-1)
+
+    override val extraDialogs: @Composable () -> Unit = {
+        if (coverCollectionOpen) {
+            AppFilterDialog(
+                title = getString(R.string.cover_collection_select),
+                options = coverCollectionLabels,
+                selectedIndex = coverCollectionSelectedIndex,
+                onSelect = { index ->
+                    coverCollectionOpen = false
+                    val selected = coverCollectionIds.getOrNull(index)
+                    CoverCollectionManager.setSelected(coverCollectionIsNight, selected)
+                    lifecycleScope.launch {
+                        val collection = if (selected == null) null else
+                            CoverCollectionManager.load(coverCollectionIsNight)
+                                .firstOrNull { it.id == selected }
+                        AppearanceKitManager.syncCurrentCoverCollectionRef(
+                            coverCollectionIsNight,
+                            collection
+                        )
+                    }
+                    refreshSettings()
+                    refreshCoverCollection()
+                },
+                onDismiss = { coverCollectionOpen = false },
+            )
         }
     }
 

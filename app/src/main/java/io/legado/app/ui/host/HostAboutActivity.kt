@@ -9,6 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,9 +39,12 @@ import io.legado.app.help.update.AppUpdateConfig
 import io.legado.app.ui.about.DebugLogDialog
 import io.legado.app.ui.about.UpdateAcceleratorDialog
 import io.legado.app.ui.debuglog.DebugFloatingBallManager
-import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.components.AppRowWithSwitch
 import io.legado.app.uikit.v5.components.AppSectionHeader
 import io.legado.app.utils.FileDoc
@@ -94,6 +101,10 @@ private fun HostAboutScreen() {
     val appInfo = io.legado.app.constant.AppConst.appInfo
 
     // 调试悬浮球开关（#16 a11y 之后仍沿用 pref 键，与旧页互通）
+    var betaDialogOpen by remember { mutableStateOf(false) }
+    var betaKeyText by remember { mutableStateOf("") }
+    var betaUrlText by remember { mutableStateOf("") }
+    var betaEnabled by remember { mutableStateOf(false) }
     var floatingBall by remember {
         mutableStateOf(context.getPrefBoolean(PreferKey.debugLogFloatingBall))
     }
@@ -168,32 +179,20 @@ private fun HostAboutScreen() {
     }
 
     fun showInternalBetaDialog() {
-        activity.showComposeTextFormDialogWithChecks(
-            title = "内测版更新",
-            labels = listOf("下载密钥", "下载地址"),
-            initialValues = listOf(
-                AppUpdateConfig.internalBetaKey.orEmpty(),
-                AppUpdateConfig.internalBetaUrl.orEmpty(),
-            ),
-            passwordFields = setOf(0),
-            checkboxLabels = listOf("启用内测版更新"),
-            checkedIndices = if (AppUpdateConfig.internalBetaEnabled) setOf(0) else emptySet(),
-            message = "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
-            validateInput = { values ->
-                val key = values.getOrNull(0).orEmpty().trim()
-                val url = values.getOrNull(1).orEmpty().trim()
-                val hasAny = key.isNotBlank() || url.isNotBlank()
-                !hasAny || (key.isNotBlank() && (url.startsWith("https://") || url.startsWith("http://")))
-            },
-            onPositive = { values, checked ->
-                val key = values.getOrNull(0).orEmpty().trim()
-                val url = values.getOrNull(1).orEmpty().trim()
-                val valid = key.isNotBlank() && (url.startsWith("https://") || url.startsWith("http://"))
-                AppUpdateConfig.internalBetaKey = key
-                AppUpdateConfig.internalBetaUrl = url
-                AppUpdateConfig.internalBetaEnabled = checked.getOrNull(0) == true && valid
-            },
-        )
+        betaKeyText = AppUpdateConfig.internalBetaKey.orEmpty()
+        betaUrlText = AppUpdateConfig.internalBetaUrl.orEmpty()
+        betaEnabled = AppUpdateConfig.internalBetaEnabled
+        betaDialogOpen = true
+    }
+
+    fun onBetaConfirm() {
+        betaDialogOpen = false
+        val key = betaKeyText.trim()
+        val url = betaUrlText.trim()
+        val valid = key.isNotBlank() && (url.startsWith("https://") || url.startsWith("http://"))
+        AppUpdateConfig.internalBetaKey = key
+        AppUpdateConfig.internalBetaUrl = url
+        AppUpdateConfig.internalBetaEnabled = betaEnabled && valid
     }
 
     HostV5Page(
@@ -303,6 +302,59 @@ private fun HostAboutScreen() {
                     headline = stringResource(R.string.disclaimer),
                     onClick = { showMdFile(context.getString(R.string.disclaimer), "disclaimer.md") },
                 )
+            }
+        }
+
+        if (betaDialogOpen) {
+            AppDialog(onDismiss = { betaDialogOpen = false }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = "内测版更新",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = betaKeyText,
+                        onValueChange = { betaKeyText = it },
+                        placeholder = "下载密钥",
+                        singleLine = true,
+                    )
+                    AppTextField(
+                        value = betaUrlText,
+                        onValueChange = { betaUrlText = it },
+                        placeholder = "下载地址",
+                        singleLine = true,
+                    )
+                    AppRowWithSwitch(
+                        title = "启用内测版更新",
+                        checked = betaEnabled,
+                        onCheckedChange = { betaEnabled = it },
+                        card = false,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { betaDialogOpen = false },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.ok),
+                            modifier = Modifier.weight(1f),
+                            onClick = { onBetaConfirm() },
+                        )
+                    }
+                }
             }
         }
     }

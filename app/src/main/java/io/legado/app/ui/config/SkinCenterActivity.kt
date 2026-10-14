@@ -1,6 +1,7 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,8 +36,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivitySkinCenterBinding
 import io.legado.app.help.config.LayoutPackageStore
 import io.legado.app.help.config.ThemePackageStore
 import io.legado.app.theme.pack.ThemePackageSpec
@@ -48,19 +47,18 @@ import io.legado.app.uikit.theme.Applicator
 import io.legado.app.uikit.theme.AppTheme
 import io.legado.app.uikit.theme.BuiltinThemes
 import io.legado.app.uikit.token.AppSpacing
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.utils.startActivity
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
  * A2-4b 主题和界面管理中心（V4.10）：主题选包 / 界面选包两个包库。
  * 点包即应用；用户包可编辑/删除；官方包编辑自动克隆。
  */
-class SkinCenterActivity : BaseActivity<ActivitySkinCenterBinding>() {
+class SkinCenterActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivitySkinCenterBinding::inflate)
-
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.composeContent.setContent {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content {
             AppTheme(Applicator.rememberAppColorScheme()) {
                 SkinCenterScreen()
             }

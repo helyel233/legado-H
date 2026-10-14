@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -35,10 +36,8 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.replace.GroupManageDialog
 import io.legado.app.ui.replace.ReplaceRuleViewModel
 import io.legado.app.ui.qrcode.QrCodeResult
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppFastScroller
@@ -56,6 +55,7 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.rememberAppReorderableListState
 import io.legado.app.uikit.v5.components.rememberAppSelectionState
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.ACache
 import io.legado.app.utils.isAbsUrl
@@ -109,6 +109,9 @@ private fun HostReplaceRuleManageScreen() {
     var statusFilter by rememberSaveable { mutableStateOf(ReplaceStatusFilter.ALL) }
     val selection = rememberAppSelectionState<ReplaceRule>(idOf = { it.id.toString() })
     var menuOpen by remember { mutableStateOf(false) }
+    var groupManageOpen by remember { mutableStateOf(false) }
+    var importUrlOpen by remember { mutableStateOf(false) }
+    var importUrlText by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ReplaceRule?>(null) }
     var longPressHintShown by rememberSaveable { mutableStateOf(false) }
@@ -351,23 +354,11 @@ private fun HostReplaceRuleManageScreen() {
                     val aCache = ACache.get(cacheDir = false)
                     val cacheUrls = aCache.getAsString("replaceRuleRecordKey")
                         ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
-                    activity.showComposeTextInputDialog(
-                        title = activity.getString(R.string.import_on_line),
-                        hint = "url",
-                        onPositive = { text ->
-                            if (text.isAbsUrl() && !cacheUrls.contains(text)) {
-                                cacheUrls.add(0, text)
-                                aCache.put("replaceRuleRecordKey", cacheUrls.joinToString(","))
-                            }
-                            ImportReplaceRuleDialog(text)
-                                .show(activity.supportFragmentManager, "importReplaceRule")
-                        },
-                    )
+                    importUrlText = ""
+                    importUrlOpen = true
                 },
                 stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) },
-                stringResource(R.string.v5_group_manage) to {
-                    GroupManageDialog().show(activity.supportFragmentManager, "groupManage")
-                },
+                stringResource(R.string.v5_group_manage) to { groupManageOpen = true },
                 stringResource(R.string.rule_subscription) to {
                     context.startActivity(
                         android.content.Intent(
@@ -379,6 +370,45 @@ private fun HostReplaceRuleManageScreen() {
                 stringResource(R.string.v5_help) to { activity.showHelp("replaceRuleHelp") },
             ),
             onDismiss = { menuOpen = false },
+        )
+    }
+
+    // 分组管理（V5 组件化，替代旧 GroupManageDialog DialogFragment）
+    if (groupManageOpen) {
+        val groups by produceState<List<String>>(emptyList()) {
+            appDb.replaceRuleDao.flowGroups().collect { value = it }
+        }
+        GroupManageDialogContent(
+            groups = groups,
+            onAddGroup = { viewModel.addGroup(it) },
+            onRenameGroup = { old, new -> viewModel.upGroup(old, new) },
+            onDeleteGroup = { viewModel.delGroup(it) },
+            onDismiss = { groupManageOpen = false },
+        )
+    }
+
+    // 在线导入 URL 输入（AppInputDialog）
+    if (importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = importUrlText,
+            onValueChange = { importUrlText = it },
+            placeholder = "url",
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                importUrlOpen = false
+                val aCache = ACache.get(cacheDir = false)
+                val cacheUrls = aCache.getAsString("replaceRuleRecordKey")
+                    ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
+                if (text.isAbsUrl() && !cacheUrls.contains(text)) {
+                    cacheUrls.add(0, text)
+                    aCache.put("replaceRuleRecordKey", cacheUrls.joinToString(","))
+                }
+                ImportReplaceRuleDialog(text)
+                    .show(activity.supportFragmentManager, "importReplaceRule")
+            },
+            onDismiss = { importUrlOpen = false },
         )
     }
 

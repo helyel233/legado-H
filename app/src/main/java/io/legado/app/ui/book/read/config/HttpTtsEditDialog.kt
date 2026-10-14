@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,10 @@ import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.host.HostSourceLoginActivity
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.GSON
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.dpToPx
@@ -80,6 +85,10 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
     private val viewModel by viewModels<HttpTtsEditViewModel>()
     private var draft by mutableStateOf(HttpTtsEditDraft())
     private var focusedField by mutableStateOf(HttpTtsField.Url)
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var loginHeaderText by mutableStateOf<String?>(null)
+    private var exitConfirmOpen by mutableStateOf(false)
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -121,6 +130,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
                     onHelp = { showHelp("httpTTSHelp") },
                     onClose = { dismiss() }
                 )
+                HttpTtsEditDialogs()
             }
         }
     }
@@ -186,13 +196,74 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
     }
 
     private fun showLoginHeader() {
-        showComposeConfirmDialog(
-            title = getString(R.string.login_header),
-            message = draft.toHttpTts(viewModel.id).getLoginHeader(),
-            showNegative = false,
-            messageInContent = true,
-            onPositive = {}
-        )
+        loginHeaderText = draft.toHttpTts(viewModel.id).getLoginHeader()
+    }
+
+    @Composable
+    private fun HttpTtsEditDialogs() {
+        val d = LocalVisualSpec.current.density
+
+        loginHeaderText?.let { header ->
+            AppDialog(onDismiss = { loginHeaderText = null }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(d.blockGap / 2),
+                ) {
+                    Text(
+                        text = stringResource(R.string.login_header),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = header,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { loginHeaderText = null },
+                    )
+                }
+            }
+        }
+
+        if (exitConfirmOpen) {
+            AppDialog(onDismiss = { exitConfirmOpen = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(d.blockGap / 2),
+                ) {
+                    Text(
+                        text = stringResource(R.string.exit),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.exit_no_save),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(d.blockGap / 2)) {
+                        AppFilledButton(
+                            text = stringResource(R.string.yes),
+                            modifier = Modifier.weight(1f),
+                            onClick = { exitConfirmOpen = false },
+                        )
+                        AppGhostButton(
+                            text = stringResource(R.string.no),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                exitConfirmOpen = false
+                                dismissWithoutConfirm()
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun isSame(): Boolean {
@@ -202,14 +273,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
 
     override fun dismiss() {
         if (!isSame()) {
-            showComposeConfirmDialog(
-                title = getString(R.string.exit),
-                message = getString(R.string.exit_no_save),
-                positiveText = getString(R.string.yes),
-                negativeText = getString(R.string.no),
-                onPositive = {},
-                onNegative = { dismissWithoutConfirm() }
-            )
+            exitConfirmOpen = true
         } else {
             super.dismiss()
         }

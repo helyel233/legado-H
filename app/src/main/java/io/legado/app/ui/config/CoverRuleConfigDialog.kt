@@ -1,164 +1,108 @@
 package io.legado.app.ui.config
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.model.BookCover
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppDialogSwitchRow
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.toastOnUi
 
-class CoverRuleConfigDialog : ComposeDialogFragment() {
-
-    override val dialogWidth: Int = ViewGroup.LayoutParams.MATCH_PARENT
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    CoverRuleConfigContent(style = style)
-                }
-            }
-        }
-    }
+/**
+ * 封面规则配置弹窗（V5 基座版）。
+ *
+ * 保留旧版 `dialogWidth = MATCH_PARENT`（V5 基座的同名 open val 默认即 MATCH_PARENT，故不覆写尺寸）；
+ * 内容由旧 AppDialogFrame + AppDialogSwitchRow + 自定义 OutlinedTextField 换为
+ * V5 AppDialog + AppRowWithSwitch + AppTextField（原 OutlinedTextField 的色值来自 style.primaryText/fieldSurface/accent/secondaryText，
+ * 现统一由 AppTextField 走 V5 输入规范，label 降级为 placeholder）。
+ * 「搜索url 与 cover 规则不得为空才允许保存」的校验与三个按钮语义不变。
+ */
+internal class CoverRuleConfigDialog : V5DialogFragment() {
 
     @Composable
-    private fun CoverRuleConfigContent(style: AppDialogStyle) {
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
         val initialRule = remember { BookCover.getCoverRule() }
         var enable by rememberSaveable { mutableStateOf(initialRule.enable) }
         var searchUrl by rememberSaveable { mutableStateOf(initialRule.searchUrl) }
         var coverRule by rememberSaveable { mutableStateOf(initialRule.coverRule) }
-        val palette = style.toMiuixPalette()
 
-        AppDialogFrame(
-            title = stringResource(R.string.cover_config),
-            content = {
-                Column(
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.cover_config),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+                AppRowWithSwitch(
+                    title = stringResource(R.string.enable),
+                    checked = enable,
+                    onCheckedChange = { enable = it },
+                    card = false,
+                )
+                AppTextField(
+                    value = searchUrl,
+                    onValueChange = { searchUrl = it },
+                    placeholder = stringResource(R.string.r_search_url),
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AppDialogSwitchRow(
-                        text = stringResource(R.string.enable),
-                        checked = enable,
-                        onCheckedChange = { enable = it }
+                )
+                AppTextField(
+                    value = coverRule,
+                    onValueChange = { coverRule = it },
+                    placeholder = stringResource(R.string.rule_cover_url),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.btn_default_s),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            BookCover.delCoverRule()
+                            dismissAllowingStateLoss()
+                        },
                     )
-                    CoverRuleTextField(
-                        value = searchUrl,
-                        onValueChange = { searchUrl = it },
-                        label = stringResource(R.string.r_search_url),
-                        style = style
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
                     )
-                    CoverRuleTextField(
-                        value = coverRule,
-                        onValueChange = { coverRule = it },
-                        label = stringResource(R.string.rule_cover_url),
-                        style = style
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            saveCoverRule(
+                                enable = enable,
+                                searchUrl = searchUrl,
+                                coverRule = coverRule
+                            )
+                        },
                     )
                 }
-            },
-            actions = {
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.btn_default_s),
-                    palette = palette,
-                    onClick = {
-                        BookCover.delCoverRule()
-                        dismissAllowingStateLoss()
-                    },
-                    cornerRadius = style.actionRadius
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.cancel),
-                    palette = palette,
-                    onClick = { dismissAllowingStateLoss() },
-                    cornerRadius = style.actionRadius
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.ok),
-                    palette = palette,
-                    primary = true,
-                    onClick = {
-                        saveCoverRule(
-                            enable = enable,
-                            searchUrl = searchUrl,
-                            coverRule = coverRule
-                        )
-                    },
-                    cornerRadius = style.actionRadius
-                )
             }
-        )
-    }
-
-    @Composable
-    private fun CoverRuleTextField(
-        value: String,
-        onValueChange: (String) -> Unit,
-        label: String,
-        style: AppDialogStyle
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = false,
-            label = { Text(label) },
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                cursorColor = style.accent,
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedLabelColor = style.accent,
-                unfocusedLabelColor = style.secondaryText
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily
-            )
-        )
+        }
     }
 
     private fun saveCoverRule(

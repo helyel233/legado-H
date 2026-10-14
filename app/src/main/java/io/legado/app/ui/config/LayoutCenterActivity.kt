@@ -2,6 +2,7 @@ package io.legado.app.ui.config
 
 import android.os.Bundle
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityLayoutCenterBinding
 import io.legado.app.help.config.LayoutPackageStore
 import io.legado.app.uikit.layout.BuiltinLayouts
 import io.legado.app.uikit.layout.LayoutEngine
@@ -38,24 +37,23 @@ import io.legado.app.uikit.layout.LayoutPackageSpec
 import io.legado.app.uikit.theme.Applicator
 import io.legado.app.uikit.theme.AppTheme
 import io.legado.app.uikit.token.AppSpacing
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.host.setV5Content
 
 /**
  * A2-4b 界面包详情（编辑指定用户包；官方包首次编辑自动克隆）。
  * 由管理中心携 pkgId 打开；无 pkgId 时编辑当前应用中的包。
  */
-class LayoutCenterActivity : BaseActivity<ActivityLayoutCenterBinding>() {
-
-    override val binding by viewBinding(ActivityLayoutCenterBinding::inflate)
+class LayoutCenterActivity : AppCompatActivity() {
 
     private val targetId: String? by lazy { intent?.getStringExtra(EXTRA_PKG_ID) }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         val spec = targetId?.let { id -> LayoutPackageStore.resolveSpec(LayoutPackageStore.load(this) ?: LayoutPackageStore.Runtime(), id) }
         if (spec != null && LayoutEngine.activeLayout.id != spec.id) {
             LayoutEngine.applyLayout(spec)
         }
-        binding.composeContent.setContent {
+        setV5Content {
             AppTheme(Applicator.rememberAppColorScheme()) {
                 LayoutCenterScreen()
             }

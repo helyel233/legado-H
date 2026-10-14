@@ -4,19 +4,21 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.view.WindowManager
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.viewbinding.ViewBinding
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.EpubLoadingTemplate
 import io.legado.app.help.config.EpubLoadingTemplateStore
 import io.legado.app.ui.book.read.epub.EpubLoadingPreviewView
 
-class EpubLoadingTemplatePreviewActivity : BaseActivity<ViewBinding>(imageBg = false) {
+/**
+ * EPUB 加载模板全屏沉浸预览（点按关闭）。
+ * 纯 View 沉浸页，不套 HostV5Page（无顶栏、模板自绘背景），仅做壳层收敛。
+ */
+class EpubLoadingTemplatePreviewActivity : AppCompatActivity() {
     private val preview by lazy {
         EpubLoadingPreviewView(this).apply {
             fullSize = true
@@ -27,11 +29,12 @@ class EpubLoadingTemplatePreviewActivity : BaseActivity<ViewBinding>(imageBg = f
             setOnClickListener { finish() }
         }
     }
-    override val binding: ViewBinding by lazy { object : ViewBinding {
-        override fun getRoot(): View = preview
-    } }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) = applyPreviewBars()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(preview)
+        applyPreviewBars()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -57,7 +60,7 @@ class EpubLoadingTemplatePreviewActivity : BaseActivity<ViewBinding>(imageBg = f
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        WindowInsetsControllerCompat(window, preview).apply {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
             val palette = preview.template.palette(preview.night)
             isAppearanceLightStatusBars = palette.darkStatusIcons
             isAppearanceLightNavigationBars = palette.darkNavigationIcons

@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -41,10 +43,14 @@ import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
 import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
@@ -84,6 +90,76 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
                 } ?: DirectLinkUploadLoadingContent(
                     onDismiss = { dismissAllowingStateLoss() }
                 )
+                DirectLinkUploadDialogs()
+            }
+        }
+    }
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    internal var defaultRuleOpen by mutableStateOf(false)
+    internal var defaultRuleLabels by mutableStateOf<List<String>>(emptyList())
+    internal var resultOpen by mutableStateOf(false)
+    internal var resultMessage by mutableStateOf("")
+    internal var resultCopyable by mutableStateOf(false)
+
+    @Composable
+    private fun DirectLinkUploadDialogs() {
+        if (defaultRuleOpen) {
+            AppMenuSheet(
+                title = getString(R.string.import_default_rule),
+                actions = defaultRuleLabels.mapIndexed { index, label ->
+                    label to {
+                        defaultRuleOpen = false
+                        val rules = runCatching { DirectLinkUpload.defaultRules }.getOrDefault(emptyList())
+                        rules.getOrNull(index)?.let { rule -> saveRuleAndDismiss(rule) }
+                    }
+                },
+                onDismiss = { defaultRuleOpen = false },
+            )
+        }
+        if (resultOpen) {
+            if (resultCopyable) {
+                AppDialog(onDismiss = { resultOpen = false }) {
+                    Column(
+                        modifier = Modifier.padding(LocalVisualSpec.current.density.screenPadding),
+                        verticalArrangement = Arrangement.spacedBy(LocalVisualSpec.current.density.blockGap / 2),
+                    ) {
+                        Text(
+                            text = "测试结果",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = resultMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(LocalVisualSpec.current.density.blockGap / 2)) {
+                            AppGhostButton(
+                                text = stringResource(R.string.copy_text),
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    resultOpen = false
+                                    appCtx.sendToClip(resultMessage)
+                                },
+                            )
+                            AppFilledButton(
+                                text = stringResource(android.R.string.ok),
+                                modifier = Modifier.weight(1f),
+                                onClick = { resultOpen = false },
+                            )
+                        }
+                    }
+                }
+            } else {
+                AppConfirmDialog(
+                    title = "测试结果",
+                    message = resultMessage,
+                    confirmLabel = stringResource(android.R.string.ok),
+                    cancelLabel = stringResource(R.string.cancel),
+                    onConfirm = { resultOpen = false },
+                    onDismiss = { resultOpen = false },
+                )
             }
         }
     }
@@ -91,14 +167,8 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
     private fun importDefault() {
         lifecycleScope.launch {
             val rules = withContext(IO) { DirectLinkUpload.defaultRules }
-            showComposeActionListDialog(
-                title = getString(R.string.import_default_rule),
-                labels = rules.map { it.summary.orEmpty() }
-            ) { index ->
-                rules.getOrNull(index)?.let { rule ->
-                    saveRuleAndDismiss(rule)
-                }
-            }
+            defaultRuleLabels = rules.map { it.summary.orEmpty() }
+            defaultRuleOpen = true
         }
     }
 
@@ -148,21 +218,13 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
                 runCatching { DirectLinkUpload.upLoad("test.json", "{}", "application/json", rule) }
             }
             result.onSuccess { msg ->
-                showComposeConfirmDialog(
-                    title = "result",
-                    message = msg,
-                    positiveText = getString(android.R.string.ok),
-                    negativeText = getString(R.string.copy_text),
-                    onPositive = {},
-                    onNegative = { appCtx.sendToClip(msg) }
-                )
+                resultMessage = msg
+                resultCopyable = true
+                resultOpen = true
             }.onFailure { e ->
-                showComposeConfirmDialog(
-                    title = "result",
-                    message = e.localizedMessage ?: "ERROR",
-                    positiveText = getString(android.R.string.ok),
-                    onPositive = {}
-                )
+                resultMessage = e.localizedMessage ?: "ERROR"
+                resultCopyable = false
+                resultOpen = true
             }
         }
     }

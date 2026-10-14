@@ -16,7 +16,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.main.ai.AiImageProviderConfig
-import io.legado.app.ui.widget.compose.showComposeActionListDialog
+import io.legado.app.uikit.v5.components.AppFilterDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 
@@ -44,6 +44,7 @@ class HostAiImageProviderEditActivity : AppCompatActivity() {
     private var scriptText by mutableStateOf("")
     private var jsLibText by mutableStateOf("")
     private var dirty by mutableStateOf(false)
+    internal var typeSelectorOpen by mutableStateOf(false)
     private var editingField: Field = Field.PARAMS
 
     private val codeEditLauncher = registerForActivityResult(
@@ -134,6 +135,27 @@ class HostAiImageProviderEditActivity : AppCompatActivity() {
                 },
             )
         }
+
+        if (typeSelectorOpen) {
+            AppFilterDialog(
+                title = stringResource(R.string.ai_image_provider_type),
+                options = listOf(
+                    stringResource(R.string.ai_image_provider_openai),
+                    stringResource(R.string.ai_image_provider_js)
+                ),
+                selectedIndex = if (providerType == AiImageProviderConfig.TYPE_JS) 1 else 0,
+                onSelect = { index ->
+                    typeSelectorOpen = false
+                    providerType = if (index == 0) {
+                        AiImageProviderConfig.TYPE_OPENAI
+                    } else {
+                        AiImageProviderConfig.TYPE_JS
+                    }
+                    dirty = true
+                },
+                onDismiss = { typeSelectorOpen = false },
+            )
+        }
     }
 
     private fun bind(provider: AiImageProviderConfig?) {
@@ -151,20 +173,7 @@ class HostAiImageProviderEditActivity : AppCompatActivity() {
     }
 
     private fun selectType() {
-        showComposeActionListDialog(
-            title = getString(R.string.ai_image_provider_type),
-            labels = listOf(
-                getString(R.string.ai_image_provider_openai),
-                getString(R.string.ai_image_provider_js)
-            )
-        ) { index ->
-            providerType = if (index == 0) {
-                AiImageProviderConfig.TYPE_OPENAI
-            } else {
-                AiImageProviderConfig.TYPE_JS
-            }
-            dirty = true
-        }
+        typeSelectorOpen = true
     }
 
     private fun openCodeEditor(

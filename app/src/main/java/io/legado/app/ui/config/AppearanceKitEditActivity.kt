@@ -1,11 +1,9 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
-import android.view.View
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,74 +11,52 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppearanceKitEditOptions
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ComponentRef
 import io.legado.app.help.config.KitBinding
 import io.legado.app.help.config.MainLayoutPresetConfig
 import io.legado.app.help.config.StoredAppearanceKit
-import io.legado.app.ui.widget.compose.AppSettingPalette
-import io.legado.app.ui.widget.compose.AppSettingSectionTitle
-import io.legado.app.ui.widget.compose.rememberAppSettingPalette
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppListItem
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.launch
 
-class AppearanceKitEditActivity : BaseActivity<ActivityThemeManageBinding>() {
+class AppearanceKitEditActivity : AppCompatActivity() {
 
-    override val binding: ActivityThemeManageBinding by lazy {
-        ActivityThemeManageBinding.inflate(layoutInflater)
-    }
+    internal var kitState by mutableStateOf<StoredAppearanceKit?>(null)
+    internal var dayOptions by mutableStateOf(AppearanceKitEditOptions())
+    internal var nightOptions by mutableStateOf(AppearanceKitEditOptions())
+    internal var nameText by mutableStateOf("")
+    internal var selectorState by mutableStateOf<SelectorState?>(null)
+    internal var confirmDelete by mutableStateOf(false)
+    internal var menuOpen by mutableStateOf(false)
 
-    private var kitState by mutableStateOf<StoredAppearanceKit?>(null)
-    private var dayOptions by mutableStateOf(AppearanceKitEditOptions())
-    private var nightOptions by mutableStateOf(AppearanceKitEditOptions())
-
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.edit)
-        binding.tabBar.visibility = View.GONE
-        binding.tvSummary.visibility = View.GONE
-        binding.recyclerView.visibility = View.GONE
-        binding.btnAdd.visibility = View.GONE
-        val composeView = ComposeView(this).apply {
-            layoutParams = binding.recyclerView.layoutParams
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                kitState?.let { kit ->
-                    AppearanceKitEditScreen(
-                        kit = kit,
-                        dayOptions = dayOptions,
-                        nightOptions = nightOptions,
-                        onKitChange = { kitState = it },
-                        onSave = ::saveKit,
-                        onDelete = ::confirmDeleteKit,
-                        onSelectPreset = ::showPresetSelector,
-                        onSelect = ::showSelector
-                    )
-                }
-            }
-        }
-        binding.root.addView(composeView, binding.root.indexOfChild(binding.recyclerView))
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { AppearanceKitEditScreen(this) }
         loadKit()
     }
 
@@ -94,38 +70,30 @@ class AppearanceKitEditActivity : BaseActivity<ActivityThemeManageBinding>() {
                 return@launch
             }
             kitState = kit
+            nameText = kit.name
             dayOptions = AppearanceKitManager.editableOptions(false)
             nightOptions = AppearanceKitManager.editableOptions(true)
         }
     }
 
-    private fun saveKit() {
+    internal fun onKitChange(kit: StoredAppearanceKit) {
+        kitState = kit
+    }
+
+    internal fun saveKit() {
         val kit = kitState ?: return
         lifecycleScope.launch {
             runCatching {
                 AppearanceKitManager.saveImportedKit(kit, this@AppearanceKitEditActivity)
-            }.onSuccess {
-                toastOnUi(if (it) R.string.success else R.string.error)
-                if (it) finish()
-            }.onFailure {
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }
+            }.onSuccess { saved ->
+                toastOnUi(if (saved) R.string.success else R.string.error)
+                if (saved) finish()
+            }.onFailure { toastOnUi(it.localizedMessage ?: getString(R.string.error)) }
         }
     }
 
-    private fun confirmDeleteKit() {
+    internal fun deleteKit() {
         val kit = kitState ?: return
-        showComposeConfirmDialog(
-            title = getString(R.string.delete),
-            message = getString(R.string.appearance_kit_delete_confirm, kit.name),
-            positiveText = getString(R.string.delete),
-            negativeText = getString(R.string.cancel),
-            dangerPositive = true,
-            onPositive = { deleteKit(kit) }
-        )
-    }
-
-    private fun deleteKit(kit: StoredAppearanceKit) {
         lifecycleScope.launch {
             runCatching {
                 AppearanceKitManager.deleteImportedTheme(
@@ -135,48 +103,92 @@ class AppearanceKitEditActivity : BaseActivity<ActivityThemeManageBinding>() {
             }.onSuccess { deleted ->
                 toastOnUi(if (deleted) R.string.delete_success else R.string.error)
                 if (deleted) finish()
-            }.onFailure {
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }
+            }.onFailure { toastOnUi(it.localizedMessage ?: getString(R.string.error)) }
         }
     }
 
-    private fun showPresetSelector(current: String?, onSelected: (String?) -> Unit) {
-        val values = listOf(
+    internal fun openPresetSelector() {
+        val kit = kitState ?: return
+        val values = listOf<String?>(
             null,
             MainLayoutPresetConfig.PRESET_DEFAULT,
             MainLayoutPresetConfig.PRESET_REGULAR,
             MainLayoutPresetConfig.PRESET_SIDEBAR
         )
         val labels = listOf("默认缺省: 常规", "悬浮", "常规", "侧栏")
-        showComposeChoiceListDialog(
+        selectorState = SelectorState(
             title = "导航样式",
-            labels = labels,
-            selectedIndex = values.indexOf(current).takeIf { it >= 0 } ?: 0,
-            onSelected = { index -> onSelected(values.getOrNull(index)) }
-        )
-    }
-
-    private fun showSelector(
-        title: String,
-        current: ComponentRef?,
-        options: List<ComponentRef>,
-        defaultLabel: String,
-        onSelected: (ComponentRef?) -> Unit
-    ) {
-        val labels = listOf(defaultLabel) + options.map { it.name.ifBlank { it.dirName } }
-        val currentIndex = current
-            ?.let { value -> options.indexOfFirst { it.key() == value.key() } }
-            ?.takeIf { it >= 0 }
-        showComposeChoiceListDialog(
-            title = title,
-            labels = labels,
-            selectedIndex = currentIndex?.plus(1) ?: 0,
+            options = labels,
+            selectedIndex = values.indexOf(kit.binding.preset).takeIf { it >= 0 } ?: 0,
             onSelected = { index ->
-                onSelected(if (index <= 0) null else options.getOrNull(index - 1))
+                val preset = values.getOrNull(index)
+                onKitChange(kit.copy(binding = kit.binding.copy(preset = preset)))
             }
         )
     }
+
+    internal fun openFieldSelector(field: Field, isNight: Boolean) {
+        val kit = kitState ?: return
+        val options = optionsFor(field, isNight)
+        val current = currentRef(field, isNight)
+        val labels = listOf(field.defaultLabel) + options.map { it.name.ifBlank { it.dirName } }
+        val currentIndex = current
+            ?.let { value -> options.indexOfFirst { it.key() == value.key() } }
+            ?.takeIf { it >= 0 }
+        selectorState = SelectorState(
+            title = field.title,
+            options = labels,
+            selectedIndex = currentIndex?.plus(1) ?: 0,
+            onSelected = { index ->
+                val ref = if (index <= 0) null else options.getOrNull(index - 1)
+                val newBinding = kit.binding.copy().apply { setField(field, isNight, ref) }
+                onKitChange(kit.copy(binding = newBinding))
+            }
+        )
+    }
+
+    internal fun currentRef(field: Field, isNight: Boolean): ComponentRef? {
+        val kit = kitState ?: return null
+        return when (field) {
+            Field.THEME -> if (isNight) kit.binding.nightTheme else kit.binding.dayTheme
+            Field.TOP_BAR -> if (isNight) kit.binding.nightTopBar else kit.binding.dayTopBar
+            Field.NAV_BAR -> if (isNight) kit.binding.nightNavigationBar else kit.binding.dayNavigationBar
+            Field.COVER -> if (isNight) kit.binding.nightCoverCollection else kit.binding.dayCoverCollection
+        }
+    }
+
+    internal fun optionsFor(field: Field, isNight: Boolean): List<ComponentRef> {
+        val opts = if (isNight) nightOptions else dayOptions
+        return when (field) {
+            Field.THEME -> opts.themes
+            Field.TOP_BAR -> opts.topBars
+            Field.NAV_BAR -> opts.navigationBars
+            Field.COVER -> opts.coverCollections
+        }
+    }
+
+    private fun KitBinding.setField(field: Field, isNight: Boolean, ref: ComponentRef?) {
+        when (field) {
+            Field.THEME -> setTheme(isNight, ref)
+            Field.TOP_BAR -> setTopBar(isNight, ref)
+            Field.NAV_BAR -> setNavigationBar(isNight, ref)
+            Field.COVER -> setCoverCollection(isNight, ref)
+        }
+    }
+
+    internal enum class Field(val title: String, val defaultLabel: String) {
+        THEME("界面主题", "使用内置界面主题"),
+        TOP_BAR("顶栏", "缺省: 常规顶栏"),
+        NAV_BAR("底栏", "使用默认 MD3 常规底栏"),
+        COVER("封面图集", "使用默认封面图集")
+    }
+
+    internal data class SelectorState(
+        val title: String,
+        val options: List<String>,
+        val selectedIndex: Int,
+        val onSelected: (Int) -> Unit
+    )
 
     companion object {
         const val EXTRA_KIT_ID = "kitId"
@@ -184,228 +196,184 @@ class AppearanceKitEditActivity : BaseActivity<ActivityThemeManageBinding>() {
 }
 
 @Composable
-private fun AppearanceKitEditScreen(
-    kit: StoredAppearanceKit,
-    dayOptions: AppearanceKitEditOptions,
-    nightOptions: AppearanceKitEditOptions,
-    onKitChange: (StoredAppearanceKit) -> Unit,
-    onSave: () -> Unit,
-    onDelete: () -> Unit,
-    onSelectPreset: (String?, (String?) -> Unit) -> Unit,
-    onSelect: (
-        title: String,
-        current: ComponentRef?,
-        options: List<ComponentRef>,
-        defaultLabel: String,
-        onSelected: (ComponentRef?) -> Unit
-    ) -> Unit
-) {
-    val palette = rememberAppSettingPalette()
-    var name by remember(kit.id) { mutableStateOf(kit.name) }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp, 14.dp, 16.dp, 28.dp)
+private fun AppearanceKitEditScreen(activity: AppearanceKitEditActivity) {
+    BackHandler { activity.finish() }
+
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    val kit = activity.kitState ?: return
+
+    HostV5Page(
+        title = stringResource(R.string.edit),
+        onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.menuOpen = true },
+            )
+        },
     ) {
-        item {
-            AppSettingSectionTitle(title = "应用主题", palette = palette)
-            SettingPanel(palette = palette) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                        onKitChange(kit.copy(name = it))
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    label = { Text("名称") },
-                    singleLine = true
-                )
-                PresetRow(kit.binding.preset, palette) {
-                    onSelectPreset(kit.binding.preset) { preset ->
-                        onKitChange(kit.copy(binding = kit.binding.copy(preset = preset)))
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = density.screenPadding,
+                end = density.screenPadding,
+                bottom = density.blockGap / 2,
+            ),
+        ) {
+            item {
+                SectionTitle("应用主题")
+                AppCard {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                        AppTextField(
+                            value = activity.nameText,
+                            onValueChange = {
+                                activity.nameText = it
+                                activity.onKitChange(kit.copy(name = it))
+                            },
+                            placeholder = "名称",
+                            singleLine = true,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        AppListItem(
+                            headline = "导航样式",
+                            supporting = presetLabel(kit.binding.preset),
+                            onClick = { activity.openPresetSelector() },
+                            card = false,
+                        )
                     }
                 }
+                Spacer(Modifier.height(density.blockGap))
             }
-            Spacer(Modifier.height(14.dp))
-            PreviewPanel(kit, palette)
-            Spacer(Modifier.height(14.dp))
-            BindingSection("日间", kit.binding, false, dayOptions, palette, {
-                onKitChange(kit.copy(binding = it))
-            }, onSelect)
-            Spacer(Modifier.height(14.dp))
-            BindingSection("夜间", kit.binding, true, nightOptions, palette, {
-                onKitChange(kit.copy(binding = it))
-            }, onSelect)
-            Spacer(Modifier.height(18.dp))
-            SaveButton(palette, onSave)
-            Spacer(Modifier.height(10.dp))
-            DeleteButton(palette, onDelete)
+            item {
+                SectionTitle("预览")
+                AppCard {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        Text(
+                            text = kit.name.ifBlank { "应用主题" },
+                            style = visual.type.body,
+                            color = colors.onSurface,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = kit.toAppearanceKit().summary,
+                            style = visual.type.caption,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "界面形态：${kit.binding.interfaceTweaks?.summary ?: "未自定义"}",
+                            style = visual.type.caption,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(density.blockGap))
+            }
+            item {
+                BindingCard(activity, kit.binding, "日间", false, activity.dayOptions)
+                Spacer(Modifier.height(density.blockGap))
+                BindingCard(activity, kit.binding, "夜间", true, activity.nightOptions)
+                Spacer(Modifier.height(density.blockGap))
+                AppFilledButton(
+                    text = "保存",
+                    onClick = { activity.saveKit() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+
+    if (activity.menuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.edit),
+            actions = listOf(
+                stringResource(R.string.delete) to { activity.confirmDelete = true },
+            ),
+            onDismiss = { activity.menuOpen = false },
+        )
+    }
+
+    if (activity.confirmDelete) {
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = stringResource(R.string.appearance_kit_delete_confirm, kit.name),
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.confirmDelete = false
+                activity.deleteKit()
+            },
+            onDismiss = { activity.confirmDelete = false },
+        )
+    }
+
+    activity.selectorState?.let { sel ->
+        AppFilterDialog(
+            title = sel.title,
+            options = sel.options,
+            selectedIndex = sel.selectedIndex,
+            onSelect = { index ->
+                activity.selectorState = null
+                sel.onSelected(index)
+            },
+            onDismiss = { activity.selectorState = null },
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Text(
+        text = text,
+        style = visual.type.body,
+        color = colors.onSurface,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = visual.density.screenPadding,
+                vertical = visual.density.blockGap / 2,
+            ),
+    )
+}
+
+@Composable
+private fun BindingCard(
+    activity: AppearanceKitEditActivity,
+    binding: KitBinding,
+    title: String,
+    isNight: Boolean,
+    options: AppearanceKitEditOptions,
+) {
+    SectionTitle(title)
+    AppCard {
+        Column {
+            for (field in AppearanceKitEditActivity.Field.entries) {
+                val current = activity.currentRef(field, isNight)
+                AppListItem(
+                    headline = field.title,
+                    supporting = current?.name?.ifBlank { current.dirName } ?: field.defaultLabel,
+                    onClick = { activity.openFieldSelector(field, isNight) },
+                    card = false,
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun PreviewPanel(kit: StoredAppearanceKit, palette: AppSettingPalette) {
-    AppSettingSectionTitle(title = "预览", palette = palette)
-    SettingPanel(palette = palette) {
-        Text(
-            text = kit.name.ifBlank { "应用主题" },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            color = palette.primaryText
-        )
-        Text(
-            text = kit.toAppearanceKit().summary,
-            modifier = Modifier
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 12.dp),
-            color = palette.secondaryText,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = "界面形态：${kit.binding.interfaceTweaks?.summary ?: "未自定义"}",
-            modifier = Modifier
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 12.dp),
-            color = palette.secondaryText,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun SettingPanel(
-    palette: AppSettingPalette,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(androidx.compose.ui.graphics.Color(palette.row)),
-        content = content
-    )
-}
-
-@Composable
-private fun SaveButton(palette: AppSettingPalette, onClick: () -> Unit) {
-    Text(
-        text = "保存",
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(palette.accent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 13.dp),
-        color = palette.onAccent,
-        textAlign = TextAlign.Center
-    )
-}
-
-@Composable
-private fun DeleteButton(palette: AppSettingPalette, onClick: () -> Unit) {
-    Text(
-        text = "删除",
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(androidx.compose.ui.graphics.Color(palette.row))
-            .clickable(onClick = onClick)
-            .padding(vertical = 13.dp),
-        color = palette.danger,
-        textAlign = TextAlign.Center
-    )
-}
-
-@Composable
-private fun PresetRow(current: String?, palette: AppSettingPalette, onClick: () -> Unit) {
-    val label = when (current) {
-        MainLayoutPresetConfig.PRESET_DEFAULT -> "悬浮"
-        MainLayoutPresetConfig.PRESET_REGULAR -> "常规"
-        MainLayoutPresetConfig.PRESET_SIDEBAR -> "侧栏"
-        else -> "默认缺省: 常规"
-    }
-    SettingChoiceRow("导航样式", label, palette, onClick)
-}
-
-@Composable
-private fun BindingSection(
-    title: String,
-    binding: KitBinding,
-    isNight: Boolean,
-    options: AppearanceKitEditOptions,
-    palette: AppSettingPalette,
-    onBindingChange: (KitBinding) -> Unit,
-    onSelect: (
-        title: String,
-        current: ComponentRef?,
-        options: List<ComponentRef>,
-        defaultLabel: String,
-        onSelected: (ComponentRef?) -> Unit
-    ) -> Unit
-) {
-    AppSettingSectionTitle(title = title, palette = palette)
-    SettingPanel(palette = palette) {
-        BindingRow("界面主题", if (isNight) binding.nightTheme else binding.dayTheme, options.themes, "使用内置界面主题", palette, {
-            onBindingChange(binding.copy().apply { if (isNight) nightTheme = it else dayTheme = it })
-        }, onSelect)
-        BindingRow("顶栏", if (isNight) binding.nightTopBar else binding.dayTopBar, options.topBars, "缺省: 常规顶栏", palette, {
-            onBindingChange(binding.copy().apply { if (isNight) nightTopBar = it else dayTopBar = it })
-        }, onSelect)
-        BindingRow("底栏", if (isNight) binding.nightNavigationBar else binding.dayNavigationBar, options.navigationBars, "使用默认 MD3 常规底栏", palette, {
-            onBindingChange(binding.copy().apply { if (isNight) nightNavigationBar = it else dayNavigationBar = it })
-        }, onSelect)
-        BindingRow("封面图集", if (isNight) binding.nightCoverCollection else binding.dayCoverCollection, options.coverCollections, "使用默认封面图集", palette, {
-            onBindingChange(binding.copy().apply { if (isNight) nightCoverCollection = it else dayCoverCollection = it })
-        }, onSelect)
-    }
-}
-
-@Composable
-private fun BindingRow(
-    title: String,
-    current: ComponentRef?,
-    options: List<ComponentRef>,
-    defaultLabel: String,
-    palette: AppSettingPalette,
-    onChange: (ComponentRef?) -> Unit,
-    onSelect: (
-        title: String,
-        current: ComponentRef?,
-        options: List<ComponentRef>,
-        defaultLabel: String,
-        onSelected: (ComponentRef?) -> Unit
-    ) -> Unit
-) {
-    SettingChoiceRow(
-        title = title,
-        value = current?.name?.ifBlank { current.dirName } ?: defaultLabel,
-        palette = palette,
-        onClick = { onSelect(title, current, options, defaultLabel, onChange) }
-    )
-}
-
-@Composable
-private fun SettingChoiceRow(
-    title: String,
-    value: String,
-    palette: AppSettingPalette,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Text(text = title, color = palette.primaryText)
-        Text(
-            text = value,
-            color = palette.secondaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+private fun presetLabel(preset: String?): String = when (preset) {
+    MainLayoutPresetConfig.PRESET_DEFAULT -> "悬浮"
+    MainLayoutPresetConfig.PRESET_REGULAR -> "常规"
+    MainLayoutPresetConfig.PRESET_SIDEBAR -> "侧栏"
+    else -> "默认缺省: 常规"
 }

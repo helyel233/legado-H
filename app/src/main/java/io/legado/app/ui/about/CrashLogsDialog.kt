@@ -2,44 +2,39 @@ package io.legado.app.ui.about
 
 import android.net.Uri
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.ui.widget.dialog.TextDialog
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.delete
@@ -56,28 +51,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileFilter
 
-class CrashLogsDialog : ComposeDialogFragment() {
+/**
+ * 崩溃日志列表弹窗（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + LegadoMiuixCard + LegadoMiuixActionButton 换为 V5 AppDialog + AppCard + 按钮行。
+ * **行为新增**：「清空」按 V5 危险操作红线补 `AppConfirmDialog(danger = true)`（旧版点击即清，无确认，
+ * 与 CoverCollectionManageActivity 删除 tgt时的处理保持一致）；ViewModel 的全部异步逻辑逐行保留。
+ */
+internal class CrashLogsDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     private val viewModel by viewModels<CrashViewModel>()
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         viewModel.initData()
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                CrashLogsContent(
-                    viewModel = viewModel,
-                    onShowLogFile = { fileDoc -> showLogFile(fileDoc) },
-                    onDismiss = { dismissAllowingStateLoss() }
-                )
-            }
-        }
     }
 
     private fun showLogFile(fileDoc: FileDoc) {
@@ -85,6 +77,76 @@ class CrashLogsDialog : ComposeDialogFragment() {
             if (lifecycleScope.isActive) {
                 showDialogFragment(TextDialog(fileDoc.name, it))
             }
+        }
+    }
+
+    @Composable
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+        val logFiles by viewModel.logFlow.collectAsState()
+        var clearConfirmOpen by remember { mutableStateOf(false) }
+
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
+                Text(
+                    text = stringResource(R.string.crash_log),
+                    style = visual.type.title,
+                    color = colors.onSurface
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(logFiles, key = { it.name }) { fileDoc ->
+                        AppCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { showLogFile(fileDoc) },
+                        ) {
+                            Text(
+                                text = fileDoc.name,
+                                style = visual.type.body,
+                                color = colors.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppFilledButton(
+                        text = stringResource(R.string.clear),
+                        modifier = Modifier.weight(1f),
+                        onClick = { clearConfirmOpen = true },
+                    )
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
+                    )
+                }
+            }
+        }
+
+        if (clearConfirmOpen) {
+            AppConfirmDialog(
+                title = stringResource(R.string.crash_log),
+                message = "确定清空全部崩溃日志？",
+                confirmLabel = stringResource(R.string.clear),
+                cancelLabel = stringResource(R.string.cancel),
+                danger = true,
+                onConfirm = {
+                    clearConfirmOpen = false
+                    viewModel.clearCrashLog()
+                },
+                onDismiss = { clearConfirmOpen = false },
+            )
         }
     }
 
@@ -166,69 +228,4 @@ class CrashLogsDialog : ComposeDialogFragment() {
 
     }
 
-}
-
-@Composable
-private fun CrashLogsContent(
-    viewModel: CrashLogsDialog.CrashViewModel,
-    onShowLogFile: (FileDoc) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    val logFiles by viewModel.logFlow.collectAsState()
-    val title = stringResource(R.string.crash_log)
-
-    AppDialogFrame(
-        title = title,
-        scrollContent = false,
-        content = {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(logFiles, key = { it.name }) { fileDoc ->
-                    LegadoMiuixCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onShowLogFile(fileDoc) },
-                        color = style.fieldSurface,
-                        contentColor = style.primaryText,
-                        cornerRadius = style.actionRadius,
-                        insidePadding = PaddingValues(
-                            horizontal = 16.dp,
-                            vertical = 13.dp
-                        )
-                    ) {
-                        Text(
-                            text = fileDoc.name,
-                            color = style.primaryText,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.clear),
-                palette = palette,
-                onClick = { viewModel.clearCrashLog() },
-                danger = true,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.cancel),
-                palette = palette,
-                onClick = onDismiss,
-                cornerRadius = style.actionRadius
-            )
-        }
-    )
 }

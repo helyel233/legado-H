@@ -1,44 +1,59 @@
+// __P1__
+
 package io.legado.app.ui.book.read.config
 
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.view.Gravity
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.SimpleItemAnimator
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReadAloudBgmGroup
 import io.legado.app.data.entities.ReadAloudBgmTrack
-import io.legado.app.databinding.ActivityThemeManageBinding
-import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.secondaryTextColor
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppNumberPickerDialog
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.MD5Utils
-import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,24 +64,41 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
+/**
+ * 智能音频（配乐/音效）管理 V5 化。
+ * 旧版 BaseActivity + 手搓 LinearLayout 行 + alert/selector/NumberPickerDialog，
+ * 全部替换为 setV5Content + HostV5Page + Compose 分组列表 + v5 弹窗。
+ * 业务逻辑（导入/ZIP 包/YAML 元数据/导出/DAO）逐行保留，仅换 UI 承载。
+ */
+class ReadAloudBgmManageActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
+    internal var groups by mutableStateOf<List<ReadAloudBgmGroup>>(emptyList())
+    internal var tracks by mutableStateOf<List<ReadAloudBgmTrack>>(emptyList())
+    internal var selectedIds by mutableStateOf<Set<Long>>(emptySet())
+    internal var expandedGroupIds by mutableStateOf<Set<Long>>(emptySet())
+    internal var expandedGroupsInitialized by mutableStateOf(false)
+    internal var currentAssetType by mutableStateOf(ReadAloudBgmTrack.TYPE_BGM)
+    internal var importing by mutableStateOf(false)
+    internal var importingText by mutableStateOf("")
 
-    private val adapter = BgmAdapter()
-    private var groups: List<ReadAloudBgmGroup> = emptyList()
-    private var tracks: List<ReadAloudBgmTrack> = emptyList()
-    private val selectedIds = linkedSetOf<Long>()
-    private val expandedGroupIds = linkedSetOf<Long>()
-    private var expandedGroupsInitialized = false
-    private var currentAssetType: String = ReadAloudBgmTrack.TYPE_BGM
+    internal var overflowMenuOpen by mutableStateOf(false)
+    internal var importMenuOpen by mutableStateOf(false)
+    internal var zipImportChoice by mutableStateOf<Pair<Uri, String>?>(null)
+    internal var groupEditorTarget by mutableStateOf<ReadAloudBgmGroup?>(null)
+    internal var groupEditorOpen by mutableStateOf(false)
+    internal var groupManageOpen by mutableStateOf(false)
+    internal var groupActionTarget by mutableStateOf<ReadAloudBgmGroup?>(null)
+    internal var tagsEditorTarget by mutableStateOf<ReadAloudBgmTrack?>(null)
+    internal var volumeTarget by mutableStateOf<ReadAloudBgmTrack?>(null)
+    internal var moveTracksIds by mutableStateOf<List<Long>?>(null)
+    internal var deleteTracksIds by mutableStateOf<List<Long>?>(null)
+    internal var deleteGroupTarget by mutableStateOf<ReadAloudBgmGroup?>(null)
+    internal var trackMenuTarget by mutableStateOf<ReadAloudBgmTrack?>(null)
+
     private var pendingPackageAssetType: String = ReadAloudBgmTrack.TYPE_SFX
     private var pendingExportPackageFile: File? = null
-    private var importing = false
-    private var importingText = ""
-    private lateinit var batchActionBar: LinearLayout
 
-    private val currentAssetLabel: String
+    internal val currentAssetLabel: String
         get() = assetLabel(currentAssetType)
 
     private val importAudio = registerForActivityResult(HandleFileContract()) { result ->
@@ -77,7 +109,7 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 kotlin.runCatching {
                     withContext(Dispatchers.IO) { importTrack(uri) }
                 }.onSuccess {
-                    selectedIds.clear()
+                    selectedIds = emptySet()
                     notifyAudioChanged()
                     finishImportingAndLoad()
                     toastOnUi("导入完成")
@@ -105,7 +137,7 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     }
                 }
             }.onSuccess {
-                selectedIds.clear()
+                selectedIds = emptySet()
                 if (success > 0) notifyAudioChanged()
                 finishImportingAndLoad()
                 toastOnUi("已导入 $success 个${currentAssetLabel}")
@@ -119,7 +151,7 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private val importAudioPackage = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
             val assetType = pendingPackageAssetType
-            confirmImportAudioPackage(uri, assetType)
+            zipImportChoice = uri to assetType
         }
     }
 
@@ -131,8 +163,9 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initView()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { ReadAloudBgmManageContent(this@ReadAloudBgmManageActivity) }
         load()
     }
 
@@ -142,119 +175,81 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         super.onDestroy()
     }
 
-    private fun initView() = binding.run {
-        titleBar.title = "智能音频"
-        tabBar.visibility = View.VISIBLE
-        tabBar.background = UiCorner.opaqueRounded(
-            themeCardColorOrDefault(),
-            UiCorner.actionRadius(this@ReadAloudBgmManageActivity)
-        )
-        btnDay.text = "配乐"
-        btnNight.text = "音效"
-        btnDay.setOnClickListener { switchAssetType(ReadAloudBgmTrack.TYPE_BGM) }
-        btnNight.setOnClickListener { switchAssetType(ReadAloudBgmTrack.TYPE_SFX) }
-        btnAdd.visibility = View.GONE
-        initBatchActionBar(root)
-        tvSummary.setTextColor(secondaryTextColor)
-        recyclerView.layoutManager = LinearLayoutManager(this@ReadAloudBgmManageActivity)
-        recyclerView.adapter = adapter
-        (recyclerView.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
-        root.applyUiBodyTypefaceDeep(uiTypeface())
-        updateAssetTabs()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, MENU_IMPORT, 0, "导入").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_EXPORT_PACKAGE, 1, "导出 ZIP").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_ADD_GROUP, 2, "新增分组").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_MANAGE_GROUPS, 3, "管理分组").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            MENU_IMPORT -> showImportActions()
-            MENU_EXPORT_PACKAGE -> exportCurrentAudioPackage()
-            MENU_ADD_GROUP -> showGroupEditor()
-            MENU_MANAGE_GROUPS -> showGroupManage()
-        }
-        return true
-    }
-
-    private fun initBatchActionBar(root: View) {
-        val parent = root as? LinearLayout ?: return
-        batchActionBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            visibility = View.GONE
-            addView(batchActionButton("批量分组") { moveSelected() })
-            addView(batchActionButton("删除") { deleteSelected() })
-            addView(batchActionButton("取消选择") {
-                selectedIds.clear()
-                load()
-            })
-        }
-        parent.addView(
-            batchActionBar,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                56.dpToPx()
-            ).apply {
-                leftMargin = 16.dpToPx()
-                rightMargin = 16.dpToPx()
-                bottomMargin = 16.dpToPx()
+    private fun load() {
+        lifecycleScope.launch {
+            val data = withContext(Dispatchers.IO) {
+                appDb.readAloudBgmDao.groupsByType(currentAssetType) to
+                    appDb.readAloudBgmDao.enabledTracksByType(currentAssetType)
             }
-        )
-    }
-
-    private fun batchActionButton(text: String, action: () -> Unit): TextView {
-        return TextView(this).apply {
-            this.text = text
-            gravity = Gravity.CENTER
-            textSize = 14f
-            typeface = uiTypeface()
-            setTextColor(primaryTextColor)
-            background = UiCorner.actionSelector(
-                themeCardColorOrDefault(),
-                themeMutedColorOrDefault(),
-                UiCorner.actionRadius(this@ReadAloudBgmManageActivity)
-            )
-            setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
-                leftMargin = 4.dpToPx()
-                rightMargin = 4.dpToPx()
-            }
+            groups = data.first
+            tracks = data.second
+            selectedIds = selectedIds.filterTo(LinkedHashSet()) { id -> tracks.any { it.id == id } }
         }
     }
 
-    private fun showImportActions() {
+    internal fun switchAssetType(assetType: String) {
+        val normalized = ReadAloudBgmTrack.normalizeAssetType(assetType)
+        if (currentAssetType == normalized) return
+        currentAssetType = normalized
+        selectedIds = emptySet()
+        expandedGroupIds = emptySet()
+        expandedGroupsInitialized = false
+        load()
+    }
+
+    private fun setImporting(value: Boolean, text: String = "") {
+        importing = value
+        importingText = if (value) text else ""
+    }
+
+    private fun finishImportingAndLoad() {
+        setImporting(false)
+        load()
+    }
+
+    internal fun assetLabel(assetType: String): String {
+        return if (ReadAloudBgmTrack.normalizeAssetType(assetType) == ReadAloudBgmTrack.TYPE_SFX) {
+            "音效"
+        } else {
+            "配乐"
+        }
+    }
+
+    private fun notifyAudioChanged() {
+        ReadAloudConfigChangeNotifier.notifyAudio()
+    }
+
+    internal fun onOverflowAction(index: Int) {
+        overflowMenuOpen = false
+        when (index) {
+            0 -> showImportActions()
+            1 -> exportCurrentAudioPackage()
+            2 -> showGroupEditor()
+            3 -> showGroupManage()
+        }
+    }
+
+    internal fun showImportActions() {
         if (importing) {
             toastOnUi(importingText.ifBlank { "正在导入，请稍候" })
             return
         }
-        selector(
-            "导入智能音频",
-            listOf(
-                "批量导入${currentAssetLabel}",
-                "导入单个${currentAssetLabel}",
-                "导入配乐 ZIP",
-                "导入音效 ZIP",
-                "新增分组",
-                "管理分组"
-            )
-        ) { _, index ->
-            when (index) {
-                0 -> importAudios.launch("audio/*")
-                1 -> importAudio.launch {
-                    mode = HandleFileContract.FILE
-                    title = "导入${currentAssetLabel}"
-                    allowExtensions = arrayOf("mp3", "wav", "m4a", "aac", "ogg", "flac")
-                }
-                2 -> openAudioPackageImport(ReadAloudBgmTrack.TYPE_BGM)
-                3 -> openAudioPackageImport(ReadAloudBgmTrack.TYPE_SFX)
-                4 -> showGroupEditor()
-                5 -> showGroupManage()
+        importMenuOpen = true
+    }
+
+    internal fun onImportAction(index: Int) {
+        importMenuOpen = false
+        when (index) {
+            0 -> importAudios.launch("audio/*")
+            1 -> importAudio.launch {
+                mode = HandleFileContract.FILE
+                title = "导入${currentAssetLabel}"
+                allowExtensions = arrayOf("mp3", "wav", "m4a", "aac", "ogg", "flac")
             }
+            2 -> openAudioPackageImport(ReadAloudBgmTrack.TYPE_BGM)
+            3 -> openAudioPackageImport(ReadAloudBgmTrack.TYPE_SFX)
+            4 -> showGroupEditor()
+            5 -> showGroupManage()
         }
     }
 
@@ -268,39 +263,33 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun confirmImportAudioPackage(uri: Uri, assetType: String) {
+    internal fun onZipImportChoice(replaceOld: Boolean) {
+        val (uri, assetType) = zipImportChoice ?: return
+        zipImportChoice = null
         val normalized = ReadAloudBgmTrack.normalizeAssetType(assetType)
         val label = assetLabel(normalized)
-        selector(
-            "导入${label} ZIP",
-            listOf(
-                "清空旧${label}并导入",
-                "追加导入"
-            )
-        ) { _, index ->
-            val replaceOld = index == 0
-            lifecycleScope.launch {
-                setImporting(true, "正在导入${label} ZIP…")
-                kotlin.runCatching {
-                    withContext(Dispatchers.IO) {
-                        importAudioPackage(uri, normalized, replaceOld = replaceOld)
-                    }
-                }.onSuccess { count ->
-                    currentAssetType = normalized
-                    selectedIds.clear()
-                    expandedGroupIds.clear()
-                    expandedGroupsInitialized = false
-                    updateAssetTabs()
-                    notifyAudioChanged()
-                    finishImportingAndLoad()
-                    toastOnUi("已导入 $count 个${label}")
-                }.onFailure {
-                    finishImportingAndLoad()
-                    toastOnUi(it.localizedMessage ?: "音频包导入失败")
+        lifecycleScope.launch {
+            setImporting(true, "正在导入${label} ZIP…")
+            kotlin.runCatching {
+                withContext(Dispatchers.IO) {
+                    importAudioPackage(uri, normalized, replaceOld = replaceOld)
                 }
+            }.onSuccess { count ->
+                currentAssetType = normalized
+                selectedIds = emptySet()
+                expandedGroupIds = emptySet()
+                expandedGroupsInitialized = false
+                notifyAudioChanged()
+                finishImportingAndLoad()
+                toastOnUi("已导入 $count 个${label}")
+            }.onFailure {
+                finishImportingAndLoad()
+                toastOnUi(it.localizedMessage ?: "音频包导入失败")
             }
         }
     }
+
+// __P2__
 
     private fun exportCurrentAudioPackage() {
         if (importing) {
@@ -333,131 +322,67 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun load() {
-        lifecycleScope.launch {
-            val data = withContext(Dispatchers.IO) {
-                appDb.readAloudBgmDao.groupsByType(currentAssetType) to appDb.readAloudBgmDao.enabledTracksByType(currentAssetType)
-            }
-            groups = data.first
-            tracks = data.second
-            selectedIds.retainAll(tracks.map { it.id }.toSet())
-            adapter.submit(buildRows())
-            updateBatchActionBar()
-            binding.tvSummary.text = if (importing) {
-                importingText.ifBlank { "正在导入…" }
-            } else if (tracks.isEmpty()) {
-                if (currentAssetType == ReadAloudBgmTrack.TYPE_SFX) {
-                    "暂无音效。导入短音频并添加标签后，AI 可以为开门、脚步、撞击等候选事件选择音效。"
-                } else {
-                    "暂无配乐。导入音乐后，AI 可以按段落范围选择配乐。"
-                }
+    internal fun showGroupEditor(group: ReadAloudBgmGroup? = null) {
+        if (group != null) {
+            importMenuOpen = false
+            groupManageOpen = false
+            groupActionTarget = null
+        }
+        groupEditorTarget = group
+        groupEditorOpen = true
+    }
+
+    internal fun onGroupEditorConfirmed(name: String) {
+        val group = groupEditorTarget
+        groupEditorOpen = false
+        groupEditorTarget = null
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            toastOnUi("分组名称不能为空")
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            if (group == null) {
+                appDb.readAloudBgmDao.insertGroup(
+                    ReadAloudBgmGroup(
+                        name = trimmed,
+                        assetType = currentAssetType,
+                        sortOrder = (appDb.readAloudBgmDao.maxGroupOrderByType(currentAssetType) ?: 0) + 1,
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                )
             } else {
-                "${tracks.size} 个${currentAssetLabel} · ${groups.size.coerceAtLeast(1)} 个分组 · 已选 ${selectedIds.size}"
+                appDb.readAloudBgmDao.updateGroup(group.copy(name = trimmed, updatedAt = now))
             }
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
         }
     }
 
-    private fun switchAssetType(assetType: String) {
-        val normalized = ReadAloudBgmTrack.normalizeAssetType(assetType)
-        if (currentAssetType == normalized) return
-        currentAssetType = normalized
-        selectedIds.clear()
-        expandedGroupIds.clear()
-        expandedGroupsInitialized = false
-        updateAssetTabs()
-        load()
-    }
-
-    private fun updateAssetTabs() = binding.run {
-        val bgmSelected = currentAssetType == ReadAloudBgmTrack.TYPE_BGM
-        btnDay.isSelected = bgmSelected
-        btnNight.isSelected = !bgmSelected
-        btnDay.setTextColor(if (bgmSelected) accentColor else secondaryTextColor)
-        btnNight.setTextColor(if (!bgmSelected) accentColor else secondaryTextColor)
-    }
-
-    private fun updateBatchActionBar() {
-        if (::batchActionBar.isInitialized) {
-            batchActionBar.visibility = if (selectedIds.isEmpty() || importing) View.GONE else View.VISIBLE
-        }
-    }
-
-    private fun setImporting(value: Boolean, text: String = "") {
-        importing = value
-        importingText = if (value) text else ""
-        binding.recyclerView.alpha = if (value) 0.45f else 1f
-        binding.tvSummary.text = if (value) text.ifBlank { "正在导入…" } else binding.tvSummary.text
-        updateBatchActionBar()
-    }
-
-    private fun finishImportingAndLoad() {
-        setImporting(false)
-        load()
-    }
-
-    private fun assetLabel(assetType: String): String {
-        return if (ReadAloudBgmTrack.normalizeAssetType(assetType) == ReadAloudBgmTrack.TYPE_SFX) {
-            "音效"
-        } else {
-            "配乐"
-        }
-    }
-
-    private fun notifyAudioChanged() {
-        ReadAloudConfigChangeNotifier.notifyAudio()
-    }
-
-    private fun showGroupEditor(group: ReadAloudBgmGroup? = null) {
-        val binding = DialogEditTextBinding.inflate(layoutInflater).apply {
-            editView.hint = "分组名称"
-            editView.setText(group?.name.orEmpty())
-            editView.setSelection(editView.text?.length ?: 0)
-        }
-        alert(if (group == null) "新增分组" else "编辑分组") {
-            customView { binding.root }
-            okButton {
-                val name = binding.editView.text?.toString()?.trim().orEmpty()
-                if (name.isBlank()) {
-                    toastOnUi("分组名称不能为空")
-                    return@okButton
-                }
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val now = System.currentTimeMillis()
-                    if (group == null) {
-                        appDb.readAloudBgmDao.insertGroup(
-                            ReadAloudBgmGroup(
-                                name = name,
-                                assetType = currentAssetType,
-                                sortOrder = (appDb.readAloudBgmDao.maxGroupOrderByType(currentAssetType) ?: 0) + 1,
-                                createdAt = now,
-                                updatedAt = now
-                            )
-                        )
-                    } else {
-                        appDb.readAloudBgmDao.updateGroup(group.copy(name = name, updatedAt = now))
-                    }
-                    notifyAudioChanged()
-                    launch(Dispatchers.Main) { load() }
-                }
-            }
-            cancelButton()
-        }
-    }
-
-    private fun showGroupManage() {
+    internal fun showGroupManage() {
+        importMenuOpen = false
+        overflowMenuOpen = false
         val managedGroups = groups.filterNot { it.isDefaultGroup() }
         if (managedGroups.isEmpty()) {
             toastOnUi("暂无分组")
             return
         }
-        selector("管理分组", managedGroups.map { it.displayName() }) { _, index ->
-            val group = managedGroups[index]
-            selector(group.displayName(), listOf("编辑分组", "删除分组")) { _, action ->
-                when (action) {
-                    0 -> showGroupEditor(group)
-                    1 -> confirmDeleteGroup(group)
-                }
-            }
+        groupManageOpen = true
+    }
+
+    internal fun onGroupManageSelected(group: ReadAloudBgmGroup) {
+        groupManageOpen = false
+        groupActionTarget = group
+    }
+
+    internal fun onGroupAction(index: Int) {
+        val group = groupActionTarget ?: return
+        groupActionTarget = null
+        when (index) {
+            0 -> showGroupEditor(group)
+            1 -> confirmDeleteGroup(group)
         }
     }
 
@@ -466,19 +391,184 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             toastOnUi("默认分组不能删除")
             return
         }
-        alert("删除分组") {
-            setMessage("确定删除“${group.displayName()}”？组内${currentAssetLabel}会移回默认分组，本地文件不会删除。")
-            okButton {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    appDb.readAloudBgmDao.resetTrackGroup(group.id, currentAssetType)
-                    appDb.readAloudBgmDao.deleteGroup(group.id, currentAssetType)
-                    selectedIds.clear()
-                    notifyAudioChanged()
-                    launch(Dispatchers.Main) { load() }
+        deleteGroupTarget = group
+    }
+
+    internal fun onDeleteGroupConfirmed() {
+        val group = deleteGroupTarget ?: return
+        deleteGroupTarget = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.readAloudBgmDao.resetTrackGroup(group.id, currentAssetType)
+            appDb.readAloudBgmDao.deleteGroup(group.id, currentAssetType)
+            selectedIds = emptySet()
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+// __P3__
+
+    internal fun onTrackAction(index: Int) {
+        val track = trackMenuTarget ?: return
+        trackMenuTarget = null
+        when (index) {
+            0 -> tagsEditorTarget = track
+            1 -> volumeTarget = track
+            2 -> moveTracks(listOf(track.id))
+            3 -> deleteTracksIds = listOf(track.id)
+        }
+    }
+
+    internal fun onTagsConfirmed(tags: String) {
+        val track = tagsEditorTarget ?: return
+        tagsEditorTarget = null
+        val normalized = tags.split(',', '，')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(",")
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.readAloudBgmDao.updateTrack(track.copy(tags = normalized, updatedAt = System.currentTimeMillis()))
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun onVolumeConfirmed(value: Int) {
+        val track = volumeTarget ?: return
+        volumeTarget = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.readAloudBgmDao.updateTrack(
+                track.copy(
+                    defaultVolume = (value / 100f).coerceIn(0f, 1f),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun moveSelected() {
+        val ids = selectedIds.toList()
+        if (ids.isEmpty()) {
+            toastOnUi("请先长按选择${currentAssetLabel}")
+            return
+        }
+        moveTracks(ids)
+    }
+
+    internal fun moveTracks(ids: List<Long>) {
+        moveTracksIds = ids
+    }
+
+    internal fun onMoveTargetSelected(groupId: Long) {
+        val ids = moveTracksIds ?: return
+        moveTracksIds = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.readAloudBgmDao.moveTracks(ids, groupId)
+            selectedIds = emptySet()
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun deleteSelected() {
+        val ids = selectedIds.toList()
+        if (ids.isEmpty()) {
+            toastOnUi("请先长按选择${currentAssetLabel}")
+            return
+        }
+        deleteTracksIds = ids
+    }
+
+    internal fun onDeleteTracksConfirmed() {
+        val ids = deleteTracksIds ?: return
+        deleteTracksIds = null
+        lifecycleScope.launch(Dispatchers.IO) {
+            ids.mapNotNull { appDb.readAloudBgmDao.track(it) }.forEach { track ->
+                runCatching { File(track.filePath).delete() }
+            }
+            appDb.readAloudBgmDao.deleteTracks(ids)
+            selectedIds = emptySet()
+            notifyAudioChanged()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun toggleGroup(groupId: Long) {
+        expandedGroupIds = if (groupId in expandedGroupIds) {
+            expandedGroupIds - groupId
+        } else {
+            expandedGroupIds + groupId
+        }
+    }
+
+    internal fun toggleGroupSelection(groupId: Long) {
+        val ids = tracks.filter { it.groupId == groupId }.map { it.id }
+        if (ids.isEmpty()) return
+        selectedIds = if (ids.all { it in selectedIds }) {
+            selectedIds - ids.toSet()
+        } else {
+            selectedIds + ids.toSet()
+        }
+    }
+
+    internal fun toggleTrack(id: Long) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+
+    internal fun groupName(groupId: Long): String {
+        if (groupId == 0L) return "默认分组"
+        return groups.firstOrNull { it.id == groupId }?.displayName() ?: "默认分组"
+    }
+
+    internal fun buildRows(): List<AudioRow> {
+        val tracksByGroup = tracks.groupBy { it.groupId }
+        val rowGroups = (listOf(ReadAloudBgmGroup(id = 0L, name = "默认分组", assetType = currentAssetType, sortOrder = Int.MIN_VALUE)) + groups)
+            .distinctBy { it.id }
+            .filter { group -> group.id != 0L || tracksByGroup.containsKey(0L) || tracks.isEmpty() }
+            .sortedWith(compareBy<ReadAloudBgmGroup> { it.sortOrder }.thenBy { it.id })
+        if (!expandedGroupsInitialized) {
+            expandedGroupIds = rowGroups.filterNot { it.isDefaultGroup() }.map { it.id }.toSet()
+            expandedGroupsInitialized = true
+        } else {
+            expandedGroupIds = expandedGroupIds.filter { id -> rowGroups.any { it.id == id } }.toSet()
+        }
+        return buildList {
+            rowGroups.forEach { group ->
+                val groupTracks = tracksByGroup[group.id].orEmpty()
+                val expanded = group.id in expandedGroupIds
+                add(
+                    AudioRow.GroupHeader(
+                        group = group,
+                        count = groupTracks.size,
+                        selectedCount = groupTracks.count { it.id in selectedIds },
+                        expanded = expanded
+                    )
+                )
+                if (expanded) {
+                    groupTracks.forEach { track ->
+                        add(AudioRow.TrackItem(track))
+                    }
                 }
             }
-            cancelButton()
         }
+    }
+
+    internal sealed class AudioRow {
+        data class GroupHeader(
+            val group: ReadAloudBgmGroup,
+            val count: Int,
+            val selectedCount: Int,
+            val expanded: Boolean
+        ) : AudioRow()
+
+        data class TrackItem(val track: ReadAloudBgmTrack) : AudioRow()
+    }
+
+    private fun ReadAloudBgmGroup.isDefaultGroup(): Boolean {
+        return id == 0L || name == "默认分组"
     }
 
     private suspend fun importTrack(uri: Uri) {
@@ -508,6 +598,8 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             )
         )
     }
+
+// __P4__
 
     private suspend fun importAudioPackage(
         uri: Uri,
@@ -591,16 +683,16 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         if (entries.isEmpty()) error("没有可导出的本地音频文件")
         val output = File.createTempFile("read_aloud_${normalizedType}_", ".zip", cacheDir)
         runCatching {
-        ZipOutputStream(output.outputStream().buffered()).use { zip ->
-            zip.putNextEntry(ZipEntry("config.yaml"))
-            zip.write(buildPackageConfigYaml(entries).toByteArray(Charsets.UTF_8))
-            zip.closeEntry()
-            entries.forEach { entry ->
-                zip.putNextEntry(ZipEntry(entry.entryName))
-                entry.file.inputStream().use { input -> input.copyTo(zip) }
+            ZipOutputStream(output.outputStream().buffered()).use { zip ->
+                zip.putNextEntry(ZipEntry("config.yaml"))
+                zip.write(buildPackageConfigYaml(entries).toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
+                entries.forEach { entry ->
+                    zip.putNextEntry(ZipEntry(entry.entryName))
+                    entry.file.inputStream().use { input -> input.copyTo(zip) }
+                    zip.closeEntry()
+                }
             }
-        }
         }.onFailure {
             output.delete()
             throw it
@@ -796,113 +888,6 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         )
     }
 
-    private fun showTrackActions(track: ReadAloudBgmTrack) {
-        selector(track.displayName(), listOf("编辑标签", "默认音量", "移动分组", "删除")) { _, index ->
-            when (index) {
-                0 -> showTagsEditor(track)
-                1 -> showVolumeEditor(track)
-                2 -> moveTracks(listOf(track.id))
-                3 -> confirmDelete(listOf(track.id))
-            }
-        }
-    }
-
-    private fun showTagsEditor(track: ReadAloudBgmTrack) {
-        val binding = DialogEditTextBinding.inflate(layoutInflater).apply {
-            editView.hint = "标签用逗号分隔，例如 紧张,日常,战斗"
-            editView.setText(track.tags)
-            editView.setSelection(editView.text?.length ?: 0)
-        }
-        alert("编辑标签") {
-            customView { binding.root }
-            okButton {
-                val tags = binding.editView.text?.toString().orEmpty()
-                    .split(',', '，')
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                    .joinToString(",")
-                lifecycleScope.launch(Dispatchers.IO) {
-                    appDb.readAloudBgmDao.updateTrack(track.copy(tags = tags, updatedAt = System.currentTimeMillis()))
-                    notifyAudioChanged()
-                    launch(Dispatchers.Main) { load() }
-                }
-            }
-            cancelButton()
-        }
-    }
-
-    private fun showVolumeEditor(track: ReadAloudBgmTrack) {
-        val current = (track.defaultVolume * 100).toInt().coerceIn(0, 100)
-        io.legado.app.ui.widget.number.NumberPickerDialog(this)
-            .setTitle("${track.assetTypeLabel()}默认音量")
-            .setMinValue(0)
-            .setMaxValue(100)
-            .setValue(current)
-            .show { value ->
-                lifecycleScope.launch(Dispatchers.IO) {
-                    appDb.readAloudBgmDao.updateTrack(
-                        track.copy(
-                            defaultVolume = (value / 100f).coerceIn(0f, 1f),
-                            updatedAt = System.currentTimeMillis()
-                        )
-                    )
-                    notifyAudioChanged()
-                    launch(Dispatchers.Main) { load() }
-                }
-            }
-    }
-
-    private fun moveSelected() {
-        val ids = selectedIds.toList()
-        if (ids.isEmpty()) {
-            toastOnUi("请先长按选择${currentAssetLabel}")
-            return
-        }
-        moveTracks(ids)
-    }
-
-    private fun moveTracks(ids: List<Long>) {
-        val options = listOf(ReadAloudBgmGroup(id = 0L, name = "默认分组", assetType = currentAssetType)) +
-            groups.filterNot { it.isDefaultGroup() }
-        selector("选择分组", options.map { it.displayName() }) { _, index ->
-            val groupId = options[index].id
-            lifecycleScope.launch(Dispatchers.IO) {
-                appDb.readAloudBgmDao.moveTracks(ids, groupId)
-                selectedIds.clear()
-                notifyAudioChanged()
-                launch(Dispatchers.Main) { load() }
-            }
-        }
-    }
-
-    private fun deleteSelected() {
-        val ids = selectedIds.toList()
-        if (ids.isEmpty()) {
-            toastOnUi("请先长按选择${currentAssetLabel}")
-            return
-        }
-        confirmDelete(ids)
-    }
-
-    private fun confirmDelete(ids: List<Long>) {
-        alert("删除${currentAssetLabel}") {
-            setMessage("确定删除选中的 ${ids.size} 个${currentAssetLabel}？文件也会从本地移除。")
-            okButton {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    ids.mapNotNull { appDb.readAloudBgmDao.track(it) }.forEach { track ->
-                        runCatching { File(track.filePath).delete() }
-                    }
-                    appDb.readAloudBgmDao.deleteTracks(ids)
-                    selectedIds.clear()
-                    notifyAudioChanged()
-                    launch(Dispatchers.Main) { load() }
-                }
-            }
-            cancelButton()
-        }
-    }
-
     private fun String.toSafeFileName(extension: String): String {
         val safe = replace(Regex("""[\\/:*?"<>|]"""), "_").ifBlank { "$currentAssetType.$extension" }
         return if (safe.contains('.')) safe else "$safe.$extension"
@@ -958,233 +943,7 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         return ext in supportedAudioExtensions
     }
 
-    private fun groupName(groupId: Long): String {
-        if (groupId == 0L) return "默认分组"
-        return groups.firstOrNull { it.id == groupId }?.displayName() ?: "默认分组"
-    }
-
-    private fun ReadAloudBgmGroup.isDefaultGroup(): Boolean {
-        return id == 0L || name == "默认分组"
-    }
-
-    private fun buildRows(): List<AudioRow> {
-        val tracksByGroup = tracks.groupBy { it.groupId }
-        val rowGroups = (listOf(ReadAloudBgmGroup(id = 0L, name = "默认分组", assetType = currentAssetType, sortOrder = Int.MIN_VALUE)) + groups)
-            .distinctBy { it.id }
-            .filter { group -> group.id != 0L || tracksByGroup.containsKey(0L) || tracks.isEmpty() }
-            .sortedWith(compareBy<ReadAloudBgmGroup> { it.sortOrder }.thenBy { it.id })
-        if (!expandedGroupsInitialized) {
-            expandedGroupIds.clear()
-            expandedGroupIds.addAll(rowGroups.filterNot { it.isDefaultGroup() }.map { it.id })
-            expandedGroupsInitialized = true
-        } else {
-            expandedGroupIds.retainAll(rowGroups.map { it.id }.toSet())
-        }
-        return buildList {
-            rowGroups.forEach { group ->
-                val groupTracks = tracksByGroup[group.id].orEmpty()
-                val expanded = group.id in expandedGroupIds
-                add(
-                    AudioRow.GroupHeader(
-                        group = group,
-                        count = groupTracks.size,
-                        selectedCount = groupTracks.count { it.id in selectedIds },
-                        expanded = expanded
-                    )
-                )
-                if (expanded) {
-                    groupTracks.forEach { track ->
-                        add(AudioRow.TrackItem(track))
-                    }
-                }
-            }
-        }
-    }
-
-    private fun toggleGroup(groupId: Long) {
-        if (!expandedGroupIds.add(groupId)) {
-            expandedGroupIds.remove(groupId)
-        }
-        adapter.submit(buildRows())
-    }
-
-    private fun toggleGroupSelection(groupId: Long) {
-        val ids = tracks.filter { it.groupId == groupId }.map { it.id }
-        if (ids.isEmpty()) return
-        if (ids.all { it in selectedIds }) {
-            selectedIds.removeAll(ids.toSet())
-        } else {
-            selectedIds.addAll(ids)
-        }
-        load()
-    }
-
-    private sealed class AudioRow {
-        data class GroupHeader(
-            val group: ReadAloudBgmGroup,
-            val count: Int,
-            val selectedCount: Int,
-            val expanded: Boolean
-        ) : AudioRow()
-
-        data class TrackItem(val track: ReadAloudBgmTrack) : AudioRow()
-    }
-
-    private inner class BgmAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        private var items: List<AudioRow> = emptyList()
-
-        fun submit(value: List<AudioRow>) {
-            items = value
-            notifyDataSetChanged()
-        }
-
-        override fun getItemViewType(position: Int): Int {
-            return when (items[position]) {
-                is AudioRow.GroupHeader -> VIEW_TYPE_GROUP
-                is AudioRow.TrackItem -> VIEW_TYPE_TRACK
-            }
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            if (viewType == VIEW_TYPE_GROUP) {
-                val root = LinearLayout(parent.context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(10.dpToPx(), 10.dpToPx(), 10.dpToPx(), 10.dpToPx())
-                    background = UiCorner.actionSelector(
-                        parent.context.themeMutedColorOrDefault(),
-                        parent.context.themeCardColorOrDefault(),
-                        UiCorner.actionRadius(parent.context)
-                    )
-                }
-                val title = TextView(parent.context).apply {
-                    textSize = 14f
-                    setTextColor(primaryTextColor)
-                    typeface = uiTypeface()
-                }
-                val sub = TextView(parent.context).apply {
-                    textSize = 12f
-                    setTextColor(secondaryTextColor)
-                    typeface = uiTypeface()
-                }
-                root.addView(title, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                root.addView(sub, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = 3.dpToPx()
-                })
-                root.layoutParams = RecyclerView.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = 8.dpToPx()
-                }
-                return GroupHolder(root, title, sub)
-            }
-            val root = LinearLayout(parent.context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(18.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
-                background = UiCorner.actionSelector(
-                    parent.context.themeCardColorOrDefault(),
-                    parent.context.themeMutedColorOrDefault(),
-                    UiCorner.panelRadius(parent.context)
-                )
-            }
-            val title = TextView(parent.context).apply {
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = uiTypeface()
-            }
-            val sub = TextView(parent.context).apply {
-                textSize = 12f
-                setTextColor(secondaryTextColor)
-                typeface = uiTypeface()
-                gravity = Gravity.START
-            }
-            root.addView(title, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            root.addView(sub, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 4.dpToPx()
-            })
-            root.layoutParams = RecyclerView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                leftMargin = 16.dpToPx()
-                bottomMargin = 10.dpToPx()
-            }
-            return TrackHolder(root, title, sub)
-        }
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            when (val row = items[position]) {
-                is AudioRow.GroupHeader -> (holder as GroupHolder).bind(row)
-                is AudioRow.TrackItem -> (holder as TrackHolder).bind(row.track)
-            }
-        }
-    }
-
-    private inner class GroupHolder(
-        itemView: View,
-        private val title: TextView,
-        private val sub: TextView
-    ) : RecyclerView.ViewHolder(itemView) {
-
-        fun bind(row: AudioRow.GroupHeader) {
-            val arrow = if (row.expanded) "▼" else "▶"
-            title.text = "$arrow ${row.group.displayName()}"
-            sub.text = buildList {
-                add("${row.count} 个${currentAssetLabel}")
-                if (row.selectedCount > 0) add("已选 ${row.selectedCount}")
-            }.joinToString(" · ")
-            itemView.setOnClickListener { toggleGroup(row.group.id) }
-            itemView.setOnLongClickListener {
-                toggleGroupSelection(row.group.id)
-                true
-            }
-        }
-    }
-
-    private inner class TrackHolder(
-        itemView: View,
-        private val title: TextView,
-        private val sub: TextView
-    ) : RecyclerView.ViewHolder(itemView) {
-
-        fun bind(track: ReadAloudBgmTrack) {
-            val selected = track.id in selectedIds
-            title.text = if (selected) "✓ ${track.displayName()}" else track.displayName()
-            sub.text = buildList {
-                add(groupName(track.groupId))
-                add(track.assetTypeLabel())
-                if (track.tags.isNotBlank()) add(track.tags)
-                add("音量 ${(track.defaultVolume * 100).toInt().coerceIn(0, 100)}%")
-                if (track.durationMs > 0) add("${track.durationMs / 1000}s")
-            }.joinToString(" · ")
-            itemView.setOnClickListener {
-                if (selectedIds.isNotEmpty()) {
-                    toggle(track.id)
-                } else {
-                    showTrackActions(track)
-                }
-            }
-            itemView.setOnLongClickListener {
-                toggle(track.id)
-                true
-            }
-        }
-
-        private fun toggle(id: Long) {
-            if (!selectedIds.add(id)) selectedIds.remove(id)
-            load()
-        }
-    }
-
-    companion object {
-        private const val MENU_IMPORT = 1
-        private const val MENU_EXPORT_PACKAGE = 2
-        private const val MENU_ADD_GROUP = 3
-        private const val MENU_MANAGE_GROUPS = 4
-        private const val VIEW_TYPE_GROUP = 1
-        private const val VIEW_TYPE_TRACK = 2
+    private companion object {
         private const val MAX_AUDIO_PACKAGE_CONFIG_BYTES = 1024 * 1024
         private val supportedAudioExtensions = setOf("mp3", "wav", "m4a", "aac", "ogg", "flac")
     }
@@ -1202,4 +961,347 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         val entryName: String,
         val file: File
     )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ReadAloudBgmManageContent(activity: ReadAloudBgmManageActivity) {
+    val density = LocalVisualSpec.current.density
+    val rows = activity.buildRows()
+
+    HostV5Page(
+        title = "智能音频",
+        onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.overflowMenuOpen = true },
+            )
+        },
+        bottomBar = {
+            if (activity.selectedIds.isNotEmpty() && !activity.importing) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = density.screenPadding,
+                            vertical = density.blockGap / 2,
+                        ),
+                    horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    AppGhostButton("批量分组", Modifier.weight(1f)) { activity.moveSelected() }
+                    AppGhostButton("删除", Modifier.weight(1f)) { activity.deleteSelected() }
+                    AppGhostButton("取消选择", Modifier.weight(1f)) { activity.selectedIds = emptySet() }
+                }
+            }
+        },
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.padding(horizontal = density.screenPadding),
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                AppChip(
+                    text = "配乐",
+                    selected = activity.currentAssetType == ReadAloudBgmTrack.TYPE_BGM,
+                    onClick = { activity.switchAssetType(ReadAloudBgmTrack.TYPE_BGM) },
+                )
+                AppChip(
+                    text = "音效",
+                    selected = activity.currentAssetType == ReadAloudBgmTrack.TYPE_SFX,
+                    onClick = { activity.switchAssetType(ReadAloudBgmTrack.TYPE_SFX) },
+                )
+            }
+            Text(
+                text = when {
+                    activity.importing -> activity.importingText.ifBlank { "正在导入…" }
+                    activity.tracks.isEmpty() -> if (activity.currentAssetType == ReadAloudBgmTrack.TYPE_SFX) {
+                        "暂无音效。导入短音频并添加标签后，AI 可以为开门、脚步、撞击等候选事件选择音效。"
+                    } else {
+                        "暂无配乐。导入音乐后，AI 可以按段落范围选择配乐。"
+                    }
+                    else -> "${activity.tracks.size} 个${activity.currentAssetLabel} · ${activity.groups.size.coerceAtLeast(1)} 个分组 · 已选 ${activity.selectedIds.size}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(
+                    horizontal = density.screenPadding,
+                    vertical = density.blockGap / 2,
+                ),
+            )
+            if (rows.isEmpty() && !activity.importing) {
+                AppEmpty(
+                    title = "暂无${activity.currentAssetLabel}",
+                    supporting = "点右上角菜单导入音频或 ZIP 包",
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(
+                        horizontal = density.screenPadding,
+                        vertical = density.blockGap / 4,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    items(rows, key = { row ->
+                        when (row) {
+                            is ReadAloudBgmManageActivity.AudioRow.GroupHeader -> "g_${row.group.id}"
+                            is ReadAloudBgmManageActivity.AudioRow.TrackItem -> "t_${row.track.id}"
+                        }
+                    }) { row ->
+                        when (row) {
+                            is ReadAloudBgmManageActivity.AudioRow.GroupHeader -> GroupHeaderRow(activity, row)
+                            is ReadAloudBgmManageActivity.AudioRow.TrackItem -> TrackRow(activity, row.track)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (activity.overflowMenuOpen) {
+        AppMenuSheet(
+            title = "智能音频",
+            actions = listOf(
+                "导入" to { activity.onOverflowAction(0) },
+                "导出 ZIP" to { activity.onOverflowAction(1) },
+                "新增分组" to { activity.onOverflowAction(2) },
+                "管理分组" to { activity.onOverflowAction(3) },
+            ),
+            onDismiss = { activity.overflowMenuOpen = false },
+        )
+    }
+
+    if (activity.importMenuOpen) {
+        AppMenuSheet(
+            title = "导入智能音频",
+            actions = listOf(
+                "批量导入${activity.currentAssetLabel}" to { activity.onImportAction(0) },
+                "导入单个${activity.currentAssetLabel}" to { activity.onImportAction(1) },
+                "导入配乐 ZIP" to { activity.onImportAction(2) },
+                "导入音效 ZIP" to { activity.onImportAction(3) },
+                "新增分组" to { activity.onImportAction(4) },
+                "管理分组" to { activity.onImportAction(5) },
+            ),
+            onDismiss = { activity.importMenuOpen = false },
+        )
+    }
+
+    activity.zipImportChoice?.let { (_, assetType) ->
+        val label = activity.assetLabel(assetType)
+        AppFilterDialog(
+            title = "导入${label} ZIP",
+            options = listOf("清空旧${label}并导入", "追加导入"),
+            selectedIndex = 1,
+            onSelect = { activity.onZipImportChoice(it == 0) },
+            onDismiss = { activity.zipImportChoice = null },
+        )
+    }
+
+    if (activity.groupEditorOpen) {
+        var name by remember(activity.groupEditorTarget) {
+            mutableStateOf(activity.groupEditorTarget?.name.orEmpty())
+        }
+        AppInputDialog(
+            title = if (activity.groupEditorTarget == null) "新增分组" else "编辑分组",
+            value = name,
+            onValueChange = { name = it },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = "分组名称",
+            onConfirm = { activity.onGroupEditorConfirmed(name) },
+            onDismiss = { activity.groupEditorOpen = false },
+        )
+    }
+
+    if (activity.groupManageOpen) {
+        val managed = activity.groups.filter { !(it.id == 0L || it.name == "默认分组") }
+        AppMenuSheet(
+            title = "管理分组",
+            actions = managed.map { group ->
+                group.displayName() to { activity.onGroupManageSelected(group) }
+            },
+            onDismiss = { activity.groupManageOpen = false },
+        )
+    }
+
+    activity.groupActionTarget?.let { group ->
+        AppMenuSheet(
+            title = group.displayName(),
+            actions = listOf(
+                "编辑分组" to { activity.onGroupAction(0) },
+                "删除分组" to { activity.onGroupAction(1) },
+            ),
+            onDismiss = { activity.groupActionTarget = null },
+        )
+    }
+
+    activity.deleteGroupTarget?.let { group ->
+        AppConfirmDialog(
+            title = "删除分组",
+            message = "确定删除“${group.displayName()}”？组内${activity.currentAssetLabel}会移回默认分组，本地文件不会删除。",
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteGroupConfirmed() },
+            onDismiss = { activity.deleteGroupTarget = null },
+        )
+    }
+
+    if (activity.tagsEditorTarget != null) {
+        var tags by remember(activity.tagsEditorTarget?.id) {
+            mutableStateOf(activity.tagsEditorTarget?.tags.orEmpty())
+        }
+        AppInputDialog(
+            title = "编辑标签",
+            value = tags,
+            onValueChange = { tags = it },
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            placeholder = "标签用逗号分隔，例如 紧张,日常,战斗",
+            onConfirm = { activity.onTagsConfirmed(tags) },
+            onDismiss = { activity.tagsEditorTarget = null },
+        )
+    }
+
+    activity.volumeTarget?.let { track ->
+        AppNumberPickerDialog(
+            title = "${track.assetTypeLabel()}默认音量",
+            value = (track.defaultVolume * 100).toInt().coerceIn(0, 100),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            range = 0..100,
+            step = 1,
+            valueLabel = "${(track.defaultVolume * 100).toInt().coerceIn(0, 100)}%",
+            onConfirm = { activity.onVolumeConfirmed(it) },
+            onDismiss = { activity.volumeTarget = null },
+        )
+    }
+
+    activity.moveTracksIds?.let { _ ->
+        val options = listOf(ReadAloudBgmGroup(id = 0L, name = "默认分组", assetType = activity.currentAssetType)) +
+            activity.groups.filterNot { it.id == 0L || it.name == "默认分组" }
+        AppMenuSheet(
+            title = "选择分组",
+            actions = options.map { group ->
+                group.displayName() to { activity.onMoveTargetSelected(group.id) }
+            },
+            onDismiss = { activity.moveTracksIds = null },
+        )
+    }
+
+    activity.deleteTracksIds?.let { ids ->
+        AppConfirmDialog(
+            title = "删除${activity.currentAssetLabel}",
+            message = "确定删除选中的 ${ids.size} 个${activity.currentAssetLabel}？文件也会从本地移除。",
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.onDeleteTracksConfirmed() },
+            onDismiss = { activity.deleteTracksIds = null },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GroupHeaderRow(
+    activity: ReadAloudBgmManageActivity,
+    row: ReadAloudBgmManageActivity.AudioRow.GroupHeader,
+) {
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { activity.toggleGroup(row.group.id) },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { activity.toggleGroup(row.group.id) },
+                    onLongClick = { activity.toggleGroupSelection(row.group.id) },
+                )
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "${if (row.expanded) "▼" else "▶"} ${row.group.displayName()}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                Text(
+                    text = listOfNotNull(
+                        "${row.count} 个${activity.currentAssetLabel}",
+                        if (row.selectedCount > 0) "已选 ${row.selectedCount}" else null
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TrackRow(
+    activity: ReadAloudBgmManageActivity,
+    track: ReadAloudBgmTrack,
+) {
+    val selected = track.id in activity.selectedIds
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = {
+            if (activity.selectedIds.isNotEmpty()) activity.toggleTrack(track.id)
+            else activity.trackMenuTarget = track
+        },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        if (activity.selectedIds.isNotEmpty()) activity.toggleTrack(track.id)
+                        else activity.trackMenuTarget = track
+                    },
+                    onLongClick = { activity.toggleTrack(track.id) },
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (selected) "✓" else "♪",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = track.displayName(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                Text(
+                    text = listOfNotNull(
+                        activity.groupName(track.groupId),
+                        track.assetTypeLabel(),
+                        track.tags.takeIf { it.isNotBlank() },
+                        "音量 ${(track.defaultVolume * 100).toInt().coerceIn(0, 100)}%",
+                        if (track.durationMs > 0) "${track.durationMs / 1000}s" else null
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.trackMenuTarget = track },
+            )
+        }
+    }
 }

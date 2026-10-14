@@ -1,5 +1,13 @@
 package io.legado.app.ui.config
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppNumberPickerDialog
 import io.legado.app.reader.config.ReadConfigEvent
 import io.legado.app.reader.config.ReadConfigEvent.EpubEngineChanged
 import android.content.ComponentName
@@ -32,9 +40,6 @@ import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.video.config.SettingsDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
-import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefString
@@ -639,15 +644,106 @@ class OtherConfigFragment : ComposeSettingFragment() {
             title = title,
             summary = summary,
             onClick = {
-                showComposeNumberPickerDialog(
-                    title = title,
-                    value = value,
-                    minValue = min,
-                    maxValue = max,
-                    onValue = onSelected
-                )
+                numberPickerTitle = title
+                numberPickerMin = min
+                numberPickerMax = max
+                numberPickerValue = value
+                numberPickerOnSelected = onSelected
+                numberPickerOpen = true
             }
         )
+    }
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    internal var numberPickerOpen by mutableStateOf(false)
+    internal var numberPickerTitle by mutableStateOf("")
+    internal var numberPickerMin by mutableStateOf(0)
+    internal var numberPickerMax by mutableStateOf(0)
+    internal var numberPickerValue by mutableStateOf(0)
+    internal var numberPickerOnSelected by mutableStateOf<((Int) -> Unit)?>(null)
+    internal var userAgentOpen by mutableStateOf(false)
+    internal var userAgentText by mutableStateOf("")
+    internal var confirmKind by mutableStateOf(0)
+    internal var localPasswordOpen by mutableStateOf(false)
+    internal var localPasswordText by mutableStateOf("")
+
+    override val extraDialogs: @Composable () -> Unit = {
+        if (numberPickerOpen) {
+            AppNumberPickerDialog(
+                title = numberPickerTitle,
+                value = numberPickerValue,
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                range = numberPickerMin..numberPickerMax,
+                step = 1,
+                valueLabel = numberPickerValue.toString(),
+                onConfirm = { value ->
+                    numberPickerOpen = false
+                    numberPickerOnSelected?.invoke(value)
+                },
+                onDismiss = { numberPickerOpen = false },
+            )
+        }
+        if (userAgentOpen) {
+            AppInputDialog(
+                title = stringResource(R.string.user_agent),
+                value = userAgentText,
+                onValueChange = { userAgentText = it },
+                placeholder = stringResource(R.string.user_agent),
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { text ->
+                    userAgentOpen = false
+                    if (text.isBlank()) {
+                        removePref(PreferKey.userAgent)
+                    } else {
+                        putPrefString(PreferKey.userAgent, text)
+                    }
+                },
+                onDismiss = { userAgentOpen = false },
+            )
+        }
+        if (confirmKind != 0) {
+            val title = when (confirmKind) {
+                1 -> getString(R.string.clear_cache)
+                2 -> getString(R.string.sure)
+                else -> getString(R.string.clear_webview_data)
+            }
+            val message = when (confirmKind) {
+                2 -> getString(R.string.shrink_database)
+                else -> getString(R.string.sure_del)
+            }
+            AppConfirmDialog(
+                title = title,
+                message = message,
+                confirmLabel = stringResource(android.R.string.ok),
+                cancelLabel = stringResource(R.string.no),
+                onConfirm = {
+                    when (confirmKind) {
+                        1 -> viewModel.clearCache()
+                        2 -> viewModel.shrinkDatabase()
+                        3 -> viewModel.clearWebViewData()
+                    }
+                    confirmKind = 0
+                },
+                onDismiss = { confirmKind = 0 },
+            )
+        }
+        if (localPasswordOpen) {
+            AppInputDialog(
+                title = stringResource(R.string.set_local_password),
+                value = localPasswordText,
+                onValueChange = { localPasswordText = it },
+                placeholder = "password",
+                confirmLabel = stringResource(R.string.ok),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = { text ->
+                    localPasswordOpen = false
+                    LocalConfig.password = text
+                },
+                onDismiss = { localPasswordOpen = false },
+            )
+        }
     }
 
     private fun epubReadEngineSummary(): String {
@@ -659,18 +755,8 @@ class OtherConfigFragment : ComposeSettingFragment() {
     }
 
     private fun showUserAgentDialog() {
-        showComposeTextInputDialog(
-            title = getString(R.string.user_agent),
-            hint = getString(R.string.user_agent),
-            initialValue = userAgentValue(),
-            onPositive = { userAgent ->
-                if (userAgent.isNullOrBlank()) {
-                    removePref(PreferKey.userAgent)
-                } else {
-                    putPrefString(PreferKey.userAgent, userAgent)
-                }
-            }
-        )
+        userAgentText = userAgentValue()
+        userAgentOpen = true
     }
 
     private fun userAgentValue(): String {
@@ -679,33 +765,15 @@ class OtherConfigFragment : ComposeSettingFragment() {
     }
 
     private fun clearCache() {
-        showComposeConfirmDialog(
-            title = getString(R.string.clear_cache),
-            message = getString(R.string.sure_del),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
-            onPositive = { viewModel.clearCache() }
-        )
+        confirmKind = 1
     }
 
     private fun shrinkDatabase() {
-        showComposeConfirmDialog(
-            title = getString(R.string.sure),
-            message = getString(R.string.shrink_database),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
-            onPositive = { viewModel.shrinkDatabase() }
-        )
+        confirmKind = 2
     }
 
     private fun clearWebViewData() {
-        showComposeConfirmDialog(
-            title = getString(R.string.clear_webview_data),
-            message = getString(R.string.sure_del),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
-            onPositive = { viewModel.clearWebViewData() }
-        )
+        confirmKind = 3
     }
 
     private fun isProcessTextEnabled(): Boolean {
@@ -730,12 +798,8 @@ class OtherConfigFragment : ComposeSettingFragment() {
     }
 
     private fun alertLocalPassword() {
-        showComposeTextInputDialog(
-            title = getString(R.string.set_local_password),
-            hint = "password",
-            message = getString(R.string.set_local_password_summary),
-            onPositive = { LocalConfig.password = it }
-        )
+        localPasswordText = LocalConfig.password.orEmpty()
+        localPasswordOpen = true
     }
 
     companion object {

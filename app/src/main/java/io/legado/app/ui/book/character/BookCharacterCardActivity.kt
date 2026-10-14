@@ -1,36 +1,28 @@
 package io.legado.app.ui.book.character
 
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
-import androidx.viewbinding.ViewBinding
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookCharacter
 import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
 import io.legado.app.help.readaloud.speech.SpeechVoiceCatalogRepository
 import io.legado.app.ui.book.character.compose.CharacterCardScreen
 import io.legado.app.ui.book.character.compose.CharacterSpeechEngineUi
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BookCharacterCardActivity : BaseActivity<ViewBinding>(
-    fullScreen = false,
-    imageBg = false
-) {
-
-    private lateinit var composeView: ComposeView
-    override val binding: ViewBinding by lazy {
-        composeView = ComposeView(this)
-        SimpleViewBinding(composeView)
-    }
+/**
+ * 角色卡 V5 脚手架迁移：BaseActivity+ComposeView → AppCompatActivity+setV5Content。
+ */
+class BookCharacterCardActivity : AppCompatActivity() {
 
     private var bookUrl: String = ""
     private var characterBookKey: String = ""
@@ -38,12 +30,12 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
     private var character by mutableStateOf<BookCharacter?>(null)
     private var speechEngines by mutableStateOf<List<CharacterSpeechEngineUi>>(emptyList())
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         bookUrl = intent.getStringExtra(BookCharacterManageActivity.EXTRA_BOOK_URL).orEmpty()
         characterBookKey = intent.getStringExtra(BookCharacterManageActivity.EXTRA_CHARACTER_BOOK_KEY).orEmpty()
         characterId = intent.getLongExtra(BookCharacterManageActivity.EXTRA_CHARACTER_ID, 0L)
-        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        composeView.setContent {
+        setV5Content {
             CharacterCardScreen(
                 character = character,
                 onBack = ::finish,

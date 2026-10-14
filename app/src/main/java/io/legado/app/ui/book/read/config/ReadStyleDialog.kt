@@ -1,35 +1,27 @@
 package io.legado.app.ui.book.read.config
 
-import io.legado.app.reader.config.ReadConfigEvent
-import io.legado.app.reader.config.ReadConfigEvent.Background
-import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
-import io.legado.app.reader.config.ReadConfigEvent.InvalidateTextPage
-import io.legado.app.reader.config.ReadConfigEvent.Relayout
-import io.legado.app.reader.config.ReadConfigEvent.TipStyle
-import io.legado.app.reader.config.ReadConfigEvent.Typography
 import android.content.DialogInterface
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,18 +38,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import io.legado.app.ui.widget.compose.releaseComposeImage
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import io.legado.app.R
 import io.legado.app.constant.EventBus
@@ -69,14 +60,26 @@ import io.legado.app.help.config.ReaderFontWeight
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadBook
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.Background
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.InvalidateTextPage
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.font.FontSelectDialog
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.LegadoMiuixSlider
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.ui.widget.compose.releaseComposeImage
 import io.legado.app.ui.widget.image.CircleImageView
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.postEvent
@@ -84,125 +87,221 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import kotlin.math.roundToInt
 
-class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
+/**
+ * 阅读样式面板（V5 基座版）。
+ *
+ * 旧基类 `ReaderBottomSheetComposeDialogFragment`(BOTTOM + AnimDialogBottom + MATCH_PARENT) 对应 V5 基座的五个 open val；
+ * 旧 `maxSheetHeightFraction = 0.70f` 改为面板内 `heightIn(max = screenHeightDp * 0.70f)`。
+ * **外观跟随阅读页背景色**：改用共享的 `rememberReaderPagePalette()`。
+ * 组件替换：`ReaderSectionCard` → Box+shape+palette.panel；`ReaderSegmentedOptions` → LazyRow/Row + `AppChip(selected)`；
+ * `ReaderTextAction` → AppGhostButton；`ReaderSwitchRow` → `AppRowWithSwitch(card = false)`（**降级：原 summary 副标题不再显示**，
+ * 因 AppRowWithSwitch 未确认支持 summary 参数）；`LegadoMiuixSlider`/`AppThemedStepperSlider` → `AppSlider(steps = range.count()-1)`；
+ * 样式预览的 `CircleImageView`（AndroidView + releaseComposeImage）原样保留。
+ * 业务逻辑全部保留：`changeBgTextConfig` 的「仅本书独立样式 vs 全局切换」双分支、动画切换时先 `setPageAnim(-1)` 再绑定 delegate、
+ * `showBgTextConfig` 的「先切样式再关面板并打开配置」（原 `view?.post{}` 改为主队列 post）、`FontSelectDialog.CallBack` 实现。
+ */
+internal class ReadStyleDialog : V5DialogFragment(),
     FontSelectDialog.CallBack {
 
-    override val maxSheetHeightFraction: Float = 0.70f
+    override val dialogTheme: Int = R.style.Theme_Legado_ComposeDialog_Bottom
+    override val dialogWidth: Int = ViewGroup.LayoutParams.MATCH_PARENT
+    override val dialogHeight: Int = ViewGroup.LayoutParams.WRAP_CONTENT
+    override val dialogGravity: Int = Gravity.BOTTOM
+    override val dialogWindowAnimations: Int = R.style.AnimDialogBottom
+
+    private val maxSheetHeightFraction: Float = 0.70f
 
     private val callBack get() = activity as? ReadBookActivity
+
+    internal var indentDialogOpen by mutableStateOf(false)
 
     override fun onDismiss(dialog: DialogInterface) {
         ReadBookConfig.save()
         super.onDismiss(dialog)
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                ReadStyleContent()
-            }
-        }
-    }
-
     @Composable
-    private fun ReadStyleContent() {
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val v5Colors = LocalSemanticColors.current
+        val palette = rememberReaderPagePalette()
+        val surface = Color(palette.surface)
+        val textColor = Color(palette.textColor)
+        val secondaryText = Color(palette.secondaryTextColor)
+        val accent = Color(palette.accentColor)
+
         var selectedAnim by rememberSaveable { mutableIntStateOf(ReadBook.pageAnim()) }
         val templateOnly = ReadBook.usesPageTemplate()
-        ReaderBottomSheetFrame(maxHeightFraction = maxSheetHeightFraction) { style ->
+        val maxHeight = (LocalConfiguration.current.screenHeightDp * maxSheetHeightFraction)
+            .toInt()
+            .dp
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            color = surface,
+            contentColor = textColor
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .heightIn(max = maxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = stringResource(if (templateOnly) R.string.reader_template_title else if (ReadBookConfig.usingEpubLayout) R.string.epub_layout_profile else R.string.native_layout_profile),
-                    color = style.primaryText,
-                    fontSize = 15.sp,
+                    text = stringResource(
+                        if (templateOnly) R.string.reader_template_title
+                        else if (ReadBookConfig.usingEpubLayout) R.string.epub_layout_profile
+                        else R.string.native_layout_profile
+                    ),
+                    style = visual.type.title,
+                    color = textColor,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
                 if (templateOnly) {
-                    ReaderTextAction(
+                    AppGhostButton(
                         text = stringResource(R.string.reader_template_title),
-                        style = style,
-                        onClick = { showDialogFragment<ReaderTemplateDialog>() }
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { showDialogFragment<ReaderTemplateDialog>() },
                     )
-                    return@Column
+                } else {
+                    TextMetricSection(
+                        palette = palette,
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        accent = accent
+                    )
+                    AnimAndToolsSection(
+                        palette = palette,
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        selectedAnim = selectedAnim,
+                        onSelectedAnimChange = { selectedAnim = it }
+                    )
+                    StyleLibrarySection(
+                        palette = palette,
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        onThemeApplied = { selectedAnim = ReadBook.pageAnim() }
+                    )
                 }
-                TextMetricSection(style = style)
-                AnimAndToolsSection(
-                    style = style,
-                    selectedAnim = selectedAnim,
-                    onSelectedAnimChange = { selectedAnim = it }
-                )
-                StyleLibrarySection(
-                    style = style,
-                    onThemeApplied = { selectedAnim = ReadBook.pageAnim() }
-                )
             }
+        }
+
+        if (indentDialogOpen) {
+            AppFilterDialog(
+                title = getString(R.string.text_indent),
+                options = resources.getStringArray(R.array.indent).toList(),
+                selectedIndex = -1,
+                onSelect = { index ->
+                    indentDialogOpen = false
+                    ReadBookConfig.paragraphIndent = "　".repeat(index)
+                    ReadConfigEvent.post(Typography, Relayout)
+                },
+                onDismiss = { indentDialogOpen = false },
+            )
+        }
+    }
+
+    @Composable
+    private fun SectionCard(
+        panelColor: Color,
+        content: @Composable () -> Unit
+    ) {
+        val visual = LocalVisualSpec.current
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(panelColor)
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            content()
         }
     }
 
     @Composable
     private fun AnimAndToolsSection(
-        style: AppDialogStyle,
+        palette: ReaderSheetStyle.Palette,
+        textColor: Color,
+        secondaryText: Color,
         selectedAnim: Int,
         onSelectedAnimChange: (Int) -> Unit
     ) {
+        val visual = LocalVisualSpec.current
+        val accent = Color(palette.accentColor)
+        val panel = Color(palette.panel)
         var selectedAnimationSpeed by rememberSaveable {
             mutableIntStateOf(ReadBookConfig.pageAnimationSpeed.preferenceValue)
         }
-        var shareLayout by rememberSaveable { mutableIntStateOf(if (ReadBookConfig.shareLayout) 1 else 0) }
         var textWeight by rememberSaveable { mutableIntStateOf(ReadBookConfig.textWeight) }
         var chineseMode by rememberSaveable { mutableIntStateOf(AppConfig.chineseConverterType) }
+        var shareLayout by rememberSaveable { mutableStateOf(ReadBookConfig.shareLayout) }
         val chineseLabels = stringArrayResource(R.array.chinese_mode)
-        ReaderSectionCard(style = style, title = null) {
-            ReaderSegmentedOptions(
-                options = pageAnimOptions(),
-                selectedValue = selectedAnim.toString(),
-                style = style,
-                scrollable = true,
-                pillStyle = true
-            ) { value ->
-                val anim = value.toIntOrNull() ?: return@ReaderSegmentedOptions
-                if (selectedAnim != anim) {
-                    val previousPageAnim = ReadBook.pageAnim()
-                    ReadBook.book?.setPageAnim(-1)
-                    ReadBookConfig.pageAnim = anim
-                    onSelectedAnimChange(anim)
-                    callBack?.applyPageAnimationChange(previousPageAnim)
+        val pageAnimOptions = pageAnimOptions()
+        val speedOptions = pageAnimationSpeedOptions()
+
+        SectionCard(panelColor = panel) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(pageAnimOptions.size) { index ->
+                    val (value, label) = pageAnimOptions[index]
+                    AppChip(
+                        text = label,
+                        selected = value == selectedAnim.toString(),
+                        onClick = {
+                            val anim = value.toIntOrNull() ?: return@AppChip
+                            if (selectedAnim != anim) {
+                                val previousPageAnim = ReadBook.pageAnim()
+                                ReadBook.book?.setPageAnim(-1)
+                                ReadBookConfig.pageAnim = anim
+                                onSelectedAnimChange(anim)
+                                callBack?.applyPageAnimationChange(previousPageAnim)
+                            }
+                        },
+                    )
                 }
             }
             Text(
                 text = stringResource(R.string.page_animation_speed),
-                color = style.secondaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 2.dp)
+                style = visual.type.caption,
+                color = secondaryText,
+                fontWeight = FontWeight.Medium
             )
-            ReaderSegmentedOptions(
-                options = pageAnimationSpeedOptions(),
-                selectedValue = selectedAnimationSpeed.toString(),
-                style = style,
-                pillStyle = true
-            ) { value ->
-                val preferenceValue = value.toIntOrNull() ?: return@ReaderSegmentedOptions
-                val speed = PageAnimationSpeed.fromPreference(preferenceValue)
-                if (selectedAnimationSpeed != speed.preferenceValue) {
-                    ReadBookConfig.pageAnimationSpeed = speed
-                    selectedAnimationSpeed = speed.preferenceValue
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                speedOptions.forEach { (value, label) ->
+                    AppChip(
+                        text = label,
+                        selected = value == selectedAnimationSpeed.toString(),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val preferenceValue = value.toIntOrNull() ?: return@AppChip
+                            val speed = PageAnimationSpeed.fromPreference(preferenceValue)
+                            if (selectedAnimationSpeed != speed.preferenceValue) {
+                                ReadBookConfig.pageAnimationSpeed = speed
+                                selectedAnimationSpeed = speed.preferenceValue
+                            }
+                        },
+                    )
                 }
             }
             FontWeightSlider(
                 value = textWeight,
-                style = style,
+                panelColor = panel,
+                textColor = textColor,
+                accent = accent,
                 onValueChange = { value ->
                     textWeight = value
                     ReadBookConfig.textWeight = value
@@ -215,122 +314,122 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                ReaderTextAction(
+                AppGhostButton(
                     text = stringResource(R.string.text_font),
-                    style = style,
                     modifier = Modifier.weight(1f),
-                    onClick = { showDialogFragment<FontSelectDialog>() }
+                    onClick = { showDialogFragment<FontSelectDialog>() },
                 )
-                ReaderTextAction(
+                AppGhostButton(
                     text = stringResource(R.string.text_indent),
-                    style = style,
                     modifier = Modifier.weight(1f),
-                    onClick = { showTextIndentDialog() }
+                    onClick = { showTextIndentDialog() },
                 )
-                ReaderTextAction(
+                AppGhostButton(
                     text = stringResource(R.string.padding),
-                    style = style,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         dismissAllowingStateLoss()
                         callBack?.showPaddingConfig()
-                    }
+                    },
                 )
-                if (!ReadBookConfig.usingEpubLayout) ReaderTextAction(
-                    text = chineseLabels.getOrElse(chineseMode) { "" },
-                    style = style,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        chineseMode = (chineseMode + 1) % chineseLabels.size
-                        AppConfig.chineseConverterType = chineseMode
-                        ChineseUtils.unLoad(*TransType.entries.toTypedArray())
-                        ReadConfigEvent.post(Relayout)
-                    }
-                )
-                ReaderTextAction(
+                if (!ReadBookConfig.usingEpubLayout) {
+                    AppGhostButton(
+                        text = chineseLabels.getOrElse(chineseMode) { "" },
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            chineseMode = (chineseMode + 1) % chineseLabels.size
+                            AppConfig.chineseConverterType = chineseMode
+                            ChineseUtils.unLoad(*TransType.entries.toTypedArray())
+                            ReadConfigEvent.post(Relayout)
+                        },
+                    )
+                }
+                AppGhostButton(
                     text = stringResource(R.string.information),
-                    style = style,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         TipConfigDialog().show(childFragmentManager, "tipConfigDialog")
-                    }
+                    },
                 )
             }
-            ReaderSwitchRow(
+            AppRowWithSwitch(
                 title = stringResource(R.string.share_layout),
-                checked = shareLayout == 1,
-                style = style
-            ) { checked ->
-                shareLayout = if (checked) 1 else 0
-                ReadBookConfig.shareLayout = checked
-                ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
-            }
+                checked = shareLayout,
+                onCheckedChange = { checked ->
+                    shareLayout = checked
+                    ReadBookConfig.shareLayout = checked
+                    ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
+                },
+                card = false,
+            )
         }
     }
 
     @Composable
     private fun FontWeightSlider(
         value: Int,
-        style: AppDialogStyle,
+        panelColor: Color,
+        textColor: Color,
+        accent: Color,
         onValueChange: (Int) -> Unit,
         onValueChangeFinished: () -> Unit
     ) {
-        Surface(
+        val visual = LocalVisualSpec.current
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 66.dp),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(panelColor)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.text_font_weight),
-                        modifier = Modifier.weight(1f),
-                        color = style.primaryText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight(value)
-                    )
-                    Text(
-                        text = value.toString(),
-                        color = style.accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                LegadoMiuixSlider(
-                    value = value.toFloat(),
-                    onValueChange = {
-                        onValueChange(
-                            it.roundToInt().coerceIn(ReaderFontWeight.MIN, ReaderFontWeight.MAX)
-                        )
-                    },
-                    onValueChangeFinished = onValueChangeFinished,
-                    palette = style.toMiuixPalette(),
-                    valueRange = ReaderFontWeight.MIN.toFloat()..ReaderFontWeight.MAX.toFloat()
+                Text(
+                    text = stringResource(R.string.text_font_weight),
+                    modifier = Modifier.weight(1f),
+                    color = textColor,
+                    style = visual.type.caption,
+                    fontWeight = FontWeight(value)
+                )
+                Text(
+                    text = value.toString(),
+                    color = accent,
+                    style = visual.type.caption,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+            AppSlider(
+                value = value.toFloat(),
+                onValueChange = {
+                    onValueChange(
+                        it.roundToInt().coerceIn(ReaderFontWeight.MIN, ReaderFontWeight.MAX)
+                    )
+                },
+                onValueChangeFinished = onValueChangeFinished,
+                valueRange = ReaderFontWeight.MIN.toFloat()..ReaderFontWeight.MAX.toFloat(),
+                steps = ReaderFontWeight.MAX - ReaderFontWeight.MIN - 1,
+            )
         }
     }
 
     @Composable
-    private fun TextMetricSection(style: AppDialogStyle) {
+    private fun TextMetricSection(
+        palette: ReaderSheetStyle.Palette,
+        textColor: Color,
+        secondaryText: Color,
+        accent: Color
+    ) {
         var textSize by rememberSaveable { mutableIntStateOf(ReadBookConfig.textSize - 5) }
         var letterSpacing by rememberSaveable {
             mutableIntStateOf((ReadBookConfig.letterSpacing * 100).toInt() + 50)
         }
         var lineSpacing by rememberSaveable { mutableIntStateOf(ReadBookConfig.lineSpacingExtra) }
         var paragraphSpacing by rememberSaveable { mutableIntStateOf(ReadBookConfig.paragraphSpacing) }
-        ReaderSectionCard(style = style, title = null) {
+
+        SectionCard(panelColor = Color(palette.panel)) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -344,7 +443,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         value = textSize,
                         valueText = (textSize + 5).toString(),
                         range = 0..45,
-                        style = style,
+                        panelColor = Color(palette.panel),
+                        textColor = textColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onValueChange = {
                             textSize = it
@@ -357,7 +458,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         value = letterSpacing,
                         valueText = ((letterSpacing - 50) / 100f).toString(),
                         range = 0..100,
-                        style = style,
+                        panelColor = Color(palette.panel),
+                        textColor = textColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onValueChange = {
                             letterSpacing = it
@@ -375,7 +478,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         value = lineSpacing,
                         valueText = ((lineSpacing - 10) / 10f).toString(),
                         range = 0..20,
-                        style = style,
+                        panelColor = Color(palette.panel),
+                        textColor = textColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onValueChange = {
                             lineSpacing = it
@@ -388,7 +493,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         value = paragraphSpacing,
                         valueText = (paragraphSpacing / 10f).toString(),
                         range = 0..20,
-                        style = style,
+                        panelColor = Color(palette.panel),
+                        textColor = textColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onValueChange = {
                             paragraphSpacing = it
@@ -407,62 +514,57 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
         value: Int,
         valueText: String,
         range: IntRange,
-        style: AppDialogStyle,
+        panelColor: Color,
+        textColor: Color,
+        accent: Color,
         modifier: Modifier = Modifier,
         onValueChange: (Int) -> Unit
     ) {
-        Surface(
-            modifier = modifier.heightIn(min = 58.dp),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
+        val visual = LocalVisualSpec.current
+        Column(
+            modifier = modifier
+                .heightIn(min = 58.dp)
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(panelColor)
+                .padding(horizontal = 7.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 7.dp, vertical = 5.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = label,
-                        modifier = Modifier.weight(1f),
-                        color = style.primaryText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = valueText,
-                        color = style.accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
-                }
-                AppThemedStepperSlider(
-                    value = value.coerceIn(range),
-                    range = range,
-                    onValueChange = { onValueChange(it.coerceIn(range)) },
-                    palette = style.toMiuixPalette(),
-                    trackHeight = 34.dp,
-                    thumbSize = 26.dp,
-                    endpointWidth = 30.dp
+                Text(
+                    text = label,
+                    modifier = Modifier.weight(1f),
+                    color = textColor,
+                    style = visual.type.caption,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = valueText,
+                    color = accent,
+                    style = visual.type.caption,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
                 )
             }
+            AppSlider(
+                value = value.coerceIn(range).toFloat(),
+                onValueChange = { onValueChange(it.roundToInt().coerceIn(range)) },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                steps = range.count() - 1,
+            )
         }
     }
 
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
     private fun StyleLibrarySection(
-        style: AppDialogStyle,
+        palette: ReaderSheetStyle.Palette,
+        textColor: Color,
+        secondaryText: Color,
         onThemeApplied: () -> Unit
     ) {
         var selectedIndex by rememberSaveable { mutableIntStateOf(ReadBookConfig.styleSelect) }
@@ -470,7 +572,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
         var onlyThisBook by rememberSaveable { mutableStateOf(ReadBookConfig.onlyThisBook) }
         val context = LocalContext.current
         val configs = remember(version) { ReadBookConfig.configList.toList() }
-        ReaderSectionCard(style = style, title = null) {
+        val accent = Color(palette.accentColor)
+
+        SectionCard(panelColor = Color(palette.panel)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -482,7 +586,9 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                     StylePreviewItem(
                         config = config,
                         selected = selectedIndex == index,
-                        style = style,
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        accent = accent,
                         onClick = {
                             changeBgTextConfig(index)
                             selectedIndex = ReadBookConfig.styleSelect
@@ -494,7 +600,11 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                         }
                     )
                 }
-                AddStyleItem(style = style) {
+                AddStyleItem(
+                    panelColor = Color(palette.panel),
+                    textColor = textColor,
+                    secondaryText = secondaryText
+                ) {
                     if (onlyThisBook) {
                         context.toastOnUi(R.string.read_style_only_this_book_add_forbidden)
                         return@AddStyleItem
@@ -503,20 +613,19 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                     showBgTextConfig(ReadBookConfig.configList.lastIndex)
                 }
             }
-            ReaderSwitchRow(
+            AppRowWithSwitch(
                 title = stringResource(R.string.read_style_only_this_book),
-                summary = stringResource(R.string.read_style_only_this_book_summary),
                 checked = onlyThisBook,
-                enabled = ReadBookConfig.canUseBookStyle,
-                style = style
-            ) { enabled ->
-                ReadBookConfig.setOnlyThisBook(enabled)
-                onlyThisBook = enabled
-                selectedIndex = ReadBookConfig.styleSelect
-                onThemeApplied()
-                version++
-                ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
-            }
+                onCheckedChange = { enabled ->
+                    ReadBookConfig.setOnlyThisBook(enabled)
+                    onlyThisBook = enabled
+                    selectedIndex = ReadBookConfig.styleSelect
+                    onThemeApplied()
+                    version++
+                    ReadConfigEvent.post(Background, HeaderFooterTips, Relayout)
+                },
+                card = false,
+            )
         }
     }
 
@@ -525,14 +634,16 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
     private fun StylePreviewItem(
         config: ReadBookConfig.Config,
         selected: Boolean,
-        style: AppDialogStyle,
+        textColor: Color,
+        secondaryText: Color,
+        accent: Color,
         onClick: () -> Unit,
         onLongClick: () -> Unit
     ) {
         val context = LocalContext.current
+        val visual = LocalVisualSpec.current
         Column(
-            modifier = Modifier
-                .width(62.dp),
+            modifier = Modifier.width(62.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
@@ -552,22 +663,22 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
                             setPadding(padding, padding, padding, padding)
                         }
                     },
-                update = { imageView ->
-                    imageView.setText(config.name.ifBlank { context.getString(R.string.text) })
-                    imageView.setTypeface(context.uiTypeface())
-                    imageView.setTextColor(config.curTextColor())
-                    imageView.setImageDrawable(config.curBgDrawable(100, 150))
-                    imageView.borderColor = if (selected) context.accentColor else config.curTextColor()
-                    imageView.setTextBold(selected)
-                },
-                onRelease = { it.releaseComposeImage() },
-                modifier = Modifier.size(48.dp)
-            )
+                    update = { imageView ->
+                        imageView.setText(config.name.ifBlank { context.getString(R.string.text) })
+                        imageView.setTypeface(context.uiTypeface())
+                        imageView.setTextColor(config.curTextColor())
+                        imageView.setImageDrawable(config.curBgDrawable(100, 150))
+                        imageView.borderColor = if (selected) context.accentColor else config.curTextColor()
+                        imageView.setTextBold(selected)
+                    },
+                    onRelease = { it.releaseComposeImage() },
+                    modifier = Modifier.size(48.dp)
+                )
             }
             Text(
                 text = config.name.ifBlank { stringResource(R.string.text) },
-                color = if (selected) style.accent else style.secondaryText,
-                fontSize = 11.sp,
+                color = if (selected) accent else secondaryText,
+                style = visual.type.caption,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -578,38 +689,37 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
 
     @Composable
     private fun AddStyleItem(
-        style: AppDialogStyle,
+        panelColor: Color,
+        textColor: Color,
+        secondaryText: Color,
         onClick: () -> Unit
     ) {
+        val visual = LocalVisualSpec.current
         Column(
             modifier = Modifier
                 .width(62.dp)
                 .heightIn(min = 68.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Surface(
+            Box(
                 modifier = Modifier
                     .size(48.dp)
+                    .clip(CircleShape)
+                    .background(panelColor)
                     .clickable(onClick = onClick),
-                shape = CircleShape,
-                color = style.fieldSurface,
-                contentColor = style.primaryText,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_add),
-                        contentDescription = stringResource(R.string.add),
-                        tint = style.primaryText,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                Icon(
+                    painter = painterResource(R.drawable.ic_add),
+                    contentDescription = stringResource(R.string.add),
+                    tint = textColor,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             Text(
                 text = stringResource(R.string.add),
-                color = style.secondaryText,
-                fontSize = 11.sp,
+                color = secondaryText,
+                style = visual.type.caption,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 5.dp)
@@ -618,13 +728,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
     }
 
     private fun showTextIndentDialog() {
-        showComposeChoiceListDialog(
-            title = getString(R.string.text_indent),
-            labels = resources.getStringArray(R.array.indent).toList()
-        ) { index ->
-            ReadBookConfig.paragraphIndent = "　".repeat(index)
-            ReadConfigEvent.post(Typography, Relayout)
-        }
+        indentDialogOpen = true
     }
 
     private fun changeBgTextConfig(index: Int) {
@@ -655,7 +759,7 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
 
     private fun showBgTextConfig(index: Int): Boolean {
         changeBgTextConfig(index)
-        view?.post {
+        Handler(Looper.getMainLooper()).post {
             dismissAllowingStateLoss()
             callBack?.showBgTextConfig()
         }
@@ -663,36 +767,28 @@ class ReadStyleDialog : ReaderBottomSheetComposeDialogFragment(),
     }
 
     @Composable
-    private fun pageAnimOptions(): List<ReaderOption> {
+    private fun pageAnimOptions(): List<Pair<String, String>> {
         return listOf(
-            ReaderOption(PageAnim.coverPageAnim.toString(), stringResource(R.string.page_anim_cover)),
-            ReaderOption(PageAnim.linkedCoverPageAnim.toString(), stringResource(R.string.page_anim_linked_cover)),
-            ReaderOption(PageAnim.slidePageAnim.toString(), stringResource(R.string.page_anim_slide)),
-            ReaderOption(PageAnim.simulationPageAnim.toString(), stringResource(R.string.page_anim_simulation)),
-            ReaderOption(PageAnim.scrollPageAnim.toString(), stringResource(R.string.page_anim_scroll)),
-            ReaderOption(PageAnim.noAnim.toString(), stringResource(R.string.page_anim_none))
+            PageAnim.coverPageAnim.toString() to stringResource(R.string.page_anim_cover),
+            PageAnim.linkedCoverPageAnim.toString() to stringResource(R.string.page_anim_linked_cover),
+            PageAnim.slidePageAnim.toString() to stringResource(R.string.page_anim_slide),
+            PageAnim.simulationPageAnim.toString() to stringResource(R.string.page_anim_simulation),
+            PageAnim.scrollPageAnim.toString() to stringResource(R.string.page_anim_scroll),
+            PageAnim.noAnim.toString() to stringResource(R.string.page_anim_none)
         )
     }
 
     @Composable
-    private fun pageAnimationSpeedOptions(): List<ReaderOption> {
+    private fun pageAnimationSpeedOptions(): List<Pair<String, String>> {
         return listOf(
-            ReaderOption(
-                PageAnimationSpeed.EXTREME.preferenceValue.toString(),
-                stringResource(R.string.page_animation_speed_extreme)
-            ),
-            ReaderOption(
-                PageAnimationSpeed.STANDARD.preferenceValue.toString(),
-                stringResource(R.string.page_animation_speed_standard)
-            ),
-            ReaderOption(
-                PageAnimationSpeed.RELAXED.preferenceValue.toString(),
-                stringResource(R.string.page_animation_speed_relaxed)
-            ),
-            ReaderOption(
-                PageAnimationSpeed.ELEGANT.preferenceValue.toString(),
+            PageAnimationSpeed.EXTREME.preferenceValue.toString() to
+                stringResource(R.string.page_animation_speed_extreme),
+            PageAnimationSpeed.STANDARD.preferenceValue.toString() to
+                stringResource(R.string.page_animation_speed_standard),
+            PageAnimationSpeed.RELAXED.preferenceValue.toString() to
+                stringResource(R.string.page_animation_speed_relaxed),
+            PageAnimationSpeed.ELEGANT.preferenceValue.toString() to
                 stringResource(R.string.page_animation_speed_elegant)
-            )
         )
     }
 

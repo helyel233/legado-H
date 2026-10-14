@@ -1,36 +1,44 @@
 package io.legado.app.ui.book.read.config
 
 import android.os.Bundle
-import android.view.Gravity
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.SimpleItemAnimator
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiReadAloudUsageRecord
-import io.legado.app.databinding.ActivityThemeManageBinding
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.secondaryTextColor
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.widget.compose.ComposeActionListDialog
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.showDialogFragment
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,58 +46,36 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>() {
+private val usageTimeFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
+/**
+ * 朗读 AI 消耗记录 V5 版（主题/外观编辑器批，台账 #46）。
+ * 旧版：BaseActivity<ActivityThemeManageBinding> + RecyclerView 自绘 adapter（旧主题 UiCorner/主题色）。
+ * 新版：AppCompatActivity + setV5Content + HostV5Page；列表用 LazyColumn + AppCard；顶栏溢出菜单承载
+ * 类型筛选/当前书切换/删除选中/清空全部；弹窗全换 V5（类型筛选 AppMenuSheet、删除 AppConfirmDialog(danger)）。
+ */
+class AiReadAloudUsageRecordActivity : AppCompatActivity() {
 
-    private val adapter = UsageAdapter()
-    private val selectedIds = linkedSetOf<Long>()
-    private var records: List<AiReadAloudUsageRecord> = emptyList()
-    private var typeFilter: String = ""
-    private var currentBookOnly = false
+    internal val records = mutableStateOf<List<AiReadAloudUsageRecord>>(emptyList())
+    internal val selectedIds = mutableStateOf<Set<Long>>(emptySet())
+    internal var typeFilter by mutableStateOf("")
+    internal var currentBookOnly by mutableStateOf(false)
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initView()
+    internal var menuOpen by mutableStateOf(false)
+    internal var typeFilterOpen by mutableStateOf(false)
+    internal var recordMenuTarget by mutableStateOf<AiReadAloudUsageRecord?>(null)
+    internal var confirmDeleteSelected by mutableStateOf(false)
+    internal var confirmClearAll by mutableStateOf(false)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { UsageRecordScreen(this) }
         load()
     }
 
-    private fun initView() = binding.run {
-        titleBar.title = "消耗记录"
-        tabBar.visibility = View.GONE
-        btnAdd.text = "全选"
-        btnAdd.background = UiCorner.actionSelector(
-            themeCardColorOrDefault(),
-            themeMutedColorOrDefault(),
-            UiCorner.actionRadius(this@AiReadAloudUsageRecordActivity)
-        )
-        btnAdd.setOnClickListener { toggleSelectAll() }
-        tvSummary.setTextColor(secondaryTextColor)
-        recyclerView.layoutManager = LinearLayoutManager(this@AiReadAloudUsageRecordActivity)
-        recyclerView.adapter = adapter
-        (recyclerView.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
-        root.applyUiBodyTypefaceDeep(uiTypeface())
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, MENU_FILTER_TYPE, 0, "类型筛选").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_FILTER_BOOK, 1, "当前书/全部").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_DELETE_SELECTED, 2, "删除选中").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_CLEAR_ALL, 3, "清空全部").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            MENU_FILTER_TYPE -> showTypeFilter()
-            MENU_FILTER_BOOK -> {
-                currentBookOnly = !currentBookOnly
-                selectedIds.clear()
-                load()
-            }
-            MENU_DELETE_SELECTED -> deleteSelected()
-            MENU_CLEAR_ALL -> confirmClearAll()
-        }
-        return true
+    override fun onResume() {
+        super.onResume()
+        load()
     }
 
     private fun load() {
@@ -98,241 +84,279 @@ class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>(
             val loaded = withContext(Dispatchers.IO) {
                 appDb.aiReadAloudUsageRecordDao.list(typeFilter, bookUrl)
             }
-            records = loaded
-            selectedIds.retainAll(records.mapTo(hashSetOf()) { it.id })
-            adapter.submit(records)
-            updateSummary()
+            records.value = loaded
+            selectedIds.value = selectedIds.value.intersect(loaded.mapTo(hashSetOf()) { it.id })
         }
     }
 
-    private fun updateSummary() {
-        val totalInput = records.sumOf { it.inputTokens }
-        val totalCached = records.sumOf { it.cachedInputTokens }
-        val totalOutput = records.sumOf { it.outputTokens }
-        val total = records.sumOf { it.totalTokens.takeIf { value -> value > 0 } ?: (it.inputTokens + it.outputTokens) }
-        val typeText = typeLabel(typeFilter).takeIf { typeFilter.isNotBlank() } ?: "全部类型"
-        val bookText = if (currentBookOnly) "当前书" else "全部书籍"
-        binding.tvSummary.text = "$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput · 总 $total · 已选 ${selectedIds.size}"
+    internal fun toggleBookFilter() {
+        currentBookOnly = !currentBookOnly
+        selectedIds.value = emptySet()
+        load()
     }
 
-    private fun showTypeFilter() {
+    internal fun selectType(value: String) {
+        typeFilter = value
+        selectedIds.value = emptySet()
+        load()
+    }
+
+    internal fun toggleSelectAll() {
+        val all = records.value.mapTo(hashSetOf()) { it.id }
+        selectedIds.value = if (all.isNotEmpty() && selectedIds.value.size == all.size) emptySet() else all
+    }
+
+    internal fun toggle(id: Long) {
+        val cur = selectedIds.value
+        selectedIds.value = if (id in cur) cur - id else cur + id
+    }
+
+    internal fun deleteSelected() {
+        val ids = selectedIds.value.toList()
+        if (ids.isEmpty()) {
+            toastOnUi("请先长按选择记录")
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.aiReadAloudUsageRecordDao.deleteByIds(ids)
+            selectedIds.value = emptySet()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun clearAll() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.aiReadAloudUsageRecordDao.clear()
+            selectedIds.value = emptySet()
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+
+    internal fun deleteRecord(record: AiReadAloudUsageRecord) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            appDb.aiReadAloudUsageRecordDao.delete(record.id)
+            selectedIds.value = selectedIds.value - record.id
+            launch(Dispatchers.Main) { load() }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun UsageRecordScreen(activity: AiReadAloudUsageRecordActivity) {
+    BackHandler { activity.finish() }
+
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    val records = activity.records.value
+    val selectedIds = activity.selectedIds.value
+    val typeFilter = activity.typeFilter
+    val currentBookOnly = activity.currentBookOnly
+
+    val totalInput = records.sumOf { it.inputTokens }
+    val totalCached = records.sumOf { it.cachedInputTokens }
+    val totalOutput = records.sumOf { it.outputTokens }
+    val total = records.sumOf { it.totalTokens.takeIf { v -> v > 0 } ?: (it.inputTokens + it.outputTokens) }
+    val typeText = if (typeFilter.isNotBlank()) typeLabel(typeFilter) else "全部类型"
+    val bookText = if (currentBookOnly) "当前书" else "全部书籍"
+    val summary = "$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput · 总 $total · 已选 ${selectedIds.size}"
+
+    HostV5Page(
+        title = "消耗记录",
+        onBack = { activity.finish() },
+        trailing = {
+            AppOverflowMenuButton(
+                contentDescription = stringResource(R.string.more),
+                onClick = { activity.menuOpen = true },
+            )
+        },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Text(
+                text = summary,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = density.screenPadding, top = density.blockGap, end = density.screenPadding),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    start = density.screenPadding,
+                    end = density.screenPadding,
+                    top = density.blockGap,
+                    bottom = density.blockGap / 2,
+                ),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                items(records, key = { it.id }) { record ->
+                    val selected = record.id in selectedIds
+                    AppCard {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (selectedIds.isNotEmpty()) activity.toggle(record.id)
+                                        else activity.recordMenuTarget = record
+                                    },
+                                    onLongClick = { activity.toggle(record.id) },
+                                )
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) {
+                            Text(
+                                text = recordTitle(record, selected),
+                                style = visual.type.body,
+                                color = colors.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = recordSubtitle(record),
+                                style = visual.type.caption,
+                                color = colors.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+            AppFilledButton(
+                text = "全选",
+                onClick = { activity.toggleSelectAll() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap),
+            )
+        }
+    }
+
+    // 顶栏溢出菜单
+    if (activity.menuOpen) {
+        AppMenuSheet(
+            title = "消耗记录",
+            actions = listOf(
+                "类型筛选" to { activity.typeFilterOpen = true },
+                (if (currentBookOnly) "显示全部" else "只看当前书") to { activity.toggleBookFilter() },
+                "删除选中" to { activity.confirmDeleteSelected = true },
+                "清空全部" to { activity.confirmClearAll = true },
+            ),
+            onDismiss = { activity.menuOpen = false },
+        )
+    }
+
+    // 类型筛选
+    if (activity.typeFilterOpen) {
         val types = listOf(
             "" to "全部",
             AiReadAloudUsageRecord.TYPE_ROLE to "多角色",
             AiReadAloudUsageRecord.TYPE_BGM to "配乐",
             AiReadAloudUsageRecord.TYPE_SFX to "音效",
-            AiReadAloudUsageRecord.TYPE_AUDIO to "音频分析"
+            AiReadAloudUsageRecord.TYPE_AUDIO to "音频分析",
         )
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = "类型筛选",
-                labels = types.map { if (it.first == typeFilter) "${it.second} ✓" else it.second },
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    types.getOrNull(index)?.let { selected ->
-                        typeFilter = selected.first
-                        selectedIds.clear()
-                        load()
-                    }
+        AppMenuSheet(
+            title = "类型筛选",
+            actions = types.map { (value, label) ->
+                (if (value == typeFilter) "$label ✓" else label) to {
+                    activity.typeFilterOpen = false
+                    activity.selectType(value)
                 }
-            )
+            },
+            onDismiss = { activity.typeFilterOpen = false },
         )
     }
 
-    private fun toggleSelectAll() {
-        if (records.isEmpty()) return
-        if (selectedIds.size == records.size) {
-            selectedIds.clear()
-        } else {
-            selectedIds.clear()
-            records.mapTo(selectedIds) { it.id }
-        }
-        adapter.submit(records)
-        updateSummary()
-    }
-
-    private fun deleteSelected() {
-        val ids = selectedIds.toList()
-        if (ids.isEmpty()) {
-            toastOnUi("请先长按选择记录")
-            return
-        }
-        showDialogFragment(
-            ComposeConfirmDialog.create(
-                title = "删除记录",
-                message = "确定删除选中的 ${ids.size} 条消耗记录？",
-                positiveText = getString(R.string.delete),
-                negativeText = getString(R.string.cancel),
-                dangerPositive = true,
-                onPositive = {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        appDb.aiReadAloudUsageRecordDao.deleteByIds(ids)
-                        selectedIds.clear()
-                        launch(Dispatchers.Main) { load() }
-                    }
+    // 单条记录菜单（删除）
+    activity.recordMenuTarget?.let { record ->
+        AppMenuSheet(
+            title = typeLabel(record.type),
+            actions = listOf(
+                stringResource(R.string.delete) to {
+                    activity.recordMenuTarget = null
+                    activity.deleteRecord(record)
                 }
-            )
+            ),
+            onDismiss = { activity.recordMenuTarget = null },
         )
     }
 
-    private fun confirmClearAll() {
-        showDialogFragment(
-            ComposeConfirmDialog.create(
-                title = "清空记录",
-                message = "确定清空所有朗读 AI 消耗记录？",
-                positiveText = getString(R.string.clear),
-                negativeText = getString(R.string.cancel),
-                dangerPositive = true,
-                onPositive = {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        appDb.aiReadAloudUsageRecordDao.clear()
-                        selectedIds.clear()
-                        launch(Dispatchers.Main) { load() }
-                    }
-                }
-            )
+    // 删除选中确认
+    if (activity.confirmDeleteSelected) {
+        AppConfirmDialog(
+            title = "删除记录",
+            message = "确定删除选中的 ${selectedIds.size} 条消耗记录？",
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.confirmDeleteSelected = false
+                activity.deleteSelected()
+            },
+            onDismiss = { activity.confirmDeleteSelected = false },
         )
     }
 
-    private fun showRecordActions(record: AiReadAloudUsageRecord) {
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = typeLabel(record.type),
-                labels = listOf("删除"),
-                dangerIndices = setOf(0),
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    if (index == 0) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            appDb.aiReadAloudUsageRecordDao.delete(record.id)
-                            selectedIds.remove(record.id)
-                            launch(Dispatchers.Main) { load() }
-                        }
-                    }
-                }
-            )
+    // 清空确认
+    if (activity.confirmClearAll) {
+        AppConfirmDialog(
+            title = "清空记录",
+            message = "确定清空所有朗读 AI 消耗记录？",
+            confirmLabel = stringResource(R.string.clear),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.confirmClearAll = false
+                activity.clearAll()
+            },
+            onDismiss = { activity.confirmClearAll = false },
         )
     }
+}
 
-    private inner class UsageAdapter : RecyclerView.Adapter<UsageHolder>() {
-        private var items: List<AiReadAloudUsageRecord> = emptyList()
-
-        fun submit(value: List<AiReadAloudUsageRecord>) {
-            items = value
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UsageHolder {
-            val root = LinearLayout(parent.context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
-                background = UiCorner.actionSelector(
-                    parent.context.themeCardColorOrDefault(),
-                    parent.context.themeMutedColorOrDefault(),
-                    UiCorner.panelRadius(parent.context)
-                )
-            }
-            val title = TextView(parent.context).apply {
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = uiTypeface()
-            }
-            val sub = TextView(parent.context).apply {
-                textSize = 12f
-                setTextColor(secondaryTextColor)
-                typeface = uiTypeface()
-                gravity = Gravity.START
-            }
-            root.addView(title, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            root.addView(sub, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 4.dpToPx()
-            })
-            root.layoutParams = RecyclerView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = 10.dpToPx()
-            }
-            return UsageHolder(root, title, sub)
-        }
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onBindViewHolder(holder: UsageHolder, position: Int) {
-            holder.bind(items[position])
-        }
+private fun recordTitle(record: AiReadAloudUsageRecord, selected: Boolean): String {
+    return buildString {
+        if (selected) append("✓ ")
+        append(typeLabel(record.type))
+        append(" · ")
+        append(statusLabel(record.status))
+        if (record.batchName.isNotBlank()) append(" · ").append(record.batchName)
     }
+}
 
-    private inner class UsageHolder(
-        itemView: View,
-        private val title: TextView,
-        private val sub: TextView
-    ) : RecyclerView.ViewHolder(itemView) {
+private fun recordSubtitle(record: AiReadAloudUsageRecord): String {
+    return buildList {
+        add(record.chapterTitle.ifBlank { record.bookName.ifBlank { "未知章节" } })
+        add(formatTime(record.createdAt))
+        if (record.modelId.isNotBlank()) add(record.modelId)
+        add("输入 ${record.inputTokens}")
+        if (record.cachedInputTokens > 0) add("缓存 ${record.cachedInputTokens}")
+        add("输出 ${record.outputTokens}")
+        add("总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}")
+        if (record.error.isNotBlank()) add(record.error)
+    }.joinToString(" · ")
+}
 
-        fun bind(record: AiReadAloudUsageRecord) {
-            val selected = record.id in selectedIds
-            title.text = buildString {
-                if (selected) append("✓ ")
-                append(typeLabel(record.type))
-                append(" · ")
-                append(statusLabel(record.status))
-                if (record.batchName.isNotBlank()) append(" · ").append(record.batchName)
-            }
-            sub.text = buildList {
-                add(record.chapterTitle.ifBlank { record.bookName.ifBlank { "未知章节" } })
-                add(formatTime(record.createdAt))
-                if (record.modelId.isNotBlank()) add(record.modelId)
-                add("输入 ${record.inputTokens}")
-                if (record.cachedInputTokens > 0) add("缓存 ${record.cachedInputTokens}")
-                add("输出 ${record.outputTokens}")
-                add("总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}")
-                if (record.error.isNotBlank()) add(record.error)
-            }.joinToString(" · ")
-            itemView.setOnClickListener {
-                if (selectedIds.isNotEmpty()) {
-                    toggle(record.id)
-                } else {
-                    showRecordActions(record)
-                }
-            }
-            itemView.setOnLongClickListener {
-                toggle(record.id)
-                true
-            }
-        }
+private fun typeLabel(type: String): String = when (type) {
+    AiReadAloudUsageRecord.TYPE_ROLE -> "多角色"
+    AiReadAloudUsageRecord.TYPE_BGM -> "配乐"
+    AiReadAloudUsageRecord.TYPE_SFX -> "音效"
+    AiReadAloudUsageRecord.TYPE_AUDIO -> "音频分析"
+    else -> "全部"
+}
 
-        private fun toggle(id: Long) {
-            if (!selectedIds.add(id)) selectedIds.remove(id)
-            adapter.submit(records)
-            updateSummary()
-        }
-    }
+private fun statusLabel(status: String): String = when (status) {
+    AiReadAloudUsageRecord.STATUS_SUCCESS -> "成功"
+    AiReadAloudUsageRecord.STATUS_FAILED -> "失败"
+    AiReadAloudUsageRecord.STATUS_CACHE -> "缓存"
+    else -> status.ifBlank { "未知" }
+}
 
-    companion object {
-        private const val MENU_FILTER_TYPE = 1
-        private const val MENU_FILTER_BOOK = 2
-        private const val MENU_DELETE_SELECTED = 3
-        private const val MENU_CLEAR_ALL = 4
-
-        private val timeFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-
-        private fun typeLabel(type: String): String = when (type) {
-            AiReadAloudUsageRecord.TYPE_ROLE -> "多角色"
-            AiReadAloudUsageRecord.TYPE_BGM -> "配乐"
-            AiReadAloudUsageRecord.TYPE_SFX -> "音效"
-            AiReadAloudUsageRecord.TYPE_AUDIO -> "音频分析"
-            else -> "全部"
-        }
-
-        private fun statusLabel(status: String): String = when (status) {
-            AiReadAloudUsageRecord.STATUS_SUCCESS -> "成功"
-            AiReadAloudUsageRecord.STATUS_FAILED -> "失败"
-            AiReadAloudUsageRecord.STATUS_CACHE -> "缓存"
-            else -> status.ifBlank { "未知" }
-        }
-
-        private fun formatTime(time: Long): String {
-            return if (time > 0) timeFormat.format(Date(time)) else "-"
-        }
-    }
+private fun formatTime(time: Long): String {
+    return if (time > 0) usageTimeFormat.format(Date(time)) else "-"
 }

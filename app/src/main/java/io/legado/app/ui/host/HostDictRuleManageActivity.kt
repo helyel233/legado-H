@@ -52,8 +52,8 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.rememberAppReorderableListState
 import io.legado.app.uikit.v5.components.rememberAppSelectionState
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.ACache
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.showHelp
@@ -95,6 +95,8 @@ private fun HostDictRuleManageScreen() {
 
     val selection = rememberAppSelectionState<DictRule>(idOf = { it.name })
     var menuOpen by remember { mutableStateOf(false) }
+    var importUrlOpen by remember { mutableStateOf(false) }
+    var importUrlText by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<DictRule?>(null) }
     var editTarget by remember { mutableStateOf<String?>(null) }
@@ -261,18 +263,8 @@ private fun HostDictRuleManageScreen() {
                     val aCache = ACache.get(cacheDir = false)
                     val cacheUrls = aCache.getAsString("dictRuleRecordKey")
                         ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
-                    activity.showComposeTextInputDialog(
-                        title = activity.getString(R.string.import_on_line),
-                        hint = "url",
-                        onPositive = { text ->
-                            if (text.isAbsUrl() && !cacheUrls.contains(text)) {
-                                cacheUrls.add(0, text)
-                                aCache.put("dictRuleRecordKey", cacheUrls.joinToString(","))
-                            }
-                            ImportDictRuleDialog(text)
-                                .show(activity.supportFragmentManager, "importDictRule")
-                        },
-                    )
+                    importUrlText = ""
+                    importUrlOpen = true
                 },
                 stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) },
                 stringResource(R.string.import_default_rule) to {
@@ -282,6 +274,31 @@ private fun HostDictRuleManageScreen() {
                 stringResource(R.string.v5_help) to { activity.showHelp("dictRuleHelp") },
             ),
             onDismiss = { menuOpen = false },
+        )
+    }
+
+    // 在线导入 URL 输入（AppInputDialog）
+    if (importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = importUrlText,
+            onValueChange = { importUrlText = it },
+            placeholder = "url",
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                importUrlOpen = false
+                val aCache = ACache.get(cacheDir = false)
+                val cacheUrls = aCache.getAsString("dictRuleRecordKey")
+                    ?.splitNotBlank(",")?.toMutableList() ?: mutableListOf()
+                if (text.isAbsUrl() && !cacheUrls.contains(text)) {
+                    cacheUrls.add(0, text)
+                    aCache.put("dictRuleRecordKey", cacheUrls.joinToString(","))
+                }
+                ImportDictRuleDialog(text)
+                    .show(activity.supportFragmentManager, "importDictRule")
+            },
+            onDismiss = { importUrlOpen = false },
         )
     }
 

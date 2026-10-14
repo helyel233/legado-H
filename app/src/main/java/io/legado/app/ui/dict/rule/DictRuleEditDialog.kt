@@ -4,46 +4,53 @@ import android.app.Activity.RESULT_OK
 import android.app.Application
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.unit.dp
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.DictRule
 import io.legado.app.ui.code.CodeEditActivity
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppRuleFieldSpacer
-import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.*
 
-class DictRuleEditDialog() : ComposeDialogFragment() {
+/**
+ * 词典规则编辑弹窗（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + AppRuleTextField + LegadoMiuixActionButton 换为
+ * V5 AppDialog + AppTextField + AppGhostButton/AppFilledButton。
+ * 已知降级：AppTextField 以 String 为值，全屏编辑（CodeEditActivity）回填后光标落于文末
+ * （旧版可精确回填 cursorPosition）；粘贴/复制/保存/退出确认语义不变。
+ */
+internal class DictRuleEditDialog() : V5DialogFragment() {
 
     val viewModel by viewModels<DictRuleEditViewModel>()
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     enum class EditField {
         Name, UrlRule, ShowRule
@@ -56,53 +63,49 @@ class DictRuleEditDialog() : ComposeDialogFragment() {
     private var loaded by mutableStateOf(false)
     private var forceDismiss = false
 
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var exitConfirmOpen by mutableStateOf(false)
+
     constructor(name: String) : this() {
         arguments = Bundle().apply {
             putString("name", name)
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): ComposeView {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                LaunchedEffect(Unit) {
-                    viewModel.initData(arguments?.getString("name")) {
-                        upRuleView(viewModel.dictRule)
-                        loaded = true
-                    }
-                }
-                if (loaded) {
-                    DictRuleEditContent(
-                        name = nameValue,
-                        onNameChange = { nameValue = it },
-                        urlRule = urlRuleValue,
-                        onUrlRuleChange = { urlRuleValue = it },
-                        showRule = showRuleValue,
-                        onShowRuleChange = { showRuleValue = it },
-                        onFieldFocused = { focusedField = it },
-                        onFullEdit = ::onFullEditClicked,
-                        onSave = {
-                            viewModel.save(getDictRule()) {
-                                forceDismiss = true
-                                dismissAllowingStateLoss()
-                            }
-                        },
-                        onCopyRule = { viewModel.copyRule(getDictRule()) },
-                        onPasteRule = {
-                            viewModel.pasteRule {
-                                upRuleView(it)
-                            }
-                        },
-                        onDismiss = { dismiss() }
-                    )
-                }
+    @Composable
+    override fun Content() {
+        LaunchedEffect(Unit) {
+            viewModel.initData(arguments?.getString("name")) {
+                upRuleView(viewModel.dictRule)
+                loaded = true
             }
         }
+        if (loaded) {
+            DictRuleEditContent(
+                name = nameValue.text,
+                onNameChange = { nameValue = TextFieldValue(it) },
+                urlRule = urlRuleValue.text,
+                onUrlRuleChange = { urlRuleValue = TextFieldValue(it) },
+                showRule = showRuleValue.text,
+                onShowRuleChange = { showRuleValue = TextFieldValue(it) },
+                onFieldFocused = { focusedField = it },
+                onFullEdit = ::onFullEditClicked,
+                onSave = {
+                    viewModel.save(getDictRule()) {
+                        forceDismiss = true
+                        dismissAllowingStateLoss()
+                    }
+                },
+                onCopyRule = { viewModel.copyRule(getDictRule()) },
+                onPasteRule = {
+                    viewModel.pasteRule {
+                        upRuleView(it)
+                    }
+                },
+                onDismiss = { dismiss() }
+            )
+        }
+        DictRuleExitDialogs()
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -185,17 +188,47 @@ class DictRuleEditDialog() : ComposeDialogFragment() {
         if (forceDismiss || isSame()) {
             super.dismiss()
         } else {
-            ComposeConfirmDialog.create(
-                title = getString(R.string.exit),
-                message = getString(R.string.exit_no_save),
-                positiveText = getString(R.string.yes),
-                negativeText = getString(R.string.no),
-                onPositive = {},
-                onNegative = {
-                    forceDismiss = true
-                    dismissWithoutConfirm()
+            exitConfirmOpen = true
+        }
+    }
+
+    @Composable
+    private fun DictRuleExitDialogs() {
+        val density = LocalVisualSpec.current.density
+        val colors = LocalSemanticColors.current
+        if (exitConfirmOpen) {
+            AppDialog(onDismiss = { exitConfirmOpen = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = stringResource(R.string.exit),
+                        style = LocalVisualSpec.current.type.title,
+                        color = colors.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.exit_no_save),
+                        style = LocalVisualSpec.current.type.caption,
+                        color = colors.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppFilledButton(
+                            text = stringResource(R.string.yes),
+                            modifier = Modifier.weight(1f),
+                            onClick = { exitConfirmOpen = false },
+                        )
+                        AppGhostButton(
+                            text = stringResource(R.string.no),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                exitConfirmOpen = false
+                                dismissWithoutConfirm()
+                            },
+                        )
+                    }
                 }
-            ).show(childFragmentManager, "exitConfirm")
+            }
         }
     }
 
@@ -255,12 +288,12 @@ class DictRuleEditDialog() : ComposeDialogFragment() {
 
 @Composable
 private fun DictRuleEditContent(
-    name: TextFieldValue,
-    onNameChange: (TextFieldValue) -> Unit,
-    urlRule: TextFieldValue,
-    onUrlRuleChange: (TextFieldValue) -> Unit,
-    showRule: TextFieldValue,
-    onShowRuleChange: (TextFieldValue) -> Unit,
+    name: String,
+    onNameChange: (String) -> Unit,
+    urlRule: String,
+    onUrlRuleChange: (String) -> Unit,
+    showRule: String,
+    onShowRuleChange: (String) -> Unit,
     onFieldFocused: (DictRuleEditDialog.EditField) -> Unit,
     onFullEdit: () -> Unit,
     onSave: () -> Unit,
@@ -268,77 +301,76 @@ private fun DictRuleEditContent(
     onPasteRule: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    AppDialogFrame(
-        title = stringResource(R.string.dict_rule),
-        content = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                AppRuleTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    label = stringResource(R.string.name),
-                    singleLine = true,
-                    style = style,
-                    onFocused = { onFieldFocused(DictRuleEditDialog.EditField.Name) }
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(visual.density.blockGap),
+        ) {
+            Text(
+                text = stringResource(R.string.dict_rule),
+                style = visual.type.title,
+                color = colors.onSurface,
+            )
+            AppTextField(
+                value = name,
+                onValueChange = onNameChange,
+                placeholder = stringResource(R.string.name),
+                singleLine = true,
+                modifier = Modifier.onFocusChanged {
+                    if (it.isFocused) onFieldFocused(DictRuleEditDialog.EditField.Name)
+                },
+            )
+            AppTextField(
+                value = urlRule,
+                onValueChange = onUrlRuleChange,
+                placeholder = stringResource(R.string.url_rule),
+                singleLine = true,
+                modifier = Modifier.onFocusChanged {
+                    if (it.isFocused) onFieldFocused(DictRuleEditDialog.EditField.UrlRule)
+                },
+            )
+            AppTextField(
+                value = showRule,
+                onValueChange = onShowRuleChange,
+                placeholder = stringResource(R.string.show_rule),
+                singleLine = false,
+                minLines = 5,
+                maxLines = 12,
+                modifier = Modifier.onFocusChanged {
+                    if (it.isFocused) onFieldFocused(DictRuleEditDialog.EditField.ShowRule)
+                },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(visual.density.blockGap / 2)) {
+                AppGhostButton(
+                    text = stringResource(R.string.edit_content),
+                    modifier = Modifier.weight(1f),
+                    onClick = onFullEdit,
                 )
-                AppRuleFieldSpacer()
-                AppRuleTextField(
-                    value = urlRule,
-                    onValueChange = onUrlRuleChange,
-                    label = stringResource(R.string.url_rule),
-                    singleLine = true,
-                    style = style,
-                    onFocused = { onFieldFocused(DictRuleEditDialog.EditField.UrlRule) }
+                AppGhostButton(
+                    text = stringResource(R.string.paste_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onPasteRule,
                 )
-                AppRuleFieldSpacer()
-                AppRuleTextField(
-                    value = showRule,
-                    onValueChange = onShowRuleChange,
-                    label = stringResource(R.string.show_rule),
-                    minLines = 5,
-                    maxLines = 12,
-                    style = style,
-                    onFocused = { onFieldFocused(DictRuleEditDialog.EditField.ShowRule) }
+                AppGhostButton(
+                    text = stringResource(R.string.copy_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onCopyRule,
                 )
             }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.edit_content),
-                palette = palette,
-                onClick = onFullEdit,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.paste_rule),
-                palette = palette,
-                onClick = onPasteRule,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.copy_rule),
-                palette = palette,
-                onClick = onCopyRule,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.cancel),
-                palette = palette,
-                onClick = onDismiss,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.action_save),
-                palette = palette,
-                onClick = onSave,
-                primary = true,
-                cornerRadius = style.actionRadius
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(visual.density.blockGap / 2)) {
+                AppGhostButton(
+                    text = stringResource(R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss,
+                )
+                AppFilledButton(
+                    text = stringResource(R.string.action_save),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSave,
+                )
+            }
         }
-    )
+    }
 }

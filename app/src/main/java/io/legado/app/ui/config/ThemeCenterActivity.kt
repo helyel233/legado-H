@@ -3,6 +3,7 @@ package io.legado.app.ui.config
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
@@ -38,8 +39,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityThemeCenterBinding
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeAssetStore
@@ -57,7 +56,7 @@ import io.legado.app.uikit.theme.Applicator
 import io.legado.app.uikit.theme.AppTheme
 import io.legado.app.uikit.theme.BuiltinThemes
 import io.legado.app.uikit.token.AppSpacing
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.utils.putPrefString
 import splitties.init.appCtx
 
@@ -65,9 +64,7 @@ import splitties.init.appCtx
  * A2-4b 主题包详情：编辑指定用户包（pkgId）；官方包首次编辑自动克隆。
  * 由管理中心携 pkgId 打开；无 pkgId 时编辑当前应用中的包。
  */
-class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
-
-    override val binding by viewBinding(ActivityThemeCenterBinding::inflate)
+class ThemeCenterActivity : AppCompatActivity() {
 
     private var pendingFontRole: FontRole? = null
     private var pendingImageSlot: String? = null
@@ -86,12 +83,13 @@ class ThemeCenterActivity : BaseActivity<ActivityThemeCenterBinding>() {
 
     private val targetId: String? by lazy { intent?.getStringExtra(EXTRA_PKG_ID) }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         val spec = targetId?.let { id -> ThemePackageStore.resolveSpec(ThemePackageStore.load(this) ?: ThemePackageStore.Runtime(), id) }
         if (spec != null && Applicator.activeTheme.id != spec.id) {
             Applicator.applyTheme(spec)
         }
-        binding.composeContent.setContent {
+        setV5Content {
             AppTheme(Applicator.rememberAppColorScheme()) {
                 ThemeCenterScreen()
             }

@@ -7,6 +7,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.Composable
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -23,7 +24,8 @@ import io.legado.app.databinding.ItemServerSelectBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.setLayout
@@ -131,13 +133,12 @@ class ServersDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
                 val server = getItemByLayoutPosition(holder.layoutPosition)
                     ?: return@setOnClickListener
                 showDialogFragment(
-                    ComposeConfirmDialog.create(
+                    V5DeleteConfirmDialog(
                         title = getString(R.string.draw),
                         message = getString(R.string.sure_del),
-                        positiveText = getString(R.string.yes),
-                        negativeText = getString(R.string.no),
-                        dangerPositive = true,
-                        onPositive = {
+                        confirmLabel = getString(R.string.yes),
+                        cancelLabel = getString(R.string.no),
+                        onConfirm = {
                             viewModel.delete(server)
                         }
                     )
@@ -168,4 +169,32 @@ class ServersDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
 
     }
 
+}
+
+/**
+ * V5 危险操作确认弹窗（旧 View 页面宿主用的轻量桥，基于 V5DialogFragment 基座）。
+ */
+internal class V5DeleteConfirmDialog(
+    private val title: String,
+    private val message: String,
+    private val confirmLabel: String,
+    private val cancelLabel: String,
+    private val onConfirm: () -> Unit
+) : V5DialogFragment() {
+
+    @Composable
+    override fun Content() {
+        AppConfirmDialog(
+            title = title,
+            message = message,
+            confirmLabel = confirmLabel,
+            cancelLabel = cancelLabel,
+            danger = true,
+            onConfirm = {
+                dismissAllowingStateLoss()
+                onConfirm()
+            },
+            onDismiss = { dismissAllowingStateLoss() },
+        )
+    }
 }

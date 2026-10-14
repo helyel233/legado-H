@@ -1,138 +1,136 @@
 package io.legado.app.ui.book.read.config
 
-import io.legado.app.reader.config.ReadConfigEvent
-import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
-import io.legado.app.reader.config.ReadConfigEvent.Relayout
-import io.legado.app.reader.config.ReadConfigEvent.TipStyle
-import io.legado.app.reader.config.ReadConfigEvent.Typography
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.content.Intent
+import android.os.Bundle
+import android.view.Gravity
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.verticalScroll
 import com.jaredrummler.android.colorpicker.ColorPickerDialog
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.usesDirectReader
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AdvancedTitleConfig
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
-import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeModePolicy
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.ComposeActionListDialog
-import io.legado.app.ui.widget.compose.ComposeTextInputDialog
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
-import io.legado.app.ui.widget.compose.toMiuixPalette
-import io.legado.app.ui.config.AdvancedTitleManageActivity
+import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeModePolicy
+import io.legado.app.reader.config.ReadConfigEvent
+import io.legado.app.reader.config.ReadConfigEvent.HeaderFooterTips
+import io.legado.app.reader.config.ReadConfigEvent.Relayout
+import io.legado.app.reader.config.ReadConfigEvent.TipStyle
+import io.legado.app.reader.config.ReadConfigEvent.Typography
 import io.legado.app.ui.config.AdvancedTipManageActivity
-import io.legado.app.help.config.AdvancedTipSlot
+import io.legado.app.ui.config.AdvancedTitleManageActivity
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.hexString
 import io.legado.app.utils.observeEvent
-import io.legado.app.utils.postEvent
+import kotlin.math.roundToInt
 
-class TipConfigDialog : ReaderBottomSheetComposeDialogFragment() {
+/**
+ * 页眉页脚（提示条）配置面板（V5 基座版）。
+ *
+ * 旧基类 BOTTOM/AnimDialogBottom/MATCH_PARENT → V5 五个 open val；`maxSheetHeightFraction = 0.76f`
+ * → 面板内 `heightIn(max = screenHeightDp*0.76f)`；**外观跟随阅读页背景色**用共享 `rememberReaderPagePalette()`。
+ * 组件替换：`ReaderSectionCard` → Box+shape+palette.panel；`AppThemedStepperSlider` → `AppSlider(steps = range.count()-1)`；
+ * `LegadoMiuixChoiceRow(compact, showSelectedMark = false)` → `AppChip(selected)`；自定义 TipValueRow/TipCompactValue 保留结构只换色。
+ * **业务逻辑全部保留**：titleMode 越界校正、`titleModeToUiIndex/uiIndexToTitleMode` 的 UI↔存储映射（高级标题模式插在中间）、
+ * `clearRepeat()` 的六槽位去重、`chooseTip` 后若为自定义模板则接着打开模板编辑器、
+ * 颜色选取器走 `ColorPickerDialog`（TIP_COLOR/TIP_DIVIDER_COLOR 两个 dialogId）与 `EventBus.TIP_COLOR` 刷新。
+ */
+internal class TipConfigDialog : V5DialogFragment() {
 
     companion object {
         const val TIP_COLOR = 7897
         const val TIP_DIVIDER_COLOR = 7898
     }
 
-    override val maxSheetHeightFraction: Float = 0.76f
+    override val dialogTheme: Int = R.style.Theme_Legado_ComposeDialog_Bottom
+    override val dialogWidth: Int = ViewGroup.LayoutParams.MATCH_PARENT
+    override val dialogHeight: Int = ViewGroup.LayoutParams.WRAP_CONTENT
+    override val dialogGravity: Int = Gravity.BOTTOM
+    override val dialogWindowAnimations: Int = R.style.AnimDialogBottom
+
+    private val maxSheetHeightFraction: Float = 0.76f
 
     private var colorRefreshTick by mutableIntStateOf(0)
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         if (ReadBookConfig.titleMode !in 0..AdvancedTitleConfig.TITLE_MODE_ADVANCED) {
             ReadBookConfig.titleMode = 0
         }
         observeEvent<String>(EventBus.TIP_COLOR) {
             colorRefreshTick++
         }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                ReaderBottomSheetFrame(maxHeightFraction = maxSheetHeightFraction) { style ->
-                    TipConfigContent(
-                        style = style,
-                        colorRefreshTick = colorRefreshTick,
-                        onShowAdvancedTitleConfig = {
-                            startActivity(Intent(requireContext(), AdvancedTitleManageActivity::class.java))
-                        },
-                        onShowSelector = ::showActionSelector,
-                        onShowTemplateEditor = ::showTemplateEditor,
-                        onShowTipColorPicker = {
-                            ColorPickerDialog.newBuilder()
-                                .setShowAlphaSlider(false)
-                                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                                .setDialogId(TIP_COLOR)
-                                .show(requireActivity())
-                        },
-                        onShowTipDividerColorPicker = {
-                            ColorPickerDialog.newBuilder()
-                                .setShowAlphaSlider(false)
-                                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                                .setDialogId(TIP_DIVIDER_COLOR)
-                                .show(requireActivity())
-                        },
-                        onColorChanged = { colorRefreshTick++ }
-                    )
-                }
-            }
-        }
     }
+
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var selectorRequest by mutableStateOf<SelectorRequest?>(null)
+    private var templateRequest by mutableStateOf<TemplateRequest?>(null)
+
+    private class SelectorRequest(
+        val title: String,
+        val labels: List<String>,
+        val onSelected: (Int) -> Unit
+    )
+
+    private class TemplateRequest(
+        val title: String,
+        val initial: String,
+        val onSaved: (String) -> Unit
+    )
 
     private fun showActionSelector(
         title: String,
         labels: List<String>,
         onSelected: (Int) -> Unit
     ) {
-        ComposeActionListDialog.create(
-            title = title,
-            labels = labels,
-            negativeText = getString(R.string.cancel),
-            onSelected = onSelected
-        ).show(parentFragmentManager, "tipConfigSelector")
+        selectorRequest = SelectorRequest(title, labels, onSelected)
     }
 
     private fun showTemplateEditor(
@@ -140,21 +138,126 @@ class TipConfigDialog : ReaderBottomSheetComposeDialogFragment() {
         initialValue: String,
         onSaved: (String) -> Unit
     ) {
-        ComposeTextInputDialog.create(
+        templateRequest = TemplateRequest(
             title = getString(R.string.tip_custom_template_edit, title),
-            hint = getString(R.string.tip_custom_template_hint),
-            message = getString(R.string.tip_custom_template_help),
-            initialValue = initialValue,
-            positiveText = getString(R.string.confirm),
-            negativeText = getString(R.string.cancel),
-            onPositive = onSaved
-        ).show(parentFragmentManager, "tipTemplateEditor")
+            initial = initialValue,
+            onSaved = onSaved
+        )
+    }
+
+    @Composable
+    override fun Content() {
+        val palette = rememberReaderPagePalette()
+        val surface = Color(palette.surface)
+        val maxHeight = (LocalConfiguration.current.screenHeightDp * maxSheetHeightFraction)
+            .toInt()
+            .dp
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            color = surface,
+            contentColor = Color(palette.textColor)
+        ) {
+            TipConfigContent(
+                palette = palette,
+                colorRefreshTick = colorRefreshTick,
+                onShowAdvancedTitleConfig = {
+                    startActivity(Intent(requireContext(), AdvancedTitleManageActivity::class.java))
+                },
+                onShowSelector = ::showActionSelector,
+                onShowTemplateEditor = ::showTemplateEditor,
+                onShowTipColorPicker = {
+                    ColorPickerDialog.newBuilder()
+                        .setShowAlphaSlider(false)
+                        .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                        .setDialogId(TIP_COLOR)
+                        .show(requireActivity())
+                },
+                onShowTipDividerColorPicker = {
+                    ColorPickerDialog.newBuilder()
+                        .setShowAlphaSlider(false)
+                        .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                        .setDialogId(TIP_DIVIDER_COLOR)
+                        .show(requireActivity())
+                },
+                onColorChanged = { colorRefreshTick++ }
+            )
+        }
+        TipConfigDialogs()
+    }
+
+    @Composable
+    private fun TipConfigDialogs() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
+
+        selectorRequest?.let { req ->
+            AppFilterDialog(
+                title = req.title,
+                options = req.labels,
+                selectedIndex = -1,
+                onSelect = { index ->
+                    selectorRequest = null
+                    req.onSelected(index)
+                },
+                onDismiss = { selectorRequest = null },
+            )
+        }
+
+        templateRequest?.let { req ->
+            var text by remember(req) { mutableStateOf(req.initial) }
+            AppDialog(onDismiss = { templateRequest = null }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = req.title,
+                        style = visual.type.title,
+                        color = colors.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.tip_custom_template_help),
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant,
+                    )
+                    AppTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        placeholder = stringResource(R.string.tip_custom_template_hint),
+                        singleLine = false,
+                        minLines = 2,
+                        maxLines = 10,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                        AppGhostButton(
+                            text = stringResource(R.string.cancel),
+                            modifier = Modifier.weight(1f),
+                            onClick = { templateRequest = null },
+                        )
+                        AppFilledButton(
+                            text = stringResource(R.string.confirm),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                templateRequest = null
+                                req.onSaved(text)
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun TipConfigContent(
-    style: AppDialogStyle,
+    palette: ReaderSheetStyle.Palette,
     colorRefreshTick: Int,
     onShowAdvancedTitleConfig: () -> Unit,
     onShowSelector: (String, List<String>, (Int) -> Unit) -> Unit,
@@ -164,7 +267,11 @@ private fun TipConfigContent(
     onColorChanged: () -> Unit
 ) {
     val context = LocalContext.current
-    val miuixPalette = style.toMiuixPalette()
+    val panel = Color(palette.panel)
+    val surface = Color(palette.surface)
+    val textColor = Color(palette.textColor)
+    val secondaryText = Color(palette.secondaryTextColor)
+    val accent = Color(palette.accentColor)
     val directEpub = ReadBook.book?.usesDirectReader == true
     var titleMode by rememberSaveable { mutableIntStateOf(ReadBookConfig.titleMode) }
     var titleSize by rememberSaveable { mutableIntStateOf(ReadBookConfig.titleSize) }
@@ -277,39 +384,42 @@ private fun TipConfigContent(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = 560.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(ReaderSheetDefaults.SectionGap)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Publisher/generated document headings belong to the Direct document.
-        if (!directEpub) TipSection(style = style) {
+        if (!directEpub) TipSection(panelColor = panel) {
             TipCompactSlider(
                 label = stringResource(R.string.title_font_size),
                 value = titleSize,
                 range = 0..20,
-                style = style
+                textColor = textColor,
+                accent = accent
             ) { titleSize = it; ReadBookConfig.titleSize = it; ReadConfigEvent.post(Typography, Relayout) }
             TipCompactSlider(
                 label = stringResource(R.string.title_margin_top),
                 value = titleTopSpacing,
                 range = 0..100,
-                style = style
+                textColor = textColor,
+                accent = accent
             ) { titleTopSpacing = it; ReadBookConfig.titleTopSpacing = it; ReadConfigEvent.post(Typography, Relayout) }
             TipCompactSlider(
                 label = stringResource(R.string.title_margin_bottom),
                 value = titleBottomSpacing,
                 range = 0..100,
-                style = style
+                textColor = textColor,
+                accent = accent
             ) { titleBottomSpacing = it; ReadBookConfig.titleBottomSpacing = it; ReadConfigEvent.post(Typography, Relayout) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 titleModeOptions.forEachIndexed { index, label ->
-                    LegadoMiuixChoiceRow(
+                    AppChip(
                         text = label,
                         selected = titleModeToUiIndex(titleMode) == index,
-                        palette = miuixPalette,
-                        enabled = true,
+                        modifier = Modifier.weight(1f),
                         onClick = {
                             val newMode = uiIndexToTitleMode(index)
                             titleMode = newMode
@@ -319,10 +429,6 @@ private fun TipConfigContent(
                                 onShowAdvancedTitleConfig()
                             }
                         },
-                        modifier = Modifier.weight(1f),
-                        minHeight = 32.dp,
-                        compact = true,
-                        showSelectedMark = false
                     )
                 }
             }
@@ -343,7 +449,11 @@ private fun TipConfigContent(
             leftLabel = tipName(headerLeft),
             middleLabel = tipName(headerMiddle),
             rightLabel = tipName(headerRight),
-            style = style,
+            panelColor = panel,
+            surfaceColor = surface,
+            textColor = textColor,
+            secondaryText = secondaryText,
+            accent = accent,
             onShowClick = {
                 val keys = headerModes.keys.toList()
                 onShowSelector(context.getString(R.string.header), headerModes.values.toList()) { index ->
@@ -351,7 +461,7 @@ private fun TipConfigContent(
                     ReadTipConfig.headerMode = headerMode
                     ReadConfigEvent.post(HeaderFooterTips)
                     if (headerMode == ReadTipConfig.HEADER_MODE_ADVANCED) {
-                        AdvancedTipManageActivity.start(context, AdvancedTipSlot.HEADER)
+                        AdvancedTipManageActivity.start(context, io.legado.app.help.config.AdvancedTipSlot.HEADER)
                     }
                 }
             },
@@ -362,7 +472,7 @@ private fun TipConfigContent(
                 stringResource(R.string.advanced_header_manage)
             } else null,
             onManageClick = if (!directEpub && headerMode == ReadTipConfig.HEADER_MODE_ADVANCED) {
-                { AdvancedTipManageActivity.start(context, AdvancedTipSlot.HEADER) }
+                { AdvancedTipManageActivity.start(context, io.legado.app.help.config.AdvancedTipSlot.HEADER) }
             } else null
         )
         // 页脚
@@ -381,7 +491,11 @@ private fun TipConfigContent(
             leftLabel = tipName(footerLeft),
             middleLabel = tipName(footerMiddle),
             rightLabel = tipName(footerRight),
-            style = style,
+            panelColor = panel,
+            surfaceColor = surface,
+            textColor = textColor,
+            secondaryText = secondaryText,
+            accent = accent,
             onShowClick = {
                 val keys = footerModes.keys.toList()
                 onShowSelector(context.getString(R.string.footer), footerModes.values.toList()) { index ->
@@ -389,7 +503,7 @@ private fun TipConfigContent(
                     ReadTipConfig.footerMode = footerMode
                     ReadConfigEvent.post(HeaderFooterTips)
                     if (footerMode == ReadTipConfig.FOOTER_MODE_ADVANCED) {
-                        AdvancedTipManageActivity.start(context, AdvancedTipSlot.FOOTER)
+                        AdvancedTipManageActivity.start(context, io.legado.app.help.config.AdvancedTipSlot.FOOTER)
                     }
                 }
             },
@@ -400,13 +514,16 @@ private fun TipConfigContent(
                 stringResource(R.string.advanced_footer_manage)
             } else null,
             onManageClick = if (!directEpub && footerMode == ReadTipConfig.FOOTER_MODE_ADVANCED) {
-                { AdvancedTipManageActivity.start(context, AdvancedTipSlot.FOOTER) }
+                { AdvancedTipManageActivity.start(context, io.legado.app.help.config.AdvancedTipSlot.FOOTER) }
             } else null
         )
         // 颜色
         TipColorSection(
             colorRefreshTick = colorRefreshTick,
-            style = style,
+            panelColor = panel,
+            surfaceColor = surface,
+            textColor = textColor,
+            accent = accent,
             onTipColorClick = {
                 onShowSelector(context.getString(R.string.text_color), ReadTipConfig.tipColorNames) { index ->
                     when (index) {
@@ -429,12 +546,17 @@ private fun TipConfigContent(
 
 @Composable
 private fun TipSection(
-    style: AppDialogStyle,
+    panelColor: Color,
     content: @Composable () -> Unit
 ) {
-    ReaderSectionCard(
-        style = style,
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+    val visual = LocalVisualSpec.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(visual.shape(ShapeKind.BAR))
+            .background(panelColor)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         content()
     }
@@ -445,17 +567,19 @@ private fun TipCompactSlider(
     label: String,
     value: Int,
     range: IntRange,
-    style: AppDialogStyle,
+    textColor: Color,
+    accent: Color,
     onValueChange: (Int) -> Unit
 ) {
+    val visual = LocalVisualSpec.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            color = style.primaryText,
-            fontSize = 11.sp,
+            color = textColor,
+            style = visual.type.caption,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -463,21 +587,18 @@ private fun TipCompactSlider(
         )
         Text(
             text = value.toString(),
-            color = style.accent,
-            fontSize = 11.sp,
+            color = accent,
+            style = visual.type.caption,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             modifier = Modifier.width(32.dp)
         )
-        AppThemedStepperSlider(
-            value = value.coerceIn(range),
-            range = range,
-            onValueChange = { onValueChange(it.coerceIn(range)) },
-            palette = style.toMiuixPalette(),
-            trackHeight = 28.dp,
-            thumbSize = 22.dp,
-            endpointWidth = 24.dp,
-            modifier = Modifier.weight(1f)
+        AppSlider(
+            value = value.coerceIn(range).toFloat(),
+            onValueChange = { onValueChange(it.roundToInt().coerceIn(range)) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = range.count() - 1,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -489,7 +610,11 @@ private fun TipPlacementSection(
     leftLabel: String,
     middleLabel: String,
     rightLabel: String,
-    style: AppDialogStyle,
+    panelColor: Color,
+    surfaceColor: Color,
+    textColor: Color,
+    secondaryText: Color,
+    accent: Color,
     onShowClick: () -> Unit,
     onLeftClick: () -> Unit,
     onMiddleClick: () -> Unit,
@@ -497,18 +622,30 @@ private fun TipPlacementSection(
     manageLabel: String? = null,
     onManageClick: (() -> Unit)? = null
 ) {
-    TipSection(style = style) {
+    val visual = LocalVisualSpec.current
+    TipSection(panelColor = panelColor) {
+        Text(
+            text = title,
+            style = visual.type.title,
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         TipValueRow(
             title = stringResource(R.string.show_hide),
             value = showLabel,
-            style = style,
+            surfaceColor = surfaceColor,
+            textColor = textColor,
+            accent = accent,
             onClick = onShowClick
         )
         if (manageLabel != null && onManageClick != null) {
             TipValueRow(
                 title = manageLabel,
                 value = stringResource(R.string.advanced_title_manage),
-                style = style,
+                surfaceColor = surfaceColor,
+                textColor = textColor,
+                accent = accent,
                 onClick = onManageClick
             )
         }
@@ -519,21 +656,27 @@ private fun TipPlacementSection(
             TipCompactValue(
                 title = stringResource(R.string.left),
                 value = leftLabel,
-                style = style,
+                surfaceColor = surfaceColor,
+                secondaryText = secondaryText,
+                textColor = textColor,
                 modifier = Modifier.weight(1f),
                 onClick = onLeftClick
             )
             TipCompactValue(
                 title = stringResource(R.string.middle),
                 value = middleLabel,
-                style = style,
+                surfaceColor = surfaceColor,
+                secondaryText = secondaryText,
+                textColor = textColor,
                 modifier = Modifier.weight(1f),
                 onClick = onMiddleClick
             )
             TipCompactValue(
                 title = stringResource(R.string.right),
                 value = rightLabel,
-                style = style,
+                surfaceColor = surfaceColor,
+                secondaryText = secondaryText,
+                textColor = textColor,
                 modifier = Modifier.weight(1f),
                 onClick = onRightClick
             )
@@ -544,23 +687,30 @@ private fun TipPlacementSection(
 @Composable
 private fun TipColorSection(
     colorRefreshTick: Int,
-    style: AppDialogStyle,
+    panelColor: Color,
+    surfaceColor: Color,
+    textColor: Color,
+    accent: Color,
     onTipColorClick: () -> Unit,
     onDividerColorClick: () -> Unit
 ) {
     val tipColorLabel = remember(colorRefreshTick) { tipColorText() }
     val dividerColorLabel = remember(colorRefreshTick) { tipDividerColorText() }
-    TipSection(style = style) {
+    TipSection(panelColor = panelColor) {
         TipValueRow(
             title = stringResource(R.string.text_color),
             value = tipColorLabel,
-            style = style,
+            surfaceColor = surfaceColor,
+            textColor = textColor,
+            accent = accent,
             onClick = onTipColorClick
         )
         TipValueRow(
             title = stringResource(R.string.tip_divider_color),
             value = dividerColorLabel,
-            style = style,
+            surfaceColor = surfaceColor,
+            textColor = textColor,
+            accent = accent,
             onClick = onDividerColorClick
         )
     }
@@ -570,14 +720,17 @@ private fun TipColorSection(
 private fun TipValueRow(
     title: String,
     value: String,
-    style: AppDialogStyle,
+    surfaceColor: Color,
+    textColor: Color,
+    accent: Color,
     onClick: () -> Unit
 ) {
+    val visual = LocalVisualSpec.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(style.actionRadius))
-            .background(style.surface)
+            .clip(visual.shape(ShapeKind.BAR))
+            .background(surfaceColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         contentAlignment = Alignment.CenterStart
@@ -588,8 +741,8 @@ private fun TipValueRow(
         ) {
             Text(
                 text = title,
-                color = style.primaryText,
-                fontSize = 13.sp,
+                color = textColor,
+                style = visual.type.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -597,8 +750,8 @@ private fun TipValueRow(
             )
             Text(
                 text = value,
-                color = style.accent,
-                fontSize = 13.sp,
+                color = accent,
+                style = visual.type.body,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -611,16 +764,19 @@ private fun TipValueRow(
 private fun TipCompactValue(
     title: String,
     value: String,
-    style: AppDialogStyle,
+    surfaceColor: Color,
+    secondaryText: Color,
+    textColor: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val visual = LocalVisualSpec.current
     Column(
         modifier = modifier
             .fillMaxWidth()
             .height(44.dp)
-            .clip(RoundedCornerShape(style.actionRadius))
-            .background(style.surface)
+            .clip(visual.shape(ShapeKind.BAR))
+            .background(surfaceColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -628,15 +784,15 @@ private fun TipCompactValue(
     ) {
         Text(
             text = title,
-            color = style.secondaryText,
-            fontSize = 11.sp,
+            color = secondaryText,
+            style = visual.type.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
             text = value,
-            color = style.primaryText,
-            fontSize = 12.sp,
+            color = textColor,
+            style = visual.type.caption,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

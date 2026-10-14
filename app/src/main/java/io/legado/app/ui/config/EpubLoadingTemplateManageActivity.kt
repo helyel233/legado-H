@@ -4,40 +4,82 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.EpubLoadingTemplate
 import io.legado.app.help.config.EpubLoadingTemplateStore
+import io.legado.app.ui.book.read.epub.EpubLoadingPreviewView
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.ComposeActionListDialog
-import io.legado.app.ui.widget.compose.ComposeConfirmDialog
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterChipRow
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.inputStream
-import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>() {
-    override val binding by viewBinding(ActivityThemeManageBinding::inflate)
-    private val templates = mutableStateOf(EpubLoadingTemplate.builtins)
-    private val selectedId = mutableStateOf(EpubLoadingTemplate.default.id)
-    private val previewNight = mutableStateOf(AppConfig.isNightTheme)
+/**
+ * EPUB 加载模板管理 V5 版（主题/外观编辑器批，台账 #46）。
+ * 旧版：BaseActivity<ActivityThemeManageBinding>，隐藏 XML 的 Tab/概要/添加，用 ComposeView 塞
+ *       EpubLoadingTemplateManageScreen（旧主题桥 AppPackageManageScreen + AppPackageManageItemCard）。
+ * 新版：AppCompatActivity + setV5Content + HostV5Page；列表项改用 AppCard + AppChip（应用/预览）
+ *       + AppOverflowMenuButton；预览图 EpubLoadingPreviewView 用 AndroidView 承载（102x210 实时预览）。
+ * 弹窗全换 V5：添加/条目菜单 AppMenuSheet、删除 AppConfirmDialog(danger)。
+ * 编辑仍走 CodeEditActivity（代码编辑器），无旧 View Dialog，属「轻」页。
+ */
+class EpubLoadingTemplateManageActivity : AppCompatActivity() {
+
+    internal val templates = mutableStateOf(EpubLoadingTemplate.builtins)
+    internal val selectedId = mutableStateOf(EpubLoadingTemplate.default.id)
+    internal val previewNight = mutableStateOf(AppConfig.isNightTheme)
     private var editingId: String? = null
+
+    internal var addMenuOpen by mutableStateOf(false)
+    internal var itemMenuTarget by mutableStateOf<EpubLoadingTemplate?>(null)
+    internal var confirmDeleteTarget by mutableStateOf<EpubLoadingTemplate?>(null)
 
     private val editor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
@@ -81,32 +123,11 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
         if (result.uri != null) toastOnUi(R.string.export_success)
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         editingId = savedInstanceState?.getString("editingId")
         previewNight.value = savedInstanceState?.getBoolean("previewNight") ?: AppConfig.isNightTheme
-        binding.titleBar.title = getString(R.string.epub_loading_templates)
-        binding.tabBar.visibility = View.GONE
-        binding.tvSummary.visibility = View.GONE
-        binding.btnAdd.visibility = View.GONE
-        val container = binding.recyclerView.parent as ViewGroup
-        val index = container.indexOfChild(binding.recyclerView)
-        val params = binding.recyclerView.layoutParams
-        container.removeView(binding.recyclerView)
-        container.addView(ComposeView(this).apply {
-            layoutParams = params
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                LegadoComposeTheme {
-                    EpubLoadingTemplateManageScreen(templates.value, selectedId.value, previewNight.value,
-                        onNightChanged = { previewNight.value = it },
-                        onApply = {
-                            EpubLoadingTemplateStore.apply(this@EpubLoadingTemplateManageActivity, it)
-                            reload()
-                        },
-                        onPreview = ::preview, onMoreActions = ::actions, onAdd = ::add)
-                }
-            }
-        }, index)
+        setV5Content { ManageScreen(this) }
         reload()
     }
 
@@ -126,11 +147,16 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
         selectedId.value = EpubLoadingTemplateStore.selected(this).id
     }
 
-    private fun preview(template: EpubLoadingTemplate) {
+    internal fun preview(template: EpubLoadingTemplate) {
         startActivity<EpubLoadingTemplatePreviewActivity> {
             putExtra("templateId", template.id)
             putExtra("night", previewNight.value)
         }
+    }
+
+    internal fun applyTemplate(template: EpubLoadingTemplate) {
+        EpubLoadingTemplateStore.apply(this, template)
+        reload()
     }
 
     private fun launchEditor(text: String, id: String?) {
@@ -148,27 +174,30 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
         launchEditor(EpubLoadingTemplateStore.encode(draft), null)
     }
 
-    private fun add() {
-        showDialogFragment(ComposeActionListDialog.create(
-            title = getString(R.string.epub_loading_add),
-            labels = listOf(getString(R.string.epub_loading_copy), getString(R.string.epub_loading_import)),
-            negativeText = getString(R.string.cancel)
-        ) { index ->
-            if (index == 0) copy(EpubLoadingTemplateStore.selected(this))
-            else importer.launch {
-                mode = HandleFileContract.FILE
-                title = getString(R.string.epub_loading_import)
-                allowExtensions = arrayOf("json")
-            }
-        })
+    internal fun openAddMenu() {
+        addMenuOpen = true
     }
 
-    private fun actions(template: EpubLoadingTemplate): List<AppManagementMenuAction> = buildList {
-        add(AppManagementMenuAction(getString(R.string.epub_loading_copy)) { copy(template) })
-        if (!template.builtIn) add(AppManagementMenuAction(getString(R.string.edit)) {
+    internal fun onAddAction(index: Int) {
+        if (index == 0) copy(EpubLoadingTemplateStore.selected(this))
+        else importer.launch {
+            mode = HandleFileContract.FILE
+            title = getString(R.string.epub_loading_import)
+            allowExtensions = arrayOf("json")
+        }
+    }
+
+    internal fun openItemMenu(template: EpubLoadingTemplate) {
+        itemMenuTarget = template
+    }
+
+    internal fun itemActions(template: EpubLoadingTemplate): List<Pair<String, () -> Unit>> = buildList {
+        add(getString(R.string.epub_loading_preview) to { preview(template) })
+        add(getString(R.string.epub_loading_copy) to { copy(template) })
+        if (!template.builtIn) add(getString(R.string.edit) to {
             launchEditor(EpubLoadingTemplateStore.encode(template), template.id)
         })
-        add(AppManagementMenuAction(getString(R.string.epub_loading_export)) {
+        add(getString(R.string.epub_loading_export) to {
             exporter.launch {
                 mode = HandleFileContract.EXPORT
                 fileData = HandleFileContract.FileData(
@@ -176,15 +205,171 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
                     EpubLoadingTemplateStore.encode(template).toByteArray(Charsets.UTF_8), "application/json")
             }
         })
-        if (!template.builtIn) add(AppManagementMenuAction(getString(R.string.delete)) {
-            showDialogFragment(ComposeConfirmDialog.create(
-                title = getString(R.string.delete), message = template.name,
-                positiveText = getString(R.string.delete), negativeText = getString(R.string.cancel),
-                dangerPositive = true, onPositive = {
-                    EpubLoadingTemplateStore.delete(this@EpubLoadingTemplateManageActivity, template)
-                    reload()
-                }
-            ))
+        if (!template.builtIn) add(getString(R.string.delete) to {
+            confirmDeleteTarget = template
         })
+    }
+
+    internal fun deleteTemplate(template: EpubLoadingTemplate) {
+        EpubLoadingTemplateStore.delete(this, template)
+        reload()
+    }
+}
+
+@Composable
+private fun ManageScreen(activity: EpubLoadingTemplateManageActivity) {
+    BackHandler { activity.finish() }
+
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    val night = activity.previewNight.value
+    val templates = activity.templates.value
+    val selectedId = activity.selectedId.value
+
+    HostV5Page(
+        title = stringResource(R.string.epub_loading_templates),
+        onBack = { activity.finish() },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            AppFilterChipRow(
+                chips = listOf(
+                    AppFilterChip(stringResource(R.string.theme_day), !night),
+                    AppFilterChip(stringResource(R.string.theme_night), night),
+                ),
+                onChipClick = { index -> activity.previewNight.value = index == 1 },
+                modifier = Modifier.padding(top = density.blockGap),
+            )
+            Text(
+                text = stringResource(R.string.epub_loading_templates_help),
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = density.screenPadding, top = density.blockGap / 2, end = density.screenPadding),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    start = density.screenPadding,
+                    end = density.screenPadding,
+                    top = density.blockGap,
+                    bottom = density.blockGap / 2,
+                ),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+            ) {
+                items(templates, key = { it.id }) { template ->
+                    val active = template.id == selectedId
+                    val info = stringResource(if (template.builtIn) R.string.epub_loading_builtin else R.string.epub_loading_custom) +
+                        " · " + template.description
+                    AppCard {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AndroidView(
+                                factory = { context ->
+                                    EpubLoadingPreviewView(context).apply {
+                                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                                    }
+                                },
+                                update = { it.template = template; it.night = night },
+                                modifier = Modifier
+                                    .width(102.dp)
+                                    .height(210.dp)
+                                    .clip(visual.shape(ShapeKind.COVER))
+                                    .clickable { activity.preview(template) },
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = template.name,
+                                    style = visual.type.body,
+                                    color = colors.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = info,
+                                    style = visual.type.caption,
+                                    color = colors.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    AppChip(
+                                        text = stringResource(if (active) R.string.theme_applied_state else R.string.theme_apply),
+                                        selected = active,
+                                        onClick = { activity.applyTemplate(template) },
+                                    )
+                                    AppChip(
+                                        text = stringResource(R.string.epub_loading_preview),
+                                        selected = false,
+                                        onClick = { activity.preview(template) },
+                                    )
+                                    AppOverflowMenuButton(
+                                        contentDescription = stringResource(R.string.more),
+                                        onClick = { activity.openItemMenu(template) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            AppFilledButton(
+                text = stringResource(R.string.epub_loading_add),
+                onClick = { activity.openAddMenu() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = density.blockGap),
+            )
+        }
+    }
+
+    // 添加菜单（复制 / 导入）
+    if (activity.addMenuOpen) {
+        AppMenuSheet(
+            title = stringResource(R.string.epub_loading_add),
+            actions = listOf(
+                stringResource(R.string.epub_loading_copy) to { activity.onAddAction(0) },
+                stringResource(R.string.epub_loading_import) to { activity.onAddAction(1) },
+            ),
+            onDismiss = { activity.addMenuOpen = false },
+        )
+    }
+
+    // 条目溢出菜单
+    activity.itemMenuTarget?.let { template ->
+        AppMenuSheet(
+            title = template.name,
+            actions = activity.itemActions(template),
+            onDismiss = { activity.itemMenuTarget = null },
+        )
+    }
+
+    // 删除确认
+    activity.confirmDeleteTarget?.let { template ->
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = template.name,
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                activity.confirmDeleteTarget = null
+                activity.deleteTemplate(template)
+            },
+            onDismiss = { activity.confirmDeleteTarget = null },
+        )
     }
 }

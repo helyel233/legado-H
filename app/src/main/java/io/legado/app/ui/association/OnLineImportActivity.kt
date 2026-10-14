@@ -3,17 +3,31 @@ package io.legado.app.ui.association
 import android.os.Bundle
 import android.text.format.Formatter
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.appDb
-import io.legado.app.databinding.ActivityTranslucenceBinding
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.autoTask.ImportAutoTaskDialog
-import io.legado.app.ui.widget.compose.showComposeConfirmDialog
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers.IO
@@ -25,16 +39,22 @@ import kotlinx.coroutines.withContext
  * 格式: legado://import/{path}?src={url}
  */
 class OnLineImportActivity :
-    VMBaseActivity<ActivityTranslucenceBinding, OnLineImportViewModel>(),
+    AppCompatActivity(),
     ParagraphRuleOnlineImportDialog.Callback {
 
-    override val binding by viewBinding(ActivityTranslucenceBinding::inflate)
-    override val viewModel by viewModels<OnLineImportViewModel>()
+    private val viewModel by viewModels<OnLineImportViewModel>()
     private val onlineImportDownloader by lazy { OnlineImportDownloader(applicationContext) }
     private var pendingDownload: OnlineImportDownload? = null
     private var pendingParagraphInspection: ParagraphRuleImportInspection? = null
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    // ── V5 弹窗状态 ─────────────────────────────────────────────
+    private var privateNetworkTarget by mutableStateOf<PrivateNetworkRequest?>(null)
+    private var bubblePreviewTarget by mutableStateOf<BubblePreviewRequest?>(null)
+    private var finallyDialogState by mutableStateOf<Pair<String, String>?>(null)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setV5Content { OnlineImportDialogs() }
         viewModel.successLive.observe(this) {
             when (it.first) {
                 "bookSource" -> showDialogFragment(
@@ -185,36 +205,86 @@ class OnLineImportActivity :
         route: OnlinePackageImportRoute,
         payloadType: OnlineImportPayloadType
     ) {
-        showComposeConfirmDialog(
-            title = getString(R.string.online_import_private_network_title),
-            message = getString(R.string.online_import_private_network_message),
-            positiveText = getString(R.string.continue_),
-            messageInContent = true,
-            onPositive = {
-                downloadOnlinePackage(route, payloadType, allowPrivateNetwork = true)
-            },
-            onDismissAction = ::finish
-        )
+        privateNetworkTarget = PrivateNetworkRequest(route, payloadType)
     }
 
     private fun showBubbleImportPreview(
         route: OnlinePackageImportRoute.Bubble,
         download: OnlineImportDownload
     ) {
-        showComposeConfirmDialog(
-            title = getString(R.string.online_import_confirm_title),
-            message = buildOnlineImportPreviewMessage(route, download),
-            positiveText = getString(R.string.import_),
-            messageInContent = true,
-            onPositive = {
-                if (pendingDownload === download) pendingDownload = null
-                pendingParagraphInspection = null
-                importOnlinePackage(route, download)
-            },
-            onDismissAction = {
-                discardPendingDownload(download)
-            }
+        bubblePreviewTarget = BubblePreviewRequest(
+            route = route,
+            download = download,
+            message = buildOnlineImportPreviewMessage(route, download)
         )
+    }
+
+    @Composable
+    private fun OnlineImportDialogs() {
+        privateNetworkTarget?.let { req ->
+            AppConfirmDialog(
+                title = stringResource(R.string.online_import_private_network_title),
+                message = stringResource(R.string.online_import_private_network_message),
+                confirmLabel = stringResource(R.string.continue_),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    privateNetworkTarget = null
+                    downloadOnlinePackage(req.route, req.payloadType, allowPrivateNetwork = true)
+                },
+                onDismiss = {
+                    privateNetworkTarget = null
+                    finish()
+                },
+            )
+        }
+        bubblePreviewTarget?.let { req ->
+            AppConfirmDialog(
+                title = stringResource(R.string.online_import_confirm_title),
+                message = req.message,
+                confirmLabel = stringResource(R.string.import_),
+                cancelLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    bubblePreviewTarget = null
+                    if (pendingDownload === req.download) pendingDownload = null
+                    pendingParagraphInspection = null
+                    importOnlinePackage(req.route, req.download)
+                },
+                onDismiss = {
+                    bubblePreviewTarget = null
+                    discardPendingDownload(req.download)
+                },
+            )
+        }
+        finallyDialogState?.let { (title, msg) ->
+            val density = LocalVisualSpec.current.density
+            AppDialog(onDismiss = { finallyDialogState = null; finish() }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(density.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.ok),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            finallyDialogState = null
+                            finish()
+                        },
+                    )
+                }
+            }
+        }
     }
 
     private fun prepareParagraphRuleImport(download: OnlineImportDownload) {
@@ -381,14 +451,18 @@ class OnLineImportActivity :
     }
 
     private fun finallyDialog(title: String, msg: String) {
-        showComposeConfirmDialog(
-            title = title,
-            message = msg,
-            showNegative = false,
-            messageInContent = true,
-            onPositive = ::finish,
-            onDismissAction = ::finish
-        )
+        finallyDialogState = title to msg
     }
+
+    private data class PrivateNetworkRequest(
+        val route: OnlinePackageImportRoute,
+        val payloadType: OnlineImportPayloadType
+    )
+
+    private data class BubblePreviewRequest(
+        val route: OnlinePackageImportRoute.Bubble,
+        val download: OnlineImportDownload,
+        val message: String
+    )
 
 }

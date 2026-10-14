@@ -1,5 +1,10 @@
 package io.legado.app.ui.config
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.legado.app.uikit.v5.components.AppFilterDialog
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
@@ -10,7 +15,6 @@ import io.legado.app.ui.config.compose.SettingChoiceOption
 import io.legado.app.ui.config.compose.SettingChoiceSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.postEvent
 
 class DiscoveryConfigFragment : ComposeSettingFragment() {
@@ -77,17 +81,26 @@ class DiscoveryConfigFragment : ComposeSettingFragment() {
     }
 
     private fun showDiscoveryLayoutDialog() {
-        showComposeChoiceListDialog(
-            title = getString(R.string.discovery_page_layout),
-            labels = DISCOVERY_LAYOUT_VALUES.map(::discoveryLayoutLabel),
-            selectedIndex = DISCOVERY_LAYOUT_VALUES.indexOf(AppConfig.discoveryPageLayout),
-            negativeText = getString(R.string.cancel),
-            onSelected = { index ->
-                val value = DISCOVERY_LAYOUT_VALUES.getOrNull(index) ?: return@showComposeChoiceListDialog
-                AppConfig.discoveryPageLayout = value
-                refreshSettings()
-            }
-        )
+        layoutDialogOpen = true
+    }
+
+    internal var layoutDialogOpen by mutableStateOf(false)
+
+    override val extraDialogs: @Composable () -> Unit = {
+        if (layoutDialogOpen) {
+            AppFilterDialog(
+                title = getString(R.string.discovery_page_layout),
+                options = DISCOVERY_LAYOUT_VALUES.map(::discoveryLayoutLabel),
+                selectedIndex = DISCOVERY_LAYOUT_VALUES.indexOf(AppConfig.discoveryPageLayout),
+                onSelect = { index ->
+                    layoutDialogOpen = false
+                    val value = DISCOVERY_LAYOUT_VALUES.getOrNull(index) ?: return@AppFilterDialog
+                    AppConfig.discoveryPageLayout = value
+                    refreshSettings()
+                },
+                onDismiss = { layoutDialogOpen = false },
+            )
+        }
     }
 
     private fun discoveryLayoutSummary(): String {

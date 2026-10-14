@@ -3,30 +3,17 @@ package io.legado.app.ui.book.read.config
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,32 +21,36 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.CacheManager
 import io.legado.app.help.config.AdvancedTitleConfig
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.ui.code.CodeEditActivity
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.toastOnUi
 
 /**
- * 高级标题模板编辑（P3-d 面板化：原程序化 View 构建迁移为 Compose）
+ * 高级标题模板编辑（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Form` 映射为 widthFraction 0.94f / maxWidthDp 660；
+ * `onStart` 里的 `SOFT_INPUT_ADJUST_RESIZE` 必须保留（表单页要顶起输入法）；
+ * 内容高度上限 `screenHeightDp * 0.72` + verticalScroll 保留；
+ * 组件：OutlinedTextField(自定义 outlinedColors) → AppTextField，LegadoMiuixSwitch → AppRowWithSwitch(card=false)，
+ * 自定义 subtleButton → AppGhostButton/AppFilledButton。
+ * **行为保留**：JSON 走 CodeEditActivity 契约（CacheManager 传大文本 + cacheKey + cursorPosition 回写 jsonStateRef）、
+ * 名称必填校验、JSON validateJson 失败 toast 不关闭、heightFactor coerceIn(30,120) 兜底、保存回调 Host。
  */
-class AdvancedTitleConfigDialog : ComposeDialogFragment() {
+internal class AdvancedTitleConfigDialog : V5DialogFragment() {
 
     companion object {
         private const val ARG_ENTRY_ID = "entryId"
@@ -87,6 +78,10 @@ class AdvancedTitleConfigDialog : ComposeDialogFragment() {
             }
         }
     }
+
+    /** 旧 AppDialogSize.Form(widthFraction = 0.94f, maxWidthDp = 660) */
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
     private var initialJson: String = ""
     private var jsonCursorPosition: Int = 0
@@ -119,20 +114,8 @@ class AdvancedTitleConfigDialog : ComposeDialogFragment() {
         jsonCursorPosition = data.getIntExtra("cursorPosition", text.length)
     }
 
-    override val dialogSize: AppDialogSize? = AppDialogSize.Form
-
-    override fun onStart() {
-        super.onStart()
-        dialog?.window?.setSoftInputMode(
-            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        )
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         if (currentJson.isBlank()) {
             currentJson = if (initialJson.isNotBlank()) {
                 initialJson
@@ -144,21 +127,20 @@ class AdvancedTitleConfigDialog : ComposeDialogFragment() {
                 }.getOrDefault("")
             }
         }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    AdvancedTitleContent(style)
-                }
-            }
-        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        )
     }
 
     @Composable
-    private fun AdvancedTitleContent(style: AppDialogStyle) {
+    override fun Content() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
         val args = requireArguments()
         val entryId = args.getString(ARG_ENTRY_ID).orEmpty()
         val startMode = args.getInt(ARG_SPLIT_MODE, AdvancedTitleConfig.SPLIT_DELIMITER)
@@ -195,138 +177,130 @@ class AdvancedTitleConfigDialog : ComposeDialogFragment() {
             getString(R.string.advanced_title_rule_error, it.localizedMessage.orEmpty())
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.advanced_title_edit_title),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = style.primaryText,
-                fontFamily = style.titleFontFamily
-            )
-            fieldLabel(stringResource(R.string.advanced_title_name), style)
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.advanced_title_name)) },
-                colors = outlinedColors(style)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        AppDialog(onDismiss = { dismissAllowingStateLoss() }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.72f).dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+            ) {
                 Text(
-                    text = stringResource(R.string.advanced_title_rule_label),
-                    color = style.secondaryText,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
+                    text = stringResource(R.string.advanced_title_edit_title),
+                    style = visual.type.title,
+                    color = colors.onSurface
                 )
                 Text(
-                    text = stringResource(R.string.advanced_title_use_regex),
-                    color = style.secondaryText,
-                    fontSize = 13.sp
+                    text = stringResource(R.string.advanced_title_name),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                LegadoMiuixSwitch(
+                AppTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = stringResource(R.string.advanced_title_name),
+                    singleLine = true,
+                )
+                AppRowWithSwitch(
+                    title = stringResource(R.string.advanced_title_use_regex),
                     checked = useRegex,
                     onCheckedChange = { checked ->
                         useRegex = checked
                         ruleText = if (checked) startRegex else startDelimiter
                     },
-                    palette = style.toMiuixPalette()
+                    card = false,
                 )
-            }
-            OutlinedTextField(
-                value = ruleText,
-                onValueChange = { ruleText = it },
-                modifier = Modifier.fillMaxWidth(),
-                colors = outlinedColors(style)
-            )
-            fieldLabel(stringResource(R.string.preview), style)
-            OutlinedTextField(
-                value = sampleText,
-                onValueChange = { sampleText = it },
-                modifier = Modifier.fillMaxWidth(),
-                colors = outlinedColors(style)
-            )
-            Text(
-                text = previewText,
-                color = style.accent,
-                fontSize = 13.sp
-            )
-            fieldLabel(stringResource(R.string.advanced_title_height_factor_label), style)
-            OutlinedTextField(
-                value = heightText,
-                onValueChange = { heightText = it.filter(Char::isDigit).take(3) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(stringResource(R.string.advanced_title_height_factor_hint)) },
-                colors = outlinedColors(style)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.advanced_title_json_label),
-                    color = style.secondaryText,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
+                AppTextField(
+                    value = ruleText,
+                    onValueChange = { ruleText = it },
+                    placeholder = stringResource(R.string.advanced_title_rule_label),
+                    singleLine = false,
+                    maxLines = 3,
                 )
                 Text(
-                    text = stringResource(R.string.advanced_title_open_editor),
-                    color = style.accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(style.actionRadius))
-                        .clickable { openJsonEditor() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                    text = stringResource(R.string.preview),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant
                 )
-            }
-            Text(
-                text = stringResource(R.string.advanced_title_json_hint),
-                color = style.secondaryText.copy(alpha = 0.7f),
-                fontSize = 12.sp
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                subtleButton(stringResource(R.string.cancel), style, Modifier.weight(1f)) {
-                    dismissAllowingStateLoss()
+                AppTextField(
+                    value = sampleText,
+                    onValueChange = { sampleText = it },
+                    singleLine = false,
+                    maxLines = 3,
+                )
+                Text(
+                    text = previewText,
+                    style = visual.type.caption,
+                    color = colors.primary
+                )
+                Text(
+                    text = stringResource(R.string.advanced_title_height_factor_label),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant
+                )
+                AppTextField(
+                    value = heightText,
+                    onValueChange = { heightText = it.filter(Char::isDigit).take(3) },
+                    placeholder = stringResource(R.string.advanced_title_height_factor_hint),
+                    singleLine = true,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.advanced_title_json_label),
+                        style = visual.type.caption,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AppGhostButton(
+                        text = stringResource(R.string.advanced_title_open_editor),
+                        onClick = { openJsonEditor() },
+                    )
                 }
-                subtleButton(stringResource(R.string.confirm), style, Modifier.weight(1f)) {
-                    val trimmedName = name.trim()
-                    if (trimmedName.isEmpty()) {
-                        requireContext().toastOnUi(getString(R.string.advanced_title_name_required))
-                        return@subtleButton
-                    }
-                    val jsonText = json.trim()
-                    val jsonError = runCatching {
-                        AdvancedTitlePackageManager.validateJson(jsonText)
-                    }.exceptionOrNull()
-                    if (jsonError != null) {
-                        requireContext().toastOnUi(
-                            jsonError.localizedMessage
-                                ?: getString(R.string.advanced_title_invalid_json)
-                        )
-                        return@subtleButton
-                    }
-                    val heightFactor = heightText.trim().toIntOrNull()
-                        ?.coerceIn(30, 120)
-                        ?: AdvancedTitleConfig.DEFAULT_HEIGHT_FACTOR
-                    dismissAllowingStateLoss()
-                    (activity as? Host)?.onAdvancedTitleSaved(
-                        entryId,
-                        trimmedName,
-                        jsonText,
-                        buildRule(useRegex, ruleText, startDelimiter, startRegex),
-                        heightFactor
+                Text(
+                    text = stringResource(R.string.advanced_title_json_hint),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        modifier = Modifier.weight(1f),
+                        onClick = { dismissAllowingStateLoss() },
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.confirm),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val trimmedName = name.trim()
+                            if (trimmedName.isEmpty()) {
+                                requireContext().toastOnUi(
+                                    getString(R.string.advanced_title_name_required)
+                                )
+                                return@AppFilledButton
+                            }
+                            val jsonText = json.trim()
+                            val jsonError = runCatching {
+                                AdvancedTitlePackageManager.validateJson(jsonText)
+                            }.exceptionOrNull()
+                            if (jsonError != null) {
+                                requireContext().toastOnUi(
+                                    jsonError.localizedMessage
+                                        ?: getString(R.string.advanced_title_invalid_json)
+                                )
+                                return@AppFilledButton
+                            }
+                            val heightFactor = heightText.trim().toIntOrNull()
+                                ?.coerceIn(30, 120)
+                                ?: AdvancedTitleConfig.DEFAULT_HEIGHT_FACTOR
+                            dismissAllowingStateLoss()
+                            (activity as? Host)?.onAdvancedTitleSaved(
+                                entryId,
+                                trimmedName,
+                                jsonText,
+                                buildRule(useRegex, ruleText, startDelimiter, startRegex),
+                                heightFactor
+                            )
+                        },
                     )
                 }
             }
@@ -347,48 +321,6 @@ class AdvancedTitleConfigDialog : ComposeDialogFragment() {
             },
             delimiter = if (useRegex) startDelimiter else ruleText,
             regex = if (useRegex) ruleText else startRegex
-        )
-    }
-
-    @Composable
-    private fun fieldLabel(text: String, style: AppDialogStyle) {
-        Text(
-            text = text,
-            color = style.secondaryText,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-    }
-
-    @Composable
-    private fun outlinedColors(style: AppDialogStyle) = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = style.primaryText,
-        unfocusedTextColor = style.primaryText,
-        cursorColor = style.accent,
-        focusedBorderColor = style.accent,
-        unfocusedBorderColor = style.stroke,
-        focusedContainerColor = style.fieldSurface,
-        unfocusedContainerColor = style.fieldSurface
-    )
-
-    @Composable
-    private fun subtleButton(
-        text: String,
-        style: AppDialogStyle,
-        modifier: Modifier = Modifier,
-        onClick: () -> Unit
-    ) {
-        Text(
-            text = text,
-            color = style.primaryText,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center,
-            modifier = modifier
-                .clip(RoundedCornerShape(style.actionRadius))
-                .background(style.fieldSurface, RoundedCornerShape(style.actionRadius))
-                .clickable(onClick = onClick)
-                .padding(vertical = 10.dp)
         )
     }
 

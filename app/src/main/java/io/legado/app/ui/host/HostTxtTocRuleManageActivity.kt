@@ -52,8 +52,8 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.rememberAppReorderableListState
 import io.legado.app.uikit.v5.components.rememberAppSelectionState
+import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.showHelp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
@@ -92,6 +92,8 @@ private fun HostTxtTocRuleManageScreen() {
 
     val selection = rememberAppSelectionState<TxtTocRule>(idOf = { it.id.toString() })
     var menuOpen by remember { mutableStateOf(false) }
+    var importUrlOpen by remember { mutableStateOf(false) }
+    var importUrlText by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<TxtTocRule?>(null) }
     var editTarget by remember { mutableStateOf<Long?>(null) }
@@ -255,16 +257,8 @@ private fun HostTxtTocRuleManageScreen() {
                     }
                 },
                 stringResource(R.string.v5_import_online) to {
-                    activity.showComposeTextInputDialog(
-                        title = activity.getString(R.string.import_on_line),
-                        hint = "url",
-                        onPositive = { text ->
-                            if (text.isNotBlank()) {
-                                ImportTxtTocRuleDialog(text)
-                                    .show(activity.supportFragmentManager, "importTxtTocRule")
-                            }
-                        },
-                    )
+                    importUrlText = ""
+                    importUrlOpen = true
                 },
                 stringResource(R.string.v5_import_qr) to { qrLauncher.launch(null) },
                 stringResource(R.string.import_default_rule) to {
@@ -274,6 +268,26 @@ private fun HostTxtTocRuleManageScreen() {
                 stringResource(R.string.v5_help) to { activity.showHelp("txtTocRuleHelp") },
             ),
             onDismiss = { menuOpen = false },
+        )
+    }
+
+    // 在线导入 URL 输入（AppInputDialog）
+    if (importUrlOpen) {
+        AppInputDialog(
+            title = stringResource(R.string.import_on_line),
+            value = importUrlText,
+            onValueChange = { importUrlText = it },
+            placeholder = "url",
+            confirmLabel = stringResource(R.string.v5_ok),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            onConfirm = { text ->
+                importUrlOpen = false
+                if (text.isNotBlank()) {
+                    ImportTxtTocRuleDialog(text)
+                        .show(activity.supportFragmentManager, "importTxtTocRule")
+                }
+            },
+            onDismiss = { importUrlOpen = false },
         )
     }
 

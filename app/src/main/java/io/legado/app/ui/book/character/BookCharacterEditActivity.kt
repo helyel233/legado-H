@@ -9,19 +9,16 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.doAfterTextChanged
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
-import androidx.viewbinding.ViewBinding
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.appDb
@@ -54,6 +51,7 @@ import io.legado.app.ui.book.character.compose.CharacterEditScreen
 import io.legado.app.ui.book.character.compose.CharacterSpeechEngineUi
 import io.legado.app.ui.book.character.compose.toDraft
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.host.setV5Content
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
@@ -67,16 +65,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileOutputStream
 
-class BookCharacterEditActivity : BaseActivity<ViewBinding>(
-    fullScreen = false,
-    imageBg = false
-) {
-
-    private lateinit var composeView: ComposeView
-    override val binding: ViewBinding by lazy {
-        composeView = ComposeView(this)
-        SimpleViewBinding(composeView)
-    }
+/**
+ * 角色编辑 V5 脚手架迁移：BaseActivity+ComposeView → AppCompatActivity+setV5Content。
+ * Compose 屏（CharacterEditScreen）与业务逻辑（头像选择/AI 生成/图库弹窗）逐行保留。
+ */
+class BookCharacterEditActivity : AppCompatActivity() {
 
     private var bookUrl: String = ""
     private var characterBookKey: String = ""
@@ -90,12 +83,12 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
         result.uri?.let(::copyAvatar)
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         bookUrl = intent.getStringExtra(BookCharacterManageActivity.EXTRA_BOOK_URL).orEmpty()
         characterBookKey = intent.getStringExtra(BookCharacterManageActivity.EXTRA_CHARACTER_BOOK_KEY).orEmpty()
         characterId = intent.getLongExtra(BookCharacterManageActivity.EXTRA_CHARACTER_ID, 0L)
-        composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        composeView.setContent {
+        setV5Content {
             CharacterEditScreen(
                 title = if (characterId > 0L) "编辑角色" else "添加角色",
                 draft = draft,
