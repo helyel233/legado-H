@@ -1,77 +1,125 @@
 package io.legado.app.ui.code
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.activity.viewModels
-import androidx.annotation.RequiresApi
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
-import androidx.core.widget.addTextChangedListener
-import androidx.lifecycle.lifecycleScope
-import com.google.android.material.textfield.TextInputEditText
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import io.github.rosemoe.sora.event.PublishSearchResultEvent
 import io.github.rosemoe.sora.event.SelectionChangeEvent
+import io.github.rosemoe.sora.event.SubscriptionReceipt
 import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
 import io.github.rosemoe.sora.util.regex.RegexBackrefGrammar
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.EditorSearcher.SearchOptions
 import io.legado.app.R
-import io.legado.app.base.VMBaseActivity
-import io.legado.app.help.CacheManager
 import io.legado.app.constant.PreferKey
-import io.legado.app.databinding.ActivityCodeEditBinding
+import io.legado.app.help.CacheManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
-import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.config.ChangeThemeDialog
 import io.legado.app.ui.code.config.SettingsDialog
-import io.legado.app.ui.widget.keyboard.KeyboardToolPop
-import io.legado.app.utils.imeHeight
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppOverflowMenuButton
+import io.legado.app.uikit.v5.components.AppSwitch
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.AppSurface
+import io.legado.app.uikit.v5.token.MaterialLevel
 import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
-class CodeEditActivity :
-    VMBaseActivity<ActivityCodeEditBinding, CodeEditViewModel>(),
-    KeyboardToolPop.CallBack, ChangeThemeDialog.CallBack, SettingsDialog.CallBack {
+class CodeEditActivity : AppCompatActivity(),
+    ChangeThemeDialog.CallBack, SettingsDialog.CallBack {
     companion object {
         private var isInitialized = false
         private var findText = ""
         private var replaceText = ""
         private var isRegex = true
     }
-    override val binding by viewBinding(ActivityCodeEditBinding::inflate)
-    override val viewModel by viewModels<CodeEditViewModel>()
-    private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, lifecycleScope, binding.root, this)
-    }
-    private val editor: CodeEditor by lazy { binding.editText }
-    private val editorSearcher: EditorSearcher by lazy { editor.searcher }
+
+    private val viewModel by viewModels<CodeEditViewModel>()
+
+    private lateinit var editor: CodeEditor
+    private val editorSearcher: EditorSearcher get() = editor.searcher
     private var searchOptions: SearchOptions? = null
-    private var menuSaveBtn: MenuItem? = null
 
     private val isDark
         get() = AppConfig.editTemeAuto && ThemeConfig.isDarkTheme()
     private var themeIndex = -1
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
-        softKeyboardTool.attachToWindow(window)
+    // ---------- Compose 状态 ----------
+    var titleText by mutableStateOf("")
+    var writable by mutableStateOf(true)
+    var autoWrap by mutableStateOf(AppConfig.editAutoWrap)
+    var menuOpen by mutableStateOf(false)
+    var searchVisible by mutableStateOf(false)
+    var findValue by mutableStateOf("")
+    var replaceValue by mutableStateOf("")
+    var replaceExpanded by mutableStateOf(false)
+    var regexOn by mutableStateOf(true)
+    var searchResultText by mutableStateOf("0")
+
+    private var receiptSearch: SubscriptionReceipt<PublishSearchResultEvent>? = null
+    private var receiptChange: SubscriptionReceipt<SelectionChangeEvent>? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        editor = CodeEditor(this).apply {
+            setTextSize(18f)
+        }
+        // 原 initTheme 逻辑
+        if (!isInitialized) {
+            viewModel.initSora()
+            isInitialized = true
+        }
         editor.colorScheme = TextMateColorScheme2.create(ThemeRegistry.getInstance()) //先设置颜色,避免一开始的白屏
+        val index = if (isDark) {
+            AppConfig.editThemeDark
+        } else {
+            AppConfig.editTheme
+        }
+        upTheme(index)
+        themeIndex = index
+
+        setV5Content { CodeEditScreen(this) }
+
         viewModel.initData(intent) {
             editor.apply {
                 viewModel.title?.let {
-                    binding.titleBar.title = it
+                    titleText = it
                 }
                 // IME 组合态和提交态同时触发配对时会出现 `())` 这类重复闭合
                 getProps().autoCompletionOnComposing = false
@@ -80,7 +128,7 @@ class CodeEditActivity :
                 upEdit(AppConfig.editFontScale, null, AppConfig.editAutoWrap)
                 setText(viewModel.initialText)
                 editable = viewModel.writable
-                menuSaveBtn?.isVisible = viewModel.writable
+                writable = viewModel.writable
                 requestFocus()
                 postDelayed({
                     val pos = cursor.indexer.getCharPosition(viewModel.cursorPosition)
@@ -88,15 +136,28 @@ class CodeEditActivity :
                 }, 360) // 进行延时,确保加载渲染完成,从而确保光标能显示跳转到长文本最后
             }
         }
-        initView()
     }
 
-    private fun initView() {
-        binding.searchGroup.setBackgroundColor(themeCardColorOrDefault())
-        binding.root.setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
-            softKeyboardTool.initialPadding = windowInsets.imeHeight
-            windowInsets
+    internal fun createEditorContainer(context: Context): FrameLayout {
+        return FrameLayout(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            (editor.parent as? ViewGroup)?.removeView(editor)
+            addView(
+                editor,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
         }
+    }
+
+    internal fun releaseEditorContainer(container: FrameLayout) {
+        // 只摘除宿主，不在此 release：editor 统一在 onDestroy 里 release
+        container.removeAllViews()
     }
 
     override fun onDestroy() {
@@ -108,7 +169,7 @@ class CodeEditActivity :
     /**
      * 使用super.finish(),防止循环回调
      * */
-    private fun save(check: Boolean) {
+    internal fun save(check: Boolean) {
         if (!viewModel.writable) return super.finish()
         val text = editor.text.toString()
         val cursorPos = editor.cursor?.left ?: 0
@@ -172,21 +233,6 @@ class CodeEditActivity :
         }
     }
 
-    override fun initTheme() {
-        super.initTheme()
-        if (!isInitialized) {
-            viewModel.initSora()
-            isInitialized = true
-        }
-        val index = if (isDark) {
-            AppConfig.editThemeDark
-        } else {
-            AppConfig.editTheme
-        }
-        upTheme(index)
-        themeIndex = index
-    }
-
     override fun upTheme(index: Int) {
         if (themeIndex != index) {
             viewModel.loadTextMateThemes(index)
@@ -195,17 +241,28 @@ class CodeEditActivity :
         }
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.code_edit_activity, menu)
-        menuSaveBtn = menu.findItem(R.id.menu_save).apply {
-            isVisible = viewModel.writable
-        }
-        return super.onCompatCreateOptionsMenu(menu)
+    internal fun buildMenuActions(): List<Pair<String, () -> Unit>> {
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        actions.add(getString(R.string.search) to { openSearch() })
+        actions.add(getString(R.string.format_code) to { viewModel.formatCode(editor) })
+        actions.add(getString(R.string.change_theme) to { showDialogFragment(ChangeThemeDialog()) })
+        actions.add(getString(R.string.config_settings) to { showDialogFragment(SettingsDialog(this, this)) })
+        val autoWrapLabel = getString(R.string.auto_wrap)
+        actions.add((if (autoWrap) "✓ " else "") + autoWrapLabel to { toggleAutoWrap() })
+        actions.add(getString(R.string.log) to { showDialogFragment<AppLogDialog>() })
+        // 帮助（旧 BaseActivity helpActions）
+        actions.add("书源教程" to { showHelp("ruleHelp") })
+        actions.add("订阅源教程" to { showHelp("rssRuleHelp") })
+        actions.add("js教程" to { showHelp("jsHelp") })
+        actions.add("正则教程" to { showHelp("regexHelp") })
+        return actions
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.findItem(R.id.menu_auto_wrap)?.isChecked = AppConfig.editAutoWrap
-        return super.onPrepareOptionsMenu(menu)
+    private fun toggleAutoWrap() {
+        val newValue = !AppConfig.editAutoWrap
+        upEdit(autoWarp = newValue)
+        putPrefBoolean(PreferKey.editAutoWrap, newValue)
+        autoWrap = newValue
     }
 
     private fun setSearchOptions() {
@@ -216,90 +273,93 @@ class CodeEditActivity :
         )
     }
 
-    private fun search() {
-        if (binding.searchGroup.isVisible) return
-        binding.switchRegex.run {
-            isChecked = isRegex
-            setSearchOptions()
-            setOnCheckedChangeListener { _, isChecked ->
-                isRegex = isChecked
-                setSearchOptions()
-                searchTxt(binding.etFind.text.toString())
+    private fun openSearch() {
+        if (searchVisible) return
+        searchVisible = true
+        regexOn = isRegex
+        setSearchOptions()
+        receiptSearch = editor.subscribeEvent(PublishSearchResultEvent::class.java) { event, _ ->
+            if (event.editor == editor) {
+                updateSearchResults()
             }
         }
-        val receiptSearch =
-            editor.subscribeEvent(PublishSearchResultEvent::class.java) { event, _ ->
-                if (event.editor == editor) {
-                    updateSearchResults()
-                }
-            }
-        val receiptChange = editor.subscribeEvent(SelectionChangeEvent::class.java) { event, _ ->
+        receiptChange = editor.subscribeEvent(SelectionChangeEvent::class.java) { event, _ ->
             if (event.cause == SelectionChangeEvent.CAUSE_SEARCH) {
                 updateSearchResults()
             }
         }
-        binding.searchGroup.visibility = View.VISIBLE
-        binding.btnCloseFind.setOnClickListener {
-            binding.searchGroup.visibility = View.GONE
+        findValue = findText
+        replaceValue = replaceText
+        searchTxt(findText)
+    }
+
+    internal fun onFindChange(value: String) {
+        findValue = value
+        if (value.isNotEmpty()) {
+            findText = value
+            searchTxt(value)
+        } else {
+            findText = ""
             editorSearcher.stopSearch()
-            receiptSearch.unsubscribe()
-            receiptChange.unsubscribe()
-            editor.requestFocus()
             editor.invalidate()
         }
-        searchTxt(findText)
-        binding.etFind.run {
-            requestFocus()
-            setText(findText)
-            addTextChangedListener { text ->
-                if (!text.isNullOrEmpty()) {
-                    findText = text.toString()
-                    searchTxt(findText)
-                } else {
-                    editorSearcher.stopSearch()
-                    editor.invalidate()
-                }
-            }
+    }
 
+    internal fun onReplaceChange(value: String) {
+        replaceValue = value
+        if (value.isNotEmpty()) {
+            replaceText = value
         }
-        binding.etReplace.run {
-            setText(replaceText)
-            addTextChangedListener { text ->
-                if (!text.isNullOrEmpty()) {
-                    replaceText = text.toString()
-                }
-            }
+    }
+
+    internal fun onRegexChange(checked: Boolean) {
+        isRegex = checked
+        regexOn = checked
+        setSearchOptions()
+        searchTxt(findValue)
+    }
+
+    internal fun closeSearch() {
+        searchVisible = false
+        replaceExpanded = false
+        editorSearcher.stopSearch()
+        receiptSearch?.unsubscribe()
+        receiptChange?.unsubscribe()
+        receiptSearch = null
+        receiptChange = null
+        editor.requestFocus()
+        editor.invalidate()
+    }
+
+    internal fun gotoPrevious() {
+        if (editorSearcher.hasQuery()) {
+            editorSearcher.gotoPrevious()
         }
-        binding.btnPrevious.setOnClickListener {
+    }
+
+    internal fun gotoNext() {
+        if (editorSearcher.hasQuery()) {
+            editorSearcher.gotoNext()
+        }
+    }
+
+    internal fun onReplaceClick() {
+        if (!replaceExpanded) {
+            replaceExpanded = true
+        } else {
             if (editorSearcher.hasQuery()) {
-                editorSearcher.gotoPrevious()
+                editorSearcher.replaceCurrentMatch(replaceValue)
             }
         }
-        binding.btnNext.setOnClickListener {
-            if (editorSearcher.hasQuery()) {
-                editorSearcher.gotoNext()
-            }
-        }
-        binding.btnReplace.setOnClickListener {
-            if (binding.replaceGroup.isGone) {
-                binding.replaceGroup.visibility = View.VISIBLE
-                binding.btnReplaceAll.isEnabled = true
-                binding.etReplace.requestFocus()
-            } else {
-                if (editorSearcher.hasQuery()) {
-                    editorSearcher.replaceCurrentMatch(binding.etReplace.text.toString())
-                }
-            }
-        }
-        binding.btnCloseReplace.setOnClickListener {
-            binding.replaceGroup.visibility = View.GONE
-            binding.btnReplaceAll.isEnabled = false
-            binding.etFind.requestFocus()
-        }
-        binding.btnReplaceAll.setOnClickListener {
-            if (editorSearcher.hasQuery()) {
-                editorSearcher.replaceAll(binding.etReplace.text.toString())
-            }
+    }
+
+    internal fun closeReplace() {
+        replaceExpanded = false
+    }
+
+    internal fun replaceAll() {
+        if (editorSearcher.hasQuery()) {
+            editorSearcher.replaceAll(replaceValue)
         }
     }
 
@@ -322,81 +382,139 @@ class CodeEditActivity :
         if (editorSearcher.hasQuery()) {
             val totalResults = editorSearcher.matchedPositionCount
             val currentPosition = editorSearcher.currentMatchedPositionIndex + 1
-            binding.tvSearchResult.text =
+            searchResultText =
                 "${if (currentPosition > 0) "$currentPosition/" else ""}$totalResults"
         }
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_search -> search()
-            R.id.menu_save -> save(false)
-            R.id.menu_format_code -> viewModel.formatCode(editor)
-            R.id.menu_change_theme -> showDialogFragment(ChangeThemeDialog())
-            R.id.menu_config_settings -> showDialogFragment(SettingsDialog(this, this))
-            R.id.menu_auto_wrap -> {
-                item.isChecked = !AppConfig.editAutoWrap
-                upEdit(autoWarp = !AppConfig.editAutoWrap)
-                putPrefBoolean(PreferKey.editAutoWrap, !AppConfig.editAutoWrap)
-            }
-            R.id.menu_log -> showDialogFragment<AppLogDialog>()
-        }
-        return super.onCompatOptionsItemSelected(item)
     }
 
     override fun finish() {
         save(true)
     }
+}
 
-    override fun helpActions(): List<SelectItem<String>> {
-        return arrayListOf(
-            SelectItem("书源教程", "ruleHelp"),
-            SelectItem("订阅源教程", "rssRuleHelp"),
-            SelectItem("js教程", "jsHelp"),
-            SelectItem("正则教程", "regexHelp")
-        )
+@Composable
+private fun CodeEditScreen(activity: CodeEditActivity) {
+    val context = LocalContext.current
+    val editorContainer = remember { activity.createEditorContainer(context) }
+
+    DisposableEffect(Unit) {
+        onDispose { activity.releaseEditorContainer(editorContainer) }
     }
 
-    override fun onHelpActionSelect(action: String) {
-        when (action) {
-            "ruleHelp" -> showHelp("ruleHelp")
-            "rssRuleHelp" -> showHelp("rssRuleHelp")
-            "jsHelp" -> showHelp("jsHelp")
-            "regexHelp" -> showHelp("regexHelp")
+    // 搜索面板打开时，返回键先关搜索，否则走保存流程
+    BackHandler(enabled = activity.searchVisible) { activity.closeSearch() }
+
+    HostV5Page(
+        title = activity.titleText,
+        onBack = { activity.finish() },
+        trailing = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                AppOverflowMenuButton(
+                    contentDescription = context.getString(R.string.more),
+                    onClick = { activity.menuOpen = true },
+                )
+                if (activity.writable) {
+                    AppFilledButton(
+                        text = context.getString(R.string.action_save),
+                        onClick = { activity.save(false) },
+                    )
+                }
+            }
+        },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                AndroidView(
+                    factory = { editorContainer },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (activity.searchVisible) {
+                CodeEditSearchBar(activity)
+            }
         }
     }
 
-    override fun sendText(text: String) {
-        val view = window.decorView.findFocus()
-        if (view is TextInputEditText) {
-            var start = view.selectionStart
-            var end = view.selectionEnd
-            if (start > end) {
-                val temp = start
-                start = end
-                end = temp
+    if (activity.menuOpen) {
+        AppMenuSheet(
+            title = activity.titleText,
+            actions = activity.buildMenuActions(),
+            onDismiss = { activity.menuOpen = false },
+        )
+    }
+}
+
+@Composable
+private fun CodeEditSearchBar(activity: CodeEditActivity) {
+    AppSurface(
+        level = MaterialLevel.FLOATING,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.search_result))
+                Text(activity.searchResultText)
+                Spacer(Modifier.weight(1f))
+                Text(stringResource(R.string.regex))
+                AppSwitch(
+                    checked = activity.regexOn,
+                    onCheckedChange = { activity.onRegexChange(it) },
+                )
             }
-            if (text.isNotEmpty()) {
-                val edit = view.editableText//获取EditText的文字
-                if (start < 0 || start >= edit.length) {
-                    edit.append(text)
-                } else {
-                    edit.replace(start, end, text)//光标所在位置插入文字
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.find))
+                AppTextField(
+                    value = activity.findValue,
+                    onValueChange = { activity.onFindChange(it) },
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { activity.closeSearch() }) { Text("×") }
+            }
+            if (activity.replaceExpanded) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(stringResource(R.string.replace))
+                    AppTextField(
+                        value = activity.replaceValue,
+                        onValueChange = { activity.onReplaceChange(it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { activity.closeReplace() }) { Text("×") }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { activity.gotoPrevious() }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.btn_previous))
+                }
+                TextButton(onClick = { activity.gotoNext() }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.btn_next))
+                }
+                TextButton(onClick = { activity.onReplaceClick() }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.replace))
+                }
+                TextButton(onClick = { activity.replaceAll() }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.replace_all))
                 }
             }
         }
-        else {
-            editor.insertText(text, text.length)
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    override fun onUndoClicked() {
-        editor.undo()
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    override fun onRedoClicked() {
-        editor.redo()
     }
 }
