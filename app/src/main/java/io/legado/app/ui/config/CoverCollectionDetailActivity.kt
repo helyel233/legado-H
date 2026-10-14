@@ -1,37 +1,59 @@
 package io.legado.app.ui.config
 
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
-import com.bumptech.glide.Glide
 import io.legado.app.R
-import io.legado.app.base.BaseActivity
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.databinding.ActivityCoverCollectionDetailBinding
-import io.legado.app.databinding.ItemCoverCollectionImageBinding
 import io.legado.app.help.config.CoverCollectionManager
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.UiCorner
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.host.AppAsyncImage
+import io.legado.app.ui.host.HostV5Page
+import io.legado.app.ui.host.setV5Content
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 
-class CoverCollectionDetailActivity : BaseActivity<ActivityCoverCollectionDetailBinding>() {
+/**
+ * 封面集合详情 V5 版（换壳迁移自旧 View 版，台账 #43）。
+ *
+ * 旧版：BaseActivity + ViewBinding + GridLayoutManager(3 列) + RecyclerView + Glide，
+ *       顶栏菜单「导入图片」、长按图片确认删除。
+ * 新版：AppCompatActivity + setV5Content + HostV5Page（顶栏 trailing 导入按钮）
+ *       + LazyVerticalGrid(3 列) + AppAsyncImage + 长按 AppConfirmDialog 删除。
+ * 类名/包不变（in-place 换壳），入口 CoverCollectionManageActivity 零切换。
+ */
+class CoverCollectionDetailActivity : AppCompatActivity() {
 
-    override val binding by viewBinding(ActivityCoverCollectionDetailBinding::inflate)
-
-    private var adapter: Adapter? = null
     private var isNight = false
     private var collectionId: String? = null
     private var collection: CoverCollectionManager.Collection? = null
+
+    // ---------- Compose 状态 ----------
+    var titleText by mutableStateOf("")
+    var images by mutableStateOf<List<String>>(emptyList())
+    var deleteTarget by mutableStateOf<String?>(null)
+
     private val importImages = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isNullOrEmpty()) return@registerForActivityResult
         val current = collection ?: return@registerForActivityResult
@@ -45,30 +67,12 @@ class CoverCollectionDetailActivity : BaseActivity<ActivityCoverCollectionDetail
         }
     }
 
-    override fun onActivityCreated(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         isNight = intent.getBooleanExtra("isNight", false)
         collectionId = intent.getStringExtra("id")
-        binding.root.applyUiBodyTypefaceDeep(uiTypeface())
-        adapter = Adapter()
-        adapter?.setOnItemLongClickListener { _, item ->
-            confirmDeleteImage(item)
-            true
-        }
-        binding.recyclerView.layoutManager = GridLayoutManager(this, 3)
-        binding.recyclerView.adapter = adapter
+        setV5Content { DetailScreen(this) }
         loadCollection()
-    }
-
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(R.string.cover_collection_import_images).apply {
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        importImages.launch("image/*")
-        return true
     }
 
     private fun loadCollection() {
@@ -80,21 +84,16 @@ class CoverCollectionDetailActivity : BaseActivity<ActivityCoverCollectionDetail
 
     private fun bindCollection() {
         val current = collection ?: return
-        title = current.name
-        binding.titleBar.title = current.name
-        adapter?.setItems(current.images)
+        titleText = current.name
+        images = current.images
     }
 
-    private fun confirmDeleteImage(imagePath: String) {
-        alert(getString(R.string.delete), getString(R.string.cover_collection_delete_image_confirm)) {
-            yesButton {
-                deleteImage(imagePath)
-            }
-            noButton()
-        }
+    internal fun launchImportImages() {
+        importImages.launch("image/*")
     }
 
-    private fun deleteImage(imagePath: String) {
+    internal fun doDeleteImage() {
+        val imagePath = deleteTarget ?: return
         val current = collection ?: return
         lifecycleScope.launch {
             kotlin.runCatching {
@@ -102,33 +101,71 @@ class CoverCollectionDetailActivity : BaseActivity<ActivityCoverCollectionDetail
             }.onFailure {
                 toastOnUi(it.localizedMessage)
             }
+            deleteTarget = null
             bindCollection()
         }
     }
+}
 
-    private inner class Adapter :
-        RecyclerAdapter<String, ItemCoverCollectionImageBinding>(this@CoverCollectionDetailActivity) {
+@Composable
+private fun DetailScreen(activity: CoverCollectionDetailActivity) {
+    BackHandler { activity.finish() }
 
-        override fun getViewBinding(parent: ViewGroup): ItemCoverCollectionImageBinding {
-            return ItemCoverCollectionImageBinding.inflate(inflater, parent, false).apply {
-                root.background = UiCorner.panelRounded(
-                    root.context,
-                    root.context.themeCardColorOrDefault(),
-                    UiCorner.panelRadius(root.context)
+    HostV5Page(
+        title = activity.titleText,
+        onBack = { activity.finish() },
+        trailing = {
+            AppFilledButton(
+                text = stringResource(R.string.cover_collection_import_images),
+                onClick = { activity.launchImportImages() },
+            )
+        },
+    ) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(activity.images, key = { it }) { path ->
+                CoverImageCell(
+                    path = path,
+                    onLongClick = { activity.deleteTarget = path },
                 )
             }
         }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemCoverCollectionImageBinding,
-            item: String,
-            payloads: MutableList<Any>
-        ) {
-            Glide.with(binding.ivImage).load(item).centerCrop().into(binding.ivImage)
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemCoverCollectionImageBinding) {
-        }
     }
+
+    val target = activity.deleteTarget
+    if (target != null) {
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = stringResource(R.string.cover_collection_delete_image_confirm),
+            confirmLabel = stringResource(R.string.ok),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = { activity.doDeleteImage() },
+            onDismiss = { activity.deleteTarget = null },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CoverImageCell(path: String, onLongClick: () -> Unit) {
+    AppAsyncImage(
+        model = path,
+        contentDescription = null,
+        cornerRadius = 8.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.75f)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {},
+                onLongClick = onLongClick,
+            ),
+    )
 }
