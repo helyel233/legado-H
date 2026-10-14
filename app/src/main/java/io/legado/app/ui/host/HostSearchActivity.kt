@@ -54,6 +54,8 @@ import androidx.lifecycle.ViewModelProvider
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.about.AppLogDialog
@@ -105,6 +107,36 @@ class HostSearchActivity : AppCompatActivity(), SearchScopeDialog.Callback {
                 }
             )
         }
+
+        fun start(context: Context, key: String?, searchScope: String?) {
+            context.startActivity(
+                Intent(context, HostSearchActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    key?.let { putExtra("key", it) }
+                    searchScope?.let { putExtra("searchScope", it) }
+                }
+            )
+        }
+
+        fun start(context: Context, source: BookSource, key: String? = null) {
+            context.startActivity(
+                Intent(context, HostSearchActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    key?.let { putExtra("key", it) }
+                    putExtra("searchScope", SearchScope(source).toString())
+                }
+            )
+        }
+
+        fun start(context: Context, source: BookSourcePart, key: String? = null) {
+            context.startActivity(
+                Intent(context, HostSearchActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    key?.let { putExtra("key", it) }
+                    putExtra("searchScope", SearchScope(source).toString())
+                }
+            )
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,6 +182,10 @@ private fun HostSearchScreen() {
     }
 
     LaunchedEffect(initialKey) {
+        // 对齐旧 SearchActivity.receiptIntent：先按传入 searchScope 更新范围，再搜索
+        activity.intent.getStringExtra("searchScope")?.let {
+            vm.searchScope.update(it, postValue = false, save = false)
+        }
         if (initialKey.isNotBlank()) vm.search(initialKey)
     }
     DisposableEffect(Unit) {

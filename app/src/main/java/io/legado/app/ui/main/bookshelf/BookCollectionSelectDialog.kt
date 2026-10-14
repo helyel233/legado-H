@@ -22,6 +22,7 @@ import io.legado.app.data.entities.BookCollectionWithItems
 import io.legado.app.databinding.DialogBookCollectionSelectBinding
 import io.legado.app.databinding.ItemBookCollectionSelectBinding
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.ui.host.HostBookCollectionActivity
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.startActivity
@@ -227,9 +228,7 @@ class BookCollectionSelectDialog() : BaseBottomSheetDialogFragment(R.layout.dial
     private fun addToCollection(item: CollectionSelectItem) {
         if (bookUrls.isEmpty() && collectionIds.isEmpty()) {
             // 无待加入条目时作为合集管理入口，点击直接打开合集详情
-            startActivity<BookCollectionActivity> {
-                putExtra("collectionId", item.source.collection.collectionId)
-            }
+            HostBookCollectionActivity.start(requireContext(), item.source.collection.collectionId)
             dismissAllowingStateLoss()
             return
         }

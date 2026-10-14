@@ -25,7 +25,7 @@ import io.legado.app.help.book.isLocalModified
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.LocalBook
-import io.legado.app.ui.book.cache.CacheActivity
+import io.legado.app.ui.host.HostCacheActivity
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.HtmlFormatter
@@ -149,7 +149,7 @@ class ExportBookService : BaseService() {
         val notification = NotificationCompat.Builder(this, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_export)
             .setSubText(getString(R.string.export_book))
-            .setContentIntent(activityPendingIntent<CacheActivity>("cacheActivity"))
+            .setContentIntent(activityPendingIntent<HostCacheActivity>("cacheActivity"))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentText(notificationContentText)
             .setDeleteIntent(servicePendingIntent<ExportBookService>(IntentAction.stop))

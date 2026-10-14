@@ -9,7 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.help.book.TextBookImporter
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.startActivity
@@ -77,7 +77,7 @@ class SharedReceiverActivity : AppCompatActivity() {
             showImportAsBookDialog(text)
             return true
         }
-        SearchActivity.start(this, text)
+        HostSearchActivity.start(this, text)
         return false
     }
 

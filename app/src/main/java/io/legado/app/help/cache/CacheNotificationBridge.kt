@@ -6,7 +6,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.NotificationId
 import io.legado.app.data.appDb
-import io.legado.app.ui.book.cache.CacheActivity
+import io.legado.app.ui.host.HostCacheActivity
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.broadcastPendingIntent
@@ -19,7 +19,7 @@ internal object CacheNotificationBridge {
         return NotificationCompat.Builder(appCtx, AppConst.channelIdDownload)
             .setSmallIcon(R.drawable.ic_download)
             .setContentTitle(appCtx.getString(R.string.offline_cache))
-            .setContentIntent(appCtx.activityPendingIntent<CacheActivity>("cacheActivity"))
+            .setContentIntent(appCtx.activityPendingIntent<HostCacheActivity>("cacheActivity"))
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
             .setOngoing(true)

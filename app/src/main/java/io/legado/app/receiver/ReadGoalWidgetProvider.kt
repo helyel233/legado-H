@@ -17,7 +17,7 @@ import android.net.Uri
 import android.widget.RemoteViews
 import io.legado.app.R
 import io.legado.app.data.appDb
-import io.legado.app.ui.about.ReadRecordActivity
+import io.legado.app.ui.host.HostReadRecordActivity
 import io.legado.app.help.readrecord.ReadRecordWidgetStore
 import io.legado.app.ui.host.AppHostActivity
 import io.legado.app.utils.BitmapUtils
@@ -159,7 +159,7 @@ class ReadGoalWidgetProvider : AppWidgetProvider() {
 
         private fun openReadRecordIntent(context: Context): PendingIntent {
             val mainIntent = Intent(context, AppHostActivity::class.java)
-            val recordIntent = Intent(context, ReadRecordActivity::class.java)
+            val recordIntent = Intent(context, HostReadRecordActivity::class.java)
             return TaskStackBuilder.create(context)
                 .addNextIntent(mainIntent)
                 .addNextIntent(recordIntent)

@@ -385,9 +385,6 @@
             android:name=".ui.book.info.edit.BookInfoEditActivity"
             android:launchMode="singleTask" />
         <activity
-            android:name=".ui.main.bookshelf.BookCollectionActivity"
-            android:launchMode="singleTask" />
-        <activity
             android:name=".ui.main.bookshelf.smartgroup.SmartGroupRuleActivity"
             android:launchMode="singleTask" />
         <!-- 音频播放界面 -->
@@ -569,16 +566,6 @@
         <activity
             android:name=".ui.book.character.BookCharacterRelationActivity"
             android:launchMode="standard" />
-        <!-- 搜索界面 -->
-        <activity
-            android:name=".ui.book.search.SearchActivity"
-            android:launchMode="standard"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
-        <!-- 书源管理 -->
-        <activity
-            android:name=".ui.book.source.manage.BookSourceActivity"
-            android:launchMode="singleTop"
-            android:screenOrientation="behind" />
         <!-- 替换规则界面 -->
         <!-- 书籍管理 -->
         <activity
@@ -600,16 +587,6 @@
             android:name=".ui.book.searchContent.SearchContentActivity"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
-        <!-- RSS条目 -->
-        <activity
-            android:name=".ui.rss.article.RssSortActivity"
-            android:launchMode="singleTop" />
-        <!-- RSS阅读 -->
-        <activity
-            android:name=".ui.rss.read.ReadRssActivity"
-            android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true"
-            android:launchMode="standard" />
         <!-- 导入书籍 -->
         <activity
             android:name=".ui.book.import.local.ImportBookActivity"
@@ -618,10 +595,6 @@
         <activity
             android:name=".ui.book.import.remote.RemoteBookActivity"
             android:launchMode="singleTop" />
-        <!-- 发现界面 -->
-        <activity
-            android:name=".ui.book.explore.ExploreShowActivity"
-            android:launchMode="singleTop" />
         <!-- 订阅源调试 -->
         <activity
             android:name=".ui.rss.source.debug.RssSourceDebugActivity"
@@ -629,10 +602,6 @@
         <!-- Rss收藏 -->
         <activity
             android:name=".ui.rss.favorites.RssFavoritesActivity"
-            android:launchMode="singleTop" />
-        <!-- 缓存界面 -->
-        <activity
-            android:name=".ui.book.cache.CacheActivity"
             android:launchMode="singleTop" />
         <activity
             android:name=".ui.book.cache.CacheManageActivity"
@@ -643,11 +612,6 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="standard" />
         <!-- 书源登录 -->
-        <!-- 阅读记录 -->
-        <activity
-            android:name=".ui.about.ReadRecordActivity"
-            android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true" />
         <!-- 阅读年度报告 -->
         <activity
             android:name=".ui.main.readrecord.YearlyReportActivity"

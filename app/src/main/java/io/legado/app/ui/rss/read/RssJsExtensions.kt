@@ -19,10 +19,11 @@ import io.legado.app.model.VideoPlay
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.ui.association.AddToBookshelfDialog
-import io.legado.app.ui.book.explore.ExploreShowActivity
-import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.host.HostExploreShowActivity
+import io.legado.app.ui.host.HostReadRssActivity
+import io.legado.app.ui.host.HostRssSortActivity
+import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.host.HostSourceLoginActivity
-import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.openUrl
@@ -71,13 +72,13 @@ open class RssJsExtensions(
     @JvmOverloads
     fun searchBook(key: String, searchScope: String? = null) {
         activityRef.get()?.let {
-            SearchActivity.start(it, key, searchScope)
+            HostSearchActivity.start(it, key, searchScope)
         }
     }
 
     fun searchBook(key: String, source: BookSource) {
         activityRef.get()?.let {
-            SearchActivity.start(it, source, key)
+            HostSearchActivity.start(it, source, key)
         }
     }
 
@@ -146,7 +147,7 @@ open class RssJsExtensions(
                         } ?: url
                     }
                     val sourceUrl = toSource.sourceUrl
-                    RssSortActivity.start(activity, sortUrl, sourceUrl)
+                    HostRssSortActivity.start(activity, sourceUrl, sortUrl)
                 }
 
                 "rss" -> {
@@ -159,7 +160,7 @@ open class RssJsExtensions(
                     if (url.isNullOrBlank()) {
                         if (toSource.singleUrl) {
                             if (sourceUrl.startsWith("http", true)) {
-                                ReadRssActivity.start(
+                                HostReadRssActivity.start(
                                     activity,
                                     singleTop,
                                     sourceUrl,
@@ -184,9 +185,9 @@ open class RssJsExtensions(
                             }
                         }
                         if (startHtml.isNullOrBlank()) {
-                            RssSortActivity.start(activity, null, sourceUrl)
+                            HostRssSortActivity.start(activity, sourceUrl)
                         } else {
-                            ReadRssActivity.start(
+                            HostReadRssActivity.start(
                                 activity,
                                 singleTop,
                                 sourceUrl,
@@ -205,7 +206,7 @@ open class RssJsExtensions(
                     )
                     appDb.rssReadRecordDao.insertRecord(rssReadRecord) //留下历史记录
                     withContext(Main) {
-                        ReadRssActivity.start(
+                        HostReadRssActivity.start(
                             activity,
                             singleTop,
                             sourceUrl,
@@ -233,7 +234,7 @@ open class RssJsExtensions(
                     } ?: (source as? BookSource) ?: return@launch
                     val sourceUrl = toSource.bookSourceUrl
                     withContext(Main) {
-                        activity.startActivity<ExploreShowActivity> {
+                        activity.startActivity<HostExploreShowActivity> {
                             putExtra("exploreName", title)
                             putExtra("sourceUrl", sourceUrl)
                             putExtra("exploreUrl", url)

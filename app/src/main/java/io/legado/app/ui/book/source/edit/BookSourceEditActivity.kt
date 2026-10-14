@@ -38,7 +38,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
-import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
@@ -266,7 +266,7 @@ class BookSourceEditActivity :
 
     private fun search() {
         viewModel.save(getSource()) { source ->
-            SearchActivity.start(this, source)
+            HostSearchActivity.start(this, source)
         }
     }
 

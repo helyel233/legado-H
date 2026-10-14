@@ -23,7 +23,7 @@ import io.legado.app.model.CheckSource
 import io.legado.app.model.CheckSourceSession
 import io.legado.app.model.Debug
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.host.HostBookSourceManageActivity
 import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.onEachParallel
 import io.legado.app.utils.postEvent
@@ -71,7 +71,7 @@ class CheckSourceService : BaseService() {
             .setOnlyAlertOnce(true)
             .setContentTitle(getString(R.string.check_book_source))
             .setContentIntent(
-                activityPendingIntent<BookSourceActivity>("activity")
+                activityPendingIntent<HostBookSourceManageActivity>("activity")
             )
             .addAction(
                 R.drawable.ic_stop_black_24dp,

@@ -36,7 +36,7 @@ import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.BookCover
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.ui.book.info.BookInfoNavigator
-import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.ColorUtils
@@ -51,7 +51,7 @@ fun Context.openReadRecordBook(
 ) {
     if (book == null) {
         fallbackName?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            SearchActivity.start(this, it)
+            HostSearchActivity.start(this, it)
             return
         }
         toastOnUi(getString(R.string.read_record_goal_open_missing))
@@ -66,7 +66,7 @@ fun Context.openReadRecordBookInfo(
 ) {
     if (book == null) {
         fallbackName?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            SearchActivity.start(this, it)
+            HostSearchActivity.start(this, it)
             return
         }
         toastOnUi(getString(R.string.read_record_goal_open_missing))

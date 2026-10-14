@@ -70,7 +70,7 @@ import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.manga.ReadMangaActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.ReadBookActivity.Companion.RESULT_DELETED
-import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.host.HostSearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.file.HandleFileContract
@@ -314,7 +314,7 @@ class BookInfoComposeActivity :
                         null,
                         result = book.author
                     ) {
-                        SearchActivity.start(this, book.author)
+                        HostSearchActivity.start(this, book.author)
                     }
                 }
             },
@@ -340,7 +340,7 @@ class BookInfoComposeActivity :
                         null,
                         result = book.name
                     ) {
-                        SearchActivity.start(this, book.name)
+                        HostSearchActivity.start(this, book.name)
                     }
                 }
             },

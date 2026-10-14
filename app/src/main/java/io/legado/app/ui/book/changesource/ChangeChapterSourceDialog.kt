@@ -33,7 +33,7 @@ import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
-import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.host.HostBookSourceManageActivity
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyTint
@@ -303,7 +303,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             }
 
             R.id.menu_start_stop -> viewModel.startOrStopSearch()
-            R.id.menu_source_manage -> startActivity<BookSourceActivity>()
+            R.id.menu_source_manage -> startActivity<HostBookSourceManageActivity>()
             else -> if (item?.groupId == R.id.source_group && !item.isChecked) {
                 item.isChecked = true
                 if (item.title.toString() == getString(R.string.all_source)) {
