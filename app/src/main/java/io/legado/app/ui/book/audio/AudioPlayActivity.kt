@@ -36,7 +36,7 @@ import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.cache.CacheManageViewModel
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyNavigationBarPadding
@@ -157,7 +157,7 @@ class AudioPlayActivity :
             }
 
             R.id.menu_login -> AudioPlay.bookSource?.let {
-                startActivity<SourceLoginActivity> {
+                startActivity<HostSourceLoginActivity> {
                     putExtra("bookType", BookType.audio)
                 }
             }

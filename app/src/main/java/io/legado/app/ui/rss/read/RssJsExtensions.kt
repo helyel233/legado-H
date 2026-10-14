@@ -21,7 +21,7 @@ import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.ui.association.AddToBookshelfDialog
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.book.search.SearchActivity
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.isJsonObject
@@ -101,7 +101,7 @@ open class RssJsExtensions(
             val source = getSource() ?: return@launch
             when (name) {
                 "login" -> {
-                    if (activity is SourceLoginActivity) {
+                    if (activity is HostSourceLoginActivity) {
                         activity.toastOnUi("已在登录界面")
                         return@launch
                     }
@@ -115,7 +115,7 @@ open class RssJsExtensions(
                     when (toSource) {
                         is BookSource -> {
                             withContext(Main) {
-                                activity.startActivity<SourceLoginActivity> {
+                                activity.startActivity<HostSourceLoginActivity> {
                                     putExtra("bookType", bookType)
                                     putExtra("type", "bookSource")
                                     putExtra("key", toSource.bookSourceUrl)
@@ -125,7 +125,7 @@ open class RssJsExtensions(
 
                         is RssSource -> {
                             withContext(Main) {
-                                activity.startActivity<SourceLoginActivity> {
+                                activity.startActivity<HostSourceLoginActivity> {
                                     putExtra("type", "rssSource")
                                     putExtra("key", toSource.sourceUrl)
                                 }

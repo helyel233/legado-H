@@ -164,7 +164,7 @@ import io.legado.app.ui.book.read.page.entities.ReadAloudTextCleaner
 import io.legado.app.ui.book.read.page.entities.TextParagraph
 import io.legado.app.ui.book.read.page.entities.buildReadAloudCues
 import io.legado.app.ui.book.read.page.entities.indexForChapterPosition
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.MD5Utils
@@ -1045,7 +1045,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             ?.let { appDb.httpTTSDao.get(it) }
             ?.takeIf { !it.loginUrl.isNullOrBlank() && it.getLoginInfo().isNullOrBlank() }
             ?.let { httpTts ->
-                context.startActivity<SourceLoginActivity> {
+                context.startActivity<HostSourceLoginActivity> {
                     putExtra("type", "httpTts")
                     putExtra("key", httpTts.id.toString())
                 }

@@ -34,7 +34,7 @@ import io.legado.app.help.source.sortUrls
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.utils.*
@@ -353,7 +353,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_login -> startActivity<SourceLoginActivity> {
+            R.id.menu_login -> startActivity<HostSourceLoginActivity> {
                 putExtra("type", "rssSource")
                 putExtra("key", viewModel.rssSource?.sourceUrl)
             }

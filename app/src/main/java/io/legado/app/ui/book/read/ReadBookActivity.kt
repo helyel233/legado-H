@@ -236,7 +236,7 @@ import io.legado.app.ui.config.BubbleManageActivity
 import io.legado.app.ui.config.ShareNoteTemplateManageActivity
 import io.legado.app.ui.dict.DictDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.host.HostReplaceRuleManageActivity
 import io.legado.app.ui.host.HostReplaceEditActivity
 import io.legado.app.ui.widget.ModernActionPopup
@@ -4601,7 +4601,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 toastOnUi(R.string.source_no_login)
                 return@launch
             }
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("bookType", -1)
                 putExtra("type", "readMenuCustomButton")
                 putExtra("key", id.toString())
@@ -5250,7 +5250,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun showLogin() {
         ReadBook.bookSource?.let {
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("bookType", BookType.text)
             }
         }

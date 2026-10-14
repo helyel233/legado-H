@@ -42,7 +42,7 @@ import io.legado.app.data.entities.BookParagraphRule
 import io.legado.app.data.entities.ParagraphRule
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.toMiuixPalette
@@ -226,7 +226,7 @@ class ParagraphRuleQuickDialog : ReaderBottomSheetComposeDialogFragment() {
             toastOnUi(R.string.source_no_login)
             return
         }
-        startActivity<SourceLoginActivity> {
+        startActivity<HostSourceLoginActivity> {
             putExtra("bookType", -1)
             putExtra("type", "paragraphRule")
             putExtra("key", rule.id.toString())

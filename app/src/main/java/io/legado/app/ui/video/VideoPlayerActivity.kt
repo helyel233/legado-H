@@ -67,7 +67,7 @@ import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.info.BookInfoViewModel
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.rss.favorites.RssFavoritesDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.video.config.SettingsDialog
@@ -402,10 +402,10 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         binding.btnLoginSource.setOnClickListener {
             source?.let { s ->
                 when (s) {
-                    is BookSource -> startActivity<SourceLoginActivity> {
+                    is BookSource -> startActivity<HostSourceLoginActivity> {
                         putExtra("bookType", BookType.video)
                     }
-                    is RssSource -> startActivity<SourceLoginActivity> {
+                    is RssSource -> startActivity<HostSourceLoginActivity> {
                         putExtra("type", "rssSource")
                         putExtra("key", s.getKey())
                     }
@@ -817,12 +817,12 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
             R.id.menu_login -> VideoPlay.source?.let {s ->
                when (s) {
                     is BookSource -> {
-                        startActivity<SourceLoginActivity> {
+                        startActivity<HostSourceLoginActivity> {
                             putExtra("bookType", BookType.video)
                         }
                     }
                     is RssSource -> {
-                        startActivity<SourceLoginActivity> {
+                        startActivity<HostSourceLoginActivity> {
                             putExtra("type", "rssSource")
                             putExtra("key", s.getKey())
                         }

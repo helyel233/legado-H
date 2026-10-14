@@ -43,7 +43,7 @@ import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.setV5Content
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
@@ -257,7 +257,7 @@ class BookSourceEditActivity :
 
     private fun login() {
         viewModel.save(getSource()) { source ->
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("type", "bookSource")
                 putExtra("key", source.bookSourceUrl)
             }

@@ -79,7 +79,7 @@ import io.legado.app.model.Download
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.favorites.RssFavoritesDialog
 import io.legado.app.ui.rss.read.ReadRssViewModel
@@ -397,7 +397,7 @@ class HostReadRssActivity : AppCompatActivity(), RssFavoritesDialog.Callback {
     }
 
     private fun openLogin() {
-        startActivity<SourceLoginActivity> {
+        startActivity<HostSourceLoginActivity> {
             putExtra("type", "rssSource")
             putExtra("key", viewModel.rssSource?.sourceUrl)
         }

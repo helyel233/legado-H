@@ -64,7 +64,7 @@ import io.legado.app.help.source.removeSortCache
 import io.legado.app.help.source.sortUrls
 import io.legado.app.ui.host.pack.V5PackageStore
 import io.legado.app.ui.rss.article.RssArticlesViewModel
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.read.ReadRss
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
@@ -368,7 +368,7 @@ private fun HostRssSortScreen() {
                 })
                 if (s != null && !s.loginUrl.isNullOrBlank()) {
                     add(stringResource(R.string.v5_rss_login) to {
-                        context.startActivity<io.legado.app.ui.login.SourceLoginActivity> {
+                        context.startActivity<io.legado.app.ui.host.HostSourceLoginActivity> {
                             putExtra("type", "rssSource")
                             putExtra("key", s.sourceUrl)
                         }

@@ -76,7 +76,7 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.association.ImportHttpTtsDialog
 import io.legado.app.ui.association.showShibbolethDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.ACache
@@ -190,7 +190,7 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
             ?.let { appDb.httpTTSDao.get(it) }
             ?.takeIf { !it.loginUrl.isNullOrBlank() && it.getLoginInfo().isNullOrBlank() }
             ?.let { loginKey ->
-                startActivity<SourceLoginActivity> {
+                startActivity<HostSourceLoginActivity> {
                     putExtra("type", "httpTts")
                     putExtra("key", loginKey.id.toString())
                 }
@@ -249,7 +249,7 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
 
     override fun login(group: SpeechVoiceEngineGroup) {
         group.loginKey.takeIf { it.isNotBlank() }?.let { key ->
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("type", "httpTts")
                 putExtra("key", key)
             }

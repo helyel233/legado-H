@@ -61,7 +61,7 @@ import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.SelectActionBar
 import io.legado.app.ui.widget.compose.AppManagementAction
@@ -1071,7 +1071,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             if (bookSource.hasLoginUrl) {
                 add(
                     AppManagementMenuAction(getString(R.string.login)) {
-                        startActivity<SourceLoginActivity> {
+                        startActivity<HostSourceLoginActivity> {
                             putExtra("type", "bookSource")
                             putExtra("key", bookSource.bookSourceUrl)
                         }

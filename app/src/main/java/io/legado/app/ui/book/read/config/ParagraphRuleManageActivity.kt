@@ -39,7 +39,7 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.association.ParagraphRuleImportPolicy
 import io.legado.app.ui.association.ParagraphRulePackageParser
 import io.legado.app.ui.association.readLimitedImportText
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
@@ -265,7 +265,7 @@ class ParagraphRuleManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
 
     private fun login(rule: ParagraphRule) {
         refreshOnResume = true
-        startActivity<SourceLoginActivity> {
+        startActivity<HostSourceLoginActivity> {
             putExtra("bookType", -1)
             putExtra("type", "paragraphRule")
             putExtra("key", rule.id.toString())

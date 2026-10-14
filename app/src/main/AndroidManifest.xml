@@ -309,6 +309,12 @@
             android:launchMode="standard" />
         <!-- P4 订阅排序页 V5 原生实现（取代旧 RssSortActivity 的呈现层） -->
         <activity
+            android:name=".ui.host.HostSourceLoginActivity"
+            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".ui.host.HostReadRssActivity"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="false"
@@ -684,11 +690,6 @@
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="standard" />
         <!-- 书源登录 -->
-        <activity
-            android:name="io.legado.app.ui.login.SourceLoginActivity"
-            android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true"
-            android:theme="@style/AppTheme.Transparent" />
         <!-- 阅读记录 -->
         <activity
             android:name=".ui.about.ReadRecordActivity"

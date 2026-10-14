@@ -74,7 +74,7 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.host.HostAiImageGalleryActivity
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
@@ -578,7 +578,7 @@ class BookInfoComposeActivity :
             ?.takeIf { !it.loginUrl.isNullOrBlank() }
             ?.let { source ->
                 startActivity(
-                    Intent(this, SourceLoginActivity::class.java).apply {
+                    Intent(this, HostSourceLoginActivity::class.java).apply {
                         putExtra("type", "bookSource")
                         putExtra("key", source.bookSourceUrl)
                         putExtra("bookUrl", viewModel.getBook(false)?.bookUrl)

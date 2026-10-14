@@ -55,7 +55,7 @@ import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.ColorUtils
@@ -148,7 +148,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
             return
         }
         viewModel.save(tts) {
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("type", "httpTts")
                 putExtra("key", tts.id.toString())
             }

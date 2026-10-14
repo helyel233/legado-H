@@ -32,7 +32,7 @@ import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.setV5Content
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
@@ -262,7 +262,7 @@ class RssSourceEditActivity :
 
     private fun login() {
         viewModel.save(getRssSource()) { source ->
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 putExtra("type", "rssSource")
                 putExtra("key", source.sourceUrl)
             }

@@ -34,7 +34,7 @@ import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.host.setV5Content
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import kotlinx.coroutines.launch
 
 class AutoTaskEditActivity : AppCompatActivity() {
@@ -257,7 +257,7 @@ class AutoTaskEditActivity : AppCompatActivity() {
         viewModel.save(rule) {
             origin = it.copy()
             editorState = it.toEditorState()
-            startActivity<SourceLoginActivity> {
+            startActivity<HostSourceLoginActivity> {
                 val sourceKey = AutoTask.sourceKey(it.id)
                 putExtra("type", AutoTask.SOURCE_TYPE)
                 putExtra("key", sourceKey)

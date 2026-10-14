@@ -18,7 +18,7 @@ import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
@@ -242,7 +242,7 @@ class AutoTaskActivity : AppCompatActivity() {
             toastOnUi(R.string.source_no_login)
             return
         }
-        startActivity<SourceLoginActivity> {
+        startActivity<HostSourceLoginActivity> {
             val sourceKey = AutoTask.sourceKey(rule.id)
             putExtra("type", AutoTask.SOURCE_TYPE)
             putExtra("key", sourceKey)
