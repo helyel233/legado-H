@@ -104,7 +104,7 @@ data class LegadoMiuixPalette(
     val actionRadius: Dp? = null
 )
 
-fun AppDialogStyle.toMiuixPalette(): LegadoMiuixPalette {
+fun V5DialogColors.toMiuixPalette(): LegadoMiuixPalette {
     return LegadoMiuixPalette(
         accent = accent,
         surface = surface,

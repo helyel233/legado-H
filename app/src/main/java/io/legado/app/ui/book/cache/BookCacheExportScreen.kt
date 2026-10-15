@@ -22,10 +22,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 /**
@@ -41,7 +41,7 @@ fun BookCacheExportScreen(
     onImport: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val palette = style.toMiuixPalette()
     val exporting = state is BookCacheExportState.Exporting
 
@@ -144,7 +144,7 @@ private fun allSelected(items: List<BookCacheExportItem>): Boolean {
 @Composable
 private fun BookCacheExportItemCard(
     item: BookCacheExportItem,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: () -> Unit
 ) {
     LegadoMiuixCard(

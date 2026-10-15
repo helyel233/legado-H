@@ -35,13 +35,13 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.SourceRecycleBin
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.SourceRecycleBinHelp
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.host.V5DialogPanel
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.AppRuleTabRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
@@ -78,7 +78,7 @@ private sealed interface RecycleBinConfirm {
  */
 @Composable
 fun SourceRecycleBinScreen() {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val palette = style.toMiuixPalette()
     val scope = rememberCoroutineScope()
 
@@ -335,7 +335,7 @@ fun SourceRecycleBinScreen() {
 private fun RecycleBinItemCard(
     item: SourceRecycleBin,
     selected: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit
@@ -414,12 +414,12 @@ private fun RecycleBinConfirmDialog(
     message: String,
     confirmText: String,
     danger: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val palette = style.toMiuixPalette()
-    AppDialogFrame(
+    V5DialogPanel(
         title = title,
         message = message,
         scrollContent = false,

@@ -71,6 +71,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.uikit.v5.resolve.ThemeResolver
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.lib.theme.titleTypeface
+import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
@@ -123,7 +127,10 @@ data class AppManagementMenuAction(
 @Composable
 fun rememberAppSettingPalette(): AppSettingPalette {
     val context = LocalContext.current
-    val dialogStyle = rememberAppDialogStyle()
+    val v5Colors = LocalSemanticColors.current
+    val dangerColor = v5Colors.error
+    val bodyFont = ThemeResolver.uiFontFamily() ?: FontFamily(context.uiTypeface())
+    val titleFont = ThemeResolver.titleFontFamily() ?: FontFamily(context.titleTypeface())
     val themeUiPalette = rememberThemeUiPalette()
     val rowBaseColor = themeUiPalette.cardColor
     // 文字/强调前景色按实际背景明暗推导，避免随 night 标志产生深底深字/浅底白字
@@ -162,10 +169,10 @@ fun rememberAppSettingPalette(): AppSettingPalette {
         secondaryText,
         accent,
         onAccent,
-        dialogStyle.danger,
+        dangerColor,
         panelRadiusPx,
-        dialogStyle.bodyFontFamily,
-        dialogStyle.titleFontFamily,
+        bodyFont,
+        titleFont,
         themeUiPalette.signature
     ) {
         AppSettingPalette(
@@ -179,12 +186,12 @@ fun rememberAppSettingPalette(): AppSettingPalette {
             primaryText = primaryText,
             secondaryText = secondaryText,
             accent = accent,
-            danger = dialogStyle.danger,
+            danger = dangerColor,
             disabledText = secondaryText.copy(alpha = 0.48f),
             onAccent = onAccent,
             panelRadiusPx = panelRadiusPx,
-            bodyFontFamily = dialogStyle.bodyFontFamily,
-            titleFontFamily = dialogStyle.titleFontFamily,
+            bodyFontFamily = bodyFont,
+            titleFontFamily = titleFont,
             themeSignature = themeUiPalette.signature
         )
     }

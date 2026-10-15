@@ -38,7 +38,7 @@ enum class ImportLoadState {
 /**
  * 导入弹窗通用条目行（V5 版）。
  *
- * 旧版依赖 `style: AppDialogStyle`（Miuix 色板 + actionRadius）与 `LegadoMiuixActionButton`；
+ * 旧版依赖 `style: V5DialogColors`（Miuix 色板 + actionRadius）与 `LegadoMiuixActionButton`；
  * 新版直接读 `LocalVisualSpec` / `LocalSemanticColors`（未注入 Provider 时也会从
  * AppUiColors 派生当前主题色，见 AppSurface.kt），因此**去掉 style 参数**。
  * 因此未迁移基座的弹窗调用它也能拿到正确主题色，只是字阶/形状切换为 V5 规格。

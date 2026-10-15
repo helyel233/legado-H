@@ -26,7 +26,7 @@ import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppNumberField
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
-import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.utils.stableSearchBookKey
 import kotlinx.coroutines.Dispatchers
@@ -247,7 +247,7 @@ private fun PagePickerDialog(
 ) {
     var text by remember { mutableStateOf(current.toString()) }
     Dialog(onDismissRequest = onDismiss) {
-        AppDialogFrame(
+        V5DialogPanel(
             title = stringResource(R.string.change_page),
             content = {
                 AppNumberField(

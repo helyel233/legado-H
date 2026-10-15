@@ -41,10 +41,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.hideSoftInput
 import io.legado.app.utils.putPrefString
@@ -140,26 +142,18 @@ private fun PageKeyContent(
     onReset: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    AppCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        LegadoMiuixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             Text(
                 text = stringResource(R.string.custom_page_key),
-                color = style.primaryText,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = style.titleFontFamily,
+                style = visual.type.title,
+                color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -190,8 +184,8 @@ private fun PageKeyContent(
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.page_key_set_help),
-                color = style.secondaryText,
-                fontSize = 13.sp,
+                style = visual.type.caption,
+                color = colors.onSurfaceVariant,
                 lineHeight = 18.sp
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -199,22 +193,15 @@ private fun PageKeyContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.reset),
-                    palette = palette,
                     onClick = onReset,
-                    modifier = Modifier.weight(1f),
-                    cornerRadius = style.actionRadius,
-                    minWidth = 0.dp
+                    modifier = Modifier.weight(1f)
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.ok),
-                    palette = palette,
                     onClick = onConfirm,
-                    modifier = Modifier.weight(1f),
-                    primary = true,
-                    cornerRadius = style.actionRadius,
-                    minWidth = 0.dp
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -229,7 +216,8 @@ private fun PageKeyTextField(
     onHardwareKey: (Int) -> Unit,
     onFocusChanged: (Boolean) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -250,22 +238,19 @@ private fun PageKeyTextField(
             },
         singleLine = true,
         label = { Text(label) },
-        shape = RoundedCornerShape(style.actionRadius),
+        shape = visual.shape(ShapeKind.BUTTON),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = style.primaryText,
-            unfocusedTextColor = style.primaryText,
-            focusedContainerColor = style.fieldSurface,
-            unfocusedContainerColor = style.fieldSurface,
-            cursorColor = style.accent,
+            focusedTextColor = colors.onSurface,
+            unfocusedTextColor = colors.onSurface,
+            focusedContainerColor = colors.surfaceVariant,
+            unfocusedContainerColor = colors.surfaceVariant,
+            cursorColor = colors.primary,
             focusedBorderColor = Color.Transparent,
             unfocusedBorderColor = Color.Transparent,
-            focusedLabelColor = style.accent,
-            unfocusedLabelColor = style.secondaryText
+            focusedLabelColor = colors.primary,
+            unfocusedLabelColor = colors.onSurfaceVariant
         ),
-        textStyle = LocalTextStyle.current.copy(
-            color = style.primaryText,
-            fontFamily = style.bodyFontFamily
-        )
+        textStyle = visual.type.body.copy(color = colors.onSurface)
     )
 }
 

@@ -49,7 +49,7 @@ import io.legado.app.utils.showDialogFragment
  *
  * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
  * 内容由旧 AppDialogFrame + LegadoMiuixActionButton 换为 V5 AppDialog + AppGhostButton/AppFilledButton；
- * 列表行改用 V5 版 ImportSourceItemRow（不再吃 AppDialogStyle）。
+ * 列表行改用 V5 版 ImportSourceItemRow（不再吃 V5DialogColors）。
  * 顶部第二个按钮文案沿用原文（`keep_original_name`，疑似原稿笔误，行为仍是打开「更多」菜单）。
  * 保留选项落盘（PreferKey.importKeepName）、自定义分组、编辑直接回写 allRules 等语义不变。
  */

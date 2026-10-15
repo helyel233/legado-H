@@ -16,7 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.AppRuleFieldSpacer
 import io.legado.app.ui.widget.compose.AppRuleSwitchRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
@@ -55,7 +55,7 @@ internal data class AutoTaskEditorState(
 internal fun AutoTaskEditScreen(
     state: AutoTaskEditorState,
     onStateChange: (AutoTaskEditorState) -> Unit,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onOpenEditor: ((AutoTaskEditorField) -> Unit)? = null,
     onLogin: (() -> Unit)? = null
 ) {
@@ -186,7 +186,7 @@ internal fun AutoTaskEditScreen(
 private fun EditorField(
     value: TextFieldValue,
     label: String,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onValueChange: (TextFieldValue) -> Unit,
     singleLine: Boolean = false,
     minLines: Int = 1,

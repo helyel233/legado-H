@@ -436,11 +436,6 @@
         <!-- 规则回收站 -->
         <!-- 书籍缓存导出 -->
         <!-- 全库搜索 -->
-        <activity
-            android:name=".ui.main.librarysearch.LibrarySearchActivity"
-            android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 配置界面 -->
         <activity
             android:name=".ui.autoTask.AutoTaskActivity"

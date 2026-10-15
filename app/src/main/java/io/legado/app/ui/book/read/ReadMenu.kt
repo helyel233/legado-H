@@ -77,8 +77,8 @@ import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.activity
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.getPrefBoolean
@@ -489,7 +489,7 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     @Composable
-    private fun ReadMenuBottomPanel(style: AppDialogStyle) {
+    private fun ReadMenuBottomPanel(style: V5DialogColors) {
         val layout = if (directReader) {
             ReadMenuButtonConfig.forDirectReader(
                 buttonLayout,
@@ -616,7 +616,7 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     @Composable
-    private fun rememberReadMenuStyle(): AppDialogStyle {
+    private fun rememberReadMenuStyle(): V5DialogColors {
         val bgColor = if (immersiveMenu && !ReadBook.usesPageTemplate()) {
             runCatching {
                 ReadBookConfig.durConfig.curBgStr().toColorInt()
@@ -625,7 +625,7 @@ class ReadMenu @JvmOverloads constructor(
             context.bottomBackground
         }
         // 旧 rememberReaderMenuDialogStyle(bgColor) 的内联等价实现（ReaderComposeComponents 退役）
-        val base = rememberAppDialogStyle()
+        val base = rememberV5DialogColors()
         val palette = remember(bgColor) { ReaderSheetStyle.resolve(context, bgColor) }
         return base.copy(
             surface = Color(palette.surface),

@@ -60,7 +60,7 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileDoc
-import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.utils.isUri
 import io.legado.app.utils.putPrefInt
 import kotlinx.coroutines.Dispatchers
@@ -357,7 +357,7 @@ private fun HostImportBookScreen() {
     }
 
     if (jsDialogOpen) {
-        AppDialogFrame(
+        V5DialogPanel(
             title = stringResource(R.string.import_file_name),
             message = "使用js处理文件名变量src，将书名作者分别赋值到变量name author",
             content = {

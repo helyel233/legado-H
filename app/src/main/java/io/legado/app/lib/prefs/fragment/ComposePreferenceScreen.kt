@@ -60,18 +60,16 @@ import io.legado.app.lib.prefs.IconListPreference
 import io.legado.app.lib.prefs.SeekBarPreference
 import io.legado.app.lib.prefs.Preference as LegadoPreference
 import io.legado.app.lib.prefs.SwitchPreference as LegadoSwitchPreference
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.components.AppSwitch
+import kotlin.math.roundToInt
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
-import io.legado.app.ui.widget.compose.toMiuixPalette
 
 private val PanelHorizontalPadding = 12.dp
 
@@ -95,7 +93,6 @@ internal fun ComposePreferenceScreen(
     onScrollTargetConsumed: () -> Unit
 ) {
     val colors = rememberAppSettingPalette()
-    val switchPalette = rememberAppDialogStyle().toMiuixPalette()
     val panelRadiusPx = colors.panelRadiusPx
     val sections = remember(root, refreshTick) {
         root?.toComposeSections().orEmpty()
@@ -134,8 +131,7 @@ internal fun ComposePreferenceScreen(
                 PreferenceSectionPanel(
                     section = section,
                     colors = colors,
-                    switchPalette = switchPalette,
-                    panelRadiusPx = panelRadiusPx,
+                                    panelRadiusPx = panelRadiusPx,
                     onPreferenceClick = onPreferenceClick,
                     onSwitchChange = onSwitchChange,
                     onSeekChange = onSeekChange,
@@ -151,7 +147,6 @@ internal fun ComposePreferenceScreen(
 private fun PreferenceSectionPanel(
     section: ComposePreferenceSection,
     colors: AppSettingPalette,
-    switchPalette: LegadoMiuixPalette,
     panelRadiusPx: Float,
     onPreferenceClick: (Preference) -> Unit,
     onSwitchChange: (SwitchPreferenceCompat, Boolean) -> Unit,
@@ -179,8 +174,7 @@ private fun PreferenceSectionPanel(
             PreferenceRow(
                 preference = preference,
                 colors = colors,
-                switchPalette = switchPalette,
-                panelRadiusPx = panelRadiusPx,
+                            panelRadiusPx = panelRadiusPx,
                 isLast = index == section.rows.lastIndex,
                 showDivider = index != section.rows.lastIndex,
                 onPreferenceClick = onPreferenceClick,
@@ -198,7 +192,6 @@ private fun PreferenceSectionPanel(
 private fun PreferenceRow(
     preference: Preference,
     colors: AppSettingPalette,
-    switchPalette: LegadoMiuixPalette,
     panelRadiusPx: Float,
     isLast: Boolean,
     showDivider: Boolean,
@@ -262,8 +255,7 @@ private fun PreferenceRow(
         PreferenceWidget(
             preference = preference,
             colors = colors,
-            switchPalette = switchPalette,
-            enabled = enabled,
+                    enabled = enabled,
             onSwitchChange = onSwitchChange
         )
     }
@@ -323,7 +315,6 @@ private fun PreferenceText(
 private fun PreferenceWidget(
     preference: Preference,
     colors: AppSettingPalette,
-    switchPalette: LegadoMiuixPalette,
     enabled: Boolean,
     onSwitchChange: (SwitchPreferenceCompat, Boolean) -> Unit
 ) {
@@ -331,11 +322,10 @@ private fun PreferenceWidget(
     when (preference) {
         is SwitchPreferenceCompat -> {
             Spacer(modifier = Modifier.width(12.dp))
-            LegadoMiuixSwitch(
+            AppSwitch(
                 checked = preference.isChecked,
                 enabled = enabled,
-                onCheckedChange = { onSwitchChange(preference, it) },
-                palette = switchPalette
+                onCheckedChange = { onSwitchChange(preference, it) }
             )
         }
 
@@ -419,17 +409,6 @@ private fun SeekBarPreferenceRow(
     var sliderValue by remember(preference.key, preference.value) {
         mutableIntStateOf(preference.value.coerceIn(preference.minValue, preference.maxValue))
     }
-    val sliderPalette = remember(colors) {
-        LegadoMiuixPalette(
-            accent = colors.accent,
-            surface = Color(colors.row),
-            surfaceVariant = colors.secondaryText.copy(alpha = 0.12f),
-            primaryText = colors.primaryText,
-            secondaryText = colors.secondaryText,
-            danger = colors.danger,
-            onAccent = colors.onAccent
-        )
-    }
     fun commitValue(value: Int) {
         val nextValue = value.coerceIn(preference.minValue, preference.maxValue)
         if (sliderValue != nextValue) {
@@ -467,12 +446,12 @@ private fun SeekBarPreferenceRow(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        AppThemedStepperSlider(
-            value = sliderValue,
-            range = preference.minValue..preference.maxValue,
+        AppSlider(
+            value = sliderValue.toFloat(),
+            onValueChange = { commitValue(it.roundToInt()) },
+            valueRange = preference.minValue.toFloat()..preference.maxValue.toFloat(),
+            steps = (preference.maxValue - preference.minValue - 1).coerceAtLeast(0),
             enabled = enabled,
-            onValueChange = { commitValue(it) },
-            palette = sliderPalette,
             modifier = Modifier.fillMaxWidth()
         )
     }

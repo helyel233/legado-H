@@ -65,7 +65,7 @@ import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.components.appRowCard
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
@@ -353,7 +353,7 @@ private fun HostBookshelfTagManageScreen(focusGroupId: Long) {
     }
 
     renameTagTarget?.let { (group, tag) ->
-        AppDialogFrame(
+        V5DialogPanel(
             title = stringResource(R.string.bookshelf_tag_rename),
             message = null,
             content = {
@@ -546,7 +546,7 @@ private fun AddTagsDialog(
     var input by remember { mutableStateOf("") }
     var picked by remember { mutableStateOf(setOf<String>()) }
     val parsed = BookTagHelper.parse(input)
-    AppDialogFrame(
+    V5DialogPanel(
         title = stringResource(R.string.add),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -612,7 +612,7 @@ private fun BookTagAssignmentDialog(
             matchQuery && matchFilter
         }
     }
-    AppDialogFrame(
+    V5DialogPanel(
         title = stringResource(R.string.bookshelf_tag_assign_title, assignment.tag, assignment.groupName),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

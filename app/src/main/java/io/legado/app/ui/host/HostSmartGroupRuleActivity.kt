@@ -44,7 +44,7 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 
 /**
  * P4-3：智能分组 V5 化（2026-10-13）。
@@ -82,7 +82,7 @@ private fun HostSmartGroupRuleScreen() {
 
     var deleteTarget by remember { mutableStateOf<SmartGroupRule?>(null) }
     val listState = rememberLazyListState()
-    val editDialogStyle = rememberAppDialogStyle()
+    val editDialogStyle = rememberV5DialogColors()
 
     Column(Modifier.fillMaxSize()) {
         // 顶部：自动执行开关 + 两个动作

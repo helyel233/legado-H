@@ -66,7 +66,9 @@ import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.installViewTreeOwnersFrom
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isAbsUrl
@@ -460,7 +462,8 @@ private fun TextActionMenuContent(
     onActionClick: (TextMenuAction) -> Unit,
     onActionLongClick: (TextMenuAction) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     val density = LocalDensity.current
     val pages = actions.chunked(pageCapacity.coerceAtLeast(1)).ifEmpty { listOf(emptyList()) }
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -474,7 +477,7 @@ private fun TextActionMenuContent(
     val heightDp = with(density) { popupHeightPx.toDp() }
     val itemWidthDp = with(density) { itemWidthPx.toDp() }
     val itemHeight = 34.dp
-    val shape = RoundedCornerShape(style.panelRadius)
+    val shape = visual.shape(ShapeKind.CARD)
 
     Column(
         modifier = Modifier
@@ -482,8 +485,8 @@ private fun TextActionMenuContent(
             .height(heightDp)
             .shadow(12.dp, shape, clip = false)
             .clip(shape)
-            .background(style.surface)
-            .border(1.dp, style.stroke, shape)
+            .background(colors.surface)
+            .border(1.dp, colors.outline, shape)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -518,9 +521,9 @@ private fun TextActionMenuContent(
                                     action = action,
                                     width = itemWidthDp,
                                     height = itemHeight,
-                                    textColor = style.primaryText,
-                                    background = style.fieldSurface,
-                                    accent = style.accent,
+                                    textColor = colors.onSurface,
+                                    background = colors.surfaceVariant,
+                                    accent = colors.primary,
                                     onClick = { onActionClick(action) },
                                     onLongClick = { onActionLongClick(action) }
                                 )
@@ -542,7 +545,7 @@ private fun TextActionMenuContent(
                         modifier = Modifier
                             .size(if (selected) 6.dp else 4.dp)
                             .clip(CircleShape)
-                            .background(if (selected) style.accent else style.secondaryText.copy(alpha = 0.45f))
+                            .background(if (selected) colors.primary else colors.onSurfaceVariant.copy(alpha = 0.45f))
                     )
                 }
             }

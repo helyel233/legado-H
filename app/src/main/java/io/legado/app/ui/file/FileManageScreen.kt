@@ -48,7 +48,8 @@ import io.legado.app.R
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.widget.compose.AppSettingPalette
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import java.io.File
 
@@ -67,7 +68,6 @@ internal fun FileManageScreen(
 ) {
     val context = LocalContext.current
     val palette = rememberAppSettingPalette()
-    val dialogStyle = rememberAppDialogStyle()
     val headerBg = Color(context.backgroundColor)
     val headerTextColor = Color(context.accentColor)
 
@@ -106,8 +106,7 @@ internal fun FileManageScreen(
         SearchBar(
             query = searchQuery,
             onQueryChange = onSearchQueryChange,
-            palette = palette,
-            dialogStyle = dialogStyle
+            palette = palette
         )
 
         // File list
@@ -156,9 +155,9 @@ internal fun FileManageScreen(
 private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    palette: AppSettingPalette,
-    dialogStyle: io.legado.app.ui.widget.compose.AppDialogStyle
+    palette: AppSettingPalette
 ) {
+    val visual = LocalVisualSpec.current
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -173,7 +172,7 @@ private fun SearchBar(
             )
         },
         singleLine = true,
-        shape = RoundedCornerShape(dialogStyle.actionRadius),
+        shape = visual.shape(ShapeKind.BUTTON),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = palette.primaryText,
             unfocusedTextColor = palette.primaryText,

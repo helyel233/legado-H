@@ -36,12 +36,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import io.legado.app.ui.widget.compose.AppRuleSwitchRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.delay
 import java.util.regex.PatternSyntaxException
@@ -84,7 +87,8 @@ fun RegexTestScreen(
     initialIsRegex: Boolean = true
 ) {
     val context = LocalContext.current
-    val style = rememberAppDialogStyle()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
 
     var pattern by remember { mutableStateOf(TextFieldValue(initialPattern)) }
     var input by remember { mutableStateOf(TextFieldValue("")) }
@@ -197,7 +201,7 @@ fun RegexTestScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // ========== 正则表达式 ==========
-        ResultSectionCard(style = style) {
+        ResultSectionCard() {
             AppRuleTextField(
                 value = pattern,
                 onValueChange = { pattern = it },
@@ -238,7 +242,7 @@ fun RegexTestScreen(
         }
 
         // ========== 替换为 ==========
-        ResultSectionCard(style = style) {
+        ResultSectionCard() {
             AppRuleTextField(
                 value = replacement,
                 onValueChange = { replacement = it },
@@ -249,7 +253,7 @@ fun RegexTestScreen(
         }
 
         // ========== 待测试文本 ==========
-        ResultSectionCard(style = style) {
+        ResultSectionCard() {
             AppRuleTextField(
                 value = input,
                 onValueChange = { input = it },
@@ -266,9 +270,8 @@ fun RegexTestScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.clear),
-                    palette = style.toMiuixPalette(),
                     onClick = {
                         pattern = TextFieldValue("")
                         input = TextFieldValue("")
@@ -276,18 +279,16 @@ fun RegexTestScreen(
                         testResult = null
                     }
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.regex_test_run),
-                    palette = style.toMiuixPalette(),
-                    primary = true,
                     onClick = {
                         if (pattern.text.isEmpty()) {
                             context.toastOnUi(R.string.pattern_empty)
-                            return@LegadoMiuixActionButton
+                            return@AppFilledButton
                         }
                         if (input.text.isEmpty()) {
                             context.toastOnUi(R.string.input_is_empty)
-                            return@LegadoMiuixActionButton
+                            return@AppFilledButton
                         }
                         testResult = performTest()
                     }
@@ -298,10 +299,10 @@ fun RegexTestScreen(
         // ========== 结果区 ==========
         testResult?.let { result ->
             // 状态提示
-            val statusColor = if (result.success) SuccessColor else style.danger
+            val statusColor = if (result.success) SuccessColor else colors.error
             Surface(
                 color = statusColor.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(style.actionRadius),
+                shape = visual.shape(ShapeKind.BUTTON),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(13.dp)) {
@@ -322,23 +323,23 @@ fun RegexTestScreen(
             }
             // 匹配详情
             result.matchInfo?.let { info ->
-                ResultSectionCard(style = style, title = stringResource(R.string.match_detail)) {
-                    Text(text = info, color = style.secondaryText, fontSize = 12.sp)
+                ResultSectionCard(title = stringResource(R.string.match_detail)) {
+                    Text(text = info, color = colors.onSurfaceVariant, fontSize = 12.sp)
                 }
             }
             // 匹配高亮
             result.highlightedText?.let { highlighted ->
-                ResultSectionCard(style = style, title = stringResource(R.string.regex_highlight)) {
+                ResultSectionCard(title = stringResource(R.string.regex_highlight)) {
                     SelectionContainer {
-                        Text(text = highlighted, color = style.primaryText, fontSize = 13.sp)
+                        Text(text = highlighted, color = colors.onSurface, fontSize = 13.sp)
                     }
                 }
             }
             // 替换预览
             result.replacedText?.let { replaced ->
-                ResultSectionCard(style = style, title = stringResource(R.string.replace_preview)) {
+                ResultSectionCard(title = stringResource(R.string.replace_preview)) {
                     SelectionContainer {
-                        Text(text = replaced, color = style.primaryText, fontSize = 13.sp)
+                        Text(text = replaced, color = colors.onSurface, fontSize = 13.sp)
                     }
                 }
             }
@@ -349,21 +350,22 @@ fun RegexTestScreen(
 /** 结果分区卡片，带可选标题 */
 @Composable
 private fun ResultSectionCard(
-    style: io.legado.app.ui.widget.compose.AppDialogStyle,
     title: String? = null,
     content: @Composable () -> Unit
 ) {
-    LegadoMiuixCard(
-        modifier = Modifier.fillMaxWidth(),
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(13.dp)
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(visual.shape(ShapeKind.BUTTON))
+            .background(colors.surfaceVariant)
+            .padding(13.dp)
     ) {
         title?.let {
             Text(
                 text = it,
-                color = style.accent,
+                color = colors.primary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )

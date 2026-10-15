@@ -48,13 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.ui.main.ai.AiModelConfig
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.host.V5DialogPanel
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 // ── Tab Bar ──────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ fun AiProviderTabBar(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val trackShape = RoundedCornerShape(style.panelRadius)
     Row(
         modifier = Modifier
@@ -120,7 +120,7 @@ fun AiProviderConfigTab(
     onPromptCacheChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -218,7 +218,7 @@ private fun AiProviderTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     singleLine: Boolean = true,
     minLines: Int = 1,
     isPassword: Boolean = false,
@@ -280,7 +280,7 @@ fun AiModelManageTab(
     onFetchModels: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val palette = style.toMiuixPalette()
     Column(
         modifier = modifier
@@ -342,7 +342,7 @@ fun AiModelManageTab(
 private fun AiModelItem(
     model: AiModelConfig,
     isCurrent: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: () -> Unit
 ) {
     LegadoMiuixCard(
@@ -402,7 +402,7 @@ fun FetchedModelSelectorContent(
     onAddAll: (List<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val palette = style.toMiuixPalette()
     var searchQuery by remember { mutableStateOf("") }
     var selectionMode by remember { mutableStateOf(false) }
@@ -424,7 +424,7 @@ fun FetchedModelSelectorContent(
         stringResource(R.string.ai_fetch_models_long_press_hint)
     }
 
-    AppDialogFrame(
+    V5DialogPanel(
         title = stringResource(R.string.ai_add_model_from_list),
         scrollContent = false,
         content = {
@@ -535,7 +535,7 @@ private fun FetchedModelRow(
     existing: Boolean,
     selected: Boolean,
     selectionMode: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {

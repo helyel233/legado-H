@@ -49,7 +49,7 @@ import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.book.manage.BookshelfManageViewModel
 import io.legado.app.ui.book.manage.SourcePickerDialog
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.uikit.facade.AppToast
 import io.legado.app.uikit.v5.components.AppEmpty
 import io.legado.app.uikit.v5.components.AppFastScroller
@@ -501,7 +501,7 @@ private fun HostBookshelfManageScreen(
                 )
             )
         }
-        AppDialogFrame(
+        V5DialogPanel(
             title = stringResource(R.string.batch_auto_task_update_dialog_title, selection.count),
             content = {
                 Column(verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
@@ -555,7 +555,7 @@ private fun HostBookshelfManageScreen(
     }
 }
 
-/** 删除确认（V5：AppDialogFrame + 删除本地文件开关）。 */
+/** 删除确认（V5：V5DialogPanel + 删除本地文件开关）。 */
 @Composable
 private fun DeleteConfirmDialog(
     bookName: String?,
@@ -580,7 +580,7 @@ private fun DeleteConfirmDialog(
             }
         }
     } else null
-    AppDialogFrame(
+    V5DialogPanel(
         title = stringResource(R.string.draw),
         message = bookName?.let { stringResource(R.string.sure_del) + "\n" + it }
             ?: stringResource(R.string.sure_del),

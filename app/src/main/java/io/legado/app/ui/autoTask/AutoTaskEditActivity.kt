@@ -26,7 +26,7 @@ import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementScaffold
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.CronSchedule
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -83,7 +83,7 @@ class AutoTaskEditActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         taskId = intent.getStringExtra(EXTRA_TASK_ID)
         setV5Content {
-            val style = rememberAppDialogStyle()
+            val style = rememberV5DialogColors()
             AppManagementScaffold(
                 title = getString(
                     if (taskId.isNullOrBlank()) R.string.auto_task_add else R.string.auto_task_edit

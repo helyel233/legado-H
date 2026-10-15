@@ -56,7 +56,7 @@ import io.legado.app.data.entities.ReadMenuCustomButton
 import io.legado.app.help.book.library.LibraryCloudState
 import io.legado.app.ui.book.read.ReadMenuButtonConfig
 import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.dpToPx
@@ -130,7 +130,7 @@ data class ReadMenuActionBarActions(
 fun ReadMenuTitleBar(
     state: ReadMenuTitleBarState,
     actions: ReadMenuTitleBarActions,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -268,7 +268,7 @@ private fun ReadMenuTitleIconButton(
     painterRes: Int,
     contentDescription: String?,
     tint: Color,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
@@ -302,7 +302,7 @@ private fun ReadMenuTitleIconButton(
 fun ReadMenuActionBar(
     state: ReadMenuActionBarState,
     actions: ReadMenuActionBarActions,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -447,7 +447,7 @@ fun ReadMenuSeekBarRow(
     seekMax: Int,
     canGoPrev: Boolean,
     canGoNext: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onPrevClick: () -> Unit,
     onNextClick: () -> Unit,
     onSeekStart: () -> Unit,
@@ -516,7 +516,7 @@ fun ReadMenuBrightnessRow(
     brightness: Int,
     isAuto: Boolean,
     showBrightnessView: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onAutoClick: () -> Unit,
     onBrightnessChange: (Int) -> Unit,
     onBrightnessStop: (Int) -> Unit,
@@ -576,7 +576,7 @@ fun ReadMenuButtonGrid(
     customButtonMetadata: Map<Long, ReadMenuCustomButton>,
     autoPageActive: Boolean,
     isNightTheme: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: (ReadMenuButtonConfig.ButtonRef) -> Unit,
     onLongClick: (ReadMenuButtonConfig.ButtonRef) -> Boolean,
     modifier: Modifier = Modifier
@@ -620,7 +620,7 @@ private fun ReadMenuButtonRow(
     customButtonMetadata: Map<Long, ReadMenuCustomButton>,
     autoPageActive: Boolean,
     isNightTheme: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: (ReadMenuButtonConfig.ButtonRef) -> Unit,
     onLongClick: (ReadMenuButtonConfig.ButtonRef) -> Boolean,
     modifier: Modifier = Modifier
@@ -680,7 +680,7 @@ private fun ReadMenuButton(
     customButtonMetadata: Map<Long, ReadMenuCustomButton>,
     autoPageActive: Boolean,
     isNightTheme: Boolean,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onClick: () -> Unit,
     onLongClick: () -> Boolean,
     modifier: Modifier = Modifier
@@ -737,7 +737,7 @@ private fun ReadMenuButton(
 
 @Composable
 fun ReadMenuDivider(
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier
 ) {
     Box(

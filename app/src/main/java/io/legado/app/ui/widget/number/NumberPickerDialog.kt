@@ -7,13 +7,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.ComponentDialog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -28,7 +28,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,9 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,13 +45,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.legado.app.lib.theme.composeActionRadius
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.windowSize
 import splitties.systemservices.windowManager
@@ -150,8 +148,8 @@ private fun NumberPickerContent(
     onCancel: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     val safeMin = minOf(minValue, maxValue)
     val safeMax = maxOf(minValue, maxValue)
     var currentValue by remember {
@@ -175,56 +173,47 @@ private fun NumberPickerContent(
         inputText = formatPickerValue(committed, isDecimalMode)
         return committed
     }
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+    AppCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 520.dp)
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        LegadoMiuixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 520.dp)
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             Text(
                 text = title,
-                color = style.primaryText,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = style.titleFontFamily,
+                style = visual.type.title,
+                color = colors.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(16.dp))
             if (usePercentSlider) {
-                LegadoMiuixCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = style.fieldSurface,
-                    contentColor = style.primaryText,
-                    cornerRadius = style.actionRadius,
-                    insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(visual.shape(ShapeKind.BUTTON))
+                        .background(colors.surfaceVariant)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
                     Text(
                         text = "${currentValue.coerceIn(safeMin, safeMax)}%",
-                        color = style.primaryText,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        style = visual.type.title,
+                        color = colors.onSurface,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    AppThemedStepperSlider(
-                        value = currentValue.coerceIn(safeMin, safeMax),
-                        range = safeMin..safeMax,
+                    AppSlider(
+                        value = currentValue.coerceIn(safeMin, safeMax).toFloat(),
                         onValueChange = {
-                            currentValue = it.coerceIn(safeMin, safeMax)
+                            currentValue = it.roundToInt().coerceIn(safeMin, safeMax)
                             inputText = formatPickerValue(currentValue, isDecimalMode)
                         },
-                        palette = palette
+                        valueRange = safeMin.toFloat()..safeMax.toFloat(),
+                        steps = (safeMax - safeMin - 1).coerceAtLeast(0)
                     )
                 }
             } else {
@@ -236,7 +225,6 @@ private fun NumberPickerContent(
                     StepButton(
                         text = "-",
                         enabled = inputValueOrCurrent() > safeMin,
-                        palette = palette,
                         onClick = {
                             currentValue = (inputValueOrCurrent() - 1).coerceAtLeast(safeMin)
                             inputText = formatPickerValue(currentValue, isDecimalMode)
@@ -255,25 +243,24 @@ private fun NumberPickerContent(
                             }
                         ),
                         textStyle = LocalTextStyle.current.copy(
-                            color = style.primaryText,
+                            color = colors.onSurface,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = style.primaryText,
-                            unfocusedTextColor = style.primaryText,
-                            focusedContainerColor = style.fieldSurface,
-                            unfocusedContainerColor = style.fieldSurface,
-                            focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                            unfocusedBorderColor = style.stroke,
-                            cursorColor = style.accent
+                            focusedTextColor = colors.onSurface,
+                            unfocusedTextColor = colors.onSurface,
+                            focusedContainerColor = colors.surfaceVariant,
+                            unfocusedContainerColor = colors.surfaceVariant,
+                            focusedBorderColor = colors.primary.copy(alpha = 0.55f),
+                            unfocusedBorderColor = colors.outline,
+                            cursorColor = colors.primary
                         )
                     )
                     StepButton(
                         text = "+",
                         enabled = inputValueOrCurrent() < safeMax,
-                        palette = palette,
                         onClick = {
                             currentValue = (inputValueOrCurrent() + 1).coerceAtMost(safeMax)
                             inputText = formatPickerValue(currentValue, isDecimalMode)
@@ -288,8 +275,8 @@ private fun NumberPickerContent(
                 } else {
                     "${formatPickerValue(safeMin, isDecimalMode)} - ${formatPickerValue(safeMax, isDecimalMode)}"
                 },
-                color = style.secondaryText,
-                fontSize = 12.sp,
+                color = colors.onSurfaceVariant,
+                style = visual.type.caption,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
@@ -300,36 +287,23 @@ private fun NumberPickerContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 customButtonText?.let {
-                    LegadoMiuixActionButton(
+                    AppGhostButton(
                         text = it,
-                        palette = palette,
                         onClick = onCustomClick,
-                        modifier = Modifier.weight(1f),
-                        cornerRadius = style.actionRadius,
-                        minWidth = 0.dp,
-                        insidePadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(android.R.string.cancel),
-                    palette = palette,
                     onClick = onCancel,
-                    modifier = Modifier.weight(1f),
-                    cornerRadius = style.actionRadius,
-                    minWidth = 0.dp,
-                    insidePadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                    modifier = Modifier.weight(1f)
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(android.R.string.ok),
-                    palette = palette,
                     onClick = {
                         onConfirm(committedValue())
                     },
-                    modifier = Modifier.weight(1f),
-                    primary = true,
-                    cornerRadius = style.actionRadius,
-                    minWidth = 0.dp,
-                    insidePadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -340,32 +314,25 @@ private fun NumberPickerContent(
 private fun StepButton(
     text: String,
     enabled: Boolean,
-    palette: LegadoMiuixPalette,
     onClick: () -> Unit
 ) {
-    val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    Box(
         modifier = Modifier
             .width(48.dp)
             .height(52.dp)
+            .clip(visual.shape(ShapeKind.BUTTON))
+            .background(if (enabled) colors.surfaceVariant else colors.surfaceVariant.copy(alpha = 0.42f))
             .clickable(enabled = enabled, onClick = onClick),
-        color = if (enabled) palette.surfaceVariant else palette.surfaceVariant.copy(alpha = 0.42f),
-        contentColor = if (enabled) palette.primaryText else palette.secondaryText.copy(alpha = 0.52f),
-        cornerRadius = actionRadius,
-        insidePadding = PaddingValues(0.dp)
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = text,
-                color = if (enabled) palette.primaryText else palette.secondaryText.copy(alpha = 0.52f),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = text,
+            color = if (enabled) colors.onSurface else colors.onSurfaceVariant.copy(alpha = 0.52f),
+            style = visual.type.title,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

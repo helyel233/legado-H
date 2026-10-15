@@ -2,47 +2,29 @@ package io.legado.app.ui.video.config
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.model.VideoPlay
 import io.legado.app.ui.host.V5DialogFragment
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppDialogSwitchRow
-import io.legado.app.ui.widget.compose.LegadoMiuixActionRow
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogPanel
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
 import io.legado.app.ui.widget.number.NumberPickerDialog
 
 /**
- * 视频播放设置弹窗（V5 基座版，旧 ComposeDialogFragment 退役批最后一个子类）。
+ * 视频播放设置弹窗（V5 全量版：V5DialogPanel + AppRowWithSwitch + AppGhostButton）。
  * 尺寸：旧 AppDialogSize.Form → widthFraction 0.94f / maxWidthDp 660。
- * 内容沿用旧桥组件（rememberAppDialogStyle 只吃主题键 + V5 形状镜像，V5 壳下渲染正常）。
  * 业务保留：自动播放/开播全屏联动、底部进度条、播放缓存、长按倍速 NumberPickerDialog（含默认 30）。
  */
 internal class SettingsDialog(private val context: Context, private val callBack: CallBack? = null) :
@@ -53,11 +35,14 @@ internal class SettingsDialog(private val context: Context, private val callBack
 
     @Composable
     override fun Content() {
-        VideoSettingsContent(style = rememberAppDialogStyle())
+        V5DialogPanel(
+            title = stringResource(R.string.config_settings),
+            content = { VideoSettingsContent() }
+        )
     }
 
     @Composable
-    private fun VideoSettingsContent(style: AppDialogStyle) {
+    private fun VideoSettingsContent() {
         var autoPlay by rememberSaveable { mutableStateOf(VideoPlay.autoPlay) }
         var startFull by rememberSaveable { mutableStateOf(VideoPlay.startFull) }
         var showStartFull by rememberSaveable { mutableStateOf(true) }
@@ -65,74 +50,55 @@ internal class SettingsDialog(private val context: Context, private val callBack
         var playCacheEnabled by rememberSaveable { mutableStateOf(VideoPlay.playCacheEnabled) }
         var longPressSpeed by rememberSaveable { mutableIntStateOf(VideoPlay.longPressSpeed) }
 
-        LegadoMiuixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.config_settings),
-                    color = style.accent,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = style.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                AppDialogSwitchRow(
-                    text = stringResource(R.string.auto_play),
-                    checked = autoPlay,
-                    onCheckedChange = { checked ->
-                        autoPlay = checked
-                        showStartFull = checked
-                        VideoPlay.autoPlay = checked
-                    }
-                )
-                if (showStartFull) {
-                    AppDialogSwitchRow(
-                        text = stringResource(R.string.start_full),
-                        checked = startFull,
-                        onCheckedChange = { checked ->
-                            startFull = checked
-                            VideoPlay.startFull = checked
-                        }
-                    )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AppRowWithSwitch(
+                title = stringResource(R.string.auto_play),
+                checked = autoPlay,
+                card = false,
+                onCheckedChange = { checked ->
+                    autoPlay = checked
+                    showStartFull = checked
+                    VideoPlay.autoPlay = checked
                 }
-                AppDialogSwitchRow(
-                    text = stringResource(R.string.full_bottom_progress),
-                    checked = fullBottomProgress,
+            )
+            if (showStartFull) {
+                AppRowWithSwitch(
+                    title = stringResource(R.string.start_full),
+                    checked = startFull,
+                    card = false,
                     onCheckedChange = { checked ->
-                        fullBottomProgress = checked
-                        VideoPlay.fullBottomProgressBar = checked
+                        startFull = checked
+                        VideoPlay.startFull = checked
                     }
-                )
-                AppDialogSwitchRow(
-                    text = stringResource(R.string.video_play_cache),
-                    checked = playCacheEnabled,
-                    onCheckedChange = { checked ->
-                        playCacheEnabled = checked
-                        VideoPlay.playCacheEnabled = checked
-                    }
-                )
-                LegadoMiuixActionRow(
-                    text = longPressSpeed.toPressSpeedStr(),
-                    palette = style.toMiuixPalette(),
-                    onClick = {
-                        showPressSpeedDialog { value ->
-                            longPressSpeed = value
-                        }
-                    },
-                    cornerRadius = style.actionRadius
                 )
             }
+            AppRowWithSwitch(
+                title = stringResource(R.string.full_bottom_progress),
+                checked = fullBottomProgress,
+                card = false,
+                onCheckedChange = { checked ->
+                    fullBottomProgress = checked
+                    VideoPlay.fullBottomProgressBar = checked
+                }
+            )
+            AppRowWithSwitch(
+                title = stringResource(R.string.video_play_cache),
+                checked = playCacheEnabled,
+                card = false,
+                onCheckedChange = { checked ->
+                    playCacheEnabled = checked
+                    VideoPlay.playCacheEnabled = checked
+                }
+            )
+            AppGhostButton(
+                text = longPressSpeed.toPressSpeedStr(),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    showPressSpeedDialog { value ->
+                        longPressSpeed = value
+                    }
+                }
+            )
         }
     }
 

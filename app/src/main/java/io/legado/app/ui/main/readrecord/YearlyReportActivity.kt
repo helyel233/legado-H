@@ -32,10 +32,10 @@ import io.legado.app.databinding.ActivityYearlyReportBinding
 import io.legado.app.help.report.YearlyReportData
 import io.legado.app.help.report.YearlyReportImageRenderer
 import io.legado.app.help.report.YearlyTopBook
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
@@ -61,7 +61,7 @@ class YearlyReportActivity :
 
 @Composable
 private fun YearlyReportScreen(viewModel: YearlyReportViewModel) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val data by viewModel.data.collectAsState()
     val year by viewModel.year.collectAsState()
     val bookMap by viewModel.bookMap.collectAsState()
@@ -141,7 +141,7 @@ private fun YearlyReportScreen(viewModel: YearlyReportViewModel) {
 }
 
 @Composable
-private fun SummaryCards(report: YearlyReportData, style: AppDialogStyle) {
+private fun SummaryCards(report: YearlyReportData, style: V5DialogColors) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         SummaryCard(
             value = YearlyReportImageRenderer.formatDuration(report.totalReadTime),
@@ -168,7 +168,7 @@ private fun SummaryCards(report: YearlyReportData, style: AppDialogStyle) {
 private fun SummaryCard(
     value: String,
     label: String,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -183,7 +183,7 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun MonthlyChart(report: YearlyReportData, style: AppDialogStyle) {
+private fun MonthlyChart(report: YearlyReportData, style: V5DialogColors) {
     val maxMonth = report.monthlyTimes.max().coerceAtLeast(1L)
     Column(
         modifier = Modifier
@@ -225,7 +225,7 @@ private fun TopBookRow(
     book: YearlyTopBook,
     bookMap: Map<String, io.legado.app.data.entities.Book>,
     rank: Int,
-    style: AppDialogStyle
+    style: V5DialogColors
 ) {
     val shelfBook = bookMap[book.bookUrl]
     Row(

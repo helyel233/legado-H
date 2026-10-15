@@ -36,7 +36,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,18 +48,30 @@ import io.legado.app.R
 import io.legado.app.data.dao.BookTagInfo
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.BookTagManagement
-import io.legado.app.ui.widget.compose.AppListSpacing
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.widget.compose.AppListSpacing
+import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
 internal data class BookshelfTagItemUi(
     val name: String,
@@ -402,8 +413,8 @@ private fun BookTagAddDialog(
     onDismiss: () -> Unit,
     onAdd: (List<String>) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     var query by rememberSaveable(group.groupId) { mutableStateOf("") }
     var newTagInput by rememberSaveable(group.groupId) { mutableStateOf("") }
     var selectedTags by remember(group.groupId, reusableTags) {
@@ -426,159 +437,152 @@ private fun BookTagAddDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        LegadoMiuixCard(
+        AppCard(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .fillMaxHeight(0.82f)
                 .widthIn(max = 620.dp)
-                .navigationBarsPadding(),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(16.dp)
+                .navigationBarsPadding()
         ) {
-            Text(
-                text = stringResource(R.string.bookshelf_tag_add_title),
-                color = style.primaryText,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = stringResource(R.string.bookshelf_tag_add_group, group.groupName),
-                color = style.secondaryText,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = newTagInput,
-                onValueChange = { newTagInput = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.bookshelf_tag_new_label)) },
-                placeholder = { Text(stringResource(R.string.bookshelf_tag_new_hint)) },
-                shape = RoundedCornerShape(style.actionRadius),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = style.primaryText,
-                    unfocusedTextColor = style.primaryText,
-                    focusedContainerColor = style.fieldSurface,
-                    unfocusedContainerColor = style.fieldSurface,
-                    focusedBorderColor = style.accent,
-                    unfocusedBorderColor = style.stroke,
-                    cursorColor = style.accent,
-                    focusedLabelColor = style.accent,
-                    unfocusedLabelColor = style.secondaryText,
-                    focusedPlaceholderColor = style.secondaryText,
-                    unfocusedPlaceholderColor = style.secondaryText
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.bookshelf_tag_add_title),
+                    style = visual.type.title,
+                    color = colors.onSurface
                 )
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(
-                    R.string.bookshelf_tag_reusable_summary,
-                    reusableTags.size,
-                    selectedTags.size
-                ),
-                color = style.secondaryText,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (reusableTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = stringResource(R.string.bookshelf_tag_add_group, group.groupName),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
+                    value = newTagInput,
+                    onValueChange = { newTagInput = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text(stringResource(R.string.bookshelf_tag_search_existing)) },
-                    shape = RoundedCornerShape(style.actionRadius),
+                    label = { Text(stringResource(R.string.bookshelf_tag_new_label)) },
+                    placeholder = { Text(stringResource(R.string.bookshelf_tag_new_hint)) },
+                    shape = visual.shape(ShapeKind.BUTTON),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = style.primaryText,
-                        unfocusedTextColor = style.primaryText,
-                        focusedContainerColor = style.fieldSurface,
-                        unfocusedContainerColor = style.fieldSurface,
-                        focusedBorderColor = style.accent,
-                        unfocusedBorderColor = style.stroke,
-                        cursorColor = style.accent,
-                        focusedPlaceholderColor = style.secondaryText,
-                        unfocusedPlaceholderColor = style.secondaryText
+                        focusedTextColor = colors.onSurface,
+                        unfocusedTextColor = colors.onSurface,
+                        focusedContainerColor = colors.surfaceVariant,
+                        unfocusedContainerColor = colors.surfaceVariant,
+                        focusedBorderColor = colors.primary,
+                        unfocusedBorderColor = colors.outline,
+                        cursorColor = colors.primary,
+                        focusedLabelColor = colors.primary,
+                        unfocusedLabelColor = colors.onSurfaceVariant,
+                        focusedPlaceholderColor = colors.onSurfaceVariant,
+                        unfocusedPlaceholderColor = colors.onSurfaceVariant
                     )
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(
+                        R.string.bookshelf_tag_reusable_summary,
+                        reusableTags.size,
+                        selectedTags.size
+                    ),
+                    color = colors.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-            }
-            when {
-                reusableTags.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.bookshelf_tag_no_reusable),
-                            color = style.secondaryText,
-                            fontSize = 14.sp
+                if (reusableTags.isNotEmpty()) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.bookshelf_tag_search_existing)) },
+                        shape = visual.shape(ShapeKind.BUTTON),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.onSurface,
+                            unfocusedTextColor = colors.onSurface,
+                            focusedContainerColor = colors.surfaceVariant,
+                            unfocusedContainerColor = colors.surfaceVariant,
+                            focusedBorderColor = colors.primary,
+                            unfocusedBorderColor = colors.outline,
+                            cursorColor = colors.primary,
+                            focusedPlaceholderColor = colors.onSurfaceVariant,
+                            unfocusedPlaceholderColor = colors.onSurfaceVariant
                         )
-                    }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                visibleTags.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.bookshelf_tag_no_matching_existing),
-                            color = style.secondaryText,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .heightIn(min = 120.dp),
-                        verticalArrangement = Arrangement.spacedBy(AppListSpacing.Compact)
-                    ) {
-                        items(visibleTags, key = { it.lowercase() }) { tag ->
-                            val selected = tag in selectedTags
-                            LegadoMiuixChoiceRow(
-                                text = tag,
-                                selected = selected,
-                                palette = palette,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-                                onClick = {
-                                    selectedTags = if (selected) {
-                                        selectedTags - tag
-                                    } else {
-                                        selectedTags + tag
-                                    }
-                                }
+                when {
+                    reusableTags.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.bookshelf_tag_no_reusable),
+                                color = colors.onSurfaceVariant,
+                                fontSize = 14.sp
                             )
                         }
                     }
+                    visibleTags.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.bookshelf_tag_no_matching_existing),
+                                color = colors.onSurfaceVariant,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .heightIn(min = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(AppListSpacing.Compact)
+                        ) {
+                            items(visibleTags, key = { it.lowercase() }) { tag ->
+                                val selected = tag in selectedTags
+                                AppSelectionRow(
+                                    title = tag,
+                                    selected = selected,
+                                    selectionMode = true,
+                                    onClick = {
+                                        selectedTags = if (selected) {
+                                            selectedTags - tag
+                                        } else {
+                                            selectedTags + tag
+                                        }
+                                    },
+                                    onLongClick = {}
+                                )
+                            }
+                        }
+                    }
                 }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.cancel),
-                    palette = palette,
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                )
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.add),
-                    palette = palette,
-                    onClick = { if (tagsToAdd.isNotEmpty()) onAdd(tagsToAdd) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .alpha(if (tagsToAdd.isNotEmpty()) 1f else 0.45f),
-                    primary = true
-                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AppGhostButton(
+                        text = stringResource(R.string.cancel),
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AppFilledButton(
+                        text = stringResource(R.string.add),
+                        onClick = { onAdd(tagsToAdd) },
+                        enabled = tagsToAdd.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -590,8 +594,8 @@ private fun BookTagAssignmentDialog(
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     var query by rememberSaveable(assignment.groupId, assignment.tag) { mutableStateOf("") }
     var filter by rememberSaveable(assignment.groupId, assignment.tag) {
         mutableStateOf(BookSelectionFilter.All)
@@ -623,22 +627,18 @@ private fun BookTagAssignmentDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        LegadoMiuixCard(
+        AppCard(
             modifier = Modifier
                 .fillMaxWidth(0.96f)
                 .fillMaxHeight(0.90f)
                 .widthIn(max = 700.dp)
-                .navigationBarsPadding(),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(16.dp)
+                .navigationBarsPadding()
         ) {
+            Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "${assignment.groupName} · ${assignment.tag}",
-                color = style.primaryText,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = visual.type.title,
+                color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -649,17 +649,17 @@ private fun BookTagAssignmentDialog(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.bookshelf_tag_search_book)) },
-                shape = RoundedCornerShape(style.actionRadius),
+                shape = visual.shape(ShapeKind.BUTTON),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = style.primaryText,
-                    unfocusedTextColor = style.primaryText,
-                    focusedContainerColor = style.fieldSurface,
-                    unfocusedContainerColor = style.fieldSurface,
-                    focusedBorderColor = style.accent,
-                    unfocusedBorderColor = style.stroke,
-                    cursorColor = style.accent,
-                    focusedPlaceholderColor = style.secondaryText,
-                    unfocusedPlaceholderColor = style.secondaryText
+                    focusedTextColor = colors.onSurface,
+                    unfocusedTextColor = colors.onSurface,
+                    focusedContainerColor = colors.surfaceVariant,
+                    unfocusedContainerColor = colors.surfaceVariant,
+                    focusedBorderColor = colors.primary,
+                    unfocusedBorderColor = colors.outline,
+                    cursorColor = colors.primary,
+                    focusedPlaceholderColor = colors.onSurfaceVariant,
+                    unfocusedPlaceholderColor = colors.onSurfaceVariant
                 )
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -670,21 +670,18 @@ private fun BookTagAssignmentDialog(
                 SelectionFilterChip(
                     text = stringResource(R.string.bookshelf_tag_filter_all),
                     selected = filter == BookSelectionFilter.All,
-                    palette = palette,
                     modifier = Modifier.weight(1f),
                     onClick = { filter = BookSelectionFilter.All }
                 )
                 SelectionFilterChip(
                     text = stringResource(R.string.bookshelf_tag_filter_selected),
                     selected = filter == BookSelectionFilter.Selected,
-                    palette = palette,
                     modifier = Modifier.weight(1f),
                     onClick = { filter = BookSelectionFilter.Selected }
                 )
                 SelectionFilterChip(
                     text = stringResource(R.string.bookshelf_tag_filter_unselected),
                     selected = filter == BookSelectionFilter.Unselected,
-                    palette = palette,
                     modifier = Modifier.weight(1f),
                     onClick = { filter = BookSelectionFilter.Unselected }
                 )
@@ -701,29 +698,21 @@ private fun BookTagAssignmentDialog(
                         assignment.books.size
                     ),
                     modifier = Modifier.weight(1f),
-                    color = style.secondaryText,
+                    color = colors.onSurfaceVariant,
                     fontSize = 12.sp
                 )
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.bookshelf_tag_select_results),
-                    palette = palette,
                     onClick = {
                         selectedUrls = selectedUrls + visibleBooks.map { it.bookUrl }
-                    },
-                    minWidth = 0.dp,
-                    minHeight = 34.dp,
-                    insidePadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                    }
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.bookshelf_tag_clear_results),
-                    palette = palette,
                     onClick = {
                         selectedUrls = selectedUrls - visibleBooks.map { it.bookUrl }.toSet()
-                    },
-                    minWidth = 0.dp,
-                    minHeight = 34.dp,
-                    insidePadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                    }
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -731,7 +720,7 @@ private fun BookTagAssignmentDialog(
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
                         text = stringResource(R.string.bookshelf_tag_no_matching_books),
-                        color = style.secondaryText,
+                        color = colors.onSurfaceVariant,
                         fontSize = 14.sp
                     )
                 }
@@ -747,19 +736,19 @@ private fun BookTagAssignmentDialog(
                             book.author.takeIf { it.isNotBlank() },
                             tags.takeIf { it.isNotEmpty() }?.joinToString(" · ")
                         ).joinToString("  ·  ")
-                        LegadoMiuixChoiceRow(
-                            text = book.name,
-                            description = description,
+                        AppSelectionRow(
+                            title = book.name,
+                            supporting = description,
                             selected = selected,
-                            palette = palette,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                            selectionMode = true,
                             onClick = {
                                 selectedUrls = if (selected) {
                                     selectedUrls - book.bookUrl
                                 } else {
                                     selectedUrls + book.bookUrl
                                 }
-                            }
+                            },
+                            onLongClick = {}
                         )
                     }
                 }
@@ -769,19 +758,17 @@ private fun BookTagAssignmentDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.cancel),
-                    palette = palette,
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f)
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.bookshelf_tag_save),
-                    palette = palette,
                     onClick = { onSave(selectedUrls) },
-                    modifier = Modifier.weight(1f),
-                    primary = true
+                    modifier = Modifier.weight(1f)
                 )
+            }
             }
         }
     }
@@ -791,18 +778,13 @@ private fun BookTagAssignmentDialog(
 private fun SelectionFilterChip(
     text: String,
     selected: Boolean,
-    palette: io.legado.app.ui.widget.compose.LegadoMiuixPalette,
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    LegadoMiuixChoiceRow(
+    AppChip(
         text = text,
         selected = selected,
-        palette = palette,
         onClick = onClick,
-        modifier = modifier,
-        minHeight = 36.dp,
-        compact = true,
-        showSelectedMark = false
+        modifier = modifier
     )
 }

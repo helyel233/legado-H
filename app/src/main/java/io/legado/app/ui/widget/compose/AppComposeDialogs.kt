@@ -68,7 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import io.legado.app.R
-import io.legado.app.uikit.layout.LayoutEngine
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.lib.theme.UiCorner
@@ -97,8 +97,14 @@ internal fun DismissWhenCallbackMissing(
     }
 }
 
+/**
+ * 旧 V5DialogColors 的 V5 换源版：字段名保持不变（surface/fieldSurface/primaryText/...
+ * /panelRadius/actionRadius/bodyFontFamily/titleFontFamily），取值全部改自 V5 运行时
+ * （LocalSemanticColors / LocalVisualSpec / LayoutResolver 形状 / ThemeResolver 字体），
+ * 使剩余参数串联型消费者零改动吃到 V5 主题源。字段清零后随旧库整体删除。
+ */
 @Stable
-data class AppDialogStyle(
+data class V5DialogColors(
     val accent: Color,
     val onAccent: Color,
     val surface: Color,
@@ -114,35 +120,9 @@ data class AppDialogStyle(
 )
 
 @Composable
-fun rememberAppDialogStyle(): AppDialogStyle {
+fun rememberV5DialogColors(): V5DialogColors {
     val context = LocalContext.current
-    val night = AppConfig.isNightTheme
-    val accent = context.accentColor
-    val layoutAlpha = if (AppConfig.isEInkMode) {
-        1f
-    } else {
-        io.legado.app.uikit.layout.LayoutEngine.glassAlpha.coerceIn(0.05f, 1f)
-    }
-    val themeUiPalette = rememberThemeUiPalette()
-    val customSurface = themeUiPalette.cardColor.takeIf { themeUiPalette.hasCustomCardColor }
-    val customFieldSurface = themeUiPalette.mutedColor.takeIf { themeUiPalette.hasCustomMutedColor }
-    val surfaceBase = customSurface ?: context.bottomBackground
-    val fieldSurface = customFieldSurface ?: ColorUtils.blendColors(
-        surfaceBase,
-        accent,
-        if (night) 0.10f else 0.05f
-    )
-    val fieldAlpha = (layoutAlpha + if (night) 0.10f else 0.08f).coerceIn(0f, 1f)
-    val stroke = UiCorner.panelBorderColor(context)
-        ?: if (customSurface != null || customFieldSurface != null) {
-            context.themeDividerColorOrDefault()
-        } else {
-            UiCorner.effectStrokeColor(surfaceBase)
-        }
-    // 文字色按对话框实际背景明暗推导，而非全局 night 标志，避免深底深字/浅底白字
-    // 形状跟随 V5 形状包（V5 包库是主题唯一真相，颜色已由 V5ThemeSync 同步，
-    // 这里补齐形状）：面板取卡片角、动作按钮取按钮角；胶囊→大半径近似，
-    // 斜切角对对话框形态畸变，回落旧半径。
+    val colors = LocalSemanticColors.current
     val v5Spec = io.legado.app.uikit.v5.resolve.LayoutResolver.current
     val v5Scale = v5Spec.shapeScale.coerceIn(io.legado.app.uikit.v5.token.SHAPE_SCALE_RANGE)
     val panelRadius = when (val c = v5Spec.shapeFamily.card) {
@@ -154,400 +134,32 @@ fun rememberAppDialogStyle(): AppDialogStyle {
         is io.legado.app.uikit.v5.token.CornerSpec.Pill -> 100.dp
         else -> context.composeActionRadius()
     }
-    return AppDialogStyle(
-        accent = Color(accent),
-        onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
-        surface = Color(ColorUtils.withAlpha(surfaceBase, layoutAlpha)),
-        fieldSurface = Color(ColorUtils.withAlpha(fieldSurface, fieldAlpha)),
-        primaryText = Color(context.primaryTextColor),
-        secondaryText = Color(context.secondaryTextColor),
-        stroke = Color(stroke),
-        danger = Color(ContextCompat.getColor(context, R.color.md_red_500)),
-        panelRadius = panelRadius,
-        actionRadius = actionRadius,
-        bodyFontFamily = FontFamily(context.uiTypeface()),
-        titleFontFamily = FontFamily(context.titleTypeface())
-    )
-}
-
-@Composable
-fun AppDialogFrame(
-    title: String,
-    modifier: Modifier = Modifier,
-    message: String? = null,
-    scrollContent: Boolean = true,
-    messageInContent: Boolean = false,
-    content: @Composable () -> Unit,
-    actions: @Composable () -> Unit
-) {
-    val style = rememberAppDialogStyle()
-    val frameShape = RoundedCornerShape(style.panelRadius)
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+    return remember(
+        colors, v5Spec, panelRadius, actionRadius
     ) {
-        LegadoMiuixCard(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp)
-                .shadow(14.dp, frameShape, clip = false)
-                .border(1.dp, style.stroke, frameShape),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-            ) {
-                Text(
-                    text = title,
-                    color = style.primaryText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = style.titleFontFamily,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (!message.isNullOrBlank() && !messageInContent) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AppDialogMessageText(message = message, style = style)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                val contentModifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                val shouldScrollContent = scrollContent || messageInContent
-                if (shouldScrollContent) {
-                    Column(
-                        modifier = contentModifier.verticalScroll(rememberScrollState())
-                    ) {
-                        AppDialogContent(
-                            message = message,
-                            messageInContent = messageInContent,
-                            style = style,
-                            content = content
-                        )
-                    }
-                } else {
-                    Column(modifier = contentModifier) {
-                        AppDialogContent(
-                            message = message,
-                            messageInContent = messageInContent,
-                            style = style,
-                            content = content
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    actions()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppDialogContent(
-    message: String?,
-    messageInContent: Boolean,
-    style: AppDialogStyle,
-    content: @Composable () -> Unit
-) {
-    if (!message.isNullOrBlank() && messageInContent) {
-        AppDialogMessageText(message = message, style = style)
-    }
-    content()
-}
-
-@Composable
-private fun AppDialogMessageText(
-    message: String,
-    style: AppDialogStyle
-) {
-    SelectionContainer {
-        Text(
-            text = message,
-            color = style.secondaryText,
-            fontSize = 14.sp,
-            lineHeight = 20.sp
+        V5DialogColors(
+            accent = colors.primary,
+            onAccent = colors.onPrimary,
+            surface = colors.surface,
+            fieldSurface = colors.surfaceVariant,
+            primaryText = colors.onSurface,
+            secondaryText = colors.onSurfaceVariant,
+            stroke = colors.outline,
+            danger = colors.error,
+            panelRadius = panelRadius,
+            actionRadius = actionRadius,
+            bodyFontFamily = io.legado.app.uikit.v5.resolve.ThemeResolver.uiFontFamily()
+                ?: FontFamily(context.uiTypeface()),
+            titleFontFamily = io.legado.app.uikit.v5.resolve.ThemeResolver.titleFontFamily()
+                ?: FontFamily(context.titleTypeface())
         )
-    }
-}
-
-@Composable
-private fun AppDialogTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    label: String = "",
-    minLines: Int = 1,
-    maxLines: Int = 1,
-    singleLine: Boolean = false,
-    readOnly: Boolean = false,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    val style = rememberAppDialogStyle()
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        label.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                color = style.secondaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            minLines = minLines,
-            maxLines = maxLines,
-            singleLine = singleLine,
-            readOnly = readOnly,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions,
-            shape = RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                disabledTextColor = style.secondaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                disabledContainerColor = style.fieldSurface.copy(alpha = 0.58f),
-                cursorColor = style.accent,
-                focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                unfocusedBorderColor = style.stroke,
-                disabledBorderColor = style.stroke.copy(alpha = 0.38f),
-                focusedPlaceholderColor = style.secondaryText,
-                unfocusedPlaceholderColor = style.secondaryText
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily
-            )
-        )
-    }
-}
-
-@Composable
-fun AppDialogSwitchRow(
-    text: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    LegadoMiuixCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = text,
-                modifier = Modifier.weight(1f),
-                color = if (checked) style.primaryText else style.secondaryText,
-                fontSize = 15.sp,
-                fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            LegadoMiuixSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                palette = palette
-            )
-        }
-    }
-}
-
-@Composable
-fun AppDialogOptionGroup(
-    title: String,
-    options: List<String>,
-    selectedIndex: Int,
-    onSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            color = style.accent,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(vertical = 6.dp)
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            options.forEachIndexed { index, label ->
-                LegadoMiuixChoiceRow(
-                    text = label,
-                    selected = selectedIndex == index,
-                    palette = palette,
-                    onClick = { onSelected(index) },
-                    minHeight = 40.dp,
-                    compact = true
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AppDialogSliderRow(
-    title: String,
-    value: Int,
-    range: IntRange,
-    onValueChange: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
-    showStepper: Boolean = false,
-    step: Int = 1,
-    valueFormatter: (Int) -> String = { it.toString() },
-    onValueChangeFinished: (() -> Unit)? = null
-) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    val safeStep = step.coerceAtLeast(1)
-    val safeValue = value.coerceIn(range)
-    val displayValue = valueFormatter(safeValue)
-    LegadoMiuixCard(
-        modifier = modifier.fillMaxWidth(),
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(
-            horizontal = if (compact) 11.dp else 13.dp,
-            vertical = if (compact) 8.dp else 10.dp
-        )
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f),
-                    color = style.primaryText,
-                    fontSize = if (compact) 13.sp else 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = displayValue,
-                    color = style.secondaryText,
-                    fontSize = if (compact) 12.sp else 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
-            AppThemedStepperSlider(
-                value = safeValue,
-                range = range,
-                onValueChange = { onValueChange(it.coerceIn(range)) },
-                palette = palette,
-                step = safeStep,
-                onValueChangeFinished = onValueChangeFinished
-            )
-        }
-    }
-}
-
-data class AppDialogSliderItem(
-    val title: String,
-    val value: Int,
-    val range: IntRange,
-    val onValueChange: (Int) -> Unit,
-    val showStepper: Boolean = false,
-    val step: Int = 1,
-    val valueFormatter: (Int) -> String = { it.toString() },
-    val onValueChangeFinished: (() -> Unit)? = null
-)
-
-@Composable
-fun AppDialogSliderGrid(
-    items: List<AppDialogSliderItem>,
-    modifier: Modifier = Modifier,
-    minTwoColumnWidth: Dp = 330.dp
-) {
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val twoColumns = maxWidth >= minTwoColumnWidth
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (twoColumns) {
-                items.chunked(2).forEach { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowItems.forEach { item ->
-                            AppDialogSliderRow(
-                                title = item.title,
-                                value = item.value,
-                                range = item.range,
-                                onValueChange = item.onValueChange,
-                                modifier = Modifier.weight(1f),
-                                compact = true,
-                                showStepper = item.showStepper,
-                                step = item.step,
-                                valueFormatter = item.valueFormatter,
-                                onValueChangeFinished = item.onValueChangeFinished
-                            )
-                        }
-                        if (rowItems.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            } else {
-                items.forEach { item ->
-                    AppDialogSliderRow(
-                        title = item.title,
-                        value = item.value,
-                        range = item.range,
-                        onValueChange = item.onValueChange,
-                        showStepper = item.showStepper,
-                        step = item.step,
-                        valueFormatter = item.valueFormatter,
-                        onValueChangeFinished = item.onValueChangeFinished
-                    )
-                }
-            }
-        }
     }
 }
 
 /**
  * 模型选择弹窗（V5 基座版，旧 ComposeDialogFragment 退役批最后一个子类）。
  * 尺寸：旧 AppDialogSize.Management → widthFraction 0.96f / maxWidthDp 700。
- * 内容沿用 FetchedModelSelectorContent（旧桥 rememberAppDialogStyle 只吃主题键 +
+ * 内容沿用 FetchedModelSelectorContent（旧桥 rememberV5DialogColors 只吃主题键 +
  * V5 形状镜像，不依赖 LegadoComposeTheme，在 V5 壳下渲染正常）。
  * 行为保留：`onAddSingle == null` 时自动 dismiss（DismissWhenCallbackMissing）。
  */

@@ -39,7 +39,7 @@ import io.legado.app.utils.showDialogFragment
  *
  * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
  * 内容由旧 AppDialogFrame + LegadoMiuixActionButton 换为 V5 AppDialog + AppGhostButton/AppFilledButton；
- * 列表行改用 V5 版 ImportSourceItemRow（不再吃 AppDialogStyle）。
+ * 列表行改用 V5 版 ImportSourceItemRow（不再吃 V5DialogColors）。
  * 「导入成功后 setFragmentResult(RESULT_REFRESH) 并关闭」「Saving 复用 Ready 列表」等语义不变。
  */
 internal class ImportAutoTaskDialog() : V5DialogFragment(), CodeDialog.Callback {

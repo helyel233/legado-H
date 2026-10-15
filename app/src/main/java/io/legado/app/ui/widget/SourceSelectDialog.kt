@@ -11,7 +11,7 @@ import androidx.activity.ComponentDialog
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,7 +29,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,17 +41,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.windowSize
 import splitties.systemservices.windowManager
@@ -136,8 +134,8 @@ private fun <T> SourceSelectContent(
     showTitle: Boolean,
     onSelect: (T) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
@@ -156,26 +154,18 @@ private fun <T> SourceSelectContent(
             }
         }
     }
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+    AppCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = maxPanelHeight)
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        LegadoMiuixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = maxPanelHeight)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
             if (showTitle) {
                 Text(
                     text = title,
-                    color = style.primaryText,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = style.titleFontFamily,
+                    style = visual.type.title,
+                    color = colors.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -194,25 +184,25 @@ private fun <T> SourceSelectContent(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_clear),
                                 contentDescription = null,
-                                tint = style.secondaryText
+                                tint = colors.onSurfaceVariant
                             )
                         }
                     }
                 },
                 textStyle = LocalTextStyle.current.copy(
-                    color = style.primaryText,
+                    color = colors.onSurface,
                     fontSize = 15.sp
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = style.primaryText,
-                    unfocusedTextColor = style.primaryText,
-                    focusedContainerColor = style.fieldSurface,
-                    unfocusedContainerColor = style.fieldSurface,
+                    focusedTextColor = colors.onSurface,
+                    unfocusedTextColor = colors.onSurface,
+                    focusedContainerColor = colors.surfaceVariant,
+                    unfocusedContainerColor = colors.surfaceVariant,
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
-                    focusedLabelColor = style.accent,
-                    unfocusedLabelColor = style.secondaryText,
-                    cursorColor = style.accent
+                    focusedLabelColor = colors.primary,
+                    unfocusedLabelColor = colors.onSurfaceVariant,
+                    cursorColor = colors.primary
                 )
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -225,8 +215,8 @@ private fun <T> SourceSelectContent(
                 ) {
                     Text(
                         text = stringResource(R.string.empty),
-                        color = style.secondaryText,
-                        fontSize = 14.sp,
+                        color = colors.onSurfaceVariant,
+                        style = visual.type.body,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -243,12 +233,12 @@ private fun <T> SourceSelectContent(
                             stableSourceSelectKey(itemKey(item), originalSourceSelectIndex(items, item, index))
                         }
                     ) { _, item ->
-                        LegadoMiuixChoiceRow(
-                            text = displayName(item),
+                        AppSelectionRow(
+                            title = displayName(item),
                             selected = itemKey(item) == selectedKey,
-                            palette = palette,
+                            selectionMode = true,
                             onClick = { onSelect(item) },
-                            minHeight = 46.dp
+                            onLongClick = {}
                         )
                     }
                 }

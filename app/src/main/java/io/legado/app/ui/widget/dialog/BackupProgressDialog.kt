@@ -7,7 +7,7 @@ import android.view.ViewGroup
 import android.view.Window
 import androidx.activity.ComponentDialog
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,10 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -26,18 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.storage.BackupProgress
 import io.legado.app.help.storage.BackupProgressHolder
 import io.legado.app.help.storage.BackupStage
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 
 /**
  * 备份进度对话框：展示当前备份阶段与进度。
@@ -54,35 +50,29 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                 id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
-                    val style = rememberAppDialogStyle()
-                    val palette = style.toMiuixPalette()
+                    val visual = LocalVisualSpec.current
+                    val colors = LocalSemanticColors.current
                     val progress by BackupProgressHolder.progress.collectAsState()
-                    CompositionLocalProvider(
-                        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+                    AppCard(
+                        modifier = Modifier
+                            .widthIn(min = 260.dp, max = 420.dp)
+                            .padding(horizontal = 18.dp, vertical = 12.dp)
                     ) {
-                        LegadoMiuixCard(
-                            modifier = Modifier
-                                .widthIn(min = 260.dp, max = 420.dp)
-                                .padding(horizontal = 18.dp, vertical = 12.dp),
-                            color = style.surface,
-                            contentColor = style.primaryText,
-                            cornerRadius = style.panelRadius,
-                            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
-                        ) {
+                        Column {
                             Text(
                                 text = stringResource(R.string.backup),
-                                color = style.primaryText,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
+                                style = visual.type.title,
+                                color = colors.onSurface,
+                                modifier = Modifier.padding(horizontal = 20.dp)
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = stageMessage(progress),
-                                color = style.secondaryText,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
+                                style = visual.type.caption,
+                                color = colors.onSurfaceVariant,
                                 maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 20.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             val fraction = progress?.fraction
@@ -91,29 +81,31 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                                     progress = { fraction },
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
                                         .height(6.dp),
-                                    color = style.accent,
-                                    trackColor = style.fieldSurface
+                                    color = colors.primary,
+                                    trackColor = colors.surfaceVariant
                                 )
                             } else {
                                 LinearProgressIndicator(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
                                         .height(6.dp),
-                                    color = style.accent,
-                                    trackColor = style.fieldSurface
+                                    color = colors.primary,
+                                    trackColor = colors.surfaceVariant
                                 )
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 18.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                LegadoMiuixActionButton(
+                                AppGhostButton(
                                     text = stringResource(R.string.backup_continue_background),
-                                    palette = palette,
-                                    cornerRadius = style.actionRadius,
                                     onClick = { dismiss() }
                                 )
                             }

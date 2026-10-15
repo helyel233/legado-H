@@ -33,10 +33,10 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.SmartConditionType
 import io.legado.app.help.book.SmartGroupCondition
 import io.legado.app.help.book.SmartGroupRule
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.host.V5DialogPanel
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 /**
@@ -46,7 +46,7 @@ import io.legado.app.ui.widget.compose.toMiuixPalette
 fun RuleEditDialog(
     draft: SmartGroupRule,
     groups: List<BookGroup>,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onConfirm: (SmartGroupRule) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -64,7 +64,7 @@ fun RuleEditDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        AppDialogFrame(
+        V5DialogPanel(
             title = title,
             content = {
                 Column(
@@ -157,7 +157,7 @@ private fun StyleTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
-    style: AppDialogStyle
+    style: V5DialogColors
 ) {
     OutlinedTextField(
         value = value,
@@ -186,7 +186,7 @@ private fun StyleTextField(
 private fun GroupSelector(
     groups: List<BookGroup>,
     selectedId: Long,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onSelect: (Long) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -252,7 +252,7 @@ private fun GroupSelector(
 @Composable
 private fun ConditionRow(
     condition: SmartGroupCondition,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onUpdate: (SmartGroupCondition) -> Unit,
     onRemove: () -> Unit
 ) {

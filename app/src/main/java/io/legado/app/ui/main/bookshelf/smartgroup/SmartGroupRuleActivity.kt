@@ -34,9 +34,9 @@ import io.legado.app.help.book.SmartConditionType
 import io.legado.app.help.book.SmartGroupCondition
 import io.legado.app.help.book.SmartGroupEngine
 import io.legado.app.help.book.SmartGroupRule
-import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**
@@ -62,7 +62,7 @@ class SmartGroupRuleActivity :
 
 @Composable
 private fun SmartGroupScreen(viewModel: SmartGroupRuleViewModel) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val rules by viewModel.rules.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val autoRun by viewModel.autoRun.collectAsState()
@@ -158,7 +158,7 @@ private fun SmartGroupScreen(viewModel: SmartGroupRuleViewModel) {
 private fun RuleCard(
     rule: SmartGroupRule,
     groupName: String,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -218,7 +218,7 @@ private fun RuleCard(
 @Composable
 private fun ActionButton(
     text: String,
-    style: AppDialogStyle,
+    style: V5DialogColors,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {

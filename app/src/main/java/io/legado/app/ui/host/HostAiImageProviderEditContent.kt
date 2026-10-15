@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 /**
@@ -72,7 +72,7 @@ internal fun AiImageProviderEditForm(
     onJsLibClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     val palette = style.toMiuixPalette()
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
@@ -204,7 +204,7 @@ private fun EditTextField(
     minLines: Int = 1,
     maxLines: Int = 1,
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -258,7 +258,7 @@ private fun EditCodeButton(
     label: String,
     onClick: () -> Unit,
 ) {
-    val style = rememberAppDialogStyle()
+    val style = rememberV5DialogColors()
     LegadoMiuixCard(
         modifier = Modifier
             .fillMaxWidth()

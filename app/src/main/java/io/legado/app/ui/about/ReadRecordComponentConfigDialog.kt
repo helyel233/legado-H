@@ -35,13 +35,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogPanel
+import io.legado.app.ui.host.HostV5ThemeRoot
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppSwitch
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.utils.applyModernWindowStyle
@@ -70,7 +70,7 @@ object ReadRecordComponentConfigDialog {
             )
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
-                LegadoComposeTheme {
+                HostV5ThemeRoot {
                     ReadRecordComponentConfigContent(
                         initialItems = initialItems,
                         listHeightDp = fixedListHeight / context.resources.displayMetrics.density,
@@ -114,8 +114,7 @@ private fun ReadRecordComponentConfigContent(
             addAll(initialItems.map { it.copy() })
         }
     }
-    val dialogStyle = rememberAppDialogStyle()
-    val palette = dialogStyle.toMiuixPalette()
+    val colors = LocalSemanticColors.current
     val listState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         items.add(to.index, items.removeAt(from.index))
@@ -123,7 +122,7 @@ private fun ReadRecordComponentConfigContent(
     // Every change takes effect immediately: the list behind this dialog is the thing being
     // edited, so waiting for a confirm button only makes the edit look lost.
     fun commit() = onSave(items.map { it.copy() })
-    AppDialogFrame(
+    V5DialogPanel(
         title = stringResource(R.string.read_record_customize_components),
         message = stringResource(R.string.read_record_components_hint),
         scrollContent = false,
@@ -157,7 +156,7 @@ private fun ReadRecordComponentConfigContent(
                                 Icon(
                                     painter = painterResource(R.drawable.ic_drag_handle),
                                     contentDescription = stringResource(R.string.sort),
-                                    tint = palette.secondaryText,
+                                    tint = colors.onSurfaceVariant,
                                     modifier = Modifier
                                         .padding(end = 10.dp)
                                         .draggableHandle(onDragStopped = { commit() })
@@ -169,10 +168,8 @@ private fun ReadRecordComponentConfigContent(
             }
         },
         actions = {
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = stringResource(R.string.close),
-                palette = palette,
-                primary = true,
                 onClick = onCancel
             )
         }
@@ -185,49 +182,41 @@ private fun ReadRecordComponentConfigRow(
     onToggle: (Boolean) -> Unit,
     dragHandle: @Composable () -> Unit
 ) {
-    val context = LocalContext.current
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    val titleFont = FontFamily(context.titleTypeface())
-    val bodyFont = FontFamily(context.uiTypeface())
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle(!item.enabled) },
-        color = palette.surfaceVariant,
-        contentColor = palette.primaryText,
-        cornerRadius = style.panelRadius,
-        insidePadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+            .clickable { onToggle(!item.enabled) }
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             dragHandle()
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(item.type.titleRes),
-                    color = palette.primaryText,
-                    fontSize = 15.sp,
+                    style = visual.type.body,
+                    color = colors.onSurface,
                     fontWeight = FontWeight.SemiBold,
-                    fontFamily = titleFont,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = stringResource(item.type.hintRes),
-                    color = palette.secondaryText,
-                    fontSize = 12.sp,
-                    fontFamily = bodyFont,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 6.dp)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            LegadoMiuixSwitch(
+            AppSwitch(
                 checked = item.enabled,
-                palette = palette,
                 onCheckedChange = onToggle
             )
         }

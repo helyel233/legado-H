@@ -43,7 +43,7 @@ fun AppRuleTextField(
     minLines: Int = 1,
     maxLines: Int = if (singleLine) 1 else 6,
     keyboardType: KeyboardType = KeyboardType.Text,
-    style: AppDialogStyle = rememberAppDialogStyle(),
+    style: V5DialogColors = rememberV5DialogColors(),
     onFocused: (() -> Unit)? = null,
     onOpenEditor: (() -> Unit)? = null
 ) {
@@ -111,7 +111,7 @@ fun AppRuleSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    style: AppDialogStyle = rememberAppDialogStyle()
+    style: V5DialogColors = rememberV5DialogColors()
 ) {
     val palette = style.toMiuixPalette()
     LegadoMiuixCard(
@@ -149,7 +149,7 @@ fun AppRuleTabRow(
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    style: AppDialogStyle = rememberAppDialogStyle()
+    style: V5DialogColors = rememberV5DialogColors()
 ) {
     Row(
         modifier = modifier

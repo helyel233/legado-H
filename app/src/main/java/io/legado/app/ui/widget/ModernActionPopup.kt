@@ -54,9 +54,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.installViewTreeOwnersFrom
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.uikit.v5.components.AppSelectionRow
+import androidx.compose.ui.draw.alpha
+import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.activity
 import io.legado.app.utils.dpToPx
@@ -423,7 +424,7 @@ object ModernActionPopup {
         visible: Boolean,
         onDismiss: () -> Unit
     ) {
-        val style = rememberAppDialogStyle()
+        val style = rememberV5DialogColors()
         val palette = style.toMiuixPalette()
         val panelShape = RoundedCornerShape(style.panelRadius)
         val context = LocalContext.current
@@ -503,11 +504,14 @@ object ModernActionPopup {
                             } else {
                                 action.checked
                             }
-                            LegadoMiuixChoiceRow(
-                                text = action.title,
+                            AppSelectionRow(
+                                title = action.title,
+                                supporting = action.description,
                                 selected = isChecked,
-                                palette = palette,
+                                selectionMode = true,
+                                modifier = Modifier.alpha(if (action.enabled) 1f else 0.45f),
                                 onClick = {
+                                    if (!action.enabled) return@AppSelectionRow
                                     if (action.persistent) {
                                         // 不关闭弹窗，就地更新状态
                                         checkedStates = checkedStates.toMutableList().apply {
@@ -519,13 +523,7 @@ object ModernActionPopup {
                                         anchorPostAction(action.invoke)
                                     }
                                 },
-                                minHeight = 42.dp,
-                                compact = true,
-                                showSelectedMark = action.checked || action.persistent,
-                                enabled = action.enabled,
-                                description = action.description,
-                                leadingIconName = action.iconName,
-                                textAlign = TextAlign.Start
+                                onLongClick = {}
                             )
                         }
                     }
