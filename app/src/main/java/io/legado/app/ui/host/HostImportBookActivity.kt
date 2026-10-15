@@ -23,7 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -113,9 +113,9 @@ private fun HostImportBookScreen() {
     val selectionMode = selection.selectionMode
     val listState = rememberLazyListState()
 
-    val docs by viewModel.dataFlow.collectAsState(initial = emptyList())
-    val scanProgress by viewModel.scanProgressFlow.collectAsState()
-    val importProgress by viewModel.importProgressFlow.collectAsState()
+    val docs by viewModel.dataFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val scanProgress by viewModel.scanProgressFlow.collectAsStateWithLifecycle()
+    val importProgress by viewModel.importProgressFlow.collectAsStateWithLifecycle()
 
     // 初始化：存储引导 → 根目录解析（逻辑自旧页搬运）
     LaunchedEffect(Unit) {

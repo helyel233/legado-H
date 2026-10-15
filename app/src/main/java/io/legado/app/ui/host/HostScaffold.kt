@@ -51,7 +51,7 @@ fun HostScaffold(
     val content = remember(state.currentId, state.currentArgs) {
         registry.byId(state.currentId)?.factory?.invoke()
     }
-    val chrome: ScreenChrome = remember(state.currentId) { content?.chrome() ?: ScreenChrome() }
+    val chrome: ScreenChrome = remember(state.currentId, state.currentArgs) { content?.chrome() ?: ScreenChrome() }
     val scope = remember(visual, colors, state.currentArgs) {
         HostScope.create(visual, colors, navigate = { id -> state.navigate(id) }, arguments = state.currentArgs)
     }

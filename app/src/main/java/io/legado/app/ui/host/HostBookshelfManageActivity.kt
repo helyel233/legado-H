@@ -22,7 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -114,7 +114,13 @@ class HostBookshelfManageActivity : AppCompatActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val groupId = intent.getLongExtra(EXTRA_GROUP_ID, BookGroup.IdRoot)
-        setV5Content { HostBookshelfManageScreen(groupId) { screenApi = it } }
+        setV5Content {
+            HostBookshelfManageScreen(
+                groupId,
+                onApiReady = { screenApi = it },
+                onApiDispose = { screenApi = null },
+            )
+        }
     }
 
     override fun onDestroy() {
@@ -135,6 +141,7 @@ class HostBookshelfManageActivity : AppCompatActivity(),
 private fun HostBookshelfManageScreen(
     initialGroupId: Long,
     onApiReady: (HostBookshelfManageActivity.ScreenApi) -> Unit,
+    onApiDispose: () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context as AppCompatActivity
@@ -162,7 +169,7 @@ private fun HostBookshelfManageScreen(
         appDb.bookGroupDao.flowAll()
             .catch { AppToast.show(it.toString()) }
             .flowOn(Dispatchers.IO).conflate()
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // 当前分组的书（排序口径与旧一致）
     val allBooks by remember(groupId) {
@@ -176,7 +183,7 @@ private fun HostBookshelfManageScreen(
             }
         }.catch { AppToast.show(it.toString()) }
             .flowOn(Dispatchers.IO).conflate()
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
     val books = remember(allBooks, filter) {
         if (filter.isBlank()) allBooks else allBooks.filter { it.contains(filter) }
     }
@@ -222,7 +229,7 @@ private fun HostBookshelfManageScreen(
             }
         }
         onApiReady(api)
-        onDispose { }
+        onDispose { onApiDispose() }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(HandleFileContract()) { result ->

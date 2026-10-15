@@ -46,7 +46,7 @@ fun BookshelfComposeCover(
         themeSpec.groupCovers.isNotEmpty()
     ) {
         themeSpec.groupCovers[
-            kotlin.math.abs(item.group.groupId.hashCode()) % themeSpec.groupCovers.size
+            kotlin.math.abs(item.group.groupId.hashCode() % themeSpec.groupCovers.size)
         ]
     } else {
         null

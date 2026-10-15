@@ -32,7 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -229,7 +229,7 @@ private fun HostRssSortScreen() {
         appDb.rssArticleDao.flowByOriginSort(sourceUrl, sortName)
             .catch { emit(emptyList()) }
             .flowOn(Dispatchers.IO)
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // 分页：滚动到倒数 6 条内触发 loadMore
     val listState = rememberLazyListState()

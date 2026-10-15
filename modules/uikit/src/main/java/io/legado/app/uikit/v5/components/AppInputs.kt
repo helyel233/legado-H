@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,25 +30,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -148,43 +158,66 @@ fun AppTextField(
     errorText: String? = null,
     /** 输入变换（如密码掩码 PasswordVisualTransformation） */
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    /** 字段标签（显示在输入框上方；表单型页面常用） */
+    label: String? = null,
+    /** 文字样式覆写（如弹窗调色板域注入字体/字色；null = 跟随主题） */
+    textStyle: TextStyle? = null,
+    /** 尾部动作槽（如「编辑代码」图标按钮） */
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
     val density = visual.density
+    val fieldTextStyle = textStyle ?: visual.type.body.copy(color = colors.onSurface)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(visual.shape(ShapeKind.FIELD))
-                .background(if (errorText != null) colors.error.copy(alpha = 0.10f) else colors.surfaceVariant)
-                .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
-        ) {
-            androidx.compose.foundation.text.BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                enabled = enabled,
-                singleLine = singleLine,
-                minLines = if (singleLine) 1 else minLines,
-                maxLines = if (singleLine) 1 else maxLines,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                textStyle = visual.type.body.copy(color = colors.onSurface),
-                cursorBrush = SolidColor(if (errorText != null) colors.error else colors.primary),
-                visualTransformation = visualTransformation,
-                modifier = Modifier.fillMaxWidth(),
-                decorationBox = { inner ->
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = visual.type.body,
-                            color = colors.onSurfaceVariant,
-                            maxLines = 1,
-                        )
-                    }
-                    inner()
-                },
+        if (label != null) {
+            Text(
+                text = label,
+                style = visual.type.label,
+                color = colors.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 4.dp, start = density.screenPadding / 2),
             )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(visual.shape(ShapeKind.FIELD))
+                    .background(if (errorText != null) colors.error.copy(alpha = 0.10f) else colors.surfaceVariant)
+                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+            ) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = enabled,
+                    singleLine = singleLine,
+                    minLines = if (singleLine) 1 else minLines,
+                    maxLines = if (singleLine) 1 else maxLines,
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                    textStyle = fieldTextStyle,
+                    cursorBrush = SolidColor(if (errorText != null) colors.error else colors.primary),
+                    visualTransformation = visualTransformation,
+                    modifier = Modifier.fillMaxWidth(),
+                    decorationBox = { inner ->
+                        if (value.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = fieldTextStyle,
+                                color = colors.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                        inner()
+                    },
+                )
+            }
+            if (trailingIcon != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                trailingIcon()
+            }
         }
         if (errorText != null) {
             Text(
@@ -193,6 +226,145 @@ fun AppTextField(
                 color = colors.error,
                 modifier = Modifier.padding(top = 4.dp, start = density.screenPadding / 2),
             )
+        }
+    }
+}
+
+/**
+ * [AppTextField] 的 TextFieldValue 重载：保留光标/选区，
+ * 供「全屏编辑回填 cursorPosition」类场景（代码/规则编辑器）使用。
+ */
+@Composable
+fun AppTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = 4,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    errorText: String? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    label: String? = null,
+    textStyle: TextStyle? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    val fieldTextStyle = textStyle ?: visual.type.body.copy(color = colors.onSurface)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label != null) {
+            Text(
+                text = label,
+                style = visual.type.label,
+                color = colors.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 4.dp, start = density.screenPadding / 2),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(visual.shape(ShapeKind.FIELD))
+                    .background(if (errorText != null) colors.error.copy(alpha = 0.10f) else colors.surfaceVariant)
+                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 12.dp),
+            ) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = enabled,
+                    singleLine = singleLine,
+                    minLines = if (singleLine) 1 else minLines,
+                    maxLines = if (singleLine) 1 else maxLines,
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                    textStyle = fieldTextStyle,
+                    cursorBrush = SolidColor(if (errorText != null) colors.error else colors.primary),
+                    visualTransformation = visualTransformation,
+                    modifier = Modifier.fillMaxWidth(),
+                    decorationBox = { inner ->
+                        if (value.text.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = fieldTextStyle,
+                                color = colors.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                        inner()
+                    },
+                )
+            }
+            if (trailingIcon != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                trailingIcon()
+            }
+        }
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = visual.type.caption,
+                color = colors.error,
+                modifier = Modifier.padding(top = 4.dp, start = density.screenPadding / 2),
+            )
+        }
+    }
+}
+
+/**
+ * 等分分段控件（segmented tabs）：N 个等宽选项单选切换。
+ * 与 AppFilterChipRow（横滚筛选）互补——选项少而固定、需要「当前选中一眼可见」时用。
+ */
+@Composable
+fun AppSegmentedTabs(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(visual.shape(ShapeKind.BUTTON))
+            .background(colors.surfaceVariant)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        options.forEachIndexed { index, option ->
+            val selected = index == selectedIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 34.dp)
+                    .clip(visual.shape(ShapeKind.BUTTON))
+                    .background(if (selected) colors.surface else Color.Transparent)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = enabled,
+                    ) { onSelect(index) }
+                    .padding(horizontal = density.blockGap / 2, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = option,
+                    style = visual.type.label,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (selected) colors.onSurface else colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -525,6 +697,7 @@ fun AppNumberField(
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
     val density = visual.density
+    val focusManager = LocalFocusManager.current
 
     fun coerce(v: Int): Int = if (range != null) v.coerceIn(range.first, range.last) else v
 
@@ -544,9 +717,19 @@ fun AppNumberField(
             )
         }
         AppStepButton("−", enabled && (range == null || value > range.first)) {
+            focusManager.clearFocus()
             onValueChange(coerce(value - step))
         }
-        var text by remember(value) { mutableStateOf(value.toString()) }
+        // 键入期保留中间输入（含越界值如 "10000"），只有失焦或步进时才吸附到合法区间，
+        // 避免旧实现「键入即 coerce 回写 → remember(value) 重置 text」把用户输入打回边界。
+        var text by rememberSaveable { mutableStateOf(value.toString()) }
+        var focused by remember { mutableStateOf(false) }
+        val focusRequester = remember { FocusRequester() }
+        LaunchedEffect(value, focused) {
+            if (!focused && text.toIntOrNull() != value) {
+                text = value.toString()
+            }
+        }
         Box(
             modifier = Modifier
                 .widthIn(min = 64.dp)
@@ -557,19 +740,38 @@ fun AppNumberField(
         ) {
             BasicTextField(
                 value = text,
-                onValueChange = {
-                    text = it
-                    it.toIntOrNull()?.let { v -> onValueChange(coerce(v)) }
+                onValueChange = { input ->
+                    text = input
+                    // 只向上传递合法值；越界输入留在框内等用户继续修改
+                    input.toIntOrNull()?.let { v ->
+                        if (range == null || v in range) onValueChange(v)
+                    }
                 },
                 enabled = enabled,
                 singleLine = true,
                 textStyle = visual.type.body.copy(color = colors.onSurface),
                 cursorBrush = SolidColor(colors.primary),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.widthIn(min = 48.dp),
+                modifier = Modifier
+                    .widthIn(min = 48.dp)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { fs ->
+                        val wasFocused = focused
+                        focused = fs.isFocused
+                        // 失焦时把越界/非法输入吸附回合法区间（合法值不写回，避免与步进按钮竞争）
+                        if (wasFocused && !fs.isFocused) {
+                            val parsed = text.toIntOrNull()
+                            if (parsed == null || (range != null && parsed !in range)) {
+                                val snapped = parsed?.let { coerce(it) } ?: value
+                                text = snapped.toString()
+                                onValueChange(snapped)
+                            }
+                        }
+                    },
             )
         }
         AppStepButton("+", enabled && (range == null || value < range.last)) {
+            focusManager.clearFocus()
             onValueChange(coerce(value + step))
         }
     }

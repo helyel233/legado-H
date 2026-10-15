@@ -125,6 +125,11 @@ class HostSourceLoginActivity : AppCompatActivity(), SourceLoginJsExtensions.Cal
         loginUrl = source.getLoginJs()
         val loginUiStr = source.loginUi
         if (loginUiStr.isNullOrEmpty()) {
+            // WebView 登录支路：池实例在 init 阶段获取（与 HostReadRssActivity 同范式），
+            // 绝不放 AndroidView factory——工厂在「组合离开再进入」时会重跑，会 acquire 到第二个实例
+            if (pooledWebView == null) {
+                pooledWebView = WebViewPool.acquire(this)
+            }
             webLogin = true
             return
         }
@@ -408,7 +413,8 @@ class HostSourceLoginActivity : AppCompatActivity(), SourceLoginJsExtensions.Cal
     @SuppressLint("SetJavaScriptEnabled")
     internal fun createLoginWebView(): WebView {
         val source = viewModel.source
-        val webView = WebViewPool.acquire(this).also { pooledWebView = it }.realWebView
+        // 正常路径 initView 已 acquire；此处兜底仅防直接调用，保证实例唯一
+        val webView = (pooledWebView ?: WebViewPool.acquire(this).also { pooledWebView = it }).realWebView
         webView.onResume()
         webView.settings.apply {
             useWideViewPort = true

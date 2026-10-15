@@ -1,11 +1,9 @@
 package io.legado.app.ui.host
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Surface
@@ -53,6 +50,8 @@ import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.ui.widget.dialog.V5DialogColors
 import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppSegmentedTabs
+import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -66,41 +65,14 @@ fun AiProviderTabBar(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    val style = rememberV5DialogColors()
-    val trackShape = RoundedCornerShape(style.panelRadius)
-    Row(
+    AppSegmentedTabs(
+        options = tabs,
+        selectedIndex = selectedIndex,
+        onSelect = onTabSelected,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .clip(trackShape)
-            .background(style.fieldSurface)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        tabs.forEachIndexed { index, label ->
-            val isSelected = index == selectedIndex
-            val tabShape = RoundedCornerShape(style.actionRadius)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(34.dp)
-                    .clip(tabShape)
-                    .background(if (isSelected) style.surface else style.fieldSurface)
-                    .clickable { onTabSelected(index) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label,
-                    color = if (isSelected) style.accent else style.primaryText,
-                    fontSize = 14.sp,
-                    fontFamily = style.bodyFontFamily,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    )
 }
 
 // ── Provider Config Tab ──────────────────────────────────────────────────────
@@ -230,48 +202,22 @@ private fun AiProviderTextField(
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text
 ) {
-    Column(
+    val visual = LocalVisualSpec.current
+    AppTextField(
+        value = value,
+        onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(
-            text = label,
-            color = style.secondaryText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+        label = label,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = if (singleLine) 1 else minLines + 4,
+        keyboardType = keyboardType,
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        textStyle = visual.type.body.copy(
+            color = style.primaryText,
+            fontFamily = style.bodyFontFamily
         )
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = singleLine,
-            minLines = if (singleLine) 1 else minLines,
-            maxLines = if (singleLine) 1 else minLines + 4,
-            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            shape = RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                disabledTextColor = style.secondaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                disabledContainerColor = style.fieldSurface.copy(alpha = 0.58f),
-                cursorColor = style.accent,
-                focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                unfocusedBorderColor = style.stroke,
-                disabledBorderColor = style.stroke.copy(alpha = 0.38f),
-                focusedPlaceholderColor = style.secondaryText,
-                unfocusedPlaceholderColor = style.secondaryText
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily
-            )
-        )
-    }
+    )
 }
 
 // ── Model Manage Tab ─────────────────────────────────────────────────────────

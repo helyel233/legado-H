@@ -33,6 +33,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,10 +66,15 @@ fun AppDialog(
     content: @Composable () -> Unit,
 ) {
     val visual = LocalVisualSpec.current
+    // 弹窗内容是页面的 transient UI：显式提供页面级 LocalLifecycleOwner，
+    // 使内容里的 collectAsStateWithLifecycle 等生命周期感知 API 在窗口组合中可用
+    // （平台 Dialog 不保证提供该 CompositionLocal）。
+    val owner = LocalLifecycleOwner.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        CompositionLocalProvider(LocalLifecycleOwner provides owner) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -97,6 +104,7 @@ fun AppDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -107,10 +115,12 @@ fun AppBottomSheet(
     content: @Composable () -> Unit,
 ) {
     val visual = LocalVisualSpec.current
+    val owner = LocalLifecycleOwner.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        CompositionLocalProvider(LocalLifecycleOwner provides owner) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -145,6 +155,7 @@ fun AppBottomSheet(
                     }
                 }
             }
+        }
         }
     }
 }

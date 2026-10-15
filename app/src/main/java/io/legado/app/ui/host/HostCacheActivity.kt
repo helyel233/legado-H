@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -135,7 +135,7 @@ private fun HostCacheScreen(initialGroupId: Long) {
         refresh++
     }
 
-    val coordinator by CacheCoordinator.snapshot.collectAsState()
+    val coordinator by CacheCoordinator.snapshot.collectAsStateWithLifecycle()
 
     val exportDirLauncher = rememberLauncherForActivityResult(HandleFileContract()) { result ->
         val readyPath = result.uri?.let { uri ->
@@ -169,12 +169,12 @@ private fun HostCacheScreen(initialGroupId: Long) {
             }
         }.catch { AppLog.put("缓存管理-V5获取书籍列表失败", it) }
             .flowOn(Dispatchers.IO).conflate()
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val groups by remember {
         appDb.bookGroupDao.flowAll().catch { AppLog.put("缓存管理-V5获取分组失败", it) }
             .flowOn(Dispatchers.IO).conflate()
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     androidx.compose.runtime.LaunchedEffect(books, refresh) {
         viewModel.loadCacheFiles(books)

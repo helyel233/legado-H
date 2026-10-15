@@ -14,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -24,6 +23,7 @@ import io.legado.app.ui.book.explore.ExploreShowComposeScreen
 import io.legado.app.ui.book.explore.ExploreShowViewModel
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppNumberField
 import io.legado.app.uikit.v5.components.AppOverflowMenuButton
 import io.legado.app.ui.host.V5DialogPanel
@@ -246,7 +246,7 @@ private fun PagePickerDialog(
     onPick: (Int) -> Unit,
 ) {
     var text by remember { mutableStateOf(current.toString()) }
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismiss = onDismiss) {
         V5DialogPanel(
             title = stringResource(R.string.change_page),
             content = {

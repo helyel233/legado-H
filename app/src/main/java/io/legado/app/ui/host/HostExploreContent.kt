@@ -19,7 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -109,7 +109,7 @@ private fun HostDiscoverBody(scope: ContentScope) {
     val density = visual.density
     val coroutineScope = rememberCoroutineScope()
 
-    val sources by appDb.bookSourceDao.flowExplore().collectAsState(initial = emptyList())
+    val sources by appDb.bookSourceDao.flowExplore().collectAsStateWithLifecycle(initialValue = emptyList())
 
     // 记住所选源（与旧壳互通：AppConfig.modernDiscoverySourceUrl）
     var selectedUrl by remember { mutableStateOf(AppConfig.modernDiscoverySourceUrl) }

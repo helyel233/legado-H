@@ -5,24 +5,20 @@ import android.content.Context
 import android.content.res.XmlResourceParser
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.Text
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.legado.app.ui.host.pack.LegacyAppearanceImporter
 import io.legado.app.uikit.v5.components.AppBottomSheet
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.uikit.v5.token.ShapeKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,10 +76,12 @@ import org.xmlpull.v1.XmlPullParser
  */
 class HostMyContent : AppContent {
 
-    companion object {
-        /** 帮助请求桥（chrome() 无 context，经计数器回 Content 消费）。 */
-        internal var helpRevision by mutableIntStateOf(0)
-    }
+    /**
+     * 帮助请求桥（chrome() 无 context，经计数器回 Content 消费）。
+     * 实例级：宿主 remember 缓存本实例，chrome()/Content() 共享；
+     * 原 companion 静态计数在多开宿主/重建时会串味。
+     */
+    private var helpRevision by mutableIntStateOf(0)
 
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
@@ -254,38 +252,20 @@ class HostMyContent : AppContent {
                     }
                     Spacer(Modifier.height(scope.density.blockGap))
                     // 导入（落库并应用）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colors.primary, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) {
-                                LegacyAppearanceImporter.commit(context, proposal)
-                                legacyImportProposal = null
-                                context.toastOnUi(R.string.v5_import_done)
-                            }
-                            .padding(vertical = 11.dp),
-                        contentAlignment = Alignment.Center,
+                    AppFilledButton(
+                        text = stringResource(R.string.v5_import_apply),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.v5_import_apply), style = visual.type.label, color = colors.onPrimary)
+                        LegacyAppearanceImporter.commit(context, proposal)
+                        legacyImportProposal = null
+                        context.toastOnUi(R.string.v5_import_done)
                     }
                     Spacer(Modifier.height(scope.density.blockGap / 2))
                     // 放弃
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colors.surfaceVariant, visual.shape(ShapeKind.BUTTON))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { legacyImportProposal = null }
-                            .padding(vertical = 11.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.v5_give_up), style = visual.type.label, color = colors.onSurface)
-                    }
+                    AppGhostButton(
+                        text = stringResource(R.string.v5_give_up),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { legacyImportProposal = null }
                 }
             }
         }

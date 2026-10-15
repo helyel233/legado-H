@@ -1,7 +1,6 @@
 package io.legado.app.ui.host
 
 import io.legado.app.uikit.v5.token.ShapeKind
-import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.clickable
@@ -14,23 +13,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -39,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.ui.widget.dialog.rememberV5DialogColors
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppTextField
 /**
  * AI 绘图服务商编辑的**内容区**（V5）。
  *
@@ -74,7 +66,6 @@ internal fun AiImageProviderEditForm(
     modifier: Modifier = Modifier,
 ) {
     val style = rememberV5DialogColors()
-    val colors = LocalSemanticColors.current
     val visual = LocalVisualSpec.current
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
@@ -156,29 +147,13 @@ internal fun AiImageProviderEditForm(
             )
 
             // 启用开关
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onEnabledChange(!enabled) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = enabled,
-                    onCheckedChange = onEnabledChange,
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = colors.primary,
-                        uncheckedColor = colors.onSurfaceVariant,
-                        checkmarkColor = colors.surface,
-                    ),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.enable),
-                    color = style.primaryText,
-                    fontSize = 14.sp,
-                )
-            }
+            AppRowWithSwitch(
+                title = stringResource(R.string.enable),
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                onRowClick = { onEnabledChange(!enabled) },
+                card = false,
+            )
 
             // 风格提示词（两种类型都有）
             EditCodeButton(label = stylePromptSummary, onClick = onStylePromptClick)
@@ -210,52 +185,26 @@ private fun EditTextField(
     maxLines: Int = 1,
 ) {
     val style = rememberV5DialogColors()
-    Column(
+    val visual = LocalVisualSpec.current
+    AppTextField(
+        value = value,
+        onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            text = label,
-            color = style.secondaryText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = maxLines == 1,
-            minLines = minLines,
-            maxLines = maxLines,
-            visualTransformation = if (isPassword) {
-                PasswordVisualTransformation()
-            } else {
-                VisualTransformation.None
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            shape = RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                disabledTextColor = style.secondaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                disabledContainerColor = style.fieldSurface.copy(alpha = 0.58f),
-                cursorColor = style.accent,
-                focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                unfocusedBorderColor = style.stroke,
-                disabledBorderColor = style.stroke.copy(alpha = 0.38f),
-                focusedPlaceholderColor = style.secondaryText,
-                unfocusedPlaceholderColor = style.secondaryText,
-            ),
-            textStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily,
-            ),
-        )
-    }
+        label = label,
+        singleLine = maxLines == 1,
+        minLines = minLines,
+        maxLines = maxLines,
+        keyboardType = keyboardType,
+        visualTransformation = if (isPassword) {
+            PasswordVisualTransformation()
+        } else {
+            VisualTransformation.None
+        },
+        textStyle = visual.type.body.copy(
+            color = style.primaryText,
+            fontFamily = style.bodyFontFamily,
+        ),
+    )
 }
 
 @Composable

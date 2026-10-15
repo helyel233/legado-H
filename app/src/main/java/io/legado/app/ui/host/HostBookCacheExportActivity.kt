@@ -6,7 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -62,8 +62,8 @@ class HostBookCacheExportActivity : AppCompatActivity() {
     @Composable
     private fun HostBookCacheExportScreen() {
         val activity = LocalContext.current as AppCompatActivity
-        val items by viewModel.items.collectAsState()
-        val state by viewModel.state.collectAsState()
+        val items by viewModel.items.collectAsStateWithLifecycle()
+        val state by viewModel.state.collectAsStateWithLifecycle()
 
         HostV5Page(
             title = stringResource(R.string.export_book),

@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,9 +75,9 @@ private fun HostYearlyReportScreen() {
     val viewModel = androidx.compose.runtime.remember {
         ViewModelProvider(activity)[YearlyReportViewModel::class.java]
     }
-    val data by viewModel.data.collectAsState()
-    val year by viewModel.year.collectAsState()
-    val bookMap by viewModel.bookMap.collectAsState()
+    val data by viewModel.data.collectAsStateWithLifecycle()
+    val year by viewModel.year.collectAsStateWithLifecycle()
+    val bookMap by viewModel.bookMap.collectAsStateWithLifecycle()
 
     HostV5Page(
         title = stringResource(R.string.yearly_report),

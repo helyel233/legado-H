@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -25,8 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,6 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import io.legado.app.BuildConfig
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSectionHeader
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.theme.BuiltinThemes
 import io.legado.app.uikit.v5.resolve.LayoutResolver
 import io.legado.app.uikit.v5.resolve.ThemeResolver
@@ -157,7 +159,7 @@ fun HostDebugPanel(state: HostState) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("夜间模式", style = visual.type.body, color = colors.onSurface,
                                 modifier = Modifier.weight(1f))
-                            Switch(checked = ThemeResolver.isDark, onCheckedChange = { ThemeResolver.applyDark(it) })
+                            AppSwitch(checked = ThemeResolver.isDark, onCheckedChange = { ThemeResolver.applyDark(it) })
                         }
                     }
 
@@ -187,7 +189,7 @@ fun HostDebugPanel(state: HostState) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("启用玻璃", style = visual.type.body, color = colors.onSurface,
                                 modifier = Modifier.weight(1f))
-                            Switch(checked = visual.glass.enabled, onCheckedChange = {
+                            AppSwitch(checked = visual.glass.enabled, onCheckedChange = {
                                 LayoutResolver.update { s -> s.copy(glass = s.glass.copy(enabled = it)) }
                             })
                         }
@@ -207,7 +209,7 @@ fun HostDebugPanel(state: HostState) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("高光描边", style = visual.type.body, color = colors.onSurface,
                                     modifier = Modifier.weight(1f))
-                                Switch(checked = visual.glass.stroke, onCheckedChange = {
+                                AppSwitch(checked = visual.glass.stroke, onCheckedChange = {
                                     LayoutResolver.update { s -> s.copy(glass = s.glass.copy(stroke = it)) }
                                 })
                             }
@@ -238,7 +240,7 @@ fun HostDebugPanel(state: HostState) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("减少动效", style = visual.type.body, color = colors.onSurface,
                                 modifier = Modifier.weight(1f))
-                            Switch(checked = visual.motion.reduce, onCheckedChange = {
+                            AppSwitch(checked = visual.motion.reduce, onCheckedChange = {
                                 LayoutResolver.update { s -> s.copy(motion = s.motion.copy(reduce = it)) }
                             })
                         }
@@ -260,29 +262,17 @@ fun HostDebugPanel(state: HostState) {
 
 @Composable
 private fun PanelButton(text: String, onClick: () -> Unit) {
-    val visual = LocalVisualSpec.current
-    val colors = LocalSemanticColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.primary.copy(alpha = 0.16f), visual.shape(io.legado.app.uikit.v5.token.ShapeKind.BUTTON))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-            ) { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = text, style = visual.type.label, color = colors.primary)
-    }
+    AppGhostButton(
+        text = text,
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+    )
 }
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    val visual = LocalVisualSpec.current
-    val colors = LocalSemanticColors.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(text = title, style = visual.type.label, color = colors.primary)
+        AppSectionHeader(title = title)
         content()
         Spacer(Modifier.height(4.dp))
     }
@@ -294,29 +284,9 @@ private fun Chips(
     selected: String,
     onSelect: (String) -> Unit,
 ) {
-    val visual = LocalVisualSpec.current
-    val colors = LocalSemanticColors.current
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { (id, name) ->
-            val on = id == selected
-            Box(
-                modifier = Modifier
-                    .background(
-                        if (on) colors.primary else colors.surfaceVariant,
-                        visual.shape(io.legado.app.uikit.v5.token.ShapeKind.TAG),
-                    )
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                    ) { onSelect(id) }
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) {
-                Text(
-                    text = name,
-                    style = visual.type.caption,
-                    color = if (on) colors.onPrimary else colors.onSurfaceVariant,
-                )
-            }
+            AppChip(text = name, selected = id == selected, onClick = { onSelect(id) })
         }
     }
 }
@@ -340,11 +310,10 @@ private fun SliderRow(
                 color = colors.onSurfaceVariant,
             )
         }
-        Slider(
+        AppSlider(
             value = value.coerceIn(range),
             onValueChange = onChange,
             valueRange = range,
-            modifier = Modifier.height(20.dp),
         )
     }
 }

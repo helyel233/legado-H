@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,7 +100,7 @@ private fun HostRemoteBookScreen() {
     val selectionMode = selection.selectionMode
     val listState = rememberLazyListState()
 
-    val books by viewModel.dataFlow.collectAsState(initial = emptyList())
+    val books by viewModel.dataFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // 初始化：存储引导 → initData → upPath
     LaunchedEffect(Unit) {

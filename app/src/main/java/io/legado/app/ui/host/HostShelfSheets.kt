@@ -4,12 +4,10 @@ import io.legado.app.uikit.v5.components.AppSlider
 import kotlin.math.roundToInt
 import io.legado.app.R
 
-import androidx.compose.foundation.background
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,12 +32,12 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppInputDialog
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.contract.ContentScope
-import io.legado.app.uikit.v5.token.ShapeKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -275,21 +273,12 @@ fun GroupManageSheet(
         }
         Spacer(Modifier.height(scope.density.blockGap))
         // 新建分组
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.primary.copy(alpha = 0.14f), scope.shape(ShapeKind.BUTTON))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                ) {
-                    creating = true
-                    input = ""
-                }
-                .padding(vertical = 10.dp),
-            contentAlignment = Alignment.Center,
+        AppGhostButton(
+            text = stringResource(R.string.v5_shelf_new_group),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.v5_shelf_new_group), style = scope.type.label, color = colors.primary)
+            creating = true
+            input = ""
         }
         Spacer(Modifier.height(scope.density.screenPadding))
     }

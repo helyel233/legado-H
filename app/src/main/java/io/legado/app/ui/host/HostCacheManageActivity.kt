@@ -18,7 +18,7 @@ import io.legado.app.uikit.v5.components.AppFastScroller
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -156,8 +156,8 @@ private fun HostCacheManageScreen(initialSearchKey: String?) {
     val rawItems by viewModel.itemsLiveData.observeAsStateCompat(emptyList())
     val summary by viewModel.summaryLiveData.observeAsStateCompat<CacheSummary?>(null)
     val loading by viewModel.loadingLiveData.observeAsStateCompat(false)
-    val audioTaskStates by viewModel.audioTaskStateFlow.collectAsState()
-    val webDavTaskStates by WebDavTaskManager.states.collectAsState()
+    val audioTaskStates by viewModel.audioTaskStateFlow.collectAsStateWithLifecycle()
+    val webDavTaskStates by WebDavTaskManager.states.collectAsStateWithLifecycle()
 
     var mode by rememberSaveable { mutableStateOf(CacheManageMode.BOOK) }
     var searchKey by rememberSaveable { mutableStateOf(initialSearchKey?.trim().orEmpty()) }

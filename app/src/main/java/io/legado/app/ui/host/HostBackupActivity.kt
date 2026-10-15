@@ -5,7 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -131,7 +131,7 @@ private fun HostBackupScreen() {
     var revision by remember { mutableIntStateOf(0) }
     val settings = remember(revision) { loadSettings() }
 
-    val backupProgress by BackupProgressHolder.progress.collectAsState()
+    val backupProgress by BackupProgressHolder.progress.collectAsStateWithLifecycle()
     var restoring by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 

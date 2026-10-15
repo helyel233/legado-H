@@ -21,7 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,7 +102,7 @@ private fun HostLogScreen() {
     val crashVm = remember {
         ViewModelProvider(activity)[CrashLogsDialog.CrashViewModel::class.java]
     }
-    val crashLogs by crashVm.logFlow.collectAsState()
+    val crashLogs by crashVm.logFlow.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(Unit) { crashVm.initData() }
 
     val timeFormat = remember { SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()) }

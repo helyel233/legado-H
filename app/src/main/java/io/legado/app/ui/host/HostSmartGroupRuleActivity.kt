@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,11 +73,11 @@ private fun HostSmartGroupRuleScreen() {
     val density = visual.density
     val viewModel = remember { ViewModelProvider(activity)[SmartGroupRuleViewModel::class.java] }
 
-    val rules by viewModel.rules.collectAsState()
-    val groups by viewModel.groups.collectAsState()
-    val autoRun by viewModel.autoRun.collectAsState()
-    val running by viewModel.running.collectAsState()
-    val editing by viewModel.editing.collectAsState()
+    val rules by viewModel.rules.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
+    val autoRun by viewModel.autoRun.collectAsStateWithLifecycle()
+    val running by viewModel.running.collectAsStateWithLifecycle()
+    val editing by viewModel.editing.collectAsStateWithLifecycle()
 
     var deleteTarget by remember { mutableStateOf<SmartGroupRule?>(null) }
     val listState = rememberLazyListState()

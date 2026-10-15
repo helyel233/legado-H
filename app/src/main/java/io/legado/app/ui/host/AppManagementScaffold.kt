@@ -9,8 +9,7 @@ import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppDangerButton
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
+import io.legado.app.uikit.v5.components.AppSearchField
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -31,18 +30,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -213,53 +207,12 @@ private fun AppManagementSearchField(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
-        color = Color(palette.settings.row),
-        contentColor = palette.settings.primaryText,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_search),
-                contentDescription = null,
-                tint = palette.settings.secondaryText,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = TextStyle(
-                    color = palette.settings.primaryText,
-                    fontSize = 14.sp,
-                    fontFamily = palette.settings.bodyFontFamily
-                ),
-                cursorBrush = SolidColor(palette.settings.accent),
-                modifier = Modifier.weight(1f),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (query.isBlank()) {
-                            Text(
-                                text = hint,
-                                color = palette.settings.secondaryText,
-                                fontSize = 14.sp,
-                                fontFamily = palette.settings.bodyFontFamily,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            )
+    AppSearchField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier,
+        placeholder = hint,
+        trailing = {
             if (query.isNotEmpty()) {
                 AppManagementIconAction(
                     iconRes = R.drawable.ic_baseline_close,
@@ -270,9 +223,7 @@ private fun AppManagementSearchField(
                 )
             }
         }
-    }
-
-        }
+    )
 }
 
 @Composable

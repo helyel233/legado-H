@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,14 +89,17 @@ import kotlinx.coroutines.launch
  */
 class HostShelfContent : AppContent {
 
-    /** 顶栏 actions 是纯数据拿不到页面状态，抽屉用静态状态桥接。 */
-    companion object {
-        var layoutSheetOpen by mutableStateOf(false)
-        var shelfMenuOpen by mutableStateOf(false)
-        var settingsSheetOpen by mutableStateOf(false)
-        var groupSheetOpen by mutableStateOf(false)
-        var addUrlOpen by mutableStateOf(false)
-    }
+    /**
+     * 抽屉/弹层开关。实例级状态（不用 companion 静态桥）：
+     * 宿主 HostScaffold 以 remember(currentId, currentArgs) 缓存本实例，
+     * chrome() 与 Content() 共享同一实例；两个宿主多开时各自独立，
+     * 宿主重建时 remember 重跑工厂得到全新状态，不会复弹旧弹层。
+     */
+    private var layoutSheetOpen by mutableStateOf(false)
+    private var shelfMenuOpen by mutableStateOf(false)
+    private var settingsSheetOpen by mutableStateOf(false)
+    private var groupSheetOpen by mutableStateOf(false)
+    private var addUrlOpen by mutableStateOf(false)
 
     override fun chrome(): ScreenChrome = ScreenChrome(
         topBar = TopBarMode.LARGE_TITLE,
@@ -138,7 +142,7 @@ class HostShelfContent : AppContent {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
         }
-        var groupId by remember { mutableStateOf(BookGroup.IdRoot) }
+        var groupId by rememberSaveable { mutableStateOf(BookGroup.IdRoot) }
         // 分组页系统返回键先回到分组列表，而不是退出到桌面（台账 #35-4）
         androidx.activity.compose.BackHandler(enabled = groupId != BookGroup.IdRoot) {
             groupId = BookGroup.IdRoot

@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import io.legado.app.uikit.v5.components.AppReorderableItem
+import io.legado.app.uikit.v5.components.rememberAppReorderableListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,13 +35,19 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import io.legado.app.ui.host.HostSourceLoginActivity
+import io.legado.app.ui.host.HostSearchActivity
+import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -131,6 +140,17 @@ private enum class StatusFilter(val labelRes: Int) {
     EXPLORE_ON(R.string.v5_explore_on), EXPLORE_OFF(R.string.v5_explore_off),
 }
 
+/** 枚举 Saver：rememberSaveable 默认不支持枚举，按名字存取（进程死亡恢复筛选/排序态）。 */
+private val StatusFilterSaver = Saver<StatusFilter, String>(
+    save = { it.name },
+    restore = { StatusFilter.valueOf(it) },
+)
+
+private val BookSourceSortSaver = Saver<BookSourceSort, String>(
+    save = { it.name },
+    restore = { BookSourceSort.valueOf(it) },
+)
+
 private const val IMPORT_RECORD_KEY = "bookSourceRecordKey"
 
 @Composable
@@ -144,11 +164,11 @@ private fun HostBookSourceManageScreen() {
         ViewModelProvider(activity)[BookSourceViewModel::class.java]
     }
 
-    var searchKey by remember { mutableStateOf("") }
-    var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
-    var sort by remember { mutableStateOf(BookSourceSort.Default) }
-    var sortAscending by remember { mutableStateOf(true) }
-    var groupByDomain by remember { mutableStateOf(false) }
+    var searchKey by rememberSaveable { mutableStateOf("") }
+    var statusFilter by rememberSaveable(stateSaver = StatusFilterSaver) { mutableStateOf(StatusFilter.ALL) }
+    var sort by rememberSaveable(stateSaver = BookSourceSortSaver) { mutableStateOf(BookSourceSort.Default) }
+    var sortAscending by rememberSaveable { mutableStateOf(true) }
+    var groupByDomain by rememberSaveable { mutableStateOf(false) }
     // 页级选择模式（AppSelectionState：集合操作收编，页面只写业务动作）
     val selection = rememberAppSelectionState<io.legado.app.data.entities.BookSourcePart>(idOf = { it.bookSourceUrl })
     var menuOpen by remember { mutableStateOf(false) }
@@ -179,10 +199,10 @@ private fun HostBookSourceManageScreen() {
                 StatusFilter.EXPLORE_OFF -> appDb.bookSourceDao.flowDisabledExplore()
             }
         }
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val groups by remember { appDb.bookSourceDao.flowGroups() }
-        .collectAsState(initial = emptyList())
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     val sortedSources = remember(sources, sort, sortAscending) {
         val comparator = when (sort) {
@@ -220,6 +240,17 @@ private fun HostBookSourceManageScreen() {
     val selectionMode = selection.selectionMode
     val selectedSources = selection.selectedFrom(sortedSources)
 
+    // 手动排序拖拽（台账 #5 接线）：Default 排序按 customOrder；无搜索/无筛选/未按域名分组/
+    // 非选择态时才允许拖拽（过滤视图拖拽会写出错误全局顺序，与旧页一致取扁平全量列表）。
+    val reorderEnabled = sort == BookSourceSort.Default &&
+        !selectionMode && searchKey.isBlank() && statusFilter == StatusFilter.ALL && !groupByDomain
+    // 拖拽过程的本地顺序；sortedSources 变化（落库后重新发射）时重置同步（同旧 BookSourceScreen 模式）。
+    var orderedSources by remember(sortedSources) { mutableStateOf(sortedSources) }
+    // 行内溢出菜单目标（旧 book_source_item.xml 的单条操作：登录/搜索/调试/置顶/置底/发现/删除）
+    var rowMenuFor by remember { mutableStateOf<BookSourcePart?>(null) }
+    // 行内单条删除目标（B 门：删除必须确认）
+    var rowDeleteTarget by remember { mutableStateOf<BookSourcePart?>(null) }
+
     // 首次进入选择模式提示长按多选（每个页面会话只提示一次）
     LaunchedEffect(selectionMode) {
         if (selectionMode && !longPressHintShown) {
@@ -229,7 +260,7 @@ private fun HostBookSourceManageScreen() {
     }
 
     // 校验会话（后端 CheckSourceSession，UI 只 collect）
-    val checkSession by CheckSourceSession.state.collectAsState()
+    val checkSession by CheckSourceSession.state.collectAsStateWithLifecycle()
     // keepScreenOn 跟随会话（此前写在 onPositive 里永不复位 —— 泄漏，已修）
     LaunchedEffect(checkSession.running) {
         activity.keepScreenOn(checkSession.running)
@@ -486,6 +517,9 @@ private fun HostBookSourceManageScreen() {
                     )
                     else -> {
                         val sourceListState = rememberLazyListState()
+                        val reorderState = rememberAppReorderableListState(sourceListState) { from, to ->
+                            orderedSources = orderedSources.toMutableList().apply { add(to, removeAt(from)) }
+                        }
                         AppFastScroller(
                             listState = sourceListState,
                             topContentPadding = density.blockGap / 2,
@@ -503,6 +537,34 @@ private fun HostBookSourceManageScreen() {
                             ),
                             verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                         ) {
+                        if (reorderEnabled) {
+                            // 手动排序：扁平列表 + 拖动手柄重排（长按仍为多选，不冲突）
+                            items(orderedSources, key = { it.bookSourceUrl }) { source ->
+                                AppReorderableItem(
+                                    reorderState,
+                                    key = source.bookSourceUrl,
+                                    onDragStopped = { viewModel.upOrder(orderedSources) },
+                                ) { _, dragHandle ->
+                                    SourceRow(
+                                        source = source,
+                                        selected = selection.isSelected(source),
+                                        selectionMode = selectionMode,
+                                        checkMsg = checkSession.sourceMessages[source.bookSourceUrl],
+                                        onToggle = { on -> viewModel.enable(on, listOf(source)) },
+                                        onClick = {
+                                            if (!selection.toggle(source)) {
+                                                context.startActivity<BookSourceEditActivity> {
+                                                    putExtra("bookSourceUrl", source.bookSourceUrl)
+                                                }
+                                            }
+                                        },
+                                        onLongClick = { selection.enter(source) },
+                                        dragHandle = dragHandle,
+                                        onMore = { rowMenuFor = source },
+                                    )
+                                }
+                            }
+                        } else {
                         items(displayRows, key = { row ->
                             when (row) {
                                 is DomainRow.Header -> "h:${row.host}"
@@ -538,6 +600,7 @@ private fun HostBookSourceManageScreen() {
                                 }
                             }
                         }
+                        } // else 分支闭合（非拖拽态：域名分组/过滤视图）
                         }
                     }
                 }
@@ -689,6 +752,58 @@ private fun HostBookSourceManageScreen() {
     }
 
     // 删除确认（B 门：破坏性操作必须确认）
+    // 行内溢出菜单（旧 book_source_item.xml 单条操作全集：登录/搜索/调试/置顶/置底/发现开关/删除）
+    val rowMenuSource = rowMenuFor
+    if (rowMenuSource != null) {
+        AppMenuSheet(
+            title = rowMenuSource.bookSourceName,
+            actions = buildList {
+                if (rowMenuSource.hasLoginUrl) {
+                    add(stringResource(R.string.login) to {
+                        context.startActivity<HostSourceLoginActivity> {
+                            putExtra("type", "bookSource")
+                            putExtra("key", rowMenuSource.bookSourceUrl)
+                        }
+                    })
+                }
+                add(stringResource(R.string.search) to {
+                    HostSearchActivity.start(context, rowMenuSource)
+                })
+                add(stringResource(R.string.debug) to {
+                    context.startActivity<BookSourceDebugActivity> {
+                        putExtra("key", rowMenuSource.bookSourceUrl)
+                    }
+                })
+                add(stringResource(R.string.v5_move_top) to { viewModel.topSource(rowMenuSource) })
+                add(stringResource(R.string.v5_move_bottom) to { viewModel.bottomSource(rowMenuSource) })
+                add(
+                    (if (rowMenuSource.enabledExplore) stringResource(R.string.disable_explore)
+                    else stringResource(R.string.enable_explore))
+                        to { viewModel.enableExplore(!rowMenuSource.enabledExplore, listOf(rowMenuSource)) }
+                )
+                add(stringResource(R.string.delete) to { rowDeleteTarget = rowMenuSource })
+            },
+            onDismiss = { rowMenuFor = null },
+        )
+    }
+
+    // 行内单条删除确认（B 门：危险操作必须确认，对齐选择模式删除）
+    val rowDeleteSource = rowDeleteTarget
+    if (rowDeleteSource != null) {
+        AppConfirmDialog(
+            title = stringResource(R.string.v5_delete),
+            message = stringResource(R.string.v5_delete_confirm_message, 1),
+            confirmLabel = stringResource(R.string.v5_delete),
+            cancelLabel = stringResource(R.string.v5_cancel),
+            danger = true,
+            onConfirm = {
+                rowDeleteTarget = null
+                viewModel.del(listOf(rowDeleteSource))
+            },
+            onDismiss = { rowDeleteTarget = null },
+        )
+    }
+
     if (confirmDelete) {
         AppConfirmDialog(
             title = stringResource(R.string.v5_delete),
@@ -721,6 +836,10 @@ private fun SourceRow(
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    /** 手动排序拖拽手柄（null = 不显示；非拖拽态不传） */
+    dragHandle: Modifier? = null,
+    /** 行内溢出菜单入口（旧 book_source_item.xml 单条操作） */
+    onMore: (() -> Unit)? = null,
 ) {
     val colors = LocalSemanticColors.current
     val density = LocalVisualSpec.current.density
@@ -732,6 +851,21 @@ private fun SourceRow(
         selectionMode = selectionMode,
         onClick = onClick,
         onLongClick = onLongClick,
+        leading = dragHandle?.let { handle ->
+            {
+                Box(
+                    modifier = handle.size(34.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_drag_handle),
+                        contentDescription = stringResource(R.string.sort),
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        },
         trailing = {
             if (source.hasLoginUrl) {
                 Text(
@@ -743,6 +877,12 @@ private fun SourceRow(
             }
             if (!selectionMode) {
                 AppSwitch(checked = source.enabled, onCheckedChange = onToggle)
+            }
+            if (!selectionMode && onMore != null) {
+                AppOverflowMenuButton(
+                    contentDescription = stringResource(R.string.more),
+                    onClick = onMore,
+                )
             }
         },
     )

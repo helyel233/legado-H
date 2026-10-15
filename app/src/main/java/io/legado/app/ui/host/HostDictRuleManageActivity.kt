@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,7 +119,7 @@ private fun HostDictRuleManageScreen() {
         appDb.dictRuleDao.flowAll()
             .catch { AppLog.put("字典规则管理-V5数据获取失败", it) }
             .flowOn(Dispatchers.IO).conflate()
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectionMode = selection.selectionMode
     val selectedRules = selection.selectedFrom(rules)

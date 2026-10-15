@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -72,12 +72,12 @@ private fun HostLibrarySearchScreen() {
     val density = visual.density
     val viewModel = remember { ViewModelProvider(activity)[LibrarySearchViewModel::class.java] }
 
-    val query by viewModel.query.collectAsState()
-    val items by viewModel.items.collectAsState()
-    val searching by viewModel.searching.collectAsState()
-    val indexedCount by viewModel.indexedCount.collectAsState()
-    val rebuilding by viewModel.rebuilding.collectAsState()
-    val rebuildProgress by viewModel.rebuildProgress.collectAsState()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val items by viewModel.items.collectAsStateWithLifecycle()
+    val searching by viewModel.searching.collectAsStateWithLifecycle()
+    val indexedCount by viewModel.indexedCount.collectAsStateWithLifecycle()
+    val rebuilding by viewModel.rebuilding.collectAsStateWithLifecycle()
+    val rebuildProgress by viewModel.rebuildProgress.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     HostV5Page(

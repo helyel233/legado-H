@@ -26,7 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,10 +115,10 @@ class HostRssContent : AppContent {
                 searchKey.isNotBlank() -> appDb.rssSourceDao.flowEnabled(searchKey.trim())
                 else -> appDb.rssSourceDao.flowEnabled()
             }
-        }.collectAsState(initial = emptyList())
+        }.collectAsStateWithLifecycle(initialValue = emptyList())
 
         val groups by remember { appDb.rssSourceDao.flowEnabledGroups() }
-            .collectAsState(initial = emptyList())
+            .collectAsStateWithLifecycle(initialValue = emptyList())
 
         Column(Modifier.fillMaxSize()) {
             // 分组筛选 + 搜索开关 + 布局切换

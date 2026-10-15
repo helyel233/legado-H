@@ -19,7 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +37,7 @@ import io.legado.app.ui.main.homepage.HomepageSourceManageUi
 import io.legado.app.ui.main.homepage.HomepageViewModel
 import io.legado.app.uikit.v5.components.AppBottomSheet
 import io.legado.app.uikit.v5.components.AppSwitch
+import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.contract.ContentScope
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
@@ -73,7 +74,7 @@ fun HostHomeManageSheet(
     viewModel: HomepageViewModel,
     onDismiss: () -> Unit,
 ) {
-    val manage by viewModel.manageStateFlow.collectAsState()
+    val manage by viewModel.manageStateFlow.collectAsStateWithLifecycle()
     var stack by remember { mutableStateOf(listOf<ManagePage>(ManagePage.Sets)) }
     val page = stack.last()
 
@@ -167,7 +168,7 @@ private fun SetsPage(
         }
     }
 
-    SheetActionButton(scope, stringResource(R.string.v5_home_manage_new_set)) {
+    SheetActionButton(stringResource(R.string.v5_home_manage_new_set)) {
         creating = true
         name = ""
     }
@@ -277,7 +278,7 @@ private fun SetDetailPage(
         }
     }
 
-    SheetActionButton(scope, stringResource(R.string.v5_home_manage_add_module), onClick = onAdd)
+    SheetActionButton(stringResource(R.string.v5_home_manage_add_module), onClick = onAdd)
 }
 
 // ---------------------------------------------------------------- 添加模块
@@ -375,7 +376,7 @@ private fun PickKindsPage(
                 placeholder = "模块标题（默认取分类名）",
             )
             Spacer(Modifier.height(scope.density.blockGap))
-            SheetActionButton(scope, "添加到主页") {
+            SheetActionButton("添加到主页") {
                 val picked = checked.mapNotNull { kinds.getOrNull(it) }
                 if (picked.isEmpty()) return@SheetActionButton
                 val def = ModuleDef(
@@ -433,21 +434,8 @@ private fun SheetHeader(scope: ContentScope, page: ManagePage, canBack: Boolean,
 }
 
 @Composable
-internal fun SheetActionButton(scope: ContentScope, label: String, onClick: () -> Unit) {
-    val colors = LocalSemanticColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.primary.copy(alpha = 0.14f), scope.shape(ShapeKind.BUTTON))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-            ) { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = scope.type.label, color = colors.primary)
-    }
+internal fun SheetActionButton(label: String, onClick: () -> Unit) {
+    AppGhostButton(text = label, modifier = Modifier.fillMaxWidth(), onClick = onClick)
 }
 
 @Composable

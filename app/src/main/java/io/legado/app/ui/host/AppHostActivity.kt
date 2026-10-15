@@ -14,6 +14,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -196,7 +199,14 @@ private fun HostRoot() {
     val colors = ThemeResolver.colors()
     val hazeState = remember { HazeState() }
 
-    val state = remember { HostState(HostDestinations.registry(), "shelf") }
+    // 进程死亡恢复：记住离开时所在的顶层 Tab（二级页不恢复，回 Tab 根；ledger #15）
+    val savedTabId = rememberSaveable { mutableStateOf("shelf") }
+    val state = remember { HostState(HostDestinations.registry(), savedTabId.value) }
+    LaunchedEffect(state.currentId) {
+        if (state.registry.byId(state.currentId)?.topLevel == true) {
+            savedTabId.value = state.currentId
+        }
+    }
     val overlay = remember { HostOverlay() }
 
     CompositionLocalProvider(

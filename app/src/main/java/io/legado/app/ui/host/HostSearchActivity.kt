@@ -33,11 +33,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -155,7 +156,7 @@ private fun HostSearchScreen() {
 
     val vm = remember { ViewModelProvider(activity)[SearchViewModel::class.java] }
     val initialKey = remember { activity.intent.getStringExtra("key") ?: "" }
-    var input by remember { mutableStateOf(initialKey) }
+    var input by rememberSaveable { mutableStateOf(initialKey) }
     var menuOpen by remember { mutableStateOf(false) }
     var scopeOpen by remember { mutableStateOf(false) }
 
@@ -171,7 +172,7 @@ private fun HostSearchScreen() {
             input.isBlank() -> appDb.searchKeywordDao.flowByTime()
             else -> appDb.searchKeywordDao.flowSearch(input.trim())
         }.catch { emit(emptyList()) }.flowOn(Dispatchers.IO)
-    }.collectAsState(initial = emptyList())
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     fun doSearch(key: String) {
         val k = key.trim()

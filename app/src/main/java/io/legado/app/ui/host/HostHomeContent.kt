@@ -23,7 +23,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,10 +83,12 @@ class HostHomeContent : AppContent {
         contentOwnsScroll = true,
     )
 
-    /** 模块管理抽屉开关（chrome actions 是静态数据，用静态状态桥接）。 */
-    companion object {
-        var moduleSheetOpen by androidx.compose.runtime.mutableStateOf(false)
-    }
+    /**
+     * 模块管理抽屉开关。实例级状态：宿主 HostScaffold remember 缓存本实例，
+     * chrome() 的 onClick 与 Content() 的 LaunchedEffect 共享同一实例，
+     * 多开宿主互不干扰、重建不残留（原 companion 静态桥有互顶/复弹问题）。
+     */
+    private var moduleSheetOpen by androidx.compose.runtime.mutableStateOf(false)
 
     /** V5 原生模块管理抽屉（替代旧 HomepageModuleManageSheet View 弹层）。 */
     private var manageSheetVisible by androidx.compose.runtime.mutableStateOf(false)
@@ -100,7 +102,7 @@ class HostHomeContent : AppContent {
                 context as androidx.lifecycle.ViewModelStoreOwner
             )[HomepageViewModel::class.java]
         }
-        val uiState by viewModel.uiState.collectAsState()
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
         // 发现套件会话（B13 裁决：套件聚合归主页域）——随主页进出 bind/stop
         androidx.compose.runtime.DisposableEffect(Unit) {
@@ -108,15 +110,15 @@ class HostHomeContent : AppContent {
             onDispose { io.legado.app.ui.main.explore.DiscoverSuiteSession.stop() }
         }
         val suiteConfig by io.legado.app.ui.main.explore.DiscoverSuiteSession
-            .config.collectAsState()
+            .config.collectAsStateWithLifecycle()
         val suiteSelectedId by io.legado.app.ui.main.explore.DiscoverSuiteSession
-            .selectedSuiteId.collectAsState()
+            .selectedSuiteId.collectAsStateWithLifecycle()
         val suiteBooks by io.legado.app.ui.main.explore.DiscoverSuiteSession
-            .widgetBooks.collectAsState()
+            .widgetBooks.collectAsStateWithLifecycle()
         val suiteRanked by io.legado.app.ui.main.explore.DiscoverSuiteSession
-            .rankedWidgetBooks.collectAsState()
+            .rankedWidgetBooks.collectAsStateWithLifecycle()
         val suiteLoading by io.legado.app.ui.main.explore.DiscoverSuiteSession
-            .loadingWidgetIds.collectAsState()
+            .loadingWidgetIds.collectAsStateWithLifecycle()
         val selectedSuite = remember(suiteConfig, suiteSelectedId) {
             suiteConfig.suites.firstOrNull { it.id == suiteSelectedId }
                 ?: suiteConfig.suites.firstOrNull()
