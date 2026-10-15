@@ -1,5 +1,4 @@
 package io.legado.app.ui.widget.compose
-
 import io.legado.app.uikit.v5.components.AppSwitch
 import android.graphics.Paint
 import android.graphics.Path

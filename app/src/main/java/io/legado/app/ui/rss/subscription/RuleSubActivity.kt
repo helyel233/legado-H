@@ -15,9 +15,9 @@ import io.legado.app.data.entities.RuleSub
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
-import io.legado.app.ui.widget.compose.AppManagementAction
+import io.legado.app.ui.host.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.AppManagementScaffold
+import io.legado.app.ui.host.AppManagementScaffold
 import io.legado.app.ui.widget.compose.replaceByIndex
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi

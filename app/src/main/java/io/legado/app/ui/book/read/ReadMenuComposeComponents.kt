@@ -56,7 +56,7 @@ import io.legado.app.data.entities.ReadMenuCustomButton
 import io.legado.app.help.book.library.LibraryCloudState
 import io.legado.app.ui.book.read.ReadMenuButtonConfig
 import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.V5DialogColors
+import io.legado.app.ui.widget.dialog.V5DialogColors
 import io.legado.app.uikit.v5.components.AppSlider
 import kotlin.math.roundToInt
 import io.legado.app.utils.dpToPx

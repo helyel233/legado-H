@@ -57,7 +57,7 @@ import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.widget.compose.installViewTreeOwnersFrom
 import io.legado.app.uikit.v5.components.AppSelectionRow
 import androidx.compose.ui.draw.alpha
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import io.legado.app.utils.activity
 import io.legado.app.utils.dpToPx
 

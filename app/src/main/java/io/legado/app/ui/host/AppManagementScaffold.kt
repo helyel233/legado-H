@@ -1,5 +1,11 @@
-package io.legado.app.ui.widget.compose
+package io.legado.app.ui.host
 
+import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
+import io.legado.app.ui.widget.compose.AppManagementIconAction
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.AppManagementMenuAction
+import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppDangerButton

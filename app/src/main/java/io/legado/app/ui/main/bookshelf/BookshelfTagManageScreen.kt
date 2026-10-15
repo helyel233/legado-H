@@ -60,10 +60,10 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.uikit.v5.token.ShapeKind
-import io.legado.app.ui.widget.compose.AppManagementAction
+import io.legado.app.ui.host.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.AppManagementScaffold
+import io.legado.app.ui.host.AppManagementScaffold
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.uikit.v5.components.AppCard

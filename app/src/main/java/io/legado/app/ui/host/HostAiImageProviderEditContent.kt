@@ -38,8 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
-
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 /**
  * AI 绘图服务商编辑的**内容区**（V5）。
  *

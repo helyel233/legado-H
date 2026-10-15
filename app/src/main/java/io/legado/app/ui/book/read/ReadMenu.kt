@@ -77,8 +77,8 @@ import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.ModernActionPopup
-import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
+import io.legado.app.ui.widget.dialog.V5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import io.legado.app.utils.activity
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.getPrefBoolean

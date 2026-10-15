@@ -1,5 +1,7 @@
 package io.legado.app.ui.main.bookshelf.smartgroup
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -34,9 +36,7 @@ import io.legado.app.help.book.SmartConditionType
 import io.legado.app.help.book.SmartGroupCondition
 import io.legado.app.help.book.SmartGroupEngine
 import io.legado.app.help.book.SmartGroupRule
-import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**

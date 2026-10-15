@@ -21,7 +21,7 @@ import io.legado.app.ui.main.ai.AI_API_MODE_CHAT_COMPLETIONS
 import io.legado.app.ui.main.ai.AI_API_MODE_RESPONSES
 import io.legado.app.ui.main.ai.AiModelConfig
 import io.legado.app.ui.main.ai.AiProviderConfig
-import io.legado.app.ui.widget.compose.ComposeFetchedModelDialog
+import io.legado.app.ui.host.ComposeFetchedModelDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppFilterDialog

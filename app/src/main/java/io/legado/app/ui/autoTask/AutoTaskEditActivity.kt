@@ -1,5 +1,6 @@
 package io.legado.app.ui.autoTask
 
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -23,10 +24,9 @@ import io.legado.app.model.AutoTaskRule
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskRuleValidator
 import io.legado.app.ui.code.CodeEditActivity
-import io.legado.app.ui.widget.compose.AppManagementAction
+import io.legado.app.ui.host.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.AppManagementScaffold
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
+import io.legado.app.ui.host.AppManagementScaffold
 import io.legado.app.utils.CronSchedule
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject

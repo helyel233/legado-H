@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.ui.host.AppManagementScaffold
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography

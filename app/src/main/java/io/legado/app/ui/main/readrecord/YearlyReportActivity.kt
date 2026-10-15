@@ -1,5 +1,7 @@
 package io.legado.app.ui.main.readrecord
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -32,10 +34,8 @@ import io.legado.app.databinding.ActivityYearlyReportBinding
 import io.legado.app.help.report.YearlyReportData
 import io.legado.app.help.report.YearlyReportImageRenderer
 import io.legado.app.help.report.YearlyTopBook
-import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 /**

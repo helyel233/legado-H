@@ -44,8 +44,7 @@ import io.legado.app.uikit.v5.components.AppSelectionRow
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
-
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 /**
  * P4-3：智能分组 V5 化（2026-10-13）。
  * 数据层复用 [SmartGroupRuleViewModel]（零拷贝）；规则编辑弹窗复用旧 RuleEditDialog

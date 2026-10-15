@@ -1,5 +1,7 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppRowWithSwitch
 import androidx.compose.foundation.clickable

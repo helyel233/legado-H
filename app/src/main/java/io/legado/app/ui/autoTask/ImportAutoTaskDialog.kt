@@ -1,5 +1,6 @@
 package io.legado.app.ui.autoTask
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
 import android.os.Bundle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

@@ -1,5 +1,7 @@
 package io.legado.app.ui.main.bookshelf.smartgroup
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,8 +36,6 @@ import io.legado.app.help.book.SmartConditionType
 import io.legado.app.help.book.SmartGroupCondition
 import io.legado.app.help.book.SmartGroupRule
 import io.legado.app.ui.host.V5DialogPanel
-import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
 

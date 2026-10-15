@@ -14,9 +14,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityAutoTaskDebugBinding
-import io.legado.app.ui.widget.compose.AppManagementAction
+import io.legado.app.ui.host.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.AppManagementScaffold
+import io.legado.app.ui.host.AppManagementScaffold
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 

@@ -17,9 +17,9 @@ import io.legado.app.R
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskRule
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.ui.widget.compose.AppManagementAction
+import io.legado.app.ui.host.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
-import io.legado.app.ui.widget.compose.AppManagementScaffold
+import io.legado.app.ui.host.AppManagementScaffold
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.host.HostSourceLoginActivity
 import io.legado.app.utils.startActivity

@@ -37,10 +37,10 @@ import io.legado.app.data.entities.SourceRecycleBin
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.ui.host.V5DialogPanel
-import io.legado.app.ui.widget.compose.V5DialogColors
+import io.legado.app.ui.widget.dialog.V5DialogColors
 import io.legado.app.ui.widget.compose.AppRuleTabRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.rememberV5DialogColors
+import io.legado.app.ui.widget.dialog.rememberV5DialogColors
 import io.legado.app.uikit.v5.components.AppDangerButton
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton

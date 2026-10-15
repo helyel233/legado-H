@@ -1,5 +1,6 @@
 package io.legado.app.ui.association
 
+import io.legado.app.ui.widget.dialog.V5DialogColors
 import android.content.DialogInterface
 import android.os.Bundle
 import androidx.compose.foundation.clickable
