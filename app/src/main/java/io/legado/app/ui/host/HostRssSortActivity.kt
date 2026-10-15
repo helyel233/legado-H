@@ -137,7 +137,10 @@ internal fun HostV5ThemeRoot(content: @Composable () -> Unit) {
             type = baseSpec.type.copy(
                 uiFont = ThemeResolver.uiFontFamily(),
                 titleFont = ThemeResolver.titleFontFamily(),
-            )
+            ),
+            // E-Ink：关闭玻璃，容器退回实色（半透明在墨水屏发灰发虚）
+            glass = if (io.legado.app.help.config.AppConfig.isEInkMode)
+                baseSpec.glass.copy(enabled = false) else baseSpec.glass,
         )
     }
     val colors = ThemeResolver.colors()

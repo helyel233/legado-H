@@ -123,6 +123,21 @@ class HostShelfContent : AppContent {
     @Composable
     override fun Content(scope: ContentScope) {
         val context = LocalContext.current
+        val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        val listState197 = androidx.compose.foundation.lazy.rememberLazyListState()
+        if (AppConfig.bookshelfReturnToTopAfterRead) {
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        gridState.requestScrollToItem(0)
+                        listState197.requestScrollToItem(0)
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+        }
         var groupId by remember { mutableStateOf(BookGroup.IdRoot) }
         // 分组页系统返回键先回到分组列表，而不是退出到桌面（台账 #35-4）
         androidx.activity.compose.BackHandler(enabled = groupId != BookGroup.IdRoot) {
@@ -176,15 +191,15 @@ class HostShelfContent : AppContent {
         if (layout >= 2) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(layout),
-                state = rememberLazyGridState(),
+                state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = scope.density.screenPadding,
                     end = scope.density.screenPadding,
                     bottom = 104.dp,
                 ),
-                horizontalArrangement = Arrangement.spacedBy(scope.density.gridGap),
-                verticalArrangement = Arrangement.spacedBy(scope.density.gridGap),
+                horizontalArrangement = Arrangement.spacedBy(AppConfig.bookshelfMargin.dp),
+                verticalArrangement = Arrangement.spacedBy(AppConfig.bookshelfMargin.dp),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column {
@@ -202,7 +217,7 @@ class HostShelfContent : AppContent {
                 }
             }
         } else {
-            val fsState197 = rememberLazyListState()
+            val fsState197 = listState197
             AppFastScroller(
                 listState = fsState197,
                 topContentPadding = Dp.Hairline,
@@ -217,7 +232,7 @@ class HostShelfContent : AppContent {
                     end = scope.density.screenPadding,
                     bottom = 104.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(scope.density.gridGap / 2),
+                verticalArrangement = Arrangement.spacedBy(AppConfig.bookshelfMargin.dp / 2),
             ) {
                 item {
                     Column {

@@ -1,5 +1,7 @@
 package io.legado.app.ui.host
 
+import io.legado.app.uikit.v5.components.AppSlider
+import kotlin.math.roundToInt
 import io.legado.app.R
 
 import androidx.compose.foundation.background
@@ -57,10 +59,12 @@ private val LAYOUT_OPTIONS = listOf(
     0 to R.string.v5_shelf_layout_minimal, 1 to R.string.v5_shelf_layout_compact,
     2 to R.string.v5_shelf_grid_2, 3 to R.string.v5_shelf_grid_3,
     4 to R.string.v5_shelf_grid_4, 5 to R.string.v5_shelf_grid_5,
+    6 to R.string.v5_shelf_grid_6,
 )
 private val SORT_OPTIONS = listOf(
     0 to R.string.v5_shelf_sort_recent, 1 to R.string.v5_shelf_sort_update,
     2 to R.string.v5_shelf_book_name, 3 to R.string.v5_shelf_sort_manual, 4 to R.string.v5_shelf_sort_smart,
+    5 to R.string.bookshelf_px_5,
 )
 private val LIST_STYLES = listOf(0 to R.string.v5_shelf_minimal, 1 to R.string.v5_shelf_layout_compact)
 
@@ -94,6 +98,7 @@ fun ShelfSettingsSheet(
                 "未读数" to { AppConfig.showUnread },
                 "最后更新时间" to { AppConfig.showLastUpdateTime },
                 "待更新数" to { AppConfig.showWaitUpCount },
+                "阅读后回到顶部" to { AppConfig.bookshelfReturnToTopAfterRead },
             )
             switches.forEach { (label, read) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,6 +115,7 @@ fun ShelfSettingsSheet(
                                 "未读数" -> AppConfig.showUnread = on
                                 "最后更新时间" -> AppConfig.showLastUpdateTime = on
                                 "待更新数" -> AppConfig.showWaitUpCount = on
+                                "阅读后回到顶部" -> AppConfig.bookshelfReturnToTopAfterRead = on
                             }
                             onChanged()
                         },
@@ -140,21 +146,24 @@ fun ShelfSettingsSheet(
             }
         }
         SheetSection(scope, "简介行数（仅列表布局）") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${AppConfig.bookshelfListIntroLines} 行",
-                    style = scope.type.body,
-                    color = colors.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                AppSwitch(
-                    checked = AppConfig.bookshelfListIntroLines > 0,
-                    onCheckedChange = { on ->
-                        AppConfig.bookshelfListIntroLines = if (on) 2 else 0
-                        onChanged()
-                    },
-                )
+            OptionChips(
+                scope,
+                listOf(0 to R.string.v5_shelf_intro_0, 1 to R.string.v5_shelf_intro_1,
+                    2 to R.string.v5_shelf_intro_2, 3 to R.string.v5_shelf_intro_3),
+                AppConfig.bookshelfListIntroLines,
+            ) { v ->
+                AppConfig.bookshelfListIntroLines = v
+                onChanged()
             }
+        }
+        SheetSection(scope, "书架间距") {
+            AppSlider(
+                value = AppConfig.bookshelfMargin.toFloat(),
+                onValueChange = { AppConfig.bookshelfMargin = it.roundToInt().coerceIn(0, 60) },
+                valueRange = 0f..60f,
+                steps = 59,
+                valueLabel = "${AppConfig.bookshelfMargin} dp",
+            )
         }
         Spacer(Modifier.height(scope.density.screenPadding))
     }

@@ -3170,4 +3170,9 @@ Selected text or question:
     <string name="v5_stats_total">Total</string>
     <string name="v5_hint_long_press">Long-press an item to multi-select</string>
     <string name="v5_delete_confirm_message">This will delete %1$d selected sources. This cannot be undone.</string>
+    <string name="v5_shelf_grid_6">Six-column grid</string>
+    <string name="v5_shelf_intro_0">Off</string>
+    <string name="v5_shelf_intro_1">One line</string>
+    <string name="v5_shelf_intro_2">Two lines</string>
+    <string name="v5_shelf_intro_3">Three lines</string>
 </resources>

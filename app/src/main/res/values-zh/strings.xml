@@ -2970,4 +2970,9 @@ bookUrl：%7$s
     <string name="v5_stats_total">累计</string>
     <string name="v5_hint_long_press">长按条目可进入多选</string>
     <string name="v5_delete_confirm_message">将删除已选中的 %1$d 个书源，操作不可撤销。</string>
+    <string name="v5_shelf_grid_6">六列网格</string>
+    <string name="v5_shelf_intro_0">关</string>
+    <string name="v5_shelf_intro_1">1 行</string>
+    <string name="v5_shelf_intro_2">2 行</string>
+    <string name="v5_shelf_intro_3">3 行</string>
 </resources>
