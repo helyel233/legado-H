@@ -410,7 +410,8 @@ fun AppRowWithSwitch(
 
 /**
  * 滑块：轨道读 primary 渐变，支持点按与拖动，拇指带弹性。
- * [steps] > 0 时按 steps 等分吸附；[valueLabel] 显示当前值文案（右对齐）；
+ * [steps] > 0 时按 M3 语义吸附：steps 为两端之间的**中间停靠点数**（区间共 steps+1 份）；
+ * [valueLabel] 显示当前值文案（右对齐）；
  * [onValueChangeFinished] 拖动结束回调（设置类页面保存偏好用）。
  */
 @Composable
@@ -452,8 +453,9 @@ fun AppSlider(
                 if (!enabled || widthPx <= 0f) return
                 var f = (x / widthPx).coerceIn(0f, 1f)
                 if (steps > 0) {
-                    // 等分吸附：取最近的 1/steps 刻度
-                    f = (f * steps).toFloat().let { kotlin.math.round(it) } / steps
+                    // M3 语义：steps = 中间停靠点数，区间共 steps+1 份
+                    val parts = steps + 1
+                    f = (f * parts).toFloat().let { kotlin.math.round(it) } / parts
                 }
                 onValueChange(valueRange.start + f * span)
             }

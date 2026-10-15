@@ -18,15 +18,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.legado.app.uikit.v5.components.AppCard
+import androidx.compose.material3.Surface
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 
 /**
  * DialogFragment 内容面板（V5 版，替代旧 `AppDialogFrame`）。
  *
  * `V5DialogFragment` 的窗口已提供尺寸与主题环境，本件只负责卡片形态：
- * E2 悬浮卡 + 标题 + 可选说明 + 可滚动内容区（max 520dp）+ 底部动作行。
+ * 实色卡（M3 Surface，玻璃材质在墨水屏上发灰发虚故不用于弹窗卡片）
+ * + 标题 + 可选说明 + 可滚动内容区（max 520dp，**scrollContent=false 时内容须自带滚动**）
+ * + 底部动作行。
  * 参数与旧 `AppDialogFrame` 同名同义（title/modifier/message/scrollContent/content/actions），
  * 迁移即纯改名；旧件无调用方后随旧库删除。
  */
@@ -41,7 +44,16 @@ internal fun V5DialogPanel(
 ) {
     val visual = LocalVisualSpec.current
     val colors = LocalSemanticColors.current
-    AppCard(modifier = modifier.fillMaxWidth().imePadding()) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .imePadding(),
+        shape = visual.shape(ShapeKind.CARD),
+        color = colors.surface,
+        contentColor = colors.onSurface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
         Text(
             text = title,
             style = visual.type.title,

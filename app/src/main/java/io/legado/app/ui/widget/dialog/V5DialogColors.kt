@@ -63,8 +63,13 @@ fun rememberV5DialogColors(): V5DialogColors {
         is io.legado.app.uikit.v5.token.CornerSpec.Pill -> 100.dp
         else -> context.composeActionRadius()
     }
+    // 字体入键：主题包仅换字体时也要重建
+    val bodyFont = io.legado.app.uikit.v5.resolve.ThemeResolver.uiFontFamily()
+        ?: FontFamily(context.uiTypeface())
+    val titleFont = io.legado.app.uikit.v5.resolve.ThemeResolver.titleFontFamily()
+        ?: FontFamily(context.titleTypeface())
     return remember(
-        colors, v5Spec, panelRadius, actionRadius
+        colors, v5Spec, panelRadius, actionRadius, bodyFont, titleFont
     ) {
         V5DialogColors(
             accent = colors.primary,
@@ -77,10 +82,8 @@ fun rememberV5DialogColors(): V5DialogColors {
             danger = colors.error,
             panelRadius = panelRadius,
             actionRadius = actionRadius,
-            bodyFontFamily = io.legado.app.uikit.v5.resolve.ThemeResolver.uiFontFamily()
-                ?: FontFamily(context.uiTypeface()),
-            titleFontFamily = io.legado.app.uikit.v5.resolve.ThemeResolver.titleFontFamily()
-                ?: FontFamily(context.titleTypeface())
+            bodyFontFamily = bodyFont,
+            titleFontFamily = titleFont
         )
     }
 }

@@ -33,6 +33,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppInputDialog
+import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppTextField
 import io.legado.app.uikit.v5.contract.ContentScope
@@ -86,6 +87,50 @@ fun ShelfSettingsSheet(
             OptionChips(scope, SORT_OPTIONS, AppConfig.bookshelfSort) { v ->
                 AppConfig.bookshelfSort = v
                 onChanged()
+            }
+        }
+        SheetSection(scope, "显示") {
+            val switches = listOf(
+                "未读数" to { AppConfig.showUnread },
+                "最后更新时间" to { AppConfig.showLastUpdateTime },
+                "待更新数" to { AppConfig.showWaitUpCount },
+            )
+            switches.forEach { (label, read) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        label,
+                        style = scope.type.body,
+                        color = colors.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppSwitch(
+                        checked = read(),
+                        onCheckedChange = { on ->
+                            when (label) {
+                                "未读数" -> AppConfig.showUnread = on
+                                "最后更新时间" -> AppConfig.showLastUpdateTime = on
+                                "待更新数" -> AppConfig.showWaitUpCount = on
+                            }
+                            onChanged()
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            // 书名显示（仅网格布局有意义，沿用旧 BookshelfConfigDialog 三态）
+            Text("书名（网格）", style = scope.type.caption, color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0 to "显示", 1 to "隐藏", 2 to "覆盖").forEach { (v, label) ->
+                    AppChip(
+                        text = label,
+                        selected = AppConfig.showBookname == v,
+                        onClick = {
+                            AppConfig.showBookname = v
+                            onChanged()
+                        },
+                    )
+                }
             }
         }
         SheetSection(scope, "列表样式（仅列表布局）") {

@@ -110,6 +110,7 @@ internal fun AiImageProviderEditForm(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            }
 
             // 名称
             EditTextField(
@@ -194,7 +195,7 @@ internal fun AiImageProviderEditForm(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-                    }}
+                }
     }
 }
 
