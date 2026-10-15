@@ -387,23 +387,11 @@ fun OptionChips(
         items.chunked(3).forEach { rowItems ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 rowItems.forEach { (value, labelRes) ->
-                    val on = value == selected
-                    Box(
-                        modifier = Modifier
-                            .clip(scope.shape(ShapeKind.TAG))
-                            .background(if (on) colors.primary else colors.surfaceVariant)
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { onSelect(value) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            stringResource(labelRes),
-                            style = scope.type.caption,
-                            color = if (on) colors.onPrimary else colors.onSurfaceVariant,
-                        )
-                    }
+                    AppChip(
+                        text = stringResource(labelRes),
+                        selected = value == selected,
+                        onClick = { onSelect(value) },
+                    )
                 }
             }
         }

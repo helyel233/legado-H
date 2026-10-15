@@ -1,5 +1,6 @@
 package io.legado.app.ui.host
 
+import io.legado.app.uikit.v5.components.AppChip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -365,22 +366,11 @@ private fun Chips(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 rowItems.forEach { (key, label) ->
                     val on = key.equals(selected, ignoreCase = true)
-                    Box(
-                        modifier = Modifier
-                            .clip(visual.shape(io.legado.app.uikit.v5.token.ShapeKind.TAG))
-                            .background(if (on) colors.primary else colors.surfaceVariant)
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ) { onSelect(key, label) }
-                            .padding(horizontal = 11.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = label,
-                            style = visual.type.caption,
-                            color = if (on) colors.onPrimary else colors.onSurfaceVariant,
-                        )
-                    }
+                    AppChip(
+                        text = label,
+                        selected = on,
+                        onClick = { onSelect(key, label) },
+                    )
                 }
             }
         }

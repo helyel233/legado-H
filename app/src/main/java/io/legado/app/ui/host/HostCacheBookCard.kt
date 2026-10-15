@@ -1,5 +1,6 @@
 package io.legado.app.ui.host
 
+import io.legado.app.uikit.v5.components.AppChip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -136,11 +137,7 @@ internal fun HostCacheBookCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .padding(top = 2.dp)
-                            .clip(visual.shape(ShapeKind.TAG))
-                            .background(colors.surfaceVariant)
-                            .clickable { onSelectSource(item) }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                            .padding(top = 2.dp),
                     )
                 } else {
                     Text(

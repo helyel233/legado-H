@@ -1,5 +1,6 @@
 package io.legado.app.uikit.v5.components
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -338,4 +339,41 @@ fun AppPullRefresh(
         modifier = modifier,
         content = content,
     )
+}
+
+/** 图标按钮：默认无背景（40dp 触控区），可选 surfaceVariant 底。 */
+@Composable
+fun AppIconButton(
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color? = null,
+    size: androidx.compose.ui.unit.Dp = 40.dp,
+    tonal: Boolean = false,
+) {
+    val colors = LocalSemanticColors.current
+    Box(
+        modifier = modifier
+            .size(size)
+            .then(
+                if (tonal) Modifier.background(colors.surfaceVariant, shape = RectangleShape)
+                else Modifier
+            )
+            .clickable(
+                enabled = enabled,
+                interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painter,
+            contentDescription = contentDescription,
+            tint = tint ?: colors.onSurface,
+            modifier = Modifier.size(size / 2),
+        )
+    }
 }
