@@ -1,5 +1,7 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -113,34 +115,12 @@ fun AppRuleSwitchRow(
     modifier: Modifier = Modifier,
     style: V5DialogColors = rememberV5DialogColors()
 ) {
-    val palette = style.toMiuixPalette()
-    LegadoMiuixCard(
+    AppRowWithSwitch(
+        title = text,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
         modifier = modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = text,
-                modifier = Modifier.weight(1f),
-                color = if (checked) style.primaryText else style.secondaryText,
-                fontSize = 14.sp,
-                fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            LegadoMiuixSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                palette = palette
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -160,22 +140,12 @@ fun AppRuleTabRow(
     ) {
         tabs.forEachIndexed { index, label ->
             val selected = index == selectedIndex
-            LegadoMiuixCard(
-                modifier = Modifier.clickable { onSelected(index) },
-                color = if (selected) style.accent.copy(alpha = 0.16f) else style.fieldSurface,
-                contentColor = if (selected) style.accent else style.primaryText,
-                cornerRadius = style.actionRadius,
-                insidePadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
-            ) {
-                Text(
-                    text = label,
-                    color = if (selected) style.accent else style.primaryText,
-                    fontSize = 14.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            AppChip(
+                text = label,
+                selected = selected,
+                modifier = Modifier,
+                onClick = { onSelected(index) }
+            )
         }
     }
 }

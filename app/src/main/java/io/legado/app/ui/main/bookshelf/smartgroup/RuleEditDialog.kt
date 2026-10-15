@@ -35,9 +35,9 @@ import io.legado.app.help.book.SmartGroupCondition
 import io.legado.app.help.book.SmartGroupRule
 import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
 
 /**
  * 智能分组规则编辑弹窗。
@@ -58,7 +58,6 @@ fun RuleEditDialog(
     var groupId by remember(draft.id) { mutableStateOf(draft.groupId) }
     var priority by remember(draft.id) { mutableStateOf(draft.priority.toString()) }
     var conditions by remember(draft.id) { mutableStateOf(draft.conditions) }
-    val palette = style.toMiuixPalette()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -123,20 +122,15 @@ fun RuleEditDialog(
                 }
             },
             actions = {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.cancel),
-                    palette = palette,
-                    onClick = onDismiss,
-                    cornerRadius = style.actionRadius
+                    onClick = onDismiss
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.ok),
-                    palette = palette,
-                    primary = true,
-                    cornerRadius = style.actionRadius,
                     onClick = {
                         val gid = groupId
-                        if (gid <= 0 || conditions.isEmpty()) return@LegadoMiuixActionButton
+                        if (gid <= 0 || conditions.isEmpty()) return@AppFilledButton
                         onConfirm(
                             draft.copy(
                                 ruleName = ruleName.trim(),

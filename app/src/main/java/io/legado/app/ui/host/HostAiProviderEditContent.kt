@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -50,12 +51,12 @@ import io.legado.app.R
 import io.legado.app.ui.main.ai.AiModelConfig
 import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSwitch
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 
 // ── Tab Bar ──────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ fun AiProviderConfigTab(
     modifier: Modifier = Modifier
 ) {
     val style = rememberV5DialogColors()
+    val visual = LocalVisualSpec.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -153,14 +155,15 @@ fun AiProviderConfigTab(
             style = style
         )
         // API mode selector
-        LegadoMiuixCard(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onApiModeClick),
+            shape = visual.shape(ShapeKind.BUTTON),
             color = style.fieldSurface,
             contentColor = style.primaryText,
-            cornerRadius = style.actionRadius,
-            insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
             Text(
                 text = apiModeLabel,
@@ -168,21 +171,25 @@ fun AiProviderConfigTab(
                 fontSize = 14.sp,
                 fontFamily = style.bodyFontFamily,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
             )
         }
         // Prompt cache switch
-        LegadoMiuixCard(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onPromptCacheChange(!promptCache) },
+            shape = visual.shape(ShapeKind.BUTTON),
             color = style.fieldSurface,
             contentColor = style.primaryText,
-            cornerRadius = style.actionRadius,
-            insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
-            val palette = style.toMiuixPalette()
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = stringResource(R.string.ai_enable_prompt_cache_key),
                     modifier = Modifier.weight(1f),
@@ -194,10 +201,9 @@ fun AiProviderConfigTab(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                LegadoMiuixSwitch(
+                AppSwitch(
                     checked = promptCache,
-                    onCheckedChange = onPromptCacheChange,
-                    palette = palette
+                    onCheckedChange = onPromptCacheChange
                 )
             }
         }
@@ -281,7 +287,7 @@ fun AiModelManageTab(
     modifier: Modifier = Modifier,
 ) {
     val style = rememberV5DialogColors()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -320,19 +326,15 @@ fun AiModelManageTab(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.ai_add_model_manual),
-                palette = palette,
                 onClick = onAddModel,
-                modifier = Modifier.weight(1f),
-                cornerRadius = style.actionRadius
+                modifier = Modifier.weight(1f)
             )
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.ai_fetch_models),
-                palette = palette,
                 onClick = onFetchModels,
-                modifier = Modifier.weight(1f),
-                cornerRadius = style.actionRadius
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -345,16 +347,21 @@ private fun AiModelItem(
     style: V5DialogColors,
     onClick: () -> Unit
 ) {
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        shape = visual.shape(ShapeKind.BUTTON),
         color = style.fieldSurface,
         contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = model.modelId,
@@ -378,14 +385,9 @@ private fun AiModelItem(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.more),
-                palette = style.toMiuixPalette(),
-                onClick = onClick,
-                cornerRadius = style.actionRadius,
-                minWidth = 56.dp,
-                minHeight = 34.dp,
-                insidePadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                onClick = onClick
             )
         }
     }
@@ -403,7 +405,6 @@ fun FetchedModelSelectorContent(
     onDismiss: () -> Unit
 ) {
     val style = rememberV5DialogColors()
-    val palette = style.toMiuixPalette()
     var searchQuery by remember { mutableStateOf("") }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -497,32 +498,26 @@ fun FetchedModelSelectorContent(
         },
         actions = {
             // Add All button
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.ai_add_all_models),
-                palette = palette,
                 onClick = {
                     onDismiss()
                     onAddAll(modelIds)
-                },
-                cornerRadius = style.actionRadius
+                }
             )
             Spacer(modifier = Modifier.width(8.dp))
             // Add Selected button
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = if (selectedIds.isEmpty()) {
                     stringResource(R.string.ai_fetch_models_add_selected_empty)
                 } else {
                     stringResource(R.string.ai_fetch_models_add_selected, selectedIds.size)
                 },
-                palette = palette,
+                enabled = selectedIds.isNotEmpty(),
                 onClick = {
-                    if (selectedIds.isNotEmpty()) {
-                        onDismiss()
-                        onAddSelected(selectedIds.toList())
-                    }
-                },
-                primary = selectedIds.isNotEmpty(),
-                cornerRadius = style.actionRadius
+                    onDismiss()
+                    onAddSelected(selectedIds.toList())
+                }
             )
         }
     )
@@ -539,20 +534,25 @@ private fun FetchedModelRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val visual = LocalVisualSpec.current
     val rowColor = if (selected) style.fieldSurface else style.surface
-    LegadoMiuixCard(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
+        shape = visual.shape(ShapeKind.BUTTON),
         color = rowColor,
         contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             if (selectionMode) {
                 Checkbox(
                     checked = selected,

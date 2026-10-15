@@ -49,6 +49,10 @@ import io.legado.app.data.dao.BookTagInfo
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.BookTagManagement
 import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppDangerButton
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSwitch
 import io.legado.app.uikit.v5.components.AppChip
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
@@ -60,12 +64,8 @@ import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppManagementScaffold
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.AppListSpacing
-import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.uikit.v5.components.AppCard
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
@@ -222,7 +222,7 @@ private fun GroupSelector(
             val selected = group.groupId == selectedGroupId
             Surface(
                 modifier = Modifier.clickable { onSelect(group.groupId) },
-                shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
+                shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
                 color = if (selected) {
                     palette.settings.accent.copy(alpha = 0.16f)
                 } else {
@@ -281,12 +281,9 @@ private fun TagGroupContent(
                             fontSize = 13.sp
                         )
                     }
-                    LegadoMiuixActionButton(
+                    AppFilledButton(
                         text = stringResource(R.string.add),
-                        palette = palette.miuix,
-                        onClick = onAddTags,
-                        primary = true,
-                        minWidth = 68.dp
+                        onClick = onAddTags
                     )
                 }
             }
@@ -356,10 +353,9 @@ private fun TagCard(
                     fontSize = 11.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                LegadoMiuixSwitch(
+                AppSwitch(
                     checked = tag.visible,
-                    onCheckedChange = onVisibilityChange,
-                    palette = palette.miuix
+                    onCheckedChange = onVisibilityChange
                 )
             }
         }
@@ -368,25 +364,20 @@ private fun TagCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = stringResource(R.string.bookshelf_tag_manage_books),
-                palette = palette.miuix,
                 onClick = onManageBooks,
-                modifier = Modifier.weight(1f),
-                primary = true
+                modifier = Modifier.weight(1f)
             )
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.bookshelf_tag_rename),
-                palette = palette.miuix,
                 onClick = onRename,
                 modifier = Modifier.weight(1f)
             )
-            LegadoMiuixActionButton(
+            AppDangerButton(
                 text = stringResource(R.string.delete),
-                palette = palette.miuix,
                 onClick = onDelete,
-                modifier = Modifier.weight(1f),
-                danger = true
+                modifier = Modifier.weight(1f)
             )
         }
     }

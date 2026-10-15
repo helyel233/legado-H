@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,10 +40,12 @@ import io.legado.app.ui.host.V5DialogPanel
 import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.AppRuleTabRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppDangerButton
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +82,6 @@ private sealed interface RecycleBinConfirm {
 @Composable
 fun SourceRecycleBinScreen() {
     val style = rememberV5DialogColors()
-    val palette = style.toMiuixPalette()
     val scope = rememberCoroutineScope()
 
     val filters = remember { RecycleBinFilter.entries.toList() }
@@ -183,13 +185,11 @@ fun SourceRecycleBinScreen() {
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(
                         if (enabled) R.string.disable_source_recycle_bin
                         else R.string.enable_source_recycle_bin
                     ),
-                    palette = palette,
-                    cornerRadius = style.actionRadius,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         val newValue = !enabled
@@ -197,11 +197,8 @@ fun SourceRecycleBinScreen() {
                         enabled = newValue
                     }
                 )
-                LegadoMiuixActionButton(
+                AppDangerButton(
                     text = stringResource(R.string.clear),
-                    palette = palette,
-                    danger = true,
-                    cornerRadius = style.actionRadius,
                     onClick = { confirm = RecycleBinConfirm.ClearAll }
                 )
             }
@@ -211,10 +208,8 @@ fun SourceRecycleBinScreen() {
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = stringResource(R.string.select_all),
-                    palette = palette,
-                    cornerRadius = style.actionRadius,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         selectedIds = if (selectedIds.size == displayedItems.size) {
@@ -224,21 +219,15 @@ fun SourceRecycleBinScreen() {
                         }
                     }
                 )
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.restore),
-                    palette = palette,
-                    primary = true,
-                    cornerRadius = style.actionRadius,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         if (selectedItems.isNotEmpty()) requestRestore(selectedItems)
                     }
                 )
-                LegadoMiuixActionButton(
+                AppDangerButton(
                     text = stringResource(R.string.delete_forever),
-                    palette = palette,
-                    danger = true,
-                    cornerRadius = style.actionRadius,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         if (selectedItems.isNotEmpty()) {
@@ -340,16 +329,23 @@ private fun RecycleBinItemCard(
     onRestore: () -> Unit,
     onDelete: () -> Unit
 ) {
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
+        shape = visual.shape(ShapeKind.BUTTON),
         color = if (selected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
         contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = if (selected) "☑" else "☐",
                 color = if (selected) style.accent else style.secondaryText,
@@ -418,25 +414,19 @@ private fun RecycleBinConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = style.toMiuixPalette()
     V5DialogPanel(
         title = title,
         message = message,
         scrollContent = false,
         content = {},
         actions = {
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.cancel),
-                palette = palette,
-                cornerRadius = style.actionRadius,
                 onClick = onDismiss
             )
             Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
+            AppDangerButton(
                 text = confirmText,
-                palette = palette,
-                danger = danger,
-                cornerRadius = style.actionRadius,
                 onClick = onConfirm
             )
         }

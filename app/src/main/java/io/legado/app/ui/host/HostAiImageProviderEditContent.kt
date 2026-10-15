@@ -1,5 +1,9 @@
 package io.legado.app.ui.host
 
+import io.legado.app.uikit.v5.token.ShapeKind
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,9 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
 
 /**
  * AI 绘图服务商编辑的**内容区**（V5）。
@@ -73,7 +75,8 @@ internal fun AiImageProviderEditForm(
     modifier: Modifier = Modifier,
 ) {
     val style = rememberV5DialogColors()
-    val palette = style.toMiuixPalette()
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
     ) {
@@ -85,15 +88,17 @@ internal fun AiImageProviderEditForm(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // 服务商类型
-            LegadoMiuixCard(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onTypeClick),
+                shape = visual.shape(ShapeKind.BUTTON),
                 color = style.fieldSurface,
                 contentColor = style.primaryText,
-                cornerRadius = style.actionRadius,
-                insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
             ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                 Text(
                     text = "${stringResource(R.string.ai_image_provider_type)}: " +
                         stringResource(
@@ -162,9 +167,9 @@ internal fun AiImageProviderEditForm(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,
                     colors = CheckboxDefaults.colors(
-                        checkedColor = palette.accent,
-                        uncheckedColor = palette.secondaryText,
-                        checkmarkColor = palette.surface,
+                        checkedColor = colors.primary,
+                        uncheckedColor = colors.onSurfaceVariant,
+                        checkmarkColor = colors.surface,
                     ),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -190,7 +195,7 @@ internal fun AiImageProviderEditForm(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-        }
+                    }}
     }
 }
 
@@ -259,14 +264,16 @@ private fun EditCodeButton(
     onClick: () -> Unit,
 ) {
     val style = rememberV5DialogColors()
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        shape = visual.shape(ShapeKind.BUTTON),
         color = style.fieldSurface,
         contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Text(
             text = label,
@@ -274,6 +281,7 @@ private fun EditCodeButton(
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
         )
     }
 }

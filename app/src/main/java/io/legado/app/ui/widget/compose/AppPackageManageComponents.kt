@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.uikit.v5.components.AppGhostButton
 import android.view.Gravity
 import android.widget.TextView
 import androidx.compose.foundation.clickable
@@ -100,16 +101,13 @@ fun AppPackageManageScreen(
                     headerContent(palette)
                     listContent(palette)
                 }
-                LegadoMiuixActionButton(
+                AppGhostButton(
                     text = addText,
-                    palette = palette.miuix,
                     onClick = onAdd,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 14.dp),
-                    primary = false,
-                    cornerRadius = palette.miuix.actionRadius,
-                    minHeight = 46.dp
+
                 )
             }
         }
@@ -155,7 +153,7 @@ fun AppPackageManageSettingCard(
             Spacer(modifier = Modifier.width(12.dp))
             AppPackageManageActionButton(
                 text = valueText,
-                palette = palette.miuix,
+                palette = palette,
                 selected = false,
                 onClick = onClick
             )
@@ -218,14 +216,14 @@ fun AppPackageManageItemCard(
                 ) {
                     AppPackageManageActionButton(
                         text = applyText,
-                        palette = palette.miuix,
+                        palette = palette,
                         selected = isActive,
                         onClick = onApply
                     )
                     if (canEdit) {
                         AppPackageManageActionButton(
                             text = editText,
-                            palette = palette.miuix,
+                            palette = palette,
                             onClick = onEdit
                         )
                     }
@@ -243,18 +241,18 @@ fun AppPackageManageItemCard(
 @Composable
 fun AppPackageManageActionButton(
     text: String,
-    palette: LegadoMiuixPalette,
+    palette: AppManagementPalette,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     onClick: () -> Unit
 ) {
-    val radius = palette.actionRadius ?: 12.dp
+    val radius = palette.actionRadius
     val background = if (selected) {
-        palette.accent.copy(alpha = 0.14f)
+        palette.settings.accent.copy(alpha = 0.14f)
     } else {
-        palette.surfaceVariant
+        Color(palette.settings.row)
     }
-    val content = if (selected) palette.accent else palette.primaryText
+    val content = if (selected) palette.settings.accent else palette.settings.primaryText
     Surface(
         modifier = modifier
             .widthIn(min = 72.dp)
@@ -294,7 +292,7 @@ private fun AppPackageManageMoreButton(
 ) {
     val context = LocalContext.current
     var popupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
-    val actionRadius = palette.miuix.actionRadius ?: 12.dp
+    val actionRadius = palette.actionRadius ?: 12.dp
     DisposableEffect(Unit) {
         onDispose {
             popupHandle?.dismiss()
@@ -317,7 +315,7 @@ private fun AppPackageManageMoreButton(
             button.setTextColor(palette.settings.primaryText.toArgb())
             button.typeface = context.uiTypeface()
             button.background = UiCorner.actionSelector(
-                palette.miuix.surfaceVariant.toArgb(),
+                Color(palette.settings.row).toArgb(),
                 palette.settings.rowPressed,
                 (actionRadius.value * context.resources.displayMetrics.density)
             )
@@ -389,7 +387,7 @@ private fun AppPackageManageTabButton(
         modifier = modifier
             .height(34.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
+        shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
         color = if (selected) palette.settings.accent.copy(alpha = 0.14f) else Color.Transparent,
         contentColor = if (selected) palette.settings.accent else palette.settings.primaryText,
         tonalElevation = 0.dp,

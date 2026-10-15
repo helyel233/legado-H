@@ -58,7 +58,6 @@ import io.legado.app.ui.widget.compose.installViewTreeOwnersFrom
 import io.legado.app.uikit.v5.components.AppSelectionRow
 import androidx.compose.ui.draw.alpha
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.activity
 import io.legado.app.utils.dpToPx
 
@@ -425,7 +424,6 @@ object ModernActionPopup {
         onDismiss: () -> Unit
     ) {
         val style = rememberV5DialogColors()
-        val palette = style.toMiuixPalette()
         val panelShape = RoundedCornerShape(style.panelRadius)
         val context = LocalContext.current
         // 仅当主题确实设置了面板边框色才画边框；无边框主题不应再显描边线。

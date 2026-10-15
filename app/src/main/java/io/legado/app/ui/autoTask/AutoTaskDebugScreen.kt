@@ -1,5 +1,7 @@
 package io.legado.app.ui.autoTask
 
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppDangerButton
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,7 +26,6 @@ import io.legado.app.model.AutoTaskRunStatus
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementLazyColumn
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import androidx.compose.ui.res.stringResource
 
@@ -144,24 +145,15 @@ private fun DebugStatusCard(
             horizontalArrangement = Arrangement.End
         ) {
             if (state is AutoTaskDebugState.Running) {
-                LegadoMiuixActionButton(
+                AppDangerButton(
                     text = stringResource(R.string.auto_task_debug_cancel),
-                    palette = palette.miuix,
-                    danger = true,
-                    onClick = onCancel,
-                    minHeight = 34.dp,
-                    insidePadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                    cornerRadius = palette.miuix.actionRadius
+                    onClick = onCancel
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.auto_task_debug_clear),
-                palette = palette.miuix,
-                onClick = onClearLogs,
-                minHeight = 34.dp,
-                insidePadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                cornerRadius = palette.miuix.actionRadius
+                onClick = onClearLogs
             )
         }
     }

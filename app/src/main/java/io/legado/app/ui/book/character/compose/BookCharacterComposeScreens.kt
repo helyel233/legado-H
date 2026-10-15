@@ -1,5 +1,8 @@
 package io.legado.app.ui.book.character.compose
 
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppSlider
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -97,10 +100,6 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.book.read.config.SpeechVoiceRoutePickerDialog
 import io.legado.app.ui.book.read.config.speechRouteSummary
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixSlider
 import io.legado.app.utils.ColorUtils
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -156,16 +155,6 @@ fun rememberCharacterStyle(): CharacterStyle {
     )
 }
 
-private fun CharacterStyle.toCharacterMiuixPalette(): LegadoMiuixPalette {
-    return LegadoMiuixPalette(
-        accent = colors.accent,
-        surface = colors.page,
-        surfaceVariant = colors.cardAlt,
-        primaryText = colors.text,
-        secondaryText = colors.subText,
-        danger = colors.danger
-    )
-}
 
 data class CharacterEditDraft(
     val name: String = "",
@@ -1891,7 +1880,6 @@ private fun RelationEditSheet(
     var editing by remember(draft) { mutableStateOf(draft) }
     var selectingTarget by remember { mutableStateOf<RelationSelectTarget?>(null) }
     val style = rememberCharacterStyle()
-    val palette = style.toCharacterMiuixPalette()
     CharacterBackHandler {
         if (selectingTarget != null) {
             selectingTarget = null
@@ -1908,7 +1896,7 @@ private fun RelationEditSheet(
                 .background(Color.Black.copy(alpha = if (AppConfig.isNightTheme) 0.34f else 0.22f))
                 .clickable(onClick = onDismiss)
         )
-        LegadoMiuixCard(
+        Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -1916,11 +1904,13 @@ private fun RelationEditSheet(
                 .imePadding()
                 .padding(horizontal = 12.dp, vertical = 10.dp)
                 .heightIn(max = 620.dp),
+            shape = RoundedCornerShape(style.radius),
             color = style.colors.page,
             contentColor = style.colors.text,
-            cornerRadius = style.radius,
-            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
         ) {
+            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = 8.dp),
@@ -1949,37 +1939,34 @@ private fun RelationEditSheet(
                 item {
                     Column {
                         Text("关系强度 ${editing.strength}", color = style.colors.subText, fontSize = 13.sp)
-                        LegadoMiuixSlider(
+                        AppSlider(
                             value = editing.strength.toFloat(),
                             onValueChange = { editing = editing.copy(strength = it.roundToInt().coerceIn(0, 100)) },
-                            palette = palette,
-                            valueRange = 0f..100f
+                            valueRange = 0f..100f,
+                            steps = 99
                         )
                     }
                 }
                 item { CharacterTextField("关系说明", editing.description, { editing = editing.copy(description = it) }, minLines = 3) }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        LegadoMiuixActionButton(
+                        AppGhostButton(
                             text = "取消",
-                            palette = palette,
                             onClick = onDismiss,
-                            modifier = Modifier.weight(1f),
-                            cornerRadius = style.smallRadius
+                            modifier = Modifier.weight(1f)
                         )
-                        LegadoMiuixActionButton(
+                        AppFilledButton(
                             text = "保存",
-                            palette = palette,
                             onClick = { onChange(editing) },
-                            modifier = Modifier.weight(1f),
-                            primary = true,
-                            cornerRadius = style.smallRadius
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
         }
-    }
+    
+            }
+}
     selectingTarget?.let { target ->
         CharacterSelectDialog(
             title = if (target == RelationSelectTarget.FROM) "选择角色 A" else "选择角色 B",

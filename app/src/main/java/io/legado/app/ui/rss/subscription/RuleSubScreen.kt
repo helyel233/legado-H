@@ -1,5 +1,7 @@
 package io.legado.app.ui.rss.subscription
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -32,7 +34,6 @@ import io.legado.app.ui.widget.compose.AppManagementLazyColumn
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 
 @Composable
@@ -135,12 +136,14 @@ private fun RuleSubTypeChip(
     label: String,
     palette: AppManagementPalette
 ) {
-    LegadoMiuixCard(
+    Surface(
+        shape = RoundedCornerShape(palette.actionRadius ?: 9.dp),
         color = palette.settings.accent.copy(alpha = 0.14f),
         contentColor = palette.settings.accent,
-        cornerRadius = palette.miuix.actionRadius ?: 9.dp,
-        insidePadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
+        Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
         Text(
             text = label,
             color = palette.settings.accent,
@@ -150,6 +153,8 @@ private fun RuleSubTypeChip(
             overflow = TextOverflow.Ellipsis
         )
     }
+
+        }
 }
 
 @Composable

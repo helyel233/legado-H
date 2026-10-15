@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.uikit.v5.components.AppSwitch
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -112,7 +113,7 @@ data class AppSettingPalette(
 @Immutable
 data class AppManagementPalette(
     val settings: AppSettingPalette,
-    val miuix: LegadoMiuixPalette
+    val actionRadius: androidx.compose.ui.unit.Dp
 )
 
 @Immutable
@@ -203,20 +204,10 @@ fun rememberAppManagementPalette(): AppManagementPalette {
     val colors = rememberAppSettingPalette()
     val panelRadius = context.composePanelRadius()
     val actionRadius = context.composeActionRadius()
-    return remember(colors, panelRadius, actionRadius) {
+    return remember(colors, actionRadius) {
         AppManagementPalette(
             settings = colors,
-            miuix = LegadoMiuixPalette(
-                accent = colors.accent,
-                surface = colors.page,
-                surfaceVariant = Color(colors.row),
-                primaryText = colors.primaryText,
-                secondaryText = colors.secondaryText,
-                danger = colors.danger,
-                onAccent = colors.onAccent,
-                panelRadius = panelRadius,
-                actionRadius = actionRadius
-            )
+            actionRadius = actionRadius
         )
     }
 }
@@ -405,10 +396,9 @@ fun AppManagementListRow(
             }
             trailingBeforeSwitch?.invoke(this)
             if (switchChecked != null && onSwitchChange != null) {
-                LegadoMiuixSwitch(
+                AppSwitch(
                     checked = switchChecked,
-                    onCheckedChange = onSwitchChange,
-                    palette = palette.miuix
+                    onCheckedChange = onSwitchChange
                 )
             }
             onEdit?.let {

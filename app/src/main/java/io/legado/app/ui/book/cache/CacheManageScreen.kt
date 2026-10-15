@@ -190,7 +190,7 @@ private fun CacheModeTabRow(
                     .fillMaxSize()
                     .background(
                         color = if (selected) {
-                            palette.miuix.surfaceVariant
+                            Color(palette.settings.row)
                         } else {
                             Color.Transparent
                         },

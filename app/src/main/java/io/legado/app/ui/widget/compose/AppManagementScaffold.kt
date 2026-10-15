@@ -1,5 +1,10 @@
 package io.legado.app.ui.widget.compose
 
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppDangerButton
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -202,13 +207,15 @@ private fun AppManagementSearchField(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LegadoMiuixCard(
+    Surface(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
         color = Color(palette.settings.row),
         contentColor = palette.settings.primaryText,
-        cornerRadius = palette.miuix.actionRadius ?: 12.dp,
-        insidePadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -258,6 +265,8 @@ private fun AppManagementSearchField(
             }
         }
     }
+
+        }
 }
 
 @Composable
@@ -329,16 +338,13 @@ private fun RowScope.CompactSelectionButton(
     primary: Boolean = false,
     onClick: () -> Unit
 ) {
-    LegadoMiuixActionButton(
-        text = text,
-        palette = palette.miuix,
-        onClick = onClick,
-        primary = primary,
-        danger = danger,
-        minWidth = 72.dp,
-        minHeight = 34.dp,
-        insidePadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
-    )
+    if (danger) {
+        AppDangerButton(text = text, onClick = onClick)
+    } else if (primary) {
+        AppFilledButton(text = text, onClick = onClick)
+    } else {
+        AppGhostButton(text = text, onClick = onClick)
+    }
 }
 
 @Composable

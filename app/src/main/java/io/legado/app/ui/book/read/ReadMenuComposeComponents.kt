@@ -57,8 +57,8 @@ import io.legado.app.help.book.library.LibraryCloudState
 import io.legado.app.ui.book.read.ReadMenuButtonConfig
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppSlider
+import kotlin.math.roundToInt
 import io.legado.app.utils.dpToPx
 
 private const val MENU_BUTTONS_PER_PAGE = 4
@@ -480,16 +480,13 @@ fun ReadMenuSeekBarRow(
         // 进度滑块
         var localProgress by remember { mutableIntStateOf(seekProgress) }
         LaunchedEffect(seekProgress) { localProgress = seekProgress }
-        AppThemedStepperSlider(
-            value = localProgress,
-            range = 0..seekMax.coerceAtLeast(1),
-            onValueChange = { localProgress = it },
+        AppSlider(
+            value = localProgress.toFloat(),
+            onValueChange = { localProgress = it.roundToInt() },
             onValueChangeFinished = { onSeekStop(localProgress) },
-            palette = style.toMiuixPalette(),
-            modifier = Modifier.weight(1f),
-            trackHeight = 28.dp,
-            thumbSize = 22.dp,
-            endpointWidth = 24.dp
+            valueRange = 0f..seekMax.coerceAtLeast(1).toFloat(),
+            steps = seekMax.coerceAtLeast(1) - 1,
+            modifier = Modifier.weight(1f)
         )
 
         Spacer(modifier = Modifier.width(10.dp))
@@ -548,20 +545,17 @@ fun ReadMenuBrightnessRow(
         // 亮度滑块
         var localBrightness by remember { mutableIntStateOf(brightness) }
         LaunchedEffect(brightness) { localBrightness = brightness }
-        AppThemedStepperSlider(
-            value = localBrightness,
-            range = 0..255,
+        AppSlider(
+            value = localBrightness.toFloat(),
             onValueChange = {
-                localBrightness = it
-                onBrightnessChange(it)
+                localBrightness = it.roundToInt()
+                onBrightnessChange(localBrightness)
             },
             onValueChangeFinished = { onBrightnessStop(localBrightness) },
-            palette = style.toMiuixPalette(),
+            valueRange = 0f..255f,
+            steps = 254,
             enabled = !isAuto,
-            modifier = Modifier.weight(1f),
-            trackHeight = 28.dp,
-            thumbSize = 22.dp,
-            endpointWidth = 24.dp
+            modifier = Modifier.weight(1f)
         )
 
         // 右侧占位（和进度条的下一章图标等宽）

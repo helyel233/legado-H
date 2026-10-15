@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.uikit.v5.components.AppFilledButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,7 +40,6 @@ import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 
 @Composable
@@ -104,16 +104,13 @@ internal fun AiImageProviderManageScreen(
                         }
                     }
                 }
-                LegadoMiuixActionButton(
+                AppFilledButton(
                     text = stringResource(R.string.add),
-                    palette = palette.miuix,
                     onClick = onAdd,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 14.dp),
-                    primary = true,
-                    cornerRadius = palette.miuix.actionRadius,
-                    minHeight = 46.dp
+
                 )
             }
         }
@@ -138,7 +135,7 @@ private fun AiImageProviderTopBar(
             modifier = Modifier
                 .size(42.dp)
                 .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
+            shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
             color = Color.Transparent,
             contentColor = palette.settings.primaryText,
             tonalElevation = 0.dp,
@@ -193,7 +190,7 @@ private fun AiImageProviderTopBarButton(
         modifier = Modifier
             .size(42.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
+        shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
         color = Color.Transparent,
         contentColor = palette.settings.primaryText,
         tonalElevation = 0.dp,
@@ -292,7 +289,7 @@ private fun AiImageProviderCard(
 @Composable
 private fun AiImageProviderCurrentBadge(palette: AppManagementPalette) {
     Surface(
-        shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
+        shape = RoundedCornerShape(palette.actionRadius ?: 12.dp),
         color = palette.settings.accent.copy(alpha = 0.14f),
         contentColor = palette.settings.accent,
         tonalElevation = 0.dp,

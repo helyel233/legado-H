@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.ai.compose
-
+import io.legado.app.uikit.v5.components.AppDropdownField
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,10 +61,6 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.main.ai.AiWorldBookBinding
 import io.legado.app.ui.main.ai.AiWorldBookConfig
 import io.legado.app.ui.main.ai.AiWorldBookEntry
-import io.legado.app.ui.widget.compose.LegadoMiuixActionRow
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
-import io.legado.app.ui.widget.compose.LegadoMiuixSelectField
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 
@@ -107,14 +104,18 @@ private data class WorldBookSelectOption(
     val description: String = ""
 )
 
-private fun AiComposeStyle.toWorldBookMiuixPalette(): LegadoMiuixPalette {
-    return LegadoMiuixPalette(
-        accent = colors.accent,
+/** AI 域独立取色（aiComposeStyle），替代旧 LegadoMiuixPalette。 */
+private data class AiWbColors(
+    val surface: Color,
+    val surfaceVariant: Color,
+    val primaryText: Color
+)
+
+private fun AiComposeStyle.toAiWbColors(): AiWbColors {
+    return AiWbColors(
         surface = colors.cardSurface,
         surfaceVariant = colors.toolSurface.copy(alpha = 0.78f),
-        primaryText = colors.primaryText,
-        secondaryText = colors.secondaryText,
-        danger = colors.danger
+        primaryText = colors.primaryText
     )
 }
 
@@ -459,7 +460,7 @@ private fun WorldBookTopBar(
             }
         }
         onAdd?.let { addAction ->
-            val palette = style.toWorldBookMiuixPalette()
+            val palette = style.toAiWbColors()
             Box {
                 IconButton(onClick = { addMenuExpanded = true }) {
                     Icon(
@@ -474,15 +475,17 @@ private fun WorldBookTopBar(
                         onDismissRequest = { addMenuExpanded = false },
                         properties = PopupProperties(focusable = true)
                     ) {
-                        LegadoMiuixCard(
+                        Surface(
                             modifier = Modifier
                                 .width(188.dp)
                                 .padding(top = 46.dp),
+                            shape = RoundedCornerShape(style.metrics.chipRadius),
                             color = palette.surface,
                             contentColor = palette.primaryText,
-                            cornerRadius = style.metrics.chipRadius,
-                            insidePadding = PaddingValues(vertical = 6.dp)
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp
                         ) {
+                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
                             WorldBookAddMenuItem("新增世界书", palette, style) {
                                 addMenuExpanded = false
                                 addAction()
@@ -506,7 +509,7 @@ private fun WorldBookTopBar(
                                 }
                             }
                         }
-                    }
+                                                }}
                 }
             }
         }
@@ -516,17 +519,20 @@ private fun WorldBookTopBar(
 @Composable
 private fun WorldBookAddMenuItem(
     text: String,
-    palette: LegadoMiuixPalette,
+    palette: AiWbColors,
     style: AiComposeStyle,
     onClick: () -> Unit
 ) {
-    LegadoMiuixActionRow(
-        text = text,
-        palette = palette,
-        onClick = onClick,
-        cornerRadius = style.metrics.chipRadius,
-        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-    )
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(style.metrics.chipRadius))
+            .background(palette.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Text(text = text, color = palette.primaryText)
+    }
 }
 
 @Composable
@@ -998,17 +1004,13 @@ private fun LabeledSelect(
     modifier: Modifier = Modifier.fillMaxWidth(),
     onValueChange: (String) -> Unit
 ) {
-    val selected = options.firstOrNull { it.value == value } ?: options.first()
-    LegadoMiuixSelectField(
+    val selectedIndex = options.indexOfFirst { it.value == value }.coerceAtLeast(0)
+    AppDropdownField(
         label = label,
-        options = options,
-        selected = selected,
-        optionLabel = { it.label },
-        optionDescription = { it.description },
-        onSelected = { onValueChange(it.value) },
-        palette = style.toWorldBookMiuixPalette(),
-        modifier = modifier.padding(top = 10.dp),
-        cornerRadius = style.metrics.chipRadius
+        options = options.map { it.label },
+        selectedIndex = selectedIndex,
+        onSelect = { index -> onValueChange(options[index].value) },
+        modifier = modifier.padding(top = 10.dp)
     )
 }
 

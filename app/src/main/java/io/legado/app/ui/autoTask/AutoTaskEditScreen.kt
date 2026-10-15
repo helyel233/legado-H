@@ -1,5 +1,6 @@
 package io.legado.app.ui.autoTask
 
+import io.legado.app.uikit.v5.components.AppFilledButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
@@ -20,8 +21,6 @@ import io.legado.app.ui.widget.compose.V5DialogColors
 import io.legado.app.ui.widget.compose.AppRuleFieldSpacer
 import io.legado.app.ui.widget.compose.AppRuleSwitchRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.toMiuixPalette
 import androidx.compose.ui.res.stringResource
 
 internal enum class AutoTaskEditorField(
@@ -168,15 +167,12 @@ internal fun AutoTaskEditScreen(
         )
         onLogin?.let { login ->
             AppRuleFieldSpacer()
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = stringResource(R.string.login),
-                palette = style.toMiuixPalette(),
                 onClick = login,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                primary = true,
-                cornerRadius = style.actionRadius
+                    .padding(vertical = 4.dp)
             )
         }
     }

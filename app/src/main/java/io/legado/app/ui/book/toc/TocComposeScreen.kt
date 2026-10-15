@@ -1157,7 +1157,7 @@ private fun TocBottomIconButton(
         modifier = Modifier
             .padding(start = 8.dp)
             .defaultMinSize(minWidth = 42.dp, minHeight = 42.dp)
-            .clip(RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
+            .clip(RoundedCornerShape(palette.actionRadius ?: 12.dp))
             .appSettingPanelBackground(
                 normalColor = if (pressed) palette.settings.rowPressed else palette.settings.row,
                 panelImage = panelImage,

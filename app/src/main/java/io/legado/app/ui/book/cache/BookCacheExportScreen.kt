@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,10 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.ui.widget.compose.V5DialogColors
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberV5DialogColors
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 
 /**
  * 书籍缓存导出界面：勾选有缓存的书籍，全选/全不选，导出为 ZIP 或从 ZIP 恢复。
@@ -42,7 +44,6 @@ fun BookCacheExportScreen(
     onDismiss: () -> Unit
 ) {
     val style = rememberV5DialogColors()
-    val palette = style.toMiuixPalette()
     val exporting = state is BookCacheExportState.Exporting
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -112,24 +113,17 @@ fun BookCacheExportScreen(
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.book_cache_import),
-                palette = palette,
-                cornerRadius = style.actionRadius,
                 onClick = onImport
             )
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = stringResource(R.string.book_cache_export),
-                palette = palette,
-                primary = true,
-                cornerRadius = style.actionRadius,
                 modifier = Modifier.weight(1f),
                 onClick = onExport
             )
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.close),
-                palette = palette,
-                cornerRadius = style.actionRadius,
                 onClick = onDismiss
             )
         }
@@ -147,16 +141,23 @@ private fun BookCacheExportItemCard(
     style: V5DialogColors,
     onClick: () -> Unit
 ) {
-    LegadoMiuixCard(
+    val visual = LocalVisualSpec.current
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
+        shape = visual.shape(ShapeKind.BUTTON),
         color = if (item.isSelected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
         contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = if (item.isSelected) "☑" else "☐",
                 color = if (item.isSelected) style.accent else style.secondaryText,
