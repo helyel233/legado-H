@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -71,12 +72,13 @@ import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
-import io.legado.app.ui.book.read.config.rememberReaderMenuDialogStyle
+import io.legado.app.ui.book.read.config.ReaderSheetStyle
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppDialogStyle
+import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.utils.activity
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.getPrefBoolean
@@ -622,7 +624,17 @@ class ReadMenu @JvmOverloads constructor(
         } else {
             context.bottomBackground
         }
-        return rememberReaderMenuDialogStyle(bgColor)
+        // 旧 rememberReaderMenuDialogStyle(bgColor) 的内联等价实现（ReaderComposeComponents 退役）
+        val base = rememberAppDialogStyle()
+        val palette = remember(bgColor) { ReaderSheetStyle.resolve(context, bgColor) }
+        return base.copy(
+            surface = Color(palette.surface),
+            fieldSurface = Color(palette.panel),
+            primaryText = Color(palette.textColor),
+            secondaryText = Color(palette.secondaryTextColor),
+            accent = Color(palette.accentColor),
+            stroke = Color(palette.stroke)
+        )
     }
     // endregion
 

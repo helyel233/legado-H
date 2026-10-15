@@ -1,18 +1,10 @@
 package io.legado.app.ui.book.toc.rule
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,115 +13,115 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.TxtTocRule
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.utils.GSON
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
-class TxtTocRuleEditComposeDialog : ComposeDialogFragment() {
+/**
+ * TXT 目录规则编辑（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + 自定义 OutlinedTextField(style 配色) + LegadoMiuixActionButton
+ * 换为 V5 AppDialog + `AppTextField`（label 降级为 placeholder）+ AppGhostButton/AppFilledButton。
+ * **按钮排布调整**：旧的 4 个动作按钮（粘贴/复制/取消/保存）在手机上一行放不下，
+ * 改为「粘贴/复制/取消」一行 + 「保存」整行（与 DictRuleEditDialog 的处理一致）。
+ * 业务保留：保存前名称非空 + `Pattern.compile(…, MULTILINE)` 正则语法校验（失败记 AppLog 且不关闭）、
+ * 复制/粘贴走剪贴板 JSON、ViewModel 复用 `TxtTocRuleEditDialog.ViewModel`。
+ */
+internal class TxtTocRuleEditComposeDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
     private val viewModel by viewModels<TxtTocRuleEditDialog.ViewModel>()
 
     private val callback: Callback?
         get() = (parentFragment as? Callback) ?: activity as? Callback
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    @Composable
+    override fun Content() {
+        val context = LocalContext.current
         val ruleId = arguments?.getLong(ARG_ID, 0L)?.takeIf { it != 0L }
+        var loaded by remember { mutableStateOf(false) }
+        var name by remember { mutableStateOf("") }
+        var rule by remember { mutableStateOf("") }
+        var replacement by remember { mutableStateOf("") }
+        var example by remember { mutableStateOf("") }
 
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val context = LocalContext.current
-                var loaded by remember { mutableStateOf(false) }
-                var name by remember { mutableStateOf("") }
-                var rule by remember { mutableStateOf("") }
-                var replacement by remember { mutableStateOf("") }
-                var example by remember { mutableStateOf("") }
-
-                LaunchedEffect(ruleId) {
-                    viewModel.initData(ruleId) { tocRule ->
-                        if (tocRule != null) {
-                            name = tocRule.name
-                            rule = tocRule.rule
-                            replacement = tocRule.replacement
-                            example = tocRule.example.orEmpty()
-                        }
-                        loaded = true
-                    }
+        LaunchedEffect(ruleId) {
+            viewModel.initData(ruleId) { tocRule ->
+                if (tocRule != null) {
+                    name = tocRule.name
+                    rule = tocRule.rule
+                    replacement = tocRule.replacement
+                    example = tocRule.example.orEmpty()
                 }
-
-                if (loaded) {
-                    TxtTocRuleEditContent(
-                        name = name,
-                        onNameChange = { name = it },
-                        rule = rule,
-                        onRuleChange = { rule = it },
-                        replacement = replacement,
-                        onReplacementChange = { replacement = it },
-                        example = example,
-                        onExampleChange = { example = it },
-                        onSave = {
-                            val tocRule = viewModel.tocRule ?: TxtTocRule().also {
-                                viewModel.tocRule = it
-                            }
-                            tocRule.name = name
-                            tocRule.rule = rule
-                            tocRule.replacement = replacement
-                            tocRule.example = example
-                            if (checkValid(tocRule)) {
-                                callback?.saveTxtTocRule(tocRule)
-                                dismissAllowingStateLoss()
-                            }
-                        },
-                        onCopyRule = {
-                            val tocRule = viewModel.tocRule ?: TxtTocRule().also {
-                                viewModel.tocRule = it
-                            }
-                            tocRule.name = name
-                            tocRule.rule = rule
-                            tocRule.replacement = replacement
-                            tocRule.example = example
-                            context.sendToClip(
-                                io.legado.app.utils.GSON.toJson(tocRule)
-                            )
-                        },
-                        onPasteRule = {
-                            viewModel.pasteRule { pasted ->
-                                name = pasted.name
-                                rule = pasted.rule
-                                replacement = pasted.replacement
-                                example = pasted.example.orEmpty()
-                            }
-                        },
-                        onDismiss = { dismissAllowingStateLoss() }
-                    )
-                }
+                loaded = true
             }
         }
+
+        if (!loaded) return
+
+        val fillRule: (TxtTocRule) -> TxtTocRule = { tocRule ->
+            tocRule.apply {
+                this.name = name
+                this.rule = rule
+                this.replacement = replacement
+                this.example = example
+            }
+        }
+
+        TxtTocRuleEditContent(
+            name = name,
+            onNameChange = { name = it },
+            rule = rule,
+            onRuleChange = { rule = it },
+            replacement = replacement,
+            onReplacementChange = { replacement = it },
+            example = example,
+            onExampleChange = { example = it },
+            onSave = {
+                val tocRule = viewModel.tocRule ?: TxtTocRule().also {
+                    viewModel.tocRule = it
+                }
+                fillRule(tocRule)
+                if (checkValid(tocRule)) {
+                    callback?.saveTxtTocRule(tocRule)
+                    dismissAllowingStateLoss()
+                }
+            },
+            onCopyRule = {
+                val tocRule = viewModel.tocRule ?: TxtTocRule().also {
+                    viewModel.tocRule = it
+                }
+                context.sendToClip(GSON.toJson(fillRule(tocRule)))
+            },
+            onPasteRule = {
+                viewModel.pasteRule { pasted ->
+                    name = pasted.name
+                    rule = pasted.rule
+                    replacement = pasted.replacement
+                    example = pasted.example.orEmpty()
+                }
+            },
+            onDismiss = { dismissAllowingStateLoss() }
+        )
     }
 
     private fun checkValid(tocRule: TxtTocRule): Boolean {
@@ -149,7 +141,7 @@ class TxtTocRuleEditComposeDialog : ComposeDialogFragment() {
     companion object {
         private const val ARG_ID = "id"
 
-        fun create(id: Long? = null): TxtTocRuleEditComposeDialog {
+        internal fun create(id: Long? = null): TxtTocRuleEditComposeDialog {
             return TxtTocRuleEditComposeDialog().apply {
                 if (id != null) {
                     arguments = Bundle().apply {
@@ -180,119 +172,71 @@ private fun TxtTocRuleEditContent(
     onPasteRule: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
 
-    AppDialogFrame(
-        title = stringResource(R.string.txt_toc_rule),
-        content = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                TxtTocRuleTextField(
-                    value = name,
-                    onValueChange = onNameChange,
-                    label = stringResource(R.string.name),
-                    singleLine = true,
-                    style = style
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+        ) {
+            Text(
+                text = stringResource(R.string.txt_toc_rule),
+                style = visual.type.title,
+                color = colors.onSurface
+            )
+            AppTextField(
+                value = name,
+                onValueChange = onNameChange,
+                placeholder = stringResource(R.string.name),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppTextField(
+                value = rule,
+                onValueChange = onRuleChange,
+                placeholder = stringResource(R.string.regex),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppTextField(
+                value = replacement,
+                onValueChange = onReplacementChange,
+                placeholder = stringResource(R.string.replace_to_js),
+                minLines = 2,
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            AppTextField(
+                value = example,
+                onValueChange = onExampleChange,
+                placeholder = stringResource(R.string.example),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 3)) {
+                AppGhostButton(
+                    text = stringResource(R.string.paste_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onPasteRule,
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                TxtTocRuleTextField(
-                    value = rule,
-                    onValueChange = onRuleChange,
-                    label = stringResource(R.string.regex),
-                    singleLine = true,
-                    style = style
+                AppGhostButton(
+                    text = stringResource(R.string.copy_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onCopyRule,
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                TxtTocRuleTextField(
-                    value = replacement,
-                    onValueChange = onReplacementChange,
-                    label = stringResource(R.string.replace_to_js),
-                    minLines = 2,
-                    maxLines = 4,
-                    style = style
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                TxtTocRuleTextField(
-                    value = example,
-                    onValueChange = onExampleChange,
-                    label = stringResource(R.string.example),
-                    singleLine = true,
-                    style = style
+                AppGhostButton(
+                    text = stringResource(R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss,
                 )
             }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.paste_rule),
-                palette = palette,
-                onClick = onPasteRule,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.copy_rule),
-                palette = palette,
-                onClick = onCopyRule,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.cancel),
-                palette = palette,
-                onClick = onDismiss,
-                cornerRadius = style.actionRadius
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
+            AppFilledButton(
                 text = stringResource(R.string.action_save),
-                palette = palette,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = onSave,
-                primary = true,
-                cornerRadius = style.actionRadius
             )
         }
-    )
-}
-
-@Composable
-private fun TxtTocRuleTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    style: AppDialogStyle,
-    singleLine: Boolean = false,
-    minLines: Int = 1,
-    maxLines: Int = 1
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            color = style.secondaryText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = singleLine,
-            minLines = minLines,
-            maxLines = maxLines,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily
-            ),
-            shape = RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                cursorColor = style.accent,
-                focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                unfocusedBorderColor = style.stroke
-            )
-        )
     }
 }

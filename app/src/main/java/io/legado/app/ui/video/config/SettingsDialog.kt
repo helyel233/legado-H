@@ -30,37 +30,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.model.VideoPlay
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppDialogSwitchRow
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionRow
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.ui.widget.number.NumberPickerDialog
 
-class SettingsDialog(private val context: Context, private val callBack: CallBack? = null) :
-    ComposeDialogFragment() {
+/**
+ * 视频播放设置弹窗（V5 基座版，旧 ComposeDialogFragment 退役批最后一个子类）。
+ * 尺寸：旧 AppDialogSize.Form → widthFraction 0.94f / maxWidthDp 660。
+ * 内容沿用旧桥组件（rememberAppDialogStyle 只吃主题键 + V5 形状镜像，V5 壳下渲染正常）。
+ * 业务保留：自动播放/开播全屏联动、底部进度条、播放缓存、长按倍速 NumberPickerDialog（含默认 30）。
+ */
+internal class SettingsDialog(private val context: Context, private val callBack: CallBack? = null) :
+    V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Form
+    override val widthFraction: Float = 0.94f
+    override val maxWidthDp: Int = 660
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    VideoSettingsContent(style = style)
-                }
-            }
-        }
+    @Composable
+    override fun Content() {
+        VideoSettingsContent(style = rememberAppDialogStyle())
     }
 
     @Composable

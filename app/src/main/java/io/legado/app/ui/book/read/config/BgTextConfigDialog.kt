@@ -39,6 +39,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,6 +47,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,10 +57,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -84,7 +84,6 @@ import androidx.core.graphics.toColorInt
 import androidx.appcompat.widget.AppCompatImageView
 import com.jaredrummler.android.colorpicker.ColorPickerDialog
 import io.legado.app.R
-import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.help.DefaultData
@@ -102,11 +101,13 @@ import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppThemedStepperSlider
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
+import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppRowWithSwitch
+import io.legado.app.uikit.v5.components.AppSlider
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
+import io.legado.app.uikit.v5.token.ShapeKind
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.fromJsonObject
@@ -137,10 +138,19 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
 import androidx.lifecycle.lifecycleScope
+import io.legado.app.help.coroutine.Coroutine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import splitties.init.appCtx
+import kotlin.coroutines.CoroutineContext
 
-class BgTextConfigDialog : BaseDialogFragment(0) {
+internal class BgTextConfigDialog : V5DialogFragment() {
+
+    /** 旧 BaseDialogFragment 的 BOTTOM 底部面板窗口行为 */
+    override val dialogTheme: Int = R.style.Theme_Legado_ComposeDialog_Bottom
+    override val dialogGravity: Int = Gravity.BOTTOM
+    override val dialogWindowAnimations: Int = R.style.AnimDialogBottom
 
     companion object {
         const val TEXT_COLOR = 121
@@ -174,21 +184,12 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         super.onStart()
         dialog?.window?.run {
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setBackgroundDrawableResource(android.R.color.transparent)
             decorView.setPadding(0, 0, 0, 0)
-            val attr = attributes
-            attr.dimAmount = 0.0f
-            attr.gravity = Gravity.BOTTOM
-            attributes = attr
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         observeEvent<ArrayList<ReadConfigEvent>>(EventBus.READ_CONFIG_V2) {
             if (pendingSelfConfigEvents > 0) {
                 pendingSelfConfigEvents--
@@ -196,19 +197,20 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 refreshTick++
             }
         }
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val style = rememberAppDialogStyle()
-                CompositionLocalProvider(
-                    LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
-                ) {
-                    BgTextConfigContent(style = style)
-                }
-                BgTextConfigDialogs()
-            }
-        }
     }
+
+    @Composable
+    override fun Content() {
+        BgTextConfigContent(palette = rememberReaderPagePalette())
+        BgTextConfigDialogs()
+    }
+
+    /** 旧 BaseDialogFragment.execute() 的等价实现（基座退役后自带）。 */
+    private fun <T> execute(
+        scope: CoroutineScope = lifecycleScope,
+        context: CoroutineContext = Dispatchers.IO,
+        block: suspend CoroutineScope.() -> T
+    ) = Coroutine.async(scope, context) { block() }
 
     // ── V5 弹窗状态 ─────────────────────────────────────────────
     internal var styleNameOpen by mutableStateOf(false)
@@ -271,7 +273,8 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         }
     }
 
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         (activity as ReadBookActivity).bottomDialog++
         presetBgImages = requireContext().assets.list("bg")?.toList().orEmpty()
     }
@@ -283,139 +286,163 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     }
 
     @Composable
-    private fun BgTextConfigContent(style: AppDialogStyle) {
-        refreshTick
-        LegadoMiuixCard(
+    private fun SectionCard(
+        palette: ReaderSheetStyle.Palette,
+        title: String? = null,
+        content: @Composable ColumnScope.() -> Unit
+    ) {
+        val visual = LocalVisualSpec.current
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(Color(palette.panel))
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            title?.let {
+                Text(
+                    text = it,
+                    color = Color(palette.accentColor),
+                    style = visual.type.label,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            content()
+        }
+    }
+
+    @Composable
+    private fun BgTextConfigContent(palette: ReaderSheetStyle.Palette) {
+        refreshTick
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            color = Color(palette.surface),
+            contentColor = Color(palette.textColor)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 520.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                HeaderSection(style)
-                ToggleSection(style)
+                HeaderSection(palette)
+                ToggleSection(palette)
                 if (ReadBook.book?.isImage != true) {
-                    UnderlineSection(style)
+                    UnderlineSection(palette)
                 }
-                ColorSection(style)
-                ImportExportSection(style)
-                SliderSection(style)
-                BackgroundImageSection(style)
+                ColorSection(palette)
+                ImportExportSection(palette)
+                SliderSection(palette)
+                BackgroundImageSection(palette)
             }
         }
     }
 
     @Composable
-    private fun HeaderSection(style: AppDialogStyle) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
+    private fun HeaderSection(palette: ReaderSheetStyle.Palette) {
+        val visual = LocalVisualSpec.current
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(visual.shape(ShapeKind.BAR))
+                .background(Color(palette.panel))
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.style_name),
-                    color = style.primaryText,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = ReadBookConfig.durConfig.name.ifBlank { "文字" },
-                    color = style.secondaryText,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    painter = painterResource(R.drawable.ic_edit),
-                    contentDescription = stringResource(R.string.edit),
-                    tint = style.secondaryText,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clickable { editStyleName() }
-                        .padding(2.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.restore),
-                    color = style.accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { restorePreset() }
-                )
-            }
+            Text(
+                text = stringResource(R.string.style_name),
+                color = Color(palette.textColor),
+                style = visual.type.body,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = ReadBookConfig.durConfig.name.ifBlank { "文字" },
+                color = Color(palette.secondaryTextColor),
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_edit),
+                contentDescription = stringResource(R.string.edit),
+                tint = Color(palette.secondaryTextColor),
+                modifier = Modifier
+                    .size(24.dp)
+                    .clickable { editStyleName() }
+                    .padding(2.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.restore),
+                color = Color(palette.accentColor),
+                style = visual.type.caption,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable { restorePreset() }
+            )
         }
     }
 
     @Composable
-    private fun ToggleSection(style: AppDialogStyle) {
-        ReaderSectionCard(style = style, title = null, contentPadding = PaddingValues(6.dp)) {
+    private fun ToggleSection(palette: ReaderSheetStyle.Palette) {
+        SectionCard(palette = palette) {
             var followTheme by rememberSaveable(refreshTick) {
                 mutableStateOf(AppConfig.readerFollowTheme)
             }
             var darkStatusIcon by rememberSaveable(refreshTick) {
                 mutableStateOf(ReadBookConfig.durConfig.curStatusIconDark())
             }
-            ReaderSwitchRow(
-                title = stringResource(R.string.reader_follow_theme),
-                summary = stringResource(R.string.reader_follow_theme_summary),
-                checked = followTheme,
-                style = style
-            ) {
-                followTheme = it
-                AppConfig.readerFollowTheme = it
-                postReadConfigChanged(Background, Relayout)
-                (activity as? ReadBookActivity)?.upSystemUiVisibility()
-            }
             var scrollFollowBg by rememberSaveable(refreshTick) {
                 mutableStateOf(ReadBookConfig.durConfig.curReadScrollFollowBackground())
             }
-            ReaderSwitchRow(
+            AppRowWithSwitch(
+                title = stringResource(R.string.reader_follow_theme),
+                checked = followTheme,
+                card = false,
+                onCheckedChange = {
+                    followTheme = it
+                    AppConfig.readerFollowTheme = it
+                    postReadConfigChanged(Background, Relayout)
+                    (activity as? ReadBookActivity)?.upSystemUiVisibility()
+                }
+            )
+            AppRowWithSwitch(
                 title = stringResource(R.string.dark_status_icon),
                 checked = darkStatusIcon,
-                style = style
-            ) {
-                darkStatusIcon = it
-                ReadBookConfig.durConfig.setCurStatusIconDark(it)
-                (activity as? ReadBookActivity)?.upSystemUiVisibility()
-            }
-            ReaderSwitchRow(
+                card = false,
+                onCheckedChange = {
+                    darkStatusIcon = it
+                    ReadBookConfig.durConfig.setCurStatusIconDark(it)
+                    (activity as? ReadBookActivity)?.upSystemUiVisibility()
+                }
+            )
+            AppRowWithSwitch(
                 title = stringResource(R.string.read_scroll_follow_background),
                 checked = scrollFollowBg,
-                style = style,
-                summary = stringResource(R.string.read_scroll_follow_background_summary)
-            ) {
-                scrollFollowBg = it
-                ReadBookConfig.durConfig.setCurReadScrollFollowBackground(it)
-                postReadConfigChanged(Background, Relayout)
-            }
+                card = false,
+                onCheckedChange = {
+                    scrollFollowBg = it
+                    ReadBookConfig.durConfig.setCurReadScrollFollowBackground(it)
+                    postReadConfigChanged(Background, Relayout)
+                }
+            )
         }
     }
 
     @Composable
-    private fun UnderlineSection(style: AppDialogStyle) {
-        ReaderSectionCard(
-            style = style,
-            title = stringResource(R.string.text_underline),
-            contentPadding = PaddingValues(8.dp)
-        ) {
+    private fun UnderlineSection(palette: ReaderSheetStyle.Palette) {
+        val textColor = Color(palette.textColor)
+        val accent = Color(palette.accentColor)
+        SectionCard(palette = palette, title = stringResource(R.string.text_underline)) {
             var underlineMode by rememberSaveable(refreshTick) {
                 mutableIntStateOf(ReadBookConfig.underlineMode)
             }
@@ -425,28 +452,31 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             var dashLength by rememberSaveable(refreshTick) {
                 mutableIntStateOf(ReadBookConfig.underlineDashLength.roundToInt())
             }
-            ReaderSegmentedOptions(
-                options = listOf(
-                    ReaderOption("0", "关闭"),
-                    ReaderOption("1", "实线"),
-                    ReaderOption("2", "虚线")
-                ),
-                selectedValue = underlineMode.toString(),
-                style = style,
-                pillStyle = true
-            ) { value ->
-                val next = value.toIntOrNull() ?: return@ReaderSegmentedOptions
-                if (next == underlineMode) return@ReaderSegmentedOptions
-                underlineMode = next
-                ReadBookConfig.underlineMode = next
-                postReadConfigChanged(InvalidateTextPage, SubmitRender)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(0 to "关闭", 1 to "实线", 2 to "虚线").forEach { (value, label) ->
+                    AppChip(
+                        text = label,
+                        selected = value == underlineMode,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            if (value == underlineMode) return@AppChip
+                            underlineMode = value
+                            ReadBookConfig.underlineMode = value
+                            postReadConfigChanged(InvalidateTextPage, SubmitRender)
+                        }
+                    )
+                }
             }
             if (underlineMode != 0) {
                 SliderRow(
                     title = stringResource(R.string.underline_stroke_width),
                     value = strokeWidthStep,
                     range = 1..8,
-                    style = style,
+                    textColor = textColor,
+                    accent = accent,
                     valueText = "${strokeWidthStep / 2f} dp"
                 ) {
                     strokeWidthStep = it
@@ -459,7 +489,8 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                     title = stringResource(R.string.underline_dash_length),
                     value = dashLength,
                     range = 2..30,
-                    style = style,
+                    textColor = textColor,
+                    accent = accent,
                     valueText = "$dashLength dp"
                 ) {
                     dashLength = it
@@ -471,8 +502,10 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     }
 
     @Composable
-    private fun ColorSection(style: AppDialogStyle) {
-        ReaderSectionCard(style = style, title = null, contentPadding = PaddingValues(8.dp)) {
+    private fun ColorSection(palette: ReaderSheetStyle.Palette) {
+        val panel = Color(palette.panel)
+        val textColor = Color(palette.textColor)
+        SectionCard(palette = palette) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
@@ -480,19 +513,22 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 ColorAction(
                     text = stringResource(R.string.text_color),
                     color = Color(ReadBookConfig.durConfig.curTextColor()),
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f)
                 ) { showTextColorPicker() }
                 ColorAction(
                     text = stringResource(R.string.bg_color),
                     color = currentBackgroundSwatch(),
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f)
                 ) { showBgColorPicker() }
                 ColorAction(
                     text = stringResource(R.string.text_accent_color),
                     color = Color(ReadBookConfig.durConfig.curTextAccentColor()),
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f)
                 ) { showTextAccentColorPicker() }
             }
@@ -503,45 +539,43 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     private fun ColorAction(
         text: String,
         color: Color,
-        style: AppDialogStyle,
+        panel: Color,
+        textColor: Color,
         modifier: Modifier = Modifier,
         onClick: () -> Unit
     ) {
-        Surface(
+        val visual = LocalVisualSpec.current
+        Row(
             modifier = modifier
                 .heightIn(min = 42.dp)
-                .clickable(onClick = onClick),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 1.dp
+                .clip(visual.shape(ShapeKind.BUTTON))
+                .background(panel)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 9.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(color)
-                )
-                Spacer(modifier = Modifier.width(7.dp))
-                Text(
-                    text = text,
-                    color = style.primaryText,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(color)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+                text = text,
+                color = textColor,
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 
     @Composable
-    private fun ImportExportSection(style: AppDialogStyle) {
-        ReaderSectionCard(style = style, title = null, contentPadding = PaddingValues(8.dp)) {
+    private fun ImportExportSection(palette: ReaderSheetStyle.Palette) {
+        val panel = Color(palette.panel)
+        val textColor = Color(palette.textColor)
+        SectionCard(palette = palette) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -549,21 +583,24 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 SmallActionButton(
                     text = stringResource(R.string.import_str),
                     iconRes = R.drawable.ic_import,
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f),
                     onClick = ::launchImport
                 )
                 SmallActionButton(
                     text = stringResource(R.string.export_str),
                     iconRes = R.drawable.ic_export,
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f),
                     onClick = ::launchExport
                 )
                 SmallActionButton(
                     text = stringResource(R.string.delete),
                     iconRes = R.drawable.ic_clear_all,
-                    style = style,
+                    panel = panel,
+                    textColor = textColor,
                     modifier = Modifier.weight(1f),
                     danger = true,
                     onClick = ::deleteCurrentConfig
@@ -576,53 +613,55 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     private fun SmallActionButton(
         text: String,
         iconRes: Int,
-        style: AppDialogStyle,
+        panel: Color,
+        textColor: Color,
         modifier: Modifier = Modifier,
         danger: Boolean = false,
         onClick: () -> Unit
     ) {
-        Surface(
-            onClick = onClick,
-            modifier = modifier.heightIn(min = 42.dp),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = if (danger) style.danger.copy(alpha = 0.11f) else style.fieldSurface,
-            contentColor = if (danger) style.danger else style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 1.dp
+        val visual = LocalVisualSpec.current
+        val v5Colors = LocalSemanticColors.current
+        val tint = if (danger) v5Colors.error else textColor
+        Row(
+            modifier = modifier
+                .heightIn(min = 42.dp)
+                .clip(visual.shape(ShapeKind.BUTTON))
+                .background(if (danger) v5Colors.error.copy(alpha = 0.11f) else panel)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = text,
-                    tint = if (danger) style.danger else style.primaryText,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = text,
-                    color = if (danger) style.danger else style.primaryText,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = text,
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                color = tint,
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 
     @Composable
-    private fun SliderSection(style: AppDialogStyle) {
-        ReaderSectionCard(style = style, title = null, contentPadding = PaddingValues(8.dp)) {
+    private fun SliderSection(palette: ReaderSheetStyle.Palette) {
+        val textColor = Color(palette.textColor)
+        val accent = Color(palette.accentColor)
+        SectionCard(palette = palette) {
             var bgAlpha by rememberSaveable(refreshTick) { mutableIntStateOf(ReadBookConfig.bgAlpha) }
             var textShadow by rememberSaveable(refreshTick) { mutableIntStateOf(ReadBookConfig.paperInkStrength) }
             SliderRow(
                 title = stringResource(R.string.bg_alpha),
                 value = bgAlpha,
                 range = 0..100,
-                style = style
+                textColor = textColor,
+                accent = accent
             ) {
                 bgAlpha = it
                 ReadBookConfig.bgAlpha = it
@@ -632,7 +671,8 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 title = stringResource(R.string.text_shadow),
                 value = textShadow,
                 range = 0..100,
-                style = style,
+                textColor = textColor,
+                accent = accent,
                 valueText = if (textShadow == 0) stringResource(R.string.jf_convert_o) else "$textShadow%"
             ) {
                 textShadow = it
@@ -647,10 +687,12 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         title: String,
         value: Int,
         range: IntRange,
-        style: AppDialogStyle,
+        textColor: Color,
+        accent: Color,
         valueText: String = "$value%",
         onValueChange: (Int) -> Unit
     ) {
+        val visual = LocalVisualSpec.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -659,136 +701,125 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = title,
-                    color = style.primaryText,
-                    fontSize = 13.sp,
+                    color = textColor,
+                    style = visual.type.caption,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = valueText,
-                    color = style.accent,
-                    fontSize = 12.sp,
+                    color = accent,
+                    style = visual.type.caption,
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            AppThemedStepperSlider(
-                value = value,
-                range = range,
-                onValueChange = onValueChange,
-                palette = style.toMiuixPalette(),
-                trackHeight = 32.dp,
-                thumbSize = 24.dp,
-                endpointWidth = 28.dp
+            AppSlider(
+                value = value.toFloat(),
+                onValueChange = {
+                    onValueChange(it.roundToInt().coerceIn(range.first, range.last))
+                },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                steps = (range.last - range.first - 1).coerceAtLeast(0)
             )
         }
     }
 
     @Composable
-    private fun BackgroundImageSection(style: AppDialogStyle) {
-        ReaderSectionCard(
-            style = style,
-            title = stringResource(R.string.bg_image),
-            contentPadding = PaddingValues(8.dp)
-        ) {
+    private fun BackgroundImageSection(palette: ReaderSheetStyle.Palette) {
+        SectionCard(palette = palette, title = stringResource(R.string.bg_image)) {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item(key = "select_image") {
-                    SelectImageTile(style)
+                    SelectImageTile(palette)
                 }
                 items(
                     items = presetBgImages,
                     key = { it }
                 ) { imageName ->
-                    PresetBackgroundTile(imageName = imageName, style = style)
+                    PresetBackgroundTile(imageName = imageName, palette = palette)
                 }
             }
         }
     }
 
     @Composable
-    private fun SelectImageTile(style: AppDialogStyle) {
-        Surface(
+    private fun SelectImageTile(palette: ReaderSheetStyle.Palette) {
+        val visual = LocalVisualSpec.current
+        Column(
             modifier = Modifier
                 .width(82.dp)
                 .height(82.dp)
+                .clip(visual.shape(ShapeKind.BUTTON))
+                .background(Color(palette.panel))
                 .clickable {
                     selectBgImage.launch {
                         mode = HandleFileContract.IMAGE
                     }
-                },
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 1.dp
+                }
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_image),
-                    contentDescription = stringResource(R.string.select_image),
-                    tint = style.primaryText,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = stringResource(R.string.select_image),
-                    color = style.secondaryText,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Icon(
+                painter = painterResource(R.drawable.ic_image),
+                contentDescription = stringResource(R.string.select_image),
+                tint = Color(palette.textColor),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.select_image),
+                color = Color(palette.secondaryTextColor),
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 
     @Composable
-    private fun PresetBackgroundTile(imageName: String, style: AppDialogStyle) {
-        Surface(
+    private fun PresetBackgroundTile(imageName: String, palette: ReaderSheetStyle.Palette) {
+        val visual = LocalVisualSpec.current
+        Column(
             modifier = Modifier
                 .width(82.dp)
                 .height(82.dp)
+                .clip(visual.shape(ShapeKind.BUTTON))
+                .background(Color(palette.panel))
                 .clickable {
                     ReadBookConfig.durConfig.setCurBg(1, imageName)
                     postReadConfigChanged(Background)
                     refreshTick++
-                },
-            shape = RoundedCornerShape(style.actionRadius),
-            color = style.fieldSurface,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 1.dp
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(topStart = style.actionRadius, topEnd = style.actionRadius))
-                        .background(style.surface)
-                ) {
-                    PresetBackgroundPreview(
-                        imageName = imageName,
-                        modifier = Modifier.fillMaxSize()
-                    )
                 }
-                Text(
-                    text = imageName.substringBeforeLast("."),
-                    color = style.secondaryText,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 12.dp,
+                            topEnd = 12.dp
+                        )
+                    )
+                    .background(Color(palette.surface))
+            ) {
+                PresetBackgroundPreview(
+                    imageName = imageName,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
+            Text(
+                text = imageName.substringBeforeLast("."),
+                color = Color(palette.secondaryTextColor),
+                style = visual.type.caption,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+            )
         }
     }
 

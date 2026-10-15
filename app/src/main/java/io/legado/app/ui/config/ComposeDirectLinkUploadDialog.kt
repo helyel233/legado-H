@@ -1,9 +1,5 @@
 package io.legado.app.ui.config
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,45 +7,32 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.help.DirectLinkUpload
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppDialog
 import io.legado.app.uikit.v5.components.AppFilledButton
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.sendToClip
@@ -59,40 +42,45 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 
-class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
+/**
+ * 直链上传配置（V5 基座版）。
+ *
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + 自定义 OutlinedTextField + LegadoMiuixActionButton
+ * 换为 V5 AppDialog + `AppTextField` + AppGhostButton/AppFilledButton。
+ * 业务全部保留：`produceState` 异步读取已有规则（失败兜底空规则）、导入默认规则走 AppMenuSheet、
+ * 复制/粘贴走剪贴板（encodeRule/importRule 的失败文案不变）、
+ * 「上传 Url 与下载 Url 规则均非空才允许保存」的校验、`DirectLinkUpload.upLoad` 测试结果
+ * （成功可复制 / 失败走 AppConfirmDialog）以及保存落盘后的关闭。
+ */
+internal class ComposeDirectLinkUploadDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                val initialRule by produceState<DirectLinkUpload.Rule?>(null) {
-                    value = withContext(IO) {
-                        runCatching { DirectLinkUpload.getRule() }
-                            .getOrElse { DirectLinkUpload.Rule("", "", "") }
-                    }
-                }
-                initialRule?.let { rule ->
-                    DirectLinkUploadContent(
-                        initialRule = rule,
-                        onDismiss = { dismissAllowingStateLoss() },
-                        onImportDefault = ::importDefault,
-                        onCopyRule = ::copyRule,
-                        onPasteRule = ::pasteRule,
-                        onTest = ::test,
-                        onSave = ::saveRuleAndDismiss
-                    )
-                } ?: DirectLinkUploadLoadingContent(
-                    onDismiss = { dismissAllowingStateLoss() }
-                )
-                DirectLinkUploadDialogs()
+    @Composable
+    override fun Content() {
+        val initialRule by produceState<DirectLinkUpload.Rule?>(null) {
+            value = withContext(IO) {
+                runCatching { DirectLinkUpload.getRule() }
+                    .getOrElse { DirectLinkUpload.Rule("", "", "") }
             }
         }
+        initialRule?.let { rule ->
+            DirectLinkUploadContent(
+                initialRule = rule,
+                onDismiss = { dismissAllowingStateLoss() },
+                onImportDefault = ::importDefault,
+                onCopyRule = ::copyRule,
+                onPasteRule = ::pasteRule,
+                onTest = ::test,
+                onSave = ::saveRuleAndDismiss
+            )
+        } ?: DirectLinkUploadLoadingContent(
+            onDismiss = { dismissAllowingStateLoss() }
+        )
+        DirectLinkUploadDialogs()
     }
 
     // ── V5 弹窗状态 ─────────────────────────────────────────────
@@ -104,6 +92,9 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
 
     @Composable
     private fun DirectLinkUploadDialogs() {
+        val visual = LocalVisualSpec.current
+        val colors = LocalSemanticColors.current
+        val density = visual.density
         if (defaultRuleOpen) {
             AppMenuSheet(
                 title = getString(R.string.import_default_rule),
@@ -121,20 +112,20 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
             if (resultCopyable) {
                 AppDialog(onDismiss = { resultOpen = false }) {
                     Column(
-                        modifier = Modifier.padding(LocalVisualSpec.current.density.screenPadding),
-                        verticalArrangement = Arrangement.spacedBy(LocalVisualSpec.current.density.blockGap / 2),
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                     ) {
                         Text(
                             text = "测试结果",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = visual.type.title,
+                            color = colors.onSurface,
                         )
                         Text(
                             text = resultMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = visual.type.caption,
+                            color = colors.onSurfaceVariant,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(LocalVisualSpec.current.density.blockGap / 2)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2)) {
                             AppGhostButton(
                                 text = stringResource(R.string.copy_text),
                                 modifier = Modifier.weight(1f),
@@ -232,30 +223,34 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
 
 @Composable
 private fun DirectLinkUploadLoadingContent(onDismiss: () -> Unit) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    AppDialogFrame(
-        title = stringResource(R.string.backup_restore),
-        scrollContent = false,
-        content = {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+        ) {
+            Text(
+                text = stringResource(R.string.backup_restore),
+                style = visual.type.title,
+                color = colors.onSurface
+            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(96.dp),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = style.accent)
+                CircularProgressIndicator(color = colors.primary)
             }
-        },
-        actions = {
-            LegadoMiuixActionButton(
+            AppGhostButton(
                 text = stringResource(R.string.cancel),
-                palette = palette,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = onDismiss,
-                cornerRadius = style.actionRadius
             )
         }
-    )
+    }
 }
 
 @Composable
@@ -268,161 +263,125 @@ private fun DirectLinkUploadContent(
     onTest: () -> Unit,
     onSave: (DirectLinkUpload.Rule) -> Unit
 ) {
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
-    var uploadUrl by remember { mutableStateOf(initialRule.uploadUrl.orEmpty()) }
-    var downloadUrlRule by remember {
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
+    var uploadUrl by rememberSaveable { mutableStateOf(initialRule.uploadUrl.orEmpty()) }
+    var downloadUrlRule by rememberSaveable {
         mutableStateOf(initialRule.downloadUrlRule.orEmpty())
     }
-    var summary by remember { mutableStateOf(initialRule.summary.orEmpty()) }
+    var summary by rememberSaveable { mutableStateOf(initialRule.summary.orEmpty()) }
     var compress by rememberSaveable { mutableStateOf(initialRule.compress) }
 
-    AppDialogFrame(
-        title = stringResource(R.string.backup_restore),
-        content = {
-            Column(
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+        ) {
+            Text(
+                text = stringResource(R.string.backup_restore),
+                style = visual.type.title,
+                color = colors.onSurface
+            )
+            // Menu actions row
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(density.blockGap / 3)
             ) {
-                // Menu actions row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.import_default_rule),
-                        palette = palette,
-                        onClick = onImportDefault,
-                        cornerRadius = style.actionRadius
-                    )
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.copy_text),
-                        palette = palette,
-                        onClick = onCopyRule,
-                        cornerRadius = style.actionRadius
-                    )
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.paste_rule),
-                        palette = palette,
-                        onClick = onPasteRule,
-                        cornerRadius = style.actionRadius
-                    )
-                }
-                // Upload URL
-                DirectLinkTextField(
-                    value = uploadUrl,
-                    onValueChange = { uploadUrl = it },
-                    label = "上传Url",
-                    style = style
+                AppGhostButton(
+                    text = stringResource(R.string.import_default_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onImportDefault,
                 )
-                // Download URL rule
-                DirectLinkTextField(
-                    value = downloadUrlRule,
-                    onValueChange = { downloadUrlRule = it },
-                    label = "下载Url规则",
-                    style = style
+                AppGhostButton(
+                    text = stringResource(R.string.copy_text),
+                    modifier = Modifier.weight(1f),
+                    onClick = onCopyRule,
                 )
-                // Summary
-                DirectLinkTextField(
-                    value = summary,
-                    onValueChange = { summary = it },
-                    label = "注释",
-                    style = style
+                AppGhostButton(
+                    text = stringResource(R.string.paste_rule),
+                    modifier = Modifier.weight(1f),
+                    onClick = onPasteRule,
                 )
-                // Compress checkbox
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = compress,
-                        onCheckedChange = { compress = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = style.accent,
-                            uncheckedColor = style.secondaryText,
-                            checkmarkColor = style.surface
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "压缩",
-                        color = style.primaryText,
-                        fontSize = 14.sp,
-                        fontFamily = style.bodyFontFamily
-                    )
-                }
             }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = "测试",
-                palette = palette,
-                onClick = onTest,
-                cornerRadius = style.actionRadius
+            AppTextField(
+                value = uploadUrl,
+                onValueChange = { uploadUrl = it },
+                placeholder = "上传Url",
+                singleLine = false,
+                minLines = 1,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.cancel),
-                palette = palette,
-                onClick = onDismiss,
-                cornerRadius = style.actionRadius
+            AppTextField(
+                value = downloadUrlRule,
+                onValueChange = { downloadUrlRule = it },
+                placeholder = "下载Url规则",
+                singleLine = false,
+                minLines = 1,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.ok),
-                palette = palette,
-                onClick = {
-                    if (uploadUrl.isBlank()) {
-                        return@LegadoMiuixActionButton
-                    }
-                    if (downloadUrlRule.isBlank()) {
-                        return@LegadoMiuixActionButton
-                    }
-                    onSave(
-                        DirectLinkUpload.Rule(
-                            uploadUrl,
-                            downloadUrlRule,
-                            summary,
-                            compress,
-                            initialRule.expiryDate
-                        )
+            AppTextField(
+                value = summary,
+                onValueChange = { summary = it },
+                placeholder = "注释",
+                singleLine = false,
+                minLines = 1,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Compress checkbox
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = compress,
+                    onCheckedChange = { compress = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = colors.primary,
+                        uncheckedColor = colors.onSurfaceVariant,
+                        checkmarkColor = colors.surface
                     )
-                },
-                primary = true,
-                cornerRadius = style.actionRadius
-            )
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "压缩",
+                    color = colors.onSurface,
+                    style = visual.type.body
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 3)) {
+                AppGhostButton(
+                    text = "测试",
+                    modifier = Modifier.weight(1f),
+                    onClick = onTest,
+                )
+                AppGhostButton(
+                    text = stringResource(R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss,
+                )
+                AppFilledButton(
+                    text = stringResource(R.string.ok),
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (uploadUrl.isBlank() || downloadUrlRule.isBlank()) {
+                            return@AppFilledButton
+                        }
+                        onSave(
+                            DirectLinkUpload.Rule(
+                                uploadUrl,
+                                downloadUrlRule,
+                                summary,
+                                compress,
+                                initialRule.expiryDate
+                            )
+                        )
+                    },
+                )
+            }
         }
-    )
-}
-
-@Composable
-private fun DirectLinkTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    style: AppDialogStyle
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(text = label, fontSize = 13.sp) },
-        textStyle = androidx.compose.ui.text.TextStyle(
-            fontSize = 15.sp,
-            fontFamily = style.bodyFontFamily,
-            color = style.primaryText
-        ),
-        shape = RoundedCornerShape(style.actionRadius),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = style.accent,
-            unfocusedBorderColor = style.stroke,
-            focusedLabelColor = style.accent,
-            unfocusedLabelColor = style.secondaryText,
-            cursorColor = style.accent,
-            focusedContainerColor = style.fieldSurface,
-            unfocusedContainerColor = style.fieldSurface
-        ),
-        singleLine = false,
-        minLines = 1,
-        maxLines = 6
-    )
+    }
 }

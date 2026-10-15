@@ -1,14 +1,9 @@
 package io.legado.app.ui.about
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,61 +24,77 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.data.repository.debug.DebugEventCenter
 import io.legado.app.model.debug.DebugCategory
 import io.legado.app.model.debug.DebugEvent
 import io.legado.app.model.debug.DebugLevel
 import io.legado.app.model.debug.DebugLogUtils
-import io.legado.app.ui.widget.compose.AppDialogFrame
-import io.legado.app.ui.widget.compose.AppDialogSize
-import io.legado.app.ui.widget.compose.AppDialogStyle
-import io.legado.app.ui.widget.compose.AppRuleTabRow
-import io.legado.app.ui.widget.compose.AppRuleTextField
-import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
-import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.ui.host.V5DialogFragment
 import io.legado.app.ui.widget.dialog.TextDialog
+import io.legado.app.uikit.v5.components.AppCard
+import io.legado.app.uikit.v5.components.AppConfirmDialog
+import io.legado.app.uikit.v5.components.AppDialog
+import io.legado.app.uikit.v5.components.AppFilterChip
+import io.legado.app.uikit.v5.components.AppFilterChipRow
+import io.legado.app.uikit.v5.components.AppGhostButton
+import io.legado.app.uikit.v5.components.AppTextField
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
+import io.legado.app.uikit.v5.runtime.LocalVisualSpec
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 
 /**
- * 调试日志查看（移植自 Legado_Max 的调试日志体系·第一阶段）
+ * 调试日志查看（V5 基座版）。
  *
- * 分类标签（应用/网络/规则/书源/RSS/Toast/校验/崩溃/阅读器）+ 关键字过滤 + 实时刷新，
- * 点条目查看详情（含堆栈），支持清空与导出（复制全文）。
+ * 尺寸由旧 `AppDialogSize.Management` 映射为 widthFraction 0.96f / maxWidthDp 700；
+ * 内容由旧 AppDialogFrame + AppRuleTabRow + AppRuleTextField + LegadoMiuixCard + LegadoMiuixActionButton
+ * 换为 V5 AppDialog + `AppFilterChipRow`（分类标签）+ AppTextField + AppCard + AppGhostButton。
+ * **行为新增**：「清空」按 V5 危险操作红线补 `AppConfirmDialog(danger = true)`
+ * （旧版点击即清无确认，与 CrashLogsDialog 的处理保持一致）。
+ * 业务保留：分类 + 关键字过滤、`DebugEventCenter.eventFlow` 实时刷新、点条目看详情（含堆栈）、导出复制全文。
  */
-class DebugLogDialog : ComposeDialogFragment() {
+internal class DebugLogDialog : V5DialogFragment() {
 
-    override val dialogSize: AppDialogSize = AppDialogSize.Management
+    /** 旧 AppDialogSize.Management(widthFraction = 0.96f, maxWidthDp = 700) */
+    override val widthFraction: Float = 0.96f
+    override val maxWidthDp: Int = 700
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        val fragment = this
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                DebugLogContent(
-                    onDismiss = { dismissAllowingStateLoss() },
-                    onShowDetail = { event ->
-                        fragment.showDialogFragment(TextDialog(event.message, buildDetailText(event)))
-                    }
-                )
+    @Composable
+    override fun Content() {
+        val context = LocalContext.current
+        var clearConfirmOpen by remember { mutableStateOf(false) }
+        DebugLogContent(
+            onDismiss = { dismissAllowingStateLoss() },
+            onClear = { clearConfirmOpen = true },
+            onExport = {
+                context.sendToClip(DebugEventCenter.exportToText())
+                context.toastOnUi(R.string.copy_complete)
+            },
+            onShowDetail = { event ->
+                showDialogFragment(TextDialog(event.message, buildDetailText(event)))
             }
+        )
+        if (clearConfirmOpen) {
+            AppConfirmDialog(
+                title = stringResource(R.string.debug_log),
+                message = "确定清空全部调试日志？",
+                confirmLabel = stringResource(R.string.clear),
+                cancelLabel = stringResource(R.string.cancel),
+                danger = true,
+                onConfirm = {
+                    clearConfirmOpen = false
+                    DebugEventCenter.clear()
+                },
+                onDismiss = { clearConfirmOpen = false },
+            )
         }
     }
 
@@ -104,130 +115,117 @@ class DebugLogDialog : ComposeDialogFragment() {
 @Composable
 private fun DebugLogContent(
     onDismiss: () -> Unit,
+    onClear: () -> Unit,
+    onExport: () -> Unit,
     onShowDetail: (DebugEvent) -> Unit
 ) {
-    val context = LocalContext.current
-    val style = rememberAppDialogStyle()
-    val palette = style.toMiuixPalette()
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    val density = visual.density
 
     val categories = remember { DebugCategory.entries.toList() }
     var selectedCategory by remember { mutableStateOf(DebugCategory.ALL) }
     var query by remember { mutableStateOf("") }
     var events by remember { mutableStateOf(emptyList<DebugEvent>()) }
 
-    fun refresh() {
-        events = DebugEventCenter.getLogsByCategory(selectedCategory).filter { event ->
+    fun filtered(): List<DebugEvent> {
+        return DebugEventCenter.getLogsByCategory(selectedCategory).filter { event ->
             query.isBlank() || event.message.contains(query, ignoreCase = true)
         }
     }
 
     LaunchedEffect(selectedCategory, query) {
-        refresh()
+        events = filtered()
         // 有新事件时按当前筛选实时刷新
         DebugEventCenter.eventFlow.collect {
-            events = DebugEventCenter.getLogsByCategory(selectedCategory).filter { event ->
-                query.isBlank() || event.message.contains(query, ignoreCase = true)
-            }
+            events = filtered()
         }
     }
 
-    AppDialogFrame(
-        title = stringResource(R.string.debug_log),
-        scrollContent = false,
-        content = {
-            Column {
-                AppRuleTabRow(
-                    tabs = categories.map { it.displayName },
-                    selectedIndex = categories.indexOf(selectedCategory),
-                    onSelected = { index -> selectedCategory = categories[index] }
+    AppDialog(onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2)
+        ) {
+            Text(
+                text = stringResource(R.string.debug_log),
+                style = visual.type.title,
+                color = colors.onSurface
+            )
+            AppFilterChipRow(
+                chips = categories.map {
+                    AppFilterChip(label = it.displayName, selected = it == selectedCategory)
+                },
+                onChipClick = { index -> selectedCategory = categories[index] },
+            )
+            AppTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = stringResource(R.string.search),
+                singleLine = true,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (events.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.debug_log_empty),
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.padding(top = 6.dp))
-                AppRuleTextField(
-                    value = androidx.compose.ui.text.input.TextFieldValue(query),
-                    onValueChange = { query = it.text },
-                    label = stringResource(R.string.search),
-                    singleLine = true,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.padding(top = 6.dp))
-                if (events.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.debug_log_empty),
-                        color = style.secondaryText,
-                        fontSize = 13.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 380.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(events, key = { it.id }) { event ->
-                            DebugLogItem(
-                                event = event,
-                                style = style,
-                                onClick = { onShowDetail(event) }
-                            )
-                        }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(events, key = { it.id }) { event ->
+                        DebugLogItem(
+                            event = event,
+                            onClick = { onShowDetail(event) }
+                        )
                     }
                 }
             }
-        },
-        actions = {
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.clear),
-                palette = palette,
-                danger = true,
-                cornerRadius = style.actionRadius,
-                onClick = {
-                    DebugEventCenter.clear()
-                    events = emptyList()
-                }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.debug_log_export),
-                palette = palette,
-                cornerRadius = style.actionRadius,
-                onClick = {
-                    context.sendToClip(DebugEventCenter.exportToText())
-                    context.toastOnUi(R.string.copy_complete)
-                }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            LegadoMiuixActionButton(
-                text = stringResource(R.string.close),
-                palette = palette,
-                cornerRadius = style.actionRadius,
-                onClick = onDismiss
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(density.blockGap / 3)) {
+                AppGhostButton(
+                    text = stringResource(R.string.clear),
+                    modifier = Modifier.weight(1f),
+                    onClick = onClear,
+                )
+                AppGhostButton(
+                    text = stringResource(R.string.debug_log_export),
+                    modifier = Modifier.weight(1f),
+                    onClick = onExport,
+                )
+                AppGhostButton(
+                    text = stringResource(R.string.close),
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss,
+                )
+            }
         }
-    )
+    }
 }
 
 /** 单条日志：级别色点 + 分类 + 时间 + 消息 */
 @Composable
 private fun DebugLogItem(
     event: DebugEvent,
-    style: AppDialogStyle,
     onClick: () -> Unit
 ) {
-    LegadoMiuixCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        color = style.fieldSurface,
-        contentColor = style.primaryText,
-        cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
+    val visual = LocalVisualSpec.current
+    val colors = LocalSemanticColors.current
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.foundation.layout.Box(
+            Box(
                 modifier = Modifier
                     .size(8.dp)
                     .background(levelColor(event.level), CircleShape)
@@ -235,22 +233,22 @@ private fun DebugLogItem(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = event.category.displayName,
-                color = style.accent,
-                fontSize = 12.sp,
+                color = colors.primary,
+                style = visual.type.caption,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = DebugLogUtils.formatShortTime(event.time),
-                color = style.secondaryText,
-                fontSize = 12.sp
+                color = colors.onSurfaceVariant,
+                style = visual.type.caption
             )
         }
         Spacer(modifier = Modifier.padding(top = 2.dp))
         Text(
             text = event.message,
-            color = style.primaryText,
-            fontSize = 13.sp,
+            color = colors.onSurface,
+            style = visual.type.body,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
