@@ -122,9 +122,11 @@ class AnalyzeByJSonPath(json: Any) {
         }
     }
 
-    internal fun getObject(rule: String): Any {
+    internal fun getObject(rule: String): Any? {
         return try {
-            ctx.read(rule)
+            //必须显式指定 Any：否则 try/catch 降级返回 "" 会让 Kotlin 把泛型 T 推断为 String，
+            //编译出 check-cast String，$.data 取到 JSON 对象(Map)时抛 ClassCastException
+            ctx.read<Any>(rule)
         } catch (e: Exception) {
             //节点不存在或路径非法时返回空串，与 getString/getList 的降级行为保持一致
             e.printOnDebug()

@@ -44,8 +44,10 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.readingHttpClient as okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.data.entities.RssSource
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.association.OnLineImportActivity
@@ -404,6 +406,34 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
     }
 
+    /**
+     * 纯文章源(articleStyle<2)的文章态强制套一层主题纯色底：
+     * 源内容自带复杂背景图时正文难以辨认，这里用 !important 盖掉
+     * html/body 的背景并配套主题文字色，保证日夜主题下都有对比度。
+     * 图片样式源(articleStyle>=2)保持源样式不动。
+     */
+    private fun buildArticleHtmlStyle(rssSource: RssSource?): String? {
+        val sourceStyle = rssSource?.style
+        if ((rssSource?.articleStyle ?: 0) >= 2) {
+            return sourceStyle
+        }
+        fun Int.toCssColor(): String = String.format("#%06X", 0xFFFFFF and this)
+        val bg = ThemeStore.backgroundColor(this).toCssColor()
+        val fg = primaryTextColor.toCssColor()
+        val link = accentColor.toCssColor()
+        val solidStyle = "html,body{background-color:$bg !important;background-image:none !important;}" +
+            "body{color:$fg !important;}" +
+            "a{color:$link !important;}"
+        return if (sourceStyle.isNullOrBlank()) {
+            //传了非空 style 会跳过 clHtml 里的 img/video 默认兜底，这里一并带上
+            "img{max-width:100% !important; width:auto; height:auto;}" +
+                "video{object-fit:fill; max-width:100% !important; width:auto; height:auto;}" +
+                solidStyle
+        } else {
+            sourceStyle + solidStyle
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun initLiveData() {
         viewModel.contentLiveData.observe(this) { content ->
@@ -411,7 +441,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 upWebviewSettings()
                 initJavascriptInterface()
                 val rssSource = viewModel.rssSource
-                val html = viewModel.clHtml(content, rssSource?.style)
+                val html = viewModel.clHtml(content, buildArticleHtmlStyle(rssSource))
                 val url = NetworkUtils.getAbsoluteURL(it.origin, it.link).substringBefore("@js")
                 val baseUrl = if (rssSource?.loadWithBaseUrl == false) null else url
                 currentWebView.loadDataWithBaseURL(
