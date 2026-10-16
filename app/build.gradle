@@ -229,6 +229,8 @@ dependencies {
     implementation(libs.fragment.ktx)
     implementation(libs.preference.ktx)
     implementation(libs.androidx.constraintlayout)
+    // Baseline Profile 安装器：冷启动/首滑 AOT 预热的生效前置（基线文件生成需真机跑宏基准，后续接入）
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.liquidglass)
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.androidx.recyclerview)

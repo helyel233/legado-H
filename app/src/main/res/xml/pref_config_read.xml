@@ -184,7 +184,7 @@
         app:isBottomBackground="true" />
 
     <io.legado.app.lib.prefs.SwitchPreference
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:key="optimizeRender"
         android:title="@string/enable_optimize_render"
         app:iconSpaceReserved="false"

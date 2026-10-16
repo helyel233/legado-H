@@ -742,11 +742,14 @@ private fun BookTagAssignmentDialog(
                 ) {
                     items(visibleBooks, key = { it.bookUrl }) { book ->
                         val selected = book.bookUrl in selectedUrls
-                        val tags = BookTagHelper.parse(book.customTag)
-                        val description = listOfNotNull(
-                            book.author.takeIf { it.isNotBlank() },
-                            tags.takeIf { it.isNotEmpty() }?.joinToString(" · ")
-                        ).joinToString("  ·  ")
+                        // 标签解析与描述拼接缓存到书籍维度，滚动/重组不重复计算
+                        val description = remember(book) {
+                            val tags = BookTagHelper.parse(book.customTag)
+                            listOfNotNull(
+                                book.author.takeIf { it.isNotBlank() },
+                                tags.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+                            ).joinToString("  ·  ")
+                        }
                         LegadoMiuixChoiceRow(
                             text = book.name,
                             description = description,

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.page.entities
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
@@ -88,6 +89,8 @@ data class TextPage(
     var hasReadAloudSpan = false
     var epubBackgroundSrc: String? = null
     var epubBackgroundColor: Int? = null
+    private var cachedEpubBgKey: String? = null
+    private var cachedEpubBgBitmap: Bitmap? = null
     var epubBackgroundSize: String? = null
     var epubBackgroundPosition: String? = null
     var epubBackgroundRepeat: String? = null
@@ -581,13 +584,20 @@ data class TextPage(
         val width = view.width.toFloat()
         val height = view.height.toFloat()
         if (width <= 0f || height <= 0f) return
-        val bitmap = ImageProvider.getImageOrNull(
+        // 背景图按 (src+尺寸) 缓存在页对象上：ImageProvider 内部位图可能被 LRU 驱逐回收，
+        // 命中前需校验 isRecycled，失效时重新走 ImageProvider 解码。
+        val bitmap = cachedEpubBgBitmap?.takeIf {
+            cachedEpubBgKey == "$src@${width.toInt()}x${height.toInt()}" && !it.isRecycled
+        } ?: ImageProvider.getImageOrNull(
             book = book,
             src = src,
             width = width.toInt(),
             height = height.toInt(),
             cacheKeySuffix = "epub-bg-${width.toInt()}x${height.toInt()}"
-        ) ?: return
+        )?.also {
+            cachedEpubBgKey = "$src@${width.toInt()}x${height.toInt()}"
+            cachedEpubBgBitmap = it
+        } ?: return
         val (drawWidth, drawHeight) = resolveEpubBackgroundSize(
             sourceWidth = bitmap.width.toFloat(),
             sourceHeight = bitmap.height.toFloat(),

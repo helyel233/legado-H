@@ -125,36 +125,64 @@ fun rememberAppDialogStyle(): AppDialogStyle {
         AppConfig.dialogAlpha.coerceIn(0, 100) / 100f
     }
     val themeUiPalette = rememberThemeUiPalette()
-    val customSurface = themeUiPalette.cardColor.takeIf { themeUiPalette.hasCustomCardColor }
-    val customFieldSurface = themeUiPalette.mutedColor.takeIf { themeUiPalette.hasCustomMutedColor }
-    val surfaceBase = customSurface ?: context.bottomBackground
-    val fieldSurface = customFieldSurface ?: ColorUtils.blendColors(
-        surfaceBase,
+    // 结果整体 remember：blendColors/withAlpha/字体构造等重算只在键变化时执行，
+    // 避免每次重组都重复读 SP 与派生颜色计算。
+    // 注意：所有参与构造的派生值都要进键，否则主题局部变化时对话框样式会陈旧。
+    val uiFontPath = AppConfig.uiFontPath
+    val titleFontPath = AppConfig.titleFontPath
+    val bottomBackground = context.bottomBackground
+    val primaryText = context.primaryTextColor
+    val secondaryText = context.secondaryTextColor
+    val panelRadius = context.composePanelRadius()
+    val actionRadius = context.composeActionRadius()
+    val panelBorderColor = UiCorner.panelBorderColor(context)
+    val dangerColor = ContextCompat.getColor(context, R.color.md_red_500)
+    return remember(
+        themeUiPalette.signature,
+        night,
         accent,
-        if (night) 0.10f else 0.05f
-    )
-    val fieldAlpha = (layoutAlpha + if (night) 0.10f else 0.08f).coerceIn(0f, 1f)
-    val stroke = UiCorner.panelBorderColor(context)
-        ?: if (customSurface != null || customFieldSurface != null) {
-            context.themeDividerColorOrDefault()
-        } else {
-            UiCorner.effectStrokeColor(surfaceBase)
-        }
-    // 文字色按对话框实际背景明暗推导，而非全局 night 标志，避免深底深字/浅底白字
-    return AppDialogStyle(
-        accent = Color(accent),
-        onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
-        surface = Color(ColorUtils.withAlpha(surfaceBase, layoutAlpha)),
-        fieldSurface = Color(ColorUtils.withAlpha(fieldSurface, fieldAlpha)),
-        primaryText = Color(context.primaryTextColor),
-        secondaryText = Color(context.secondaryTextColor),
-        stroke = Color(stroke),
-        danger = Color(ContextCompat.getColor(context, R.color.md_red_500)),
-        panelRadius = context.composePanelRadius(),
-        actionRadius = context.composeActionRadius(),
-        bodyFontFamily = FontFamily(context.uiTypeface()),
-        titleFontFamily = FontFamily(context.titleTypeface())
-    )
+        layoutAlpha,
+        uiFontPath,
+        titleFontPath,
+        bottomBackground,
+        primaryText,
+        secondaryText,
+        panelRadius,
+        actionRadius,
+        panelBorderColor,
+        dangerColor
+    ) {
+        val customSurface = themeUiPalette.cardColor.takeIf { themeUiPalette.hasCustomCardColor }
+        val customFieldSurface = themeUiPalette.mutedColor.takeIf { themeUiPalette.hasCustomMutedColor }
+        val surfaceBase = customSurface ?: bottomBackground
+        val fieldSurface = customFieldSurface ?: ColorUtils.blendColors(
+            surfaceBase,
+            accent,
+            if (night) 0.10f else 0.05f
+        )
+        val fieldAlpha = (layoutAlpha + if (night) 0.10f else 0.08f).coerceIn(0f, 1f)
+        val stroke = panelBorderColor
+            ?: if (customSurface != null || customFieldSurface != null) {
+                context.themeDividerColorOrDefault()
+            } else {
+                UiCorner.effectStrokeColor(surfaceBase)
+            }
+        // 文字色按对话框实际背景明暗推导，而非全局 night 标志，避免深底深字/浅底白字
+        AppDialogStyle(
+            accent = Color(accent),
+            onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
+            surface = Color(ColorUtils.withAlpha(surfaceBase, layoutAlpha)),
+            fieldSurface = Color(ColorUtils.withAlpha(fieldSurface, fieldAlpha)),
+            primaryText = Color(primaryText),
+            secondaryText = Color(secondaryText),
+            stroke = Color(stroke),
+            danger = Color(dangerColor),
+            panelRadius = panelRadius,
+            actionRadius = actionRadius,
+            bodyFontFamily = FontFamily(context.uiTypeface()),
+            titleFontFamily = FontFamily(context.titleTypeface())
+        )
+    }
 }
 
 @Composable

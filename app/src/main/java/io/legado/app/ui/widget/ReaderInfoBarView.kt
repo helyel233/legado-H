@@ -63,6 +63,7 @@ class ReaderInfoBarView @JvmOverloads constructor(
         }
     private var timeText = timeFormat.format(Date())
     private var text: String = ""
+    private var cachedTextWidth = 0f
     private val innerHeight
         get() = height - paddingTop - paddingBottom - insetTop
     private val innerWidth
@@ -94,7 +95,8 @@ class ReaderInfoBarView @JvmOverloads constructor(
 
         val textX = when (textInfoAlignment) {
             ALIGN_CENTER -> {
-                val textWidth = paint.measureText(text)
+                // 文本宽度在 updateTextSize 缓存，onDraw 不再每帧 measureText
+                val textWidth = cachedTextWidth
                 (width / 2f).coerceIn(
                     paddingLeft + insetLeft + cutoutInsetLeft + textWidth / 2,
                     width - paddingRight - insetRight - cutoutInsetRight - textWidth / 2
@@ -161,6 +163,7 @@ class ReaderInfoBarView @JvmOverloads constructor(
         paint.textSize = testTextSize * scaleFactor
 
         paint.getTextBounds(text, 0, text.length, textBounds)
+        cachedTextWidth = paint.measureText(text)
     }
 
     private fun calculateMaxWidthScale(): Float {

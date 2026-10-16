@@ -488,6 +488,8 @@ private suspend fun loadCoverBitmapOnce(
         .let { if (thumbFile == null) it.placeholder(BookCover.defaultDrawable) else it }
         .error(BookCover.defaultDrawable)
         .priority(if (useThumb) Priority.HIGH else Priority.NORMAL)
+        // 高清模式保持 SIZE_ORIGINAL：改成按屏幕尺寸 override 会让小尺寸封面被 Glide
+        // 放大到屏幕分辨率解码（低分辨率封面很常见），内存占用反而成倍增加
         .override(
             if (useThumb) COVER_THUMB_WIDTH else Target.SIZE_ORIGINAL,
             if (useThumb) COVER_THUMB_HEIGHT else Target.SIZE_ORIGINAL

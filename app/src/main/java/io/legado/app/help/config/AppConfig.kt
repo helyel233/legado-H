@@ -102,7 +102,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val immersiveManageBar: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.immersiveManageBar, true)
     var optimizeRender = CanvasRecorderFactory.isSupport
-            && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
+            && appCtx.getPrefBoolean(PreferKey.optimizeRender, true)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
     var editFontScale = appCtx.getPrefInt(PreferKey.editFontScale, 16)
     var editNonPrintable = appCtx.getPrefInt(PreferKey.editNonPrintable, 0)
@@ -198,7 +198,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                 appCtx.getPrefBoolean(PreferKey.loadCoverHighQuality, false)
 
             PreferKey.optimizeRender -> optimizeRender = CanvasRecorderFactory.isSupport
-                    && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
+                    && appCtx.getPrefBoolean(PreferKey.optimizeRender, true)
 
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
 

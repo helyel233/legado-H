@@ -98,7 +98,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     @SuppressLint("NotifyDataSetChanged")
     @Synchronized
-    fun setItems(items: List<ITEM>?) {
+    private fun setItemsAll(items: List<ITEM>?) {
         kotlin.runCatching {
             diffVersion++
             diffJob?.cancel()
@@ -113,6 +113,29 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         }
     }
 
+    /**
+     * 默认比较钩子：子类可覆写以获得更精确的增量刷新。
+     * 默认实现用 equals——数据类可正确 diff；普通实体退化为全量重绑（与旧 notifyDataChanged 行为一致）。
+     */
+    protected open fun areItemsTheSame(oldItem: ITEM, newItem: ITEM): Boolean = oldItem == newItem
+
+    protected open fun areContentsTheSame(oldItem: ITEM, newItem: ITEM): Boolean = oldItem == newItem
+
+    private val defaultDiffCallback = object : DiffUtil.ItemCallback<ITEM>() {
+        override fun areItemsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
+            return this@RecyclerAdapter.areItemsTheSame(oldItem, newItem)
+        }
+
+        override fun areContentsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
+            return this@RecyclerAdapter.areContentsTheSame(oldItem, newItem)
+        }
+    }
+
+    @Synchronized
+    fun setItems(items: List<ITEM>?) {
+        setItems(items, defaultDiffCallback)
+    }
+
     @Synchronized
     fun setItems(
         items: List<ITEM>?,
@@ -121,7 +144,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     ) {
         kotlin.runCatching {
             if (!isResumed) { //全量标记更新
-                setItems(items)
+                setItemsAll(items)
                 return@runCatching
             }
             val oldItems = this.items.toList()
@@ -165,7 +188,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
             }
             if (!isResumed) {
-                setItems(items)
+                setItemsAll(items)
                 return@runCatching
             }
             diffJob?.cancel()
@@ -185,7 +208,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     // 原写法 `if (isResumed || diffResult == null)` 把活跃态也导向全量刷新，
                     // 导致 dispatchUpdatesTo 永远走不到、DiffUtil 形同虚设。
                     if (!isResumed || diffResult == null) {
-                        setItems(items)
+                        setItemsAll(items)
                         return@post
                     }
                     if (this@RecyclerAdapter.items.isNotEmpty()) {
@@ -241,7 +264,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
             val oldSize = getActualItemCount()
             if (this.items.addAll(newItems)) {
                 if (oldSize == 0 && getHeaderCount() == 0) {
-                    notifyDataSetChanged()
+                    notifyItemRangeInserted(0, newItems.size)
                 } else {
                     notifyItemRangeInserted(oldSize + getHeaderCount(), newItems.size)
                 }
@@ -335,8 +358,13 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     @Synchronized
     fun clearItems() {
         kotlin.runCatching {
+            val oldSize = getActualItemCount()
             this.items.clear()
-            notifyDataSetChanged()
+            if (oldSize > 0) {
+                notifyItemRangeRemoved(getHeaderCount(), oldSize)
+            } else {
+                notifyDataSetChanged()
+            }
             onCurrentListChanged()
         }
     }

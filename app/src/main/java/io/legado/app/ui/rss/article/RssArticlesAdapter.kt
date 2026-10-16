@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.view.ViewGroup
 import com.bumptech.glide.load.DataSource
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
@@ -65,7 +66,10 @@ class RssArticlesAdapter(context: Context, callBack: CallBack) :
             } else {
                 val options =
                     RequestOptions().set(OkHttpModelLoader.sourceOriginOption, item.origin)
-                ImageLoader.load(context, item.image).apply(options).apply {
+                ImageLoader.load(context, item.image)
+                    .apply(options)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .apply {
                     if (callBack.isGridLayout) {
                         placeholder(R.drawable.image_rss_article)
                     } else {

@@ -22,6 +22,7 @@ import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class ThemeUiPalette(
     @param:ColorInt val cardColor: Int,
@@ -117,23 +118,100 @@ fun Context.themeUiPalette(): ThemeUiPalette {
     )
 }
 
+/**
+ * 进程级签名/色板缓存：
+ * themeUiSignature() 约 40 次 SP 读取 + 1 次面板背景图文件 stat，
+ * 书架格子/列表项每个都会调用一次，缓存后只有偏好真正变化时才重算。
+ * 失效依赖单一全局 SP 监听，与 rememberThemeUiPalette 内的监听使用同一套依赖键。
+ */
+private object ThemeUiSignatureCache {
+    @Volatile
+    var signature: String? = null
+
+    @Volatile
+    var palette: ThemeUiPalette? = null
+
+    /**
+     * 签名同时依赖"当前是否夜间"。themeMode 为"跟随系统"时该值来自 Configuration，
+     * 系统切深浅色不一定伴随偏好写入事件，因此读取时额外比对，避免缓存永久陈旧。
+     */
+    @Volatile
+    private var cachedNight: Boolean = false
+
+    private val listenersRegistered = AtomicBoolean(false)
+
+    fun ensureListeners(context: Context) {
+        if (!listenersRegistered.compareAndSet(false, true)) return
+        val appContext = context.applicationContext
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key in themeUiDependencyKeySet ||
+                key == ThemeStorePrefKeys.VALUES_CHANGED
+            ) {
+                invalidate()
+            }
+        }
+        appContext.defaultSharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        ThemeStore.prefs(appContext).registerOnSharedPreferenceChangeListener(listener)
+    }
+
+    fun invalidate() {
+        synchronized(this) {
+            signature = null
+            palette = null
+        }
+    }
+
+    fun cachedSignature(): String? {
+        val cached = signature ?: return null
+        return cached.takeIf { cachedNight == AppConfig.isNightTheme }
+    }
+
+    fun store(signature: String, night: Boolean) {
+        this.cachedNight = night
+        this.signature = signature
+    }
+}
+
+fun Context.themeUiSignatureCached(): String {
+    ThemeUiSignatureCache.ensureListeners(this)
+    val night = AppConfig.isNightTheme
+    ThemeUiSignatureCache.cachedSignature()?.let { return it }
+    return synchronized(ThemeUiSignatureCache) {
+        ThemeUiSignatureCache.cachedSignature() ?: themeUiSignature().also {
+            ThemeUiSignatureCache.store(it, night)
+        }
+    }
+}
+
+fun Context.themeUiPaletteCached(): ThemeUiPalette {
+    val signature = themeUiSignatureCached()
+    ThemeUiSignatureCache.palette?.takeIf { it.signature == signature }?.let { return it }
+    return synchronized(ThemeUiSignatureCache) {
+        ThemeUiSignatureCache.palette
+            ?.takeIf { it.signature == signature }
+            ?: themeUiPalette().also { ThemeUiSignatureCache.palette = it }
+    }
+}
+
 @Composable
 fun rememberThemeUiPalette(): ThemeUiPalette {
     val context = LocalContext.current
+    // 签名/色板走进程级缓存（见 ThemeUiSignatureCache），
+    // 每个调用点只在缓存失效时才做全量 SP 读取与文件 stat
     var signature by remember(context) {
-        mutableStateOf(context.themeUiSignature())
+        mutableStateOf(context.themeUiSignatureCached())
     }
     DisposableEffect(context) {
         val defaultPrefs = context.defaultSharedPreferences
         val themeStorePrefs = ThemeStore.prefs(context)
         val defaultListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key != null && key in themeUiDependencyKeySet) {
-                signature = context.themeUiSignature()
+                signature = context.themeUiSignatureCached()
             }
         }
         val themeStoreListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == ThemeStorePrefKeys.VALUES_CHANGED) {
-                signature = context.themeUiSignature()
+                signature = context.themeUiSignatureCached()
             }
         }
         defaultPrefs.registerOnSharedPreferenceChangeListener(defaultListener)
@@ -144,7 +222,7 @@ fun rememberThemeUiPalette(): ThemeUiPalette {
         }
     }
     return remember(context, signature) {
-        context.themeUiPalette()
+        context.themeUiPaletteCached()
     }
 }
 

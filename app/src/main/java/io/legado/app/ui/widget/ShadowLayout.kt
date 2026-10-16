@@ -119,7 +119,12 @@ class ShadowLayout @JvmOverloads constructor(
         mRectF.top = rectTop
         mRectF.right = rectRight
         mRectF.bottom = rectBottom
-        setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom)
+        // setPadding 会触发 requestLayout：值没变时跳过，避免测量循环放大
+        if (paddingLeft != this.paddingLeft || paddingTop != this.paddingTop ||
+            paddingRight != this.paddingRight || paddingBottom != this.paddingBottom
+        ) {
+            setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom)
+        }
     }
 
     /**
@@ -127,7 +132,7 @@ class ShadowLayout @JvmOverloads constructor(
      */
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        setUpShadowPaint()
+        // Paint 配置只与阴影属性相关，在 init/setter 中设置一次即可，不必每帧 reset+setShadowLayer
         if (mShadowShape == SHAPE_RECTANGLE) {
             canvas.drawRect(mRectF, mPaint)
         } else if (mShadowShape == SHAPE_OVAL) {
@@ -142,12 +147,14 @@ class ShadowLayout @JvmOverloads constructor(
 
     fun setShadowColor(shadowColor: Int) {
         mShadowColor = shadowColor
+        setUpShadowPaint()
         requestLayout()
         postInvalidate()
     }
 
     fun setShadowRadius(shadowRadius: Float) {
         mShadowRadius = shadowRadius
+        setUpShadowPaint()
         requestLayout()
         postInvalidate()
     }

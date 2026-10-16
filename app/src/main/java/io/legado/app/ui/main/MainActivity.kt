@@ -210,7 +210,16 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
     private var onUpBooksBadgeView: BadgeView? = null
+
+    /** 外观套件变更事件后紧跟 RECREATE：置位后跳过本帧的全量外观刷新，避免同帧双倍重建 */
+    private var recreatePending = false
+
+    /** 安全网：recreate() 万一未真正重建本实例（如 Activity 正在结束），1.5s 后必须解除抑制 */
+    private val resetRecreatePendingRunnable = Runnable {
+        recreatePending = false
+    }
     private val appearanceRefreshRunnable = Runnable {
+        if (recreatePending) return@Runnable
         refreshAppearanceKitNow()
     }
     private var mainBackgroundVersion by mutableIntStateOf(0)
@@ -509,7 +518,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val initialPage = resolveHomePagePosition()
         pagePosition = initialPage
         viewPagerMain.setEdgeEffectColor(primaryColor)
-        viewPagerMain.offscreenPageLimit = (bottomMenuCount - 1).coerceAtLeast(1)
+        // 只保留相邻页常驻：启动不再一次性实例化全部 Tab 的 Fragment（降内存与首帧耗时）。
+        // 非相邻 Tab 切换时按需重建，各 Fragment 的数据重载路径均已带脏检查。
+        viewPagerMain.offscreenPageLimit = 1
         viewPagerMain.adapter = adapter
         viewPagerMain.setCurrentItem(initialPage, false)
         viewPagerMain.addOnPageChangeListener(PageChangeCallback())
@@ -2303,6 +2314,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     override fun onDestroy() {
         aiFloatingBall?.removeCallbacks(aiFloatingBallAttachRunnable)
         binding.root.removeCallbacks(appearanceRefreshRunnable)
+        binding.root.removeCallbacks(resetRecreatePendingRunnable)
         clearLiquidGlassCallbacks()
         resetLiquidGlassBindingState()
         clearSideNavigationBackground()
@@ -2331,6 +2343,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             onUpBooksBadgeView!!.setBadgeCount(it)
         }
         observeEvent<String>(EventBus.RECREATE) {
+            recreatePending = true
+            binding.root.removeCallbacks(resetRecreatePendingRunnable)
+            binding.root.postDelayed(resetRecreatePendingRunnable, 1500L)
             refreshMainThemeBackground(force = true, scheduleWarmup = false)
             recreate()
         }

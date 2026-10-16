@@ -234,7 +234,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                             switch(
                                 key = PreferKey.optimizeRender,
                                 title = getString(R.string.enable_optimize_render),
-                                defaultValue = false,
+                                defaultValue = true,
                                 visible = CanvasRecorderFactory.isSupport
                             ),
                             SettingActionSpec(

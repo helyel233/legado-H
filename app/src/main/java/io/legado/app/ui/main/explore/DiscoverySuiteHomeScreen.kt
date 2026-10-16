@@ -687,10 +687,12 @@ private fun DiscoverySuiteHorizontalBooksWidget(
     val displayBooks = remember(widget.id, books) {
         books.take(HORIZONTAL_WIDGET_MAX_RENDER_COUNT)
     }
-    val shouldLoadMore by remember {
+    // 以数量为键：derivedStateOf 内不能捕获会整体替换的 List（追加后读到旧实例）
+    val displayCount = displayBooks.size
+    val shouldLoadMore by remember(displayCount) {
         derivedStateOf {
             val lastVisibleIndex = rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            displayBooks.isNotEmpty() && lastVisibleIndex >= displayBooks.lastIndex - 4
+            displayCount > 0 && lastVisibleIndex >= displayCount - 5
         }
     }
     LaunchedEffect(shouldLoadMore, displayBooks.size) {
@@ -806,8 +808,12 @@ private fun DiscoverySuiteRankButtonsWidget(
 ) {
     val palette = renderConfig.palette
     val radiusPx = with(LocalDensity.current) { palette.actionRadius.toPx() }
+    // 分组结构缓存：目标列表变化才重算，重组不重复 chunked
+    val buttonRows = remember(widget.id, widget.targets) {
+        widget.targets.take(RANK_BUTTON_MAX_COUNT).chunked(3)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        widget.targets.take(RANK_BUTTON_MAX_COUNT).chunked(3).forEach { rowTargets ->
+        buttonRows.forEach { rowTargets ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

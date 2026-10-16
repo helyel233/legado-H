@@ -37,6 +37,9 @@ class BatteryView @JvmOverloads constructor(
             }
         }
     private var battery: Int = 0
+    private var batteryWidthCacheKey = Int.MIN_VALUE
+    private var batteryWidthCacheTextSize = 0f
+    private var batteryWidthCacheValue = 0f
 
     init {
         setPadding(4.dpToPx(), 3.dpToPx(), 6.dpToPx(), 3.dpToPx())
@@ -72,7 +75,10 @@ class BatteryView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        canvasRecorder.invalidate()
+        // 仅在布局真正变化时失效录制缓存，避免每次 layout 往返都抵消录制收益
+        if (changed) {
+            canvasRecorder.invalidate()
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -100,11 +106,23 @@ class BatteryView @JvmOverloads constructor(
     private fun drawBattery(canvas: Canvas) {
         if (!isBattery) return
         layout.getLineBounds(0, outFrame)
+        val batteryText = battery.toString()
+        // 电量文本宽度按电量值缓存，避免每帧 StaticLayout.getDesiredWidth 测量
+        val batteryTextWidth = if (batteryWidthCacheKey == battery &&
+            batteryWidthCacheTextSize == paint.textSize
+        ) {
+            batteryWidthCacheValue
+        } else {
+            StaticLayout.getDesiredWidth(batteryText, paint).also {
+                batteryWidthCacheKey = battery
+                batteryWidthCacheTextSize = paint.textSize
+                batteryWidthCacheValue = it
+            }
+        }
         val batteryStart = layout
-            .getPrimaryHorizontal(text.length - battery.toString().length)
+            .getPrimaryHorizontal(text.length - batteryText.length)
             .toInt() + 2.dpToPx()
-        val batteryEnd = batteryStart +
-                StaticLayout.getDesiredWidth(battery.toString(), paint).toInt() + 4.dpToPx()
+        val batteryEnd = batteryStart + batteryTextWidth.toInt() + 4.dpToPx()
         outFrame.set(
             batteryStart,
             2.dpToPx(),

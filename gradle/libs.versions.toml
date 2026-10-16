@@ -95,6 +95,7 @@ androidx-annotation = { group = "androidx.annotation", name = "annotation", vers
 androidx-collection = { module = "androidx.collection:collection", version.ref = "collection" }
 appcompat-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version = "1.4.1" }
 liquidglass = { module = "com.qmdeve.liquidglass:core", version.ref = "liquidglass" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 lottie = { module = "com.airbnb.android:lottie", version.ref = "lottie" }

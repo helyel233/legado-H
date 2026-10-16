@@ -77,7 +77,7 @@ class CacheChapterAdapter(
         if (!enabled) {
             selectedKeys.clear()
         }
-        notifyDataSetChanged()
+        upAllSelectionState()
     }
 
     fun toggleSelection(item: CacheChapterItem) {
@@ -94,12 +94,22 @@ class CacheChapterAdapter(
     fun selectAllVisible() {
         selectedKeys.clear()
         getItems().forEach { selectedKeys.add(it.key) }
-        notifyDataSetChanged()
+        upAllSelectionState()
     }
 
     fun clearSelection() {
         selectedKeys.clear()
-        notifyDataSetChanged()
+        upAllSelectionState()
+    }
+
+    /** 全选/清空/模式切换只刷勾选态，避免长列表整表重绑 */
+    private fun upAllSelectionState() {
+        val size = getItems().size
+        if (size > 0) {
+            updateItems(0, size - 1, PAYLOAD_SELECTION)
+        } else {
+            notifyDataSetChanged()
+        }
     }
 
     fun getSelectedItems(): List<CacheChapterItem> {

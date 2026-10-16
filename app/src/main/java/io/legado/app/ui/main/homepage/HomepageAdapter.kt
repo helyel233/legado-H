@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.MarginPageTransformer
@@ -94,6 +95,71 @@ class HomepageAdapter(
         }
     }
 
+    /** 仅"加载中"状态翻转（书籍列表不变）时走 payload 轻量刷新，避免整块重绑 */
+    private fun moduleDiffCallback(
+        oldModules: List<HomepageModuleUi>,
+        newModules: List<HomepageModuleUi>
+    ): DiffUtil.Callback = object : DiffUtil.Callback() {
+        override fun getOldListSize(): Int = oldModules.size
+        override fun getNewListSize(): Int = newModules.size
+
+        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+            val old = oldModules.getOrNull(oldItemPosition) ?: return true
+            val new = newModules.getOrNull(newItemPosition) ?: return true
+            return old.globalId == new.globalId
+        }
+
+        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+            val old = oldModules.getOrNull(oldItemPosition) ?: return true
+            val new = newModules.getOrNull(newItemPosition) ?: return true
+            return old == new
+        }
+
+        override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any? {
+            val oldItem = oldModules.getOrNull(oldItemPosition) ?: return null
+            val newItem = newModules.getOrNull(newItemPosition) ?: return null
+            val oldLoaded = oldItem.state as? ModuleLoadState.Loaded
+            val newLoaded = newItem.state as? ModuleLoadState.Loaded
+            if (oldLoaded != null && newLoaded != null &&
+                oldLoaded.books == newLoaded.books && oldLoaded.hasMore == newLoaded.hasMore &&
+                oldLoaded.page == newLoaded.page &&
+                oldLoaded.isLoadingMore != newLoaded.isLoadingMore
+            ) {
+                return LoadMorePayload(
+                    module = newItem,
+                    hasMore = newLoaded.hasMore,
+                    isLoadingMore = newLoaded.isLoadingMore
+                )
+            }
+            val oldTabs = oldItem.state as? ModuleLoadState.RankingTabs
+            val newTabs = newItem.state as? ModuleLoadState.RankingTabs
+            if (oldTabs != null && newTabs != null &&
+                oldTabs.tabs == newTabs.tabs && oldTabs.selectedIndex == newTabs.selectedIndex
+            ) {
+                val oldTab = oldTabs.tabs.getOrNull(oldTabs.selectedIndex)
+                val newTab = newTabs.tabs.getOrNull(newTabs.selectedIndex)
+                if (oldTab != null && newTab != null &&
+                    oldTab.books == newTab.books && oldTab.hasMore == newTab.hasMore &&
+                    oldTab.isLoadingMore != newTab.isLoadingMore
+                ) {
+                    return LoadMorePayload(
+                        module = newItem,
+                        hasMore = newTab.hasMore,
+                        isLoadingMore = newTab.isLoadingMore
+                    )
+                }
+            }
+            return null
+        }
+    }
+
+    /** payload：只有加载更多状态变化，书籍列表内容未变 */
+    private data class LoadMorePayload(
+        val module: HomepageModuleUi,
+        val hasMore: Boolean,
+        val isLoadingMore: Boolean,
+    )
+
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         recyclerView.addOnScrollListener(outerScrollListener)
     }
@@ -104,9 +170,17 @@ class HomepageAdapter(
 
     fun submitModules(list: List<HomepageModuleUi>) {
         if (list == modules) return
+        val oldModules = modules.toList()
+        val newModules = list.toList()
         modules.clear()
         modules.addAll(list)
-        notifyDataSetChanged()
+        if (oldModules.isEmpty() || newModules.isEmpty()) {
+            notifyDataSetChanged()
+        } else {
+            // detectMoves 保持 false：与原行为一致，模块重排走 remove+insert，不做位移动画
+            DiffUtil.calculateDiff(moduleDiffCallback(oldModules, newModules))
+                .dispatchUpdatesTo(this)
+        }
     }
 
     override fun getItemCount(): Int = modules.size
@@ -118,6 +192,18 @@ class HomepageAdapter(
 
     override fun onBindViewHolder(holder: ModuleViewHolder, position: Int) {
         holder.bind(modules[position])
+    }
+
+    override fun onBindViewHolder(
+        holder: ModuleViewHolder,
+        position: Int,
+        payloads: MutableList<Any>
+    ) {
+        val payload = payloads.firstOrNull()
+        if (payload != null && holder.handlePayload(payload)) {
+            return
+        }
+        super.onBindViewHolder(holder, position, payloads)
     }
 
     inner class ModuleViewHolder(
@@ -199,6 +285,40 @@ class HomepageAdapter(
                 is ModuleLoadState.Buttons -> bindButtons(module, state)
                 is ModuleLoadState.Loaded -> bindLoaded(module, state)
                 is ModuleLoadState.RankingTabs -> bindRankingTabs(module, state)
+            }
+        }
+
+        /** payload 轻量刷新：书籍列表不变，仅"加载更多"状态翻转；非本类 payload 返回 false 走全量绑定 */
+        fun handlePayload(payload: Any): Boolean {
+            if (payload !is LoadMorePayload) return false
+            updateLoadMore(payload)
+            return true
+        }
+
+        private fun updateLoadMore(payload: LoadMorePayload) {
+            val module = payload.module
+            val onLoadMore = {
+                val state = module.state
+                if (state is ModuleLoadState.RankingTabs) {
+                    callBack.onLoadMoreRankingTab(module, state.selectedIndex)
+                } else {
+                    callBack.onLoadMore(module)
+                }
+            }
+            when (module.type) {
+                // 横向翻页排行榜：只更新自动加载动作的可用性
+                HomepageModuleType.GridRanking -> {
+                    pagerLoadAction =
+                        if (payload.hasMore && !payload.isLoadingMore) onLoadMore else null
+                    binding.pbLoadMore.isVisible = false
+                }
+                // 网格/排行榜等带底部加载条的形态：只刷新加载条
+                HomepageModuleType.Grid,
+                HomepageModuleType.Waterfall,
+                HomepageModuleType.Ranking,
+                -> bindLoadMore(payload.hasMore, payload.isLoadingMore, onLoadMore)
+                // 横幅/卡片/无限网格：无底部加载条，自动加载动作不随 isLoadingMore 变化
+                else -> Unit
             }
         }
 

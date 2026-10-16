@@ -2,6 +2,7 @@ package io.legado.app.ui.book.manage
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
@@ -52,6 +53,11 @@ class BookAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.apply {
+            // 选中态 payload：只刷勾选框，避免长列表整行重绑
+            if (payloads.any { it is Bundle && it.containsKey("selected") }) {
+                checkbox.isChecked = selectedBooks.contains(item)
+                return
+            }
             // 背景图模式下 backgroundColor 返回透明，行文字直接压图难分辨：
             // 改铺与主题一致的半透明行底（随界面不透明度走）；普通主题维持原样
             root.setBackgroundColor(
@@ -127,7 +133,7 @@ class BookAdapter(context: Context, val callBack: CallBack) :
         } else {
             selectedBooks.clear()
         }
-        notifyDataSetChanged()
+        upAllSelectionState()
         callBack.upSelectCount()
     }
 
@@ -140,8 +146,17 @@ class BookAdapter(context: Context, val callBack: CallBack) :
                 selectedBooks.add(it)
             }
         }
-        notifyDataSetChanged()
+        upAllSelectionState()
         callBack.upSelectCount()
+    }
+
+    private fun upAllSelectionState() {
+        val size = getActualItemCount()
+        if (size > 0) {
+            notifyItemRangeChanged(0, size, bundleOf(Pair("selected", null)))
+        } else {
+            notifyDataSetChanged()
+        }
     }
 
     fun checkSelectedInterval() {

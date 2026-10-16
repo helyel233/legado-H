@@ -157,7 +157,7 @@ object BookCover {
             .apply(options)
             .override(context.resources.displayMetrics.widthPixels, SIZE_ORIGINAL)
             .diskCacheStrategy(DiskCacheStrategy.ALL)
-            .skipMemoryCache(true).let {
+            .let {
                 if (transformation != null) {
                     it.transform(transformation)
                 } else {

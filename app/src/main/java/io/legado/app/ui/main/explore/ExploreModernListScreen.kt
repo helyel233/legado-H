@@ -90,10 +90,13 @@ fun ExploreModernListScreen(
     }
     val listState = rememberLazyListState()
     val topPadding = with(LocalDensity.current) { topPaddingPx.toDp() }
-    val shouldLoadMore by remember(books, hasMore, isLoading) {
+    // 以 books.size 为 key：列表追加时换新 List 实例不会重建 derivedStateOf，
+    // 只有数量真正变化才失效
+    val bookCount = books.size
+    val shouldLoadMore by remember(bookCount, hasMore, isLoading) {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            books.isNotEmpty() && hasMore && !isLoading && lastVisible >= books.lastIndex - 3
+            bookCount > 0 && hasMore && !isLoading && lastVisible >= bookCount - 4
         }
     }
     val canScrollBackward by remember {
@@ -143,6 +146,12 @@ fun ExploreModernListScreen(
                 key = { book -> "${book.origin}|${book.bookUrl}" },
                 contentType = { "discover_book_$listItemStyle" }
             ) { book ->
+                // remember 稳定 onPreview 回调，保证列表项可跳过重组
+                val onPreview = remember(book) {
+                    { bounds: Rect? ->
+                        previewState = SearchBookPreviewState(book, bounds)
+                    }
+                }
                 ExploreBookListItem(
                     book = book,
                     inBookshelf = isInBookshelf(book),
@@ -151,9 +160,7 @@ fun ExploreModernListScreen(
                     fragment = fragment,
                     lifecycle = lifecycle,
                     onClick = onBookClick,
-                    onPreview = { bounds ->
-                        previewState = SearchBookPreviewState(book, bounds)
-                    }
+                    onPreview = onPreview
                 )
             }
             if (isLoading && books.isNotEmpty()) {
@@ -208,10 +215,11 @@ private fun ExploreModernGridScreen(
 ) {
     val gridState = rememberLazyGridState()
     val topPadding = with(LocalDensity.current) { topPaddingPx.toDp() }
-    val shouldLoadMore by remember(books, hasMore, isLoading) {
+    val bookCount = books.size
+    val shouldLoadMore by remember(bookCount, hasMore, isLoading) {
         derivedStateOf {
             val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            books.isNotEmpty() && hasMore && !isLoading && lastVisible >= books.lastIndex - 6
+            bookCount > 0 && hasMore && !isLoading && lastVisible >= bookCount - 7
         }
     }
     val canScrollBackward by remember {
@@ -263,15 +271,18 @@ private fun ExploreModernGridScreen(
                 key = { book -> "${book.origin}|${book.bookUrl}" },
                 contentType = { "discover_grid_book" }
             ) { book ->
+                val onPreview = remember(book) {
+                    { bounds: Rect? ->
+                        previewState = SearchBookPreviewState(book, bounds)
+                    }
+                }
                 ExploreGridBookItem(
                     book = book,
                     renderConfig = renderConfig,
                     fragment = fragment,
                     lifecycle = lifecycle,
                     onClick = onBookClick,
-                    onPreview = { bounds ->
-                        previewState = SearchBookPreviewState(book, bounds)
-                    }
+                    onPreview = onPreview
                 )
             }
             if (isLoading && books.isNotEmpty()) {

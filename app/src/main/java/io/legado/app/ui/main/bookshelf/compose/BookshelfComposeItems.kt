@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,9 @@ sealed interface BookshelfItemUi {
     val contentType: String
 }
 
+// @Immutable：列表项为纯展示数据（字段构造后不再变化），
+// 标注后 Compose 可跳过未变化 item 的重组，是书架滑动/刷新流畅度的关键
+@Immutable
 data class BookshelfFolderItemUi(
     val group: BookGroup
 ) : BookshelfItemUi {
@@ -57,6 +61,7 @@ data class BookshelfFolderItemUi(
     override val contentType: String = "folder"
 }
 
+@Immutable
 data class BookshelfCollectionItemUi(
     val collection: BookCollection,
     val bookCount: Int,
@@ -66,6 +71,7 @@ data class BookshelfCollectionItemUi(
     override val contentType: String = "collection"
 }
 
+@Immutable
 data class BookshelfBookItemUi(
     val display: BookShelfDisplay,
     val isUpdating: Boolean,

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Build
+import android.os.StrictMode
 import android.util.Log
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.jeremyliao.liveeventbus.LiveEventBus
@@ -96,6 +97,21 @@ class App : Application() {
         CrashHandler(this)
         if (isDebuggable) {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)
+            // debug 构建暴露主线程磁盘 IO（penaltyLog 不中断运行），防止启动/滑动卡顿问题长期隐藏
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .penaltyLog()
+                    .build()
+            )
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .penaltyLog()
+                    .build()
+            )
         }
         repairReaderDataBeforeUi()
         oldConfig = Configuration(resources.configuration)
@@ -104,6 +120,13 @@ class App : Application() {
         DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         Coroutine.async(Coroutine.defaultScope) {
+            // 数据库预热从主线程移到 IO 线程：Room 打开有毫秒级开销，
+            // 放在后台最早位置，绝大多数 UI 读取发生在其完成之后
+            runCatching {
+                appDb.openHelper.writableDatabase
+            }.onFailure {
+                Log.e("App", "open database in background failed", it)
+            }
             RestoreSnapshot.cleanupOrphans()
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")
@@ -159,11 +182,8 @@ class App : Application() {
     }
 
     private fun repairReaderDataBeforeUi() {
-        runCatching {
-            appDb.openHelper.writableDatabase
-        }.onFailure {
-            Log.e("App", "open database before reader data repair failed", it)
-        }
+        // 数据修复为纯偏好/配置文件操作（repair 路径不触碰 appDb），
+        // 稳态下 repairOnAppStart 因版本标记早退，仅应用升级后真正执行一次
         ReaderDataRepair.repairOnAppStart()
     }
 

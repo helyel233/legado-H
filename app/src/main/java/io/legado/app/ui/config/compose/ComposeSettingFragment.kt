@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.annotation.StringRes
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.edit
@@ -53,10 +54,13 @@ abstract class ComposeSettingFragment : Fragment(),
             )
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                refreshTick.intValue
+                // spec 用 remember(tick) 缓存：滚动定位等其他 state 变化不再触发整页 spec 重建，
+                // 只有偏好变化（refreshTick）时才重读 SP 重建
+                val tick = refreshTick.intValue
+                val page = remember(tick) { buildPageSpec() }
                 LegadoComposeTheme {
                     SettingSpecScreen(
-                        page = buildPageSpec(),
+                        page = page,
                         scrollTargetKey = scrollTargetKey.value,
                         drawPanelImage = drawPanelImage,
                         onTargetReady = ::handleTargetReady,

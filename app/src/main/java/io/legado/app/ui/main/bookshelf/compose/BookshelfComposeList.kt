@@ -441,7 +441,9 @@ private fun BookshelfBookMeta(
         palette = palette
     )
     if (showIntro && introMaxLines > 0) {
-        BookIntroUtils.listIntro(book.getDisplayIntro())?.let { intro ->
+        // 简介清洗有正则开销，缓存到书籍维度，重组不重复计算
+        val intro = remember(book) { BookIntroUtils.listIntro(book.getDisplayIntro()) }
+        intro?.let { intro ->
             Text(
                 text = intro,
                 color = palette.secondaryText,
