@@ -15,6 +15,7 @@ import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.postEvent
@@ -159,6 +160,7 @@ object AppearanceKitManager {
         isNightTheme: Boolean = AppConfig.isNightTheme
     ): Boolean {
         val generation = currentModeThemeGeneration.incrementAndGet()
+        val before = currentThemeModeSnapshot(isNightTheme)
         currentModeThemeMutex.lock()
         try {
             currentCoroutineContext().ensureActive()
@@ -173,10 +175,50 @@ object AppearanceKitManager {
             if (generation != currentModeThemeGeneration.get()) return false
             ThemeConfig.applyTheme(context, isNightTheme)
             BookCover.upDefaultCover()
-            return true
+            // 只在投影真的改写了本模式主题（名字/目录/颜色/背景图）时返回 true，调用方
+            // （AppConfig.themeMode 监听、App 系统日/夜链路）据此补发刷新事件。
+            // 已一致时返回 false，避免与调用方同步的 applyDayNight 形成双重 recreate。
+            return currentThemeModeSnapshot(isNightTheme) != before
         } finally {
             currentModeThemeMutex.unlock()
         }
+    }
+
+    /** 本模式主题的身份快照：主题名/目录名/主色/强调色/背景色/底栏色/背景图。 */
+    private data class ThemeModeSnapshot(
+        val themeName: String,
+        val dirName: String,
+        val primary: Int,
+        val accent: Int,
+        val background: Int,
+        val bottomBackground: Int,
+        val backgroundImage: String
+    )
+
+    private fun currentThemeModeSnapshot(isNightTheme: Boolean): ThemeModeSnapshot {
+        return ThemeModeSnapshot(
+            themeName = appCtx.getPrefString(
+                if (isNightTheme) PreferKey.dNThemeName else PreferKey.dThemeName, ""
+            ).orEmpty(),
+            dirName = appCtx.getPrefString(
+                if (isNightTheme) PreferKey.dNThemeDirName else PreferKey.dThemeDirName, ""
+            ).orEmpty(),
+            primary = appCtx.getPrefInt(
+                if (isNightTheme) PreferKey.cNPrimary else PreferKey.cPrimary, Int.MIN_VALUE
+            ),
+            accent = appCtx.getPrefInt(
+                if (isNightTheme) PreferKey.cNAccent else PreferKey.cAccent, Int.MIN_VALUE
+            ),
+            background = appCtx.getPrefInt(
+                if (isNightTheme) PreferKey.cNBackground else PreferKey.cBackground, Int.MIN_VALUE
+            ),
+            bottomBackground = appCtx.getPrefInt(
+                if (isNightTheme) PreferKey.cNBBackground else PreferKey.cBBackground, Int.MIN_VALUE
+            ),
+            backgroundImage = appCtx.getPrefString(
+                if (isNightTheme) PreferKey.bgImageN else PreferKey.bgImage, ""
+            ).orEmpty()
+        )
     }
 
     suspend fun deleteImportedTheme(context: Context, kit: AppearanceKit): Boolean = withContext(IO) {

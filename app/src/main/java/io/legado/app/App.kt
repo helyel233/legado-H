@@ -23,6 +23,7 @@ import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -63,6 +64,7 @@ import io.legado.app.model.BookCover
 import io.legado.app.service.AutoTaskService
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.postEvent
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.isDebuggable
@@ -210,19 +212,39 @@ class App : Application() {
                     try {
                         currentCoroutineContext().ensureActive()
                         if (generation != themeConfigurationGeneration.get()) return@launch
-                        val applied = AppearanceKitManager.applyCurrentModeTheme(this@App, expectedNight)
+                        // 先同步切主题、再异步投影外观套件：主界面 Manifest 拦了 uiMode，
+                        // 系统切日/夜时不会自动重建，六个 Tab 只能等本链路 applyDayNight
+                        // 发出 RECREATE 才重建。若等耗时的套件投影（读 kits.json、解析
+                        // 主题包、写偏好）完成才切，Tab 会明显迟于系统栏与已自重建的
+                        // 二级页；且投影中途 ThemeStore 写入会让 Compose Tab 先换色、
+                        // View Tab 等 recreate 才换色，出现"部分 Tab 切换不一致"。
+                        // 顺序与 MyFragment.setThemeMode 对齐：同步 applyDayNight
+                        // 即时重建，投影只在真的改写本模式主题时补发刷新。
+                        // 注意必须用 newConfig 的 expectedNight：resources.configuration
+                        // 被包装上下文固定为启动模式，跟随系统切换后不更新。
+                        withContext(Dispatchers.Main.immediate) {
+                            if (generation == themeConfigurationGeneration.get() &&
+                                AppConfig.themeMode == "0"
+                            ) {
+                                applyDayNight(this@App, expectedNight)
+                            }
+                        }
                         currentCoroutineContext().ensureActive()
-                        if (!applied || generation != themeConfigurationGeneration.get()) return@launch
+                        if (generation != themeConfigurationGeneration.get()) return@launch
+                        val themeChanged =
+                            AppearanceKitManager.applyCurrentModeTheme(this@App, expectedNight)
+                        currentCoroutineContext().ensureActive()
+                        if (!themeChanged ||
+                            generation != themeConfigurationGeneration.get()
+                        ) return@launch
+                        withContext(Dispatchers.Main.immediate) {
+                            // 套件绑定的本模式主题此前未投影过（如导入套件后首次进入
+                            // 该模式），偏好已被异步改写，补发刷新让界面重新应用
+                            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, expectedNight)
+                            postEvent(EventBus.RECREATE, "")
+                        }
                     } finally {
                         themeConfigurationMutex.unlock()
-                    }
-                    withContext(Dispatchers.Main.immediate) {
-                        //必须用 newConfig 的 expectedNight，resources.configuration 被包装上下文固定为启动模式，跟随系统切换后不更新，否则会跳过 applyDayNight
-                        if (generation == themeConfigurationGeneration.get() &&
-                            AppConfig.themeMode == "0"
-                        ) {
-                            applyDayNight(this@App, expectedNight)
-                        }
                     }
                 } catch (_: CancellationException) {
                     // A newer system theme request superseded this one.

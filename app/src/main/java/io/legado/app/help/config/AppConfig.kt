@@ -127,7 +127,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                 Coroutine.async(Coroutine.defaultScope) {
                     runCatching {
                         // 调用方在写入 themeMode 后会立刻同步 applyDayNight 重建界面，
-                        // 套件投影异步完成时界面可能已用旧偏好重建，需补发刷新事件。
+                        // 套件投影异步完成时界面可能已用旧偏好重建，需补发刷新事件；
+                        // 投影未改变本模式主题时返回 false，此时无需（也不能）再重建。
                         if (AppearanceKitManager.applyCurrentModeTheme(appCtx, expectedNight)) {
                             postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, expectedNight)
                             postEvent(EventBus.RECREATE, "")
