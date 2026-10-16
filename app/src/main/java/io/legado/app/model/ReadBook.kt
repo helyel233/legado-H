@@ -133,8 +133,10 @@ object ReadBook : CoroutineScope by MainScope() {
     var webBookProgress: BookProgress? = null
 
     var preDownloadTask: Job? = null
-    val downloadedChapters = hashSetOf<Int>()
-    val downloadFailChapters = hashMapOf<Int, Int>()
+    // 跨线程访问：IO 线程下载回调 add/put，主线程 resetData/upData clear，
+    // 必须用线程安全容器，否则 HashMap/HashSet 结构性并发修改会损坏或抛 ConcurrentModificationException
+    val downloadedChapters: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    val downloadFailChapters: MutableMap<Int, Int> = ConcurrentHashMap()
     var contentProcessor: ContentProcessor? = null
     val downloadScope = CoroutineScope(SupervisorJob() + IO)
     val executor = globalExecutor

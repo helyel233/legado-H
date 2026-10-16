@@ -76,11 +76,12 @@ class GroupManageDialog : ComposeDialogFragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 LegadoComposeTheme {
-                    val groups by appDb.bookGroupDao.flowAll()
-                        .catch { }
-                        .flowOn(IO)
-                        .conflate()
-                        .collectAsStateWithLifecycle(initialValue = emptyList())
+                    val groups by remember {
+                        appDb.bookGroupDao.flowAll()
+                            .catch { }
+                            .flowOn(IO)
+                            .conflate()
+                    }.collectAsStateWithLifecycle(initialValue = emptyList())
                     GroupManageContent(
                         groups = groups,
                         onAddGroup = {

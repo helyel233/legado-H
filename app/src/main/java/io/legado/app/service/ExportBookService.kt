@@ -100,11 +100,14 @@ class ExportBookService : BaseService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.start -> kotlin.runCatching {
-                val bookUrl = intent.getStringExtra("bookUrl")!!
+                val bookUrl = intent.getStringExtra("bookUrl")
+                    ?: throw NoStackTraceException("缺少参数 bookUrl")
                 if (!exportProgress.contains(bookUrl)) {
                     val exportConfig = ExportConfig(
-                        path = intent.getStringExtra("exportPath")!!,
-                        type = intent.getStringExtra("exportType")!!,
+                        path = intent.getStringExtra("exportPath")
+                            ?: throw NoStackTraceException("缺少参数 exportPath"),
+                        type = intent.getStringExtra("exportType")
+                            ?: throw NoStackTraceException("缺少参数 exportType"),
                         epubSize = intent.getIntExtra("epubSize", 1),
                         epubScope = intent.getStringExtra("epubScope")
                     )

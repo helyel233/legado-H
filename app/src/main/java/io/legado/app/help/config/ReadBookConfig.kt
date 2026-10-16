@@ -106,7 +106,9 @@ object ReadBookConfig {
                 bookStyle.use(value)
                 return
             }
-            configList[styleSelect] = value
+            synchronized(this) {
+                configList[styleSelect] = value
+            }
             if (shareLayout) {
                 shareConfig = value
             }

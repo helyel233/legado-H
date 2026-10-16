@@ -34,7 +34,11 @@ data class ReviewSnapshotResourceHandle(
     val mimeType: String,
     val inputStream: InputStream,
     val file: File,
-)
+) : java.io.Closeable {
+    override fun close() {
+        inputStream.close()
+    }
+}
 
 /** Enables an external REVIEW-start epoch check while a GC scan is in flight (ABA guard). */
 object ReviewResourceEpoch {

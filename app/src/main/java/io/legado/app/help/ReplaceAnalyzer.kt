@@ -9,8 +9,10 @@ object ReplaceAnalyzer {
     fun jsonToReplaceRules(json: String): Result<MutableList<ReplaceRule>> {
         return kotlin.runCatching {
             val replaceRules = mutableListOf<ReplaceRule>()
-            val items: List<Map<String, Any>> = jsonPath.parse(json).read("$")
+            val root = jsonPath.parse(json).read<Any>("$")
+            val items: List<*> = if (root is List<*>) root else listOf(root)
             for (item in items) {
+                if (item == null) continue
                 val jsonItem = jsonPath.parse(item)
                 jsonToReplaceRule(jsonItem.jsonString()).getOrThrow().let {
                     if (it.isValid()) {

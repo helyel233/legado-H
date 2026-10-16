@@ -3,6 +3,7 @@ package io.legado.app.ui.rss.source.manage
 import android.view.View
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.activityViewModels
@@ -28,9 +29,9 @@ class GroupManageDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                val groups by appDb.rssSourceDao.flowGroups()
-                    .conflate()
-                    .collectAsState(initial = emptyList())
+                val groups by remember {
+                    appDb.rssSourceDao.flowGroups().conflate()
+                }.collectAsState(initial = emptyList())
                 ComposeGroupManageDialogContent(
                     groups = groups,
                     onAddGroup = viewModel::addGroup,

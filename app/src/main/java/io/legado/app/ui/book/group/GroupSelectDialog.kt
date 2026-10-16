@@ -84,8 +84,9 @@ class GroupSelectDialog() : ComposeDialogFragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 LegadoComposeTheme {
-                    val groups by appDb.bookGroupDao.flowSelect().conflate()
-                        .collectAsStateWithLifecycle(initialValue = emptyList())
+                    val groups by remember {
+                        appDb.bookGroupDao.flowSelect().conflate()
+                    }.collectAsStateWithLifecycle(initialValue = emptyList())
                     var selectedGroupId by remember { mutableLongStateOf(initialGroupId) }
                     GroupSelectContent(
                         groups = groups,

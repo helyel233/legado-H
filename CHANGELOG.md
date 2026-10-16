@@ -1,5 +1,21 @@
 # 更新日志
 
+## 1.8.1 版（2026-10-16）
+
+本版修复若干稳定性与崩溃问题，并持续优化 Compose 状态收集。
+
+### 修复
+
+- **阅读并发安全**：下载章节的已完成/失败计数容器改为并发安全实现（`ConcurrentHashMap` / `newKeySet`），并配套加锁写入与线程安全合并，修复多线程下载时 `ConcurrentModificationException` 与数据损坏。
+- **导入替换规则兼容**：`ReplaceAnalyzer` 支持根节点为单条规则对象（非数组 JSON）的导入，并跳过空项，避免导入失败。
+- **空参数崩溃**：`PermissionActivity`（未传入权限列表）、`ExportBookService`（缺少 `bookUrl` / `exportPath` / `exportType`）改为安全处理并给出明确提示，不再空指针崩溃。
+- **资源泄漏**：`ReviewSnapshotResourceHandle` 实现 `Closeable`，关闭时释放底层输入流。
+- **重组重复订阅**：书源/替换/分组管理等多个对话框用 `remember` 包裹 Flow 收集，修复重组时重复订阅导致的数据重复与资源浪费。
+
+### 优化
+
+- 持续将 Compose 状态收集由 `collectAsState` 迁移到 lifecycle 感知的 `collectAsStateWithLifecycle`（含书架、发现、搜索、阅读、AI 等页面）。
+
 ## 1.8.0 版（2026-10-16）
 
 本版将「自定义背景图下的文字可读性」从书架推广为全站通用能力。
