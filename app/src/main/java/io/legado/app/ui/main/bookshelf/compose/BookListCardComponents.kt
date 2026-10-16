@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.bookshelf.compose
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -9,11 +10,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 
 data class BookListCardMetrics(
@@ -62,6 +67,12 @@ fun BookListCardSurface(
         renderConfig.classicCardMetrics(compact)
     }
     val shape = RoundedCornerShape(if (rounded) palette.panelRadius else metrics.cornerRadius)
+    // 经典样式原本无卡片底，自定义背景图下文字直接压图难分辨：
+    // 背景图模式时套与圆角卡一致的半透明面板底（rowColor 已按界面不透明度调透明度）
+    val context = LocalContext.current
+    val hasBgImage = remember(context, palette.themeSignature) {
+        ThemeConfig.hasUsableBgImage(context)
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -74,6 +85,8 @@ fun BookListCardSurface(
                         borderColor = palette.borderColor,
                         radiusPx = palette.panelRadiusPx
                     )
+                } else if (hasBgImage) {
+                    Modifier.background(Color(palette.rowColor), shape)
                 } else {
                     Modifier
                 }

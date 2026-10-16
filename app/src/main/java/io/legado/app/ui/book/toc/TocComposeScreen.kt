@@ -81,6 +81,7 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.illustration.IllustrationHelp
@@ -940,6 +941,12 @@ private fun TocChapterRow(
     val isCurrent = book?.durChapterIndex == chapter.index
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    // 自定义背景图下章节行原本全透明，文字直接压图难分辨：背景图模式时先铺半透明行底
+    // （row 已按界面不透明度调透明度），当前章/按压高亮再叠加其上
+    val context = LocalContext.current
+    val hasBgImage = remember(context, palette.settings.themeSignature) {
+        ThemeConfig.hasUsableBgImage(context)
+    }
     val rowBackground = when {
         isCurrent -> palette.settings.accent.copy(alpha = 0.14f)
         pressed -> Color(palette.settings.rowPressed)
@@ -948,12 +955,7 @@ private fun TocChapterRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            // 当前章/按压态整行通栏高亮（去掉内缩圆角药丸，看着更清爽）。
+            .background(if (hasBgImage) Color(palette.settings.row) else Color.Transparent)
             .background(rowBackground)
             .padding(
                 start = if (indented) 22.dp else 14.dp,
@@ -1333,6 +1335,10 @@ private fun TocIllustrationList(
         }
     } else {
         val palette = rememberAppManagementPalette()
+        val context = LocalContext.current
+        val hasBgImage = remember(context, palette.settings.themeSignature) {
+            ThemeConfig.hasUsableBgImage(context)
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 24.dp)
@@ -1344,6 +1350,7 @@ private fun TocIllustrationList(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(if (hasBgImage) Color(palette.settings.row) else Color.Transparent)
                         .combinedClickable(
                             onClick = { onClick(record) },
                             onLongClick = { onLongClick(record) }

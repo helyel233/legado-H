@@ -51,6 +51,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,7 @@ import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.BookCoverImage
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.SearchBookPreviewOverlay
 import io.legado.app.ui.widget.compose.SearchBookPreviewState
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -376,13 +378,15 @@ private fun DiscoverySuiteEmptyState(
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = palette.titleFontFamily,
-            color = palette.primaryText
+            color = palette.primaryText,
+            style = TextStyle(shadow = imageBgTextShadow(palette.primaryText))
         )
         Text(
             text = summary,
             fontSize = 14.sp,
             fontFamily = palette.bodyFontFamily,
-            color = palette.secondaryText
+            color = palette.secondaryText,
+            style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
         )
         Box(
             modifier = Modifier
@@ -442,7 +446,8 @@ private fun DiscoverySuiteWidgetSection(
                 fontFamily = palette.titleFontFamily,
                 color = palette.primaryText,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(shadow = imageBgTextShadow(palette.primaryText))
             )
         }
         when {
@@ -452,7 +457,8 @@ private fun DiscoverySuiteWidgetSection(
                         text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
                         fontSize = 14.sp,
                         fontFamily = palette.bodyFontFamily,
-                        color = palette.secondaryText
+                        color = palette.secondaryText,
+                        style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
                     )
                 } else {
                     DiscoverySuiteTagBarWidget(
@@ -468,7 +474,8 @@ private fun DiscoverySuiteWidgetSection(
                         text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
                         fontSize = 14.sp,
                         fontFamily = palette.bodyFontFamily,
-                        color = palette.secondaryText
+                        color = palette.secondaryText,
+                        style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
                     )
                 } else {
                     DiscoverySuiteRankButtonsWidget(
@@ -484,7 +491,8 @@ private fun DiscoverySuiteWidgetSection(
                         text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
                         fontSize = 14.sp,
                         fontFamily = palette.bodyFontFamily,
-                        color = palette.secondaryText
+                        color = palette.secondaryText,
+                        style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
                     )
                 } else if (isLoading && rankedBooks.isEmpty()) {
                     Text(
@@ -510,13 +518,15 @@ private fun DiscoverySuiteWidgetSection(
                 text = LocalContext.current.getString(R.string.discovery_suite_widget_loading),
                 fontSize = 14.sp,
                 fontFamily = palette.bodyFontFamily,
-                color = palette.secondaryText
+                color = palette.secondaryText,
+                style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
             )
             books.isEmpty() -> Text(
                 text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
                 fontSize = 14.sp,
                 fontFamily = palette.bodyFontFamily,
-                color = palette.secondaryText
+                color = palette.secondaryText,
+                style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
             )
             widget.type == DiscoverySuiteWidgetType.HorizontalBooks.value -> DiscoverySuiteHorizontalBooksWidget(
                 widget = widget,
@@ -641,7 +651,8 @@ private fun DiscoverySuiteWaterfallBookCard(
             lineHeight = 18.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = palette.titleFontFamily,
-            color = palette.primaryText
+            color = palette.primaryText,
+            style = TextStyle(shadow = imageBgTextShadow(palette.primaryText))
         )
         val meta = listOf(book.author, book.originName)
             .filter { it.isNotBlank() }
@@ -654,7 +665,8 @@ private fun DiscoverySuiteWaterfallBookCard(
                 overflow = TextOverflow.Ellipsis,
                 fontSize = 12.sp,
                 fontFamily = palette.bodyFontFamily,
-                color = palette.secondaryText
+                color = palette.secondaryText,
+                style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
             )
         }
     }

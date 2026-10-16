@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -41,6 +42,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityLibrarySearchBinding
 import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -144,6 +146,7 @@ private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
                 text = rebuildProgress,
                 color = style.secondaryText,
                 fontSize = 12.sp,
+                style = TextStyle(shadow = imageBgTextShadow(style.secondaryText)),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         } else if (rebuildProgress.isNotBlank()) {
@@ -151,6 +154,7 @@ private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
                 text = rebuildProgress,
                 color = style.secondaryText,
                 fontSize = 12.sp,
+                style = TextStyle(shadow = imageBgTextShadow(style.secondaryText)),
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }
@@ -228,7 +232,12 @@ private fun EmptyHint(text: String, style: io.legado.app.ui.widget.compose.AppDi
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(48.dp))
-        Text(text = text, color = style.secondaryText, fontSize = 14.sp)
+        Text(
+            text = text,
+            color = style.secondaryText,
+            fontSize = 14.sp,
+            style = TextStyle(shadow = imageBgTextShadow(style.secondaryText))
+        )
     }
 }
 

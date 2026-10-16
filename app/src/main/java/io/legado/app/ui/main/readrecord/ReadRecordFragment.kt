@@ -21,6 +21,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityReadRecordBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
@@ -805,6 +806,16 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
         }
         binding.tvRecordDate.setTextColor(primaryTextColor)
         binding.tvRecordDateHint.setTextColor(secondaryTextColor)
+        // 标题区（panelOverview 无面板底）：背景图模式下加自适应投影保证可读，普通主题无投影
+        if (ThemeConfig.hasUsableBgImage(requireContext())) {
+            val shadowColor = if (androidx.core.graphics.ColorUtils.calculateLuminance(primaryTextColor) > 0.5) {
+                0xB3000000.toInt()
+            } else {
+                0xB3FFFFFF.toInt()
+            }
+            binding.tvRecordDate.setShadowLayer(4f, 1f, 1f, shadowColor)
+            binding.tvRecordDateHint.setShadowLayer(4f, 1f, 1f, shadowColor)
+        }
         binding.tvHeatmapSubtitle.setTextColor(secondaryTextColor)
         binding.tvHeatmapEmpty.setTextColor(secondaryTextColor)
         binding.tvRecentBooksEmpty.setTextColor(secondaryTextColor)

@@ -14,7 +14,10 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.ItemArrangeBookBinding
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.themeUiPalette
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import java.util.Collections
@@ -49,7 +52,15 @@ class BookAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.apply {
-            root.setBackgroundColor(context.backgroundColor)
+            // 背景图模式下 backgroundColor 返回透明，行文字直接压图难分辨：
+            // 改铺与主题一致的半透明行底（随界面不透明度走）；普通主题维持原样
+            root.setBackgroundColor(
+                if (ThemeConfig.hasUsableBgImage(context)) {
+                    UiCorner.surfaceColor(context.themeUiPalette().cardColor)
+                } else {
+                    context.backgroundColor
+                }
+            )
             tvName.text = item.name
             tvAuthor.text = item.author
             tvAuthor.visibility = if (item.author.isEmpty()) View.GONE else View.VISIBLE

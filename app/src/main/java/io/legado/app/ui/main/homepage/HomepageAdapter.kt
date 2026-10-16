@@ -22,6 +22,7 @@ import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.databinding.ItemHomepageModuleBinding
 import io.legado.app.domain.model.HomepageModuleType
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.utils.dpToPx
@@ -165,6 +166,17 @@ class HomepageAdapter(
             }
             currentModule = module
             binding.tvTitle.text = module.title
+            // 模块标题区无卡片底：背景图模式下加自适应投影保证可读，普通主题无投影
+            if (ThemeConfig.hasUsableBgImage(appContext)) {
+                binding.tvTitle.setShadowLayer(
+                    4f, 1f, 1f,
+                    if (ColorUtils.calculateLuminance(appContext.primaryTextColor) > 0.5) {
+                        0xB3000000.toInt()
+                    } else {
+                        0xB3FFFFFF.toInt()
+                    }
+                )
+            }
             binding.tvRetry.setTextColor(appContext.accentColor)
             if (module.type == HomepageModuleType.ButtonGroup) {
                 binding.llTitle.isClickable = false
@@ -497,6 +509,17 @@ class HomepageAdapter(
                 binding.llLoadMore.background = null
                 binding.tvLoadMore.setTextColor(appContext.secondaryTextColor)
                 binding.ivLoadMore.setColorFilter(appContext.secondaryTextColor)
+                // 无底态下文字直接压背景图：背景图模式加自适应投影
+                if (ThemeConfig.hasUsableBgImage(appContext)) {
+                    binding.tvLoadMore.setShadowLayer(
+                        4f, 1f, 1f,
+                        if (ColorUtils.calculateLuminance(appContext.secondaryTextColor) > 0.5) {
+                            0xB3000000.toInt()
+                        } else {
+                            0xB3FFFFFF.toInt()
+                        }
+                    )
+                }
             }
             binding.llLoadMore.setOnClickListener { if (!isLoadingMore && hasMore) action() }
         }

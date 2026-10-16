@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +37,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfListItemStyle
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListPalette
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.SearchBookListItem
 import io.legado.app.ui.widget.compose.SearchBookPreviewOverlay
 import io.legado.app.ui.widget.compose.SearchBookPreviewState
@@ -162,6 +164,7 @@ fun ExploreShowComposeScreen(
                 color = palette.secondaryText,
                 fontSize = 14.sp,
                 fontFamily = palette.bodyFontFamily,
+                style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText)),
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(24.dp)
@@ -211,7 +214,8 @@ private fun ExploreShowStatusRow(
                 text = message,
                 color = palette.secondaryText,
                 fontSize = 13.sp,
-                fontFamily = palette.bodyFontFamily
+                fontFamily = palette.bodyFontFamily,
+                style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
             )
         }
     }
