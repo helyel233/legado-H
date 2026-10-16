@@ -163,6 +163,12 @@ class BookSourceEditActivity :
 
     private fun createRecyclerView(context: Context): RecyclerView {
         return RecyclerView(context).apply {
+            // 显式 MATCH_PARENT：AndroidView 宿主里 RV 无 LayoutParams 时测量口径不稳，
+            // 会长内容行溢出压住周围 UI（编辑页文字重叠选项的根因）
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
             setEdgeEffectColor(context.primaryColor)
             if (this@BookSourceEditActivity.adapter.editEntityMaxLine < 999) {
                 layoutManager = NoChildScrollLinearLayoutManager(context)

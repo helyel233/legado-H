@@ -41,8 +41,11 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.main.rss.RssViewModel
+import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppMenuSheet
 import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.contract.AppContent
 import io.legado.app.uikit.v5.contract.ChromeAction
@@ -108,6 +111,9 @@ class HostRssContent : AppContent {
         var group by remember { mutableStateOf<String?>(null) }
         // 布局 1/2/3 列，沿用旧 AppConfig.rssSourceLayout 键（与旧壳互通）
         var columns by remember { mutableStateOf(AppConfig.rssSourceLayout.coerceIn(1, 3)) }
+        // 长按源卡片弹出操作菜单（旧 RssAdapter 长按同款：编辑/置顶/登录/禁用源/删除）
+        var rssMenuSource by remember { mutableStateOf<RssSource?>(null) }
+        var rssDeleteTarget by remember { mutableStateOf<RssSource?>(null) }
 
         val sources by remember(searchKey, group) {
             when {
@@ -213,13 +219,57 @@ class HostRssContent : AppContent {
                             source = source,
                             compact = columns >= 3,
                             onClick = { openRssSource(context, viewModel, source) },
-                            onManage = {
-                                io.legado.app.ui.host.HostRssSourceManageActivity.start(context)
-                            },
+                            onLongClick = { rssMenuSource = source },
                         )
                     }
                 }
             }
+        }
+
+        // 长按菜单（旧版 rss_main_item 同款五项；登录仅源配了登录地址时出现）
+        val menuRss = rssMenuSource
+        if (menuRss != null) {
+            AppMenuSheet(
+                title = menuRss.sourceName,
+                actions = buildList {
+                    add(stringResource(R.string.edit) to {
+                        context.startActivity<RssSourceEditActivity> {
+                            putExtra("sourceUrl", menuRss.sourceUrl)
+                        }
+                    })
+                    add(stringResource(R.string.to_top) to { viewModel.topSource(menuRss) })
+                    if (!menuRss.loginUrl.isNullOrBlank()) {
+                        add(stringResource(R.string.login) to {
+                            context.startActivity<HostSourceLoginActivity> {
+                                putExtra("type", "rssSource")
+                                putExtra("key", menuRss.sourceUrl)
+                            }
+                        })
+                    }
+                    add(stringResource(R.string.disable_source) to {
+                        viewModel.disable(menuRss)
+                    })
+                    add(stringResource(R.string.delete) to { rssDeleteTarget = menuRss })
+                },
+                onDismiss = { rssMenuSource = null },
+            )
+        }
+
+        // 删除源确认（B 门：危险操作必须确认）
+        val deleteRss = rssDeleteTarget
+        if (deleteRss != null) {
+            AppConfirmDialog(
+                title = stringResource(R.string.delete),
+                message = stringResource(R.string.sure_del) + "\n" + deleteRss.sourceName,
+                confirmLabel = stringResource(R.string.delete),
+                cancelLabel = stringResource(R.string.cancel),
+                danger = true,
+                onConfirm = {
+                    rssDeleteTarget = null
+                    viewModel.del(deleteRss)
+                },
+                onDismiss = { rssDeleteTarget = null },
+            )
         }
     }
 }
@@ -230,7 +280,7 @@ private fun RssSourceCard(
     source: RssSource,
     compact: Boolean,
     onClick: () -> Unit,
-    onManage: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val colors = LocalSemanticColors.current
     Column(
@@ -241,23 +291,35 @@ private fun RssSourceCard(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onClick,
-                onLongClick = onManage,
+                onLongClick = onLongClick,
             )
             .padding(scope.density.screenPadding / 2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // 源标（首字圆形徽标）
+        // 源标：有 sourceIcon 显图标（对齐旧 RssAdapter ImageLoader.load(sourceIcon)），
+        // 无图标回落首字圆形徽标
         Box(
             modifier = Modifier
                 .size(38.dp)
                 .background(colors.primary.copy(alpha = 0.16f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = source.sourceName.firstOrNull()?.toString() ?: "R",
-                style = scope.type.title,
-                color = colors.primary,
-            )
+            if (source.sourceIcon.isNotBlank()) {
+                AppAsyncImage(
+                    model = source.sourceIcon,
+                    contentDescription = null,
+                    sourceOrigin = source.sourceUrl,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape),
+                )
+            } else {
+                Text(
+                    text = source.sourceName.firstOrNull()?.toString() ?: "R",
+                    style = scope.type.title,
+                    color = colors.primary,
+                )
+            }
         }
         Spacer(Modifier.height(scope.density.blockGap / 2))
         Text(
@@ -266,9 +328,12 @@ private fun RssSourceCard(
             color = colors.onSurface,
             maxLines = 1,
         )
-        if (!compact && !source.sourceGroup.isNullOrBlank()) {
+        // 名称与下方分组标签之间补间距（验收：间隙太小）
+        Spacer(Modifier.height(3.dp))
+        // 分组标签行常驻占位（无分组留空串）：保证网格内卡片等高（验收：卡片大小不一致）
+        if (!compact) {
             Text(
-                text = source.sourceGroup ?: "",
+                text = source.sourceGroup.orEmpty(),
                 style = scope.type.caption,
                 color = colors.onSurfaceVariant,
                 maxLines = 1,

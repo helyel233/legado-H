@@ -1334,16 +1334,7 @@
     <string name="v5_shelf_rename_group">グループ名を変更</string>
     <string name="v5_shelf_new_group">＋ 新規グループ</string>
     <string name="v5_shelf_rename">名前を変更</string>
-    <string name="v5_home_manage_title">ホームモジュール管理</string>
-    <string name="v5_home_manage_set_detail">セット詳細</string>
-    <string name="v5_home_manage_pick_source">ソースを選択</string>
-    <string name="v5_home_manage_new_set">＋ 新規カスタムセット</string>
-    <string name="v5_home_manage_add_module">＋ モジュールを追加</string>
-    <string name="v5_home_manage_no_modules">モジュールがありません。下の「モジュールを追加」からソース分類を選んでください</string>
-    <string name="v5_home_manage_pick_hint">書源または RSS ソースを選択</string>
-    <string name="v5_home_manage_no_kinds">このソースには利用可能な分類がありません（探索ルールを確認）</string>
-    <string name="v5_home_manage_custom">  · カスタム</string>
-    <string name="v5_home_manage_modules_count">%1$d 個のモジュール</string>
+    <string name="query">クエリ</string>
     <string name="v5_explore_pick_source">発見ソースを選択</string>
     <string name="v5_explore_no_sources_title">発見が有効なソースがありません</string>
     <string name="v5_explore_no_sources_supporting">書源で「発見を有効化」にチェックするか、先にソースをインポートしてください</string>

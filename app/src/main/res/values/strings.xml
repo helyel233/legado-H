@@ -3124,16 +3124,7 @@ Selected text or question:
     <string name="v5_shelf_rename_group">Rename group</string>
     <string name="v5_shelf_new_group">＋ New group</string>
     <string name="v5_shelf_rename">Rename</string>
-    <string name="v5_home_manage_title">Home module manager</string>
-    <string name="v5_home_manage_set_detail">Set details</string>
-    <string name="v5_home_manage_pick_source">Choose a source</string>
-    <string name="v5_home_manage_new_set">＋ New custom set</string>
-    <string name="v5_home_manage_add_module">＋ Add module</string>
-    <string name="v5_home_manage_no_modules">No modules yet. Tap Add module below to pick from source categories</string>
-    <string name="v5_home_manage_pick_hint">Pick a book source or RSS source</string>
-    <string name="v5_home_manage_no_kinds">No categories available for this source (check its explore rules)</string>
-    <string name="v5_home_manage_custom">  · Custom</string>
-    <string name="v5_home_manage_modules_count">%1$d modules</string>
+    <string name="query">Query</string>
     <string name="v5_explore_pick_source">Choose an explore source</string>
     <string name="v5_explore_no_sources_title">No sources with explore enabled</string>
     <string name="v5_explore_no_sources_supporting">Enable Explore on a book source, or import sources first</string>

@@ -1334,16 +1334,7 @@
     <string name="v5_shelf_rename_group">Renomear grupo</string>
     <string name="v5_shelf_new_group">＋ Novo grupo</string>
     <string name="v5_shelf_rename">Renomear</string>
-    <string name="v5_home_manage_title">Gerenciador de módulos da página inicial</string>
-    <string name="v5_home_manage_set_detail">Detalhes do conjunto</string>
-    <string name="v5_home_manage_pick_source">Escolher fonte</string>
-    <string name="v5_home_manage_new_set">＋ Novo conjunto personalizado</string>
-    <string name="v5_home_manage_add_module">＋ Adicionar módulo</string>
-    <string name="v5_home_manage_no_modules">Ainda não há módulos. Toque em Adicionar módulo para escolher entre categorias de fontes</string>
-    <string name="v5_home_manage_pick_hint">Escolha uma fonte de livros ou RSS</string>
-    <string name="v5_home_manage_no_kinds">Esta fonte não tem categorias (verifique as regras de exploração)</string>
-    <string name="v5_home_manage_custom">  · Personalizado</string>
-    <string name="v5_home_manage_modules_count">%1$d módulos</string>
+    <string name="query">Consulta</string>
     <string name="v5_explore_pick_source">Escolher fonte de exploração</string>
     <string name="v5_explore_no_sources_title">Nenhuma fonte com exploração ativada</string>
     <string name="v5_explore_no_sources_supporting">Ative Explorar em uma fonte ou importe fontes primeiro</string>

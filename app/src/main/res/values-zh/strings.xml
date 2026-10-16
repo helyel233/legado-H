@@ -2924,16 +2924,7 @@ bookUrl：%7$s
     <string name="v5_shelf_rename_group">重命名分组</string>
     <string name="v5_shelf_new_group">＋ 新建分组</string>
     <string name="v5_shelf_rename">重命名</string>
-    <string name="v5_home_manage_title">主页模块管理</string>
-    <string name="v5_home_manage_set_detail">集详情</string>
-    <string name="v5_home_manage_pick_source">选择书源</string>
-    <string name="v5_home_manage_new_set">＋ 新建自定义集</string>
-    <string name="v5_home_manage_add_module">＋ 添加模块</string>
-    <string name="v5_home_manage_no_modules">这个集还没有模块，点下面「添加模块」从书源分类里挑</string>
-    <string name="v5_home_manage_pick_hint">选一个书源或 RSS 源</string>
-    <string name="v5_home_manage_no_kinds">这个源没有可用分类（检查书源的探索规则）</string>
-    <string name="v5_home_manage_custom"> · 自定义</string>
-    <string name="v5_home_manage_modules_count">%1$d 个模块</string>
+    <string name="query">查询</string>
     <string name="v5_explore_pick_source">选择发现源</string>
     <string name="v5_explore_no_sources_title">没有启用发现的源</string>
     <string name="v5_explore_no_sources_supporting">给书源勾选「启用发现」，或先导入书源</string>

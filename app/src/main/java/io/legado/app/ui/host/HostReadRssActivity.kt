@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.createBitmap
@@ -98,6 +99,7 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.textArray
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.toggleSystemBar
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.launch
@@ -479,13 +481,17 @@ class HostReadRssActivity : AppCompatActivity(), RssFavoritesDialog.Callback {
     }
 
     /** AndroidView factory：每次重组/配置变更都可能重跑，只做重新挂载，不碰池实例 */
-    internal fun createWebViewContainer(context: Context): FrameLayout {
+    internal fun createWebViewContainer(context: Context, backgroundColor: Int): FrameLayout {
         return FrameLayout(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            // 不透明底色：WebView 默认透明，复杂背景图下正文会直接透出底图难以阅读；
+            // 同时避免透明 WebView 每帧与背景层重新合成导致的屏幕闪烁
+            setBackgroundColor(backgroundColor)
             (currentWebView.parent as? ViewGroup)?.removeView(currentWebView)
+            currentWebView.setBackgroundColor(backgroundColor)
             addView(
                 currentWebView,
                 ViewGroup.LayoutParams(
@@ -994,6 +1000,10 @@ private fun HostReadRssScreen(activity: HostReadRssActivity) {
     // 旧 onBackPressedDispatcher 的返回栈算法
     BackHandler { activity.handleBack() }
 
+    // WebView 区底色跟随当前主题（不透明，防透底与闪烁）
+    val colors = LocalSemanticColors.current
+    val webViewBackground = colors.surface.toArgb()
+
     val actions = remember(
         activity.sourceVersion,
         activity.starred,
@@ -1013,6 +1023,8 @@ private fun HostReadRssScreen(activity: HostReadRssActivity) {
                 onClick = { activity.menuOpen = true },
             )
         },
+        // WebView 不进 haze 采样源：硬件层逐帧回读会导致屏幕频繁闪烁
+        contentInHazeSource = false,
     ) {
         Box(Modifier.fillMaxSize()) {
             // ① WebView 区：常驻组合，全屏时切 INVISIBLE（条件移除组合会中断正在播放的视频）
@@ -1020,7 +1032,9 @@ private fun HostReadRssScreen(activity: HostReadRssActivity) {
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding(),
-                factory = { context -> activity.createWebViewContainer(context) },
+                factory = { context ->
+                    activity.createWebViewContainer(context, webViewBackground)
+                },
                 // 只解绑宿主，绝不 release/destroy（见 createWebViewContainer 注释）
                 onRelease = { activity.releaseWebViewContainer(it) },
             )

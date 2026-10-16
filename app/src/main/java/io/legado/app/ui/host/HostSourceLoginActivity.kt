@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,6 +54,7 @@ import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.login.SourceLoginViewModel
 import io.legado.app.utils.GSON
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.buildMainHandler
@@ -565,6 +567,9 @@ private fun HostSourceLoginScreen(activity: HostSourceLoginActivity) {
         }
 
         true -> {
+            // WebView 区底色跟随当前主题（不透明，防透底与透明 WebView 重合成闪烁）
+            val colors = LocalSemanticColors.current
+            val webViewBackground = colors.surface.toArgb()
             HostV5Page(
                 title = activity.titleText,
                 onBack = { activity.finishSafely() },
@@ -574,13 +579,18 @@ private fun HostSourceLoginScreen(activity: HostSourceLoginActivity) {
                         onClick = { activity.checkCookieAndFinish() },
                     )
                 },
+                // WebView 不进 haze 采样源：硬件层逐帧回读会导致屏幕频繁闪烁
+                contentInHazeSource = false,
             ) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = {
                         FrameLayout(it).apply {
+                            setBackgroundColor(webViewBackground)
                             addView(
-                                activity.createLoginWebView(),
+                                activity.createLoginWebView().also { web ->
+                                    web.setBackgroundColor(webViewBackground)
+                                },
                                 ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT

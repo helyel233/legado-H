@@ -155,6 +155,12 @@ class RssSourceEditActivity :
 
     private fun createRecyclerView(context: Context): RecyclerView {
         return RecyclerView(context).apply {
+            // 显式 MATCH_PARENT：AndroidView 宿主里 RV 无 LayoutParams 时测量口径不稳，
+            // 会长内容行溢出压住周围 UI（编辑页文字重叠选项的根因）
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
             setEdgeEffectColor(context.primaryColor)
             val createSpanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int = when (this@RssSourceEditActivity.adapter.getItemViewType(position)) {

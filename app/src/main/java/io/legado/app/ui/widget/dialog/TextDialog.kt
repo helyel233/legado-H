@@ -52,6 +52,9 @@ import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.image.glide.GlideImagesPlugin
 import kotlinx.coroutines.delay
 
+/** 纯文本模式渲染上限（见 [TextDialogContent]）：超长文本截断显示，避免布局卡死 */
+private const val MAX_DISPLAY_LENGTH = 8 * 1024
+
 /**
  * 文本查看弹窗（V5 基座版）：支持 Markdown / HTML / 纯文本三种模式。
  *
@@ -227,8 +230,12 @@ private fun TextDialogContent(
         }
 
         else -> {
-            val displayText = if (content.length >= 32 * 1024) {
-                content.take(32 * 1024) + "\n\n数据太大，无法全部显示…"
+            // 渲染量上限：Compose 的 Text+SelectionContainer 对超长文本布局极慢
+            // （几十 KB 的崩溃栈会卡 5~6 秒），只渲染前 [MAX_DISPLAY_LENGTH] 字符；
+            // 完整内容仍可「复制全文」或「编辑」查看。
+            val displayText = if (content.length > MAX_DISPLAY_LENGTH) {
+                content.take(MAX_DISPLAY_LENGTH) +
+                    "\n\n…内容过大，仅显示前 ${MAX_DISPLAY_LENGTH / 1024}KB（完整内容请用「复制全文」或「编辑」查看）"
             } else {
                 content
             }

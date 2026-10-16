@@ -70,6 +70,12 @@ internal fun HostV5Page(
      */
     selectionCount: Int? = null,
     onExitSelection: (() -> Unit)? = null,
+    /**
+     * 内容是否进 haze 采样源。默认 true（内容滚过玻璃顶栏时被实时模糊）。
+     * WebView 页必须传 false —— 硬件层内容进采样源会被逐帧回读，导致屏幕频繁闪烁
+     * （2026-10-15 验收 bug）；false 时顶栏玻璃只糊静态背景，内容不再参与采样。
+     */
+    contentInHazeSource: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val hazeState = LocalHazeState.current ?: dev.chrisbanes.haze.HazeState()
@@ -82,41 +88,20 @@ internal fun HostV5Page(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // ① 采样源层：背景 + 内容（AppSurface 的玻璃从这里取样）
+        // ① 采样源层：背景 +（可选）内容（AppSurface 的玻璃从这里取样）
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(state = hazeState),
         ) {
             HostBackgroundLayer()
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding(),
-            ) {
-                Spacer(Modifier.height(hostTopBarHeight(TopBarMode.TITLE, scrolled = false)))
-                if (bottomBar == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .navigationBarsPadding(),
-                    ) {
-                        content()
-                    }
-                } else {
-                    // 底部固定操作区走插槽 + weight 让位（迁移门 D2），内容区不再靠 padding 硬撑
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
-                    ) {
-                        content()
-                    }
-                    Box(modifier = Modifier.navigationBarsPadding()) {
-                        bottomBar()
-                    }
-                }
+            if (contentInHazeSource) {
+                HostV5PageBody(bottomBar = bottomBar, content = content)
             }
+        }
+        // WebView 页：内容在采样源外（背景仍供玻璃取样，内容自身不进采样）
+        if (!contentInHazeSource) {
+            HostV5PageBody(bottomBar = bottomBar, content = content)
         }
 
         // ② 玻璃层：顶栏（AppSurface 内部自动 hazeEffect）
@@ -160,6 +145,45 @@ internal fun HostV5Page(
                     .padding(end = visual.density.screenPadding, bottom = visual.density.screenPadding),
             ) {
                 floatingAction()
+            }
+        }
+    }
+}
+
+/**
+ * [HostV5Page] 的内容区布局（顶栏占位 + 内容/底部操作区）。
+ * 抽出来供「内容进/不进采样源」两种结构共用。
+ */
+@Composable
+private fun HostV5PageBody(
+    bottomBar: (@Composable () -> Unit)?,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+    ) {
+        Spacer(Modifier.height(hostTopBarHeight(TopBarMode.TITLE, scrolled = false)))
+        if (bottomBar == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding(),
+            ) {
+                content()
+            }
+        } else {
+            // 底部固定操作区走插槽 + weight 让位（迁移门 D2），内容区不再靠 padding 硬撑
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize(),
+            ) {
+                content()
+            }
+            Box(modifier = Modifier.navigationBarsPadding()) {
+                bottomBar()
             }
         }
     }

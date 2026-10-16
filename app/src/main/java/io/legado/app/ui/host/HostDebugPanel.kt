@@ -74,28 +74,32 @@ fun HostDebugPanel(state: HostState) {
     val density = visual.density
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-        // 把手
+        // 把手：可开关按钮（图标 + 文案），点击切换调参面板开合
         AppSurface(
             backgroundBlur = true,
             level = MaterialLevel.FLOATING,
-            modifier = Modifier
-                .padding(end = 0.dp)
-                .size(40.dp, 64.dp),
+            modifier = Modifier.padding(end = 0.dp),
         ) {
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(40.dp, 64.dp)
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
-                    ) { open = true },
-                contentAlignment = Alignment.Center,
+                    ) { open = !open }
+                    .padding(horizontal = 10.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = HostIcons.Settings,
-                    contentDescription = "调参面板",
+                    contentDescription = null,
                     tint = colors.primary,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = if (open) "收起" else "调参",
+                    style = visual.type.label,
+                    color = colors.primary,
                 )
             }
         }

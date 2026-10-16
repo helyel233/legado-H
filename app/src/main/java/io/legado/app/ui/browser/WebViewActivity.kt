@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -95,6 +96,7 @@ import io.legado.app.utils.openUrl
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toggleSystemBar
+import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import kotlinx.coroutines.launch
 import splitties.systemservices.powerManager
 import java.lang.ref.WeakReference
@@ -759,13 +761,17 @@ class WebViewActivity : AppCompatActivity() {
         }
     }
 
-    internal fun createWebViewContainer(context: Context): FrameLayout {
+    internal fun createWebViewContainer(context: Context, backgroundColor: Int): FrameLayout {
         return FrameLayout(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            // 不透明底色：WebView 默认透明，复杂背景图下加载期/透明网页会透出底图，
+            // 且透明 WebView 每帧与背景层重新合成会导致屏幕频繁闪烁
+            setBackgroundColor(backgroundColor)
             (currentWebView.parent as? ViewGroup)?.removeView(currentWebView)
+            currentWebView.setBackgroundColor(backgroundColor)
             addView(
                 currentWebView,
                 ViewGroup.LayoutParams(
@@ -795,6 +801,10 @@ private fun WebViewScreen(activity: WebViewActivity) {
     // 旧 onBackPressedDispatcher 的返回栈算法
     BackHandler { activity.handleBack() }
 
+    // WebView 区底色跟随当前主题（不透明，防透底与闪烁）
+    val colors = LocalSemanticColors.current
+    val webViewBackground = colors.surface.toArgb()
+
     val actions = remember(activity.sourceVersion, activity.showWebLog) {
         activity.buildMenuActions()
     }
@@ -818,12 +828,16 @@ private fun WebViewScreen(activity: WebViewActivity) {
                 )
             }
         },
+        // WebView 不进 haze 采样源：硬件层逐帧回读会导致屏幕频繁闪烁
+        contentInHazeSource = false,
     ) {
         Box(Modifier.fillMaxSize()) {
             // ① WebView 区：常驻组合，视频全屏时切 INVISIBLE（条件移除组合会中断正在播放的视频）
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { context -> activity.createWebViewContainer(context) },
+                factory = { context ->
+                    activity.createWebViewContainer(context, webViewBackground)
+                },
                 onRelease = { activity.releaseWebViewContainer(it) },
             )
             // ② 全屏视频容器：覆盖最上层，常驻组合，靠 visibility 切换

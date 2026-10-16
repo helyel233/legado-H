@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.legado.app.help.LauncherIconHelp
 import io.legado.app.ui.host.pack.LegacyAppearanceImporter
 import io.legado.app.uikit.v5.components.AppBottomSheet
 import io.legado.app.uikit.v5.components.AppFilledButton
+import io.legado.app.uikit.v5.components.AppFilterDialog
 import io.legado.app.uikit.v5.components.AppGhostButton
 import io.legado.app.uikit.v5.runtime.LocalSemanticColors
 import io.legado.app.uikit.v5.runtime.LocalVisualSpec
@@ -76,6 +78,11 @@ import org.xmlpull.v1.XmlPullParser
  */
 class HostMyContent : AppContent {
 
+    private companion object {
+        /** 桌面图标默认值（与旧 ThemeConfigFragment 一致） */
+        const val DEFAULT_LAUNCHER_ICON = "ic_launcher"
+    }
+
     /**
      * 帮助请求桥（chrome() 无 context，经计数器回 Content 消费）。
      * 实例级：宿主 remember 缓存本实例，chrome()/Content() 共享；
@@ -114,7 +121,15 @@ class HostMyContent : AppContent {
         }
         var themeSheet by remember { mutableStateOf(false) }
         var webSheet by remember { mutableStateOf(false) }
+        var iconSheet by remember { mutableStateOf(false) }
         var legacyImportProposal by remember { mutableStateOf<LegacyAppearanceImporter.Proposal?>(null) }
+        // 界面分区的开关态与桌面图标当前值
+        var immersiveManageBar by remember { mutableStateOf(AppConfig.immersiveManageBar) }
+        var launcherIcon by remember {
+            mutableStateOf(context.getPrefString(PreferKey.launcherIcon, DEFAULT_LAUNCHER_ICON) ?: DEFAULT_LAUNCHER_ICON)
+        }
+        val iconNames = remember { context.resources.getStringArray(R.array.icon_names).toList() }
+        val iconValues = remember { context.resources.getStringArray(R.array.icons).toList() }
 
         val themeOptions = remember {
             buildThemeOptions(context)
@@ -210,12 +225,31 @@ class HostMyContent : AppContent {
                     "publicWebRelay" -> context.startActivity<RelaySettingsActivity>()
                     "cacheManage" -> HostCacheManageActivity.start(context)
                     "sourceRecycleBin" -> context.startActivity<HostSourceRecycleBinActivity>()
-                    "theme_setting" -> HostSettingsActivity.start(context, ConfigTag.THEME_CONFIG)
+                    // 界面：各 UI 管理页直达（原「主题设置」页已拆散）
+                    "topBarManage" -> context.startActivity<io.legado.app.ui.config.TopBarManageActivity>()
+                    "navigationBarManage" ->
+                        context.startActivity<io.legado.app.ui.config.NavigationBarManageActivity>()
+                    "bubbleManage" -> context.startActivity<io.legado.app.ui.config.BubbleManageActivity>()
+                    "readMenuButton" ->
+                        context.startActivity<io.legado.app.ui.book.read.config.ReadMenuButtonManageActivity>()
+                    "epubLoadingTemplate" ->
+                        context.startActivity<io.legado.app.ui.config.EpubLoadingTemplateManageActivity>()
+                    "coverConfig" -> HostSettingsActivity.start(context, ConfigTag.COVER_CONFIG)
+                    "launcherIcon" -> iconSheet = true
                     "ai_setting" -> HostSettingsActivity.start(context, ConfigTag.AI_CONFIG)
                     "fileManage" -> HostFileManageActivity.start(context)
                     "readRecord" -> HostReadRecordActivity.start(context)
                     "about" -> HostAboutActivity.start(context)
                     "exit" -> (context as? Activity)?.finish()
+                }
+            },
+            switchStates = mapOf(PreferKey.immersiveManageBar to immersiveManageBar),
+            onSwitchChange = { key, checked ->
+                when (key) {
+                    PreferKey.immersiveManageBar -> {
+                        context.putPrefBoolean(PreferKey.immersiveManageBar, checked)
+                        immersiveManageBar = checked
+                    }
                 }
             },
         )
@@ -286,6 +320,21 @@ class HostMyContent : AppContent {
                 onDismiss = { themeSheet = false },
             )
         }
+        if (iconSheet) {
+            AppFilterDialog(
+                title = stringResource(R.string.change_icon),
+                options = iconNames,
+                selectedIndex = iconValues.indexOf(launcherIcon).coerceAtLeast(0),
+                onSelect = { index ->
+                    val value = iconValues.getOrNull(index) ?: return@AppFilterDialog
+                    iconSheet = false
+                    launcherIcon = value
+                    context.putPrefString(PreferKey.launcherIcon, value)
+                    LauncherIconHelp.changeIcon(value)
+                },
+                onDismiss = { iconSheet = false },
+            )
+        }
         if (webSheet) {
             val url = WebService.hostAddress
             AppMenuSheet(
@@ -333,7 +382,6 @@ class HostMyContent : AppContent {
                         title = context.getString(R.string.app_ui_config),
                         summary = context.getString(R.string.app_ui_config_summary),
                     ),
-                    actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s),
                     // P5-2 一次性通道：旧版本外观设置 → V5 双包（仅检测有旧设置时显示）
                     if (LegacyAppearanceImporter.hasLegacyAppearance(context)) {
                         MySettingsRowModel(
@@ -344,6 +392,38 @@ class HostMyContent : AppContent {
                     } else {
                         null
                     }
+                ),
+            ),
+            // 界面：旧「主题设置」一页打包所有 UI 入口，已拆成下面这些直达项
+            // （已删除：主题管理—由 App UI 配置接管；主界面沉浸状态栏—V5 恒沉浸，开关失效）
+            MySettingsSectionModel(
+                title = context.getString(R.string.interface_setting),
+                rows = listOf(
+                    actionRow("topBarManage", R.string.top_bar_manage, R.string.top_bar_manage_summary),
+                    actionRow(
+                        "navigationBarManage",
+                        R.string.navigation_bar_manage,
+                        R.string.navigation_bar_manage_summary
+                    ),
+                    actionRow("bubbleManage", R.string.bubble_manage, R.string.bubble_manage_summary),
+                    actionRow(
+                        "readMenuButton",
+                        R.string.read_menu_button_manage,
+                        R.string.read_menu_button_summary
+                    ),
+                    actionRow(
+                        "epubLoadingTemplate",
+                        R.string.epub_loading_templates,
+                        R.string.epub_loading_templates_summary
+                    ),
+                    actionRow("coverConfig", R.string.cover_config, R.string.cover_config_summary),
+                    actionRow("launcherIcon", R.string.change_icon, R.string.change_icon_summary),
+                    MySettingsRowModel(
+                        key = PreferKey.immersiveManageBar,
+                        title = context.getString(R.string.manage_bar_immersion),
+                        summary = context.getString(R.string.manage_bar_immersion_summary),
+                        kind = MySettingsRowKind.Switch,
+                    ),
                 ),
             ),
             MySettingsSectionModel(
@@ -406,30 +486,18 @@ class HostMyContent : AppContent {
 
     /** 设置搜索索引：各设置页 pref XML 解析成可搜条目（与 MyFragment.buildSubSearchItems 一致）。 */
     private fun buildSubSearchItems(context: Context): List<MySettingsSubSearchItem> {
+        // 清理：pref_config_theme 各项目前已是「界面」分区的直达行，不再进索引；
+        // pref_config_welcome（V4 旧日夜主题体系，已由 V5 主题包接管）
+        // 与 pref_config_discovery_subscription（modernDiscoveryMode/modernRssMode 已无引用）整页作废。
         return listOf(
-            Triple("theme_setting", R.xml.pref_config_theme, ConfigTag.THEME_CONFIG),
-            Triple("theme_setting", R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
-            Triple("theme_setting", R.xml.pref_config_welcome, ConfigTag.WELCOME_CONFIG),
+            Triple("coverConfig", R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
             Triple("web_dav_setting", R.xml.pref_config_backup, ConfigTag.BACKUP_CONFIG),
             Triple("ai_setting", R.xml.pref_config_ai, ConfigTag.AI_CONFIG),
             Triple("setting", R.xml.pref_config_other, ConfigTag.OTHER_CONFIG),
             Triple("setting", R.xml.pref_config_network_dns, ConfigTag.NETWORK_DNS_CONFIG),
-            Triple(
-                "theme_setting",
-                R.xml.pref_config_discovery_subscription,
-                ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG
-            )
         ).flatMap { (ownerKey, xmlRes, ownerConfigTag) ->
             buildPreferenceXmlSearchItems(context, ownerKey, xmlRes, ownerConfigTag)
-        } + listOf(
-            MySettingsSubSearchItem(
-                ownerKey = "theme_setting",
-                title = context.getString(R.string.welcome_style),
-                summary = context.getString(R.string.welcome_style_summary),
-                key = PreferKey.welcomeShowTime,
-                ownerConfigTag = ConfigTag.WELCOME_CONFIG
-            )
-        )
+        }
     }
 
     private fun buildPreferenceXmlSearchItems(

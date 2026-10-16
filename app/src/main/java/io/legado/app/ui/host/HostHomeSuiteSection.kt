@@ -3,7 +3,6 @@ package io.legado.app.ui.host
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -36,6 +34,10 @@ import io.legado.app.uikit.v5.contract.ContentScope
  * 渲染复用 DiscoverySuiteHomeScreen 的控件级渲染件 [DiscoverySuiteWidgetSection]
  * （已提升 internal，零拷贝）。以 LazyListScope 扩展挂进主页 LazyColumn，
  * 每个控件一个 item，保持懒加载。
+ *
+ * 管理入口：2026-10-15 V5 测试裁决（模块/套件功能重合 → 删模块留套件）后，
+ * 套件管理统一并入顶栏「管理」菜单（HostHomeManageSheet），区块头不再内嵌管理按钮；
+ * 空态「去创建」保留为直通套件管理页的快捷入口。
  */
 
 internal fun LazyListScope.hostHomeSuiteItems(
@@ -55,7 +57,6 @@ internal fun LazyListScope.hostHomeSuiteItems(
             suites = suites,
             selectedSuite = selectedSuite,
             onSuiteSelect = onSuiteSelect,
-            onManage = onManage,
         )
     }
     if (selectedSuite == null || selectedSuite.widgets.isEmpty()) {
@@ -95,25 +96,20 @@ internal fun LazyListScope.hostHomeSuiteItems(
     }
 }
 
-/** 套件头：区块标题 + 管理入口；多套件时给切换 chips。 */
+/** 套件头：区块标题；多套件时给切换 chips（管理入口在顶栏「管理」菜单）。 */
 @Composable
 private fun SuiteHeader(
     scope: ContentScope,
     suites: List<DiscoverySuite>,
     selectedSuite: DiscoverySuite?,
     onSuiteSelect: (DiscoverySuite) -> Unit,
-    onManage: () -> Unit,
 ) {
     Column(Modifier.padding(top = scope.density.blockGap / 2)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.Text(
-                text = "发现套件",
-                style = scope.type.title,
-                color = scope.color.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            AppGhostButton(text = "管理", onClick = onManage)
-        }
+        androidx.compose.material3.Text(
+            text = "发现套件",
+            style = scope.type.title,
+            color = scope.color.onSurface,
+        )
         if (suites.size > 1) {
             Spacer(Modifier.height(scope.density.blockGap / 2))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

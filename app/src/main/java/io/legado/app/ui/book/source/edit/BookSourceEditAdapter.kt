@@ -17,7 +17,14 @@ import io.legado.app.ui.widget.text.EditEntity
 
 class BookSourceEditAdapter : RecyclerView.Adapter<BookSourceEditAdapter.MyViewHolder>() {
 
-    val editEntityMaxLine = AppConfig.sourceEditMaxLine
+    /**
+     * 页内显示行数。用户设置"无限"（≥999）时收敛到 [EDIT_ENTITY_UNLIMITED_CAP] 行：
+     * 无限行会让超长注释行高出视口，在 V5 壳（AndroidView 宿主）里溢出压住周围 UI；
+     * 完整内容仍可在字段内滚动，或用菜单「编辑内容」全屏编辑。
+     */
+    val editEntityMaxLine = AppConfig.sourceEditMaxLine.let {
+        if (it >= 999) EDIT_ENTITY_UNLIMITED_CAP else it
+    }
 
     var editEntities: ArrayList<EditEntity> = ArrayList()
         @SuppressLint("NotifyDataSetChanged")
@@ -96,5 +103,9 @@ class BookSourceEditAdapter : RecyclerView.Adapter<BookSourceEditAdapter.MyViewH
         }
     }
 
+    companion object {
+        /** 用户设置"无限"时的页内显示行数上限（见 [editEntityMaxLine] 注释） */
+        const val EDIT_ENTITY_UNLIMITED_CAP = 20
+    }
 
 }

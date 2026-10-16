@@ -35,6 +35,9 @@ import java.util.Date
  * 内容由旧 AppDialogFrame + LegadoMiuixCard 换为 V5 AppDialog + AppCard（日志明细可选中复制），
  * 堆栈仍走 TextDialog；清空后关闭的行为不变。
  */
+/** 列表条目摘要长度上限（完整内容点开看） */
+private const val MAX_LOG_ITEM_LENGTH = 500
+
 internal class AppLogDialog : V5DialogFragment() {
 
     /** 旧 AppDialogSize.Wide(widthFraction = 0.98f, maxWidthDp = 760) */
@@ -79,7 +82,14 @@ internal class AppLogDialog : V5DialogFragment() {
                         ) { _, item ->
                             LogItem(
                                 time = LogUtils.logTimeFormat.format(Date(item.first)),
-                                message = item.second,
+                                // 列表里只渲染摘要，完整内容点开看（避免超长日志拖慢列表）
+                                message = item.second.let {
+                                    if (it.length > MAX_LOG_ITEM_LENGTH) {
+                                        it.take(MAX_LOG_ITEM_LENGTH) + "…"
+                                    } else {
+                                        it
+                                    }
+                                },
                                 onClick = {
                                     item.third?.let { throwable ->
                                         showDialogFragment(

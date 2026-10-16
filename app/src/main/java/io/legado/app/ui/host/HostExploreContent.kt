@@ -3,19 +3,24 @@ package io.legado.app.ui.host
 import android.content.Context
 import io.legado.app.R
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,20 +35,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.horizontalScroll
 import com.script.rhino.runScriptWithContext
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
+import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.main.explore.DiscoverEngine
 import io.legado.app.ui.main.explore.DiscoverTagItem
 import io.legado.app.uikit.v5.components.AppBottomSheet
 import io.legado.app.uikit.v5.components.AppChip
+import io.legado.app.uikit.v5.components.AppConfirmDialog
 import io.legado.app.uikit.v5.components.AppEmpty
+import io.legado.app.uikit.v5.components.AppMenuSheet
+import io.legado.app.uikit.v5.components.AppPullRefresh
 import io.legado.app.uikit.v5.components.AppSearchField
 import io.legado.app.uikit.v5.components.AppSkeletonList
 import io.legado.app.uikit.v5.contract.AppContent
@@ -101,6 +111,7 @@ internal object HostExploreContentStatic {
     var openPicker by mutableStateOf(false)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HostDiscoverBody(scope: ContentScope) {
     val context = LocalContext.current
@@ -142,6 +153,11 @@ private fun HostDiscoverBody(scope: ContentScope) {
 
     // 选择器弹层状态
     var selectItem by remember { mutableStateOf<DiscoverTagItem?>(null) }
+
+    // 源操作菜单 / 分类查询 / 删除确认（对齐旧版长按源标题菜单：编辑/置顶/查询/登录/搜索/刷新/删除）
+    var sourceMenuOpen by remember { mutableStateOf(false) }
+    var kindQueryOpen by remember { mutableStateOf(false) }
+    var deleteSourceTarget by remember { mutableStateOf<BookSourcePart?>(null) }
 
     fun openExplore(targetSourceUrl: String, title: String, exploreUrl: String) {
         if (exploreUrl.isBlank()) return
@@ -228,136 +244,152 @@ private fun HostDiscoverBody(scope: ContentScope) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+    // 下拉刷新：清探索分类缓存后重载（指示器接加载态）
+    AppPullRefresh(
+        refreshing = loadingKinds,
+        onRefresh = {
+            val s = source
+            if (s != null) {
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) { s.clearExploreKindsCache() }
+                    reloadKey++
+                }
+            }
+        },
     ) {
-        // 源选择行
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = density.screenPadding, vertical = 4.dp)
-                .clip(visual.shape(ShapeKind.BUTTON))
-                .background(colors.surfaceVariant)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                ) { HostExploreContentStatic.openPicker = true }
-                .padding(horizontal = density.screenPadding / 1.4f, vertical = 10.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = source?.bookSourceName ?: stringResource(R.string.v5_explore_pick_source),
-                style = visual.type.title,
-                color = colors.onSurface,
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-            Text("更换 ▾", style = visual.type.caption, color = colors.primary)
-        }
-        Spacer(Modifier.height(density.blockGap / 2))
+            // 源选择行（点击换源 / 长按弹源操作菜单，对齐旧版长按源标题）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = density.screenPadding, vertical = 4.dp)
+                    .clip(visual.shape(ShapeKind.BUTTON))
+                    .background(colors.surfaceVariant)
+                    .combinedClickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = { HostExploreContentStatic.openPicker = true },
+                        onLongClick = { sourceMenuOpen = true },
+                    )
+                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 10.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = source?.bookSourceName ?: stringResource(R.string.v5_explore_pick_source),
+                    style = visual.type.title,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("更换 ▾", style = visual.type.caption, color = colors.primary)
+            }
+            Spacer(Modifier.height(density.blockGap / 2))
 
-        when {
-            source == null -> AppEmpty(
-                title = stringResource(R.string.v5_explore_no_sources_title),
-                supporting = stringResource(R.string.v5_explore_no_sources_supporting),
-                actionLabel = stringResource(R.string.v5_explore_manage_sources),
-                onAction = {
-                    io.legado.app.ui.host.HostBookSourceManageActivity.start(context)
-                },
-            )
+            when {
+                source == null -> AppEmpty(
+                    title = stringResource(R.string.v5_explore_no_sources_title),
+                    supporting = stringResource(R.string.v5_explore_no_sources_supporting),
+                    actionLabel = stringResource(R.string.v5_explore_manage_sources),
+                    onAction = {
+                        io.legado.app.ui.host.HostBookSourceManageActivity.start(context)
+                    },
+                )
 
-            loadingKinds -> AppSkeletonList(rows = 4)
+                loadingKinds -> AppSkeletonList(rows = 4)
 
-            tagItems.isEmpty() -> AppEmpty(
-                title = "该源没有可用分类",
-                supporting = "检查书源的探索规则",
-            )
+                tagItems.isEmpty() -> AppEmpty(
+                    title = "该源没有可用分类",
+                    supporting = "检查书源的探索规则",
+                )
 
-            else -> {
-                // ① 选择器行（线路/类型/平台…）：label + 当前值 → 点开选项弹层
-                tagItems.filter { it.role == DiscoverTagItem.Role.GlobalSelect }
-                    .forEach { item ->
-                        val current = DiscoverEngine.currentValue(item.kind, source!!.bookSourceUrl)
-                        Row(
+                else -> {
+                    // ① 选择器行（线路/类型/平台…）：label + 当前值 → 点开选项弹层
+                    tagItems.filter { it.role == DiscoverTagItem.Role.GlobalSelect }
+                        .forEach { item ->
+                            val current = DiscoverEngine.currentValue(item.kind, source!!.bookSourceUrl)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = density.screenPadding, vertical = 5.dp)
+                                    .clip(visual.shape(ShapeKind.FIELD))
+                                    .background(colors.surfaceVariant)
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                    ) { onItemTap(item) }
+                                    .padding(horizontal = density.screenPadding / 1.4f, vertical = 10.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = item.text,
+                                    style = visual.type.label,
+                                    color = colors.primary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = current.ifBlank { "点击选择" },
+                                    style = visual.type.body,
+                                    color = colors.onSurface,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+
+                    // ② 开关/按钮 chips（脚本类，自动换行）
+                    val controls = tagItems.filter {
+                        it.role == DiscoverTagItem.Role.Toggle ||
+                            it.role == DiscoverTagItem.Role.ActionButton ||
+                            it.role == DiscoverTagItem.Role.ScriptUrl
+                    }
+                    if (controls.isNotEmpty()) {
+                        FlowRow(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = density.screenPadding, vertical = 5.dp)
-                                .clip(visual.shape(ShapeKind.FIELD))
-                                .background(colors.surfaceVariant)
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                ) { onItemTap(item) }
-                                .padding(horizontal = density.screenPadding / 1.4f, vertical = 10.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                .padding(horizontal = density.screenPadding),
+                            horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
                         ) {
+                            controls.forEach { item ->
+                                AppChip(item.text, selected = false, onClick = { onItemTap(item) })
+                            }
+                        }
+                        Spacer(Modifier.height(density.blockGap / 2))
+                    }
+
+                    // ③ 分组分类 chips → 结果页（自动换行）
+                    val groups = tagItems
+                        .filter { it.role == DiscoverTagItem.Role.UrlTag }
+                        .groupBy { it.group ?: "" }
+                    groups.forEach { (group, items) ->
+                        if (groups.size > 1 || group.isNotBlank()) {
                             Text(
-                                text = item.text,
+                                text = group,
                                 style = visual.type.label,
-                                color = colors.primary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                text = current.ifBlank { "点击选择" },
-                                style = visual.type.body,
-                                color = colors.onSurface,
-                                maxLines = 1,
+                                color = colors.onSurfaceVariant,
+                                modifier = Modifier.padding(
+                                    horizontal = density.screenPadding, vertical = 4.dp,
+                                ),
                             )
                         }
-                    }
-
-                // ② 开关/按钮 chips（脚本类）
-                val controls = tagItems.filter {
-                    it.role == DiscoverTagItem.Role.Toggle ||
-                        it.role == DiscoverTagItem.Role.ActionButton ||
-                        it.role == DiscoverTagItem.Role.ScriptUrl
-                }
-                if (controls.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = density.screenPadding),
-                        horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-                    ) {
-                        controls.forEach { item ->
-                            AppChip(item.text, selected = false, onClick = { onItemTap(item) })
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = density.screenPadding),
+                            horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                            verticalArrangement = Arrangement.spacedBy(density.blockGap / 2),
+                        ) {
+                            items.forEach { item ->
+                                AppChip(item.text, selected = false, onClick = { onItemTap(item) })
+                            }
                         }
+                        Spacer(Modifier.height(density.blockGap / 3))
                     }
-                    Spacer(Modifier.height(density.blockGap / 2))
+                    Spacer(Modifier.height(density.screenPadding))
                 }
-
-                // ③ 分组分类 chips → 结果页
-                val groups = tagItems
-                    .filter { it.role == DiscoverTagItem.Role.UrlTag }
-                    .groupBy { it.group ?: "" }
-                groups.forEach { (group, items) ->
-                    if (groups.size > 1 || group.isNotBlank()) {
-                        Text(
-                            text = group,
-                            style = visual.type.label,
-                            color = colors.onSurfaceVariant,
-                            modifier = Modifier.padding(
-                                horizontal = density.screenPadding, vertical = 4.dp,
-                            ),
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = density.screenPadding),
-                        horizontalArrangement = Arrangement.spacedBy(density.blockGap / 2),
-                    ) {
-                        items.forEach { item ->
-                            AppChip(item.text, selected = false, onClick = { onItemTap(item) })
-                        }
-                    }
-                    Spacer(Modifier.height(density.blockGap / 3))
-                }
-                Spacer(Modifier.height(density.screenPadding))
             }
         }
     }
@@ -403,6 +435,89 @@ private fun HostDiscoverBody(scope: ContentScope) {
             onDismiss = { HostExploreContentStatic.openPicker = false },
         )
     }
+
+    // 源操作菜单（旧版长按源标题同款七项：编辑/置顶/查询/登录/搜索/刷新/删除）
+    val menuSource = source
+    if (sourceMenuOpen && menuSource != null) {
+        val menuPart = sources.firstOrNull { it.bookSourceUrl == menuSource.bookSourceUrl }
+        AppMenuSheet(
+            title = menuSource.bookSourceName,
+            actions = buildList {
+                add(stringResource(R.string.edit) to {
+                    context.startActivity<BookSourceEditActivity> {
+                        putExtra("sourceUrl", menuSource.bookSourceUrl)
+                    }
+                })
+                add(stringResource(R.string.to_top) to {
+                    menuPart?.let { part ->
+                        coroutineScope.launch {
+                            withContext(Dispatchers.IO) {
+                                val minOrder = appDb.bookSourceDao.minOrder - 1
+                                appDb.bookSourceDao.upOrder(part.copy(customOrder = minOrder))
+                            }
+                        }
+                    }
+                })
+                add(stringResource(R.string.query) to { kindQueryOpen = true })
+                if (!menuSource.loginUrl.isNullOrBlank()) {
+                    add(stringResource(R.string.login) to {
+                        context.startActivity<HostSourceLoginActivity> {
+                            putExtra("type", "bookSource")
+                            putExtra("key", menuSource.bookSourceUrl)
+                        }
+                    })
+                }
+                add(stringResource(R.string.search) to {
+                    HostSearchActivity.start(context, menuSource)
+                })
+                add(stringResource(R.string.refresh) to {
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) { menuSource.clearExploreKindsCache() }
+                        reloadKey++
+                    }
+                })
+                add(stringResource(R.string.delete) to { deleteSourceTarget = menuPart })
+            },
+            onDismiss = { sourceMenuOpen = false },
+        )
+    }
+
+    // 分类查询弹层（旧 ExploreKindQueryDialog 的 V5 版：搜索过滤 → 直达结果页）
+    if (kindQueryOpen) {
+        val s = source
+        if (s != null) {
+            ExploreKindQuerySheet(
+                scope = scope,
+                source = s,
+                onDismiss = { kindQueryOpen = false },
+                onOpenKind = { kind ->
+                    kindQueryOpen = false
+                    openExplore(s.bookSourceUrl, kind.title, kind.url ?: "")
+                },
+            )
+        }
+    }
+
+    // 删除源确认（B 门：危险操作必须确认）
+    val deleteSource = deleteSourceTarget
+    if (deleteSource != null) {
+        AppConfirmDialog(
+            title = stringResource(R.string.delete),
+            message = stringResource(R.string.sure_del) + "\n" + deleteSource.bookSourceName,
+            confirmLabel = stringResource(R.string.delete),
+            cancelLabel = stringResource(R.string.cancel),
+            danger = true,
+            onConfirm = {
+                deleteSourceTarget = null
+                coroutineScope.launch {
+                    withContext(Dispatchers.IO) {
+                        SourceHelp.deleteBookSourceParts(listOf(deleteSource))
+                    }
+                }
+            },
+            onDismiss = { deleteSourceTarget = null },
+        )
+    }
 }
 
 @Composable
@@ -442,7 +557,16 @@ private fun SelectOptionsSheet(
                         style = visual.type.body,
                         color = if (option == current) colors.primary else colors.onSurface,
                         maxLines = 1,
+                        modifier = Modifier.weight(1f),
                     )
+                    if (option == current) {
+                        Icon(
+                            imageVector = HostIcons.Check,
+                            contentDescription = null,
+                            tint = colors.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         }
@@ -511,6 +635,14 @@ private fun SourcePickerSheet(
                             )
                         }
                     }
+                    if (src.bookSourceUrl == selectedUrl) {
+                        Icon(
+                            imageVector = HostIcons.Check,
+                            contentDescription = null,
+                            tint = colors.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             Text(
@@ -524,6 +656,89 @@ private fun SourcePickerSheet(
                         interactionSource = remember { MutableInteractionSource() },
                     ) { onManage() },
             )
+        }
+    }
+}
+
+/**
+ * 分类查询弹层（旧 ExploreKindQueryDialog 的 V5 版）：
+ * 列出该书源全部发现分类，顶部搜索框实时过滤，点某分类直达结果页。
+ */
+@Composable
+private fun ExploreKindQuerySheet(
+    scope: ContentScope,
+    source: BookSource,
+    onDismiss: () -> Unit,
+    onOpenKind: (ExploreKind) -> Unit,
+) {
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
+    val density = visual.density
+    var query by remember { mutableStateOf("") }
+    var kinds by remember { mutableStateOf<List<ExploreKind>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(source.bookSourceUrl) {
+        loading = true
+        kinds = runCatching {
+            withContext(Dispatchers.IO) { source.exploreKinds() }
+        }.getOrElse { emptyList() }
+        loading = false
+    }
+    val filtered = remember(query, kinds) {
+        if (query.isBlank()) kinds else kinds.filter { it.title.contains(query, true) }
+    }
+
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(
+            Modifier
+                .padding(density.screenPadding)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(source.bookSourceName, style = visual.type.title, color = colors.onSurface)
+            Spacer(Modifier.height(density.blockGap / 2))
+            AppSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = stringResource(R.string.search),
+            )
+            Spacer(Modifier.height(density.blockGap / 2))
+            when {
+                loading -> Text(
+                    "加载分类中…",
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                )
+
+                filtered.isEmpty() -> Text(
+                    "无匹配分类",
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                )
+
+                else -> filtered.forEach { kind ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(visual.shape(ShapeKind.FIELD))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) {
+                                if (!kind.url.isNullOrBlank()) onOpenKind(kind)
+                            }
+                            .padding(horizontal = density.screenPadding / 1.4f, vertical = 11.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = kind.title,
+                            style = visual.type.body,
+                            color = if (kind.url.isNullOrBlank()) colors.onSurfaceVariant else colors.onSurface,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
         }
     }
 }

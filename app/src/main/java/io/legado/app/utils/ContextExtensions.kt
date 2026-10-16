@@ -378,10 +378,27 @@ fun Context.shareWithQr(
     }
 }
 
+/**
+ * 单次剪贴板写入的 Binder 事务上限。
+ * 超大文本（如巨型崩溃栈）直接 setPrimaryClip 会抛 TransactionTooLargeException 导致崩溃，
+ * 故先截断再写入；写入本身也兜异常，失败只提示不崩。
+ */
+private const val MAX_CLIP_TEXT_LENGTH = 64 * 1024
+
 fun Context.sendToClip(text: String) {
-    val clipData = ClipData.newPlainText(null, text)
-    clipboardManager.setPrimaryClip(clipData)
-    longToastOnUi(R.string.copy_complete)
+    val safeText = if (text.length > MAX_CLIP_TEXT_LENGTH) {
+        text.substring(0, MAX_CLIP_TEXT_LENGTH) + "\n…(内容过长，已截断)"
+    } else {
+        text
+    }
+    runCatching {
+        val clipData = ClipData.newPlainText(null, safeText)
+        clipboardManager.setPrimaryClip(clipData)
+        longToastOnUi(R.string.copy_complete)
+    }.onFailure {
+        LogUtils.e("sendToClip", it.stackTraceToString())
+        longToastOnUi("复制失败：${it.message}")
+    }
 }
 
 fun Context.getClipText(): String? {

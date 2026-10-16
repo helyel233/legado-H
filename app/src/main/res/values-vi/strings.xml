@@ -1325,16 +1325,7 @@
     <string name="v5_shelf_rename_group">Đổi tên nhóm</string>
     <string name="v5_shelf_new_group">＋ Nhóm mới</string>
     <string name="v5_shelf_rename">Đổi tên</string>
-    <string name="v5_home_manage_title">Quản lý mô-đun trang chủ</string>
-    <string name="v5_home_manage_set_detail">Chi tiết bộ</string>
-    <string name="v5_home_manage_pick_source">Chọn nguồn</string>
-    <string name="v5_home_manage_new_set">＋ Bộ tùy chọn mới</string>
-    <string name="v5_home_manage_add_module">＋ Thêm mô-đun</string>
-    <string name="v5_home_manage_no_modules">Bộ này chưa có mô-đun, bấm Thêm mô-đun bên dưới để chọn từ phân loại nguồn</string>
-    <string name="v5_home_manage_pick_hint">Chọn một nguồn sách hoặc nguồn RSS</string>
-    <string name="v5_home_manage_no_kinds">Nguồn này không có mục khả dụng (kiểm tra quy tắc khám phá của nguồn sách)</string>
-    <string name="v5_home_manage_custom">  · Tùy chỉnh</string>
-    <string name="v5_home_manage_modules_count">%1$d mô-đun</string>
+    <string name="query">Truy vấn</string>
     <string name="v5_explore_pick_source">Chọn nguồn khám phá</string>
     <string name="v5_explore_no_sources_title">Không có nguồn nào bật khám phá</string>
     <string name="v5_explore_no_sources_supporting">Bật Khám phá cho nguồn sách, hoặc nhập nguồn trước</string>

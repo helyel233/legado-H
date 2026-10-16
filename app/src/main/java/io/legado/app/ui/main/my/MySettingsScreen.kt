@@ -47,6 +47,8 @@ import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 
 internal enum class MySettingsRowKind {
     Action,
+    /** 开关行：勾选态由 [MySettingsScreen] 的 switchStates 按 key 下发 */
+    Switch,
     ThemeMode,
     WebService,
     AutoTaskService
@@ -112,7 +114,10 @@ internal fun MySettingsScreen(
     onWebServiceClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
-    onRowClick: (String, MySettingsSubSearchItem?) -> Unit
+    onRowClick: (String, MySettingsSubSearchItem?) -> Unit,
+    /** [MySettingsRowKind.Switch] 行的勾选态（key → checked） */
+    switchStates: Map<String, Boolean> = emptyMap(),
+    onSwitchChange: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     // P4 整改③：V5 原生渲染 —— 语义色/字阶/密度/形状族全部来自全局解析器，
     // 不再绑定旧 palette / UiCorner / miuix 组件
@@ -150,6 +155,8 @@ internal fun MySettingsScreen(
                 onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
                 onAutoTaskServiceClick = onAutoTaskServiceClick,
                 onRowClick = onRowClick,
+                switchStates = switchStates,
+                onSwitchChange = onSwitchChange,
             )
         }
         if (visibleSections.isEmpty()) {
@@ -176,7 +183,9 @@ private fun SettingsSectionCard(
     onWebServiceClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
-    onRowClick: (String, MySettingsSubSearchItem?) -> Unit
+    onRowClick: (String, MySettingsSubSearchItem?) -> Unit,
+    switchStates: Map<String, Boolean> = emptyMap(),
+    onSwitchChange: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     AppSurface(level = MaterialLevel.RAISED, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(LocalVisualSpec.current.density.cardPadding)) {
@@ -210,6 +219,13 @@ private fun SettingsSectionCard(
                         showDivider = showDivider,
                         onCheckedChange = onAutoTaskServiceCheckedChange,
                         onClick = onAutoTaskServiceClick,
+                    )
+
+                    MySettingsRowKind.Switch -> SettingsSwitchRow(
+                        item = item,
+                        checked = switchStates[item.row.key] ?: false,
+                        showDivider = showDivider,
+                        onCheckedChange = { onSwitchChange(item.row.key, it) },
                     )
 
                     MySettingsRowKind.Action -> SettingsActionRow(
@@ -264,6 +280,49 @@ private fun ServiceSwitchRow(
         }
         Spacer(modifier = Modifier.width(8.dp))
         AppSwitch(checked = state.checked, onCheckedChange = onCheckedChange)
+    }
+    if (showDivider) {
+        AppDivider(inset = false)
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    item: VisibleRow,
+    checked: Boolean,
+    showDivider: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val colors = LocalSemanticColors.current
+    val visual = LocalVisualSpec.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = visual.density.rowHeight)
+            .padding(vertical = visual.density.rowPaddingV)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.row.title,
+                style = visual.type.body,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (item.summary.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.summary,
+                    style = visual.type.caption,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        AppSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
     if (showDivider) {
         AppDivider(inset = false)
@@ -366,6 +425,6 @@ private fun MySettingsRowModel.effectiveSummary(
         MySettingsRowKind.ThemeMode -> themeModeLabel
         MySettingsRowKind.WebService -> webServiceState.summary
         MySettingsRowKind.AutoTaskService -> autoTaskServiceState.summary
-        MySettingsRowKind.Action -> summary.orEmpty()
+        MySettingsRowKind.Action, MySettingsRowKind.Switch -> summary.orEmpty()
     }
 }

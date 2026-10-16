@@ -1621,16 +1621,7 @@
     <string name="v5_shelf_rename_group">重新命名分組</string>
     <string name="v5_shelf_new_group">＋ 新建分組</string>
     <string name="v5_shelf_rename">重新命名</string>
-    <string name="v5_home_manage_title">主頁模組管理</string>
-    <string name="v5_home_manage_set_detail">集詳情</string>
-    <string name="v5_home_manage_pick_source">選擇書源</string>
-    <string name="v5_home_manage_new_set">＋ 新建自訂集</string>
-    <string name="v5_home_manage_add_module">＋ 新增模組</string>
-    <string name="v5_home_manage_no_modules">這個集還沒有模組，點下面「新增模組」從書源分類裡挑</string>
-    <string name="v5_home_manage_pick_hint">選一個書源或 RSS 源</string>
-    <string name="v5_home_manage_no_kinds">這個源沒有可用分類（檢查書源的探索規則）</string>
-    <string name="v5_home_manage_custom">  · 自訂</string>
-    <string name="v5_home_manage_modules_count">%1$d 個模組</string>
+    <string name="query">查詢</string>
     <string name="v5_explore_pick_source">選擇發現源</string>
     <string name="v5_explore_no_sources_title">沒有啟用發現的源</string>
     <string name="v5_explore_no_sources_supporting">給書源勾選「啟用發現」，或先匯入書源</string>
