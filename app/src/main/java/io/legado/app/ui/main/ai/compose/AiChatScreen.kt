@@ -55,7 +55,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -1597,7 +1597,7 @@ private fun AiMessageSpeakButton(
     style: AiComposeStyle,
     onSpeak: (String, AiChatCompanionConfig, String) -> Unit
 ) {
-    val speechState by AiChatSpeechPlayer.playbackState.collectAsState()
+    val speechState by AiChatSpeechPlayer.playbackState.collectAsStateWithLifecycle()
     val isSpeaking = speechState.key == partId && speechState.active
     Box(
         modifier = Modifier

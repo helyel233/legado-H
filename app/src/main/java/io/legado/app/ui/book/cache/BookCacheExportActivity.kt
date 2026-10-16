@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityBookCacheExportBinding
@@ -52,8 +52,8 @@ class BookCacheExportActivity :
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.composeView.setContent {
             LegadoComposeTheme {
-                val items by viewModel.items.collectAsState()
-                val state by viewModel.state.collectAsState()
+                val items by viewModel.items.collectAsStateWithLifecycle()
+                val state by viewModel.state.collectAsStateWithLifecycle()
                 BookCacheExportScreen(
                     items = items,
                     state = state,

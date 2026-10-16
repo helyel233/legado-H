@@ -18,7 +18,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,11 +63,11 @@ class SmartGroupRuleActivity :
 @Composable
 private fun SmartGroupScreen(viewModel: SmartGroupRuleViewModel) {
     val style = rememberAppDialogStyle()
-    val rules by viewModel.rules.collectAsState()
-    val groups by viewModel.groups.collectAsState()
-    val autoRun by viewModel.autoRun.collectAsState()
-    val running by viewModel.running.collectAsState()
-    val editing by viewModel.editing.collectAsState()
+    val rules by viewModel.rules.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
+    val autoRun by viewModel.autoRun.collectAsStateWithLifecycle()
+    val running by viewModel.running.collectAsStateWithLifecycle()
+    val editing by viewModel.editing.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier

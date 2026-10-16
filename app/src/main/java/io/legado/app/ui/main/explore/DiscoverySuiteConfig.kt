@@ -75,15 +75,31 @@ object DiscoverySuiteStore {
     private const val MAX_TITLE_CHARS = 60
     private const val MAX_ID_CHARS = 64
 
+    // 配置解析缓存：发现页每次 onResume 都 load()，主线程 GSON 解析最大 96KB 的
+    // 套件 JSON 是切 Tab 回发现页的卡顿点；save() 是唯一写入口，直接同步缓存
+    @Volatile
+    private var cachedRawKey: String? = null
+
+    @Volatile
+    private var cachedParsed: DiscoverySuiteConfig? = null
+
     fun load(): DiscoverySuiteConfig {
         val raw = appCtx.getPrefString(PreferKey.discoverySuiteConfig).orEmpty()
         if (raw.isBlank() || raw.length > MAX_CONFIG_CHARS) {
             return DiscoverySuiteConfig()
         }
-        return runCatching {
+        val cachedKey = cachedRawKey
+        val cachedValue = cachedParsed
+        if (cachedKey != null && cachedValue != null && cachedKey == raw) {
+            return cachedValue
+        }
+        val parsed = runCatching {
             GSON.fromJson(raw, DiscoverySuiteConfig::class.java)?.sanitize()
         }.getOrNull()
             ?: DiscoverySuiteConfig()
+        cachedRawKey = raw
+        cachedParsed = parsed
+        return parsed
     }
 
     fun save(config: DiscoverySuiteConfig) {
@@ -91,6 +107,8 @@ object DiscoverySuiteStore {
         val json = GSON.toJson(sanitized)
         if (json.length <= MAX_CONFIG_CHARS) {
             appCtx.putPrefString(PreferKey.discoverySuiteConfig, json)
+            cachedRawKey = json
+            cachedParsed = sanitized
         }
     }
 

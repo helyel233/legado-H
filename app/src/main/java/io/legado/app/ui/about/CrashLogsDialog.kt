@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -176,7 +176,7 @@ private fun CrashLogsContent(
 ) {
     val style = rememberAppDialogStyle()
     val palette = style.toMiuixPalette()
-    val logFiles by viewModel.logFlow.collectAsState()
+    val logFiles by viewModel.logFlow.collectAsStateWithLifecycle()
     val title = stringResource(R.string.crash_log)
 
     AppDialogFrame(

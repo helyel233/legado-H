@@ -19,7 +19,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +56,7 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                 setContent {
                     val style = rememberAppDialogStyle()
                     val palette = style.toMiuixPalette()
-                    val progress by BackupProgressHolder.progress.collectAsState()
+                    val progress by BackupProgressHolder.progress.collectAsStateWithLifecycle()
                     CompositionLocalProvider(
                         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                     ) {

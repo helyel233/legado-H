@@ -252,8 +252,18 @@ object ChapterProvider {
         upLayout()
     }
 
+    // 字体文件解析缓存：Typeface.createFromFile / ContentResolver 读取是重 IO，
+    // upStyle 在主线程触发（打开阅读页/切阅读样式），同一字体路径重复加载白白卡顿。
+    // 字体更换即路径变化，路径内容不会原地变，可安全缓存。
+    private val typefaceCache = object : LinkedHashMap<String, Typeface>(4) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Typeface>): Boolean {
+            return size > 8
+        }
+    }
+
     private fun getTypeface(fontPath: String): Typeface? {
-        return kotlin.runCatching {
+        typefaceCache[fontPath]?.let { return it }
+        val typeface = kotlin.runCatching {
             when {
                 fontPath.isContentScheme() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
                     appCtx.contentResolver
@@ -275,10 +285,14 @@ object ChapterProvider {
                 }
             }
         }.getOrElse {
+            // 加载失败已把 textFont 清空并落盘，下次走系统字体分支；失败结果不进缓存，
+            // 避免用户修复文件后同路径仍取到失败缓存
             ReadBookConfig.textFont = ""
             ReadBookConfig.save()
-            Typeface.SANS_SERIF
+            return Typeface.SANS_SERIF
         } ?: Typeface.DEFAULT
+        typefaceCache[fontPath] = typeface
+        return typeface
     }
 
     private fun getPaints(typeface: Typeface?): Pair<TextPaint, TextPaint> {

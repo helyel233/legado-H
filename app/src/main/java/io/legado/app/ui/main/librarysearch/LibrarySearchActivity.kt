@@ -23,7 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,12 +72,12 @@ class LibrarySearchActivity :
 @Composable
 private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
     val style = rememberAppDialogStyle()
-    val query by viewModel.query.collectAsState()
-    val items by viewModel.items.collectAsState()
-    val searching by viewModel.searching.collectAsState()
-    val indexedCount by viewModel.indexedCount.collectAsState()
-    val rebuilding by viewModel.rebuilding.collectAsState()
-    val rebuildProgress by viewModel.rebuildProgress.collectAsState()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val items by viewModel.items.collectAsStateWithLifecycle()
+    val searching by viewModel.searching.collectAsStateWithLifecycle()
+    val indexedCount by viewModel.indexedCount.collectAsStateWithLifecycle()
+    val rebuilding by viewModel.rebuilding.collectAsStateWithLifecycle()
+    val rebuildProgress by viewModel.rebuildProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Column(

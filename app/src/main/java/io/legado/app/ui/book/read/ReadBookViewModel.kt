@@ -76,12 +76,16 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     }
 
     fun initReadBookConfig(intent: Intent) {
-        val bookUrl = intent.getStringExtra("bookUrl")
-        val book = when {
-            bookUrl.isNullOrEmpty() -> appDb.bookDao.lastReadBook
-            else -> appDb.bookDao.getBook(bookUrl)
-        } ?: return
-        ReadBook.upReadBookConfig(book)
+        // DB 查询与配置绑定挪到 IO：原在 onPostCreate 主线程同步查库，
+        // 书多/磁盘忙时拖慢进书速度；效果仅是异步发 UP_CONFIG 事件，晚到无时序风险
+        execute {
+            val bookUrl = intent.getStringExtra("bookUrl")
+            val book = when {
+                bookUrl.isNullOrEmpty() -> appDb.bookDao.lastReadBook
+                else -> appDb.bookDao.getBook(bookUrl)
+            } ?: return@execute
+            ReadBook.upReadBookConfig(book)
+        }
     }
 
     /**

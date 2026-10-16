@@ -665,9 +665,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         observeEvent<String>(EventBus.BOOKSHELF_STRUCTURE_CHANGED) {
             rebuildBookshelfContent()
         }
-        observeEvent<Boolean>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
-            rebuildBookshelfContent()
-        }
+        // 注意：不监听 MAIN_THEME_BACKGROUND_CHANGED —— 主题/背景变化时 ThemeConfig
+        // 紧接着必发 RECREATE，Activity recreate 会重建一切；这里再全量重建是双倍卡顿。
     }
 
     private fun rebuildBookshelfContent() {
