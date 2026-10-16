@@ -12,13 +12,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +38,7 @@ import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
@@ -195,16 +200,41 @@ fun BookshelfGridItem(
                     fontFamily = titleFontFamily,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    // 封面自身排版复杂时白字易糊，加轻投影兜底
+                    style = LocalTextStyle.current.copy(
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            offset = Offset(1f, 1f),
+                            blurRadius = 4f
+                        )
+                    )
                 )
             }
         }
         if (showBookName == 0) {
+            // 自定义背景图下主题文字色直接压图难分辨：背景图模式时给标签加自适应衬底条
+            // （浅色文字配深衬底、深色文字配浅衬底）；无背景图时不加，普通主题观感不变
+            val hasBgImage = remember(context, themeSignature) {
+                ThemeConfig.hasUsableBgImage(context)
+            }
+            val scrimColor = if (hasBgImage) {
+                if (titleColor.luminance() > 0.5f) {
+                    Color.Black.copy(alpha = 0.45f)
+                } else {
+                    Color.White.copy(alpha = 0.55f)
+                }
+            } else {
+                Color.Transparent
+            }
             Text(
                 text = item.displayName,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(scrimColor)
+                    .padding(horizontal = 4.dp, vertical = 3.dp),
                 color = titleColor,
                 fontSize = 12.sp,
                 fontFamily = titleFontFamily,

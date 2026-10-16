@@ -4,6 +4,11 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.7.7 · 2026/10/16**
+
+- 书架自定义背景图模式下书籍名标签加自适应衬底条，普通主题观感不变；封面下书籍名加轻投影更清晰
+- 修复复制超大文本（如巨型崩溃栈）可能触发 TransactionTooLargeException 崩溃
+
 **vH.1.7.6 · 2026/10/16**
 
 - 修复 JS 聚合源解析崩溃（光遇聚合.json 等大量源「详情页出错」的根因）
