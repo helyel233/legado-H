@@ -416,9 +416,10 @@ object LocalBook {
         onProgress("toc", 0, 1, book.name)
         val chapterList = getChapterList(book)
         if (chapterList.isEmpty()) return
-        appDb.bookChapterDao.delByBook(book.bookUrl)
-        appDb.bookChapterDao.insert(*chapterList.toTypedArray())
-        appDb.bookDao.update(book)
+        appDb.runInTransaction {
+            appDb.bookChapterDao.replaceByBook(book.bookUrl, chapterList)
+            appDb.bookDao.update(book)
+        }
         onProgress("toc", 1, 1, book.name)
         kotlin.runCatching {
             onProgress("index", 0, 1, book.name)

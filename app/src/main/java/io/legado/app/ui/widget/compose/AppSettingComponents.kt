@@ -280,13 +280,20 @@ fun AppManagementCard(
     } else {
         null
     }
+    val hapticView = rememberHapticView()
+    val hapticLongClick = onLongClick?.let { callback ->
+        {
+            hapticView.performLongPressHaptic()
+            callback()
+        }
+    }
     val clickableModifier = when {
-        onClick != null && onLongClick != null -> Modifier.combinedClickable(
+        onClick != null && hapticLongClick != null -> Modifier.combinedClickable(
             enabled = enabled,
             interactionSource = interactionSource,
             indication = null,
             onClick = onClick,
-            onLongClick = onLongClick
+            onLongClick = hapticLongClick
         )
         onClick != null -> Modifier.clickable(
             enabled = enabled,

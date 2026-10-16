@@ -436,7 +436,10 @@ object VideoPlay : CoroutineScope by MainScope(){
                         mediaUrl = mUrl,
                         createdAt = System.currentTimeMillis()
                     )
-                } catch (_: Throwable) {
+                } catch (e: Throwable) {
+                    // 吞掉取消异常会破坏协程取消语义；其余失败记入调试日志
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    io.legado.app.constant.AppLog.putNotSave("预加载下一集播放链接失败", e)
                 } finally {
                     preloadingKeys.remove(nextKey)
                 }

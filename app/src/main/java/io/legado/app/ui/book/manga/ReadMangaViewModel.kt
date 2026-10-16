@@ -131,8 +131,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
                 appDb.bookDao.replace(oldBook, book)
                 BookHelp.updateCacheFolder(oldBook, book)
             }
-            appDb.bookChapterDao.delByBook(oldBook.bookUrl)
-            appDb.bookChapterDao.insert(*cList.toTypedArray())
+            appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, cList)
             ReadManga.onChapterListUpdated(book)
             return true
         }.onFailure {
@@ -248,9 +247,11 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
             oldBook?.migrateTo(book, toc)
             book.inheritNotShelfStateFrom(oldBook)
             book.removeType(BookType.updateError)
-            oldBook?.delete()
-            appDb.bookDao.insert(book)
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
+            appDb.runInTransaction {
+                oldBook?.delete()
+                appDb.bookDao.insert(book)
+                appDb.bookChapterDao.insert(*toc.toTypedArray())
+            }
             ReadManga.resetData(book)
             ReadManga.loadContent()
         }.onError {

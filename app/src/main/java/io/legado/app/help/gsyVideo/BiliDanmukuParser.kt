@@ -33,17 +33,19 @@ class BiliDanmukuParser : BaseDanmakuParser() {
 
     public override fun parse(): Danmakus? {
         if (mDataSource != null) {
-            val source = mDataSource as AndroidFileSource
-            try {
-                val xmlReader = XMLReaderFactory.createXMLReader()
-                val contentHandler = XmlContentHandler()
-                xmlReader.contentHandler = contentHandler
-                xmlReader.parse(InputSource(source.data()))
-                return contentHandler.result
-            } catch (e: SAXException) {
-                e.printStackTrace()
-            } catch (e: IOException) {
-                e.printStackTrace()
+            val source = mDataSource as? AndroidFileSource
+            if (source != null) {
+                try {
+                    val xmlReader = XMLReaderFactory.createXMLReader()
+                    val contentHandler = XmlContentHandler()
+                    xmlReader.contentHandler = contentHandler
+                    xmlReader.parse(InputSource(source.data()))
+                    return contentHandler.result
+                } catch (e: SAXException) {
+                    io.legado.app.constant.AppLog.put("弹幕解析失败", e)
+                } catch (e: IOException) {
+                    io.legado.app.constant.AppLog.put("弹幕解析失败", e)
+                }
             }
         }
 
@@ -87,11 +89,13 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                 // 5:弹幕池id
                 // 6:用户hash
                 // 7:弹幕id
-                val pValue = attributes.getValue("p")
+                val pValue = attributes.getValue("p") ?: return
                 // parse p value to danmaku
                 val values: Array<String?> =
                     pValue.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                if (values.size > 0) {
+                if (values.size < 4) return
+                // 弹幕数据来自网络不可信：任一字段格式异常时丢弃该条弹幕，保证整体解析不中断
+                runCatching {
                     val time = (values[0]!!.toFloat() * 1000).toLong() // 出现时间
                     val type = values[1]!!.toInt() // 弹幕类型
                     val textSize = values[2]!!.toFloat() // 字体大小
@@ -99,28 +103,29 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                         ((0x00000000ff000000L or values[3]!!.toLong()) and 0x00000000ffffffffL).toInt() // 颜色
                     // int poolType = Integer.parseInt(values[5]); // 弹幕池类型（忽略
                     item = mContext.mDanmakuFactory.createDanmaku(type, mContext)
-                    if (item != null) {
-                        item!!.setTime(time)
-                        item!!.textSize = textSize * (mDispDensity - 0.6f)
-                        item!!.textColor = color
-                        item!!.textShadowColor =
-                            if (color <= Color.BLACK) Color.WHITE else Color.BLACK
-                    }
+                    val danmaku = item ?: return@runCatching
+                    danmaku.setTime(time)
+                    danmaku.textSize = textSize * (mDispDensity - 0.6f)
+                    danmaku.textColor = color
+                    danmaku.textShadowColor =
+                        if (color <= Color.BLACK) Color.WHITE else Color.BLACK
+                }.onFailure {
+                    item = null
                 }
             }
         }
 
-        @Throws(SAXException::class)
         override fun endElement(uri: String?, localName: String, qName: String?) {
-            if (item != null && item!!.text != null) {
-                if (item!!.duration != null) {
-                    val tagName: String = (if (localName.length != 0) localName else qName)!!
+            val danmaku = item ?: return
+            if (danmaku.text != null) {
+                if (danmaku.duration != null) {
+                    val tagName: String = (if (localName.length != 0) localName else qName) ?: return
                     if (tagName.equals("d", ignoreCase = true)) {
-                        item!!.setTimer(mTimer)
-                        item!!.flags = mContext.mGlobalFlagValues
+                        danmaku.setTimer(mTimer)
+                        danmaku.flags = mContext.mGlobalFlagValues
                         val lock = result.obtainSynchronizer()
                         synchronized(lock) {
-                            result.addItem(item)
+                            result.addItem(danmaku)
                         }
                     }
                 }
@@ -129,15 +134,17 @@ class BiliDanmukuParser : BaseDanmakuParser() {
         }
 
         override fun characters(ch: CharArray, start: Int, length: Int) {
-            if (item != null) {
-                DanmakuUtils.fillText(item, decodeXmlString(String(ch, start, length)))
-                item!!.index = index++
+            val danmaku = item ?: return
+            DanmakuUtils.fillText(danmaku, decodeXmlString(String(ch, start, length)))
+            danmaku.index = index++
 
-                // initial specail danmaku data
-                val text = item!!.text.toString().trim { it <= ' ' }
-                if (item!!.getType() == BaseDanmaku.TYPE_SPECIAL && text.startsWith("[")
-                    && text.endsWith("]")
-                ) {
+            // initial specail danmaku data
+            val text = danmaku.text.toString().trim { it <= ' ' }
+            if (danmaku.getType() == BaseDanmaku.TYPE_SPECIAL && text.startsWith("[")
+                && text.endsWith("]")
+            ) {
+                // 高级弹幕数据来自网络不可信：解析失败时丢弃该条，保证整体解析不中断
+                runCatching {
                     //text = text.substring(1, text.length() - 1);
                     var textArr: Array<String?>? = null //text.split(",", -1);
                     try {
@@ -147,14 +154,14 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                             textArr[i] = jsonArray.getString(i)
                         }
                     } catch (e: JSONException) {
-                        e.printStackTrace()
+                        io.legado.app.constant.AppLog.put("高级弹幕解析失败", e)
                     }
 
                     if (textArr == null || textArr.size < 5 || TextUtils.isEmpty(textArr[4])) {
                         item = null
-                        return
+                        return@runCatching
                     }
-                    item!!.text = textArr[4]
+                    danmaku.text = textArr[4]
                     var beginX = textArr[0]!!.toFloat()
                     var beginY = textArr[1]!!.toFloat()
                     var endX = beginX
@@ -198,11 +205,11 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                     if (isPercentageNumber(endY)) {
                         endY *= DanmakuFactory.BILI_PLAYER_HEIGHT
                     }
-                    item!!.duration = Duration(alphaDuraion)
-                    item!!.rotationZ = rotateZ
-                    item!!.rotationY = rotateY
+                    danmaku.duration = Duration(alphaDuraion)
+                    danmaku.rotationZ = rotateZ
+                    danmaku.rotationY = rotateY
                     mContext.mDanmakuFactory.fillTranslationData(
-                        item,
+                        danmaku,
                         beginX,
                         beginY,
                         endX,
@@ -212,12 +219,12 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                         mDispScaleX,
                         mDispScaleY
                     )
-                    mContext.mDanmakuFactory.fillAlphaData(item, beginAlpha, endAlpha, alphaDuraion)
+                    mContext.mDanmakuFactory.fillAlphaData(danmaku, beginAlpha, endAlpha, alphaDuraion)
 
                     if (textArr.size >= 12) {
                         // 是否有描边
                         if (!TextUtils.isEmpty(textArr[11]) && TRUE_STRING == textArr[11]) {
-                            item!!.textShadowColor = Color.TRANSPARENT
+                            danmaku.textShadowColor = Color.TRANSPARENT
                         }
                     }
                     if (textArr.size >= 13) {
@@ -244,12 +251,14 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                                     points[i]!![1] = pointArray[1]!!.toFloat()
                                 }
                                 DanmakuFactory.fillLinePathData(
-                                    item, points, mDispScaleX,
+                                    danmaku, points, mDispScaleX,
                                     mDispScaleY
                                 )
                             }
                         }
                     }
+                }.onFailure {
+                    item = null
                 }
             }
         }

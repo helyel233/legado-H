@@ -111,18 +111,24 @@ object DefaultData {
     }
 
     fun importDefaultHttpTTS() {
-        appDb.httpTTSDao.deleteDefault()
-        appDb.httpTTSDao.insert(*httpTTS.toTypedArray())
+        appDb.runInTransaction {
+            appDb.httpTTSDao.deleteDefault()
+            appDb.httpTTSDao.insert(*httpTTS.toTypedArray())
+        }
     }
 
     fun importDefaultTocRules() {
-        appDb.txtTocRuleDao.deleteDefault()
-        appDb.txtTocRuleDao.insert(*txtTocRules.toTypedArray())
+        appDb.runInTransaction {
+            appDb.txtTocRuleDao.deleteDefault()
+            appDb.txtTocRuleDao.insert(*txtTocRules.toTypedArray())
+        }
     }
 
     fun importDefaultRssSources() {
-        appDb.rssSourceDao.deleteDefault()
-        appDb.rssSourceDao.insert(*rssSources.toTypedArray())
+        appDb.runInTransaction {
+            appDb.rssSourceDao.deleteDefault()
+            appDb.rssSourceDao.insert(*rssSources.toTypedArray())
+        }
     }
 
     fun importDefaultDictRules() {

@@ -26,6 +26,9 @@ interface SourceRecycleBinDao {
     @Query("delete from source_recycle_bin where expireAt <= :now")
     fun deleteExpired(now: Long)
 
+    @Query("delete from source_recycle_bin where type = :type and key in (:keys)")
+    fun deleteByKeys(type: String, keys: List<String>)
+
     @Query("delete from source_recycle_bin")
     fun deleteAll()
 }

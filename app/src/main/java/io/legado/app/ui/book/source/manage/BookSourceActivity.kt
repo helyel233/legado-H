@@ -92,6 +92,7 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.share
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.undoSnackbar
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
@@ -704,7 +705,19 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             negativeText = getString(R.string.no),
             dangerPositive = true,
             onPositive = {
-                viewModel.del(getSelectedSources())
+                val selected = getSelectedSources()
+                viewModel.delWithUndo(selected) { deleted ->
+                    runOnUiThread {
+                        if (deleted.isNotEmpty()) {
+                            binding.root.undoSnackbar(
+                                getString(R.string.deleted_book_sources, deleted.size),
+                                getString(R.string.undo)
+                            ) {
+                                viewModel.restoreDeleted(deleted)
+                            }
+                        }
+                    }
+                }
                 selectedUrls.value = emptySet()
                 isSelectMode.value = false
                 upCountView()

@@ -341,8 +341,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                     book.addType(BookType.notShelf)
                 }
                 book.save()
-                appDb.bookChapterDao.delByBook(book.bookUrl)
-                appDb.bookChapterDao.insert(*chapters.toTypedArray())
+                appDb.bookChapterDao.replaceByBook(book.bookUrl, chapters)
             }
             SourceCallBack.callBackBook(
                 SourceCallBack.START_READ,

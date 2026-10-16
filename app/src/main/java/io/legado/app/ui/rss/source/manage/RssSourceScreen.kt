@@ -24,6 +24,7 @@ import io.legado.app.ui.widget.compose.AppManagementLazyColumn
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
+import io.legado.app.ui.widget.compose.ListStatePlaceholder
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -78,6 +79,16 @@ internal fun RssSourceScreen(
             moreActions = sourceMenuActions(source),
             dragHandle = dragHandle
         )
+    }
+
+    if (!isSelectMode && sourceSnapshot.isEmpty()) {
+        ListStatePlaceholder(
+            text = stringResource(R.string.rss_source_empty),
+            textColor = palette.settings.secondaryText,
+            accentColor = palette.settings.accent,
+            fontFamily = palette.settings.bodyFontFamily
+        )
+        return
     }
 
     AppManagementLazyColumn(

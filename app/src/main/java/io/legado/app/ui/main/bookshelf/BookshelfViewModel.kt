@@ -98,8 +98,10 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
                     if (dbBook != null) {
                         val toc = WebBook.getChapterListAwait(bookSource, it).getOrThrow()
                         dbBook.migrateTo(it, toc)
-                        appDb.bookDao.insert(it)
-                        appDb.bookChapterDao.insert(*toc.toTypedArray())
+                        appDb.runInTransaction {
+                            appDb.bookDao.insert(it)
+                            appDb.bookChapterDao.insert(*toc.toTypedArray())
+                        }
                     } else {
                         it.order = appDb.bookDao.minOrder - 1
                         it.save()

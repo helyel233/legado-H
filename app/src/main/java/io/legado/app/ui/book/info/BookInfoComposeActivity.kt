@@ -913,41 +913,9 @@ class BookInfoComposeActivity :
     }
 
     private fun deleteBook() {
-        viewModel.getBook()?.let { book ->
-            if (LocalConfig.bookInfoDeleteAlert) {
-                alert(
-                    titleResource = R.string.draw,
-                    messageResource = R.string.sure_del
-                ) {
-                    var checkBox: CheckBox? = null
-                    if (book.isLocal) {
-                        checkBox = CheckBox(this@BookInfoComposeActivity).apply {
-                            setText(R.string.delete_book_file)
-                            isChecked = LocalConfig.deleteBookOriginal
-                        }
-                        val view = LinearLayout(this@BookInfoComposeActivity).apply {
-                            setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
-                            addView(checkBox)
-                        }
-                        customView { view }
-                    }
-                    yesButton {
-                        checkBox?.let { LocalConfig.deleteBookOriginal = it.isChecked }
-                        SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, viewModel.bookSource, book)
-                        viewModel.delBook(LocalConfig.deleteBookOriginal) {
-                            setResult(Activity.RESULT_OK)
-                            finish()
-                        }
-                    }
-                    noButton()
-                }
-            } else {
-                SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, viewModel.bookSource, book)
-                viewModel.delBook(LocalConfig.deleteBookOriginal) {
-                    setResult(Activity.RESULT_OK)
-                    finish()
-                }
-            }
+        confirmDeleteBook(viewModel) {
+            setResult(Activity.RESULT_OK)
+            finish()
         }
     }
 

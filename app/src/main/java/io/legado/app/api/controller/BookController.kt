@@ -140,9 +140,10 @@ object BookController {
                 ?: return returnData.setErrorMsg("未在数据库找到对应书籍，请先添加")
             if (book.isLocal) {
                 val toc = LocalBook.getChapterList(book)
-                appDb.bookChapterDao.delByBook(book.bookUrl)
-                appDb.bookChapterDao.insert(*toc.toTypedArray())
-                appDb.bookDao.update(book)
+                appDb.runInTransaction {
+                    appDb.bookChapterDao.replaceByBook(book.bookUrl, toc)
+                    appDb.bookDao.update(book)
+                }
                 return returnData.setData(toc)
             } else {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
@@ -153,9 +154,10 @@ object BookController {
                     }
                     WebBook.getChapterListAwait(bookSource, book).getOrThrow()
                 }
-                appDb.bookChapterDao.delByBook(book.bookUrl)
-                appDb.bookChapterDao.insert(*toc.toTypedArray())
-                appDb.bookDao.update(book)
+                appDb.runInTransaction {
+                    appDb.bookChapterDao.replaceByBook(book.bookUrl, toc)
+                    appDb.bookDao.update(book)
+                }
                 return returnData.setData(toc)
             }
         } catch (e: Exception) {

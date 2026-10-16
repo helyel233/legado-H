@@ -16,14 +16,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItemStyle
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.ListLoadingIndicator
+import io.legado.app.ui.widget.compose.ListStatePlaceholder
 import io.legado.app.ui.widget.compose.SearchBookListItem
 import io.legado.app.ui.widget.compose.SearchBookPreviewOverlay
 import io.legado.app.ui.widget.compose.SearchBookPreviewState
@@ -40,6 +44,7 @@ fun SearchResultScreen(
     hasMore: Boolean,
     scrollToTopSignal: Int,
     bookshelfTick: Int,
+    searchFinished: Boolean,
     isInBookshelf: (SearchBook) -> Boolean,
     lifecycle: Lifecycle,
     onBookClick: (SearchBook) -> Unit,
@@ -67,6 +72,23 @@ fun SearchResultScreen(
         }
 
         Box(modifier = modifier.fillMaxSize()) {
+            // 三态：初次加载指示 / 搜索结束空态 / 正常列表
+            val palette = renderConfig.palette
+            if (books.isEmpty() && isLoading) {
+                ListLoadingIndicator(
+                    accentColor = palette.accent,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else if (books.isEmpty() && searchFinished && !isLoading) {
+                ListStatePlaceholder(
+                    text = stringResource(R.string.search_result_empty),
+                    hint = stringResource(R.string.search_result_empty_hint),
+                    textColor = palette.secondaryText,
+                    accentColor = palette.accent,
+                    fontFamily = palette.bodyFontFamily,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -91,6 +113,7 @@ fun SearchResultScreen(
                         }
                     )
                 }
+            }
             }
             ComposeLazyListFastScroller(
                 state = listState,

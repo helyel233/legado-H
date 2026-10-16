@@ -1848,6 +1848,11 @@ function login() {
     <string name="edit_theme_abyss">渊默如海</string>
     <string name="edit_theme_quiet_light">素影清晖</string>
     <string name="search_result">搜索结果:</string>
+    <string name="search_result_empty">没有找到相关书籍</string>
+    <string name="search_result_empty_hint">试试更换关键词，或检查书源是否启用</string>
+    <string name="undo">撤销</string>
+    <string name="deleted_book_sources">已删除 %1$d 个书源</string>
+    <string name="bookshelf_empty_guide">第一步：导入书源后即可搜索在线书籍；也可以直接导入本地书籍。点击这里重新打开本引导。</string>
     <string name="find">查找</string>
     <string name="btn_previous">上个</string>
     <string name="btn_next">下个</string>

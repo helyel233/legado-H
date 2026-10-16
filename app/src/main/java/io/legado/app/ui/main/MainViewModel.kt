@@ -212,8 +212,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                 appDb.bookDao.replace(oldBook, book)
                 BookHelp.updateCacheFolder(oldBook, book)
             }
-            appDb.bookChapterDao.delByBook(bookUrl)
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
+            appDb.bookChapterDao.replaceByBook(bookUrl, toc)
             ReadBook.onChapterListUpdated(book, loadContent = false)
         }.onFailure {
             currentCoroutineContext().ensureActive()

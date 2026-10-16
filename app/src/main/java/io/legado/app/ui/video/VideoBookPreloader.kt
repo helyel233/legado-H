@@ -74,8 +74,7 @@ object VideoBookPreloader {
             resolvedBook.addType(BookType.notShelf)
         }
         resolvedBook.save()
-        appDb.bookChapterDao.delByBook(resolvedBook.bookUrl)
-        appDb.bookChapterDao.insert(*chapters.toTypedArray())
+        appDb.bookChapterDao.replaceByBook(resolvedBook.bookUrl, chapters)
         return true
     }
 

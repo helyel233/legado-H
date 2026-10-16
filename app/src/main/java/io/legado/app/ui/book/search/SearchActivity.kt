@@ -16,6 +16,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
@@ -88,6 +89,8 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     private val searchResults = mutableStateListOf<SearchBook>()
     private val bookshelfTick = mutableIntStateOf(0)
     private val resultScrollToTopSignal = mutableIntStateOf(0)
+    // 本轮搜索是否已结束：用于结果列表的空态展示（区分"还没搜"与"搜完没结果"）
+    private val searchFinished = mutableStateOf(false)
     // 输入帮助区(书架命中 + 搜索历史)已 Compose 化，用快照状态驱动，替代原 BookAdapter/HistoryKeyAdapter。
     private val bookshelfHintBooks = mutableStateListOf<Book>()
     private val historyKeywords = mutableStateListOf<SearchKeyword>()
@@ -276,6 +279,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 hasMore = viewModel.hasMore,
                 scrollToTopSignal = resultScrollToTopSignal.intValue,
                 bookshelfTick = bookshelfTick.intValue,
+                searchFinished = searchFinished.value,
                 isInBookshelf = { isInBookshelf(it) },
                 lifecycle = lifecycle,
                 onBookClick = { showBookInfo(it) },
@@ -560,6 +564,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
      * 开始搜索
      */
     private fun startSearch() {
+        searchFinished.value = false
         binding.refreshProgressBar.visible()
         binding.refreshProgressBar.isAutoLoading = true
         binding.fbStartStop.setImageResource(R.drawable.ic_stop_black_24dp)
@@ -570,6 +575,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
      * 搜索结束
      */
     private fun searchFinally() {
+        searchFinished.value = true
         binding.refreshProgressBar.isAutoLoading = false
         binding.refreshProgressBar.gone()
         if (!isManualStopSearch && viewModel.hasMore) {

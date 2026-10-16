@@ -337,9 +337,10 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         if (book.isLocal) {
             execute(scope) {
                 LocalBook.getChapterList(book).let {
-                    appDb.bookDao.update(book)
-                    appDb.bookChapterDao.delByBook(book.bookUrl)
-                    appDb.bookChapterDao.insert(*it.toTypedArray())
+                    appDb.runInTransaction {
+                        appDb.bookDao.update(book)
+                        appDb.bookChapterDao.replaceByBook(book.bookUrl, it)
+                    }
                     ReadBook.onChapterListUpdated(book)
                     bookData.postValue(book)
                     chapterListData.postValue(it)
@@ -370,8 +371,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                         if (oldBook.bookUrl != book.bookUrl) {
                             BookHelp.updateCacheFolder(oldBook, book)
                         }
-                        appDb.bookChapterDao.delByBook(oldBook.bookUrl)
-                        appDb.bookChapterDao.insert(*it.toTypedArray())
+                        appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, it)
                         ReadBook.onChapterListUpdated(book)
                     }
                     bookData.postValue(book)
@@ -522,9 +522,11 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             }
             if (inBookshelf) {
                 book.removeType(BookType.updateError)
-                bookData.value?.delete()
-                appDb.bookDao.insert(book)
-                appDb.bookChapterDao.insert(*toc.toTypedArray())
+                appDb.runInTransaction {
+                    bookData.value?.delete()
+                    appDb.bookDao.insert(book)
+                    appDb.bookChapterDao.insert(*toc.toTypedArray())
+                }
             }
             bookData.postValue(book)
             chapterListData.postValue(toc)

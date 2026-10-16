@@ -9,6 +9,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.toBookSource
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.cnCompare
@@ -54,6 +55,31 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
     fun del(sources: List<BookSourcePart>) {
         execute {
             SourceHelp.deleteBookSourceParts(sources)
+        }
+    }
+
+    /**
+     * 删除书源并回调被删完整实体，供 Snackbar 撤销
+     */
+    fun delWithUndo(sources: List<BookSourcePart>, onDeleted: (List<BookSource>) -> Unit) {
+        execute {
+            SourceHelp.deleteBookSourcePartsWithUndo(sources, onDeleted)
+        }
+    }
+
+    /**
+     * 撤销删除：把书源重新插回，并清掉回收站里对应的副本，避免"已恢复的书源还躺在回收站"
+     */
+    fun restoreDeleted(sources: List<BookSource>) {
+        if (sources.isEmpty()) return
+        execute {
+            appDb.runInTransaction {
+                appDb.bookSourceDao.insert(*sources.toTypedArray())
+                appDb.sourceRecycleBinDao.deleteByKeys(
+                    SourceRecycleBinHelp.TYPE_BOOK_SOURCE,
+                    sources.map { it.bookSourceUrl }
+                )
+            }
         }
     }
 

@@ -54,17 +54,21 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
                     SharedJsScope.remove(oldSource.jsLib)
                 }
             }
-            rssSource?.let {
-                appDb.rssSourceDao.delete(it)
-                //更新收藏的源地址
-                if (it.sourceUrl != source.sourceUrl) {
-                    appDb.rssStarDao.updateOrigin(source.sourceUrl, it.sourceUrl)
-                    appDb.rssArticleDao.updateOrigin(source.sourceUrl, it.sourceUrl)
-                    appDb.cacheDao.deleteSourceVariables(it.sourceUrl)
-                    AppCacheManager.clearSourceVariables()
+            appDb.runInTransaction {
+                rssSource?.let {
+                    appDb.rssSourceDao.delete(it)
+                    //更新收藏的源地址
+                    if (it.sourceUrl != source.sourceUrl) {
+                        appDb.rssStarDao.updateOrigin(source.sourceUrl, it.sourceUrl)
+                        appDb.rssArticleDao.updateOrigin(source.sourceUrl, it.sourceUrl)
+                        appDb.cacheDao.deleteSourceVariables(it.sourceUrl)
+                    }
                 }
+                appDb.rssSourceDao.insert(source)
             }
-            appDb.rssSourceDao.insert(source)
+            if (rssSource != null && rssSource?.sourceUrl != source.sourceUrl) {
+                AppCacheManager.clearSourceVariables()
+            }
             rssSource = source
             concurrentRecordMap.remove(source.sourceUrl) //删除并发限制缓存
             source

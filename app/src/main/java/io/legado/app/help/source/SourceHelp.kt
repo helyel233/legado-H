@@ -97,6 +97,29 @@ object SourceHelp {
         AppCacheManager.clearSourceVariables()
     }
 
+    /**
+     * 删除书源并在事务后回调被删的完整书源列表（用于 Snackbar 撤销恢复）。
+     * 删除仍会先入回收站，撤销是直接重新插回书源表。
+     */
+    fun deleteBookSourcePartsWithUndo(
+        sources: List<BookSourcePart>,
+        onDeleted: (List<BookSource>) -> Unit
+    ) {
+        // Room 的 runInTransaction 只收 Runnable，事务内用外部变量带回结果
+        var fullSources: List<BookSource> = emptyList()
+        appDb.runInTransaction {
+            fullSources = sources.mapNotNull {
+                appDb.bookSourceDao.getBookSource(it.bookSourceUrl)
+            }
+            SourceRecycleBinHelp.recycleBookSources(fullSources)
+            sources.forEach {
+                deleteBookSourceInternal(it.bookSourceUrl)
+            }
+        }
+        AppCacheManager.clearSourceVariables()
+        onDeleted(fullSources)
+    }
+
     private fun deleteBookSourceInternal(key: String) {
         appDb.bookSourceDao.delete(key)
         appDb.cacheDao.deleteSourceVariables(key)

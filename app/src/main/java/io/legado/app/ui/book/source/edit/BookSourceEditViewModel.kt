@@ -64,15 +64,17 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
                     SharedJsScope.remove(oldSource.jsLib)
                 }
             }
-            bookSource?.let {
-                if (it.bookSourceUrl != source.bookSourceUrl) {
-                    SourceHelp.deleteBookSource(it.bookSourceUrl)
-                } else {
-                    appDb.bookSourceDao.delete(it)
-                    SourceConfig.removeSource(it.bookSourceUrl)
+            appDb.runInTransaction {
+                bookSource?.let {
+                    if (it.bookSourceUrl != source.bookSourceUrl) {
+                        SourceHelp.deleteBookSource(it.bookSourceUrl)
+                    } else {
+                        SourceConfig.removeSource(it.bookSourceUrl)
+                        appDb.bookSourceDao.delete(it)
+                    }
                 }
+                appDb.bookSourceDao.insert(source)
             }
-            appDb.bookSourceDao.insert(source)
             bookSource = source
             concurrentRecordMap.remove(source.bookSourceUrl) //删除并发限制缓存
             source

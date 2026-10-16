@@ -488,8 +488,7 @@ object ReadManga : CoroutineScope by MainScope() {
                     appDb.bookDao.replace(oldBook, book)
                     BookHelp.updateCacheFolder(oldBook, book)
                 }
-                appDb.bookChapterDao.delByBook(oldBook.bookUrl)
-                appDb.bookChapterDao.insert(*cList.toTypedArray())
+                appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, cList)
                 onChapterListUpdated(book, false)
                 nextMangaChapter ?: loadContent(durChapterIndex + 1)
             }

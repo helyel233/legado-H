@@ -6,6 +6,9 @@ import android.view.View
 import androidx.annotation.StringRes
 import com.google.android.material.snackbar.Snackbar
 
+/** 撤销条停留时长（毫秒），比 LENGTH_LONG 更宽裕，到时自动消失 */
+const val UNDO_SNACKBAR_DURATION_MS = 8000
+
 /**
  * Display the Snackbar with the [Snackbar.LENGTH_SHORT] duration.
  *
@@ -165,5 +168,18 @@ fun View.indefiniteSnackbar(
     action: (View) -> Unit
 ) = Snackbar
     .make(this, message, Snackbar.LENGTH_INDEFINITE)
+    .setAction(actionText, action)
+    .apply { show() }
+
+/**
+ * 撤销用的 Snackbar：停留时间比 LENGTH_SHORT/LENGTH_LONG 更久，
+ * 给用户足够时间点击"撤销"，到时自动消失（不会像 INDEFINITE 那样一直挂着）。
+ */
+fun View.undoSnackbar(
+    message: CharSequence,
+    actionText: CharSequence,
+    action: (View) -> Unit
+) = Snackbar
+    .make(this, message, UNDO_SNACKBAR_DURATION_MS)
     .setAction(actionText, action)
     .apply { show() }

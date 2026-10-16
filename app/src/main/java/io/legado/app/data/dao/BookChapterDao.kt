@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.data.entities.BookChapter
 
@@ -42,6 +43,15 @@ interface BookChapterDao {
 
     @Query("delete from chapters where bookUrl = :bookUrl")
     fun delByBook(bookUrl: String)
+
+    /**
+     * 事务内完成目录替换（先删后插），避免中途失败留下半写状态
+     */
+    @Transaction
+    fun replaceByBook(bookUrl: String, bookChapters: List<BookChapter>) {
+        delByBook(bookUrl)
+        insert(*bookChapters.toTypedArray())
+    }
 
     @Query("update chapters set wordCount = :wordCount where bookUrl = :bookUrl and url = :url")
     fun upWordCount(bookUrl: String, url: String, wordCount: String)

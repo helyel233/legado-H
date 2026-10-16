@@ -52,6 +52,7 @@ import io.legado.app.databinding.FragmentBooksBinding
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.SmartGroupEngine
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.info.BookInfoNavigator
@@ -152,6 +153,27 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
         }
         initRecyclerView()
         upRecyclerData()
+        initEmptyShelfGuide()
+    }
+
+    /**
+     * 空书架引导：点击空态文案，提供"导入书源 / 添加本地书籍"两个入口，
+     * 缓解新用户装完是空壳不知道从哪开始的问题。
+     */
+    private fun initEmptyShelfGuide() {
+        binding.tvEmptyMsg.setOnClickListener {
+            alert(
+                titleResource = R.string.bookshelf_empty,
+                messageResource = R.string.bookshelf_empty_guide
+            ) {
+                positiveButton(R.string.import_book_source) {
+                    startActivity<io.legado.app.ui.book.source.manage.BookSourceActivity>()
+                }
+                negativeButton(R.string.import_local) {
+                    startActivity<io.legado.app.ui.book.import.local.ImportBookActivity>()
+                }
+            }
+        }
     }
 
     override fun onResume() {

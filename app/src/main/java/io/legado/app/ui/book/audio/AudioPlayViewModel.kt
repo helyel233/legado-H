@@ -86,8 +86,7 @@ class AudioPlayViewModel(application: Application) : BaseViewModel(application) 
                 appDb.bookDao.replace(oldBook, book)
                 BookHelp.updateCacheFolder(oldBook, book)
             }
-            appDb.bookChapterDao.delByBook(oldBook.bookUrl)
-            appDb.bookChapterDao.insert(*cList.toTypedArray())
+            appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, cList)
             AudioPlay.chapterSize = cList.size
             AudioPlay.simulatedChapterSize = book.simulatedTotalChapterNum()
             AudioPlay.upDurChapter()
@@ -113,11 +112,13 @@ class AudioPlayViewModel(application: Application) : BaseViewModel(application) 
             oldBook?.migrateTo(book, toc)
             book.inheritNotShelfStateFrom(oldBook)
             book.removeType(BookType.updateError)
-            oldBook?.delete()
-            appDb.bookDao.insert(book)
+            appDb.runInTransaction {
+                oldBook?.delete()
+                appDb.bookDao.insert(book)
+                appDb.bookChapterDao.insert(*toc.toTypedArray())
+            }
             AudioPlay.book = book
             AudioPlay.bookSource = source
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
             AudioPlay.upDurChapter()
         }.onFinally {
             postEvent(EventBus.SOURCE_CHANGED, book.bookUrl)

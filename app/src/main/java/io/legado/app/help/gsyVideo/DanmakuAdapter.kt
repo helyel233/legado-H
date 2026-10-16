@@ -23,32 +23,39 @@ class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer
 
     override fun prepareDrawing(danmaku: BaseDanmaku, fromWorkerThread: Boolean) {
         if (danmaku.text is Spanned) { // 根据你的条件检查是否需要需要更新弹幕
+            var drawable = mDrawable
+            if (drawable != null) {
+                // 已有缓存 drawable 时直接复用，不再重复起线程
+                drawable.setBounds(0, 0, 100, 100)
+                danmaku.text = createSpannable(drawable)
+                mDanmakuView?.invalidateDanmaku(danmaku, false)
+                return
+            }
             // FIXME 这里只是简单启个线程来加载远程url图片，请使用你自己的异步线程池，最好加上你的缓存池
             object : Thread() {
                 override fun run() {
                     val url = "http://www.bilibili.com/favicon.ico"
                     var inputStream: InputStream? = null
-                    var drawable = mDrawable
-                    if (drawable == null) {
+                    var loaded = mDrawable
+                    if (loaded == null) {
                         try {
                             val urlConnection = URL(url).openConnection()
                             inputStream = urlConnection.getInputStream()
-                            drawable = BitmapDrawable.createFromStream(inputStream, "bitmap")
-                            mDrawable = drawable
+                            loaded = BitmapDrawable.createFromStream(inputStream, "bitmap")
+                            mDrawable = loaded
                         } catch (e: MalformedURLException) {
-                            e.printStackTrace()
+                            io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
                         } catch (e: IOException) {
-                            e.printStackTrace()
+                            io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
                         } finally {
                             IOUtils.closeQuietly(inputStream)
                         }
                     }
-                    if (drawable != null) {
-                        drawable.setBounds(0, 0, 100, 100)
-                        val spannable = createSpannable(drawable)
+                    if (loaded != null) {
+                        loaded.setBounds(0, 0, 100, 100)
+                        val spannable = createSpannable(loaded)
                         danmaku.text = spannable
                         mDanmakuView?.invalidateDanmaku(danmaku, false)
-                        return
                     }
                 }
             }.start()
@@ -57,7 +64,14 @@ class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer
 
 
     override fun releaseResource(danmaku: BaseDanmaku?) {
-        // TODO 重要:清理含有ImageSpan的text中的一些占用内存的资源 例如drawable
+        // 清理含有 ImageSpan 的 text 中占内存的资源（drawable 引用），避免图文混排弹幕持有 bitmap。
+        // 只摘 span、不改 text：保留 Spanned 形态，后续 prepareDrawing 才能重新挂回图片。
+        val text = danmaku?.text as? Spanned ?: return
+        if (text !is Spannable) return
+        val spans = text.getSpans(0, text.length, ImageSpan::class.java)
+        for (span in spans) {
+            text.removeSpan(span)
+        }
     }
 
 
