@@ -4,7 +4,7 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
-**vH.1.7.4 · 2026/10/16**
+**vH.1.7.6 · 2026/10/16**
 
 - 修复 JS 聚合源解析崩溃（光遇聚合.json 等大量源「详情页出错」的根因）
 - RSS 纯文章源强制套主题纯色底，日夜主题下正文对比度更佳
