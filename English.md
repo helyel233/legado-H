@@ -16,7 +16,7 @@ LegadoH ships with no books and no book sources. Add your own online sources in 
 - **Page template system**: fixed-frame scrolling templates, unified font/color/header/footer management, horizontal and vertical typesetting.
 - **Theme system**: built-in Minecraft, Asuka, Lord of the Mysteries and Doraemon reading themes, advanced-title and header/footer Lottie animations, independently adjustable opacity for the top bar, bottom bar and dialogs.
 - **AI-assisted reading**: configurable AI services for source search, book and chapter reading, reading-record queries and web-connected tools; chapter text sent to third-party AI requires a consent prompt, sensitive config such as apiKey is stored encrypted locally, and built-in request rate limiting with daily usage stats is included.
-- **Modernized UI**: Compose bookshelf and explore pages, adaptive launcher icon with a monochrome themed layer, frosted-glass top and bottom bars.
+- **Modernized UI**: Compose bookshelf and explore pages, adaptive launcher icon with a monochrome themed layer, frosted-glass top and bottom bars; with a custom background image, text on the bookshelf, explore, contents, reading records, RSS and search pages gets automatic shadow and translucent backing to stay readable.
 
 Ongoing improvements from sibling forks are also ported in — such as [legadoC](https://github.com/CCSSNE/legadoC)'s review-snapshot and offline-comment system, cache download coordinator, bookshelf collections with homepage modules and inline illustrations with audio blocks, and [Legado_Max](https://github.com/Suml-1/Legado_Max)'s interaction and tooling features.
 
@@ -39,7 +39,7 @@ Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/
 | Assets & themes | Shared image/font library, day/night themes, backgrounds, advanced-title Lottie, bubble packs, continuous font weight 100–900 |
 | TTS & media | System and network TTS, text following, floating playback controls, comic and video entries |
 | AI | Configurable AI services, source search, book and chapter reading, reading-record queries and web tools |
-| Automation & data | Scheduled tasks, caching, backup and restore, WebDAV, object storage (S3) and container management |
+| Automation & data | Scheduled tasks, caching, backup and restore, rule recycle bin, delete undo, cache export, WebDAV, object storage (S3) and container management |
 | Network | DNS/DoH selection, per-feature routing, domain exceptions, service configuration and speed tests |
 
 [Full feature guide (Chinese)](docs/features.md)
@@ -50,6 +50,11 @@ Get the latest APK from [GitHub Releases](https://github.com/helyel233/legado-H/
 - **Smart bookshelf tags**: the tag bar shows hit counts per tag; tags support global rename, and deleting a tag cleans up leftovers from member books.
 - **Custom header/footer templates**: each of the six header/footer slots accepts a template built from placeholders (`{书名}` book, `{章节名}` title, `{时间}` time, `{电量}` battery, `{页码}` page, `{总页数}` pages, `{进度}` progress, etc.).
 - **Selection magnifier**: a magnifier shows while long-pressing to select text for more precise cross-page selection.
+- **Rule recycle bin**: book sources, RSS sources, replace rules and 4 other rule types are auto-binned before deletion, kept for 7 days by default and restorable at any time.
+- **Delete undo**: after deleting book sources and other rules an undo bar appears — tap to restore; restoring also clears the matching recycle-bin copy, so a restored item no longer lingers in the bin.
+- **Empty-state guidance and placeholders**: tapping the empty bookshelf message offers "Import book source / Add local book" entries; search, RSS and other lists share unified loading, empty and error placeholders (the empty state can carry a retry action).
+- **Background readability**: with a custom background image, text across the app gets automatic shadow and translucent backing so it stays readable on busy artwork, while normal themes are unaffected.
+- **Haptic feedback**: a unified haptics entry point injected at the component level, so long-press and similar actions give vibration feedback.
 - **Lint baseline gate**: unified lint config with a checked-in baseline file so existing issues no longer block builds while new issues are caught.
 
 ## Documentation
