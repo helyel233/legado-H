@@ -163,6 +163,17 @@ object ChapterProvider {
 
     private var upViewSizeRunnable: Runnable? = null
 
+    // 字体文件解析缓存：Typeface.createFromFile / ContentResolver 读取是重 IO，
+    // upStyle 在主线程触发（打开阅读页/切阅读样式），同一字体路径重复加载白白卡顿。
+    // 字体更换即路径变化，路径内容不会原地变，可安全缓存。
+    // 注意：必须声明在 init { upStyle() } 之前——<clinit> 按声明顺序执行，
+    // init 经 upStyle→getTypeface 会读到这里，声明在后会触发 NPE（打开书籍必崩）。
+    private val typefaceCache = object : LinkedHashMap<String, Typeface>(4) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Typeface>): Boolean {
+            return size > 8
+        }
+    }
+
     /**
      * Deadline until which reported view sizes are adopted immediately.
      *
@@ -250,15 +261,6 @@ object ChapterProvider {
         titlePaintFontMetrics = titlePaint.fontMetrics
         contentPaintFontMetrics = contentPaint.fontMetrics
         upLayout()
-    }
-
-    // 字体文件解析缓存：Typeface.createFromFile / ContentResolver 读取是重 IO，
-    // upStyle 在主线程触发（打开阅读页/切阅读样式），同一字体路径重复加载白白卡顿。
-    // 字体更换即路径变化，路径内容不会原地变，可安全缓存。
-    private val typefaceCache = object : LinkedHashMap<String, Typeface>(4) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Typeface>): Boolean {
-            return size > 8
-        }
     }
 
     private fun getTypeface(fontPath: String): Typeface? {
