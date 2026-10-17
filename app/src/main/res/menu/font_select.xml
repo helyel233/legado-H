@@ -12,4 +12,9 @@
         android:title="@string/other_folder"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/menu_import_font"
+        android:title="@string/import_font"
+        app:showAsAction="never" />
+
 </menu>

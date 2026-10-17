@@ -35,7 +35,10 @@ import io.legado.app.utils.putPrefString
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -72,6 +75,41 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
         }
     }
 
+    /**
+     * 直接导入字体文件：绕开目录遍历，用单文件授权把字体复制进应用私有字体目录。
+     * 部分 ROM 的文件夹选择器返回的 tree URI 查不到任何条目，这条路径不依赖目录授权。
+     */
+    private val importFontFiles = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNullOrEmpty()) return@registerForActivityResult
+        val context = context ?: return@registerForActivityResult
+        lifecycleScope.launch(Dispatchers.IO) {
+            val dir = File(FileUtils.getPath(context.externalFiles, "font"))
+            var count = 0
+            if (dir.isDirectory || dir.mkdirs()) {
+                uris.forEach { uri ->
+                    val name = DocumentFile.fromSingleUri(context, uri)?.name
+                        ?: uri.lastPathSegment?.substringAfterLast('/').orEmpty()
+                    if (!name.matches(fontRegex)) return@forEach
+                    val copied = runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            File(dir, name).outputStream().use { output -> input.copyTo(output) }
+                        } != null
+                    }.getOrDefault(false)
+                    if (copied) count++
+                }
+            }
+            withContext(Dispatchers.Main) {
+                if (count > 0) {
+                    io.legado.app.help.AppFont.invalidateFontList()
+                    // 刚导入完不该再报「文件夹读不出来」
+                    loadInitialFontFiles(showFolderError = false)
+                }
+                toastOnUi(getString(R.string.import_font_success, count))
+            }
+        }
+    }
     override fun onStart() {
         super.onStart()
         setLayout(0.9f, 0.9f)
@@ -90,25 +128,34 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
         loadInitialFontFiles()
     }
 
-    private fun loadInitialFontFiles() {
+    private fun loadInitialFontFiles(showFolderError: Boolean = true) {
         val fontPath = getPrefString(PreferKey.fontFolder)
         if (fontPath.isNullOrEmpty()) {
             loadLocalFontFiles()
-        } else {
-            if (fontPath.isContentScheme()) {
-                val doc = DocumentFile.fromTreeUri(requireContext(), Uri.parse(fontPath))
-                if (doc?.canRead() == true) {
-                    loadFontFiles(FileDoc.fromDocumentFile(doc))
-                } else {
-                    loadLocalFontFiles()
-                }
+            return
+        }
+        if (fontPath.isContentScheme()) {
+            val doc = DocumentFile.fromTreeUri(requireContext(), Uri.parse(fontPath))
+            if (doc?.canRead() == true) {
+                loadFontFiles(FileDoc.fromDocumentFile(doc))
             } else {
-                if (File(fontPath).canRead()) {
-                    loadFontFiles(FileDoc.fromFile(File(fontPath)))
-                } else {
-                    loadLocalFontFiles()
-                }
+                // 授权失效或 ROM 的 tree URI 查不到条目时，不能只给一个空列表
+                if (showFolderError) toastOnUi(R.string.font_folder_unreadable)
+                loadLocalFontFiles()
             }
+            return
+        }
+        // 部分 ROM 的选择器把字体文件夹记成 file:// 形式，取回真实路径再读
+        val folder = if (fontPath.startsWith("file://", ignoreCase = true)) {
+            Uri.parse(fontPath).path ?: fontPath
+        } else {
+            fontPath
+        }
+        if (File(folder).canRead()) {
+            loadFontFiles(FileDoc.fromFile(File(folder)))
+        } else {
+            if (showFolderError) toastOnUi(R.string.font_folder_unreadable)
+            loadLocalFontFiles()
         }
     }
 
@@ -130,6 +177,9 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
             }
             R.id.menu_other -> {
                 openFolder()
+            }
+            R.id.menu_import_font -> {
+                importFontFiles.launch(arrayOf("*/*"))
             }
         }
         return true
