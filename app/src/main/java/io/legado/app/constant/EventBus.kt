@@ -60,4 +60,5 @@ object EventBus {
     const val UP_VIDEO_INFO = "upVideoInfo"
     const val AUTO_TASK_SERVICE = "autoTaskService"
     const val REVIEW_CACHE_SAVED = "reviewCacheSaved"
+    const val LOCAL_NETWORK_PERMISSION_REQUIRED = "localNetworkPermissionRequired"
 }

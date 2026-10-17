@@ -62,6 +62,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.MainBottomNavConfig
@@ -368,8 +369,24 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
+    private var pendingLocalNetworkRequest = false
+
+    private fun requestLocalNetworkPermission() {
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            LocalNetworkAccess.request(this, onGranted = { })
+        } else {
+            // 后台启动权限申请界面会被系统拦下，记下来等回到前台再补
+            pendingLocalNetworkRequest = true
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        if (pendingLocalNetworkRequest) {
+            pendingLocalNetworkRequest = false
+            // 这里本身就是前台，直接申请：此时 lifecycle 未必已派发 ON_RESUME
+            LocalNetworkAccess.request(this, onGranted = { })
+        }
         if (clipboardImportEnabled) {
             scheduleShibbolethImport(500L)
         }
@@ -2373,6 +2390,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
         observeEvent<String>(PreferKey.threadCount) {
             viewModel.upPool()
+        }
+        observeEvent<Boolean>(EventBus.LOCAL_NETWORK_PERMISSION_REQUIRED) {
+            // 网络层发现局域网请求被系统拦截（Android 17 本地网络保护），补申请权限
+            if (it) requestLocalNetworkPermission()
         }
     }
 

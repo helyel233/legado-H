@@ -12,6 +12,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppFreezeMonitor
 import io.legado.app.help.DispatchersMonitor
+import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.EpubReadEnginePolicy
 import io.legado.app.help.config.LocalConfig
@@ -257,7 +258,10 @@ class OtherConfigFragment : ComposeSettingFragment() {
             PreferKey.webPort -> {
                 if (WebService.isRun) {
                     WebService.stop(requireContext())
-                    WebService.start(requireContext())
+                    LocalNetworkAccess.request(
+                        requireContext(),
+                        onGranted = { WebService.start(requireContext()) }
+                    )
                 }
             }
 

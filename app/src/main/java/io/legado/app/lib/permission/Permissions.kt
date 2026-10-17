@@ -7,6 +7,12 @@ object Permissions {
 
     const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
 
+    /**
+     * Android 17(API 37) 起访问局域网需要该运行时权限（低版本由 INTERNET 隐式授予）。
+     * 未授予时系统会在 eBPF 层静默丢弃局域网数据包，表现为连接超时而非报错。
+     */
+    const val ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+
     const val READ_CALENDAR = "android.permission.READ_CALENDAR"
     const val WRITE_CALENDAR = "android.permission.WRITE_CALENDAR"
 

@@ -95,6 +95,9 @@
     <string name="is_loading">Loading…</string>
     <string name="retry">Retry</string>
     <string name="web_service">Web service</string>
+    <string name="local_network_permission_rationale">需要「本地网络」权限才能访问局域网：Web 服务要被同一网络的其它设备打开，本地 AI、局域网书源和 WebDAV 也需要它</string>
+    <string name="local_network_permission_denied">未授予本地网络权限，Web 服务只能在本机访问</string>
+    <string name="local_network_permission_required">访问局域网失败，可能是系统拦截了本地网络访问，请在权限设置中授予「本地网络」权限后重试</string>
     <string name="web_service_desc">Web edit source and read book</string>
     <string name="web_edit_source">Edit book sources on the web</string>
     <string name="epub_read_engine">EPUB read engine</string>
@@ -525,6 +528,7 @@
     <string name="error_get_web_content">Failed to access website:%s</string>
     <string name="error_read_file">Failed to read file</string>
     <string name="error_load_toc">Failed to load chapters list</string>
+    <string name="toc_cache_recovered">Failed to load the table of contents, switched to the cached one</string>
     <string name="error_get_data">Failed to get data</string>
     <string name="error_load_msg">Failed to load\n%s</string>
     <string name="net_error_10001">No network</string>
@@ -927,6 +931,9 @@
     <string name="prev_sentence">Prior sentence</string>
     <string name="next_sentence">Next sentence</string>
     <string name="other_folder">Other folder</string>
+    <string name="import_font">Import font files</string>
+    <string name="import_font_success">Imported %1$d font(s)</string>
+    <string name="font_folder_unreadable">Cannot read the font folder, using the app font folder instead; try "Import font files"</string>
     <string name="text_too_long_qr_error">There are too many words to create a QR code</string>
     <string name="share_rss_source">RSS sources sharing</string>
     <string name="share_book_source">Book sources sharing</string>
@@ -1244,6 +1251,8 @@
     <string name="export_all">Export all</string>
     <string name="complete">Finished</string>
     <string name="show_unread">Show unread flag</string>
+    <string name="show_read_progress">Show reading progress</string>
+    <string name="show_read_progress_short">Progress</string>
     <string name="use_default_cover">Always show default cover</string>
     <string name="use_default_cover_s">Always show the default cover, do not show the network cover</string>
     <string name="search_src">Search source code</string>
@@ -1907,6 +1916,10 @@ function login() {
     <string name="press_speed_summary">长按倍速 %.1f</string>
     <string name="full_bottom_progress">全屏时显示底部进度条</string>
     <string name="video_play_cache">边播放边缓存</string>
+    <string name="skip_intro_outro_enabled">Skip intro &amp; outro</string>
+    <string name="skip_intro_seconds">Skip intro: %1$d s</string>
+    <string name="skip_outro_seconds">Skip outro: %1$d s</string>
+    <string name="skip_seconds_title">Skip seconds</string>
     <string name="json_format">json格式</string>
     <string name="open_other_video_player">其它播放器打开</string>
     <string name="show_source_comment">显示源注释</string>

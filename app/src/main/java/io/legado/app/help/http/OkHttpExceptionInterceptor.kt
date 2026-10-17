@@ -8,9 +8,15 @@ object OkHttpExceptionInterceptor : Interceptor {
 
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
         try {
-            return chain.proceed(chain.request())
+            return chain.proceed(request)
         } catch (e: IOException) {
+            // 局域网地址在 Android 17+ 未授权时会被系统静默丢包，表现为超时/连接失败。
+            // 这里兜底识别并提示补授权（书源、WebDAV、本地 AI 都会经过这里）。
+            runCatching {
+                LocalNetworkBlockedNotifier.onRequestFailed(request.url.host, e)
+            }
             throw e
         } catch (e: Throwable) {
             throw IOException(e)

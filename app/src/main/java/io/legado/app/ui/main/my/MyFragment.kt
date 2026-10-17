@@ -16,6 +16,7 @@ import io.legado.app.base.BaseFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
+import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
@@ -125,11 +126,11 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         when (key) {
             PreferKey.webService -> {
                 if (requireContext().getPrefBoolean(PreferKey.webService)) {
-                    WebService.start(requireContext())
+                    startWebService()
                 } else {
                     WebService.stop(requireContext())
+                    updateWebServiceState()
                 }
-                updateWebServiceState()
             }
 
             PreferKey.themeMode -> {
@@ -260,11 +261,27 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     private fun setWebServiceEnabled(enabled: Boolean) {
         requireContext().putPrefBoolean(PreferKey.webService, enabled)
         if (enabled) {
-            WebService.start(requireContext())
+            startWebService()
         } else {
             WebService.stop(requireContext())
+            updateWebServiceState()
         }
-        updateWebServiceState()
+    }
+
+    /**
+     * Android 17 起访问局域网需要先授权，未授权时 Web 服务只能被本机访问，
+     * 因此开启前先申请，授权成功再启动。
+     */
+    private fun startWebService() {
+        LocalNetworkAccess.request(
+            requireContext(),
+            onGranted = {
+                WebService.start(requireContext())
+                updateWebServiceState()
+            },
+            // 拒绝授权时服务没起来，也要刷新一次，避免开关显示成已开启却没运行
+            onDenied = { updateWebServiceState() }
+        )
     }
 
     private fun handleWebServiceClick() {

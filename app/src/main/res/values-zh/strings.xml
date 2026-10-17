@@ -94,6 +94,9 @@
     <string name="is_loading">加载中…</string>
     <string name="retry">重试</string>
     <string name="web_service">Web 服务</string>
+    <string name="local_network_permission_rationale">需要「本地网络」权限才能访问局域网：Web 服务要被同一网络的其它设备打开，本地 AI、局域网书源和 WebDAV 也需要它</string>
+    <string name="local_network_permission_denied">未授予本地网络权限，Web 服务只能在本机访问</string>
+    <string name="local_network_permission_required">访问局域网失败，可能是系统拦截了本地网络访问，请在权限设置中授予「本地网络」权限后重试</string>
     <string name="web_service_desc">用浏览器写源或看书</string>
     <string name="web_edit_source">Web 编辑书源</string>
     <string name="epub_read_engine">EPUB阅读引擎</string>
@@ -526,6 +529,7 @@
     <string name="error_get_web_content">访问网站失败：%s</string>
     <string name="error_read_file">文件读取失败</string>
     <string name="error_load_toc">加载目录失败</string>
+    <string name="toc_cache_recovered">目录加载失败，已切换为本地缓存目录</string>
     <string name="error_get_data">获取数据失败！</string>
     <string name="error_load_msg">加载失败\n%s</string>
     <string name="net_error_10001">没有网络</string>
@@ -693,6 +697,9 @@
     <string name="prev_sentence">上一句</string>
     <string name="next_sentence">下一句</string>
     <string name="other_folder">其它目录</string>
+    <string name="import_font">导入字体文件</string>
+    <string name="import_font_success">已导入 %1$d 个字体</string>
+    <string name="font_folder_unreadable">字体文件夹读取失败，已改用应用内置字体目录；可改用「导入字体文件」</string>
     <string name="text_too_long_qr_error">文字太多，生成二维码失败</string>
     <string name="share_rss_source">分享 RSS 源</string>
     <string name="share_book_source">分享书源</string>
@@ -1012,6 +1019,8 @@
     <string name="export_all">导出所有</string>
     <string name="complete">完成</string>
     <string name="show_unread">显示未读标志</string>
+    <string name="show_read_progress">显示阅读进度</string>
+    <string name="show_read_progress_short">进度</string>
     <string name="use_default_cover">总是使用默认封面</string>
     <string name="use_default_cover_s">总是显示默认封面（不显示网络封面）</string>
     <string name="title_font_size">字号</string>
@@ -2119,6 +2128,10 @@ bookUrl：%7$s
     <string name="press_speed_summary">&#38271;&#25353;&#20493;&#36895; %.1f</string>
     <string name="full_bottom_progress">&#20840;&#23631;&#26102;&#26174;&#31034;&#24213;&#37096;&#36827;&#24230;&#26465;</string>
     <string name="video_play_cache">&#36793;&#25773;&#25918;&#36793;&#32531;&#23384;</string>
+    <string name="skip_intro_outro_enabled">跳过片头片尾</string>
+    <string name="skip_intro_seconds">跳过片头：%1$d 秒</string>
+    <string name="skip_outro_seconds">跳过片尾：%1$d 秒</string>
+    <string name="skip_seconds_title">跳过秒数</string>
     <string name="json_format">JSON &#26684;&#24335;</string>
     <string name="open_other_video_player">&#20854;&#23427;&#25773;&#25918;&#22120;&#25171;&#24320;</string>
     <string name="show_source_comment">&#26174;&#31034;&#28304;&#27880;&#37322;</string>

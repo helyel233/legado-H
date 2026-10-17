@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
+import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
@@ -145,6 +146,14 @@ class WebService : BaseService() {
     }
 
     private fun upWebServer() {
+        // Android 17 起没有本地网络权限时，服务只能被本机（回环地址）访问，
+        // 其它设备一律连不上。这里兜底提示并停止，避免开关显示已开启却连不上。
+        if (!LocalNetworkAccess.isGranted(this)) {
+            toastOnUi(R.string.local_network_permission_required)
+            postEvent(EventBus.LOCAL_NETWORK_PERMISSION_REQUIRED, true)
+            stopSelf()
+            return
+        }
         if (httpServer?.isAlive == true) {
             httpServer?.stop()
         }
