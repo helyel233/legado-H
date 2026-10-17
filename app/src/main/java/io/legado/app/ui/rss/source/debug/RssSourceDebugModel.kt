@@ -4,6 +4,7 @@ import android.app.Application
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.Debug
 
 class RssSourceDebugModel(application: Application) : BaseViewModel(application),
@@ -23,14 +24,15 @@ class RssSourceDebugModel(application: Application) : BaseViewModel(application)
         }
     }
 
-    fun observe(callback: (Int, String) -> Unit) {
+    fun observe(callback: ((Int, String) -> Unit)?) {
         this.callback = callback
     }
 
     fun startDebug(key: String, start: (() -> Unit)? = null, error: (() -> Unit)? = null) {
         execute {
             Debug.callback = this@RssSourceDebugModel
-            Debug.startDebug(this, rssSource!!, key)
+            // 源不存在时给出明确原因，而不是 !! 的裸 NPE
+            Debug.startDebug(this, rssSource ?: throw NoStackTraceException("订阅源不存在"), key)
         }.onStart {
             start?.invoke()
         }.onError {

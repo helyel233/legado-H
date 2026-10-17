@@ -58,6 +58,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             }
             lifecycleScope.launch {
                 delay(100)
+                if (isDestroyed || isFinishing) return@launch
                 binding.tabLayout.getTabAt(item)?.select()
             }
         }
@@ -74,7 +75,8 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             }
 
             override fun onPageSelected(position: Int) {
-                currentGroup = groupList[position]
+                // notifyDataSetChanged 后 ViewPager 可能回传越界 position
+                groupList.getOrNull(position)?.let { currentGroup = it }
             }
 
             override fun onPageScrollStateChanged(state: Int) {}
@@ -136,7 +138,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
         }
         alert(R.string.draw) {
             val item = binding.viewPager.currentItem
-            val group = groupList[item]
+            val group = groupList.getOrNull(item) ?: return@alert
             setMessage(
                 getString(R.string.sure_del) + "\n<" + group + ">" + getString(R.string.group)
             )

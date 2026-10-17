@@ -39,6 +39,9 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     val checkSources = arrayListOf<RssSource?>()
     val selectStatus = androidx.compose.runtime.mutableStateListOf<Boolean>()
 
+    /** 已触发导入的源串，防止 Dialog 视图重建后重复导入 */
+    private var importedSourceKey: String? = null
+
     val isSelectAll: Boolean
         get() {
             selectStatus.forEach {
@@ -69,7 +72,8 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
             val selectSource = arrayListOf<RssSource>()
             selectStatus.forEachIndexed { index, b ->
                 if (b) {
-                    val source = allSources[index]
+                    // selectStatus 与 allSources 可能因并发导入短暂不等长
+                    val source = allSources.getOrNull(index) ?: return@forEachIndexed
                     checkSources[index]?.let {
                         if (keepName) {
                             source.sourceName = it.sourceName
@@ -104,6 +108,10 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        // 防重复导入：Dialog 视图重建（配置变化/恢复）会再次触发，旧写法会往
+        // allSources/selectStatus 追加重复条目
+        if (importedSourceKey == text) return
+        importedSourceKey = text
         execute {
             importSourceAwait(text)
         }.onError {
@@ -117,21 +125,27 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     private suspend fun importSourceAwait(text: String) {
         val mText = text.trim()
         when {
-            mText.isJsonObject() -> kotlin.runCatching {
+            mText.isJsonObject() -> {
                 val json = JsonPath.parse(mText)
                 val urls = json.read<List<String>>("$.sourceUrls")
+                var anySuccess = false
                 if (!urls.isNullOrEmpty()) {
-                    urls.forEach {
-                        importSourceUrl(it)
+                    // 逐个导入：旧写法任一路失败就整体吞掉转数组解析，用户看到误导性
+                    // 「不是订阅源」，且已成功的来源也丢
+                    urls.forEach { url ->
+                        runCatching { importSourceUrl(url) }
+                            .onSuccess { anySuccess = true }
+                            .onFailure { AppLog.put("导入订阅源失败: $url", it) }
                     }
                 }
-            }.onFailure {
-                GSON.fromJsonArray<RssSource>(mText).getOrThrow().let {
-                    val source = it.firstOrNull() ?: return@let
-                    if (source.sourceUrl.isEmpty()) {
-                        throw NoStackTraceException("不是订阅源")
+                if (!anySuccess) {
+                    GSON.fromJsonArray<RssSource>(mText).getOrThrow().let {
+                        val source = it.firstOrNull() ?: return@let
+                        if (source.sourceUrl.isEmpty()) {
+                            throw NoStackTraceException("不是订阅源")
+                        }
+                        allSources.addAll(it)
                     }
-                    allSources.addAll(it)
                 }
             }
 

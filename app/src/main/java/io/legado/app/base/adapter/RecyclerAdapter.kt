@@ -161,10 +161,22 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
 
                 override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                    // 头/尾位置只与头/尾位置匹配。旧写法「任意一侧是头/尾就返回 true」会把
+                    // 条目误判成尾视图，DiffUtil 据此产生错误的 move/insert：RV 按新位置在
+                    // scrap 里找不到尾视图、池里也没有尾 holder，转而重新创建仍 attach 的
+                    // 共享尾视图（如 LoadMoreView），触发
+                    // "ViewHolder views must not be attached when created" 崩溃。
+                    val oldIsHeaderOrFooter =
+                        isHeaderOrFooterPosition(oldItemPosition, oldItems.size)
+                    val newIsHeaderOrFooter =
+                        isHeaderOrFooterPosition(newItemPosition, itemsSize)
+                    if (oldIsHeaderOrFooter || newIsHeaderOrFooter) {
+                        return oldIsHeaderOrFooter && newIsHeaderOrFooter
+                    }
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
-                        ?: return true
+                        ?: return false
                     val newItem = items?.getOrNull(newItemPosition - headerCount)
-                        ?: return true
+                        ?: return false
                     return itemCallback.areItemsTheSame(oldItem, newItem)
                 }
 
@@ -172,6 +184,12 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     oldItemPosition: Int,
                     newItemPosition: Int
                 ): Boolean {
+                    // 头/尾内容不参与 diff（onBindViewHolder 本就不绑定头/尾），视为不变
+                    if (isHeaderOrFooterPosition(oldItemPosition, oldItems.size) ||
+                        isHeaderOrFooterPosition(newItemPosition, itemsSize)
+                    ) {
+                        return true
+                    }
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
                     val newItem = items?.getOrNull(newItemPosition - headerCount)
@@ -413,16 +431,44 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = when {
         viewType < TYPE_HEADER_VIEW + getHeaderCount() -> {
-            ItemViewHolder(headerItems.get(viewType).invoke(parent))
+            createHeaderFooterViewHolder(headerItems, viewType, parent)
         }
 
         viewType >= TYPE_FOOTER_VIEW -> {
-            ItemViewHolder(footerItems.get(viewType).invoke(parent))
+            createHeaderFooterViewHolder(footerItems, viewType, parent)
         }
 
         else -> {
             ItemViewHolder(getViewBinding(parent))
         }
+    }
+
+    /**
+     * 头/尾 ViewHolder 创建。
+     *
+     * 头/尾工厂通常返回跨创建复用的共享视图实例（如 [io.legado.app.ui.widget.recycler.LoadMoreView]），
+     * 而 [RecyclerView.Adapter.createViewHolder] 要求 itemView 必须处于 detached 状态，否则抛
+     * "ViewHolder views must not be attached when created"。共享视图若仍挂在某个旧父容器上
+     * （适配器跨 RecyclerView 复用时上一个 RV 尚未释放），先摘除再包装。
+     */
+    private fun createHeaderFooterViewHolder(
+        factories: SparseArray<(parent: ViewGroup) -> ViewBinding>,
+        viewType: Int,
+        parent: ViewGroup
+    ): ItemViewHolder {
+        val factory = factories.get(viewType)
+            ?: throw IllegalStateException("missing header/footer factory for viewType $viewType")
+        val binding = factory(parent)
+        val root = binding.root
+        val oldParent = root.parent as? ViewGroup
+        if (oldParent != null && oldParent !== parent) {
+            oldParent.removeView(root)
+        }
+        return ItemViewHolder(binding)
+    }
+
+    private fun isHeaderOrFooterPosition(position: Int, itemCount: Int): Boolean {
+        return position < getHeaderCount() || position >= itemCount + getHeaderCount()
     }
 
     protected abstract fun getViewBinding(parent: ViewGroup): VB

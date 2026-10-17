@@ -147,7 +147,14 @@ class MangaAdapter(private val context: Context) :
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when {
             viewType >= TYPE_FOOTER_VIEW -> {
-                ItemViewHolder(footerItems.get(viewType).invoke(parent))
+                // 尾视图是共享实例（LoadMoreView），itemView 必须 detached，否则 RV 抛
+                // "ViewHolder views must not be attached when created"；旧父容器非当前 RV 时先摘除
+                ItemViewHolder(footerItems.get(viewType).invoke(parent).also { binding ->
+                    val oldParent = binding.root.parent as? ViewGroup
+                    if (oldParent != null && oldParent !== parent) {
+                        oldParent.removeView(binding.root)
+                    }
+                })
             }
 
             viewType == LOADING_VIEW -> {

@@ -266,16 +266,22 @@ object WebViewPool {
             scopePool.cleanupJob?.cancel()
             scopePool.cleanupJob = null
             scopePool.needInitialize = true
+            // 只销毁闲置/重置中的实例。scope 是跨页面共享的（订阅页多个 Fragment、
+            // 后台抓取都共用 RSS scope），销毁使用中的实例会直接把别的页面/后台任务
+            // 正在跑的 WebView 拆掉（白屏/回调丢失）。使用中的实例被 release 后进池，
+            // 由闲置定时器回收。
             val list = scopePool.idlePool.toMutableList() +
-                scopePool.inUsePool.values +
                 scopePool.resettingPool.values
+            val inUseCount = scopePool.inUsePool.size
             scopePool.idlePool.clear()
-            scopePool.inUsePool.clear()
             scopePool.resettingPool.clear()
-            list
+            list to inUseCount
         }
-        logScopedDestroy(scope, "执行销毁", toDestroy.size)
-        toDestroy.forEach { destroyNow(it) }
+        logScopedDestroy(scope, "执行销毁", toDestroy.first.size)
+        toDestroy.first.forEach { destroyNow(it) }
+        if (toDestroy.second > 0) {
+            logScopedDestroy(scope, "跳过使用中的实例", toDestroy.second)
+        }
     }
 
     private fun logScopedDestroy(scope: Scope, action: String, count: Int? = null) {

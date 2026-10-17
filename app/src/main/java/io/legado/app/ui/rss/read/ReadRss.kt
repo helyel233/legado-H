@@ -16,7 +16,6 @@ import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
-import kotlinx.coroutines.Dispatchers.IO
 
 object ReadRss {
     /**
@@ -82,7 +81,9 @@ object ReadRss {
                 }
             } else {
                 Rss.getContent(fragment.viewLifecycleOwner.lifecycleScope, rssArticle, ruleContent, s)
-                    .onSuccess(IO) { body ->
+                    // 回调必须留在主线程：showDialogFragment 走 FragmentTransaction.commit，
+                    // 在 IO 线程执行会抛 IllegalStateException(Must be called from main thread)
+                    .onSuccess { body ->
                         if (body.isBlank()) {
                             throw ContentEmptyException("正文为空")
                         }
@@ -107,7 +108,8 @@ object ReadRss {
                 }
             } else {
                 Rss.getContent(activity.lifecycleScope, record.toRssArticle(), ruleContent, s)
-                    .onSuccess(IO) { body ->
+                    // 同上：onSuccess 需在主线程弹 DialogFragment
+                    .onSuccess { body ->
                         val url = NetworkUtils.getAbsoluteURL(record.record, body)
                         when (type) {
                             1 -> activity.showDialogFragment(PhotoDialog(url))

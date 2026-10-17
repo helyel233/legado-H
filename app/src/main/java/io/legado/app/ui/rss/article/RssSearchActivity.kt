@@ -6,7 +6,6 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
-import androidx.fragment.app.commit
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityRssSearchBinding
@@ -49,6 +48,7 @@ class RssSearchActivity : VMBaseActivity<ActivityRssSearchBinding, RssSortViewMo
             val key = intent.getStringExtra("key").orEmpty()
             if (key.isBlank()) {
                 binding.searchView.post {
+                    if (isDestroyed || isFinishing) return@post
                     binding.searchView.requestFocus()
                     (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
                         ?.showSoftInput(binding.searchView.findFocus(), InputMethodManager.SHOW_IMPLICIT)
@@ -84,13 +84,15 @@ class RssSearchActivity : VMBaseActivity<ActivityRssSearchBinding, RssSortViewMo
         val searchUrl = source.searchUrl ?: return
         viewModel.searchKey = key
         binding.titleBar.title = key
-        supportFragmentManager.commit {
-            replace(
+        // 搜索提交可能由 post/SearchView 回调在 onSaveInstanceState 之后触发，
+        // 用 commitAllowingStateLoss 避免 IllegalStateException
+        supportFragmentManager.beginTransaction()
+            .replace(
                 R.id.fragment_container,
                 RssArticlesFragment(getString(R.string.search), searchUrl, key),
                 "rss_search_result"
             )
-        }
+            .commitAllowingStateLoss()
     }
 
     companion object {

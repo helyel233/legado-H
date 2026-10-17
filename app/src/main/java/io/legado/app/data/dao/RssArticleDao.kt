@@ -31,6 +31,13 @@ interface RssArticleDao {
     @Query("delete from rssArticles where origin = :origin and sort = :sort and `order` < :order")
     fun clearOld(origin: String, sort: String, order: Long)
 
+    /**
+     * 批量查询已存在的文章链接：loadMore 判"整页是否都已入库"用，
+     * 旧写法逐条 count 查询，一页 N 篇就是 N 次查询
+     */
+    @Query("select link from rssArticles where origin = :origin and sort = :sort and link in (:links)")
+    fun existLinks(origin: String, sort: String, links: List<String>): List<String>
+
     @Update
     fun update(vararg rssArticle: RssArticle)
 

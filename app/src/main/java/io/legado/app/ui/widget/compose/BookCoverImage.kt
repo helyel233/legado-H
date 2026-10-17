@@ -2,6 +2,7 @@ package io.legado.app.ui.widget.compose
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.BlurMaskFilter
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -49,6 +50,7 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.CoverDisplayResolver
+import io.legado.app.help.CoverMemoryCache
 import io.legado.app.help.CoverThumbnailCache
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
@@ -65,8 +67,10 @@ import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.textHeight
 import io.legado.app.utils.toStringArray
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val BOOK_COVER_ASPECT_RATIO = 0.75f
@@ -226,9 +230,17 @@ fun BookCoverImage(
             System.identityHashCode(BookCover.defaultDrawable).toString()
         ).joinToString("|")
     }
-    var bitmap by remember(loadKey, defaultBitmap) { mutableStateOf(defaultBitmap) }
+    var bitmap by remember(loadKey, defaultBitmap) {
+        // 组合重启（tab 切回/视图重建）时先用进程缓存里自己持有的封面位图做初值，
+        // 避免整屏封面先闪默认封面再异步加载回来（打开书架页的毫秒级刷新观感）
+        mutableStateOf(CoverMemoryCache.get(loadKey) ?: defaultBitmap)
+    }
 
     LaunchedEffect(loadKey, context, fragment, lifecycle) {
+        CoverMemoryCache.get(loadKey)?.let {
+            bitmap = it
+            return@LaunchedEffect
+        }
         bitmap = defaultBitmap
         if (AppConfig.useDefaultCover && !forcePath) return@LaunchedEffect
         if (htmlCover) {
@@ -236,6 +248,16 @@ fun BookCoverImage(
             return@LaunchedEffect
         }
         val thumbFile = if (useThumb) CoverThumbnailCache.existing(context, thumbKey) else null
+        if (thumbFile != null) {
+            // 缩略图文件已在磁盘：自己解码（位图归自己所有，可安全进进程缓存），
+            // 不必再走 Glide 往返；解码失败回退 Glide
+            val own = withContext(Dispatchers.IO) { decodeCoverThumbFile(thumbFile) }
+            if (own != null) {
+                CoverMemoryCache.put(loadKey, own)
+                bitmap = own
+                return@LaunchedEffect
+            }
+        }
         var loaded: Bitmap? = null
         for (attempt in 0 until COVER_LOAD_ATTEMPTS) {
             val bmp = withTimeoutOrNull(COVER_LOAD_TIMEOUT_MS) {
@@ -253,6 +275,14 @@ fun BookCoverImage(
                         thumbKey,
                         BitmapDrawable(context.resources, bmp)
                     )
+                    // Glide 位图可能被其 BitmapPool 回收复用，拷贝一份自己持有的进缓存，
+                    // 下次组合重启即可无缝续显，不再闪默认封面
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            bmp.takeIf { !it.isRecycled }
+                                ?.copy(Bitmap.Config.ARGB_8888, false)
+                        }.getOrNull().let { CoverMemoryCache.put(loadKey, it) }
+                    }
                 }
                 break
             }
@@ -281,7 +311,7 @@ fun BookCoverImage(
 
     Box(modifier = frameModifier) {
         Image(
-            bitmap = bitmap.asImageBitmap(),
+            bitmap = (bitmap.takeIf { !it.isRecycled } ?: defaultBitmap).asImageBitmap(),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -422,6 +452,32 @@ private fun defaultCoverBitmap(drawable: Drawable): Bitmap {
         cachedDefaultDrawable = drawable
         cachedDefaultBitmap = it
     }
+}
+
+/**
+ * 自己解码封面缩略图文件（CoverThumbnailCache 落盘的 240x320 文件）：
+ * 位图归本模块所有，可安全进进程缓存；Glide 经 BitmapPool 回收复用的位图则不能缓存。
+ */
+private fun decodeCoverThumbFile(file: java.io.File): Bitmap? {
+    if (!file.isFile || file.length() <= 0L) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > COVER_THUMB_WIDTH * 2 &&
+        bounds.outHeight / sampleSize > COVER_THUMB_HEIGHT * 2
+    ) {
+        sampleSize *= 2
+    }
+    return runCatching {
+        BitmapFactory.decodeFile(
+            file.absolutePath,
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+        )
+    }.getOrNull()
 }
 
 private fun Drawable?.toCoverBitmap(fallback: Bitmap): Bitmap {

@@ -47,7 +47,8 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
             val oldSource = rssSource ?: RssSource()
             if (!source.equal(oldSource)) {
                 source.lastUpdateTime = System.currentTimeMillis()
-                if (oldSource.sortUrl != source.sortUrl) {
+                // jsLib 也可能被 sortUrl 的 JS import，变了同样要让分类缓存失效
+                if (oldSource.sortUrl != source.sortUrl || oldSource.jsLib != source.jsLib) {
                     oldSource.removeSortCache()
                 }
                 if (oldSource.jsLib != source.jsLib) {
@@ -91,6 +92,10 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
             context.toastOnUi(it.localizedMessage)
         }.onSuccess {
             if (it != null) {
+                // 粘贴表示以一个新源填充表单：必须清除原源引用，否则保存时
+                // oldSource 仍是原来那个源，会 delete(原源)+insert(新源) 并把原源的
+                // 收藏/文章迁移走——用户只是想导入编辑，原源却被删了
+                rssSource = null
                 onSuccess(it)
             } else {
                 context.toastOnUi("格式不对")
@@ -102,6 +107,8 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
         execute {
             val text1 = text.trim()
             GSON.fromJsonObject<RssSource>(text1).getOrThrow().let {
+                // 同 pasteSource：导入/扫码后表单里是一个新源，清除原源引用避免保存时误删原源
+                rssSource = null
                 finally.invoke(it)
             }
         }.onError {

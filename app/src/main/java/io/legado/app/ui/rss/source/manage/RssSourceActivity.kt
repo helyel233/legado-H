@@ -11,7 +11,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
@@ -452,7 +454,9 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     private fun upSourceFlow(searchKey: String? = null) {
         sourceFlowJob?.cancel()
         sourceFlowJob = lifecycleScope.launch {
-            when {
+            // STARTED 门控：页面不可见时不 collect，避免后台持续Room查询+列表刷新
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                when {
                 searchKey.isNullOrBlank() -> {
                     appDb.rssSourceDao.flowAll()
                 }
@@ -490,6 +494,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 isSelectMode.value = selectedUrls.value.isNotEmpty()
                 upCountView()
                 delay(100)
+                }
             }
         }
     }

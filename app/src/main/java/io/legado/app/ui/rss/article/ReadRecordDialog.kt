@@ -48,7 +48,12 @@ class ReadRecordDialog(private val origin: String? = null) : BaseDialogFragment(
         adapter.setItems(viewModel.getRecords(origin))
         adapter.setOnRecordClickListener(object : OnRecordClickListener {
             override fun onRecordClick(record: RssReadRecord?) {
-                record?.let { ReadRss.readRss(activity as AppCompatActivity, it)}
+                record?.let {
+                    // Dialog detach 后 activity 可能为 null，硬转会 NPE
+                    (activity as? AppCompatActivity)?.let { activity ->
+                        ReadRss.readRss(activity, it)
+                    }
+                }
             }
         })
     }

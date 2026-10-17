@@ -7,7 +7,9 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "ruleSubs")
 data class RuleSub(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = System.currentTimeMillis(),
+    // 默认 0 才会真正触发 Room 的 autoGenerate；旧默认 currentTimeMillis 使自增长失效，
+    // 同一毫秒内新增两条订阅会拿到相同 id，insert(REPLACE) 直接互相覆盖
+    val id: Long = 0,
     var name: String = "",
     var url: String = "",
     /** 0 书源， 1 订阅源 ， 3 替换规则**/

@@ -507,6 +507,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
                 true
             }
             withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed) return@withContext
                 toastOnUi(if (added) R.string.in_favorites else R.string.out_favorites)
                 refreshFavoriteMenuState(sourceUrl)
             }
@@ -518,6 +519,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         lifecycleScope.launch(Dispatchers.IO) {
             val starred = appDb.rssStarDao.get(sourceUrl, sourceUrl) != null
             withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed) return@withContext
                 favoriteMenuItem?.setIcon(
                     if (starred) R.drawable.ic_star else R.drawable.ic_star_border
                 )

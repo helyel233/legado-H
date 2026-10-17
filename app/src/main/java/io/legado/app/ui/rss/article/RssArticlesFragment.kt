@@ -135,8 +135,14 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
         recyclerView.layoutManager = layoutManager
         recyclerView.adapter = adapter
         applyTopOverlaySpace()
-        adapter.addFooterView {
-            ViewLoadMoreBinding.bind(loadMoreView)
+        // 防重复注册：adapter 随 Fragment 实例存活，视图重建后 initView 再次执行时
+        // 若重复添加尾视图，会出现两个尾槽共用同一个共享 loadMoreView，
+        // RV 布局第二个尾槽时其 itemView 仍 attach，触发
+        // "ViewHolder views must not be attached when created" 崩溃
+        if (adapter.getFooterCount() == 0) {
+            adapter.addFooterView {
+                ViewLoadMoreBinding.bind(loadMoreView)
+            }
         }
         refreshLayout.setOnRefreshListener {
             loadArticles()
@@ -205,10 +211,13 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
         val rssUrl = activityViewModel.url ?: return
         articlesFlowJob?.cancel()
         articlesFlowJob = viewLifecycleOwner.lifecycleScope.launch {
-            appDb.rssArticleDao.flowByOriginSort(rssUrl, viewModel.sortName)
-                .catch {
-                    AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)
-                }.flowOn(IO).collect { newList ->
+            // STARTED 门控：页面不可见时不 collect，避免后台持续 DiffUtil + RV 更新
+            // 与视图生命周期竞态；回到可见时 Room flow 重新发射最新数据
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                appDb.rssArticleDao.flowByOriginSort(rssUrl, viewModel.sortName)
+                    .catch {
+                        AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)
+                    }.flowOn(IO).collect { newList ->
                     if (!isResumed || fullRefresh || newList.isEmpty()) {
                         adapter.setItems(newList)
                     } else {
@@ -237,9 +246,10 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
                         }, true)
                     }
                     delay(200) // 200毫秒防抖
+                    }
                 }
+            }
         }
-    }
 
     override fun onResume() {
         super.onResume()

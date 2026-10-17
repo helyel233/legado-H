@@ -102,11 +102,13 @@ class RssArticlesViewModel(application: Application) : BaseViewModel(application
             loadFinallyLiveData.postValue(false)
             return
         }
-        //逐条统计已在库中的数量：仅当整页均已存在时判定无更多，
+        //批量统计已在库中的数量：仅当整页均已存在时判定无更多，
         //避免首尾采样在部分重叠页上误判（重复 append 或提前终止）
-        val existCount = articles.count { article ->
-            appDb.rssArticleDao.get(article.origin, article.link, article.sort) != null
-        }
+        val links = articles.map { it.link }.take(900) //SQLite 参数个数上限保护
+        val existLinks = appDb.rssArticleDao.existLinks(
+            articles.first().origin, articles.first().sort, links
+        ).toHashSet()
+        val existCount = articles.count { it.link in existLinks }
         if (existCount == articles.size) {
             loadFinallyLiveData.postValue(false)
         } else {

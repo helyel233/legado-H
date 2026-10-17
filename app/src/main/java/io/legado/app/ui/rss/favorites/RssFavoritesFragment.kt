@@ -56,7 +56,9 @@ class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fr
     }
 
     private fun loadArticles() {
-        lifecycleScope.launch {
+        // 必须用 viewLifecycleOwner：Fragment 宿主在 ViewPager 里视图会销毁重建，
+        // 用 lifecycleScope 会在视图销毁后继续 collect 并对已 detach 的 RecyclerView setItems
+        viewLifecycleOwner.lifecycleScope.launch {
             val group = arguments?.getString("group") ?: "默认分组"
             appDb.rssStarDao.flowByGroup(group).catch {
                 AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)

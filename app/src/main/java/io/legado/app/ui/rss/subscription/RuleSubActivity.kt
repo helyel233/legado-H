@@ -160,13 +160,8 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
             return
         }
         lifecycleScope.launch {
-            val duplicate = withContext(IO) {
-                appDb.ruleSubDao.findByUrl(ruleSub.url)
-            }
-            if (duplicate != null && duplicate.id != ruleSub.id) {
-                toastOnUi("${getString(R.string.url_already)}(${duplicate.name})")
-                return@launch
-            }
+            // ruleSubsState 是 Compose SnapshotStateList，只允许主线程访问，
+            // 不能放进 withContext(IO)（与 flow 回灌的 replaceByIndex 并发会 CME）
             val itemToSave = ruleSubsState.firstOrNull { it.id == ruleSub.id }?.copy(
                 name = ruleSub.name,
                 url = ruleSub.url,
@@ -176,10 +171,18 @@ class RuleSubActivity : BaseActivity<ActivityRuleSubBinding>(),
                 updateInterval = ruleSub.updateInterval,
                 silentUpdate = ruleSub.silentUpdate
             ) ?: ruleSub
-            withContext(IO) {
-                appDb.ruleSubDao.insert(itemToSave)
+            // 查重+插入在同一 Room 事务内完成，消除并发保存插入重复 url 的竞态
+            val saved = withContext(IO) {
+                appDb.ruleSubDao.insertIfNotDuplicate(itemToSave, itemToSave.id)
             }
-            onSaved()
+            if (saved) {
+                onSaved()
+            } else {
+                val duplicate = withContext(IO) {
+                    appDb.ruleSubDao.findByUrl(itemToSave.url)
+                }
+                toastOnUi("${getString(R.string.url_already)}(${duplicate?.name})")
+            }
         }
     }
 

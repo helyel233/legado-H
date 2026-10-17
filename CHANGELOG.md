@@ -1,5 +1,24 @@
 # 更新日志
 
+## 1.9.3 版（2026-10-17）
+
+本版是一轮 RSS 与列表相关的稳定性修复与性能优化，并修复书架封面切换闪烁。
+
+### 修复
+
+- **RecyclerView 尾视图崩溃**：`RecyclerAdapter` 的 DiffUtil 对头/尾位置按「同为头/尾才匹配」处理，旧写法会把普通条目误判成尾视图，导致 `ViewHolder views must not be attached when created` 崩溃；同时修正条目/头尾为空时 `areItemsTheSame` 的返回值误判。
+- **订阅规则重复与数据覆盖**：`RuleSub.id` 默认值改为 0 以真正触发 Room 自增（旧默认 `System.currentTimeMillis()` 使同毫秒新增互相 REPLACE 覆盖）；`maxOrder` 改为 `max()` 聚合，避免空表新增插到列表中段；新增 `insertIfNotDuplicate` 事务（查重+插入），防止连点保存、或与自动更新并发时产生重复 url 行。
+- **RSS 解析健壮性**：新增 `extractJsFromRule` 统一解析 `<js>…</js>` 与 `@js:` 规则，旧写法在 `<js>` 缺结尾 `<` 时 `substring(4, -1)` 直接崩溃或静默丢失分类；JS 执行失败现在记入调试日志而非静默吞掉。
+- **订阅源导入**：修复配置变化/恢复后重复导入；`selectStatus` 与 `allSources` 不等长时越界防御；多个 url 逐条导入，单条失败不再整体丢失已成功的来源。
+- **RSS 阅读页**：`onSuccess` 回调改回主线程，修复 IO 线程弹 `DialogFragment` 的 `IllegalStateException`；`onReceivedSslError` 与上游一致继续加载，避免自签证书订阅源打不开；预加载 JS 拦截增加超时上限，避免阻塞 WebView 网络线程。
+- **WebView 池**：销毁 scope 时只销毁闲置/重置中的实例，不再误拆使用中的共享实例（修复跨页、后台抓取时白屏与回调丢失）。
+- **规则更新重试**：订阅规则拉取失败时回退检查时间，避免该订阅在后续周期不再重试。
+
+### 优化
+
+- **书架封面闪烁**：新增进程级封面位图缓存 `CoverMemoryCache`，tab 切回、组合重建时先用缓存位图做初值，避免整屏封面先回落默认封面再异步加载的闪烁；缩略图文件已在磁盘时本地解码后入缓存，省去 Glide 往返。
+- **RSS 文章加载**：批量查询已存在文章链接替代逐条 count，一页 N 篇从 N 次查询降为 1 次；文章流收集用 `repeatOnLifecycle(STARTED)` 门控，页面不可见时不触发 DiffUtil 与 RV 更新。
+
 ## 1.9.2 版（2026-10-17）
 
 本版修复跟随系统切换日/夜间模式时界面主题切换延迟与不一致的问题。

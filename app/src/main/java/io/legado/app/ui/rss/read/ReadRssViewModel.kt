@@ -95,7 +95,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 val openUrl = intent.getStringExtra("openUrl")
                 if (startHtml != null) {
                     loadStartHtml(startHtml)
-                } else if (ruleContent.isNullOrBlank() || rssSource!!.singleUrl) {
+                } else if (ruleContent.isNullOrBlank() || rssSource?.singleUrl == true) {
                     loadUrl(openUrl, origin)
                 } else if (openUrl != null) {
                     val rssArticle = appDb.rssArticleDao.getByLink(origin, openUrl) ?: RssArticle(
@@ -140,7 +140,11 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                     contentLiveData.postValue(body)
                 }
             }.onError {
-                contentLiveData.postValue("加载正文失败\n${it.stackTraceToString()}")
+                // 旧写法把堆栈文本塞进 contentLiveData，被当 HTML 渲染成正文，
+                // 用户看到一屏转义堆栈；改为回退网页态 + 提示，与 noImageContent 回退一致
+                this@ReadRssViewModel.rssArticle = null
+                loadUrl(rssArticle.link, rssArticle.origin)
+                context.toastOnUi("正文加载失败，已回退网页")
             }
     }
 
@@ -271,7 +275,12 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 url(data)
             }.bytes()
         } else {
-            Base64.decode(data.split(",").toTypedArray()[1], Base64.DEFAULT)
+            // data URI 形如 "data:image/jpeg;base64,xxxx"，无逗号时旧写法 [1] 越界
+            val base64 = data.substringAfter(",", "")
+            if (base64.isBlank()) {
+                throw NoStackTraceException("图片数据格式错误")
+            }
+            Base64.decode(base64, Base64.DEFAULT)
         }
     }
 

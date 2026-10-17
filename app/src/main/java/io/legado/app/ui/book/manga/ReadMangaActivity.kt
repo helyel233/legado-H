@@ -226,8 +226,12 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
             ReadManga.loadOrUpContent()
         }
         binding.pbLoading.isVisible = !AppConfig.isEInkMode
-        mAdapter.addFooterView {
-            ViewLoadMoreBinding.bind(loadMoreView)
+        // 防重复注册：尾视图是共享的 loadMoreView 实例，重复添加会出现两个尾槽
+        // 共用同一视图，RV 布局第二个尾槽时其 itemView 仍 attach 会崩溃
+        if (mAdapter.getFooterCount() == 0) {
+            mAdapter.addFooterView {
+                ViewLoadMoreBinding.bind(loadMoreView)
+            }
         }
         loadMoreView.setOnClickListener {
             if (!loadMoreView.isLoading && ReadManga.hasNextChapter) {

@@ -83,6 +83,7 @@ import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.utils.StartActivityContract
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.core.net.toUri
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.webView.WebJsExtensions.Companion.basicJs
@@ -157,7 +158,14 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        pooledWebView = WebViewPool.acquire(this)
+        // acquire 失败（WebView 创建异常）时不能留半初始化状态，直接结束本页
+        val acquired = runCatching { WebViewPool.acquire(this) }.getOrNull()
+        if (acquired == null) {
+            toastOnUi(R.string.error)
+            finish()
+            return
+        }
+        pooledWebView = acquired
         currentWebView = pooledWebView.realWebView
         binding.webViewContainer.addView(currentWebView)
         viewModel.upStarMenuData.observe(this) { upStarMenu() }
@@ -550,11 +558,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             upTtsMenu(false)
         } else {
             currentWebView.settings.javaScriptEnabled = true
-            currentWebView.evaluateJavascript("document.documentElement.outerHTML") {
-                val html = StringEscapeUtils.unescapeJson(it).replace("^\"|\"$".toRegex(), "")
-                viewModel.readAloud(
-                    Jsoup.parse(html).textArray().joinToString("\n")
-                )
+            currentWebView.evaluateJavascript("document.documentElement.outerHTML") { result ->
+                // 平台类型 String!，个别 ROM/无返回值场景会回传 null
+                val html = StringEscapeUtils.unescapeJson(result.orEmpty())
+                    .replace("^\"|\"$".toRegex(), "")
+                if (html.isNotBlank()) {
+                    viewModel.readAloud(
+                        Jsoup.parse(html).textArray().joinToString("\n")
+                    )
+                }
             }
         }
     }
@@ -577,7 +589,9 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     override fun onDestroy() {
-        WebViewPool.release(pooledWebView)
+        if (::pooledWebView.isInitialized) {
+            WebViewPool.release(pooledWebView)
+        }
         super.onDestroy()
     }
 
@@ -616,7 +630,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     inner class CustomWebChromeClient : WebChromeClient() {
         override fun getDefaultVideoPoster(): Bitmap {
-            return super.getDefaultVideoPoster() ?: createBitmap(100, 100)
+            // 复用同一张占位图，避免每次全屏视频都新建 Bitmap
+            return super.getDefaultVideoPoster() ?: defaultVideoPosterBitmap
         }
 
         override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -688,6 +703,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             currentWebView.evaluateJavascript(basicJs, null)
         }
 
+        @Volatile
         private var jsInjected = false
         /**
          * 如果有黑名单,黑名单匹配返回空白,
@@ -705,8 +721,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     if (url.startsWith("data:text/html;") || request.method == "POST") {
                         return super.shouldInterceptRequest(view, request)
                     }
+                    // 阻塞 WebView 网络线程改写主文档，加超时上限防止慢网络/JS 卡死拖 ANR
                     return runBlocking(IO) {
-                        getModifiedContentWithJs(url, request) ?: super.shouldInterceptRequest(view, request)
+                        withTimeoutOrNull(PRELOAD_INTERCEPT_TIMEOUT_MS) {
+                            getModifiedContentWithJs(url, request)
+                        } ?: super.shouldInterceptRequest(view, request)
                     }
                 }
             } else if (!jsInjected && url == nameUrl) {
@@ -865,6 +884,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         override fun onReceivedSslError(
             view: WebView?, handler: SslErrorHandler?, error: SslError?
         ) {
+            // 设计取舍：私人自签证书的订阅源很常见，cancel 会让这些源全部打不开，
+            // 因此与上游 legado 保持一致继续加载；仅本地缓存证书错误不弹窗打断阅读
             handler?.proceed()
         }
 
@@ -897,6 +918,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
 
         private val webCookieManager by lazy { android.webkit.CookieManager.getInstance() }
+
+        /** 主文档预加载 JS 拦截的超时上限：阻塞 WebView 网络线程，不能无限等 */
+        private const val PRELOAD_INTERCEPT_TIMEOUT_MS = 15_000L
+
+        private val defaultVideoPosterBitmap: Bitmap by lazy { createBitmap(100, 100) }
     }
 
 }

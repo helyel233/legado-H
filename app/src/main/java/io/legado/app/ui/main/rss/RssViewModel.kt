@@ -6,6 +6,7 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.help.source.extractJsFromRule
 import io.legado.app.utils.toastOnUi
 
 class RssViewModel(application: Application) : BaseViewModel(application) {
@@ -52,11 +53,7 @@ class RssViewModel(application: Application) : BaseViewModel(application) {
                 if (sortUrl.startsWith("<js>", false)
                     || sortUrl.startsWith("@js:", false)
                 ) {
-                    val jsStr = if (sortUrl.startsWith("@")) {
-                        sortUrl.substring(4)
-                    } else {
-                        sortUrl.substring(4, sortUrl.lastIndexOf("<"))
-                    }
+                    val jsStr = sortUrl.extractJsFromRule().orEmpty()
                     val result = runScriptWithContext {
                         rssSource.evalJS(jsStr)?.toString()
                     }
@@ -88,7 +85,7 @@ class RssViewModel(application: Application) : BaseViewModel(application) {
                 }
 
                 startHtml.startsWith("<js>") -> runScriptWithContext {
-                    rssSource.evalJS(startHtml.substring(4, startHtml.lastIndexOf("<"))).toString()
+                    rssSource.evalJS(startHtml.extractJsFromRule().orEmpty()).toString()
                 }
 
                 else -> startHtml

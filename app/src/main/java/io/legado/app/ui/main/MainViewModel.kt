@@ -70,6 +70,8 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        // callback 强引用 MainActivity，不清空会在 VM 重建后仍拉住旧 Activity
+        callback = null
         upTocPool.close()
     }
 

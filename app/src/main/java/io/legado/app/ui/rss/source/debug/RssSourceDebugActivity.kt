@@ -44,6 +44,8 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
             initHelpView()
         }
         viewModel.observe { state, msg ->
+            // Debug 回调可能在 Activity 销毁后到达，操作视图前判生命周期
+            if (isDestroyed || isFinishing) return@observe
             lifecycleScope.launch {
                 adapter.addItem(msg)
                 if (state == -1 || state == 1000) {
@@ -51,6 +53,16 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        // observe 的回调 lambda 捕获本 Activity，VM 生命周期更长，finish 时置空防泄漏。
+        // 注意只能在 isFinishing 时清：旋转重建时新 Activity 的 observe 先于本 onDestroy
+        // 执行，无条件清空会误清新实例刚注册的回调，导致日志不再显示
+        if (isFinishing) {
+            viewModel.observe(null)
+        }
+        super.onDestroy()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {

@@ -104,6 +104,9 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
         execute {
             importSource(text)
         }.onSuccess {
+            // 导入/粘贴/扫码表示以一个新源填充表单：必须清除原源引用，否则保存时
+            // 会把正在编辑的原书源 delete 掉（用户只是想导入编辑，原源却被删了）
+            bookSource = null
             finally.invoke(it)
         }.onError {
             context.toastOnUi(it.localizedMessage ?: "Error")

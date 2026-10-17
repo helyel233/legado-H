@@ -13,6 +13,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssReadRecord
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.source.extractJsFromRule
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.ReadBook
 import io.legado.app.model.VideoPlay
@@ -97,6 +98,8 @@ open class RssJsExtensions(
     fun open(name: String, url: String? = null, title: String? = null, origin: String? = null) {
         if (onOpen(name, url, title, origin)) return
         val activity = activityRef.get() ?: return
+        // 对正在 finishing/destroyed 的 Activity 启动新页面无意义且会竞态
+        if (activity.isFinishing || activity.isDestroyed) return
         activity.lifecycleScope.launch(IO) {
             val source = getSource() ?: return@launch
             when (name) {
@@ -146,7 +149,9 @@ open class RssJsExtensions(
                         } ?: url
                     }
                     val sourceUrl = toSource.sourceUrl
-                    RssSortActivity.start(activity, sortUrl, sourceUrl)
+                    withContext(Main) {
+                        RssSortActivity.start(activity, sortUrl, sourceUrl)
+                    }
                 }
 
                 "rss" -> {
@@ -159,14 +164,18 @@ open class RssJsExtensions(
                     if (url.isNullOrBlank()) {
                         if (toSource.singleUrl) {
                             if (sourceUrl.startsWith("http", true)) {
-                                ReadRssActivity.start(
-                                    activity,
-                                    singleTop,
-                                    sourceUrl,
-                                    title
-                                )
+                                withContext(Main) {
+                                    ReadRssActivity.start(
+                                        activity,
+                                        singleTop,
+                                        sourceUrl,
+                                        title
+                                    )
+                                }
                             } else {
-                                activity.openUrl(sourceUrl)
+                                withContext(Main) {
+                                    activity.openUrl(sourceUrl)
+                                }
                             }
                             return@launch
                         }
@@ -177,22 +186,27 @@ open class RssJsExtensions(
                                 }
 
                                 it.startsWith("<js>") -> runScriptWithContext {
-                                    toSource.evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
+                                    // 用安全提取：<js> 缺结尾 < 时旧写法 substring(4, -1) 直接崩
+                                    toSource.evalJS(it.extractJsFromRule().orEmpty()).toString()
                                 }
 
                                 else -> it
                             }
                         }
                         if (startHtml.isNullOrBlank()) {
-                            RssSortActivity.start(activity, null, sourceUrl)
+                            withContext(Main) {
+                                RssSortActivity.start(activity, null, sourceUrl)
+                            }
                         } else {
-                            ReadRssActivity.start(
-                                activity,
-                                singleTop,
-                                sourceUrl,
-                                title,
-                                startHtml = startHtml
-                            )
+                            withContext(Main) {
+                                ReadRssActivity.start(
+                                    activity,
+                                    singleTop,
+                                    sourceUrl,
+                                    title,
+                                    startHtml = startHtml
+                                )
+                            }
                         }
                         return@launch
                     }
