@@ -540,6 +540,14 @@ data class BookShelfDisplay(
     val order: Int,
     val readConfig: Book.ReadConfig?
 ) {
+    /** 阅读进度文案（如 35%）；章节总数未知时为 null。 */
+    val readProgressText: String?
+        get() {
+            if (totalChapterNum <= 0) return null
+            val read = (durChapterIndex + 1).coerceIn(0, totalChapterNum)
+            return "${read * 100 / totalChapterNum}%"
+        }
+
     val isLocal: Boolean
         get() {
             if (type == 0) {

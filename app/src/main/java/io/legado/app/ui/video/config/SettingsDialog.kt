@@ -71,6 +71,9 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
         var fullBottomProgress by rememberSaveable { mutableStateOf(VideoPlay.fullBottomProgressBar) }
         var playCacheEnabled by rememberSaveable { mutableStateOf(VideoPlay.playCacheEnabled) }
         var longPressSpeed by rememberSaveable { mutableIntStateOf(VideoPlay.longPressSpeed) }
+        var skipIntroOutroEnabled by rememberSaveable { mutableStateOf(VideoPlay.skipIntroOutroEnabled) }
+        var skipIntroSeconds by rememberSaveable { mutableIntStateOf(VideoPlay.skipIntroSeconds) }
+        var skipOutroSeconds by rememberSaveable { mutableIntStateOf(VideoPlay.skipOutroSeconds) }
 
         LegadoMiuixCard(
             modifier = Modifier
@@ -129,6 +132,38 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
                         VideoPlay.playCacheEnabled = checked
                     }
                 )
+                AppDialogSwitchRow(
+                    text = stringResource(R.string.skip_intro_outro_enabled),
+                    checked = skipIntroOutroEnabled,
+                    onCheckedChange = { checked ->
+                        skipIntroOutroEnabled = checked
+                        VideoPlay.skipIntroOutroEnabled = checked
+                    }
+                )
+                if (skipIntroOutroEnabled) {
+                    LegadoMiuixActionRow(
+                        text = stringResource(R.string.skip_intro_seconds, skipIntroSeconds),
+                        palette = style.toMiuixPalette(),
+                        onClick = {
+                            showSkipSecondsDialog(VideoPlay.skipIntroSeconds) { value ->
+                                skipIntroSeconds = value
+                                VideoPlay.skipIntroSeconds = value
+                            }
+                        },
+                        cornerRadius = style.actionRadius
+                    )
+                    LegadoMiuixActionRow(
+                        text = stringResource(R.string.skip_outro_seconds, skipOutroSeconds),
+                        palette = style.toMiuixPalette(),
+                        onClick = {
+                            showSkipSecondsDialog(VideoPlay.skipOutroSeconds) { value ->
+                                skipOutroSeconds = value
+                                VideoPlay.skipOutroSeconds = value
+                            }
+                        },
+                        cornerRadius = style.actionRadius
+                    )
+                }
                 LegadoMiuixActionRow(
                     text = longPressSpeed.toPressSpeedStr(),
                     palette = style.toMiuixPalette(),
@@ -141,6 +176,16 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
                 )
             }
         }
+    }
+
+    private fun showSkipSecondsDialog(current: Int, onChanged: (Int) -> Unit) {
+        NumberPickerDialog(requireContext(), true)
+            .setTitle(getString(R.string.skip_seconds_title))
+            .setMaxValue(300)
+            .setMinValue(5)
+            .setValue(current)
+            .setCustomButton(R.string.btn_default_s) { onChanged(30) }
+            .show { onChanged(it) }
     }
 
     @SuppressLint("SetTextI18n")

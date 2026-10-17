@@ -305,6 +305,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.showUnread, value)
         }
 
+    /** 书架书籍行显示阅读进度百分比，默认关：默认观感不变。 */
+    var showReadProgress: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.showReadProgress, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.showReadProgress, value)
+        }
+
     var showLastUpdateTime: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.showLastUpdateTime, false)
         set(value) {

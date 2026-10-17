@@ -159,6 +159,7 @@ fun BookshelfListItem(
     cardStyle: Int,
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
+    showReadProgress: Boolean = false,
     modifier: Modifier = Modifier,
     fragment: Fragment? = null,
     lifecycle: Lifecycle? = null,
@@ -173,6 +174,7 @@ fun BookshelfListItem(
             compact = compact,
             introMaxLines = normalizedIntroMaxLines,
             renderConfig = renderConfig,
+            showReadProgress = showReadProgress,
             modifier = modifier,
             fragment = fragment,
             lifecycle = lifecycle,
@@ -185,6 +187,7 @@ fun BookshelfListItem(
             compact = compact,
             introMaxLines = normalizedIntroMaxLines,
             renderConfig = renderConfig,
+            showReadProgress = showReadProgress,
             modifier = modifier,
             fragment = fragment,
             lifecycle = lifecycle,
@@ -201,6 +204,7 @@ private fun BookshelfClassicListItem(
     compact: Boolean,
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
+    showReadProgress: Boolean,
     modifier: Modifier,
     fragment: Fragment?,
     lifecycle: Lifecycle?,
@@ -234,7 +238,11 @@ private fun BookshelfClassicListItem(
             showTags = false,
             introMaxLines = introMaxLines
         )
-        BookshelfListStatus(item = item, palette = palette)
+        BookshelfListStatus(
+            item = item,
+            palette = palette,
+            showReadProgress = showReadProgress
+        )
     }
 }
 
@@ -245,6 +253,7 @@ private fun BookshelfRoundedCardListItem(
     compact: Boolean,
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
+    showReadProgress: Boolean,
     modifier: Modifier,
     fragment: Fragment?,
     lifecycle: Lifecycle?,
@@ -278,7 +287,11 @@ private fun BookshelfRoundedCardListItem(
             showTags = true,
             introMaxLines = introMaxLines
         )
-        BookshelfListStatus(item = item, palette = palette)
+        BookshelfListStatus(
+            item = item,
+            palette = palette,
+            showReadProgress = showReadProgress
+        )
     }
 }
 
@@ -529,6 +542,7 @@ private fun BookshelfTagChips(
 private fun BookshelfListStatus(
     item: BookshelfItemUi,
     palette: BookshelfListPalette,
+    showReadProgress: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (item !is BookshelfBookItemUi) return
@@ -566,6 +580,19 @@ private fun BookshelfListStatus(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 6.dp)
             )
+        }
+        if (showReadProgress && item is BookshelfBookItemUi) {
+            item.display.readProgressText?.let {
+                Text(
+                    text = it,
+                    color = palette.secondaryText,
+                    fontSize = 11.sp,
+                    fontFamily = palette.bodyFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
     }
 }

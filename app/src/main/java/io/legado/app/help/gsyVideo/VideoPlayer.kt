@@ -141,8 +141,22 @@ class VideoPlayer: StandardGSYVideoPlayer {
         }
     }
 
+    /** 跳过片尾已触发标志，防止同一集反复触发 */
+    private var skipOutroTriggered = false
+
     override fun onPrepared() {
         super.onPrepared()
+        skipOutroTriggered = false
+        // 跳过片头：只在非续播时生效，否则会把续播进度一起跳掉
+        if (VideoPlay.skipIntroOutroEnabled && VideoPlay.skipIntroSeconds > 0 &&
+            mSeekOnStart <= 0
+        ) {
+            val skipMs = VideoPlay.skipIntroSeconds * 1000L
+            val duration = getDuration()
+            if (duration > 0 && skipMs < duration) {
+                seekTo(skipMs)
+            }
+        }
         onPrepareDanmaku(this)
     }
     private fun onPrepareDanmaku(gsyVideoPlayer: VideoPlayer) {
@@ -180,6 +194,24 @@ class VideoPlayer: StandardGSYVideoPlayer {
             danmakuOnResume()
         } else if (mCurrentState == CURRENT_STATE_PAUSE) {
             danmakuOnPause()
+        }
+    }
+
+    override fun setProgressAndTime(
+        progress: Long, secProgress: Long, currentTime: Long, totalTime: Long, forceChange: Boolean
+    ) {
+        super.setProgressAndTime(progress, secProgress, currentTime, totalTime, forceChange)
+        // 跳过片尾：剩余时间不足设定秒数时直接进入下一集。
+        // setProgressAndTime 由进度定时器每秒调用，是检测播放位置的可靠回调。
+        val skipMs = VideoPlay.skipOutroSeconds * 1000L
+        // 片尾区间必须明显短于整集，否则短视频一开始就被判定为片尾、连续跳集
+        if (VideoPlay.skipIntroOutroEnabled && VideoPlay.skipOutroSeconds > 0 &&
+            totalTime > skipMs * 2 && !skipOutroTriggered
+        ) {
+            if (totalTime - currentTime <= skipMs) {
+                skipOutroTriggered = true
+                onAutoCompletion()
+            }
         }
     }
 

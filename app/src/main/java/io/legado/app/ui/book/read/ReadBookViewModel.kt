@@ -338,6 +338,15 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         return true
                     }.onFailure {
                         currentCoroutineContext().ensureActive()
+                        // 目录拉取失败：先沿用已有章节，再从缓存文件反推，
+                        // 保证断网或源失效时仍能读已缓存的正文。
+                        // url 被改写时缓存目录还没迁移，这种情况无从恢复，照常报错。
+                        if (oldBook.bookUrl == book.bookUrl &&
+                            tryRecoverFromCache(book)
+                        ) {
+                            ReadBook.upMsg(context.getString(R.string.toc_cache_recovered))
+                            return true
+                        }
                         ReadBook.upMsg(context.getString(R.string.error_load_toc))
                         AppLog.put(
                             "read-toc: failed, book=${book.name}, bookUrl=${book.bookUrl}, " +
@@ -348,6 +357,39 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                     }
             }
         }
+        // 没有书源（被删除或禁用）时目录无从拉取，用缓存目录兜底，仍能读已缓存的正文
+        if (ReadBook.bookSource == null &&
+            appDb.bookChapterDao.getChapterList(book.bookUrl).isEmpty() &&
+            tryRecoverFromCache(book)
+        ) {
+            ReadBook.upMsg(context.getString(R.string.toc_cache_recovered))
+        }
+        return true
+    }
+
+    /**
+     * 目录加载失败或无书源时的兜底：优先沿用已有的章节记录，没有再从缓存文件反推一份。
+     *
+     * @return 是否拿到了可用的章节列表
+     */
+    private suspend fun tryRecoverFromCache(
+        book: Book,
+        loadContentAfterUpdate: Boolean = true
+    ): Boolean {
+        if (appDb.bookChapterDao.getChapterList(book.bookUrl).isNotEmpty()) {
+            ReadBook.onChapterListUpdated(book, loadContentAfterUpdate)
+            return true
+        }
+        val recovered = BookHelp.recoverChaptersFromCache(book)
+        if (recovered.isEmpty()) return false
+        appDb.runInTransaction {
+            appDb.bookChapterDao.delByBook(book.bookUrl)
+            appDb.bookChapterDao.insert(*recovered.toTypedArray())
+        }
+        book.totalChapterNum = recovered.size
+        appDb.bookDao.update(book)
+        ReadBook.onChapterListUpdated(book, loadContentAfterUpdate)
+        AppLog.put("目录加载失败，已从缓存恢复 ${recovered.size} 章")
         return true
     }
 

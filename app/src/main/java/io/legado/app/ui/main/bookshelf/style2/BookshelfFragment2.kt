@@ -334,6 +334,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                         cardStyle = composeListItemStyle,
                         introMaxLines = composeListIntroLines,
                         renderConfig = renderConfig,
+                        showReadProgress = AppConfig.showReadProgress,
                         modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
                         fragment = this@BookshelfFragment2,
                         lifecycle = viewLifecycleOwner.lifecycle,

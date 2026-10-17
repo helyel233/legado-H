@@ -60,6 +60,10 @@ import kotlin.math.min
 object BookHelp {
     private val downloadDir: File = appCtx.externalFiles
     private const val cacheFolderName = "book_cache"
+    /** 从缓存恢复的章节 url 前缀，见 [recoverChaptersFromCache]。 */
+    private const val CACHE_CHAPTER_PREFIX = "cache://"
+    /** 带章节序号的缓存文件名：`%05d-{titleMD5}.nb`。 */
+    private val indexedCacheFileNameRegex = Regex("""^(\\d{5})-([a-fA-F0-9]+)\\.nb$""")
     private const val cacheImageFolderName = "images"
     private const val cacheEpubFolderName = "epub"
     private val downloadImages = ConcurrentHashMap<String, Mutex>()
@@ -89,6 +93,57 @@ object BookHelp {
     fun getCacheDir(book: Book): File {
         return downloadDir.getFile(cacheFolderName, book.getFolderName())
     }
+
+    /**
+     * 目录加载失败时，从缓存文件反推出一份可阅读的章节记录。
+     *
+     * 缓存有两种命名：`%05d-{titleMD5}.nb`（带序号，可直接还原顺序）与
+     * `c-{内容键MD5}.nb`（稳定命名，文件名不含序号，按缓存写入顺序兜底排序）。
+     * 恢复出的章节 url 形如 `cache://{bookUrl}/{缓存文件名}`，读取正文时直接定位该文件，
+     * 不再按标题或 url 反推，避免离线时读不到已缓存的正文。
+     *
+     * @return 恢复的章节列表，没有任何缓存时返回空列表
+     */
+    fun recoverChaptersFromCache(book: Book): List<BookChapter> {
+        val cacheDir = getCacheDir(book)
+        if (!cacheDir.isDirectory) return emptyList()
+        val files = cacheDir.listFiles { file ->
+            file.isFile && file.name.endsWith(".nb")
+        }?.toList() ?: return emptyList()
+        // 优先用带序号的命名：文件名里的序号就是真实章节顺序
+        val indexed = ArrayList<Pair<Int, File>>()
+        val stable = ArrayList<File>()
+        files.forEach { file ->
+            val match = indexedCacheFileNameRegex.matchEntire(file.name)
+            if (match != null) {
+                match.groupValues[1].toIntOrNull()?.let { indexed.add(it to file) }
+            } else if (file.name.startsWith("c-")) {
+                stable.add(file)
+            }
+        }
+        val ordered: List<Pair<Int, File>> = if (indexed.isNotEmpty()) {
+            indexed.sortedBy { it.first }
+        } else {
+            // 稳定命名不含序号，退化为按缓存写入顺序（修改时间）排序
+            stable.sortedBy { it.lastModified() }.mapIndexed { i, file -> i to file }
+        }
+        return ordered.map { (index, file) ->
+            BookChapter(
+                url = "$CACHE_CHAPTER_PREFIX${book.bookUrl}/${file.name}",
+                title = readCachedChapterTitle(file) ?: "第${index + 1}章",
+                baseUrl = book.tocUrl.ifEmpty { book.bookUrl },
+                bookUrl = book.bookUrl,
+                index = index
+            )
+        }
+    }
+
+    /** 缓存正文首行通常是章节标题；过长的首行多半是正文而非标题，直接放弃。 */
+    private fun readCachedChapterTitle(file: File): String? = runCatching {
+        file.bufferedReader().useLines { lines ->
+            lines.firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it.length <= 60 }
+        }
+    }.getOrNull()
 
     fun updateCacheFolder(oldBook: Book, newBook: Book) {
         val oldFolderName = oldBook.getFolderNameNoCache()
@@ -614,6 +669,13 @@ object BookHelp {
     }
 
     private fun getPrimaryContentFile(book: Book, chapter: BookChapter, suffix: String = "nb"): File {
+        // 从缓存恢复的章节：url 里带着缓存文件名，直接定位，不必再按标题或 url 反推
+        if (chapter.url.startsWith(CACHE_CHAPTER_PREFIX)) {
+            val fileName = chapter.url.substringAfterLast('/')
+            if (fileName.isNotBlank()) {
+                return downloadDir.getFile(cacheFolderName, book.getFolderName(), fileName)
+            }
+        }
         return if (book.isLocal) {
             downloadDir.getFile(cacheFolderName, book.getFolderName(), chapter.getFileName(suffix))
         } else {

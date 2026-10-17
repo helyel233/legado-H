@@ -470,6 +470,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                         cardStyle = composeListItemStyle,
                         introMaxLines = composeListIntroLines,
                         renderConfig = renderConfig,
+                        showReadProgress = AppConfig.showReadProgress,
                         modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
                         fragment = this@BooksFragment,
                         lifecycle = viewLifecycleOwner.lifecycle,
