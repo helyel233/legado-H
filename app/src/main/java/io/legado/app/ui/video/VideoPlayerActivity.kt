@@ -888,6 +888,17 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     override fun observeLiveBus() {
+        // 本页在 Manifest 里声明了 uiMode 自行处理（configChanges 含 uiMode）：系统切
+        // 日/夜时框架只会走 onConfigurationChanged、不会重建本页，且 AppCompat 的
+        // setDefaultNightMode 也会跳过声明了 uiMode 的 Activity，二级页那套「自动重建」
+        // 在本页不成立。只能像 MainActivity 一样监听 RECREATE 主动重建，否则播放器
+        // 外壳/标题栏/菜单会停留在旧配色，直到杀进程重进才恢复。
+        // 播放进度由 VideoPlay 进程级对象与本地记录保留，重建后按原进度续播。
+        observeEvent<String>(EventBus.RECREATE) {
+            if (!isFinishing && !isDestroyed) {
+                recreate()
+            }
+        }
 
         observeEventSticky<String>(EventBus.VIDEO_SUB_TITLE) {
             binding.titleBar.title = it

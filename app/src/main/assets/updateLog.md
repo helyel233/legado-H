@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.9.4 · 2026/10/17**
+
+- 修复阅读页与视频播放页跟随系统切换日/夜间模式时标题栏、控件与弹窗停留在旧配色不刷新的问题
+
 **vH.1.9.3 · 2026/10/17**
 
 - 修复 RecyclerView 尾视图「ViewHolder 必须非 attached」崩溃、订阅规则重复与同毫秒互相覆盖
