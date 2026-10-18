@@ -46,8 +46,8 @@ starts there. The runtime searches paragraph and character ranges by bisection,
 caches the result per page/layout revision, and gates the new bridge callback to
 the active document. Actual EPUB documents do not execute those text hooks.
 
-See [the implementation and verification record](plain-text-epub-rendering-plan.md)
-for the release checks and device limitations.
+Ordinary-text release checks and device limitations were verified during its
+release cycle and are not repeated here.
 
 ## Direct-Only Invariants
 
