@@ -178,4 +178,29 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             putBoolean("appCrash", value)
         }
 
+    /**
+     * 上次崩溃时的前台页面（Activity 全限定名）。
+     *
+     * 崩溃往往发生在后台线程或 WebView 回调里，栈顶未必是页面类，
+     * 所以由 [io.legado.app.help.LifecycleHelp] 在崩溃瞬间记下当前前台页面，
+     * 供下次启动的崩溃提示直接告诉用户"崩在哪一页"。
+     */
+    var crashPage: String
+        get() = getString("crashPage", "") ?: ""
+        set(value) {
+            putString("crashPage", value)
+        }
+
+    /**
+     * 上次崩溃的一行摘要：时间 + 页面 + 异常类型 + 消息。
+     *
+     * 崩溃详情在 externalCache/crash 的日志文件里，但弹窗需要立刻能展示的内容，
+     * 所以在写文件的同时把可读摘要也留一份。
+     */
+    var crashSummary: String
+        get() = getString("crashSummary", "") ?: ""
+        set(value) {
+            putString("crashSummary", value)
+        }
+
 }

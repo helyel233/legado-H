@@ -28,6 +28,26 @@ object LifecycleHelp : Application.ActivityLifecycleCallbacks {
     @Volatile
     private var appForeground = false
 
+    /**
+     * 当前处于前台（已 onResume 且未 onPause）的页面。
+     *
+     * 崩溃/卡顿发生在后台线程时栈里通常看不到具体页面，这里保留弱引用用于补齐定位信息，
+     * 只做诊断用，不参与任何业务判断（弱引用随时可能已被回收）。
+     */
+    @Volatile
+    private var resumedActivityRef: WeakReference<Activity>? = null
+
+    val currentActivity: Activity?
+        get() = resumedActivityRef?.get()
+
+    /**
+     * 当前前台页面名，崩溃定位用。取不到页面时（后台任务崩溃）返回 [NO_PAGE]。
+     */
+    val currentPageName: String
+        get() = resumedActivityRef?.get()?.javaClass?.name ?: NO_PAGE
+
+    const val NO_PAGE = "unknown"
+
     private val backgroundRunnable = Runnable {
         if (startedActivityCount == 0) {
             dispatchAppForeground(false)
@@ -76,10 +96,14 @@ object LifecycleHelp : Application.ActivityLifecycleCallbacks {
 
     override fun onActivityPaused(activity: Activity) {
         LogUtils.d(TAG, "${activity::class.simpleName} onPause")
+        if (resumedActivityRef?.get() === activity) {
+            resumedActivityRef = null
+        }
     }
 
     override fun onActivityResumed(activity: Activity) {
         LogUtils.d(TAG, "${activity::class.simpleName} onResume")
+        resumedActivityRef = WeakReference(activity)
     }
 
     override fun onActivityStarted(activity: Activity) {

@@ -82,7 +82,13 @@ class CronetCoroutineInterceptor(private val cookieJar: CookieJar) : Interceptor
 
             val callBack = object : AbsCallBack(request, call, readTimeoutMillis) {
                 override fun waitForDone(urlRequest: UrlRequest): Response {
-                    TODO("Not yet implemented")
+                    // 协程版靠 onSuccess/onError 回调恢复协程，不会走到这个阻塞等待方法，
+                    // 这里只是为满足抽象成员而必须实现。
+                    //
+                    // 刻意抛 IOException 而不是 TODO()：TODO() 抛的是 NotImplementedError（Error 而非
+                    // Exception），会绕过 intercept 里的 catch (e: Exception) 兜底，导致整个请求直接崩掉
+                    // 而不是回退到 okhttp。真被误调用时抛 IOException 才能安全降级。
+                    throw IOException("waitForDone should not be called in the coroutine interceptor")
                 }
 
                 override fun onError(error: IOException) {

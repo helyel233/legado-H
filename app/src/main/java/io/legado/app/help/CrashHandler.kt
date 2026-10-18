@@ -82,6 +82,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
     private fun handleException(ex: Throwable?) {
         if (ex == null) return
         LocalConfig.appCrash = true
+        recordCrashSummary(ex)
         //记录到调试事件中心（分类：崩溃），便于下次启动后在调试日志页回看
         DebugLogScope.launch {
             runCatching {
@@ -103,6 +104,33 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         }
         context.longToastOnUiLegacy(ex.stackTraceStr)
         Thread.sleep(3000)
+    }
+
+    /**
+     * 记一行可读的崩溃摘要（时间 + 页面 + 异常类型 + 消息）。
+     *
+     * 崩溃现场往往在后台线程或 WebView 回调中，只看堆栈很难判断是哪个页面触发的，
+     * 因此在崩溃瞬间把当前前台页面一并留下，下次启动的提示就能直接说清"崩在哪、报什么"。
+     */
+    private fun recordCrashSummary(ex: Throwable) {
+        kotlin.runCatching {
+            val page = LifecycleHelp.currentPageName
+            val errorType = ex::class.java.simpleName.takeIf { it.isNotBlank() }
+                ?: ex::class.java.name
+            val summary = buildString {
+                append(summaryFormat.format(Date()))
+                append(" · ")
+                append(page)
+                append('\n')
+                append(errorType)
+                ex.localizedMessage?.takeIf { it.isNotBlank() }?.let {
+                    append(": ")
+                    append(it.take(120))
+                }
+            }
+            LocalConfig.crashPage = page
+            LocalConfig.crashSummary = summary
+        }
     }
 
     companion object {
@@ -140,11 +168,17 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         @SuppressLint("SimpleDateFormat")
         private val format = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
 
+        @SuppressLint("SimpleDateFormat")
+        private val summaryFormat = SimpleDateFormat("MM-dd HH:mm:ss")
+
         /**
          * 保存错误信息到文件中
          */
         fun saveCrashInfo2File(ex: Throwable) {
             val sb = StringBuilder()
+            // 崩溃现场常在后台线程，栈顶未必是页面，这里把时间与前台页面写在最前面方便定位
+            sb.append("crashTime=").append(format.format(Date())).append("\n")
+            sb.append("page=").append(LifecycleHelp.currentPageName).append("\n")
             for ((key, value) in paramsMap) {
                 sb.append(key).append("=").append(value).append("\n")
             }

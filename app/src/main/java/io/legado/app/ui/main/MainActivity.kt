@@ -63,6 +63,7 @@ import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.LocalNetworkAccess
+import io.legado.app.help.DiagnosticExporter
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.MainBottomNavConfig
@@ -120,6 +121,7 @@ import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setHuaweiDisplayCutoutShortEdgesCompat
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.setStatusBarColorAuto
+import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -2266,15 +2268,34 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun notifyAppCrash() {
-        if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
+        // 正式分发包打的是 appDebug（BuildConfig.DEBUG 恒为 true），
+        // 旧写法在这里直接 return，等于正式包从不提示崩溃，崩溃证据链在最后一步断掉。
+        // 现改为两种包都提示：这是用户唯一能发现"上次崩过"的入口。
+        if (!LocalConfig.appCrash) {
             return
         }
         LocalConfig.appCrash = false
-        alert(getString(R.string.draw), "检测到阅读发生了崩溃，是否打开崩溃日志以便报告问题？") {
+        val summary = LocalConfig.crashSummary
+        val message = buildString {
+            if (summary.isNotBlank()) {
+                append(summary)
+                append("\n\n")
+            }
+            append("可复制诊断信息反馈问题，或查看完整崩溃日志。")
+        }
+        alert(getString(R.string.draw), message) {
+            neutralButton("复制诊断信息") { copyDiagnosticReport() }
             yesButton {
                 showDialogFragment<CrashLogsDialog>()
             }
             noButton()
+        }
+    }
+
+    private fun copyDiagnosticReport() {
+        lifecycleScope.launch {
+            val report = withContext(IO) { DiagnosticExporter.diagnosticReport() }
+            sendToClip(report)
         }
     }
 

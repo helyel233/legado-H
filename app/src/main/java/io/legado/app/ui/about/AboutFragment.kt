@@ -8,6 +8,7 @@ import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.CrashHandler
+import io.legado.app.help.DiagnosticExporter
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.update.AppUpdate
@@ -22,7 +23,6 @@ import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.ui.widget.compose.showComposeTextFormDialogWithChecks
 import io.legado.app.utils.FileDoc
-import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.createFolderIfNotExist
 import io.legado.app.utils.delete
@@ -300,25 +300,9 @@ class AboutFragment : ComposeSettingFragment() {
     }
 
     private fun copyLogs(doc: FileDoc) {
-        val cacheDir = appCtx.externalCache
-        val logFiles = File(cacheDir, "logs")
-        val crashFiles = File(cacheDir, "crash")
-        val logcatFile = File(cacheDir, "logcat.txt")
-
-        dumpLogcat(logcatFile)
-
-        val zipFile = File(cacheDir, "logs.zip")
-        ZipUtils.zipFiles(arrayListOf(logFiles, crashFiles, logcatFile), zipFile)
-
-        doc.find("logs.zip")?.delete()
-
-        zipFile.inputStream().use { input ->
-            doc.createFileIfNotExist("logs.zip").openOutputStream().getOrNull()
-                ?.use {
-                    input.copyTo(it)
-                }
-        }
-        zipFile.delete()
+        // 打包逻辑（logs + crash + logcat + 崩溃摘要）已收进 DiagnosticExporter，
+        // 与崩溃提示、崩溃日志页共用同一份实现，避免同一件事有两套打包代码。
+        DiagnosticExporter.exportZip(doc)
     }
 
     private fun copyHeapDump(doc: FileDoc): Boolean {
@@ -333,17 +317,6 @@ class AboutFragment : ComposeSettingFragment() {
                 }
         }
         return true
-    }
-
-    private fun dumpLogcat(file: File) {
-        try {
-            val process = Runtime.getRuntime().exec("logcat -d")
-            file.outputStream().use {
-                process.inputStream.copyTo(it)
-            }
-        } catch (e: Exception) {
-            AppLog.put("保存Logcat失败\n$e", e)
-        }
     }
 
     companion object {
