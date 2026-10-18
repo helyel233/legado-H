@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      baselineprofile 模块只承载宏基准测试代码，本身不产生 UI。
+      不要在这里声明 application 或 activity：运行时由 macrobenchmark 拉起被测应用。
+    -->
+
+</manifest>

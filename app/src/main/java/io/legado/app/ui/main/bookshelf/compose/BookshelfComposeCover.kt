@@ -57,7 +57,13 @@ fun BookshelfComposeCover(
     )
 }
 
-private data class BookshelfCoverRequest(
+/**
+ * 封面请求参数。
+ *
+ * internal：封面预热（CoverWarmup）要算出**与首屏渲染完全一致**的封面 key，
+ * 必须复用这里的 path / forcePath / allowNameOverlay 推导，自己另抄一份必然对不上。
+ */
+internal data class BookshelfCoverRequest(
     val path: String?,
     val name: String?,
     val author: String?,
@@ -117,7 +123,8 @@ private fun BookshelfCollectionMosaicCover(
     }
 }
 
-private fun BookShelfDisplay.toCoverRequest(): BookshelfCoverRequest {
+/** internal：供封面预热复用同一套封面来源推导（见 BookshelfCoverRequest 注释）。 */
+internal fun BookShelfDisplay.toCoverRequest(): BookshelfCoverRequest {
     val originalCover = getDisplayCover()
     val collectionCover = CoverCollectionManager.selectedCollectionCover(
         bookKey = bookUrl.ifBlank { "$origin|$name|$author" },

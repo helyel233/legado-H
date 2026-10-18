@@ -52,6 +52,7 @@ import io.legado.app.databinding.FragmentBooksBinding
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.SmartGroupEngine
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.CoverWarmup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -640,6 +641,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                     binding.refreshLayout.isEnabled = enableRefresh && itemCount > 0
                     composeItems = items
                     saveComposeSnapshot(snapshotKey, items)
+                    warmUpShelfCovers(list)
                     delay(100)
                 }
                 return@launch
@@ -711,6 +713,22 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
 
     fun getBooks(): List<Book> {
         return shelfDisplays.map { it.toMinimalBook() }
+    }
+
+    /**
+     * 在列表数据 collect 到、首帧渲染之前，先把前几本书的封面解码进进程缓存。
+     *
+     * 放在这里而不是各自的 BookCoverImage 里，是因为首屏 N 个封面各自异步解码，
+     * 会先渲染一批默认封面再逐个补上（tab 切换/视图重建后 remember 丢失时尤其明显）。
+     * 预热是纯 IO 的活，且只解磁盘上已有的小缩略图，失败不影响正常流程。
+     */
+    private fun warmUpShelfCovers(displays: List<BookShelfDisplay>) {
+        if (displays.isEmpty()) return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                CoverWarmup.warmUpShelfCovers(requireContext(), displays)
+            }
+        }
     }
 
     private fun BookShelfDisplay.hasCustomTag(tag: String): Boolean {

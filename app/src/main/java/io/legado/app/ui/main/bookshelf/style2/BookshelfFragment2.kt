@@ -44,6 +44,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.CoverWarmup
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.group.GroupEditDialog
@@ -106,6 +107,23 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     override var groupId = BookGroup.IdRoot
     override var books: List<Book> = emptyList()
     private var shelfDisplays: List<BookShelfDisplay> = emptyList()
+
+    /**
+     * 在列表数据 collect 到、首帧渲染之前，先把前几本书的封面解码进进程缓存。
+     *
+     * 与 style1 的 BooksFragment 同一用意：首屏 N 个封面各自异步解码，
+     * 会先渲染一批默认封面再逐个补上（tab 切换/视图重建后 remember 丢失时尤其明显）。
+     * 预热是纯 IO 的活，且只解磁盘上已有的小缩略图，失败不影响正常流程。
+     */
+    private fun warmUpShelfCovers(displays: List<BookShelfDisplay>) {
+        if (displays.isEmpty()) return
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                CoverWarmup.warmUpShelfCovers(requireContext(), displays)
+            }
+        }
+    }
+
     private var enableRefresh = true
     override var onlyUpdateRead = false
     private var bookshelfMargin by mutableIntStateOf(AppConfig.bookshelfMargin)
@@ -444,6 +462,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     books = list.map { it.toMinimalBook() }
                     collectionItems = items.filterIsInstance<BookshelfCollectionItemUi>()
                     composeItems = items
+                    warmUpShelfCovers(list)
                     composeDataVersion++
                     itemCount = getItemCount()
                     binding.tvEmptyMsg.isGone = itemCount > 0

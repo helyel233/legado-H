@@ -11,6 +11,9 @@ plugins {
     alias libs.plugins.kotlin.parcelize
     alias libs.plugins.room
     alias libs.plugins.ksp
+    // 基线 profile：冷启动/滚动关键路径的 AOT 预热。
+    // 生成侧在 :baselineprofile 模块（需真机跑宏基准），这里只负责把基线文件合进 APK。
+    alias libs.plugins.androidx.baselineprofile
 }
 apply from: 'download.gradle'
 
@@ -201,6 +204,8 @@ dependencies {
     //noinspection GradleDependency,GradlePackageUpdate
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
     coreLibraryDesugaring(libs.desugar)
+    // 基线 profile 源。正式分发的是 appDebug 变体，所以基线对 debug 一并生效才有意义。
+    baselineProfile(project(":baselineprofile"))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.okhttp.mockwebserver)

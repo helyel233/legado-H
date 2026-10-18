@@ -1,0 +1,60 @@
+plugins {
+    // 顺序有讲究：先 com.android.test（AGP），再 kotlin-android，最后 baselineprofile。
+    // androidx.baselineprofile 自己不带 AGP，也不会帮你 apply；而 kotlin-android
+    // 必须在某个 AGP 插件之后 apply，否则报
+    // "'kotlin-android' plugin requires one of the Android Gradle plugins"。
+    //
+    // 这里不带版本：AGP 与 kotlin-android 已由 :app 声明的同 artifact 插件带上 classpath，
+    // 再写一遍版本会报 "already on the classpath with an unknown version"。
+    id 'com.android.test'
+    id 'org.jetbrains.kotlin.android'
+    alias(libs.plugins.androidx.baselineprofile)
+}
+
+android {
+    namespace = "io.legado.app.baselineprofile"
+    compileSdk = 36
+
+    defaultConfig {
+        // 宏基准要求 API 28+（ART profile 相关接口从这里开始可用）
+        minSdk = 28
+        targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // com.android.test 模块必须知道自己测的是哪个工程，否则配置阶段直接失败：
+    // "targetProjectPath cannot be null in test project baselineprofile"
+    targetProjectPath = ":app"
+
+    // 与 :app 保持一致：Java 走 17，Kotlin 也要显式锁 17。
+    // 否则本机 JDK 21 会把 Kotlin 编成 21，而 Java 编成 17，
+    // 报 "Inconsistent JVM-target compatibility detected"。
+    kotlin {
+        jvmToolchain {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // 这里刻意不配 managedDevices（托管模拟器）。
+    // AGP 的 DeviceGroup.targetDevices 只是只读的 DomainObjectSet，没有可直接配置的
+    // DSL 入口，硬写只会得到一堆难以维护的 workaround。基准优先用真机跑，
+    // 没有真机时自己在 Android Studio 的 Device Manager 里建一台 API 33 模拟器即可。
+}
+
+baselineProfile {
+    // 有真机就优先用真机（数据更接近真实场景），否则回落到上面的模拟器
+    useConnectedDevices = true
+}
+
+dependencies {
+    implementation(libs.junit)
+    implementation(libs.androidx.junit)
+    implementation(libs.androidx.runner)
+    implementation(libs.androidx.uiautomator)
+    implementation(libs.androidx.benchmark.macro.junit4)
+}

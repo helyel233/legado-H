@@ -201,35 +201,16 @@ fun BookCoverImage(
     val thumbKey = remember(sourceOrigin, path, cleanName, cleanAuthor) {
         "$sourceOrigin|$path|$cleanName|$cleanAuthor"
     }
-    val loadKey = remember(
-        path,
-        cleanName,
-        cleanAuthor,
-        sourceOrigin,
-        loadOnlyWifi,
-        AppConfig.useDefaultCover,
-        AppConfig.loadCoverHighQuality,
-        CoverCollectionManager.selectionKey(),
-        useThumb,
-        forcePath,
-        allowNameOverlay,
-        System.identityHashCode(BookCover.defaultDrawable)
-    ) {
-        listOf(
-            path.orEmpty(),
-            cleanName.orEmpty(),
-            cleanAuthor.orEmpty(),
-            sourceOrigin.orEmpty(),
-            loadOnlyWifi.toString(),
-            AppConfig.useDefaultCover.toString(),
-            AppConfig.loadCoverHighQuality.toString(),
-            CoverCollectionManager.selectionKey(),
-            useThumb.toString(),
-            forcePath.toString(),
-            allowNameOverlay.toString(),
-            System.identityHashCode(BookCover.defaultDrawable).toString()
-        ).joinToString("|")
-    }
+    val loadKey = coverLoadKey(
+        path = path,
+        cleanName = cleanName,
+        cleanAuthor = cleanAuthor,
+        sourceOrigin = sourceOrigin,
+        loadOnlyWifi = loadOnlyWifi,
+        useThumb = useThumb,
+        forcePath = forcePath,
+        allowNameOverlay = allowNameOverlay
+    )
     var bitmap by remember(loadKey, defaultBitmap) {
         // 组合重启（tab 切回/视图重建）时先用进程缓存里自己持有的封面位图做初值，
         // 避免整屏封面先闪默认封面再异步加载回来（打开书架页的毫秒级刷新观感）
@@ -455,10 +436,49 @@ private fun defaultCoverBitmap(drawable: Drawable): Bitmap {
 }
 
 /**
+ * 封面内存缓存 key。
+ *
+ * **必须与 BookCoverImage 内部用的 key 完全一致**，否则封面预热写进去的位图
+ * 首屏命中不了（表现为"预热点用没有"）。
+ *
+ * key 里每一项都不是凑数的，改任何一项都会让旧缓存全部失效：
+ * - path / cleanName / cleanAuthor / sourceOrigin：同一本书不同封面、不同书名的区分
+ * - useDefaultCover / loadCoverHighQuality：用户改了这两个开关，封面形态就变了
+ * - CoverCollectionManager.selectionKey()：封面集选中的那一个变了，封面就换人
+ * - useThumb / forcePath / allowNameOverlay：决定走缩略图还是原图、要不要书名覆盖
+ * - identityHashCode(BookCover.defaultDrawable)：默认封面 drawable 换了实例（主题切换）
+ */
+internal fun coverLoadKey(
+    path: String?,
+    cleanName: String?,
+    cleanAuthor: String?,
+    sourceOrigin: String?,
+    loadOnlyWifi: Boolean,
+    useThumb: Boolean,
+    forcePath: Boolean,
+    allowNameOverlay: Boolean?
+): String {
+    return listOf(
+        path.orEmpty(),
+        cleanName.orEmpty(),
+        cleanAuthor.orEmpty(),
+        sourceOrigin.orEmpty(),
+        loadOnlyWifi.toString(),
+        AppConfig.useDefaultCover.toString(),
+        AppConfig.loadCoverHighQuality.toString(),
+        CoverCollectionManager.selectionKey(),
+        useThumb.toString(),
+        forcePath.toString(),
+        allowNameOverlay.toString(),
+        System.identityHashCode(BookCover.defaultDrawable).toString()
+    ).joinToString("|")
+}
+
+/**
  * 自己解码封面缩略图文件（CoverThumbnailCache 落盘的 240x320 文件）：
  * 位图归本模块所有，可安全进进程缓存；Glide 经 BitmapPool 回收复用的位图则不能缓存。
  */
-private fun decodeCoverThumbFile(file: java.io.File): Bitmap? {
+internal fun decodeCoverThumbFile(file: java.io.File): Bitmap? {
     if (!file.isFile || file.length() <= 0L) return null
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
