@@ -11,6 +11,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.help.LocalNetworkAccess
+import io.legado.app.help.config.AppConfig
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
@@ -28,6 +29,7 @@ import io.legado.app.utils.startService
 import io.legado.app.utils.stopService
 import io.legado.app.utils.toastOnUi
 import io.legado.app.web.HttpServer
+import io.legado.app.web.WebServiceGuard
 import io.legado.app.web.WebSocketServer
 import splitties.init.appCtx
 import splitties.systemservices.powerManager
@@ -102,7 +104,7 @@ class WebService : BaseService() {
                         getPort()
                     )
                 })
-                hostAddress = notificationList.first()
+                hostAddress = decorateAddress(notificationList.first())
             } else {
                 hostAddress = getString(R.string.network_connection_unavailable)
                 notificationList.add(hostAddress)
@@ -176,7 +178,7 @@ class WebService : BaseService() {
                         getPort()
                     )
                 })
-                hostAddress = notificationList.first()
+                hostAddress = decorateAddress(notificationList.first())
                 isRun = true
                 postEvent(EventBus.WEB_SERVICE, hostAddress)
                 startForegroundNotification()
@@ -197,6 +199,17 @@ class WebService : BaseService() {
             port = 1122
         }
         return port
+    }
+
+    /**
+     * 给对外展示/复制的地址附上访问口令。
+     *
+     * 启用了口令时，用户复制到的地址必须带 `?token=` 才能打开，否则会 401；
+     * 未启用时原样返回。非地址文本（如"网络不可用"）也原样返回。
+     */
+    private fun decorateAddress(address: String): String {
+        if (!address.startsWith("http")) return address
+        return WebServiceGuard.authorizedUrl(address, AppConfig.webServiceToken)
     }
 
     /**

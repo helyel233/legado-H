@@ -2466,6 +2466,22 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.webPort, value)
         }
 
+    /**
+     * Web 服务访问口令。
+     *
+     * Web 服务本身没有任何鉴权：开启后同一局域网内任何人都能增删书源、删书、
+     * 读取书源登录态。这里给一个可选的访问口令堵住这个缺口。
+     *
+     * **留空（默认）= 不启用**，行为与旧版完全一致。
+     * 启用后浏览器首次访问需带 `?token=口令`，服务端验证通过会种下 Cookie，
+     * 之后同一浏览器不再需要带参数（前端无需任何改动）。
+     */
+    var webServiceToken: String
+        get() = appCtx.getPrefString(PreferKey.webServiceToken, "") ?: ""
+        set(value) {
+            appCtx.putPrefString(PreferKey.webServiceToken, value.trim())
+        }
+
     var tocUiUseReplace: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.tocUiUseReplace)
         set(value) {

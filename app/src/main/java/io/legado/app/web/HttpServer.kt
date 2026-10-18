@@ -8,6 +8,7 @@ import io.legado.app.api.controller.BookSourceController
 import io.legado.app.api.controller.BookSourceWebController
 import io.legado.app.api.controller.ReplaceRuleController
 import io.legado.app.api.controller.RssSourceController
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.service.WebService
 import io.legado.app.utils.GSON
@@ -36,6 +37,17 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
         }
 
         try {
+            // 访问口令校验。口令未启用（默认）时这里直接放行，行为与旧版一致。
+            // 必须放在静态资源之前：启用了口令就连页面都不该能打开。
+            if (!WebServiceGuard.isAuthorized(session)) {
+                val denied = newFixedLengthResponse(
+                    Response.Status.UNAUTHORIZED,
+                    "application/json",
+                    """{"msg":"unauthorized"}"""
+                )
+                denied.addHeader("WWW-Authenticate", "Bearer")
+                return denied
+            }
             when (session.method) {
                 Method.OPTIONS -> {
                     val response = newFixedLengthResponse("")
@@ -109,7 +121,13 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
             if (returnData == null) {
                 if (uri.endsWith("/"))
                     uri += "index.html"
-                return assetsWeb.getResponse(uri)
+                val assetResponse = assetsWeb.getResponse(uri)
+                // 令牌是刚通过 URL 参数带进来的：种下 Cookie，之后同一浏览器不再需要
+                // 每次带 ?token=（前端零改动，同源请求自动带 Cookie）
+                if (WebServiceGuard.shouldSetCookie(session)) {
+                    assetResponse.addHeader("Set-Cookie", WebServiceGuard.cookieHeader(AppConfig.webServiceToken.trim()))
+                }
+                return assetResponse
             }
 
             val response = if (returnData.data is Bitmap) {

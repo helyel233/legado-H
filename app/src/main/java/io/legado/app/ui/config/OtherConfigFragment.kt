@@ -34,6 +34,7 @@ import io.legado.app.ui.video.config.SettingsDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.ui.widget.compose.showComposeTextFormDialog
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefString
@@ -498,6 +499,32 @@ class OtherConfigFragment : ComposeSettingFragment() {
                 max = 60000,
                 value = AppConfig.webPort,
                 onSelected = { AppConfig.webPort = it }
+            ),
+            SettingActionSpec(
+                key = PreferKey.webServiceToken,
+                title = getString(R.string.web_service_token_title),
+                summary = if (AppConfig.webServiceToken.isBlank()) {
+                    getString(R.string.web_service_token_summary_off)
+                } else {
+                    getString(R.string.web_service_token_summary_on)
+                },
+                onClick = {
+                    showComposeTextFormDialog(
+                        title = getString(R.string.web_service_token_title),
+                        labels = listOf(getString(R.string.web_service_token_hint)),
+                        initialValues = listOf(AppConfig.webServiceToken),
+                        positiveText = getString(android.R.string.ok),
+                        negativeText = getString(R.string.cancel),
+                        onPositive = { values ->
+                            AppConfig.webServiceToken = values.getOrNull(0) ?: ""
+                            if (WebService.isRun) {
+                                // 口令改动只影响后续请求的校验，服务本身不用重启；
+                                // 但通知/地址里的 token 参数要跟着变
+                                WebService.serve()
+                            }
+                        }
+                    )
+                }
             ),
             SettingActionSpec(
                 key = PreferKey.cleanCache,

@@ -372,6 +372,9 @@ object PreferKey {
     const val noAnimScrollPage = "noAnimScrollPage"
     const val webDavDeviceName = "webDavDeviceName"
     const val webServiceWakeLock = "webServiceWakeLock"
+
+    /** Web 服务访问口令。留空 = 不启用（默认，行为与旧版一致）。 */
+    const val webServiceToken = "webServiceToken"
     const val audioPlayWakeLock = "audioPlayWakeLock"
     const val readAloudWakeLock = "readAloudWakeLock"
     const val showLastUpdateTime = "showLastUpdateTime"

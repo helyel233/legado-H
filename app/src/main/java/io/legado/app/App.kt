@@ -329,7 +329,7 @@ class App : Application() {
 
         val aiTaskChannel = NotificationChannel(
             channelIdAiTask,
-            "AI任务",
+            getString(R.string.ai_task_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             enableLights(false)

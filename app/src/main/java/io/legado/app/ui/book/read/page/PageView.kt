@@ -302,8 +302,16 @@ class PageView(context: Context) : FrameLayout(context) {
             tvFooterRight.setColor(tipColor)
             advancedTitleFallback.setTextColor(textColor)
             advancedTitleFallbackPair.setTextColor(textColor)
-            advancedTitleFallback.textSize = advancedTitleTextSizeSp()
-            advancedTitleFallbackPair.textSize = advancedTitleTextSizeSp()
+            advancedTitleFallback.textSize =
+                LottieTitleJsonStyler.textSizeSp(
+                    ReadBookConfig.textSize.toFloat(),
+                    ReadBookConfig.titleSize.toFloat()
+                )
+            advancedTitleFallbackPair.textSize =
+                LottieTitleJsonStyler.textSizeSp(
+                    ReadBookConfig.textSize.toFloat(),
+                    ReadBookConfig.titleSize.toFloat()
+                )
             val titleTypeface = ChapterProvider.titlePaint.typeface ?: ChapterProvider.typeface
             advancedTitleFallback.typeface = titleTypeface
             advancedTitleFallbackPair.typeface = titleTypeface
@@ -1192,7 +1200,11 @@ class PageView(context: Context) : FrameLayout(context) {
         } ?: return
         val json = block.payload?.takeIf { it.isNotBlank() } ?: return
         val pageWidth = binding.contentTextView.width.toFloat().coerceAtLeast(1f)
-        val styled = applyLottieTextFallbackStyle(json, advancedTitleTextLayerScale(block, pageWidth))
+        val styled = LottieTitleJsonStyler.applyFallbackStyle(
+            json,
+            advancedTitleTextLayerScale(block, pageWidth),
+            ReadBookConfig.textColor
+        )
         val tw = block.width.toInt().coerceAtLeast(1)
         val th = block.height.toInt().coerceAtLeast(1)
         val key = AdvancedTitleLottieKeys.composition(styled.json, tw, th)
@@ -1768,7 +1780,9 @@ class PageView(context: Context) : FrameLayout(context) {
         lottieView.setFontAssetDelegate(defaultFontAssetDelegate)
         val json = block.payload?.takeIf { it.isNotBlank() }
         val textScale = advancedTitleTextLayerScale(block, pageWidth)
-        val styled = json?.let { applyLottieTextFallbackStyle(it, textScale) }
+        val styled = json?.let {
+            LottieTitleJsonStyler.applyFallbackStyle(it, textScale, ReadBookConfig.textColor)
+        }
         val resolvedJson = styled?.json
         val nextKey = resolvedJson?.let {
             AdvancedTitleLottieKeys.composition(it, targetWidth, targetHeight)
@@ -2398,380 +2412,16 @@ class PageView(context: Context) : FrameLayout(context) {
         view.alpha = 1f
     }
 
-    private fun advancedTitleTextSizeSp(): Float {
-        return with(ReadBookConfig) {
-            (textSize + titleSize * ADVANCED_TITLE_SIZE_FACTOR).coerceAtLeast(1f)
-        }
-    }
-
-    private fun advancedTitleScale(): Float {
-        return with(ReadBookConfig) {
-            (advancedTitleTextSizeSp() / textSize.coerceAtLeast(1)).coerceIn(0.6f, 2.5f)
-        }
-    }
     private fun advancedTitleTextLayerScale(block: TextPage.EpubEmbeddedBlock, pageWidth: Float): Float {
-        val contentWidth = pageWidth.takeIf { it > 0f } ?: block.width
-        if (contentWidth <= 0f) return 1f
-        val actualWidthRatio = block.width / contentWidth
-        if (actualWidthRatio < 0.98f) return 1f
-        val requestedWidthRatio = ADVANCED_TITLE_WIDTH_FACTOR * advancedTitleScale() *
-            (AdvancedTitleConfig.heightFactor / AdvancedTitleConfig.DEFAULT_HEIGHT_FACTOR.toFloat())
-        return (requestedWidthRatio / actualWidthRatio).coerceIn(1f, 2.5f)
-    }
-
-    private fun applyLottieTextFallbackStyle(rawJson: String, textScale: Float): StyledLottieJson {
-        if (!AdvancedTitleLottieKeys.canApplyFallbackStyle(rawJson)) {
-            return StyledLottieJson(rawJson, null)
-        }
-        val fallbackColor = ReadBookConfig.textColor
-        val fallbackHex = String.format("#%06X", 0xFFFFFF and fallbackColor)
-        val fallbackFont = "legado_default_font"
-        val normalizedTextScale = textScale.coerceIn(1f, 2.5f)
-        val cacheKey = AdvancedTitleLottieKeys.styledJson(
-            rawJson = rawJson,
-            fallbackColor = fallbackColor,
-            textScaleBits = normalizedTextScale.toBits()
+        // 纯计算已搬到 LottieTitleJsonStyler（可单测），这里只负责把阅读器配置喂进去
+        return LottieTitleJsonStyler.textLayerScale(
+            block = block,
+            pageWidth = pageWidth,
+            textSize = ReadBookConfig.textSize.toFloat(),
+            titleSize = ReadBookConfig.titleSize.toFloat(),
+            heightFactorRatio = AdvancedTitleConfig.heightFactor /
+                AdvancedTitleConfig.DEFAULT_HEIGHT_FACTOR.toFloat()
         )
-        styledLottieJsonCache[cacheKey]?.let { return it }
-        val styled = runCatching {
-            val root = JSONObject(rawJson)
-            val compositionSize = root.optInt("w").takeIf { it > 0 }?.let { width ->
-                root.optInt("h").takeIf { it > 0 }?.let { height ->
-                    LottieDecodeSize(width, height)
-                }
-            }
-            normalizeFullWidthImageLayers(root)
-            val layers = root.optJSONArray("layers")
-            if (layers != null) {
-                for (i in 0 until layers.length()) {
-                    val layer = layers.optJSONObject(i) ?: continue
-                    if (layer.optInt("ty") != 5) continue
-                    val text = layer.optJSONObject("t") ?: continue
-                    val d = text.optJSONObject("d") ?: continue
-                    val kArr = d.optJSONArray("k") ?: continue
-                    for (j in 0 until kArr.length()) {
-                        val keyFrame = kArr.optJSONObject(j) ?: continue
-                        val style = keyFrame.optJSONObject("s") ?: continue
-                        if (!style.has("f") || style.optString("f").isBlank()) {
-                            style.put("f", fallbackFont)
-                        }
-                        if (style.optString("f") == fallbackFont ||
-                            !style.has("fc") || style.optJSONArray("fc") == null
-                        ) {
-                            style.put("fc", parseColorArray(fallbackHex))
-                        }
-                        scaleLottieTextStyle(style, normalizedTextScale)
-                    }
-                }
-                val fonts = root.optJSONObject("fonts")
-                    ?: JSONObject().also { root.put("fonts", it) }
-                val list = fonts.optJSONArray("list")
-                    ?: org.json.JSONArray().also { fonts.put("list", it) }
-                var hasFont = false
-                for (i in 0 until list.length()) {
-                    val item = list.optJSONObject(i) ?: continue
-                    if (item.optString("fName") == fallbackFont) {
-                        hasFont = true
-                        break
-                    }
-                }
-                if (!hasFont) {
-                    list.put(JSONObject().apply {
-                        put("fName", fallbackFont)
-                        put("fFamily", fallbackFont)
-                        put("fStyle", "Regular")
-                        put("ascent", 75)
-                    })
-                }
-            }
-            StyledLottieJson(
-                json = if (layers == null) rawJson else root.toString(),
-                compositionSize = compositionSize
-            )
-        }.getOrElse {
-            StyledLottieJson(rawJson, null)
-        }
-        styledLottieJsonCache.put(cacheKey, styled)
-        return styled
-    }
-
-    private fun normalizeFullWidthImageLayers(root: JSONObject) {
-        val rootWidth = root.optDouble("w", 0.0)
-        if (rootWidth <= 0.0) return
-        val assets = root.optJSONArray("assets") ?: return
-        val assetWidthMap = mutableMapOf<String, Double>()
-        for (i in 0 until assets.length()) {
-            val asset = assets.optJSONObject(i) ?: continue
-            val id = asset.optString("id").takeIf { it.isNotBlank() } ?: continue
-            assetWidthMap[id] = asset.optDouble("w", 0.0)
-        }
-        val layers = root.optJSONArray("layers") ?: return
-        for (i in 0 until layers.length()) {
-            val layer = layers.optJSONObject(i) ?: continue
-            if (layer.optInt("ty") != 2) continue
-            val assetWidth = assetWidthMap[layer.optString("refId")] ?: continue
-            if (kotlin.math.abs(assetWidth - rootWidth) > 1.0) continue
-            val scaleArray = layer.optJSONObject("ks")
-                ?.optJSONObject("s")
-                ?.optJSONArray("k") ?: continue
-            val scaleX = scaleArray.optDouble(0, 100.0)
-            val scaleY = scaleArray.optDouble(1, scaleX)
-            if (scaleX <= 0.0 || scaleX >= 99.9) continue
-            val fillScale = (100.0 / scaleX).coerceIn(1.0, 2.0)
-            scaleArray.put(0, scaleX * fillScale)
-            scaleArray.put(1, scaleY * fillScale)
-        }
-    }
-
-    private fun scaleLottieTextStyle(style: JSONObject, scale: Float) {
-        if (scale <= 1.001f) return
-        val fontSize = style.optDouble("s", 0.0)
-        if (fontSize > 0.0) {
-            style.put("s", fontSize * scale)
-        }
-        val lineHeight = style.optDouble("lh", 0.0)
-        if (lineHeight > 0.0) {
-            style.put("lh", lineHeight * scale)
-        }
-        val size = style.optJSONArray("sz")
-        val oldHeight = size?.optDouble(1, 0.0) ?: 0.0
-        if (size != null && oldHeight > 0.0) {
-            val newHeight = oldHeight * scale
-            size.put(1, newHeight)
-            val position = style.optJSONArray("ps")
-            if (position != null && position.length() > 1) {
-                val oldY = position.optDouble(1, 0.0)
-                if (kotlin.math.abs(oldY + oldHeight / 2.0) < 1.0) {
-                    position.put(1, -newHeight / 2.0)
-                }
-            }
-        }
-    }
-
-    private fun parseColorArray(hex: String): org.json.JSONArray {
-        val color = Color.parseColor(hex)
-        return org.json.JSONArray().apply {
-            put(Color.red(color) / 255.0)
-            put(Color.green(color) / 255.0)
-            put(Color.blue(color) / 255.0)
-        }
-    }
-
-    private data class ResolvedLottieAssetSource(
-        val identity: String,
-        val file: File?,
-        val fallbackDataUri: String?
-    )
-
-    private data class LottieAssetDecodeRequest(
-        val asset: LottieImageAsset,
-        val source: ResolvedLottieAssetSource,
-        val decodeSize: LottieDecodeSize,
-        val cacheKey: LottieImageCacheKey
-    )
-
-    private inner class LottieImageAssetResolver(
-        private val viewWidth: Int,
-        private val viewHeight: Int,
-        private val compositionWidth: Int,
-        private val compositionHeight: Int,
-        private val fallbackAssets: Map<String, String>
-    ) : ImageAssetDelegate {
-
-        override fun fetchBitmap(asset: LottieImageAsset): Bitmap? {
-            asset.bitmap?.takeUnless { it.isRecycled }?.let { return it }
-            val request = decodeRequest(asset) ?: return null
-            return bitmapFor(request)
-        }
-
-        /**
-         * Decode this composition's images off the UI thread. Individual assets that
-         * cannot be resolved or decoded are left to [fetchBitmap]; Lottie simply skips
-         * them. Only a composition that declares images yet yields none at all is
-         * reported as not ready, so a partially decodable package keeps rendering
-         * instead of dropping to the plain-text title.
-         */
-        fun prepareCompositionImages(composition: com.airbnb.lottie.LottieComposition): Boolean {
-            return synchronized(composition) {
-                val assets = composition.images.values
-                if (assets.isEmpty()) return@synchronized true
-                val requests = assets.mapNotNull { asset -> decodeRequest(asset) }
-                if (requests.isEmpty()) return@synchronized false
-                val uniqueSizes = LinkedHashMap<LottieImageCacheKey, LottieDecodeSize>()
-                requests.forEach { request ->
-                    uniqueSizes.putIfAbsent(request.cacheKey, request.decodeSize)
-                }
-                // Shrink an oversized package rather than refusing to render it.
-                val scale = LottieImageMemoryPolicy.compositionBudgetScale(uniqueSizes.values)
-                val decoded = LinkedHashMap<LottieImageCacheKey, Bitmap>(uniqueSizes.size)
-                val assignments = ArrayList<Pair<LottieImageAsset, Bitmap>>(requests.size)
-                requests.forEach { request ->
-                    val effective = if (scale >= 1f) {
-                        request
-                    } else {
-                        val size = LottieImageMemoryPolicy.scaled(request.decodeSize, scale)
-                        request.copy(
-                            decodeSize = size,
-                            cacheKey = request.cacheKey.copy(
-                                width = size.width,
-                                height = size.height
-                            )
-                        )
-                    }
-                    val bitmap = effective.asset.bitmap?.takeUnless { it.isRecycled }
-                        ?: decoded[effective.cacheKey]
-                        ?: bitmapFor(effective)
-                        ?: return@forEach
-                    decoded[effective.cacheKey] = bitmap
-                    assignments.add(effective.asset to bitmap)
-                }
-                if (assignments.isEmpty()) return@synchronized false
-                assignments.forEach { (asset, bitmap) -> asset.bitmap = bitmap }
-                true
-            }
-        }
-
-        private fun decodeRequest(asset: LottieImageAsset): LottieAssetDecodeRequest? {
-            val source = resolveLottieAssetSource(asset, fallbackAssets) ?: return null
-            val decodeSize = LottieImageMemoryPolicy.decodeSize(
-                assetWidth = asset.width.takeIf { it > 0 }
-                    ?: compositionWidth.coerceAtLeast(viewWidth),
-                assetHeight = asset.height.takeIf { it > 0 }
-                    ?: compositionHeight.coerceAtLeast(viewHeight),
-                viewWidth = viewWidth,
-                viewHeight = viewHeight,
-                compositionWidth = compositionWidth,
-                compositionHeight = compositionHeight
-            ) ?: return null
-            return LottieAssetDecodeRequest(
-                asset = asset,
-                source = source,
-                decodeSize = decodeSize,
-                cacheKey = LottieImageCacheKey(
-                    sourceSha256 = LottieImageMemoryPolicy.sourceSha256(source.identity),
-                    width = decodeSize.width,
-                    height = decodeSize.height
-                )
-            )
-        }
-
-        private fun bitmapFor(request: LottieAssetDecodeRequest): Bitmap? {
-            LottieImageBitmapCache.get(request.cacheKey)?.let { return it }
-            return loadLottieAssetBitmap(request.source, request.decodeSize)?.also { bitmap ->
-                LottieImageBitmapCache.put(request.cacheKey, bitmap)
-            }
-        }
-    }
-
-    private fun resolveLottieAssetSource(
-        asset: LottieImageAsset,
-        fallbackAssets: Map<String, String>
-    ): ResolvedLottieAssetSource? {
-        val candidates = arrayListOf<String>()
-        asset.fileName?.let(candidates::add)
-        if (!asset.dirName.isNullOrBlank() && !asset.fileName.isNullOrBlank()) {
-            candidates.add(asset.dirName + asset.fileName)
-        }
-        candidates.forEach { candidate ->
-            if (candidate.startsWith("data:image", ignoreCase = true)) {
-                return ResolvedLottieAssetSource(
-                    identity = candidate,
-                    file = null,
-                    fallbackDataUri = candidate
-                )
-            }
-            if (LottieDerivedResourceCache.isResourceAlias(candidate)) {
-                val fallback = fallbackAssets[candidate]
-                    ?.takeIf { it.startsWith("data:image", ignoreCase = true) }
-                    ?: return@forEach
-                return ResolvedLottieAssetSource(
-                    identity = candidate,
-                    file = LottieDerivedResourceCache.resourceFile(candidate),
-                    fallbackDataUri = fallback
-                )
-            }
-        }
-        return null
-    }
-
-    private fun loadLottieAssetBitmap(
-        source: ResolvedLottieAssetSource,
-        decodeSize: LottieDecodeSize
-    ): Bitmap? {
-        source.file?.takeIf {
-            it.isFile && it.length() in 1..MAX_LOTTIE_DERIVED_RESOURCE_BYTES
-        }?.let { file ->
-            runCatching { decodeBitmapFileByType(file, decodeSize) }
-                .getOrNull()
-                ?.let { return it }
-        }
-        val fallback = source.fallbackDataUri ?: return null
-        return runCatching {
-            val bytes = fallback.decodeBase64DataUrlBytes() ?: return@runCatching null
-            decodeBitmapByType(fallback, bytes, decodeSize)
-        }.getOrNull()
-    }
-
-    private fun decodeBitmapFileByType(file: File, decodeSize: LottieDecodeSize): Bitmap? {
-        return if (file.extension.equals("svg", ignoreCase = true)) {
-            file.inputStream().buffered().use { input ->
-                SvgUtils.createBitmap(input, decodeSize.width, decodeSize.height)
-            }
-        } else {
-            decodeRasterBitmap(file, decodeSize)
-        }
-    }
-
-    private fun decodeBitmapByType(
-        source: String,
-        bytes: ByteArray,
-        decodeSize: LottieDecodeSize
-    ): Bitmap? {
-        val lower = source.lowercase()
-        return if (lower.contains("image/svg+xml") || lower.endsWith(".svg")) {
-            SvgUtils.createBitmap(ByteArrayInputStream(bytes), decodeSize.width, decodeSize.height)
-        } else {
-            decodeRasterBitmap(bytes, decodeSize)
-        }
-    }
-
-    private fun decodeRasterBitmap(bytes: ByteArray, decodeSize: LottieDecodeSize): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        val target = LottieImageMemoryPolicy.fitSourceInto(bounds.outWidth, bounds.outHeight, decodeSize)
-            ?: return null
-        val sampleSize = LottieImageMemoryPolicy.sampleSize(bounds.outWidth, bounds.outHeight, target)
-        val decoded = BitmapFactory.decodeByteArray(
-            bytes,
-            0,
-            bytes.size,
-            BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        ) ?: return null
-        if (decoded.width == target.width && decoded.height == target.height) return decoded
-        return Bitmap.createScaledBitmap(decoded, target.width, target.height, true).also {
-            if (it !== decoded) decoded.recycle()
-        }
-    }
-
-    private fun decodeRasterBitmap(file: File, decodeSize: LottieDecodeSize): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        val target = LottieImageMemoryPolicy.fitSourceInto(bounds.outWidth, bounds.outHeight, decodeSize)
-            ?: return null
-        val decoded = BitmapFactory.decodeFile(
-            file.absolutePath,
-            BitmapFactory.Options().apply {
-                inSampleSize = LottieImageMemoryPolicy.sampleSize(
-                    bounds.outWidth,
-                    bounds.outHeight,
-                    target
-                )
-            }
-        ) ?: return null
-        if (decoded.width == target.width && decoded.height == target.height) return decoded
-        return Bitmap.createScaledBitmap(decoded, target.width, target.height, true).also {
-            if (it !== decoded) decoded.recycle()
-        }
     }
 
     private val defaultFontAssetDelegate = AdvancedTitleFontAssetDelegate {
@@ -2811,11 +2461,5 @@ class PageView(context: Context) : FrameLayout(context) {
          * across a title page without holding rasterized bitmaps for a whole chapter.
          */
         const val MAX_COMMITTED_TITLES = 6
-        const val MAX_STYLED_LOTTIE_CACHE_CHARS = 1024 * 1024
-        const val MAX_STYLED_LOTTIE_CACHE_UTF8_BYTES = 1024 * 1024
-        val styledLottieJsonCache = StyledLottieJsonCache(
-            maxChars = MAX_STYLED_LOTTIE_CACHE_CHARS,
-            maxUtf8Bytes = MAX_STYLED_LOTTIE_CACHE_UTF8_BYTES
-        )
     }
 }

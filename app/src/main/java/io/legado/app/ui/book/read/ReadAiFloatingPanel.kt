@@ -69,6 +69,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.LifecycleOwner
 import io.legado.app.R
+import splitties.init.appCtx
 import io.legado.app.data.entities.AiAgentJob
 import io.legado.app.data.entities.AiAgentSession
 import io.legado.app.data.entities.AiMemoryItem
@@ -327,7 +328,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             bookKey = AiMemoryStore.bookKey(context.bookName, context.author),
             sessionId = requestSessionId,
             companionId = READ_AI_COMPANION_ID,
-            title = context.bookName.ifBlank { "阅读页问AI" }
+            title = context.bookName.ifBlank { appCtx.getString(R.string.read_ai_ask) }
         )
         val agentRun = AiAgentStateStore.startRun(
             sessionId = requestSessionId,
@@ -346,7 +347,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
         activeAgentRun = agentRun
         streamingAssistantMessageId = pendingAssistantId
         val keepAliveId = AiTaskKeepAlive.retain(
-            title = "阅读页问AI",
+            title = appCtx.getString(R.string.read_ai_ask),
             content = "${context.bookName} · $question",
             kind = AiTaskKeepAlive.KIND_READ_AI
         )
@@ -873,7 +874,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                         it.targetKey == READ_AI_COMPANION_ID
             }
         }.mapTo(linkedSetOf()) { it.id }
-        context.alert(title = "阅读页问 AI · 世界书") {
+        context.alert(title = appCtx.getString(R.string.read_ai_world_book)) {
             multiChoiceItems(
                 items = worldBooks.map { book ->
                     "${book.name}${if (book.enabled) "" else "（停用）"}"
@@ -913,7 +914,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             return
         }
         val selected = windowSkillIds.toMutableSet()
-        context.alert(title = "当前窗口 Skill") {
+        context.alert(title = appCtx.getString(R.string.read_ai_current_skill)) {
             multiChoiceItems(
                 items = skills.map { skill -> skill.name.ifBlank { "Skill" } }.toTypedArray(),
                 checkedItems = BooleanArray(skills.size) { index -> skills[index].id in selected }
@@ -939,7 +940,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             return
         }
         val selected = windowMcpServerIds.toMutableSet()
-        context.alert(title = "当前窗口 MCP") {
+        context.alert(title = appCtx.getString(R.string.read_ai_current_mcp)) {
             multiChoiceItems(
                 items = servers.map { server -> server.name.ifBlank { "MCP" } }.toTypedArray(),
                 checkedItems = BooleanArray(servers.size) { index -> servers[index].id in selected }
@@ -1719,8 +1720,12 @@ private fun ReadAiMessage.toProcessStep(): AiProcessStepUi {
         else -> AiProcessStepUi(
             id = id,
             type = AiProcessStepType.Thinking,
-            title = statusLabel?.takeIf { it.isNotBlank() } ?: if (pending) "思考中" else "思考完成",
-            subtitle = summarizeReadAiProcessDetail(detail, if (pending) "思考中" else "思考完成"),
+            title = statusLabel?.takeIf { it.isNotBlank() }
+                ?: appCtx.getString(if (pending) R.string.read_ai_thinking else R.string.read_ai_thought_done),
+            subtitle = summarizeReadAiProcessDetail(
+                    detail,
+                    appCtx.getString(if (pending) R.string.read_ai_thinking else R.string.read_ai_thought_done)
+                ),
             detail = detail,
             pending = pending,
             success = true,

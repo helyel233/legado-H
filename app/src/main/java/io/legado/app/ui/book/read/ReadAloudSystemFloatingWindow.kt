@@ -1144,7 +1144,7 @@ private fun FloatingReaderTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = state.chapterTitle.ifBlank { "当前章节" },
+                text = state.chapterTitle.ifBlank { LocalContext.current.getString(R.string.read_aloud_current_chapter) },
                 color = colors.primaryText,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -1154,14 +1154,14 @@ private fun FloatingReaderTopBar(
             )
             Icon(
                 painter = painterResource(R.drawable.ic_expand_more),
-                contentDescription = "切换章节",
+                contentDescription = LocalContext.current.getString(R.string.read_aloud_switch_chapter),
                 tint = colors.secondaryText,
                 modifier = Modifier.size(18.dp)
             )
         }
-        FloatingTopIcon(R.drawable.ic_fullscreen, "返回朗读页", colors, onFullscreen)
-        FloatingTopIcon(R.drawable.ic_expand_less, "缩小", colors, onMinimize)
-        FloatingTopIcon(R.drawable.ic_settings, "设置", colors, onSettings)
+        FloatingTopIcon(R.drawable.ic_fullscreen, LocalContext.current.getString(R.string.read_aloud_back), colors, onFullscreen)
+        FloatingTopIcon(R.drawable.ic_expand_less, LocalContext.current.getString(R.string.read_aloud_minimize), colors, onMinimize)
+        FloatingTopIcon(R.drawable.ic_settings, LocalContext.current.getString(R.string.read_aloud_settings), colors, onSettings)
     }
 }
 
@@ -1200,7 +1200,7 @@ private fun ColumnScope.FloatingOriginalText(
         listOf(
             ReadAloudPlayerPanel.TextCueUi(
                 index = 1,
-                text = state.paragraphText.ifBlank { "暂无原文" },
+                text = state.paragraphText.ifBlank { LocalContext.current.getString(R.string.read_aloud_no_text) },
                 current = true,
                 key = state.paragraphKey.ifBlank { "current" },
                 sequence = 0,
@@ -1282,7 +1282,7 @@ private fun ColumnScope.FloatingChapterPicker(
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "切换章节",
+            text = LocalContext.current.getString(R.string.read_aloud_switch_chapter),
             color = colors.secondaryText,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
@@ -1331,7 +1331,7 @@ private fun ColumnScope.FloatingChapterPicker(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             FloatingChapterStepButton(
-                text = "上一章",
+                text = LocalContext.current.getString(R.string.read_aloud_prev_chapter),
                 colors = colors,
                 enabled = state.chapterIndex > 0,
                 modifier = Modifier.weight(1f),
@@ -1339,7 +1339,7 @@ private fun ColumnScope.FloatingChapterPicker(
                 onClick = { onChapterSelect(state.chapterIndex - 1) }
             )
             FloatingChapterStepButton(
-                text = "下一章",
+                text = LocalContext.current.getString(R.string.read_aloud_next_chapter),
                 colors = colors,
                 enabled = state.chapterIndex + 1 < state.chapterCount,
                 modifier = Modifier.weight(1f),
@@ -1399,7 +1399,7 @@ private fun ColumnScope.FloatingReaderSettings(
         verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
         FloatingSettingSlider(
-            title = "原文字体大小",
+            title = LocalContext.current.getString(R.string.read_aloud_text_size),
             valueText = "${fontSize}sp",
             value = fontSize.toFloat(),
             range = 14f..34f,
@@ -1408,7 +1408,7 @@ private fun ColumnScope.FloatingReaderSettings(
             onValueChangeFinished = onFontSizeChangeFinished
         )
         FloatingSettingSlider(
-            title = "窗口背景透明度",
+            title = LocalContext.current.getString(R.string.read_aloud_bg_alpha),
             valueText = "${100 - backgroundAlpha}%",
             value = (100 - backgroundAlpha).toFloat(),
             range = 0f..100f,
@@ -1417,7 +1417,7 @@ private fun ColumnScope.FloatingReaderSettings(
             onValueChangeFinished = onBackgroundAlphaChangeFinished
         )
         FloatingSettingSlider(
-            title = "窗口高度",
+            title = LocalContext.current.getString(R.string.read_aloud_window_height),
             valueText = "$heightPercent%",
             value = heightPercent.toFloat(),
             range = 15f..90f,
@@ -1426,7 +1426,7 @@ private fun ColumnScope.FloatingReaderSettings(
             onValueChangeFinished = onHeightPercentChangeFinished
         )
         Text(
-            text = "透明度过高时，原文在复杂背景上可能不易阅读。",
+            text = LocalContext.current.getString(R.string.read_aloud_bg_alpha_tip),
             color = colors.subtleText,
             fontSize = 12.sp,
             lineHeight = 18.sp
