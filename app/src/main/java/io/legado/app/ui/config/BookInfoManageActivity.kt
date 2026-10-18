@@ -54,7 +54,7 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     onStyleChanged = ::onStyleChanged,
                     onComponentToggle = ::onComponentToggle,
                     onReset = ::onReset,
-                    onMoveItem = ::onMoveItem
+                    onMoveBy = ::onMoveItemBy
                 )
             }
         }
@@ -83,11 +83,18 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         componentsState.value = BookInfoComponentConfig.load()
     }
 
-    private fun onMoveItem(fromIndex: Int, toIndex: Int) {
+    /**
+     * 拖动排序：每次都从最新状态按条目身份解析索引，
+     * 同一帧内连续多次移动也不会用到过期的列表快照。
+     */
+    private fun onMoveItemBy(item: BookInfoComponentItem, delta: Int) {
         val current = componentsState.value.toMutableList()
-        if (fromIndex !in current.indices || toIndex !in current.indices) return
-        val item = current.removeAt(fromIndex)
-        current.add(toIndex, item)
+        val fromIndex = current.indexOfFirst { it.type == item.type }
+        if (fromIndex < 0) return
+        val toIndex = fromIndex + delta
+        if (toIndex !in current.indices) return
+        val moved = current.removeAt(fromIndex)
+        current.add(toIndex, moved)
         componentsState.value = current
         BookInfoComponentConfig.save(current)
     }

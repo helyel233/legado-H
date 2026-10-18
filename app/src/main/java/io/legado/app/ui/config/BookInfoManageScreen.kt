@@ -2,6 +2,7 @@ package io.legado.app.ui.config
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,7 +53,7 @@ internal fun BookInfoManageScreen(
     onStyleChanged: (BookInfoPageStyle) -> Unit,
     onComponentToggle: (Int, Boolean) -> Unit,
     onReset: () -> Unit,
-    onMoveItem: (Int, Int) -> Unit
+    onMoveBy: (BookInfoComponentItem, Int) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
 
@@ -98,6 +106,11 @@ internal fun BookInfoManageScreen(
                             palette = palette,
                             onCheckedChange = { checked ->
                                 onComponentToggle(index, checked)
+                            },
+                            onMoveBy = { delta ->
+                                // 只传条目身份+偏移量，索引由 Activity 侧按最新状态解析：
+                                // 拖动期间列表实时重排，同一帧内连续移动时组合侧列表会过期。
+                                onMoveBy(item, delta)
                             }
                         )
                     }
@@ -214,7 +227,8 @@ private fun StyleTabButton(
 private fun ComponentItemRow(
     item: BookInfoComponentItem,
     palette: AppManagementPalette,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    onMoveBy: (Int) -> Unit
 ) {
     AppManagementCard(
         palette = palette,
@@ -254,12 +268,51 @@ private fun ComponentItemRow(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Icon(
-                painter = painterResource(R.drawable.ic_arrange),
-                contentDescription = stringResource(R.string.read_record_drag_sort),
-                tint = palette.settings.secondaryText.copy(alpha = 0.6f),
-                modifier = Modifier.size(24.dp)
+            ComponentDragHandle(
+                palette = palette,
+                onMoveBy = onMoveBy
             )
         }
     }
+}
+
+/**
+ * 详情页组件排序手柄：长按后上下拖动即移动一项（与订阅规则页同一套阈值拖动）。
+ */
+@Composable
+private fun ComponentDragHandle(
+    palette: AppManagementPalette,
+    onMoveBy: (Int) -> Unit
+) {
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 58.dp.toPx() }
+    var accumulatedY by remember { mutableFloatStateOf(0f) }
+    // pointerInput(Unit) 不随重组重启，必须始终调用最新回调，防止拖动中用旧闭包
+    val currentMoveBy by rememberUpdatedState(onMoveBy)
+    Icon(
+        painter = painterResource(R.drawable.ic_arrange),
+        contentDescription = stringResource(R.string.read_record_drag_sort),
+        tint = palette.settings.secondaryText.copy(alpha = 0.6f),
+        modifier = Modifier
+            .size(36.dp)
+            .padding(8.dp)
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragEnd = { accumulatedY = 0f },
+                    onDragCancel = { accumulatedY = 0f },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        accumulatedY += dragAmount.y
+                        while (accumulatedY >= thresholdPx) {
+                            currentMoveBy(1)
+                            accumulatedY -= thresholdPx
+                        }
+                        while (accumulatedY <= -thresholdPx) {
+                            currentMoveBy(-1)
+                            accumulatedY += thresholdPx
+                        }
+                    }
+                )
+            }
+    )
 }

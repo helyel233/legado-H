@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
@@ -201,30 +202,45 @@ private fun GroupEditContent(
         content = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 封面图
-                Box(
-                    modifier = Modifier
-                        .size(width = 90.dp, height = 120.dp)
-                        .clickable {
-                            if (!coverPath.isNullOrBlank()) {
-                                // 已有封面：选择切换或删除（简化为直接选图）
-                                onSelectImage()
-                            } else {
-                                onSelectImage()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 90.dp, height = 120.dp)
+                            .clickable {
+                                if (!coverPath.isNullOrBlank()) {
+                                    // 已有封面：选择切换或删除（简化为直接选图）
+                                    onSelectImage()
+                                } else {
+                                    onSelectImage()
+                                }
                             }
-                        }
-                ) {
-                    BookCoverImage(
-                        path = coverPath,
-                        name = groupName,
-                        author = null,
-                        sourceOrigin = null,
-                        modifier = Modifier.fillMaxSize(),
-                        style = CoverImageView.CoverStyle.DETAIL,
-                        loadOnlyWifi = false,
-                        preferThumb = false,
-                        allowNameOverlay = true,
-                        fillBounds = true
-                    )
+                    ) {
+                        BookCoverImage(
+                            path = coverPath,
+                            name = groupName,
+                            author = null,
+                            sourceOrigin = null,
+                            modifier = Modifier.fillMaxSize(),
+                            style = CoverImageView.CoverStyle.DETAIL,
+                            loadOnlyWifi = false,
+                            preferThumb = false,
+                            allowNameOverlay = true,
+                            fillBounds = true
+                        )
+                    }
+                    if (!coverPath.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.clear),
+                            color = style.accent,
+                            fontFamily = style.bodyFontFamily,
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(style.actionRadius))
+                                .clickable { onClearCover() }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
 

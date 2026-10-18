@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -431,6 +434,11 @@ private fun KitSection(
                         { onEdit(kit) }
                     } else {
                         null
+                    },
+                    onDelete = if (kit.type == AppearanceKitType.IMPORTED_THEME) {
+                        { onDelete(kit) }
+                    } else {
+                        null
                     }
                 )
             }
@@ -600,7 +608,8 @@ private fun AppearanceKitCard(
     active: Boolean,
     palette: AppManagementPalette,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)?
+    onLongClick: (() -> Unit)?,
+    onDelete: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -646,7 +655,10 @@ private fun AppearanceKitCard(
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             listOf(preview.primaryColor, preview.accentColor, preview.cardColor, preview.bottomColor).forEach {
                 Box(
                     modifier = Modifier
@@ -654,6 +666,20 @@ private fun AppearanceKitCard(
                         .clip(RoundedCornerShape(4.dp))
                         .background(Color(it))
                 )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            if (onDelete != null) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_outline_delete),
+                        contentDescription = stringResource(R.string.delete),
+                        tint = palette.settings.secondaryText,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
