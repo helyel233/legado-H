@@ -314,7 +314,13 @@ fun SourceRecycleBinScreen() {
             onConfirm = {
                 scope.launch {
                     runCatching {
-                        withContext(Dispatchers.IO) { appDb.sourceRecycleBinDao.deleteAll() }
+                        withContext(Dispatchers.IO) {
+                            // 清空回收站也是真删除：先把全部条目取出来清附带数据，再清表
+                            SourceRecycleBinHelp.purgeAttachedData(
+                                appDb.sourceRecycleBinDao.getAll()
+                            )
+                            appDb.sourceRecycleBinDao.deleteAll()
+                        }
                     }.onFailure {
                         AppLog.put("回收站清空失败\n${it.localizedMessage}", it)
                         appCtx.toastOnUi("清空失败：${it.localizedMessage}")
@@ -484,6 +490,9 @@ private suspend fun runRestore(items: List<SourceRecycleBin>, overwrite: Boolean
 private suspend fun runDelete(items: List<SourceRecycleBin>) {
     runCatching {
         withContext(Dispatchers.IO) {
+            // 真删除：顺带清掉该源删除时保留的源变量与源评分，
+            // 否则回收站里删掉的源会把变量/评分永久留在库里
+            SourceRecycleBinHelp.purgeAttachedData(items)
             appDb.sourceRecycleBinDao.delete(*items.toTypedArray())
         }
     }.onFailure {

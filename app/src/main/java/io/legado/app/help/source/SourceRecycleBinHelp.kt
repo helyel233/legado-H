@@ -11,6 +11,7 @@ import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.book.highlight.HighlightRule
 import io.legado.app.help.book.highlight.HighlightRules
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.SourceConfig
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import splitties.init.appCtx
@@ -245,6 +246,43 @@ object SourceRecycleBinHelp {
     }
 
     fun cleanupExpired(now: Long = System.currentTimeMillis()) {
+        // 过期即"真删除"，先把条目取出来清掉该源删除时保留的附带数据，再删行
+        val expired = appDb.sourceRecycleBinDao.getExpired(now)
+        if (expired.isEmpty()) return
+        purgeAttachedData(expired)
         appDb.sourceRecycleBinDao.deleteExpired(now)
+    }
+
+    /**
+     * 真删除回收站条目时，一并清理该源在删除时**故意保留**的附带数据。
+     *
+     * ## 为什么删除时要保留这些数据
+     *
+     * 删除书源/RSS 源会先入回收站（7 天撤销窗口），而撤销只是把源插回表里。
+     * 如果删除当时就把源变量和源评分清掉，撤销回来的书源就是"裸"的：
+     * 登录态、JS 里存的变量、源评分全部归零，用户长期积累的数据说没就没。
+     *
+     * 所以改成：入回收站时只删源本身，附带数据留着；等真删除
+     * （彻底删除单条/批量、清空回收站、过期自动清理）时再清。
+     * 这样撤销窗口内数据完好，真删除时也不残留，语义比原来更正确。
+     *
+     * 附带副作用（属于合理行为）：撤销窗口内重新添加同一个 URL 的源，
+     * 会沿用之前的变量与评分，而不是从零开始。
+     */
+    fun purgeAttachedData(items: List<SourceRecycleBin>) {
+        if (items.isEmpty()) return
+        items.forEach { item ->
+            when (item.type) {
+                TYPE_BOOK_SOURCE, TYPE_RSS_SOURCE -> {
+                    // 源变量在 cache 表，按源的 key 删
+                    runCatching { appDb.cacheDao.deleteSourceVariables(item.key) }
+                    // 源评分只在书源侧有（RSS 不用评分），存在 SharedPreferences
+                    if (item.type == TYPE_BOOK_SOURCE) {
+                        runCatching { SourceConfig.removeSource(item.key) }
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 }

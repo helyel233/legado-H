@@ -26,6 +26,19 @@ interface SourceRecycleBinDao {
     @Query("delete from source_recycle_bin where expireAt <= :now")
     fun deleteExpired(now: Long)
 
+    /**
+     * 取已过期的条目。
+     *
+     * 清理前要先拿到条目本身：过期即"真删除"，需要顺带清掉该源删除时
+     * 故意保留的源变量与源评分（见 SourceRecycleBinHelp.purgeAttachedData）。
+     */
+    @Query("select * from source_recycle_bin where expireAt <= :now")
+    fun getExpired(now: Long): List<SourceRecycleBin>
+
+    /** 取全部条目，用于清空回收站前清理附带数据。 */
+    @Query("select * from source_recycle_bin")
+    fun getAll(): List<SourceRecycleBin>
+
     @Query("delete from source_recycle_bin where type = :type and key in (:keys)")
     fun deleteByKeys(type: String, keys: List<String>)
 

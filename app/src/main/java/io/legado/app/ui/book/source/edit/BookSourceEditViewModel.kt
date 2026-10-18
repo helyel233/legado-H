@@ -69,7 +69,10 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
                     if (it.bookSourceUrl != source.bookSourceUrl) {
                         SourceHelp.deleteBookSource(it.bookSourceUrl)
                     } else {
+                        // 换了 URL：旧 URL 的书源彻底不用了，附带数据一起清，
+                        // 否则源评分清了、源变量却永久留在 cache 表里
                         SourceConfig.removeSource(it.bookSourceUrl)
+                        appDb.cacheDao.deleteSourceVariables(it.bookSourceUrl)
                         appDb.bookSourceDao.delete(it)
                     }
                 }

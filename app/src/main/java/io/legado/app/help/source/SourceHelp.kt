@@ -122,8 +122,11 @@ object SourceHelp {
 
     private fun deleteBookSourceInternal(key: String) {
         appDb.bookSourceDao.delete(key)
-        appDb.cacheDao.deleteSourceVariables(key)
-        SourceConfig.removeSource(key)
+        // 源变量与源评分**不在这里清**。
+        // 删除会先入回收站（撤销窗口内），而撤销只是把书源插回表里；
+        // 这里清掉的话，撤销回来的书源会丢登录态/JS 变量、源评分归零。
+        // 改由真删除（彻底删除、清空回收站、过期清理）时清理，
+        // 见 SourceRecycleBinHelp.purgeAttachedData。
     }
 
     fun deleteBookSource(key: String) {
@@ -149,7 +152,9 @@ object SourceHelp {
     private fun deleteRssSourceInternal(key: String) {
         appDb.rssSourceDao.delete(key)
         appDb.rssArticleDao.delete(key)
-        appDb.cacheDao.deleteSourceVariables(key)
+        // 源变量不在删除时清，理由同 deleteBookSourceInternal：
+        // 撤销只插回 RSS 源本身，删除即清会让撤销回来的源丢掉登录态与 JS 变量。
+        // 真删除时由 SourceRecycleBinHelp.purgeAttachedData 清理。
     }
 
     fun deleteRssSource(key: String) {
