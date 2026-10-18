@@ -1,5 +1,25 @@
 # 更新日志
 
+## 1.11.2 版（2026-10-18）
+
+本版新增书架封面冷启动预热与 baseline profile 基线，并修复一轮自查 review 抓出的崩溃、数据回归与竞态问题。
+
+### 优化
+
+- **书架封面冷启动预热**：列表数据 collect 到、首帧渲染之前，先把前 12 本「磁盘上已有缩略图」的封面解码进进程缓存；首屏组合时直接命中缓存，避免默认封面先铺满再逐个补上（tab 切回/视图重建后尤其明显）。只解磁盘小图，不打网络、不解原图；新书维持原异步加载，落盘后下次即被命中。
+- **baseline profile 基线模块**：新增 `baselineprofile` 模块采集冷启动与书架滚动两条轨迹，配合已有的 profileinstaller，缩短冷启动与首屏滚动的 interpreter 阶段。
+
+### 修复
+
+- **书源回收站撤销数据回归（1.9.1 引入）**：删除书源/RSS 源不再立即清掉源变量与源评分；改为「入回收站只删源本身、真删除（彻底删除/清空回收站/7 天过期）时才清附带数据」，撤销回来的书源登录态、JS 变量、评分不再归零。
+- **书源编辑器编辑保存误清数据**：「URL 未变」的重存分支误加了 `deleteSourceVariables`，导致每次保存都清掉登录态/JS 变量，已回滚；并修正改 URL 时漏清 cache 表源变量的不一致。
+- **回收站关闭时残留**：回收站功能关闭（无撤销窗口）时删除书源仍不清理附带数据，现按 `sourceRecycleBinEnabled` 分流，关闭即真删除并照旧清理。
+- **恢复与过期清理竞态**：条目恰好过期的瞬间点「恢复」，`cleanupExpired` 会把它的变量/评分清掉、恢复出裸源；`cleanupExpired` 增加 `excludeId` 排除正在恢复的条目。
+- **基线采集包名错配**：生成任务给 `:app` 装的是 release 变体（`io.legado.app.LegadoH`），`TARGET_PACKAGE` 却写的 `.debug`，导致 `generateBaselineProfile` 必然超时失败，已修正。
+- **崩溃路径加固**：崩溃摘要写 `SharedPreferences` 由 `apply` 改 `commit` 同步落盘（`apply` 异步在进程被杀时会丢，导致下次启动没有崩溃提示）；`SimpleDateFormat` 共享实例非线程安全改为每次新建；`saveCrashInfo2File` 加 `runCatching`，崩溃收尾不因单点异常中断。
+- **书架预热协程崩溃**：两个书架 Fragment 的封面预热在协程里调 `requireContext()`，collect 带 delay、Fragment 在窗口期销毁会抛 `IllegalStateException` 直接崩；改用 `appCtx`。
+- **诊断导出健壮性**：`DiagnosticExporter` 临时文件改 `finally` 统一清理、logcat 子进程加 `destroy`、写目标失败时清掉可能留下的半截 zip。
+
 ## 1.11.1 版（2026-10-18）
 
 本版新增外观套件删除与分组封面清除，并修复书籍信息组件拖拽排序错乱。
