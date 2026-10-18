@@ -383,6 +383,14 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
 
     private fun refreshList() {
         task = viewModelScope.launch(searchPool!!) {
+            // 先把候选源一次性装进 Map：旧写法在 mapParallelSafe 里对每个候选逐条
+            // getBookSource，候选多时等于 N 次 DB 往返（即便并行也拖慢换源面板）。
+            // 分批是防 SQLite 的 IN 参数上限。
+            val sourcesByUrl = searchBookList
+                .mapTo(linkedSetOf()) { it.origin }
+                .chunked(500)
+                .flatMap { appDb.bookSourceDao.getBookSourcesByUrls(it) }
+                .associateBy { it.bookSourceUrl }
             flow {
                 for (searchBook in searchBookList) {
                     emit(searchBook)
@@ -390,7 +398,7 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             }.onStart {
                 searchStateData.postValue(true)
             }.mapParallelSafe(threadCount) {
-                val source = appDb.bookSourceDao.getBookSource(it.origin)
+                val source = sourcesByUrl[it.origin]
                     ?: return@mapParallelSafe
                 withTimeout(60000L) {
                     loadBookInfo(source, it.toBook())

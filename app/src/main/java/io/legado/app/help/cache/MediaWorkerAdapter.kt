@@ -26,9 +26,12 @@ internal class MediaWorkerAdapter(
             ?: error("book not found: ${task.bookUrl}")
         runnableUnits
             .forEach { workerPort.updateUnit(lease, it.key, CacheUnitStatus.RUNNING) }
+        // 一次取整本书的章节目录再按 index 映射，避免逐章查库的 N+1
+        // （整本缓存时 DB 往返次数 = 章节数，会拖慢进度与通知）
+        val chapterByIndex = appDb.bookChapterDao.getChapterList(task.bookUrl)
+            .associateBy { it.index }
         val chapters = runnableUnits.mapNotNull { unit ->
-            appDb.bookChapterDao.getChapter(task.bookUrl, unit.key.chapterIndex)
-                ?.let { unit.key to it }
+            chapterByIndex[unit.key.chapterIndex]?.let { unit.key to it }
         }
         val validKeys = chapters.mapTo(linkedSetOf()) { it.first }
         runnableUnits.asSequence()

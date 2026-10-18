@@ -246,6 +246,16 @@ interface BookSourceDao {
     @Query("select * from book_sources where bookSourceUrl = :key")
     fun getBookSource(key: String): BookSource?
 
+    /**
+     * 按一组 url 批量取完整书源。
+     *
+     * 供换源面板之类"要对一批候选源逐个取源"的场景一次查完，
+     * 避免逐条 getBookSource 造成 N 次 DB 往返。
+     * 调用方需自行控制入参规模（SQLite 的 IN 有参数上限，建议 chunk 后分批）。
+     */
+    @Query("select * from book_sources where bookSourceUrl in (:keys)")
+    fun getBookSourcesByUrls(keys: List<String>): List<BookSource>
+
     @Query("select * from book_sources_part where bookSourceUrl = :key")
     fun getBookSourcePart(key: String): BookSourcePart?
 

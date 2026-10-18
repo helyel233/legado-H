@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 8.13.2" type="baseline" client="gradle" dependencies="true" name="AGP (8.13.2)" variant="all" version="8.13.2">
-
-    <issue
+<issues format="6" by="lint 8.13.2" type="baseline" client="gradle" dependencies="true" name="AGP (8.13.2)" variant="all" version="8.13.2">    <issue
         id="MissingPermission"
         message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
         errorLine1="        NotificationManagerCompat.from(context).notify("
@@ -5228,16 +5226,6 @@
     </issue>
     <issue
         id="UnusedResources"
-        message="The resource `R.menu.book_group_manage` appears to be unused"
-        errorLine1="&lt;menu xmlns:tools=&quot;http://schemas.android.com/tools&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/book_group_manage.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
         message="The resource `R.menu.book_read_source` appears to be unused"
         errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
@@ -8098,16 +8086,6 @@
     </issue>
     <issue
         id="UnusedResources"
-        message="The resource `R.menu.dialog_text` appears to be unused"
-        errorLine1="&lt;menu xmlns:tools=&quot;http://schemas.android.com/tools&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/dialog_text.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
         message="The resource `R.menu.dict_rule_edit` appears to be unused"
         errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
@@ -8363,26 +8341,6 @@
         errorLine2="^">
         <location
             file="src/main/res/menu/explore_item.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.menu.file_long_click` appears to be unused"
-        errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/file_long_click.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.menu.group_manage` appears to be unused"
-        errorLine1="&lt;menu xmlns:app=&quot;http://schemas.android.com/apk/res-auto&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/group_manage.xml"
             line="2"
             column="1"/>
     </issue>
@@ -8846,16 +8804,6 @@
     </issue>
     <issue
         id="UnusedResources"
-        message="The resource `R.menu.save` appears to be unused"
-        errorLine1="&lt;menu xmlns:tools=&quot;http://schemas.android.com/tools&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/save.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
         message="The resource `R.menu.search_view` appears to be unused"
         errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
         errorLine2="^">
@@ -8951,16 +8899,6 @@
         errorLine2="^">
         <location
             file="src/main/res/drawable/shape_translucent_card.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.menu.source_picker` appears to be unused"
-        errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/source_picker.xml"
             line="2"
             column="1"/>
     </issue>
@@ -13606,16 +13544,6 @@
     </issue>
     <issue
         id="UnusedResources"
-        message="The resource `R.menu.theme_list` appears to be unused"
-        errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/menu/theme_list.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
         message="The resource `R.menu.txt_toc_rule_item` appears to be unused"
         errorLine1="&lt;menu xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
         errorLine2="^">
@@ -17019,16 +16947,6 @@
         <location
             file="src/main/res/layout/switch_episode_video_dialog.xml"
             line="16"
-            column="9"/>
-    </issue>
-    <issue
-        id="HardcodedText"
-        message="Hardcoded string &quot;剪贴板导入&quot;, should use `@string` resource"
-        errorLine1="        android:title=&quot;剪贴板导入&quot;"
-        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/menu/theme_list.xml"
-            line="7"
             column="9"/>
     </issue>
     <issue

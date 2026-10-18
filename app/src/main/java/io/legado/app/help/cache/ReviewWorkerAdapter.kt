@@ -50,9 +50,13 @@ internal class ReviewWorkerAdapter(
             .forEach { unit ->
                 workerPort.updateUnit(lease, unit.key, CacheUnitStatus.RUNNING)
             }
+        // 一次取整本书的章节目录，再在内存按 index 映射。
+        // 旧写法对每个 unit 逐条 getChapter：整本缓存时 DB 往返次数 = 章节数，
+        // 进度与通知都会被拖慢。章节目录很轻（只有 title/url），多拉一点也比 N 次往返划算。
+        val chapterByIndex = appDb.bookChapterDao.getChapterList(task.bookUrl)
+            .associateBy { it.index }
         val chapters = runnableUnits.mapNotNull { unit ->
-            appDb.bookChapterDao.getChapter(task.bookUrl, unit.key.chapterIndex)
-                ?.let { unit.key to it }
+            chapterByIndex[unit.key.chapterIndex]?.let { unit.key to it }
         }
         val validKeys = chapters.mapTo(linkedSetOf()) { it.first }
         runnableUnits.asSequence()

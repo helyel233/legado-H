@@ -29,6 +29,15 @@ updates:
       interval: "weekly"
     registries: "*"
     open-pull-requests-limit: 20
+    ignore:
+      # 以下依赖是**有意钉死**的（libs.versions.toml 里有注释说明破坏性变更），
+      # 升了会直接破坏书源解析/JS 引擎/规则分析。dependabot 无视代码里的
+      # noinspection 注释，必须在这里显式忽略，否则每周都开无效 PR。
+      - dependency-name: "org.jsoup:jsoup"
+      - dependency-name: "org.mozilla:rhino"
+      - dependency-name: "org.apache.commons:commons-text"
+      - dependency-name: "com.google.protobuf:protobuf-javalite"
+      - dependency-name: "cn.hutool:*"
     groups:
       kotlin_KSP:
         patterns:

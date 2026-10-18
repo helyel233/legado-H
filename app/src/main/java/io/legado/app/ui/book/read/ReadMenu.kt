@@ -57,6 +57,11 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.ReadMenuCustomButton
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.library.LibraryCloudState
 import io.legado.app.help.book.isEpub
@@ -215,35 +220,69 @@ class ReadMenu @JvmOverloads constructor(
         replaceRulesSupported = callBack.supportsReplaceRules()
         currentBookName = currentBook?.name
         if (callBack.isEpubCoreBook()) {
-            currentChapterUrl = callBack.epubCoreChapterUrl()
-            currentChapterName = callBack.epubCoreChapterTitle().orEmpty()
+            // EPUB 直读的章标题/URL 要查库（直读不用 TextChapter，内存里没有），
+            // 放到 IO 里异步填：这里是每次唤出菜单都会走的路径，主线程查库
+            // 在低端机/库较大时会让人感觉到菜单弹出卡顿
+            loadEpubCoreChapterAsync()
             upSeekBar()
             canGoPrev = ReadBook.durChapterIndex != 0
             canGoNext = ReadBook.durChapterIndex != ReadBook.simulatedChapterSize - 1
             return
         }
         val currentTextChapter = ReadBook.curTextChapter
-        val currentChapter = currentTextChapter?.chapter
-            ?: currentBook?.let { book ->
-                appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex)
-            }
-        if (currentChapter != null) {
-            currentChapterName = currentTextChapter?.title
-                ?: currentChapter.title.takeIf { it.isNotBlank() }
-                ?: currentBook?.durChapterTitle?.takeIf { it.isNotBlank() }
-            if (!ReadBook.isLocalBook) {
-                currentChapterUrl = resolveChapterUrl(currentChapter)
-            } else {
-                currentChapterUrl = null
-            }
+        val chapter = currentTextChapter?.chapter
+        if (chapter != null) {
+            // 内存里已有当前章，直接填，不必查库
+            applyTextChapter(chapter, currentTextChapter.title)
             upSeekBar()
             canGoPrev = ReadBook.durChapterIndex != 0
             canGoNext = ReadBook.durChapterIndex != ReadBook.simulatedChapterSize - 1
-        } else {
+            return
+        }
+        val book = currentBook ?: run {
             currentChapterUrl = null
-            currentChapterName = currentBook?.durChapterTitle?.takeIf { it.isNotBlank() }
+            currentChapterName = null
+            return
+        }
+        // 兜底：内存里没有当前章（异常/恢复场景），查库也放到 IO
+        viewScope()?.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex)
+            }
+            if (loaded != null) {
+                applyTextChapter(loaded, null)
+                upSeekBar()
+                canGoPrev = ReadBook.durChapterIndex != 0
+                canGoNext = ReadBook.durChapterIndex != ReadBook.simulatedChapterSize - 1
+            } else {
+                currentChapterUrl = null
+                currentChapterName = book.durChapterTitle?.takeIf { it.isNotBlank() }
+            }
         }
     }
+
+    /** 只做 UI 赋值，不含任何 IO */
+    private fun applyTextChapter(
+        chapter: io.legado.app.data.entities.BookChapter,
+        fallbackTitle: String?
+    ) {
+        currentChapterName = fallbackTitle?.takeIf { it.isNotBlank() }
+            ?: chapter.title.takeIf { it.isNotBlank() }
+            ?: ReadBook.book?.durChapterTitle?.takeIf { it.isNotBlank() }
+        currentChapterUrl = if (ReadBook.isLocalBook) null else resolveChapterUrl(chapter)
+    }
+
+    private fun loadEpubCoreChapterAsync() {
+        viewScope()?.launch {
+            val title = withContext(Dispatchers.IO) { callBack.epubCoreChapterTitle() }
+            val url = withContext(Dispatchers.IO) { callBack.epubCoreChapterUrl() }
+            currentChapterName = title.orEmpty()
+            currentChapterUrl = url
+        }
+    }
+
+    /** View 自己的协程作用域：没 attach 上就不干，避免空 activity */
+    private fun viewScope(): CoroutineScope? = activity?.lifecycleScope
 
     fun upSeekBar() {
         when (AppConfig.progressBarBehavior) {

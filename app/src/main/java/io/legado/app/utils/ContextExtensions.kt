@@ -161,7 +161,19 @@ fun Context.startForegroundServiceCompat(intent: Intent) {
     try {
         startService(intent)
     } catch (e: IllegalStateException) {
-        ContextCompat.startForegroundService(this, intent)
+        // Android 8+ 后台不允许普通 startService，改走前台服务方式。
+        //
+        // 但 Android 12+ 在后台同样不允许启动前台服务，此时 ContextCompat 会抛
+        // ForegroundServiceStartNotAllowedException——它是 IllegalStateException 的
+        // 子类，所以第一步的 catch 拦不住它，会直接穿透到调用方把 app 崩掉
+        // （后台跑 AI 任务、WebDAV 同步、定时任务时都可能命中）。
+        //
+        // 兜底再失败是正常情况：服务起不来，任务本身仍在后台继续跑，只是没有
+        // 常驻通知而已，绝不能因此崩溃。
+        try {
+            ContextCompat.startForegroundService(this, intent)
+        } catch (_: IllegalStateException) {
+        }
     }
 }
 
