@@ -2,6 +2,7 @@ package io.legado.app.web
 
 import fi.iki.elonen.NanoHTTPD
 import io.legado.app.help.config.AppConfig
+import java.security.MessageDigest
 
 /**
  * Web 服务访问口令守卫。
@@ -44,7 +45,9 @@ object WebServiceGuard {
      */
     fun isAuthorized(session: NanoHTTPD.IHTTPSession, expected: String): Boolean {
         if (expected.isEmpty()) return true
-        return extractToken(session) == expected
+        val provided = extractToken(session) ?: return false
+        // 常量时间比较：局域网内的计时攻击理论上可行，代价为零就顺手防掉
+        return MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())
     }
 
     fun isAuthorized(session: NanoHTTPD.IHTTPSession): Boolean =

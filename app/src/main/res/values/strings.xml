@@ -619,6 +619,7 @@
     <string name="web_service_token_summary_off">未启用：同一网络内任何人都能访问（默认）</string>
     <string name="web_service_token_summary_on">已启用：访问需带口令，服务通知里的地址已自动附带</string>
     <string name="web_service_token_hint">访问口令（留空 = 不启用）</string>
+    <string name="web_service_token_invalid">口令仅支持字母、数字和 _.@-，长度 4–64</string>
     <string name="ai_task_channel_name">AI任务</string>
     <string name="read_aloud_current_chapter">当前章节</string>
     <string name="read_aloud_switch_chapter">切换章节</string>

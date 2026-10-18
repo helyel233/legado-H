@@ -33,21 +33,26 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
 
         val startAt = System.currentTimeMillis()
         LogUtils.d(TAG) {
-            "${session.method.name} - $uri - ${session.queryParameterString} - Start($startAt)"
+            "${session.method.name} - $uri - ${sanitizeQuery(session.queryParameterString)} - Start($startAt)"
+        }
+
+        // 访问口令校验。口令未启用（默认）时这里直接放行，行为与旧版一致。
+        // 必须放在静态资源之前：启用了口令就连页面都不该能打开。
+        // 放在 try 外：守卫是纯字符串判断不应抛异常，而一旦真抛了也必须
+        // fail-closed（拒绝请求），绝不能落进 catch 变成 200 放行。
+        // OPTIONS 预检不执行业务、不泄露数据，放行以保住跨域场景的 CORS 协商，
+        // 真正的数据请求仍会在下面被校验。
+        if (session.method != Method.OPTIONS && !WebServiceGuard.isAuthorized(session)) {
+            val denied = newFixedLengthResponse(
+                Response.Status.UNAUTHORIZED,
+                "application/json",
+                """{"msg":"unauthorized"}"""
+            )
+            denied.addHeader("WWW-Authenticate", "Bearer")
+            return denied
         }
 
         try {
-            // 访问口令校验。口令未启用（默认）时这里直接放行，行为与旧版一致。
-            // 必须放在静态资源之前：启用了口令就连页面都不该能打开。
-            if (!WebServiceGuard.isAuthorized(session)) {
-                val denied = newFixedLengthResponse(
-                    Response.Status.UNAUTHORIZED,
-                    "application/json",
-                    """{"msg":"unauthorized"}"""
-                )
-                denied.addHeader("WWW-Authenticate", "Bearer")
-                return denied
-            }
             when (session.method) {
                 Method.OPTIONS -> {
                     val response = newFixedLengthResponse("")
@@ -163,12 +168,12 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
             response.addHeader("Access-Control-Allow-Methods", "GET, POST")
             response.addHeader("Access-Control-Allow-Origin", session.headers["origin"])
             LogUtils.d(TAG) {
-                "${session.method.name} - $uri - ${session.queryParameterString} - End($startAt)"
+                "${session.method.name} - $uri - ${sanitizeQuery(session.queryParameterString)} - End($startAt)"
             }
             return response
         } catch (e: Exception) {
             LogUtils.d(TAG) {
-                "${session.method.name} - $uri - ${session.queryParameterString} - Error End($startAt)\n$e\n${e.stackTraceStr}"
+                "${session.method.name} - $uri - ${sanitizeQuery(session.queryParameterString)} - Error End($startAt)\n$e\n${e.stackTraceStr}"
             }
             return newFixedLengthResponse(e.message)
         }
@@ -177,6 +182,18 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
 
     companion object {
         private const val TAG = "HttpServer"
+
+        /**
+         * 日志里的 query 做 token 脱敏：启用口令后 `?token=xxx` 会随日志落盘，
+         * 明文记下来等于把口令写进日志文件。
+         */
+        private fun sanitizeQuery(query: String?): String {
+            if (query.isNullOrBlank()) return query ?: ""
+            return query.replace(
+                Regex("(token=)[^&]*", RegexOption.IGNORE_CASE),
+                "$1***"
+            )
+        }
     }
 
 }

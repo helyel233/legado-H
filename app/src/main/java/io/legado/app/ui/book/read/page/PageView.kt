@@ -2446,9 +2446,6 @@ class PageView(context: Context) : FrameLayout(context) {
     fun selectedStartPage(): TextPage? = binding.contentTextView.selectedStartPage()
 
     private companion object {
-        const val ADVANCED_TITLE_SIZE_FACTOR = 1.25f
-        const val ADVANCED_TITLE_WIDTH_FACTOR = 0.86f
-        const val MAX_LOTTIE_DERIVED_RESOURCE_BYTES = 8L * 1024L * 1024L
         /**
          * Positions worth remembering a composition key for. Only pages within reach of a
          * few turns can be returned to before the key would be rebuilt anyway, and each

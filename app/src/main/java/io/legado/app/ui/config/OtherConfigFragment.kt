@@ -42,6 +42,7 @@ import io.legado.app.utils.removePref
 import io.legado.app.utils.restart
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 
 /**
@@ -516,11 +517,22 @@ class OtherConfigFragment : ComposeSettingFragment() {
                         positiveText = getString(android.R.string.ok),
                         negativeText = getString(R.string.cancel),
                         onPositive = { values ->
-                            AppConfig.webServiceToken = values.getOrNull(0) ?: ""
+                            val token = values.getOrNull(0)?.trim() ?: ""
+                            // 口令会拼进 URL query 和 Cookie，字符集必须受限：
+                            // 含 & = ; 空格或中文时，地址解析出来的 token 会和设置的
+                            // 对不上（比如 token=a&b 只解析出 a），用户会被锁在 401 外
+                            // 且毫无提示；非 ASCII 还会让部分浏览器直接丢弃 Cookie。
+                            if (token.isNotEmpty() && !token.matches(TOKEN_PATTERN)) {
+                                appCtx.toastOnUi(R.string.web_service_token_invalid)
+                                return@showComposeTextFormDialog
+                            }
+                            AppConfig.webServiceToken = token
                             if (WebService.isRun) {
-                                // 口令改动只影响后续请求的校验，服务本身不用重启；
-                                // 但通知/地址里的 token 参数要跟着变
-                                WebService.serve()
+                                // 校验对新请求即时生效，无需重启；
+                                // 但通知/复制地址里的 ?token= 是启动时生成的，
+                                // 重启一次让地址带上新口令，否则用户复制的地址打不开
+                                WebService.stop(requireContext())
+                                WebService.start(requireContext())
                             }
                         }
                     )
@@ -772,6 +784,9 @@ class OtherConfigFragment : ComposeSettingFragment() {
         private const val KEY_LANGUAGE = "language"
         private const val KEY_LOCAL_PASSWORD = "localPassword"
         private const val KEY_MEDIA_BUTTON_ON_EXIT = "mediaButtonOnExit"
+
+        /** Web 服务口令允许的字符集：对 URL query 与 Cookie 双安全（见口令设置项说明） */
+        private val TOKEN_PATTERN = Regex("[A-Za-z0-9_.@\\-]{4,64}")
         private const val KEY_AUTO_UPDATE_VARIANT = "autoUpdateVariant"
         private val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" +
