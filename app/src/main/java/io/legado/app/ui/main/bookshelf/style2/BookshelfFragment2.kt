@@ -45,6 +45,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.CoverWarmup
+import splitties.init.appCtx
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.group.GroupEditDialog
@@ -117,9 +118,12 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
      */
     private fun warmUpShelfCovers(displays: List<BookShelfDisplay>) {
         if (displays.isEmpty()) return
+        // 不能在协程里 requireContext()：collect 有 delay，Fragment 若在此窗口销毁，
+        // requireContext() 抛 IllegalStateException 直接崩。预热只需要读文件目录，
+        // 用 appCtx 等价且与生命周期无关。
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
-                CoverWarmup.warmUpShelfCovers(requireContext(), displays)
+                CoverWarmup.warmUpShelfCovers(appCtx, displays)
             }
         }
     }

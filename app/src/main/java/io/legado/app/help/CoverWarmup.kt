@@ -47,8 +47,8 @@ object CoverWarmup {
      */
     suspend fun warmUpShelfCovers(context: Context, displays: List<BookShelfDisplay>) {
         if (displays.isEmpty()) return
-        // 全用默认封面时，没有任何封面需要解码
-        if (AppConfig.useDefaultCover) return
+        // 不在这里按 useDefaultCover 整体跳过：开了默认封面但用了封面集的书
+        // 依然要走真实封面（forcePath），per-book 的判断在 warmUpOne 里
         displays.take(WARM_UP_LIMIT).forEach { display ->
             runCatching { warmUpOne(context, display) }
         }

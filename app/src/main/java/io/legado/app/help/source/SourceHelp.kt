@@ -13,6 +13,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.AppCacheManager
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.SourceConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.permission.Permissions
@@ -122,9 +123,16 @@ object SourceHelp {
 
     private fun deleteBookSourceInternal(key: String) {
         appDb.bookSourceDao.delete(key)
-        // 源变量与源评分**不在这里清**。
-        // 删除会先入回收站（撤销窗口内），而撤销只是把书源插回表里；
-        // 这里清掉的话，撤销回来的书源会丢登录态/JS 变量、源评分归零。
+        if (!AppConfig.sourceRecycleBinEnabled) {
+            // 回收站关闭时没有撤销窗口，这就是真删除，附带数据必须清掉，
+            // 否则登录态/JS 变量/评分永久残留在库里
+            appDb.cacheDao.deleteSourceVariables(key)
+            SourceConfig.removeSource(key)
+            return
+        }
+        // 回收站开启时**不在这里清**：删除会先入回收站（撤销窗口内），
+        // 而撤销只是把书源插回表里；这里清掉的话，撤销回来的书源会
+        // 丢登录态/JS 变量、源评分归零。
         // 改由真删除（彻底删除、清空回收站、过期清理）时清理，
         // 见 SourceRecycleBinHelp.purgeAttachedData。
     }
@@ -152,7 +160,12 @@ object SourceHelp {
     private fun deleteRssSourceInternal(key: String) {
         appDb.rssSourceDao.delete(key)
         appDb.rssArticleDao.delete(key)
-        // 源变量不在删除时清，理由同 deleteBookSourceInternal：
+        if (!AppConfig.sourceRecycleBinEnabled) {
+            // 回收站关闭 = 真删除，理由同 deleteBookSourceInternal
+            appDb.cacheDao.deleteSourceVariables(key)
+            return
+        }
+        // 回收站开启时不在删除时清源变量，理由同 deleteBookSourceInternal：
         // 撤销只插回 RSS 源本身，删除即清会让撤销回来的源丢掉登录态与 JS 变量。
         // 真删除时由 SourceRecycleBinHelp.purgeAttachedData 清理。
     }

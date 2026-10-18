@@ -42,35 +42,38 @@ object DiagnosticExporter {
         val cacheDir = appCtx.externalCache
         val logcatFile = File(cacheDir, LOGCAT_NAME)
         val summaryFile = File(cacheDir, SUMMARY_NAME)
-        dumpLogcat(logcatFile)
-        runCatching { summaryFile.writeText(summaryText()) }
         val zipFile = File(cacheDir, ZIP_NAME)
-        val sources = listOf(
-            File(cacheDir, LOG_DIR),
-            File(cacheDir, CRASH_DIR),
-            logcatFile,
-            summaryFile
-        )
-        val zipped = runCatching { ZipUtils.zipFiles(sources, zipFile) }.getOrDefault(false)
-        if (!zipped) {
+        try {
+            dumpLogcat(logcatFile)
+            runCatching { summaryFile.writeText(summaryText()) }
+            val sources = listOf(
+                File(cacheDir, LOG_DIR),
+                File(cacheDir, CRASH_DIR),
+                logcatFile,
+                summaryFile
+            )
+            val zipped = runCatching { ZipUtils.zipFiles(sources, zipFile) }.getOrDefault(false)
+            if (!zipped) return false
+            return runCatching {
+                doc.find(ZIP_NAME)?.delete()
+                zipFile.inputStream().use { input ->
+                    doc.createFileIfNotExist(ZIP_NAME)
+                        .openOutputStream()
+                        .getOrNull()
+                        ?.use { output -> input.copyTo(output) }
+                        ?: return@runCatching false
+                }
+                true
+            }.onFailure {
+                // 写目标失败时可能已在备份目录留下空/半截的 zip，一并清掉
+                runCatching { doc.find(ZIP_NAME)?.delete() }
+            }.getOrDefault(false)
+        } finally {
+            // 无论成败都清掉 externalCache 里的临时产物
             zipFile.delete()
-            return false
+            summaryFile.delete()
+            logcatFile.delete()
         }
-        val saved = runCatching {
-            doc.find(ZIP_NAME)?.delete()
-            zipFile.inputStream().use { input ->
-                doc.createFileIfNotExist(ZIP_NAME)
-                    .openOutputStream()
-                    .getOrNull()
-                    ?.use { output -> input.copyTo(output) }
-                    ?: return@runCatching false
-            }
-            true
-        }.getOrDefault(false)
-        zipFile.delete()
-        summaryFile.delete()
-        logcatFile.delete()
-        return saved
     }
 
     /**
@@ -136,17 +139,27 @@ object DiagnosticExporter {
      */
     private fun runLogcat(): String = runCatching {
         val process = Runtime.getRuntime().exec("logcat -d -t $LOGCAT_TAIL_LINES")
-        process.inputStream.bufferedReader().use { it.readText() }
+        try {
+            process.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            process.destroy()
+        }
     }.getOrDefault("")
 
     private fun dumpLogcat(file: File) {
         runCatching {
             val process = Runtime.getRuntime().exec("logcat -d -t $LOGCAT_TAIL_LINES")
-            file.outputStream().use { output ->
-                process.inputStream.copyTo(output)
+            try {
+                file.outputStream().use { output ->
+                    process.inputStream.copyTo(output)
+                }
+            } finally {
+                process.destroy()
             }
         }.onFailure {
             AppLog.put("导出 logcat 失败\n${it.localizedMessage}", it)
+            // 失败时删掉半截文件，避免它混进 zip 里当成正常日志
+            file.delete()
         }
     }
 

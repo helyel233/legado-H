@@ -34,8 +34,9 @@ import org.junit.Test
  *
  * ## 正式包（appDebug）怎么用上基线
  *
- * 插件默认只给 **release** 变体生成基线，但本项目正式分发的是 appDebug
- * （applicationIdSuffix = `.debug`）。所以生成之后还要把文件复制过去：
+ * 生成过程会在设备上安装 **release 变体**（`io.legado.app.LegadoH`，未混淆版），
+ * 这是插件默认行为，属正常现象。但本项目正式分发的是 appDebug
+ * （applicationIdSuffix = `.debug`），基线文件要复制过去才会对它生效：
  *
  * ```
  * # AGP 会把 app/src/main/baseline-prof.txt 合并进所有变体（含 debug），
@@ -116,11 +117,11 @@ class BaselineProfileGenerator {
 
     private companion object {
         /**
-         * 正式分发的包打的是 appDebug 变体（applicationIdSuffix = `.debug`），
-         * 所以基线要对着这个包名采集，profileinstaller 才会真正用上。
-         * release 变体是 `io.legado.app.LegadoH`，换变体采集时改这里。
+         * 插件给 :app 构建并安装的是 release 变体（nonMinifiedRelease），
+         * applicationId = `io.legado.app` + `.LegadoH` 后缀。包名与设备上
+         * 实际安装的包不一致的话，startActivityAndWait 会一直等到超时失败。
          */
-        const val TARGET_PACKAGE = "io.legado.app.debug"
+        const val TARGET_PACKAGE = "io.legado.app.LegadoH"
 
         private const val SETTLE_TIMEOUT_MS = 10_000L
         private const val SCROLL_PAGES = 4

@@ -2,6 +2,7 @@ package io.legado.app.help
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.core.content.edit
 import android.net.Uri
 import android.os.Build
 import android.os.Debug
@@ -81,7 +82,6 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
      */
     private fun handleException(ex: Throwable?) {
         if (ex == null) return
-        LocalConfig.appCrash = true
         recordCrashSummary(ex)
         //记录到调试事件中心（分类：崩溃），便于下次启动后在调试日志页回看
         DebugLogScope.launch {
@@ -97,8 +97,9 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
                 )
             }
         }
-        //保存日志文件
-        saveCrashInfo2File(ex)
+        //保存日志文件。这是崩溃收尾路径，绝不能因它抛异常而中断后面的收尾
+        runCatching { saveCrashInfo2File(ex) }
+            .onFailure { android.util.Log.e("CrashHandler", "save crash log failed", it) }
         if ((ex is OutOfMemoryError || ex.cause is OutOfMemoryError) && AppConfig.recordHeapDump) {
             doHeapDump()
         }
@@ -117,8 +118,11 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
             val page = LifecycleHelp.currentPageName
             val errorType = ex::class.java.simpleName.takeIf { it.isNotBlank() }
                 ?: ex::class.java.name
+            // SimpleDateFormat 非线程安全：saveCrashInfo2File 也可能从 RegexExtensions
+            // 的任意线程进来，共享实例会产出脏时间甚至抛数组越界，这里每次新建
+            val summaryTime = SimpleDateFormat("MM-dd HH:mm:ss").format(Date())
             val summary = buildString {
-                append(summaryFormat.format(Date()))
+                append(summaryTime)
                 append(" · ")
                 append(page)
                 append('\n')
@@ -128,8 +132,13 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
                     append(it.take(120))
                 }
             }
-            LocalConfig.crashPage = page
-            LocalConfig.crashSummary = summary
+            // 崩溃路径必须 commit 同步落盘：随后进程随时可能被杀，
+            // apply 的异步落盘会丢，丢了下次启动就没有崩溃提示（证据链第一环失效）
+            LocalConfig.edit(commit = true) {
+                putBoolean("appCrash", true)
+                putString("crashPage", page)
+                putString("crashSummary", summary)
+            }
         }
     }
 
@@ -163,21 +172,15 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         }
 
         /**
-         * 格式化时间
-         */
-        @SuppressLint("SimpleDateFormat")
-        private val format = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
-
-        @SuppressLint("SimpleDateFormat")
-        private val summaryFormat = SimpleDateFormat("MM-dd HH:mm:ss")
-
-        /**
          * 保存错误信息到文件中
          */
+        @SuppressLint("SimpleDateFormat")
         fun saveCrashInfo2File(ex: Throwable) {
+            // SimpleDateFormat 非线程安全且本方法可能从任意线程进来，时间戳每次新建
+            val timeFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
             val sb = StringBuilder()
             // 崩溃现场常在后台线程，栈顶未必是页面，这里把时间与前台页面写在最前面方便定位
-            sb.append("crashTime=").append(format.format(Date())).append("\n")
+            sb.append("crashTime=").append(timeFormat.format(Date())).append("\n")
             sb.append("page=").append(LifecycleHelp.currentPageName).append("\n")
             for ((key, value) in paramsMap) {
                 sb.append(key).append("=").append(value).append("\n")
@@ -196,7 +199,7 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
             sb.append(result)
             val crashLog = sb.toString()
             val timestamp = System.currentTimeMillis()
-            val time = format.format(Date())
+            val time = timeFormat.format(Date())
             val fileName = "crash-$time-$timestamp.log"
             try {
                 val backupPath = AppConfig.backupPath

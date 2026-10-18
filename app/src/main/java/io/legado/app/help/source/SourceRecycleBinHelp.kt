@@ -185,7 +185,8 @@ object SourceRecycleBinHelp {
     }
 
     fun restore(item: SourceRecycleBin, overwrite: Boolean) {
-        cleanupExpired()
+        // 排除自己：条目恰好过期的瞬间点恢复，不能让过期清理把它的附带数据清掉
+        cleanupExpired(excludeId = item.id)
         when (item.type) {
             TYPE_BOOK_SOURCE -> {
                 val source = GSON.fromJsonObject<BookSource>(item.payload).getOrNull() ?: return
@@ -245,9 +246,12 @@ object SourceRecycleBinHelp {
         }
     }
 
-    fun cleanupExpired(now: Long = System.currentTimeMillis()) {
-        // 过期即"真删除"，先把条目取出来清掉该源删除时保留的附带数据，再删行
+    fun cleanupExpired(now: Long = System.currentTimeMillis(), excludeId: Long? = null) {
+        // 过期即"真删除"，先把条目取出来清掉该源删除时保留的附带数据，再删行。
+        // excludeId：恢复流程用它排除自己正在恢复的条目——否则条目恰好过期的瞬间
+        // 点"恢复"，过期清理会把该源的变量/评分清掉，恢复出来的是个"裸"源。
         val expired = appDb.sourceRecycleBinDao.getExpired(now)
+            .filter { it.id != excludeId }
         if (expired.isEmpty()) return
         purgeAttachedData(expired)
         appDb.sourceRecycleBinDao.deleteExpired(now)
