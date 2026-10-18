@@ -955,6 +955,11 @@ private fun TocChapterRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .background(if (hasBgImage) Color(palette.settings.row) else Color.Transparent)
             .background(rowBackground)
             .padding(
