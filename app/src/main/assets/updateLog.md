@@ -4,6 +4,13 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.12.1 · 2026/10/19**
+
+- 新增 Web 服务可选访问口令（堵住同局域网任意人可增删书源、读取登录态的缺口）：设置页可设口令，支持 Authorization/Cookie/?token= 三种来源，未授权连页面都打不开，复制地址自动带 ?token=
+- 修复 Web 口令 review 缺口：WebSocket 握手裸奔(远程代码执行面暴露)、fail-open 放行、特殊字符锁死 401、token 明文落盘、跨域预检被卡、改口令后地址不刷新，并改常量时间比较
+- 修复口令启用后浏览器打开只返回 unauthorized、被前端误判「后端连接失败」：改按 Accept 协商返回 HTML 说明页（API 仍返回 JSON）
+- 重构 PageView 第一轮（Lottie 标题/图片逻辑抽离，PageView 2821→2465 行）+ 抽取朗读/AI 悬浮窗等硬编码文案
+
 **vH.1.11.2 · 2026/10/18**
 
 - 优化书架封面冷启动预热（首屏先预热已落盘缩略图，避免默认封面闪烁）+ 新增 baseline profile 基线模块缩短冷启动

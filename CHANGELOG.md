@@ -1,5 +1,25 @@
 # 更新日志
 
+## 1.12.1 版（2026-10-19）
+
+本版新增 Web 服务可选访问口令（堵住同局域网任意人可增删书源、读取登录态的安全缺口），并修复一轮 review 抓出的口令相关缺口与体验问题。
+
+### 新增
+
+- **Web 服务可选访问口令**：局域网 Web 服务现在可设访问口令，未授权连页面都打不开。口令可为空（默认，旧行为逐字节不变）。`AppConfig.webServiceToken` 控制，新增 `web/WebServiceGuard.kt` 统一守卫，支持 `Authorization` / `Cookie` / URL `?token=` 三种来源任一通过即放行；`HttpServer.serve` 统一校验（含静态资源）；返回页面时种 `Set-Cookie`，前端零改动。其它设置页新增「访问口令」入口，25 个单测覆盖分支。期间还修了一个真 bug：原按小写 `headers["cookie"]` 取值而浏览器发的是 `Cookie`，导致口令对不上，已改大小写不敏感取值。
+
+### 修复
+
+- **Web 口令 review 缺口（6 处）**：WebSocket（端口+1 的握手）原本完全无口令校验，`/bookSourceDebug` 等于把远程代码执行面暴露给同网段，已接入守卫；`HttpServer` 口令校验原在 `try` 内、守卫异常会被 `catch` 变 200 放行（fail-open），移到 `try` 外 fail-closed；口令保存时校验字符集（字母数字与 `_.@-`、4–64 位），避免含 `&=; ` 空格或中文时地址解析出的 token 与设置对不上、用户被锁在 401 外且无提示；调试日志对 query 里的 token 脱敏，明文口令不再落盘；`OPTIONS` 预检放行口令校验，避免启用口令后跨域 CORS 协商被 401 卡死且读不到错误；改口令后重启 Web 服务刷新地址（否则复制出的还是旧 token 地址）；口令比较改 `MessageDigest.isEqual` 常量时间比较。
+- **401 返回 HTML 说明页**：口令启用后浏览器直接打开地址原本只返回 `{"msg":"unauthorized"}`，而前端对 401 与网络失败走同一拦截器统一提示「后端连接失败」，用户会以为服务没开。改为按 `Accept` 协商：浏览器请求（含 `text/html`）返回 HTML 说明页写清原因与解法（用通知里带 `?token=` 的完整地址），API 请求仍返回 JSON。
+- **补文案**：补抽 `ReadAiFloatingPanel` 漏掉的两处 toast（「没有可用 Skill」「没有已启用 MCP」）。
+- **RSS 适配器结论固化**：将 `RssArticlesAdapter1-4`「布局互不相同、ViewBinding 类型各异、无法泛型合并」的评估结论固化为注释。
+
+### 优化
+
+- **PageView 拆分第一轮**：先补 45 个单测锁行为，再把 Lottie 标题逻辑搬到 `LottieTitleJsonStyler.kt`、图片逻辑搬到 `LottieImageAssetDecoder.kt`（去 inner、改构造注入），`PageView` 由 2821 行减到 2465 行，`StyledLottieJsonCache` 随迁。
+- **硬编码文案抽取**：抽出 `App.kt` 通知渠道名、朗读悬浮窗 13 处、AI 悬浮面板 7 处硬编码中文。
+
 ## 1.11.2 版（2026-10-18）
 
 本版新增书架封面冷启动预热与 baseline profile 基线，并修复一轮自查 review 抓出的崩溃、数据回归与竞态问题。
