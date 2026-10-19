@@ -910,7 +910,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     private fun showWindowSkillDialog() {
         val skills = AppConfig.aiSkillList.filter { it.enabled }
         if (skills.isEmpty()) {
-            context.toastOnUi("没有可用 Skill")
+            context.toastOnUi(R.string.read_ai_no_skill)
             return
         }
         val selected = windowSkillIds.toMutableSet()
@@ -936,7 +936,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     private fun showWindowMcpDialog() {
         val servers = AppConfig.aiMcpServerList.filter { it.enabled }
         if (servers.isEmpty()) {
-            context.toastOnUi("没有已启用 MCP")
+            context.toastOnUi(R.string.read_ai_no_mcp)
             return
         }
         val selected = windowMcpServerIds.toMutableSet()

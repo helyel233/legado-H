@@ -639,6 +639,8 @@
     <string name="read_ai_current_mcp">当前窗口 MCP</string>
     <string name="read_ai_thinking">思考中</string>
     <string name="read_ai_thought_done">思考完成</string>
+    <string name="read_ai_no_skill">没有可用 Skill</string>
+    <string name="read_ai_no_mcp">没有已启用 MCP</string>
     <string name="qr_share">QR code sharing</string>
     <string name="str_share">Strings sharing</string>
     <string name="wifi_share">Wifi sharing</string>

@@ -58,6 +58,9 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
     private val isPreload by lazy { activityViewModel.rssSource?.preload ?: false }
     private val orientation by lazy { resources.configuration.orientation }
     private val adapter: BaseRssArticlesAdapter<*> by lazy {
+        // articleStyle 对应 5 种用户可选的文章布局；Adapter/1/2/4 逻辑相同但
+        // ViewBinding 类型不同无法泛型合并（详见 RssArticlesAdapter1 的类注释），
+        // Adapter3 实现有实质差异。改绑定逻辑时要同步 0/1/2/4 四处。
         when (activityViewModel.articleStyle) {
             1 -> RssArticlesAdapter1(requireContext(), this@RssArticlesFragment)
             2 -> RssArticlesAdapter2(requireContext(), this@RssArticlesFragment)

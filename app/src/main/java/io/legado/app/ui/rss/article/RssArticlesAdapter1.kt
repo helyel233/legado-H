@@ -21,6 +21,17 @@ import io.legado.app.utils.gone
 import io.legado.app.utils.visible
 
 
+/**
+ * 订阅文章列表样式 1（大图）。
+ *
+ * ⚠️ Adapter / Adapter1 / Adapter2 / Adapter4 四个类的 convert 逻辑**完全相同**，
+ * 但它们对应的 5 个 item 布局是用户可选的文章样式（图片高度/字号/间距各不相同），
+ * ViewBinding 类型因此互不相同，无法用泛型合并——除非把所有取 view 的地方改成
+ * findViewById 或再加一层接口包装，得不偿失（2026-10-19 评估过，结论：维持现状）。
+ *
+ * 所以：**改这四个类里任何一个的绑定/加载逻辑，必须同步检查另外三个**。
+ * Adapter3 的实现有实质差异（圆角裁剪 + Glide 加载监听），不在同步范围。
+ */
 class RssArticlesAdapter1(context: Context, callBack: CallBack) :
     BaseRssArticlesAdapter<ItemRssArticle1Binding>(context, callBack) {
 

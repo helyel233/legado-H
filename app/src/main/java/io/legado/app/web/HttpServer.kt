@@ -43,13 +43,7 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
         // OPTIONS 预检不执行业务、不泄露数据，放行以保住跨域场景的 CORS 协商，
         // 真正的数据请求仍会在下面被校验。
         if (session.method != Method.OPTIONS && !WebServiceGuard.isAuthorized(session)) {
-            val denied = newFixedLengthResponse(
-                Response.Status.UNAUTHORIZED,
-                "application/json",
-                """{"msg":"unauthorized"}"""
-            )
-            denied.addHeader("WWW-Authenticate", "Bearer")
-            return denied
+            return unauthorizedResponse(session)
         }
 
         try {
@@ -182,6 +176,39 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
 
     companion object {
         private const val TAG = "HttpServer"
+
+        /**
+         * 未授权响应。
+         *
+         * 浏览器直接打开地址时给 HTML 说明页：前端对 401 与网络失败走同一个错误拦截器，
+         * 统一提示"后端连接失败"，用户会以为服务没开（实际是没带口令），无从下手。
+         * 服务端在能展示 HTML 的场景直接把原因和解法写清楚，前端零改动。
+         */
+        private fun unauthorizedResponse(session: IHTTPSession): Response {
+            val accept = session.headers.entries
+                .firstOrNull { it.key.equals("accept", ignoreCase = true) }
+                ?.value
+                .orEmpty()
+            val response = if (accept.contains("text/html", ignoreCase = true)) {
+                newFixedLengthResponse(
+                    Response.Status.UNAUTHORIZED,
+                    "text/html; charset=utf-8",
+                    """<html><body style="font-family:sans-serif;padding:24px">
+                        <h3>需要访问口令</h3>
+                        <p>Web 服务已启用访问口令，请使用服务通知里附带的完整地址（含 ?token=）访问，
+                        或在当前地址后加上 <code>?token=你的口令</code>。</p>
+                        </body></html>"""
+                )
+            } else {
+                newFixedLengthResponse(
+                    Response.Status.UNAUTHORIZED,
+                    "application/json",
+                    """{"msg":"unauthorized"}"""
+                )
+            }
+            response.addHeader("WWW-Authenticate", "Bearer")
+            return response
+        }
 
         /**
          * 日志里的 query 做 token 脱敏：启用口令后 `?token=xxx` 会随日志落盘，
