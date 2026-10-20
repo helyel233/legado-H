@@ -292,20 +292,13 @@ data class TextPage(
      * 阅读进度
      */
     val readProgress: String
-        get() {
-            val df = readProgressFormatter
-            if (chapterSize == 0 || pageSize == 0 && chapterIndex == 0) {
-                return "0.0%"
-            } else if (pageSize == 0) {
-                return df.format((chapterIndex + 1.0f) / chapterSize.toDouble())
-            }
-            var percent =
-                df.format(chapterIndex * 1.0f / chapterSize + 1.0f / chapterSize * (index + 1) / pageSize.toDouble())
-            if (percent == "100.0%" && (chapterIndex + 1 != chapterSize || index + 1 != pageSize)) {
-                percent = "99.9%"
-            }
-            return percent
-        }
+        get() = ReadProgressCalculator.format(
+            chapterSize = chapterSize,
+            pageSize = pageSize,
+            chapterIndex = chapterIndex,
+            pageIndex = index,
+            formatter = readProgressFormatter
+        )
 
     /**
      * 根据行和列返回字符在本页的位置
