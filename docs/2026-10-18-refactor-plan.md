@@ -240,3 +240,17 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - **单测 7 个**（`AdvancedTipRequestGateTest`），覆盖：旧世代令牌被拒、
   被替换的令牌被拒、两个槽位互不干扰、清空后全失效、请求号必须递增。
 - 阅读页包合计 **86 个单测全绿**。
+
+### 2026-10-20 阅读页回归手段（续：保留判定 + 几何计算）
+
+- **新增 `AdvancedTitleRetentionPolicy.kt`**：把"翻页时这个标题槽位能不能留着不重建"
+  的判定抽成纯策略。关键点是**身份比较（`!==`）而不是相等比较**：内容相同但不是同一
+  个实例的两个 block 不能证明槽位画的就是这一页的标题，误保留会让一个页面的标题压在
+  另一个页面上——比闪一下严重得多。条件仍要求"已呈现 + 有组合 + 可见"，顺序不变。
+- **新增 `AdvancedTitleGeometry.kt`**：把标题的尺寸与位置计算抽成纯函数
+  （`viewSize` / `translationX` / `translationY` / `scrollTranslationY`）。
+  原来的三个私有方法要读 `binding.contentTextView` 的宽高，无法单测；抽出来后
+  只需传数字。覆盖的规则：尺寸不塌缩到 0、居中偏移要减掉、双页右半页要加页偏移、
+  纵向位置要夹在内容内、标题比内容还高时只能停在 0、滚动模式跟随内容不夹取。
+- **单测 13 个**（`AdvancedTitleRetentionPolicyTest` 5 + `AdvancedTitleGeometryTest` 8），
+  阅读页包合计 **99 个单测全绿**。

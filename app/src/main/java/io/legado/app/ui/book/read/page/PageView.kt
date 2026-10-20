@@ -741,10 +741,13 @@ class PageView(context: Context) : FrameLayout(context) {
         return AdvancedTitleSlot.entries.filterTo(mutableSetOf()) { slot ->
             val incoming = advancedTitleBlock(pages[slot.ordinal]) ?: return@filterTo false
             val (lottieView, _) = titleViews(slot)
-            boundAdvancedTitleBlocks[slot.ordinal] === incoming &&
-                isAdvancedTitlePresented(slot) &&
-                lottieView.composition != null &&
-                lottieView.visibility == VISIBLE
+            AdvancedTitleRetentionPolicy.canRetain(
+                boundBlock = boundAdvancedTitleBlocks[slot.ordinal],
+                incomingBlock = incoming,
+                isPresented = isAdvancedTitlePresented(slot),
+                hasComposition = lottieView.composition != null,
+                isVisible = lottieView.visibility == VISIBLE
+            )
         }
     }
 
@@ -849,7 +852,7 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     private fun resolveTitleViewSize(block: TextPage.EpubEmbeddedBlock): Pair<Int, Int> {
-        return block.width.toInt().coerceAtLeast(1) to block.height.toInt().coerceAtLeast(1)
+        return AdvancedTitleGeometry.viewSize(block.width, block.height)
     }
 
     private fun resolveTitleTranslationX(
@@ -857,10 +860,12 @@ class PageView(context: Context) : FrameLayout(context) {
         targetWidth: Int,
         pageOffsetX: Float
     ): Float {
-        val contentWidth = binding.contentTextView.width
-        if (contentWidth <= 0) return pageOffsetX + block.offsetX
-        val centeredX = (contentWidth - targetWidth) / 2f
-        return pageOffsetX + block.offsetX - centeredX
+        return AdvancedTitleGeometry.translationX(
+            blockOffsetX = block.offsetX,
+            targetWidth = targetWidth,
+            contentWidth = binding.contentTextView.width,
+            pageOffsetX = pageOffsetX
+        )
     }
 
     private fun resolveTitleTranslationY(
@@ -868,11 +873,14 @@ class PageView(context: Context) : FrameLayout(context) {
         targetHeight: Int,
         scrollBaseY: Float
     ): Float {
-        if (isScroll) return scrollBaseY + block.offsetY
-        val contentHeight = binding.contentTextView.height
-        if (contentHeight <= 0) return block.offsetY
-        val maxTranslation = (contentHeight - targetHeight).toFloat().coerceAtLeast(0f)
-        return block.offsetY.coerceIn(0f, maxTranslation)
+        if (isScroll) {
+            return AdvancedTitleGeometry.scrollTranslationY(block.offsetY, scrollBaseY)
+        }
+        return AdvancedTitleGeometry.translationY(
+            blockOffsetY = block.offsetY,
+            targetHeight = targetHeight,
+            contentHeight = binding.contentTextView.height
+        )
     }
 
     /**
