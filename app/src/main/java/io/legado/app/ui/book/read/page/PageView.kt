@@ -192,12 +192,6 @@ class PageView(context: Context) : FrameLayout(context) {
     private var advancedFooterLottieKey: String? = null
     private var headerTipTextDelegate: TipFieldTextDelegate? = null
     private var footerTipTextDelegate: TipFieldTextDelegate? = null
-    private data class AdvancedTipRequestToken(
-        val contentGeneration: Long,
-        val requestGeneration: Long,
-        val slot: AdvancedTipSlot,
-        val compositionKey: String
-    )
     private data class PendingAdvancedTipComposition(
         val token: AdvancedTipRequestToken,
         val composition: com.airbnb.lottie.LottieComposition,
@@ -208,9 +202,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val composition: com.airbnb.lottie.LottieComposition,
         val imageAssetResolver: LottieImageAssetResolver
     )
-    private var advancedTipRequestGeneration = 0L
-    private val currentAdvancedTipRequests =
-        arrayOfNulls<AdvancedTipRequestToken>(AdvancedTipSlot.entries.size)
+    private val advancedTipRequestGate = AdvancedTipRequestGate()
     private val pendingAdvancedTipCompositions =
         arrayOfNulls<PendingAdvancedTipComposition>(AdvancedTipSlot.entries.size)
     private val advancedTipPrepareJobs =
@@ -648,7 +640,7 @@ class PageView(context: Context) : FrameLayout(context) {
         removeCallbacks(overlayBindRunnable)
         clearPendingAdvancedTitleCompositions()
         pendingAdvancedTipCompositions.fill(null)
-        currentAdvancedTipRequests.fill(null)
+        advancedTipRequestGate.clearAll()
         AdvancedTipSlot.entries.forEach(::cancelAdvancedTipPreparation)
         advancedTitleAnimations.reset()
         AdvancedTitleSlot.entries.forEach { slot ->
@@ -1004,7 +996,7 @@ class PageView(context: Context) : FrameLayout(context) {
         advancedTitleRequestGate.nextContent()
         clearPendingAdvancedTitleCompositions()
         pendingAdvancedTipCompositions.fill(null)
-        currentAdvancedTipRequests.fill(null)
+        advancedTipRequestGate.clearAll()
         boundScrollTitleIds.fill(null)
         AdvancedTitleSlot.entries.forEach { slot ->
             if (slot !in alreadyShowing) hideAdvancedTitleSlot(slot)
@@ -2045,7 +2037,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val lottieView = tipView(slot)
         val pixelsChanged = lottieView.visibility != GONE
         pendingAdvancedTipCompositions[slot.ordinal] = null
-        currentAdvancedTipRequests[slot.ordinal] = null
+        advancedTipRequestGate.clear(slot)
         cancelAdvancedTipPreparation(slot)
         advancedTitleAnimations.clearTipResume(slot)
         clearAdvancedTitleLoadingState(lottieView)
@@ -2204,7 +2196,7 @@ class PageView(context: Context) : FrameLayout(context) {
 
         if (advancedTipKey(slot) == nextKey && lottieView.composition != null) {
             pendingAdvancedTipCompositions[slot.ordinal] = null
-            currentAdvancedTipRequests[slot.ordinal] = null
+            advancedTipRequestGate.clear(slot)
             lottieView.tag = nextKey
             ensureDelegate()
             lottieView.visibility = VISIBLE
@@ -2220,20 +2212,12 @@ class PageView(context: Context) : FrameLayout(context) {
             return
         }
 
-        val existingRequest = currentAdvancedTipRequests[slot.ordinal]
-        if (existingRequest?.contentGeneration == contentGeneration &&
-            existingRequest.compositionKey == nextKey &&
+        if (advancedTipRequestGate.hasCurrent(slot, contentGeneration, nextKey) &&
             lottieView.tag == nextKey
         ) {
             return
         }
-        val token = AdvancedTipRequestToken(
-            contentGeneration = contentGeneration,
-            requestGeneration = ++advancedTipRequestGeneration,
-            slot = slot,
-            compositionKey = nextKey
-        )
-        currentAdvancedTipRequests[slot.ordinal] = token
+        val token = advancedTipRequestGate.begin(slot, contentGeneration, nextKey)
         pendingAdvancedTipCompositions[slot.ordinal] = null
         cancelAdvancedTipPreparation(slot)
 
@@ -2292,9 +2276,10 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     private fun acceptsAdvancedTipRequest(token: AdvancedTipRequestToken): Boolean {
-        return token.contentGeneration == advancedTitleRequestGate.contentGeneration &&
-            currentAdvancedTipRequests[token.slot.ordinal] == token &&
-            tipView(token.slot).tag == token.compositionKey &&
+        if (!advancedTipRequestGate.accepts(token, advancedTitleRequestGate.contentGeneration)) {
+            return false
+        }
+        return tipView(token.slot).tag == token.compositionKey &&
             advancedTipEnabled(token.slot) &&
             AdvancedTipConfig.compositionCacheKey(token.slot) == token.compositionKey
     }

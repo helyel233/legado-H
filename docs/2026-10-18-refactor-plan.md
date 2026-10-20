@@ -226,3 +226,17 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   `map[k] = v` 写法编译不过，改成 `.put(k, v)`；自己写的第一条单测把
   "先读取 page0 再淘汰"的结果断言成淘汰 page0，实际 LRU 语义下该淘汰 page1，
   断言写错（不是实现错），已改成两条用例分别覆盖"满则淘汰最老"和"读过就保活"。
+
+### 2026-10-20 阅读页回归手段（续：G 区 tip 门禁）
+
+- **新增 `AdvancedTipRequestGate.kt`**：把 G 区原先内联在 PageView 里的
+  "当前请求令牌 + 世代号"机制收口成类（`begin` / `accepts` / `hasCurrent` /
+  `clear` / `clearAll`），`AdvancedTipRequestToken` 一并搬出（PageView 里的
+  `private data class`）。PageView 的 `currentAdvancedTipRequests` 数组与
+  `advancedTipRequestGeneration` 计数器随之删除。
+- 保持等价的关键点：接受条件拆成"纯状态"（门禁内判定）与"环境条件"
+  （View 的 tag、tip 是否启用、`AdvancedTipConfig.compositionCacheKey` 是否仍一致，
+  仍在 PageView 里判定），**判定顺序不变**，因此"旧回调不得上屏"的语义不变。
+- **单测 7 个**（`AdvancedTipRequestGateTest`），覆盖：旧世代令牌被拒、
+  被替换的令牌被拒、两个槽位互不干扰、清空后全失效、请求号必须递增。
+- 阅读页包合计 **86 个单测全绿**。
