@@ -44,6 +44,22 @@ internal object AdvancedTitleLottieKeys {
             LottieImageMemoryPolicy.sourceSha256(styledJson) +
             ":$viewWidth:$viewHeight"
     }
+
+    /** Key used when the payload could not be styled and the raw JSON is used as is. */
+    fun rawComposition(viewWidth: Int, viewHeight: Int): String {
+        return "advanced_title:raw:$viewWidth:$viewHeight"
+    }
+
+    /**
+     * True when the key was built for exactly this view size.
+     *
+     * The size is part of the key, so a composition built for other bounds never
+     * resolves for a slot that renders at a different size — a title drawn for the
+     * wrong bounds is worse than the flash rebuilding it would avoid.
+     */
+    fun matchesViewSize(compositionKey: String, viewWidth: Int, viewHeight: Int): Boolean {
+        return compositionKey.endsWith(":$viewWidth:$viewHeight")
+    }
 }
 
 /** Access-ordered cache bounded by both character count and serialized UTF-8 size. */

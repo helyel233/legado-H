@@ -153,13 +153,7 @@ class PageView(context: Context) : FrameLayout(context) {
      * produces a key that no longer resolves, and the page rebuilds instead of reusing a
      * composition built for different conditions — something position alone cannot detect.
      */
-    private val advancedTitleKeysByPage = object : LinkedHashMap<String, String>(
-        MAX_TITLE_KEYS_BY_PAGE, 0.75f, true
-    ) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
-            return size > MAX_TITLE_KEYS_BY_PAGE
-        }
-    }
+    private val advancedTitleKeysByPage = AdvancedTitlePageKeyCache(MAX_TITLE_KEYS_BY_PAGE)
 
     /**
      * A composition already committed to a slot, kept per key rather than per slot.
@@ -174,15 +168,8 @@ class PageView(context: Context) : FrameLayout(context) {
         val renderConfig: AdvancedTitleRenderConfig
     )
 
-    private val committedAdvancedTitles = object : LinkedHashMap<String, CommittedAdvancedTitle>(
-        MAX_COMMITTED_TITLES, 0.75f, true
-    ) {
-        override fun removeEldestEntry(
-            eldest: MutableMap.MutableEntry<String, CommittedAdvancedTitle>?
-        ): Boolean {
-            return size > MAX_COMMITTED_TITLES
-        }
-    }
+    private val committedAdvancedTitles =
+        AccessOrderedLruCache<String, CommittedAdvancedTitle>(MAX_COMMITTED_TITLES)
 
     /**
      * Stable identity for a page's position within a book.
@@ -191,14 +178,13 @@ class PageView(context: Context) : FrameLayout(context) {
      * entry from a previously open book could answer for this one.
      */
     private fun advancedTitlePageKey(textPage: TextPage): String {
-        val bookUrl = ReadBook.book?.bookUrl.orEmpty()
-        return "$bookUrl#${textPage.chapterIndex}#${textPage.index}"
+        return AdvancedTitlePageKeys.of(
+            bookUrl = ReadBook.book?.bookUrl.orEmpty(),
+            chapterIndex = textPage.chapterIndex,
+            pageIndex = textPage.index
+        )
     }
-    private var advancedTitleAnimationsFrozenForPageTurn = false
-    private val advancedTitleAnimationsToResume =
-        BooleanArray(AdvancedTitleSlot.entries.size)
-    private val advancedTipAnimationsToResume =
-        BooleanArray(AdvancedTipSlot.entries.size)
+    private val advancedTitleAnimations = AdvancedTitleAnimationFreeze()
     private var scrollTitleLinger: List<ScrollAdvTitle> = emptyList()
     private var lastScrollPageOffsetForTitle: Int = Int.MIN_VALUE
     private var boundScrollTitleIds: Array<String?> = arrayOf(null, null)
@@ -664,9 +650,7 @@ class PageView(context: Context) : FrameLayout(context) {
         pendingAdvancedTipCompositions.fill(null)
         currentAdvancedTipRequests.fill(null)
         AdvancedTipSlot.entries.forEach(::cancelAdvancedTipPreparation)
-        advancedTitleAnimationsFrozenForPageTurn = false
-        advancedTitleAnimationsToResume.fill(false)
-        advancedTipAnimationsToResume.fill(false)
+        advancedTitleAnimations.reset()
         AdvancedTitleSlot.entries.forEach { slot ->
             hideAdvancedTitleSlot(slot)
             val (lottieView, _) = titleViews(slot)
@@ -678,13 +662,13 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     internal fun freezeAdvancedTitleAnimationsForPageTurn() {
-        if (isScroll || advancedTitleAnimationsFrozenForPageTurn) return
-        advancedTitleAnimationsFrozenForPageTurn = true
+        if (isScroll) return
+        if (!advancedTitleAnimations.beginFreeze()) return
         var pixelsWereChanging = false
         AdvancedTitleSlot.entries.forEach { slot ->
             val (lottieView, _) = titleViews(slot)
             if (lottieView.visibility == VISIBLE && lottieView.isAnimating) {
-                advancedTitleAnimationsToResume[slot.ordinal] = true
+                advancedTitleAnimations.markTitleToResume(slot)
                 lottieView.pauseAnimation()
                 pixelsWereChanging = true
             }
@@ -692,7 +676,7 @@ class PageView(context: Context) : FrameLayout(context) {
         AdvancedTipSlot.entries.forEach { slot ->
             val lottieView = tipView(slot)
             if (lottieView.visibility == VISIBLE && lottieView.isAnimating) {
-                advancedTipAnimationsToResume[slot.ordinal] = true
+                advancedTitleAnimations.markTipToResume(slot)
                 lottieView.pauseAnimation()
                 pixelsWereChanging = true
             }
@@ -705,12 +689,11 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     internal fun resumeAdvancedTitleAnimationsAfterPageTurn() {
-        if (!advancedTitleAnimationsFrozenForPageTurn) return
-        advancedTitleAnimationsFrozenForPageTurn = false
+        if (!advancedTitleAnimations.isFrozen) return
+        advancedTitleAnimations.endFreeze()
         if (isMainView && !isScroll) {
             AdvancedTitleSlot.entries.forEach { slot ->
-                val shouldResume = advancedTitleAnimationsToResume[slot.ordinal]
-                advancedTitleAnimationsToResume[slot.ordinal] = false
+                val shouldResume = advancedTitleAnimations.consumeTitleResume(slot)
                 val (lottieView, _) = titleViews(slot)
                 if (!shouldResume || lottieView.visibility != VISIBLE ||
                     !isAdvancedTitleReady(slot)
@@ -723,8 +706,7 @@ class PageView(context: Context) : FrameLayout(context) {
                 }
             }
             AdvancedTipSlot.entries.forEach { slot ->
-                val shouldResume = advancedTipAnimationsToResume[slot.ordinal]
-                advancedTipAnimationsToResume[slot.ordinal] = false
+                val shouldResume = advancedTitleAnimations.consumeTipResume(slot)
                 val lottieView = tipView(slot)
                 if (shouldResume && lottieView.visibility == VISIBLE &&
                     advancedTipKey(slot) != null && !lottieView.isAnimating
@@ -738,8 +720,7 @@ class PageView(context: Context) : FrameLayout(context) {
                 }
             }
         } else {
-            advancedTitleAnimationsToResume.fill(false)
-            advancedTipAnimationsToResume.fill(false)
+            advancedTitleAnimations.clearResumePlan()
         }
     }
 
@@ -815,7 +796,7 @@ class PageView(context: Context) : FrameLayout(context) {
         // The size baked into the key has to still be the size this slot renders at, or the
         // composition would be drawn for bounds it was not built for.
         val (targetWidth, targetHeight) = resolveTitleViewSize(block)
-        if (!key.endsWith(":$targetWidth:$targetHeight")) return false
+        if (!AdvancedTitleLottieKeys.matchesViewSize(key, targetWidth, targetHeight)) return false
         return runCatching {
             // Geometry first: committing only swaps the composition in, so without this the
             // title would be drawn wherever the previous page left the slot.
@@ -1283,7 +1264,7 @@ class PageView(context: Context) : FrameLayout(context) {
             AdvancedTitleSlot.entries.forEach { slot ->
                 titleViews(slot).first.pauseAnimation()
             }
-        } else if (!advancedTitleAnimationsFrozenForPageTurn && isMainView) {
+        } else if (!advancedTitleAnimations.isFrozen && isMainView) {
             AdvancedTitleSlot.entries.forEach { slot ->
                 val lottieView = titleViews(slot).first
                 if (lottieView.visibility == VISIBLE && isAdvancedTitleReady(slot)) {
@@ -1786,7 +1767,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val resolvedJson = styled?.json
         val nextKey = resolvedJson?.let {
             AdvancedTitleLottieKeys.composition(it, targetWidth, targetHeight)
-        } ?: "advanced_title:raw:$targetWidth:$targetHeight"
+        } ?: AdvancedTitleLottieKeys.rawComposition(targetWidth, targetHeight)
         val compositionSize = styled?.compositionSize
         val renderConfig = AdvancedTitleRenderConfig(
             imageAssetResolver = LottieImageAssetResolver(
@@ -1804,14 +1785,14 @@ class PageView(context: Context) : FrameLayout(context) {
         boundAdvancedTitleBlocks[slot.ordinal] = block
         // Record against the page's position too, so returning to it can find this key back
         // without restyling the JSON on the page-turn path.
-        advancedTitleKeysByPage[advancedTitlePageKey(page)] = nextKey
+        advancedTitleKeysByPage.put(advancedTitlePageKey(page), nextKey)
 
         if (advancedTitleRequestGate.hasCurrent(slot, nextKey, sourceId) && lottieView.tag == nextKey) {
             if (pendingAdvancedTitleCompositions[slot.ordinal] != null) return nextKey
             if (isAdvancedTitleReady(slot)) {
                 lottieView.visibility = VISIBLE
                 fallbackView.visibility = if (isAdvancedTitlePresented(slot)) GONE else VISIBLE
-                if (isMainView && !isScroll && !advancedTitleAnimationsFrozenForPageTurn &&
+                if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen &&
                     !lottieView.isAnimating
                 ) {
                     lottieView.playAnimation()
@@ -1840,7 +1821,7 @@ class PageView(context: Context) : FrameLayout(context) {
                 // Already on screen, so it has provably rendered; no pre-draw wait needed.
                 advancedTitleRequestGate.markPresented(token)
                 fallbackView.visibility = GONE
-                if (isMainView && !isScroll && !advancedTitleAnimationsFrozenForPageTurn) {
+                if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen) {
                     if (!lottieView.isAnimating) lottieView.playAnimation()
                 } else {
                     lottieView.pauseAnimation()
@@ -1974,17 +1955,19 @@ class PageView(context: Context) : FrameLayout(context) {
             appliedAdvancedTitleRenderConfigs[token.slot.ordinal] = pending.renderConfig
             // Outlives the slot: the next page overwrites the entries above, and without a
             // copy here a page the reader returns to would have to be composed again.
-            committedAdvancedTitles[token.compositionKey] =
+            committedAdvancedTitles.put(
+                token.compositionKey,
                 CommittedAdvancedTitle(pending.composition, pending.renderConfig)
+            )
             lottieView.progress = 0f
             lottieView.alpha = 1f
             lottieView.visibility = VISIBLE
-            if (isMainView && !isScroll && !advancedTitleAnimationsFrozenForPageTurn) {
+            if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen) {
                 lottieView.playAnimation()
             } else {
                 lottieView.pauseAnimation()
-                if (isMainView && !isScroll && advancedTitleAnimationsFrozenForPageTurn) {
-                    advancedTitleAnimationsToResume[token.slot.ordinal] = true
+                if (isMainView && !isScroll && advancedTitleAnimations.isFrozen) {
+                    advancedTitleAnimations.markTitleToResume(token.slot)
                 }
             }
             if (!advancedTitleRequestGate.markReady(token)) {
@@ -2064,7 +2047,7 @@ class PageView(context: Context) : FrameLayout(context) {
         pendingAdvancedTipCompositions[slot.ordinal] = null
         currentAdvancedTipRequests[slot.ordinal] = null
         cancelAdvancedTipPreparation(slot)
-        advancedTipAnimationsToResume[slot.ordinal] = false
+        advancedTitleAnimations.clearTipResume(slot)
         clearAdvancedTitleLoadingState(lottieView)
         lottieView.cancelAnimation()
         lottieView.setTextDelegate(null)
@@ -2226,12 +2209,12 @@ class PageView(context: Context) : FrameLayout(context) {
             ensureDelegate()
             lottieView.visibility = VISIBLE
             setClassicTipFallbackVisible(slot, false)
-            if (isMainView && !advancedTitleAnimationsFrozenForPageTurn) {
+            if (isMainView && !advancedTitleAnimations.isFrozen) {
                 if (!lottieView.isAnimating) lottieView.playAnimation()
             } else {
                 lottieView.pauseAnimation()
-                if (isMainView && advancedTitleAnimationsFrozenForPageTurn) {
-                    advancedTipAnimationsToResume[slot.ordinal] = true
+                if (isMainView && advancedTitleAnimations.isFrozen) {
+                    advancedTitleAnimations.markTipToResume(slot)
                 }
             }
             return
@@ -2362,12 +2345,12 @@ class PageView(context: Context) : FrameLayout(context) {
             }
             lottieView.alpha = 1f
             lottieView.visibility = VISIBLE
-            if (isMainView && !advancedTitleAnimationsFrozenForPageTurn) {
+            if (isMainView && !advancedTitleAnimations.isFrozen) {
                 if (!lottieView.isAnimating) lottieView.playAnimation()
             } else {
                 lottieView.pauseAnimation()
-                if (isMainView && advancedTitleAnimationsFrozenForPageTurn) {
-                    advancedTipAnimationsToResume[token.slot.ordinal] = true
+                if (isMainView && advancedTitleAnimations.isFrozen) {
+                    advancedTitleAnimations.markTipToResume(token.slot)
                 }
             }
             setAdvancedTipKey(token.slot, token.compositionKey)

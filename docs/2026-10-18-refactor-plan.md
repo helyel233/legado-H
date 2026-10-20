@@ -200,3 +200,29 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - `ReadBook.kt`（2059 行 God Object）同理。
 - Web 服务口令只做了"可选开启"，未做"强制开启"——若认为默认就该有口令，
   可把 `webServiceToken` 改为首次开启服务时自动生成并提示用户。
+
+### 2026-10-20 阅读页回归手段（F/G 区第二轮，铺垫批）
+
+**目标**：给拆 F/G 区铺路——先把其中"纯逻辑"的策略抽成可测对象并用单测锁住，
+只搬不改，行为保持逐条等价。
+
+- **新增 `AdvancedTitlePageKeys.kt`**：`AdvancedTitlePageKeys.of(bookUrl, chapterIndex,
+  pageIndex)`（页面位置键，必须带书名，章节名会重复）、`AccessOrderedLruCache`
+  （访问顺序 LRU，读取即算使用）、`AdvancedTitlePageKeyCache`（页面位置 → 组合键，
+  最多 24 条）。PageView 里的两个匿名 `LinkedHashMap` 子类（页面键表 24 条、
+  已提交组合表 6 条）换成这两个类，淘汰语义不变。
+- **新增 `AdvancedTitleAnimationFreeze.kt`**：翻页冻结/恢复动画的状态机
+  （`beginFreeze` / `endFreeze` / `markTitleToResume` / `markTipToResume` /
+  `consumeTitleResume` / `consumeTipResume` / `clearTipResume` / `clearResumePlan` /
+  `reset`）。PageView 原来用「一个 Boolean + 两个 BooleanArray」表达的同一状态，
+  现在收口成一个对象，"取计划即作废"的规则由单测锁住。
+- **键格式规则收口到 `AdvancedTitleLottieKeys`**：新增 `rawComposition(w, h)` 与
+  `matchesViewSize(key, w, h)`，替换 PageView 里手写的
+  `"advanced_title:raw:$w:$h"` 与 `key.endsWith(":$w:$h")`。
+- **单测 18 个**（`AdvancedTitlePageKeysTest` 10 + `AdvancedTitleAnimationFreezeTest` 8），
+  阅读页包合计 **79 个单测全绿**。覆盖：跨书/跨章/跨页键不撞、LRU 淘汰与"读取即保活"、
+  恢复计划用一次即作废、尺寸必须匹配才能复用组合。
+- 踩坑：`AdvancedTitlePageKeyCache` 没有 `set` 操作符，PageView 里
+  `map[k] = v` 写法编译不过，改成 `.put(k, v)`；自己写的第一条单测把
+  "先读取 page0 再淘汰"的结果断言成淘汰 page0，实际 LRU 语义下该淘汰 page1，
+  断言写错（不是实现错），已改成两条用例分别覆盖"满则淘汰最老"和"读过就保活"。
