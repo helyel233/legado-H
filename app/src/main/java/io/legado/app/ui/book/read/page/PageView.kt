@@ -1538,15 +1538,27 @@ class PageView(context: Context) : FrameLayout(context) {
             val block = page.epubEmbeddedBlocks.firstOrNull {
                 it.role == AdvancedTitleConfig.LOTTIE_BLOCK_ROLE
             } ?: continue
-            val width = block.width.toInt().coerceAtLeast(1)
-            val height = block.height.toInt().coerceAtLeast(1)
-            // Identical to text: relativeOffset(pos) + in-page offsetY.
-            val y = content.scrollRelativeOffset(pos) + block.offsetY
-            val x = block.offsetX - (contentWidth - width) / 2f
-            // Keep while any pixel still intersects the content viewport (like normal text).
-            if (y + height <= 0f || y >= contentHeight) continue
-            val id = "${page.chapterIndex}:${page.index}:${page.title}"
-            live.add(ScrollAdvTitle(id, page, block, x, y, width, height))
+            val placement = AdvancedTitleScrollGeometry.place(
+                blockOffsetX = block.offsetX,
+                blockOffsetY = block.offsetY,
+                blockWidth = block.width,
+                blockHeight = block.height,
+                relativeOffsetY = content.scrollRelativeOffset(pos),
+                contentWidth = contentWidth,
+                contentHeight = contentHeight
+            ) ?: continue
+            val id = AdvancedTitleScrollGeometry.id(page.chapterIndex, page.index, page.title)
+            live.add(
+                ScrollAdvTitle(
+                    id = id,
+                    textPage = page,
+                    block = block,
+                    x = placement.x,
+                    y = placement.y,
+                    width = placement.width,
+                    height = placement.height
+                )
+            )
         }
         live.sortBy { it.y }
         scrollTitleLinger = live.take(2)

@@ -254,3 +254,15 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   纵向位置要夹在内容内、标题比内容还高时只能停在 0、滚动模式跟随内容不夹取。
 - **单测 13 个**（`AdvancedTitleRetentionPolicyTest` 5 + `AdvancedTitleGeometryTest` 8），
   阅读页包合计 **99 个单测全绿**。
+
+### 2026-10-20 阅读页回归手段（续：滚动模式标题落位）
+
+- **新增 `AdvancedTitleScrollGeometry.kt`**：把滚动模式下高级标题的"落位 + 是否可见"
+  规则抽成纯函数（`place` / `id`）。原逻辑内联在 `collectScrollAdvancedTitles` 里，
+  规则是：位置 = 页面相对偏移 + 页内偏移，横向要减去居中偏移，
+  **只有还与内容视口相交（哪怕只露出一像素）才显示**，与正文一致。
+- **单测 6 个**（`AdvancedTitleScrollGeometryTest`），阅读页包合计 **105 个单测全绿**。
+- 这一轮"铺垫批"到此把 F/G 区里能纯逻辑化的判定都搬进了可测对象：
+  页面键、LRU 淘汰、动画冻结/恢复、tip 请求门禁、标题保留判定、几何计算、滚动落位。
+  剩下的是与 View/协程强耦合的绑定流程本身，属于"真正拆 F/G 区"的大工程，
+  现在已具备回归手段，可以开始动。
