@@ -266,3 +266,17 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   页面键、LRU 淘汰、动画冻结/恢复、tip 请求门禁、标题保留判定、几何计算、滚动落位。
   剩下的是与 View/协程强耦合的绑定流程本身，属于"真正拆 F/G 区"的大工程，
   现在已具备回归手段，可以开始动。
+
+### 2026-10-20 ReadBook 回归网（章节加载竞态守卫）
+
+- **新增 `model/ChapterLoadGuard.kt`**：把 `ReadBook.kt` 里"这次章节加载的结果还能不能用"
+  的三条判定抽成纯规则（`isTokenCurrent` / `isRequestCurrent` / `isSlotCurrent`，
+  另含章节窗口 `isInChapterWindow`）。原实现内嵌在 `ReadBook` 的三个私有方法里，
+  直接读 `book` / `durChapterIndex` / `chapterLoadGenerations` /
+  `chapterLoadingLayoutKeys` 等状态，无法单测。
+- 抽出来后仍然读同一批状态、判定顺序不变，**语义逐条等价**：
+  书不同 / 世代号不同 / 排版键不同 / 章节不在前后一页窗口内 → 一律判为过期；
+  槽位还要额外满足"相对偏移正确"与"槽位里正是期望的 TextChapter"。
+- **单测 9 个**（`ChapterLoadGuardTest`），覆盖换书、重复加载、排版变更、
+  章节超出窗口、状态缺失、槽位偏移与槽位内容不匹配。
+- 这一块是阅读器最经典的竞态（"翻页后旧章节内容盖上来"），现在有网可依。

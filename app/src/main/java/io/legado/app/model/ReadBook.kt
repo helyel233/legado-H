@@ -1186,8 +1186,17 @@ object ReadBook : CoroutineScope by MainScope() {
         layoutKey: String,
         generation: Long
     ): Boolean {
-        return isChapterLoadTokenCurrent(bookUrl, chapterIndex, layoutKey, generation) &&
-                currentChapterLayoutKey() == layoutKey
+        return ChapterLoadGuard.isRequestCurrent(
+            activeBookUrl = book?.bookUrl,
+            requestBookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            currentChapterIndex = durChapterIndex,
+            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            requestGeneration = generation,
+            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            requestLayoutKey = layoutKey,
+            currentLayoutKey = currentChapterLayoutKey()
+        )
     }
 
     private fun isChapterLoadTokenCurrent(
@@ -1196,10 +1205,16 @@ object ReadBook : CoroutineScope by MainScope() {
         layoutKey: String,
         generation: Long
     ): Boolean {
-        return book?.bookUrl == bookUrl &&
-                chapterLoadGenerations[chapterIndex] == generation &&
-                chapterLoadingLayoutKeys[chapterIndex] == layoutKey &&
-                chapterIndex in durChapterIndex - 1..durChapterIndex + 1
+        return ChapterLoadGuard.isTokenCurrent(
+            activeBookUrl = book?.bookUrl,
+            requestBookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            currentChapterIndex = durChapterIndex,
+            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            requestGeneration = generation,
+            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            requestLayoutKey = layoutKey
+        )
     }
 
     private fun isChapterLoadSlotCurrent(
@@ -1210,12 +1225,18 @@ object ReadBook : CoroutineScope by MainScope() {
         expectedOffset: Int,
         expectedChapter: TextChapter? = null
     ): Boolean {
-        if (!isChapterLoadTokenCurrent(bookUrl, chapterIndex, layoutKey, generation) ||
-            chapterIndex - durChapterIndex != expectedOffset
-        ) {
-            return false
-        }
-        return expectedChapter == null || textChapter(expectedOffset) === expectedChapter
+        return ChapterLoadGuard.isSlotCurrent(
+            activeBookUrl = book?.bookUrl,
+            requestBookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            currentChapterIndex = durChapterIndex,
+            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            requestGeneration = generation,
+            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            requestLayoutKey = layoutKey,
+            expectedOffset = expectedOffset,
+            slotMatches = expectedChapter == null || textChapter(expectedOffset) === expectedChapter
+        )
     }
 
     @Synchronized
