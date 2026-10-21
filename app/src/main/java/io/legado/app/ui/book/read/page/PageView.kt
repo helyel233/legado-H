@@ -106,36 +106,12 @@ class PageView(context: Context) : FrameLayout(context) {
     private var currentTextPage: TextPage? = null
     private var pairedTextPage: TextPage? = null
     private val advancedTitleRequestGate = AdvancedTitleRequestGate()
-    private data class AdvancedTitleRenderConfig(
-        val imageAssetResolver: LottieImageAssetResolver,
-        val cacheComposition: Boolean,
-        val maintainOriginalImageBounds: Boolean = true
-    )
-    private data class PendingAdvancedTitleComposition(
-        val token: AdvancedTitleRequestToken,
-        val composition: com.airbnb.lottie.LottieComposition,
-        val renderConfig: AdvancedTitleRenderConfig
-    )
-    private val pendingAdvancedTitleCompositions =
-        arrayOfNulls<PendingAdvancedTitleComposition>(AdvancedTitleSlot.entries.size)
-    private val advancedTitleImagePrepareJobs =
-        arrayOfNulls<Coroutine<Boolean>>(AdvancedTitleSlot.entries.size)
-    private val appliedAdvancedTitleKeys = arrayOfNulls<String>(AdvancedTitleSlot.entries.size)
-    private val appliedAdvancedTitleCompositions =
-        arrayOfNulls<com.airbnb.lottie.LottieComposition>(AdvancedTitleSlot.entries.size)
-    private val appliedAdvancedTitleRenderConfigs =
-        arrayOfNulls<AdvancedTitleRenderConfig>(AdvancedTitleSlot.entries.size)
-
     /**
-     * The title block each slot currently has composed and on screen.
-     *
-     * Page turning re-runs [setContent], and tearing the slot down there means a title the
-     * reader turns away from and back to has to be composed again, which reads as a flash.
-     * [TextChapter] hands back the same [TextPage] instances, so an identity match proves
-     * the slot already holds exactly this title and can simply stay up.
+     * 标题槽位的全部状态（F 区）：每个槽位正在画的组合/键/渲染配置/所属 block、
+     * 翻页期间待提交的组合、图片解码任务，以及按键保留的已提交组合。
+     * 收拢在 AdvancedTitleSlotState 里，装载逻辑不再按索引摸十几个数组。
      */
-    private val boundAdvancedTitleBlocks =
-        arrayOfNulls<TextPage.EpubEmbeddedBlock>(AdvancedTitleSlot.entries.size)
+    private val advancedTitleState = AdvancedTitleSlotState(MAX_COMMITTED_TITLES)
 
     /**
      * Composition key last bound for a page, keyed by that page's position.
@@ -154,22 +130,6 @@ class PageView(context: Context) : FrameLayout(context) {
      * composition built for different conditions — something position alone cannot detect.
      */
     private val advancedTitleKeysByPage = AdvancedTitlePageKeyCache(MAX_TITLE_KEYS_BY_PAGE)
-
-    /**
-     * A composition already committed to a slot, kept per key rather than per slot.
-     *
-     * The slot itself can only hold one at a time, so recording the current one alone means
-     * a page the reader turns away from and back has nothing to come back to: the next page
-     * has overwritten the entry. Keeping a few keyed by composition lets a returning page
-     * find its own again and go straight back up.
-     */
-    private data class CommittedAdvancedTitle(
-        val composition: com.airbnb.lottie.LottieComposition,
-        val renderConfig: AdvancedTitleRenderConfig
-    )
-
-    private val committedAdvancedTitles =
-        AccessOrderedLruCache<String, CommittedAdvancedTitle>(MAX_COMMITTED_TITLES)
 
     /**
      * Stable identity for a page's position within a book.
@@ -648,23 +608,19 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     private fun clearPendingAdvancedTitleComposition(slot: AdvancedTitleSlot) {
-        pendingAdvancedTitleCompositions[slot.ordinal] = null
+        advancedTitleState.setPendingComposition(slot, null)
     }
 
     private fun cancelAdvancedTitleImagePreparation(slot: AdvancedTitleSlot) {
-        advancedTitleImagePrepareJobs[slot.ordinal]?.cancel()
-        advancedTitleImagePrepareJobs[slot.ordinal] = null
+        advancedTitleState.cancelImagePrepareJob(slot)
     }
 
     private fun clearAppliedAdvancedTitle(slot: AdvancedTitleSlot) {
-        appliedAdvancedTitleKeys[slot.ordinal] = null
-        appliedAdvancedTitleCompositions[slot.ordinal] = null
-        appliedAdvancedTitleRenderConfigs[slot.ordinal] = null
-        boundAdvancedTitleBlocks[slot.ordinal] = null
+        advancedTitleState.clearApplied(slot)
     }
 
     internal fun clearPendingAdvancedTitleCompositions() {
-        pendingAdvancedTitleCompositions.fill(null)
+        advancedTitleState.clearPendingCompositions()
         AdvancedTitleSlot.entries.forEach(::cancelAdvancedTitleImagePreparation)
     }
 
@@ -775,7 +731,7 @@ class PageView(context: Context) : FrameLayout(context) {
             val incoming = advancedTitleBlock(pages[slot.ordinal]) ?: return@filterTo false
             val (lottieView, _) = titleViews(slot)
             AdvancedTitleRetentionPolicy.canRetain(
-                boundBlock = boundAdvancedTitleBlocks[slot.ordinal],
+                boundBlock = advancedTitleState.boundBlock(slot),
                 incomingBlock = incoming,
                 isPresented = isAdvancedTitlePresented(slot),
                 hasComposition = lottieView.composition != null,
@@ -819,7 +775,7 @@ class PageView(context: Context) : FrameLayout(context) {
     ): Boolean {
         val page = textPage ?: return false
         val key = advancedTitleKeysByPage[advancedTitlePageKey(page)] ?: return false
-        val committed = committedAdvancedTitles[key] ?: return false
+        val committed = advancedTitleState.committed(key) ?: return false
         val (lottieView, fallbackView) = titleViews(slot)
         // The size baked into the key has to still be the size this slot renders at, or the
         // composition would be drawn for bounds it was not built for.
@@ -850,11 +806,15 @@ class PageView(context: Context) : FrameLayout(context) {
             )
             lottieView.tag = key
             commitAdvancedTitleComposition(
-                PendingAdvancedTitleComposition(token, committed.composition, committed.renderConfig)
+                AdvancedTitleSlotState.PendingComposition(
+                    token,
+                    committed.composition,
+                    committed.renderConfig
+                )
             )
             val restored = isAdvancedTitleReady(slot) && lottieView.visibility == VISIBLE
             if (restored) {
-                boundAdvancedTitleBlocks[slot.ordinal] = block
+                advancedTitleState.setBoundBlock(slot, block)
                 fallbackView.visibility = GONE
             }
             restored
@@ -865,7 +825,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val (lottieView, fallbackView) = titleViews(slot)
         val pixelsChanged = lottieView.visibility != GONE || fallbackView.visibility != GONE
         // This slot no longer shows anything, so it must not claim retention on the next bind.
-        boundAdvancedTitleBlocks[slot.ordinal] = null
+        advancedTitleState.setBoundBlock(slot, null)
         advancedTitleRequestGate.clear(slot)
         clearPendingAdvancedTitleComposition(slot)
         cancelAdvancedTitleImagePreparation(slot)
@@ -1649,7 +1609,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val (lottieView, _) = titleViews(slot)
         return advancedTitleRequestGate.accepts(token) &&
             lottieView.tag == token.compositionKey &&
-            appliedAdvancedTitleKeys[slot.ordinal] == token.compositionKey &&
+            advancedTitleState.appliedKey(slot) == token.compositionKey &&
             lottieView.composition != null
     }
 
@@ -1778,7 +1738,7 @@ class PageView(context: Context) : FrameLayout(context) {
             AdvancedTitleLottieKeys.composition(it, targetWidth, targetHeight)
         } ?: AdvancedTitleLottieKeys.rawComposition(targetWidth, targetHeight)
         val compositionSize = styled?.compositionSize
-        val renderConfig = AdvancedTitleRenderConfig(
+        val renderConfig = AdvancedTitleSlotState.RenderConfig(
             imageAssetResolver = LottieImageAssetResolver(
                 viewWidth = targetWidth,
                 viewHeight = targetHeight,
@@ -1791,13 +1751,13 @@ class PageView(context: Context) : FrameLayout(context) {
 
         // Remember which title this slot is working on so a later page turn can tell that a
         // slot already holds the incoming page's title and leave it up.
-        boundAdvancedTitleBlocks[slot.ordinal] = block
+        advancedTitleState.setBoundBlock(slot, block)
         // Record against the page's position too, so returning to it can find this key back
         // without restyling the JSON on the page-turn path.
         advancedTitleKeysByPage.put(advancedTitlePageKey(page), nextKey)
 
         if (advancedTitleRequestGate.hasCurrent(slot, nextKey, sourceId) && lottieView.tag == nextKey) {
-            if (pendingAdvancedTitleCompositions[slot.ordinal] != null) return nextKey
+            if (advancedTitleState.pendingComposition(slot) != null) return nextKey
             if (isAdvancedTitleReady(slot)) {
                 lottieView.visibility = VISIBLE
                 fallbackView.visibility = if (isAdvancedTitlePresented(slot)) GONE else VISIBLE
@@ -1817,12 +1777,12 @@ class PageView(context: Context) : FrameLayout(context) {
         // content generation, which retires the token above even though nothing about what
         // is on screen changed. Re-adopt it instead of composing again — going through
         // setComposition would blank the slot for a frame and read as a flash.
-        val liveComposition = appliedAdvancedTitleCompositions[slot.ordinal]
-        if (appliedAdvancedTitleKeys[slot.ordinal] == nextKey &&
+        val liveComposition = advancedTitleState.appliedComposition(slot)
+        if (advancedTitleState.appliedKey(slot) == nextKey &&
             liveComposition != null &&
             lottieView.composition === liveComposition &&
             lottieView.visibility == VISIBLE &&
-            appliedAdvancedTitleRenderConfigs[slot.ordinal] != null
+            advancedTitleState.appliedRenderConfig(slot) != null
         ) {
             val token = advancedTitleRequestGate.begin(slot, nextKey, sourceId)
             lottieView.tag = nextKey
@@ -1848,13 +1808,13 @@ class PageView(context: Context) : FrameLayout(context) {
         // page's path, where the slot itself has since been handed to another page. Skipping
         // the reload keeps the JSON parse, the image decode and the async hop out of the
         // page turn — that round trip is what the reader sees as a flash.
-        val reusable = appliedAdvancedTitleCompositions[slot.ordinal]
-            ?.takeIf { appliedAdvancedTitleKeys[slot.ordinal] == nextKey }
+        val reusable = advancedTitleState.appliedComposition(slot)
+            ?.takeIf { advancedTitleState.appliedKey(slot) == nextKey }
             ?.let { composition ->
-                appliedAdvancedTitleRenderConfigs[slot.ordinal]
-                    ?.let { CommittedAdvancedTitle(composition, it) }
+                advancedTitleState.appliedRenderConfig(slot)
+                    ?.let { AdvancedTitleSlotState.CommittedComposition(composition, it) }
             }
-            ?: committedAdvancedTitles[nextKey]
+            ?: advancedTitleState.committed(nextKey)
         if (reusable != null) {
             val token = advancedTitleRequestGate.begin(slot, nextKey, sourceId)
             lottieView.tag = nextKey
@@ -1886,8 +1846,8 @@ class PageView(context: Context) : FrameLayout(context) {
             prepareJob = Coroutine.async(Coroutine.defaultScope, start = CoroutineStart.LAZY) {
                 renderConfig.imageAssetResolver.prepareCompositionImages(composition)
             }.onSuccess { ready ->
-                if (advancedTitleImagePrepareJobs[slot.ordinal] !== prepareJob) return@onSuccess
-                advancedTitleImagePrepareJobs[slot.ordinal] = null
+                if (advancedTitleState.imagePrepareJob(slot) !== prepareJob) return@onSuccess
+                advancedTitleState.setImagePrepareJob(slot, null)
                 if (!advancedTitleRequestGate.accepts(token)) return@onSuccess
                 // The composition parsed, so it stays. Undecodable images are skipped by
                 // Lottie; never drop a valid advanced title back to the plain-text one.
@@ -1896,15 +1856,15 @@ class PageView(context: Context) : FrameLayout(context) {
                 }
                 commitOrDeferAdvancedTitleComposition(token, composition, renderConfig)
             }.onError { error ->
-                if (advancedTitleImagePrepareJobs[slot.ordinal] !== prepareJob) return@onError
-                advancedTitleImagePrepareJobs[slot.ordinal] = null
+                if (advancedTitleState.imagePrepareJob(slot) !== prepareJob) return@onError
+                advancedTitleState.setImagePrepareJob(slot, null)
                 AppLog.put("PageView advanced title image preparation failed: $slot", error)
                 // Images are best-effort; the parsed composition is still valid.
                 if (advancedTitleRequestGate.accepts(token)) {
                     commitOrDeferAdvancedTitleComposition(token, composition, renderConfig)
                 }
             }
-            advancedTitleImagePrepareJobs[slot.ordinal] = prepareJob
+            advancedTitleState.setImagePrepareJob(slot, prepareJob)
             prepareJob.start()
         }
 
@@ -1927,21 +1887,23 @@ class PageView(context: Context) : FrameLayout(context) {
     private fun commitOrDeferAdvancedTitleComposition(
         token: AdvancedTitleRequestToken,
         composition: com.airbnb.lottie.LottieComposition,
-        renderConfig: AdvancedTitleRenderConfig
+        renderConfig: AdvancedTitleSlotState.RenderConfig
     ) {
         if (!advancedTitleRequestGate.accepts(token)) return
         val readView = parent as? ReadView
         if (!isScroll && readView?.isHorizontalPageTurnActive == true) {
-            pendingAdvancedTitleCompositions[token.slot.ordinal] =
-                PendingAdvancedTitleComposition(token, composition, renderConfig)
+            advancedTitleState.setPendingComposition(
+                token.slot,
+                AdvancedTitleSlotState.PendingComposition(token, composition, renderConfig)
+            )
             return
         }
         commitAdvancedTitleComposition(
-            PendingAdvancedTitleComposition(token, composition, renderConfig)
+            AdvancedTitleSlotState.PendingComposition(token, composition, renderConfig)
         )
     }
 
-    private fun commitAdvancedTitleComposition(pending: PendingAdvancedTitleComposition) {
+    private fun commitAdvancedTitleComposition(pending: AdvancedTitleSlotState.PendingComposition) {
         val token = pending.token
         if (!advancedTitleRequestGate.accepts(token)) return
         val (lottieView, fallbackView) = titleViews(token.slot)
@@ -1959,14 +1921,20 @@ class PageView(context: Context) : FrameLayout(context) {
             lottieView.setImageAssetDelegate(pending.renderConfig.imageAssetResolver)
             lottieView.setCacheComposition(pending.renderConfig.cacheComposition)
             lottieView.setComposition(pending.composition)
-            appliedAdvancedTitleKeys[token.slot.ordinal] = token.compositionKey
-            appliedAdvancedTitleCompositions[token.slot.ordinal] = pending.composition
-            appliedAdvancedTitleRenderConfigs[token.slot.ordinal] = pending.renderConfig
+            advancedTitleState.setApplied(
+                token.slot,
+                token.compositionKey,
+                pending.composition,
+                pending.renderConfig
+            )
             // Outlives the slot: the next page overwrites the entries above, and without a
             // copy here a page the reader returns to would have to be composed again.
-            committedAdvancedTitles.put(
+            advancedTitleState.putCommitted(
                 token.compositionKey,
-                CommittedAdvancedTitle(pending.composition, pending.renderConfig)
+                AdvancedTitleSlotState.CommittedComposition(
+                    pending.composition,
+                    pending.renderConfig
+                )
             )
             lottieView.progress = 0f
             lottieView.alpha = 1f
@@ -2012,7 +1980,7 @@ class PageView(context: Context) : FrameLayout(context) {
     internal fun flushPendingAdvancedTitleCompositions() {
         val readView = parent as? ReadView
         if (!isScroll && readView?.isHorizontalPageTurnActive == true) return
-        pendingAdvancedTitleCompositions.filterNotNull().forEach { pending ->
+        advancedTitleState.pendingCompositions().forEach { pending ->
             commitAdvancedTitleComposition(pending)
         }
         advancedTip.commitPending()

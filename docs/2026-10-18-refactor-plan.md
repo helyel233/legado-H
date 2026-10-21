@@ -318,6 +318,21 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - 阅读页包 **111 个单测全绿**（新增的回归网在拆搬后立刻起了作用：漏掉
   `tipView`/`advancedTipKey` 两个访问器时，是编译错误而不是运行时 NPE 暴露的）。
 
+### 2026-10-21 F 区状态收拢（AdvancedTitleSlotState）
+
+**F 区主体还没搬，但先把"十几个私有状态数组"这个拆不动的根因消掉。**
+
+- **新增 `AdvancedTitleSlotState.kt`**：把 F 区的 6 个数组 + 1 个 LRU + 3 个私有数据类
+  收进一个对象——每槽位的待提交组合、图片解码任务、已应用的键/组合/渲染配置、
+  绑定 block，以及按键保留的已提交组合（上限仍是 6）。三个原私有类型
+  （`RenderConfig`/`PendingComposition`/`CommittedComposition`）随之一并搬出。
+- **PageView 2106 → 2074 行**，28 处 `xxx[slot.ordinal]` 索引访问全部换成具名方法
+  （`appliedKey(slot)` / `setApplied(slot, …)` / `boundBlock(slot)` / `committed(key)` …）。
+  装载逻辑不再"按 ordinal 摸数组"，这是后续把 F 区函数搬出去的前提。
+- 纯机械改写：先用脚本按出现次数断言替换（有一处 `= block` 出现 2 次、
+  `= null` 因 `clearApplied` 要先整块替换否则计数对不上，都靠断言挡下来了），
+  再编译验证。阅读页包 **111 个单测全绿**。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
