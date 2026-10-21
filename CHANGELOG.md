@@ -1,5 +1,16 @@
 # 更新日志
 
+## 1.12.2 版（2026-10-21）
+
+本版是阅读页的一次纯内部重构，无用户可见的功能变化，主要为提升可维护性与可测试性。
+
+### 重构（行为保持，靠新增单测锁行为）
+
+- **PageView 拆分为纯逻辑模块**：将阅读页庞大的 `PageView`（减少约 782 行）进一步拆分——F 区槽位状态收拢进 `AdvancedTitleSlotState`；G 区页眉页脚动效装载抽出为 `AdvancedTipLottieController`（含请求门控 `AdvancedTipRequestGate`、动画冻结 `AdvancedTitleAnimationFreeze`、几何计算 `AdvancedTitleGeometry`/`AdvancedTitleScrollGeometry`、缓存 `AdvancedTitleLottieCache`、页面键 `AdvancedTitlePageKeys`、留存策略 `AdvancedTitleRetentionPolicy` 等）。
+- **章节加载竞态守卫**：抽出 `ChapterLoadGuard` 纯规则（先于 `ReadBook` 内联逻辑），并补 `ChapterLoadGuardTest` 覆盖竞态场景。
+- **阅读进度百分比计算**：抽出 `ReadProgressCalculator`（含 99.9% 特判）为独立实体并补单测。
+- **验收与文档**：补真机验收清单（动效续播、进度 100%、重排、竞态）与遗留项现状；更新 `2026-10-18-refactor-plan.md`。
+
 ## 1.12.1 版（2026-10-19）
 
 本版新增 Web 服务可选访问口令（堵住同局域网任意人可增删书源、读取登录态的安全缺口），并修复一轮 review 抓出的口令相关缺口与体验问题。
