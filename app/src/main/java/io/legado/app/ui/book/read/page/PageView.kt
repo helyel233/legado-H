@@ -188,27 +188,67 @@ class PageView(context: Context) : FrameLayout(context) {
     private var scrollTitleLinger: List<ScrollAdvTitle> = emptyList()
     private var lastScrollPageOffsetForTitle: Int = Int.MIN_VALUE
     private var boundScrollTitleIds: Array<String?> = arrayOf(null, null)
-    private var advancedHeaderLottieKey: String? = null
-    private var advancedFooterLottieKey: String? = null
-    private var headerTipTextDelegate: TipFieldTextDelegate? = null
-    private var footerTipTextDelegate: TipFieldTextDelegate? = null
-    private data class PendingAdvancedTipComposition(
-        val token: AdvancedTipRequestToken,
-        val composition: com.airbnb.lottie.LottieComposition,
-        val variables: Map<String, String>,
-        val imageAssetResolver: LottieImageAssetResolver
-    )
-    private data class PreparedAdvancedTipComposition(
-        val composition: com.airbnb.lottie.LottieComposition,
-        val imageAssetResolver: LottieImageAssetResolver
-    )
-    private val advancedTipRequestGate = AdvancedTipRequestGate()
-    private val pendingAdvancedTipCompositions =
-        arrayOfNulls<PendingAdvancedTipComposition>(AdvancedTipSlot.entries.size)
-    private val advancedTipPrepareJobs =
-        arrayOfNulls<Coroutine<PreparedAdvancedTipComposition?>>(AdvancedTipSlot.entries.size)
-    private val advancedTipPrewarmKeys = arrayOfNulls<String>(AdvancedTipSlot.entries.size)
+    /**
+     * 页眉页脚要显示的阅读信息。经典文本 tip 与进阶动效包都从它渲染，
+     * 所以这份状态放在 PageView，双方共用。
+     */
     private var lastTipContext: AdvancedTipConfig.TipContext = AdvancedTipConfig.TipContext()
+    /**
+     * 页眉页脚进阶动效装载（G 区），逻辑在 AdvancedTipLottieController 里，
+     * 这里只提供它需要的宿主环境。
+     */
+    private val advancedTip = AdvancedTipLottieController(TipHost())
+
+    private inner class TipHost : AdvancedTipHost {
+
+        override fun tipView(slot: AdvancedTipSlot): LottieAnimationView {
+            return when (slot) {
+                AdvancedTipSlot.HEADER -> binding.advancedHeaderLottie
+                AdvancedTipSlot.FOOTER -> binding.advancedFooterLottie
+            }
+        }
+
+        override fun contentWidth(): Int = binding.contentTextView.width
+
+        override fun contentGeneration(): Long = advancedTitleRequestGate.contentGeneration
+
+        override val isMainView: Boolean
+            get() = this@PageView.isMainView
+
+        override fun isEpubBook(): Boolean = this@PageView.isEpubBook()
+
+        override val batteryLevel: Int
+            get() = battery
+
+        override fun currentTextPage(): TextPage? = this@PageView.currentTextPage
+
+        override fun bookName(): String = ReadBook.book?.name.orEmpty()
+
+        override fun bookAuthor(): String = ReadBook.book?.author.orEmpty()
+
+        override fun isHorizontalPageTurnActive(): Boolean =
+            (parent as? ReadView)?.isHorizontalPageTurnActive == true
+
+        override var tipContext: AdvancedTipConfig.TipContext
+            get() = lastTipContext
+            set(value) {
+                lastTipContext = value
+            }
+
+        override fun markSnapDirty() = this@PageView.markSnapDirty()
+
+        override fun animationFreeze(): AdvancedTitleAnimationFreeze = advancedTitleAnimations
+
+        override fun clearAdvancedTitleLoadingState(view: LottieAnimationView) =
+            this@PageView.clearAdvancedTitleLoadingState(view)
+
+        override fun setClassicTipFallbackVisible(slot: AdvancedTipSlot, visible: Boolean) {
+            this@PageView.setClassicTipFallbackVisible(slot, visible)
+        }
+
+        override fun defaultFontAssetDelegate(): AdvancedTitleFontAssetDelegate =
+            this@PageView.defaultFontAssetDelegate
+    }
     var isScroll = false
 
     val headerHeight: Int
@@ -616,11 +656,6 @@ class PageView(context: Context) : FrameLayout(context) {
         advancedTitleImagePrepareJobs[slot.ordinal] = null
     }
 
-    private fun cancelAdvancedTipPreparation(slot: AdvancedTipSlot) {
-        advancedTipPrepareJobs[slot.ordinal]?.cancel()
-        advancedTipPrepareJobs[slot.ordinal] = null
-    }
-
     private fun clearAppliedAdvancedTitle(slot: AdvancedTitleSlot) {
         appliedAdvancedTitleKeys[slot.ordinal] = null
         appliedAdvancedTitleCompositions[slot.ordinal] = null
@@ -639,9 +674,7 @@ class PageView(context: Context) : FrameLayout(context) {
         overlayBindScheduledToken = overlayBindToken
         removeCallbacks(overlayBindRunnable)
         clearPendingAdvancedTitleCompositions()
-        pendingAdvancedTipCompositions.fill(null)
-        advancedTipRequestGate.clearAll()
-        AdvancedTipSlot.entries.forEach(::cancelAdvancedTipPreparation)
+        advancedTip.dispose()
         advancedTitleAnimations.reset()
         AdvancedTitleSlot.entries.forEach { slot ->
             hideAdvancedTitleSlot(slot)
@@ -650,7 +683,7 @@ class PageView(context: Context) : FrameLayout(context) {
             lottieView.setTextDelegate(null)
             clearAppliedAdvancedTitle(slot)
         }
-        AdvancedTipSlot.entries.forEach(::clearAdvancedTipSlot)
+        advancedTip.clearAllSlots()
     }
 
     internal fun freezeAdvancedTitleAnimationsForPageTurn() {
@@ -666,7 +699,7 @@ class PageView(context: Context) : FrameLayout(context) {
             }
         }
         AdvancedTipSlot.entries.forEach { slot ->
-            val lottieView = tipView(slot)
+            val lottieView = advancedTip.viewOf(slot)
             if (lottieView.visibility == VISIBLE && lottieView.isAnimating) {
                 advancedTitleAnimations.markTipToResume(slot)
                 lottieView.pauseAnimation()
@@ -699,9 +732,9 @@ class PageView(context: Context) : FrameLayout(context) {
             }
             AdvancedTipSlot.entries.forEach { slot ->
                 val shouldResume = advancedTitleAnimations.consumeTipResume(slot)
-                val lottieView = tipView(slot)
+                val lottieView = advancedTip.viewOf(slot)
                 if (shouldResume && lottieView.visibility == VISIBLE &&
-                    advancedTipKey(slot) != null && !lottieView.isAnimating
+                    advancedTip.hasKey(slot) && !lottieView.isAnimating
                 ) {
                     runCatching {
                         lottieView.playAnimation()
@@ -1003,8 +1036,7 @@ class PageView(context: Context) : FrameLayout(context) {
         val alreadyShowing = advancedTitleSlotsAlreadyShowing(textPage, pairedTextPage)
         advancedTitleRequestGate.nextContent()
         clearPendingAdvancedTitleCompositions()
-        pendingAdvancedTipCompositions.fill(null)
-        advancedTipRequestGate.clearAll()
+        advancedTip.dispose()
         boundScrollTitleIds.fill(null)
         AdvancedTitleSlot.entries.forEach { slot ->
             if (slot !in alreadyShowing) hideAdvancedTitleSlot(slot)
@@ -1150,28 +1182,7 @@ class PageView(context: Context) : FrameLayout(context) {
      * Cheap path: tip Lottie already on-screen for this package — only swap text fields.
      * Avoids setComposition / parse on page turns and minute ticks.
      */
-    private fun refreshAdvancedTipFieldsIfBound() {
-        if (!(ReadTipConfig.isHeaderAdvanced() || ReadTipConfig.isFooterAdvanced())) return
-        val vars = AdvancedTipConfig.variables(lastTipContext)
-        if (ReadTipConfig.isHeaderAdvanced()) {
-            val key = AdvancedTipConfig.compositionCacheKey(AdvancedTipSlot.HEADER)
-            if (advancedHeaderLottieKey == key && binding.advancedHeaderLottie.composition != null) {
-                headerTipTextDelegate?.let {
-                    it.variables = vars
-                    binding.advancedHeaderLottie.invalidate()
-                }
-            }
-        }
-        if (ReadTipConfig.isFooterAdvanced()) {
-            val key = AdvancedTipConfig.compositionCacheKey(AdvancedTipSlot.FOOTER)
-            if (advancedFooterLottieKey == key && binding.advancedFooterLottie.composition != null) {
-                footerTipTextDelegate?.let {
-                    it.variables = vars
-                    binding.advancedFooterLottie.invalidate()
-                }
-            }
-        }
-    }
+    private fun refreshAdvancedTipFieldsIfBound() = advancedTip.refreshFieldsIfBound()
 
     /** Best-effort: parse title payload of an adjacent page into Lottie cache off the hot path. */
     private fun prewarmAdvancedTitleFromPage(textPage: TextPage?) {
@@ -1226,21 +1237,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }
     }
 
-    private fun advancedTipViewsBound(): Boolean {
-        if (ReadTipConfig.isHeaderAdvanced()) {
-            val key = AdvancedTipConfig.compositionCacheKey(AdvancedTipSlot.HEADER)
-            if (advancedHeaderLottieKey != key || binding.advancedHeaderLottie.composition == null) {
-                return false
-            }
-        }
-        if (ReadTipConfig.isFooterAdvanced()) {
-            val key = AdvancedTipConfig.compositionCacheKey(AdvancedTipSlot.FOOTER)
-            if (advancedFooterLottieKey != key || binding.advancedFooterLottie.composition == null) {
-                return false
-            }
-        }
-        return true
-    }
+    private fun advancedTipViewsBound(): Boolean = advancedTip.viewsBound()
 
     fun setAutoPager(autoPager: AutoPager?) {
         binding.contentTextView.setAutoPager(autoPager)
@@ -2018,62 +2015,8 @@ class PageView(context: Context) : FrameLayout(context) {
         pendingAdvancedTitleCompositions.filterNotNull().forEach { pending ->
             commitAdvancedTitleComposition(pending)
         }
-        pendingAdvancedTipCompositions.filterNotNull().forEach { pending ->
-            commitAdvancedTipComposition(pending)
-        }
+        advancedTip.commitPending()
         resumeAdvancedTitleAnimationsAfterPageTurn()
-    }
-
-    private fun tipView(slot: AdvancedTipSlot): LottieAnimationView {
-        return when (slot) {
-            AdvancedTipSlot.HEADER -> binding.advancedHeaderLottie
-            AdvancedTipSlot.FOOTER -> binding.advancedFooterLottie
-        }
-    }
-
-    private fun advancedTipKey(slot: AdvancedTipSlot): String? {
-        return when (slot) {
-            AdvancedTipSlot.HEADER -> advancedHeaderLottieKey
-            AdvancedTipSlot.FOOTER -> advancedFooterLottieKey
-        }
-    }
-
-    private fun setAdvancedTipKey(slot: AdvancedTipSlot, key: String?) {
-        when (slot) {
-            AdvancedTipSlot.HEADER -> advancedHeaderLottieKey = key
-            AdvancedTipSlot.FOOTER -> advancedFooterLottieKey = key
-        }
-    }
-
-    private fun advancedTipEnabled(slot: AdvancedTipSlot): Boolean {
-        if (isEpubBook()) return false
-        return when (slot) {
-            AdvancedTipSlot.HEADER -> ReadTipConfig.isHeaderAdvanced()
-            AdvancedTipSlot.FOOTER -> ReadTipConfig.isFooterAdvanced()
-        }
-    }
-
-    private fun clearAdvancedTipSlot(slot: AdvancedTipSlot) {
-        val lottieView = tipView(slot)
-        val pixelsChanged = lottieView.visibility != GONE
-        pendingAdvancedTipCompositions[slot.ordinal] = null
-        advancedTipRequestGate.clear(slot)
-        cancelAdvancedTipPreparation(slot)
-        advancedTitleAnimations.clearTipResume(slot)
-        clearAdvancedTitleLoadingState(lottieView)
-        lottieView.cancelAnimation()
-        lottieView.setTextDelegate(null)
-        lottieView.setImageAssetDelegate(null)
-        lottieView.visibility = GONE
-        setAdvancedTipKey(slot, null)
-        when (slot) {
-            AdvancedTipSlot.HEADER -> headerTipTextDelegate = null
-            AdvancedTipSlot.FOOTER -> footerTipTextDelegate = null
-        }
-        if (advancedTipEnabled(slot)) {
-            setClassicTipFallbackVisible(slot, true)
-        }
-        if (pixelsChanged) markSnapDirty()
     }
 
     private fun setClassicTipFallbackVisible(slot: AdvancedTipSlot, visible: Boolean) = binding.run {
@@ -2091,28 +2034,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }
     }
 
-    private fun applyAdvancedTipChromeVisibility() = binding.run {
-        val headerAdvanced = !isEpubBook() && ReadTipConfig.isHeaderAdvanced()
-        val footerAdvanced = !isEpubBook() && ReadTipConfig.isFooterAdvanced()
-        if (headerAdvanced) {
-            val loaded = advancedHeaderLottieKey == AdvancedTipConfig.compositionCacheKey(
-                AdvancedTipSlot.HEADER
-            ) && advancedHeaderLottie.composition != null && advancedHeaderLottie.visibility == VISIBLE
-            setClassicTipFallbackVisible(AdvancedTipSlot.HEADER, !loaded)
-        }
-        if (footerAdvanced) {
-            val loaded = advancedFooterLottieKey == AdvancedTipConfig.compositionCacheKey(
-                AdvancedTipSlot.FOOTER
-            ) && advancedFooterLottie.composition != null && advancedFooterLottie.visibility == VISIBLE
-            setClassicTipFallbackVisible(AdvancedTipSlot.FOOTER, !loaded)
-        }
-        if (!headerAdvanced) {
-            clearAdvancedTipSlot(AdvancedTipSlot.HEADER)
-        }
-        if (!footerAdvanced) {
-            clearAdvancedTipSlot(AdvancedTipSlot.FOOTER)
-        }
-    }
+    private fun applyAdvancedTipChromeVisibility() = advancedTip.applyChromeVisibility()
 
     private fun isEpubBook(): Boolean = ReadBook.book?.isEpub == true
 
@@ -2121,276 +2043,10 @@ class PageView(context: Context) : FrameLayout(context) {
      * before the first page turn needs them. Without this the first flip pays for
      * JSON parsing, derived-resource extraction and image decoding all at once.
      */
-    internal fun prewarmAdvancedTipCompositions() {
-        if (isEpubBook()) return
-        AdvancedTipSlot.entries.forEach { slot ->
-            if (!advancedTipEnabled(slot)) return@forEach
-            val key = AdvancedTipConfig.compositionCacheKey(slot)
-            if (LottieCompositionCache.getInstance().get(key) != null) return@forEach
-            if (advancedTipPrewarmKeys[slot.ordinal] == key) return@forEach
-            advancedTipPrewarmKeys[slot.ordinal] = key
-            val lottieView = tipView(slot)
-            val requestedWidth = lottieView.width.takeIf { it > 0 }
-                ?: binding.contentTextView.width.takeIf { it > 0 }
-            val requestedHeight = lottieView.height.takeIf { it > 0 }
-            Coroutine.async(Coroutine.defaultScope) {
-                val document = AdvancedTipConfig.rawDocument(slot) ?: return@async
-                val composition = LottieCompositionCache.getInstance().get(key)
-                    ?: LottieCompositionFactory.fromJsonStringSync(document.json, key).value
-                    ?: return@async
-                val compositionWidth = composition.bounds.width().coerceAtLeast(1)
-                val compositionHeight = composition.bounds.height().coerceAtLeast(1)
-                LottieImageAssetResolver(
-                    viewWidth = requestedWidth ?: compositionWidth,
-                    viewHeight = requestedHeight ?: compositionHeight,
-                    compositionWidth = compositionWidth,
-                    compositionHeight = compositionHeight,
-                    fallbackAssets = document.fallbackAssets
-                ).prepareCompositionImages(composition)
-            }.onError { error ->
-                advancedTipPrewarmKeys[slot.ordinal] = null
-                AppLog.put("PageView advanced tip prewarm failed: $slot", error)
-            }
-        }
-    }
+    internal fun prewarmAdvancedTipCompositions() = advancedTip.prewarm()
 
-    private fun upAdvancedTipLotties(textPage: TextPage?, contentGeneration: Long) {
-        AdvancedTipSlot.entries.forEach { slot ->
-            runCatching {
-                upAdvancedTipLottie(
-                    slot = slot,
-                    textPage = textPage,
-                    contentGeneration = contentGeneration
-                )
-            }.onFailure { error ->
-                AppLog.put("PageView advanced tip bind failed: $slot", error)
-                clearAdvancedTipSlot(slot)
-            }
-        }
-    }
-
-    private fun upAdvancedTipLottie(
-        slot: AdvancedTipSlot,
-        textPage: TextPage?,
-        contentGeneration: Long
-    ) {
-        if (contentGeneration != advancedTitleRequestGate.contentGeneration) return
-        if (!advancedTipEnabled(slot)) {
-            clearAdvancedTipSlot(slot)
-            return
-        }
-        val lottieView = tipView(slot)
-        val page = textPage ?: currentTextPage
-        val context = lastTipContext.copy(
-            book = lastTipContext.book.ifBlank { ReadBook.book?.name.orEmpty() },
-            title = page?.title?.takeIf { it.isNotBlank() } ?: lastTipContext.title,
-            time = AdvancedTipConfig.currentTimeText(),
-            battery = battery.toString(),
-            author = ReadBook.book?.author.orEmpty()
-        )
-        lastTipContext = context
-        val vars = AdvancedTipConfig.variables(context)
-        // Key by package identity only. Page/title/time updates use TextDelegate (no re-parse).
-        val nextKey = AdvancedTipConfig.compositionCacheKey(slot)
-        lottieView.scaleType = ImageView.ScaleType.FIT_CENTER
-        lottieView.repeatCount = LottieDrawable.INFINITE
-        lottieView.setFontAssetDelegate(defaultFontAssetDelegate)
-
-        fun ensureDelegate() {
-            val existing = when (slot) {
-                AdvancedTipSlot.HEADER -> headerTipTextDelegate
-                AdvancedTipSlot.FOOTER -> footerTipTextDelegate
-            }
-            if (existing != null) {
-                existing.variables = vars
-                lottieView.invalidate()
-                return
-            }
-            val created = TipFieldTextDelegate(lottieView).also { it.variables = vars }
-            lottieView.setTextDelegate(created)
-            when (slot) {
-                AdvancedTipSlot.HEADER -> headerTipTextDelegate = created
-                AdvancedTipSlot.FOOTER -> footerTipTextDelegate = created
-            }
-        }
-
-        if (advancedTipKey(slot) == nextKey && lottieView.composition != null) {
-            pendingAdvancedTipCompositions[slot.ordinal] = null
-            advancedTipRequestGate.clear(slot)
-            lottieView.tag = nextKey
-            ensureDelegate()
-            lottieView.visibility = VISIBLE
-            setClassicTipFallbackVisible(slot, false)
-            if (isMainView && !advancedTitleAnimations.isFrozen) {
-                if (!lottieView.isAnimating) lottieView.playAnimation()
-            } else {
-                lottieView.pauseAnimation()
-                if (isMainView && advancedTitleAnimations.isFrozen) {
-                    advancedTitleAnimations.markTipToResume(slot)
-                }
-            }
-            return
-        }
-
-        if (advancedTipRequestGate.hasCurrent(slot, contentGeneration, nextKey) &&
-            lottieView.tag == nextKey
-        ) {
-            return
-        }
-        val token = advancedTipRequestGate.begin(slot, contentGeneration, nextKey)
-        pendingAdvancedTipCompositions[slot.ordinal] = null
-        cancelAdvancedTipPreparation(slot)
-
-        lottieView.animate().cancel()
-        lottieView.removeAllLottieOnCompositionLoadedListener()
-        lottieView.setFailureListener(null)
-        lottieView.tag = nextKey
-        lottieView.alpha = 1f
-        if (!(lottieView.composition != null && lottieView.visibility == VISIBLE)) {
-            lottieView.visibility = INVISIBLE
-        }
-
-        fun showFailure() {
-            if (!acceptsAdvancedTipRequest(token)) return
-            clearAdvancedTipSlot(slot)
-        }
-
-        val requestedWidth = lottieView.width.takeIf { it > 0 }
-            ?: binding.contentTextView.width.takeIf { it > 0 }
-        val requestedHeight = lottieView.height.takeIf { it > 0 }
-        lateinit var prepareJob: Coroutine<PreparedAdvancedTipComposition?>
-        prepareJob = Coroutine.async(Coroutine.defaultScope, start = CoroutineStart.LAZY) {
-            val document = AdvancedTipConfig.rawDocument(slot) ?: return@async null
-            val composition = LottieCompositionCache.getInstance().get(nextKey)
-                ?: LottieCompositionFactory.fromJsonStringSync(document.json, nextKey).value
-                ?: return@async null
-            val compositionWidth = composition.bounds.width().coerceAtLeast(1)
-            val compositionHeight = composition.bounds.height().coerceAtLeast(1)
-            val resolver = LottieImageAssetResolver(
-                viewWidth = requestedWidth ?: compositionWidth,
-                viewHeight = requestedHeight ?: compositionHeight,
-                compositionWidth = compositionWidth,
-                compositionHeight = compositionHeight,
-                fallbackAssets = document.fallbackAssets
-            )
-            // Images are best-effort: a composition that parsed still renders.
-            resolver.prepareCompositionImages(composition)
-            PreparedAdvancedTipComposition(composition, resolver)
-        }.onSuccess { prepared ->
-            if (advancedTipPrepareJobs[slot.ordinal] !== prepareJob) return@onSuccess
-            advancedTipPrepareJobs[slot.ordinal] = null
-            if (!acceptsAdvancedTipRequest(token)) return@onSuccess
-            if (prepared == null) {
-                showFailure()
-            } else {
-                commitOrDeferAdvancedTipComposition(token, prepared, vars)
-            }
-        }.onError { error ->
-            if (advancedTipPrepareJobs[slot.ordinal] !== prepareJob) return@onError
-            advancedTipPrepareJobs[slot.ordinal] = null
-            AppLog.put("PageView advanced tip preparation failed: $slot", error)
-            showFailure()
-        }
-        advancedTipPrepareJobs[slot.ordinal] = prepareJob
-        prepareJob.start()
-    }
-
-    private fun acceptsAdvancedTipRequest(token: AdvancedTipRequestToken): Boolean {
-        if (!advancedTipRequestGate.accepts(token, advancedTitleRequestGate.contentGeneration)) {
-            return false
-        }
-        return tipView(token.slot).tag == token.compositionKey &&
-            advancedTipEnabled(token.slot) &&
-            AdvancedTipConfig.compositionCacheKey(token.slot) == token.compositionKey
-    }
-
-    private fun commitOrDeferAdvancedTipComposition(
-        token: AdvancedTipRequestToken,
-        prepared: PreparedAdvancedTipComposition,
-        variables: Map<String, String>
-    ) {
-        if (!acceptsAdvancedTipRequest(token)) return
-        if ((parent as? ReadView)?.isHorizontalPageTurnActive == true) {
-            pendingAdvancedTipCompositions[token.slot.ordinal] =
-                PendingAdvancedTipComposition(
-                    token,
-                    prepared.composition,
-                    variables,
-                    prepared.imageAssetResolver
-                )
-            return
-        }
-        commitAdvancedTipComposition(
-            PendingAdvancedTipComposition(
-                token,
-                prepared.composition,
-                variables,
-                prepared.imageAssetResolver
-            )
-        )
-    }
-
-    private fun commitAdvancedTipComposition(pending: PendingAdvancedTipComposition) {
-        val token = pending.token
-        if (!acceptsAdvancedTipRequest(token)) return
-        pendingAdvancedTipCompositions[token.slot.ordinal] = null
-        val lottieView = tipView(token.slot)
-        runCatching {
-            lottieView.renderMode = RenderMode.AUTOMATIC
-            lottieView.setMaintainOriginalImageBounds(true)
-            lottieView.setImageAssetDelegate(pending.imageAssetResolver)
-            lottieView.setComposition(pending.composition)
-            val delegate = TipFieldTextDelegate(lottieView).also {
-                it.variables = pending.variables
-            }
-            lottieView.setTextDelegate(delegate)
-            when (token.slot) {
-                AdvancedTipSlot.HEADER -> headerTipTextDelegate = delegate
-                AdvancedTipSlot.FOOTER -> footerTipTextDelegate = delegate
-            }
-            lottieView.alpha = 1f
-            lottieView.visibility = VISIBLE
-            if (isMainView && !advancedTitleAnimations.isFrozen) {
-                if (!lottieView.isAnimating) lottieView.playAnimation()
-            } else {
-                lottieView.pauseAnimation()
-                if (isMainView && advancedTitleAnimations.isFrozen) {
-                    advancedTitleAnimations.markTipToResume(token.slot)
-                }
-            }
-            setAdvancedTipKey(token.slot, token.compositionKey)
-            lottieView.doOnPreDraw {
-                if (acceptsAdvancedTipRequest(token) &&
-                    advancedTipKey(token.slot) == token.compositionKey &&
-                    lottieView.visibility == VISIBLE && lottieView.composition != null
-                ) {
-                    setClassicTipFallbackVisible(token.slot, false)
-                    markSnapDirty()
-                }
-            }
-            lottieView.invalidate()
-        }.onFailure { error ->
-            AppLog.put("PageView advanced tip composition failed: ${token.slot}", error)
-            if (acceptsAdvancedTipRequest(token)) clearAdvancedTipSlot(token.slot)
-        }
-    }
-
-
-    private class TipFieldTextDelegate(
-        animationView: LottieAnimationView
-    ) : TextDelegate(animationView) {
-        @Volatile
-        var variables: Map<String, String> = emptyMap()
-
-        init {
-            setCacheText(false)
-        }
-
-        override fun getText(input: String): String {
-            return AdvancedTipConfig.substituteText(input, variables)
-        }
-    }
-
+    private fun upAdvancedTipLotties(textPage: TextPage?, contentGeneration: Long) =
+        advancedTip.up(textPage, contentGeneration)
 
     private fun clearAdvancedTitleLoadingState(view: LottieAnimationView) {
         view.animate().cancel()

@@ -289,6 +289,35 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   章节超出窗口、状态缺失、槽位偏移与槽位内容不匹配。
 - 这一块是阅读器最经典的竞态（"翻页后旧章节内容盖上来"），现在有网可依。
 
+### 2026-10-21 G 区拆分（PageView 2465 → 2106 行）
+
+**第一次真正动 F/G 区。** 先拆 G 区（页眉页脚进阶动效装载），因为它只依赖两个 Lottie
+视图和一批阅读器状态，不碰标题那十几个私有数组。
+
+- **新增 `AdvancedTipLottieController.kt`（549 行）**：G 区整体搬出，含
+  `upAdvancedTipLottie`（装载主流程）、`commitOrDefer`/`commit`（翻页期间延迟提交）、
+  `prewarm`（首帧前预热）、`clear`/`clearAllSlots`/`dispose`、`applyChromeVisibility`、
+  `refreshFieldsIfBound`、`viewsBound`、`accepts`（陈旧判定）、
+  `PendingAdvancedTipComposition`/`PreparedAdvancedTipComposition`/`TipFieldTextDelegate`
+  三个原私有类型。
+- **宿主接口 `AdvancedTipHost`（15 个方法）**：控制器只通过它接触外部——
+  `tipView`/`contentWidth`/`contentGeneration`/`isMainView`/`isEpubBook`/`batteryLevel`/
+  `currentTextPage`/`bookName`/`bookAuthor`/`isHorizontalPageTurnActive`/`markSnapDirty`/
+  `animationFreeze`/`clearAdvancedTitleLoadingState`/`setClassicTipFallbackVisible`/
+  `defaultFontAssetDelegate`，外加一个共享状态 `var tipContext`。
+- **关键取舍：`tipContext`（阅读信息：书名/章节/时间/电量/作者）仍留在 PageView。**
+  经典文本 tip 与进阶动效包都从它渲染，是双向共享状态，搬进控制器会让
+  `upTime`/`upBattery`/`applyProgressTexts` 反向依赖控制器。控制器通过
+  `host.tipContext` 读写，单一来源不变。
+- **`PageView` 侧**：删掉 5 个状态字段 + 12 个私有方法，`TipHost` 内部类实现宿主接口；
+  翻页冻结/恢复动画（`freezeAdvancedTitleAnimationsForPageTurn` /
+  `resumeAdvancedTitleAnimationsAfterPageTurn`）仍留在 PageView——它同时管标题和 tip，
+  通过 `advancedTip.viewOf(slot)` / `advancedTip.hasKey(slot)` 访问 tip 侧。
+- **只搬不改**：逐字复制，唯一改动是把环境访问换成 host 调用。判定顺序、`runCatching`
+  边界、日志文案（含 "PageView advanced tip ..." 前缀）全部保持原样。
+- 阅读页包 **111 个单测全绿**（新增的回归网在拆搬后立刻起了作用：漏掉
+  `tipView`/`advancedTipKey` 两个访问器时，是编译错误而不是运行时 NPE 暴露的）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
