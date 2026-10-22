@@ -440,6 +440,31 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - ReadBook 2080 → 1932 行（搬出 235 行，新增 90 行宿主实现；净搬出约 145 行，
   加载器自身 350 行）。
 
+### 2026-10-22 第四步（下）：内容安装搬出（F/G…内容管线拆分完成）
+
+- **新增 `model/ReadBookContentLoader.kt`（982 行）**：把「安装」这一侧也搬进来——
+  `contentLoadFinish`（~260 行）/ `contentLoadFinishAwait`（~215 行）/
+  `installChapterSlot` / `clearIncompleteChapterSlot` / 三个加载守卫
+  （`isChapterLoadRequestCurrent` / `TokenCurrent` / `SlotCurrent`），
+  连同它们独占的状态：段落规则信号量、三个槽位锁、朗读待加载章节号。
+- **加载器成为 `CoroutineScope by host.coroutineScope`**：搬走的代码里
+  `Coroutine.async(this, ...)` 原本跑在 ReadBook 的作用域上（离开书籍时要能取消），
+  所以宿主把自己的作用域交给加载器委托，取消语义不变。
+- **宿主接口补齐**：`coroutineScope`、`prevTextChapter` / `curTextChapter` /
+  `nextTextChapter`（槽位是阅读器公开状态，仍归 ReadBook）、`durPageIndex`、
+  `durChapterPos`、`isScroll`、`simulatedChapterSize`、`onPageChanged`；
+  原先临时回调用的 `contentLoadFinish` / `contentLoadFinishAwait` 两个宿主方法删除。
+- **对外签名不变**：`contentLoadFinish` / `contentLoadFinishAwait` 在 ReadBook 里
+  仍是公开函数（缓存服务在调用），内部是一行薄委托。
+- **踩坑（两个）**：a) 搬走的代码里有 `this@ReadBook`（当作 CoroutineScope 传给
+  ChapterProvider），搬到加载器后要改成 `this`——加载器自己是作用域；
+  b) **源码契约测试被同名委托误伤**：`ReadBookReadAloudContractTest` 用文本匹配找
+  `fun curPageChanged(`，我把宿主方法也命名 `curPageChanged`，它把一行委托当成了真身。
+  宿主方法改名 `onPageChanged`，同时把测试改成"跳过一行委托、只取有代码块体的定义"，
+  避免以后任何同名委托再踩。
+- **ReadBook 2080 → 1362 行（-35%）**；内容管线（取正文 + 装槽位）整体独立成类。
+- 编译通过，全量单测 **1654 用例 0 失败**（纯搬移 + 1 处测试健壮性改进）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到

@@ -105,7 +105,6 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     var msg: String? = null
     private val readRecord = ReadRecord()
-    private val paragraphRuleProcessingSemaphore = Semaphore(1)
     /**
      * 章节加载的在途记录（哪个章在加载、加载到第几代、用的哪个排版键、任务句柄）。
      * 判定规则在 ChapterLoadGuard，取值在这里。
@@ -115,15 +114,10 @@ object ReadBook : CoroutineScope by MainScope() {
     private var paragraphRuleLayoutKey: String = ""
     @Volatile
     private var paragraphRuleRefreshJob: Job? = null
-    private val prevChapterLoadingLock = Mutex()
-    private val curChapterLoadingLock = Mutex()
-    private val nextChapterLoadingLock = Mutex()
     var readStartTime: Long = System.currentTimeMillis()
     private const val READ_ALOUD_USER_NAVIGATION_LOCK_MS = 1500L
     @Volatile
     private var readAloudUserNavigationUntil = 0L
-    @Volatile
-    private var readAloudPendingLoadChapterIndex = -1
 
     /* 跳转进度前进度记录 */
     var lastBookProgress: BookProgress? = null
@@ -168,6 +162,42 @@ object ReadBook : CoroutineScope by MainScope() {
         override val chapterLoads: ChapterLoadRegistry
             get() = ReadBook.chapterLoads
 
+        override val coroutineScope: CoroutineScope
+            get() = this@ReadBook
+
+        override var prevTextChapter: TextChapter?
+            get() = ReadBook.prevTextChapter
+            set(value) {
+                ReadBook.prevTextChapter = value
+            }
+
+        override var curTextChapter: TextChapter?
+            get() = ReadBook.curTextChapter
+            set(value) {
+                ReadBook.curTextChapter = value
+            }
+
+        override var nextTextChapter: TextChapter?
+            get() = ReadBook.nextTextChapter
+            set(value) {
+                ReadBook.nextTextChapter = value
+            }
+
+        override val durPageIndex: Int
+            get() = ReadBook.durPageIndex
+
+        override val durChapterPos: Int
+            get() = ReadBook.durChapterPos
+
+        override val isScroll: Boolean
+            get() = ReadBook.isScroll
+
+        override val simulatedChapterSize: Int
+            get() = ReadBook.simulatedChapterSize
+
+        override fun onPageChanged(pageChanged: Boolean, fromReadAloud: Boolean) =
+            ReadBook.curPageChanged(pageChanged, fromReadAloud)
+
         override fun currentChapterLayoutKey(): String =
             ReadBook.currentChapterLayoutKey()
 
@@ -192,41 +222,6 @@ object ReadBook : CoroutineScope by MainScope() {
             throwable: Throwable?
         ) = ReadBook.showCurrentChapterLoadError(index, message, throwable)
 
-        override fun contentLoadFinish(
-            book: Book,
-            chapter: BookChapter,
-            content: String,
-            upContent: Boolean,
-            resetPageOffset: Boolean,
-            canceled: Boolean,
-            requestGeneration: Long?,
-            success: (() -> Unit)?
-        ) = ReadBook.contentLoadFinish(
-            book,
-            chapter,
-            content,
-            upContent,
-            resetPageOffset,
-            canceled,
-            requestGeneration,
-            success
-        )
-
-        override suspend fun contentLoadFinishAwait(
-            book: Book,
-            chapter: BookChapter,
-            content: String,
-            upContent: Boolean,
-            resetPageOffset: Boolean,
-            requestGeneration: Long
-        ): Boolean = ReadBook.contentLoadFinishAwait(
-            book,
-            chapter,
-            content,
-            upContent,
-            resetPageOffset,
-            requestGeneration
-        )
     }
 
     private fun markReadAloudUserNavigation(fromReadAloud: Boolean) {
@@ -640,7 +635,7 @@ object ReadBook : CoroutineScope by MainScope() {
             if (curTextChapter == null) {
                 AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
                 if (fromReadAloud) {
-                    readAloudPendingLoadChapterIndex = durChapterIndex
+                    contentLoader.markReadAloudPendingLoad(durChapterIndex)
                 }
                 if (upContentInPlace && !suppressVisualContent) callBack?.upContent()
                 loadContent(
@@ -687,7 +682,7 @@ object ReadBook : CoroutineScope by MainScope() {
             if (curTextChapter == null) {
                 AppLog.putDebug("moveToNextChapter-章节未加载,开始加载")
                 if (fromReadAloud) {
-                    readAloudPendingLoadChapterIndex = durChapterIndex
+                    contentLoader.markReadAloudPendingLoad(durChapterIndex)
                 }
                 if (upContentInPlace && !suppressVisualContent) callBack?.upContentAwait()
                 loadContentAwait(
@@ -734,7 +729,7 @@ object ReadBook : CoroutineScope by MainScope() {
             }
             if (curTextChapter == null) {
                 if (fromReadAloud) {
-                    readAloudPendingLoadChapterIndex = durChapterIndex
+                    contentLoader.markReadAloudPendingLoad(durChapterIndex)
                 }
                 if (upContentInPlace && !suppressVisualContent) callBack?.upContent()
                 loadContent(
@@ -815,7 +810,7 @@ object ReadBook : CoroutineScope by MainScope() {
                     index,
                     if (index >= oldChapterIndex) 1 else -1
                 )
-                readAloudPendingLoadChapterIndex = index
+                contentLoader.markReadAloudPendingLoad(index)
             }
             if (upContent && !suppressVisualContent) callBack?.upContent()
             saveRead()
@@ -1026,13 +1021,41 @@ object ReadBook : CoroutineScope by MainScope() {
         success: (() -> Unit)? = null
     ) = contentLoader.loadContentAwait(index, upContent, resetPageOffset, success)
 
+    /**
+     * 内容加载完成：把正文装进槽位。逻辑在 ReadBookContentLoader 里，
+     * 这里是给缓存服务等外部调用方的入口。
+     */
+    fun contentLoadFinish(
+        book: Book,
+        chapter: BookChapter,
+        content: String,
+        upContent: Boolean = true,
+        resetPageOffset: Boolean,
+        canceled: Boolean = false,
+        requestGeneration: Long? = null,
+        success: (() -> Unit)? = null
+    ) = contentLoader.contentLoadFinish(
+        book, chapter, content, upContent, resetPageOffset, canceled, requestGeneration, success
+    )
+
+    suspend fun contentLoadFinishAwait(
+        book: Book,
+        chapter: BookChapter,
+        content: String,
+        upContent: Boolean = true,
+        resetPageOffset: Boolean,
+        requestGeneration: Long
+    ): Boolean = contentLoader.contentLoadFinishAwait(
+        book, chapter, content, upContent, resetPageOffset, requestGeneration
+    )
+
     private fun cancelChapterLoading(index: Int, expectedGeneration: Long? = null) {
         chapterLoads.cancel(index, expectedGeneration)
         sequenceOf(prevTextChapter, curTextChapter, nextTextChapter)
             .filterNotNull()
             .filter { it.chapter.index == index && !it.isCompleted }
             .toList()
-            .forEach { clearIncompleteChapterSlot(index, it) }
+            .forEach { contentLoader.clearIncompleteChapterSlot(index, it) }
     }
 
     private fun beginChapterLoad(index: Int, layoutKey: String): Long? =
@@ -1054,601 +1077,8 @@ object ReadBook : CoroutineScope by MainScope() {
         finishChapterLoad(index, generation)
     }
 
-    private fun isChapterLoadRequestCurrent(
-        bookUrl: String,
-        chapterIndex: Int,
-        layoutKey: String,
-        generation: Long
-    ): Boolean {
-        return ChapterLoadGuard.isRequestCurrent(
-            activeBookUrl = book?.bookUrl,
-            requestBookUrl = bookUrl,
-            chapterIndex = chapterIndex,
-            currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoads.generationOf(chapterIndex),
-            requestGeneration = generation,
-            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
-            requestLayoutKey = layoutKey,
-            currentLayoutKey = currentChapterLayoutKey()
-        )
-    }
-
-    private fun isChapterLoadTokenCurrent(
-        bookUrl: String,
-        chapterIndex: Int,
-        layoutKey: String,
-        generation: Long
-    ): Boolean {
-        return ChapterLoadGuard.isTokenCurrent(
-            activeBookUrl = book?.bookUrl,
-            requestBookUrl = bookUrl,
-            chapterIndex = chapterIndex,
-            currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoads.generationOf(chapterIndex),
-            requestGeneration = generation,
-            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
-            requestLayoutKey = layoutKey
-        )
-    }
-
-    private fun isChapterLoadSlotCurrent(
-        bookUrl: String,
-        chapterIndex: Int,
-        layoutKey: String,
-        generation: Long,
-        expectedOffset: Int,
-        expectedChapter: TextChapter? = null
-    ): Boolean {
-        return ChapterLoadGuard.isSlotCurrent(
-            activeBookUrl = book?.bookUrl,
-            requestBookUrl = bookUrl,
-            chapterIndex = chapterIndex,
-            currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoads.generationOf(chapterIndex),
-            requestGeneration = generation,
-            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
-            requestLayoutKey = layoutKey,
-            expectedOffset = expectedOffset,
-            slotMatches = expectedChapter == null || textChapter(expectedOffset) === expectedChapter
-        )
-    }
-
-    @Synchronized
-    private fun installChapterSlot(
-        bookUrl: String,
-        chapterIndex: Int,
-        layoutKey: String,
-        generation: Long,
-        expectedOffset: Int,
-        textChapter: TextChapter
-    ): Boolean {
-        if (!isChapterLoadTokenCurrent(bookUrl, chapterIndex, layoutKey, generation) ||
-            chapterIndex - durChapterIndex != expectedOffset
-        ) return false
-        when (expectedOffset) {
-            -1 -> {
-                prevTextChapter?.takeIf { it !== textChapter }?.cancelLayout()
-                prevTextChapter = textChapter
-            }
-            0 -> {
-                curTextChapter?.takeIf { it !== textChapter }?.cancelLayout()
-                curTextChapter = textChapter
-            }
-            1 -> {
-                nextTextChapter?.takeIf { it !== textChapter }?.cancelLayout()
-                nextTextChapter = textChapter
-            }
-            else -> return false
-        }
-        chapterLoads.setChapterLayoutKey(chapterIndex, layoutKey)
-        return true
-    }
-
     fun removeLoading(index: Int) {
         chapterLoads.removeLoading(index)
-    }
-
-    @Synchronized
-    private fun clearIncompleteChapterSlot(chapterIndex: Int, expectedChapter: TextChapter?) {
-        if (expectedChapter == null || expectedChapter.isCompleted) return
-        var cleared = false
-        if (prevTextChapter === expectedChapter) {
-            prevTextChapter = null
-            cleared = true
-        }
-        if (curTextChapter === expectedChapter) {
-            curTextChapter = null
-            cleared = true
-        }
-        if (nextTextChapter === expectedChapter) {
-            nextTextChapter = null
-            cleared = true
-        }
-        if (cleared) {
-            expectedChapter.cancelLayout()
-            chapterLoads.removeChapterLayoutKey(chapterIndex)
-        }
-    }
-
-    /**
-     * 内容加载完成
-     */
-    @Synchronized
-    fun contentLoadFinish(
-        book: Book,
-        chapter: BookChapter,
-        content: String,
-        upContent: Boolean = true,
-        resetPageOffset: Boolean,
-        canceled: Boolean = false,
-        requestGeneration: Long? = null,
-        success: (() -> Unit)? = null
-    ) {
-        val generation = requestGeneration ?: return
-        val requestedLayoutKey = chapterLoads.layoutKeyOf(chapter.index)
-        if (requestedLayoutKey == null || chapter.bookUrl != book.bookUrl || canceled ||
-            !isChapterLoadRequestCurrent(
-                book.bookUrl,
-                chapter.index,
-                requestedLayoutKey,
-                generation
-            )
-        ) {
-            finishChapterLoad(chapter.index, generation)
-            return
-        }
-        if (chapterLoads.jobOf(chapter.index)?.isActive == true) {
-            return
-        }
-        var installedTextChapter: TextChapter? = null
-        lateinit var job: Coroutine<Boolean>
-        job = Coroutine.async(this, start = CoroutineStart.LAZY) {
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    generation
-                )
-            ) {
-                return@async false
-            }
-            val contentProcessor = ContentProcessor.get(book.name, book.origin)
-            val fallbackDisplayTitle = if (book.usesDirectReader) chapter.title.trim() else chapter.getDisplayTitle(
-                contentProcessor.getTitleReplaceRules(),
-                book.getUseReplaceRule() && !book.usesDirectReader,
-                replaceBook = book.toReplaceBook()
-            )
-            val contents = paragraphRuleProcessingSemaphore.withPermit {
-                ParagraphRuleProcessor.process(
-                    book,
-                    chapter,
-                    contentProcessor.getContent(book, chapter, content, includeTitle = false, checkActive = { ensureActive() })
-                )
-            }
-            val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
-            ensureActive()
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    generation
-                )
-            ) {
-                return@async false
-            }
-            val textChapter = ChapterProvider.getTextChapterAsync(
-                this, book, chapter, displayTitle, contents, simulatedChapterSize
-            )
-            installedTextChapter = textChapter
-            when (val offset = chapter.index - durChapterIndex) {
-                0 -> curChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    if (!isChapterLoadSlotCurrent(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    ) return@withLock false
-                    callBack?.upMenuView()
-                    var available = false
-                    for (page in textChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                generation,
-                                offset,
-                                textChapter
-                            )
-                        ) {
-                            textChapter.cancelLayout()
-                            return@withLock false
-                        }
-                        val index = page.index
-                        if (!available && page.containPos(durChapterPos)) {
-                            if (upContent) {
-                                callBack?.upContent(offset, resetPageOffset)
-                            }
-                            available = true
-                        }
-                        if (upContent && isScroll && available &&
-                            index > durPageIndex && index <= durPageIndex + 2
-                        ) {
-                            callBack?.upContent(offset, false)
-                        }
-                        callBack?.onLayoutPageCompleted(index, page)
-                    }
-                    if (!isChapterLoadSlotCurrent(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    ) return@withLock false
-                    if (upContent) callBack?.upContent(offset, !available && resetPageOffset)
-                    val fromReadAloud = readAloudPendingLoadChapterIndex == chapter.index
-                    if (fromReadAloud) {
-                        readAloudPendingLoadChapterIndex = -1
-                    }
-                    curPageChanged(fromReadAloud = fromReadAloud)
-                    callBack?.contentLoadFinish()
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        generation,
-                        offset,
-                        textChapter
-                    )
-                }
-
-                -1 -> prevChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    for (page in textChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                generation,
-                                offset,
-                                textChapter
-                            )
-                        ) {
-                            textChapter.cancelLayout()
-                            return@withLock false
-                        }
-                    }
-                    if (!isChapterLoadSlotCurrent(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    ) return@withLock false
-                    if (upContent) callBack?.upContent(offset, resetPageOffset)
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        generation,
-                        offset,
-                        textChapter
-                    )
-                }
-
-                1 -> nextChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            generation,
-                            offset,
-                            textChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    for (page in textChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                generation,
-                                offset,
-                                textChapter
-                            )
-                        ) {
-                            textChapter.cancelLayout()
-                            return@withLock false
-                        }
-                        if (page.index > 1) {
-                            continue
-                        }
-                        if (upContent) callBack?.upContent(offset, resetPageOffset)
-                    }
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        generation,
-                        offset,
-                        textChapter
-                    )
-                }
-
-                else -> false
-            }
-        }.onError {
-            if (it is CancellationException) {
-                return@onError
-            }
-            AppLog.put("ChapterProvider ERROR", it)
-            if (chapter.index == durChapterIndex) {
-                showCurrentChapterLoadError(
-                    chapter.index,
-                    "Layout failed: ${it.localizedMessage ?: it::class.java.simpleName}",
-                    it
-                )
-                return@onError
-            }
-            appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
-        }.onSuccess { applied ->
-            if (applied) success?.invoke()
-        }
-        chapterLoads.setJob(chapter.index, job)
-        job.invokeOnCompletion {
-            if (chapterLoads.removeJob(chapter.index, job)) {
-                clearIncompleteChapterSlot(chapter.index, installedTextChapter)
-                finishChapterLoad(chapter.index, generation)
-            }
-        }
-        job.start()
-    }
-
-    suspend fun contentLoadFinishAwait(
-        book: Book,
-        chapter: BookChapter,
-        content: String,
-        upContent: Boolean = true,
-        resetPageOffset: Boolean,
-        requestGeneration: Long
-    ): Boolean {
-        if (chapter.bookUrl != book.bookUrl) return false
-        val requestedLayoutKey = chapterLoads.layoutKeyOf(chapter.index) ?: return false
-        if (!isChapterLoadRequestCurrent(
-                book.bookUrl,
-                chapter.index,
-                requestedLayoutKey,
-                requestGeneration
-            )
-        ) return false
-        var textChapter: TextChapter? = null
-        var applied = false
-        try {
-            val contentProcessor = ContentProcessor.get(book.name, book.origin)
-            val fallbackDisplayTitle = if (book.usesDirectReader) chapter.title.trim() else chapter.getDisplayTitle(
-                contentProcessor.getTitleReplaceRules(),
-                book.getUseReplaceRule() && !book.usesDirectReader,
-                replaceBook = book.toReplaceBook()
-            )
-            val contents = paragraphRuleProcessingSemaphore.withPermit {
-                ParagraphRuleProcessor.process(
-                    book,
-                    chapter,
-                    contentProcessor.getContent(book, chapter, content, includeTitle = false, checkActive = { ensureActive() })
-                )
-            }
-            val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
-            ensureActive()
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    requestGeneration
-                )
-            ) return false
-            val createdChapter = ChapterProvider.getTextChapterAsync(
-                this@ReadBook, book, chapter, displayTitle, contents, simulatedChapterSize
-            )
-            textChapter = createdChapter
-            applied = when (val offset = chapter.index - durChapterIndex) {
-                0 -> curChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            requestGeneration,
-                            offset,
-                            createdChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    callBack?.upMenuView()
-                    var available = false
-                    for (page in createdChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                requestGeneration,
-                                offset,
-                                createdChapter
-                            )
-                        ) {
-                            createdChapter.cancelLayout()
-                            return@withLock false
-                        }
-                        val index = page.index
-                        if (!available && page.containPos(durChapterPos)) {
-                            if (upContent) {
-                                callBack?.upContent(offset, resetPageOffset)
-                            }
-                            available = true
-                        }
-                        if (upContent && isScroll && available &&
-                            index > durPageIndex && index <= durPageIndex + 2
-                        ) {
-                            callBack?.upContent(offset, false)
-                        }
-                        callBack?.onLayoutPageCompleted(index, page)
-                    }
-                    if (!isChapterLoadSlotCurrent(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            requestGeneration,
-                            offset,
-                            createdChapter
-                        )
-                    ) return@withLock false
-                    if (upContent) callBack?.upContent(offset, !available && resetPageOffset)
-                    val fromReadAloud = readAloudPendingLoadChapterIndex == chapter.index
-                    if (fromReadAloud) {
-                        readAloudPendingLoadChapterIndex = -1
-                    }
-                    curPageChanged(fromReadAloud = fromReadAloud)
-                    callBack?.contentLoadFinish()
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        requestGeneration,
-                        offset,
-                        createdChapter
-                    )
-                }
-
-                -1 -> prevChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            requestGeneration,
-                            offset,
-                            createdChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    for (page in createdChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                requestGeneration,
-                                offset,
-                                createdChapter
-                            )
-                        ) {
-                            createdChapter.cancelLayout()
-                            return@withLock false
-                        }
-                    }
-                    if (upContent) callBack?.upContent(offset, resetPageOffset)
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        requestGeneration,
-                        offset,
-                        createdChapter
-                    )
-                }
-
-                1 -> nextChapterLoadingLock.withLock {
-                    val installed = withContext(Main) {
-                        ensureActive()
-                        installChapterSlot(
-                            book.bookUrl,
-                            chapter.index,
-                            requestedLayoutKey,
-                            requestGeneration,
-                            offset,
-                            createdChapter
-                        )
-                    }
-                    if (!installed) return@withLock false
-                    for (page in createdChapter.layoutChannel) {
-                        if (!isChapterLoadSlotCurrent(
-                                book.bookUrl,
-                                chapter.index,
-                                requestedLayoutKey,
-                                requestGeneration,
-                                offset,
-                                createdChapter
-                            )
-                        ) {
-                            createdChapter.cancelLayout()
-                            return@withLock false
-                        }
-                        if (page.index > 1) {
-                            continue
-                        }
-                        if (upContent) callBack?.upContent(offset, resetPageOffset)
-                    }
-                    isChapterLoadSlotCurrent(
-                        book.bookUrl,
-                        chapter.index,
-                        requestedLayoutKey,
-                        requestGeneration,
-                        offset,
-                        createdChapter
-                    )
-                }
-
-                else -> false
-            }
-            return applied
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            AppLog.put("ChapterProvider ERROR", e)
-            if (chapter.index == durChapterIndex) {
-                showCurrentChapterLoadError(
-                    chapter.index,
-                    "Layout failed: ${e.localizedMessage ?: e::class.java.simpleName}",
-                    e
-                )
-            } else {
-                appCtx.toastOnUi("ChapterProvider ERROR:\n${e.stackTraceStr}")
-            }
-            return false
-        } finally {
-            if (!applied) clearIncompleteChapterSlot(chapter.index, textChapter)
-        }
     }
 
     fun invalidateEpubResource(bookUrl: String, chapterIndex: Int, src: String) {

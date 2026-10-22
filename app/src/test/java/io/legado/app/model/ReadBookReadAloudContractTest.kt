@@ -50,15 +50,27 @@ class ReadBookReadAloudContractTest {
     }
 
     private fun functionBody(source: String, name: String): String {
-        val start = source.indexOf("fun $name(")
-        check(start >= 0) { "ReadBook function not found: $name" }
-        val bodyStart = source.indexOf('{', start)
-        check(bodyStart >= 0) { "ReadBook function body not found: $name" }
-        var depth = 0
-        for (index in bodyStart until source.length) {
-            when (source[index]) {
-                '{' -> depth++
-                '}' -> if (--depth == 0) return source.substring(bodyStart + 1, index)
+        // 可能同时存在真函数与一行委托（宿主接口转发），只取有代码块体的那个
+        var searchFrom = 0
+        while (true) {
+            val start = source.indexOf("fun $name(", searchFrom)
+            check(start >= 0) { "ReadBook function not found: $name" }
+            val bodyStart = source.indexOf('{', start)
+            check(bodyStart >= 0) { "ReadBook function body not found: $name" }
+            var depth = 0
+            for (index in bodyStart until source.length) {
+                when (source[index]) {
+                    '{' -> depth++
+                    '}' -> {
+                        if (--depth == 0) {
+                            val body = source.substring(bodyStart + 1, index)
+                            // 一行委托（如宿主转发）没有换行，跳过它继续找真身
+                            if (body.contains('\n')) return body
+                            searchFrom = index + 1
+                            break
+                        }
+                    }
+                }
             }
         }
         error("Unterminated ReadBook function: $name")
