@@ -452,22 +452,25 @@ object ReadBook : CoroutineScope by MainScope() {
         }.onError {
             AppLog.put("拉取阅读进度失败", it)
         }.onSuccess { progress ->
-            if (progress == null || progress.durChapterIndex < book.durChapterIndex ||
-                (progress.durChapterIndex == book.durChapterIndex
-                        && progress.durChapterPos < book.durChapterPos)
-            ) {
-                // 服务器没有进度或者进度比服务器快，上传现有进度
-                Coroutine.async(Coroutine.defaultScope) {
-                    AppCloudStorage.uploadBookProgress(BookProgress(book), uploadSuccessAction)
-                    book.update()
-                }
-            } else if (progress.durChapterIndex > book.durChapterIndex ||
-                progress.durChapterPos > book.durChapterPos
-            ) {
-                // 进度比服务器慢，执行传入动作
-                newProgressAction?.invoke(progress)
+            // 决策规则在 ReadProgressSyncPolicy（可单测）
+            val decision = if (progress == null) {
+                ProgressSyncDecision.UPLOAD
             } else {
-                syncSuccessAction?.invoke()
+                ReadProgressSyncPolicy.decide(progress, BookProgress(book))
+            }
+            when (decision) {
+                // 服务器没有进度或者进度比服务器快，上传现有进度
+                ProgressSyncDecision.UPLOAD -> {
+                    Coroutine.async(Coroutine.defaultScope) {
+                        AppCloudStorage.uploadBookProgress(BookProgress(book), uploadSuccessAction)
+                        book.update()
+                    }
+                }
+                // 进度比服务器慢，执行传入动作
+                ProgressSyncDecision.APPLY_SERVER -> progress?.let {
+                    newProgressAction?.invoke(it)
+                }
+                ProgressSyncDecision.IN_SYNC -> syncSuccessAction?.invoke()
             }
         }
     }
@@ -842,6 +845,7 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     private fun currentChapterLayoutKey(): String {
+        // 纯计算已搬到 ChapterLayoutKey（可单测），这里只负责把阅读器状态喂进去
         val paint = ChapterProvider.contentPaint
         val titlePaint = ChapterProvider.titlePaint
         val currentBook = book
@@ -850,35 +854,46 @@ object ReadBook : CoroutineScope by MainScope() {
             ?.joinToString(",") {
                 "${it.id}:${it.pattern.hashCode()}:${it.replacement.hashCode()}:${it.isRegex}:${it.timeoutMillisecond}"
             }.orEmpty()
-        return buildString {
-            append(currentBook?.usesDirectReader == true).append('|')
-            append(ChapterProvider.viewWidth).append('x').append(ChapterProvider.viewHeight)
-            append('|').append(ChapterProvider.visibleWidth).append('x').append(ChapterProvider.visibleHeight)
-            append('|').append(paint.textSize).append('|').append(paint.color)
-            append('|').append(paint.typeface?.style ?: 0)
-            append('|').append(titlePaint.textSize).append('|').append(titlePaint.color)
-            append('|').append(titlePaint.typeface?.style ?: 0)
-            append('|').append(ChapterProvider.contentPaintTextHeight)
-            append('|').append(ChapterProvider.titlePaintTextHeight)
-            append('|').append(ChapterProvider.lineSpacingExtra)
-            append('|').append(ChapterProvider.paragraphSpacing)
-            append('|').append(ReadBookConfig.paragraphIndent)
-            append('|').append(ReadBookConfig.useZhLayout)
-            append('|').append(ReadBookConfig.textFullJustify)
-            append('|').append(AppConfig.adaptSpecialStyle)
-            if (currentBook != null) {
-                append('|').append(currentBook.getUseReplaceRule())
-                append('|').append(currentBook.config.delTag)
-                append('|').append(currentBook.getReSegment())
-                append('|').append(currentBook.getImageStyle())
-            }
-            append('|').append(replaceRuleKey)
-            if (currentBook != null && !currentBook.isEpub && currentBook.usesDirectReader) {
-                append('|').append(processor?.directReplacementRevision(currentBook))
-            }
-            append('|').append(paragraphRuleLayoutKey)
-            append("|highlight:").append(io.legado.app.help.book.highlight.HighlightRules.store.revision())
-        }
+        return ChapterLayoutKey.of(
+            ChapterLayoutKeyInputs(
+                viewWidth = ChapterProvider.viewWidth,
+                viewHeight = ChapterProvider.viewHeight,
+                visibleWidth = ChapterProvider.visibleWidth,
+                visibleHeight = ChapterProvider.visibleHeight,
+                textSize = paint.textSize,
+                textColor = paint.color,
+                textTypefaceStyle = paint.typeface?.style ?: 0,
+                titleSize = titlePaint.textSize,
+                titleColor = titlePaint.color,
+                titleTypefaceStyle = titlePaint.typeface?.style ?: 0,
+                contentTextHeight = ChapterProvider.contentPaintTextHeight,
+                titleTextHeight = ChapterProvider.titlePaintTextHeight,
+                lineSpacingExtra = ChapterProvider.lineSpacingExtra,
+                paragraphSpacing = ChapterProvider.paragraphSpacing,
+                paragraphIndent = ReadBookConfig.paragraphIndent,
+                useZhLayout = ReadBookConfig.useZhLayout,
+                textFullJustify = ReadBookConfig.textFullJustify,
+                adaptSpecialStyle = AppConfig.adaptSpecialStyle,
+                replaceRuleKey = replaceRuleKey,
+                paragraphRuleKey = paragraphRuleLayoutKey,
+                highlightRevision = io.legado.app.help.book.highlight.HighlightRules.store.revision(),
+                book = currentBook?.let {
+                    ChapterLayoutBookInputs(
+                        usesDirectReader = it.usesDirectReader,
+                        isEpub = it.isEpub,
+                        useReplaceRule = it.getUseReplaceRule(),
+                        delTag = it.config.delTag,
+                        reSegment = it.getReSegment(),
+                        imageStyle = it.getImageStyle(),
+                        directReplacementRevision = if (!it.isEpub && it.usesDirectReader) {
+                            processor?.directReplacementRevision(it)
+                        } else {
+                            null
+                        }
+                    )
+                }
+            )
+        )
     }
 
     private fun refreshParagraphRuleLayoutKey() {

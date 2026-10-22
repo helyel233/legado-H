@@ -361,6 +361,32 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - **阅读页包 111 个单测全绿，全量 1637 用例 0 失败。**
   PageView 从最初的 **2821 行降到 1200 行**（-57%），标题/tip 装载各自独立成类。
 
+---
+
+## 9. ReadBook.kt 拆分（2026-10-22 立项）
+
+`ReadBook.kt` 2080 行，object 单例，~70 属性 / ~60 函数，被全仓直接引用
+（`ReadBook.book` / `ReadBook.durChapterIndex` / `ReadBook.loadContent(...)` 等），
+**不能改外部调用面**，只能内部搬。
+
+沿用已验证的三步：先抽纯逻辑建回归网 → 状态收拢成对象 → 整块搬出。
+
+### 2026-10-22 第一步：纯逻辑抽取
+
+- **新增 `model/ChapterLayoutKey.kt`**：把 `currentChapterLayoutKey()` 的键计算搬成
+  纯函数。输入是 `ChapterLayoutKeyInputs`（视口、两套画笔、间距、缩进、中西文排版、
+  替换规则串、段落规则键、高亮修订号 + `ChapterLayoutBookInputs`）。
+  键的契约是「**任何影响排版的因素变化 → 键变化**」，漏一个读者就会看到按旧设置
+  排好的正文，所以逐项有单测。
+- **新增 `model/ReadProgressSyncPolicy.kt`**：把 `syncProgress` 里「服务器进度与本机
+  进度谁新」的三分支（上传 / 采用服务器 / 已同步）搬成纯决策。
+  阅读位置是（章节号, 章节内偏移）二元组，**章节号小的一定更旧，哪怕它的偏移更大**
+  ——不同章节长度不可比，写反了会覆盖读者最远进度或把人拖回旧位置。
+- **单测 11 个**（`ChapterLayoutKeyTest` 8 + `ReadProgressSyncPolicyTest` 3）。
+- 踩坑：原代码用 `append(Any)` 拼键，所以 `paragraphSpacing` 是 Int、
+  `paragraphIndent` 是 String、`delTag` 是 Long、两个 revision 是 String——
+  搬成强类型数据类时编译器才暴露，已按真实类型修正。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
