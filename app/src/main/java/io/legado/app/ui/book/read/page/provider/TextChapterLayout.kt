@@ -1,4 +1,5 @@
 package io.legado.app.ui.book.read.page.provider
+import io.legado.app.model.localBook.EpubCssValues
 
 import io.legado.app.help.http.dns.DnsScope
 import android.graphics.Color

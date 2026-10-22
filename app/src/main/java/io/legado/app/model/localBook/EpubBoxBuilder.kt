@@ -167,28 +167,9 @@ internal class EpubBoxBuilder {
         return -1
     }
 
-    private fun String.trimMatchingQuote(): String {
-        val clean = trim()
-        if (clean.length >= 2) {
-            val first = clean.first()
-            val last = clean.last()
-            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
-                return clean.substring(1, clean.lastIndex)
-            }
-        }
-        return clean
-    }
+    private fun String.trimMatchingQuote(): String = EpubCssValues.trimMatchingQuote(this)
 
-    private fun String.extractCssColor(): String? {
-        val clean = trim()
-        if (clean.startsWith("#") || clean.startsWith("rgb", true)) return clean
-        val parts = clean.split(' ', ',', '/')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-        return parts.firstOrNull { part ->
-            part.startsWith("#") || part.startsWith("rgb", true) || part.toNamedCssColor() != null
-        }
-    }
+    private fun String.extractCssColor(): String? = EpubCssValues.extractColor(this)
 
     private fun String.extractBackgroundRepeat(): String? {
         val clean = lowercase(Locale.ROOT)
@@ -213,27 +194,7 @@ internal class EpubBoxBuilder {
             .takeIf { it.isNotBlank() }
     }
 
-    private fun String.toNamedCssColor(): String? {
-        return when (lowercase(Locale.ROOT)) {
-            "black" -> "#000000"
-            "white" -> "#FFFFFF"
-            "red" -> "#FF0000"
-            "green" -> "#008000"
-            "blue" -> "#0000FF"
-            "cyan", "aqua" -> "#00FFFF"
-            "magenta", "fuchsia" -> "#FF00FF"
-            "yellow" -> "#FFFF00"
-            "gray", "grey" -> "#808080"
-            "silver" -> "#C0C0C0"
-            "maroon" -> "#800000"
-            "purple" -> "#800080"
-            "teal" -> "#008080"
-            "navy" -> "#000080"
-            "orange" -> "#FFA500"
-            "transparent" -> "#00000000"
-            else -> null
-        }
-    }
+    private fun String.toNamedCssColor(): String? = EpubCssValues.toNamedColor(this)
 
     private companion object {
         private val blockDisplays = setOf(

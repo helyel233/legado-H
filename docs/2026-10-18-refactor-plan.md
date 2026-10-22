@@ -573,6 +573,29 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   规则解析（逗号选择器拆分、`supportedOnly` 标志、注释剥离）。
 - 全量单测 **1748 用例 0 失败**（253 测试类，较上轮 1738 再 +10）。
 
+### 2026-10-23 消除 Epub 子系统的 CSS 解析重复副本（-200 行）
+
+review 时发现这段 CSS 解析代码被复制到 Epub 子系统多处（`EpubFile`/`EpubLayoutEngine`/
+`EpubBoxBuilder`/`EpubDomBuilder`）。**先取证再动**：
+- 逐函数 shell diff 确认：`trimMatchingQuote` 4 处**逐字同源**、`normalizeHexColor` 3 处同源；
+  `parseRgb`/`toNamedColor` 报差异，但核对后**仅为形式差异**——扩展函数 vs 普通函数
+  （`this`→`input`）、`Color.argb`→`pack`（已证等价）、`lowercase(Locale.ROOT)`→`lowercase()`
+  （等价）。故 4 个函数跨 5 处副本**行为完全等价**，可零风险统一。
+- **架构修正**：`EpubCssValues` 原在 `ui.book.read.page.provider`，而 4 个副本在
+  `model.localBook`——若让 model 依赖 ui 是层级倒挂。故把 `EpubCssValues`（含测试）
+  移到 `model.localBook`（与 `EpubCss` 同层），依赖方向变为正确的 ui→model。
+- **统一手法（沿用"不碰调用点"原则）**：4 个文件里 15 个重复函数**只把函数体换成一行
+  委托**（`private fun String.trimMatchingQuote(): String = EpubCssValues.trimMatchingQuote(this)`），
+  原签名保留 → 调用点零改动。共 **-200 行**。
+- **hsl 漂移保守处理**：`EpubLayoutEngine.toCssColor` 有 `parseHslCssColor` 分支，
+  而 `EpubCssValues.parseColor` 无 hsl（原文 `TextChapterLayout` 版本就没有）。
+  故 `toCssColor` **保留 hsl 分支不委托**、其余分支仍走已统一的共用函数；
+  `EpubFile.toAndroidColor`（无 hsl）则整体委托 `EpubCssValues.parseColor`。
+  即：**不擅自给任何一处增删 hsl 能力**，行为零变化。
+- 验证：编译通过 + 全量 **1748 用例 0 失败**（与上轮完全一致，证明零行为变化）。
+- **已知遗留**：`EpubLayoutEngine` 的 hsl 支持与 `TextChapterLayout` 无 hsl 并存，
+  是历史漂移。若要彻底统一需先决策"是否给所有 Epub 颜色解析补 hsl"——属行为变更，暂不动。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到

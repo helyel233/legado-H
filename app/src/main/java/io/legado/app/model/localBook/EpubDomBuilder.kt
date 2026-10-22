@@ -541,15 +541,5 @@ internal class EpubDomBuilder(
         return -1
     }
 
-    private fun String.trimMatchingQuote(): String {
-        val clean = trim()
-        if (clean.length >= 2) {
-            val first = clean.first()
-            val last = clean.last()
-            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
-                return clean.substring(1, clean.lastIndex)
-            }
-        }
-        return clean
-    }
+    private fun String.trimMatchingQuote(): String = EpubCssValues.trimMatchingQuote(this)
 }

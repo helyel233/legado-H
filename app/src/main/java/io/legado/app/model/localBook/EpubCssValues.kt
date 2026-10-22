@@ -1,4 +1,4 @@
-package io.legado.app.ui.book.read.page.provider
+package io.legado.app.model.localBook
 
 /**
  * Pure parsing of the CSS values the EPUB block-decoration code pulls out of styles.
@@ -19,11 +19,13 @@ internal object EpubCssValues {
 
     /** Parses a CSS color (hex, rgb()/rgba(), or a named color) into `0xAARRGGBB`. */
     fun parseColor(input: String): Int? {
-        val clean = input.trim().trimMatchingQuote()
+        val clean = trimMatchingQuote(input.trim())
         return when {
             clean.startsWith("rgba", true) || clean.startsWith("rgb", true) -> parseRgb(clean)
-            clean.startsWith("#") -> runCatching { parseHex(clean.normalizeHexColor()) }.getOrNull()
-            else -> toNamedColor(clean)?.let { runCatching { parseHex(it.normalizeHexColor()) }.getOrNull() }
+            clean.startsWith("#") -> runCatching { parseHex(normalizeHexColor(clean)) }.getOrNull()
+            else -> toNamedColor(clean)?.let {
+                runCatching { parseHex(normalizeHexColor(it)) }.getOrNull()
+            }
         }
     }
 
@@ -156,8 +158,8 @@ internal object EpubCssValues {
 
     // --- internals -----------------------------------------------------------
 
-    private fun String.trimMatchingQuote(): String {
-        val clean = trim()
+    internal fun trimMatchingQuote(input: String): String {
+        val clean = input.trim()
         if (clean.length >= 2) {
             val first = clean.first()
             val last = clean.last()
@@ -168,8 +170,8 @@ internal object EpubCssValues {
         return clean
     }
 
-    private fun String.normalizeHexColor(): String {
-        val hex = trim().removePrefix("#")
+    internal fun normalizeHexColor(input: String): String {
+        val hex = input.trim().removePrefix("#")
         return when (hex.length) {
             3 -> "#" + hex.map { "$it$it" }.joinToString("")
             4 -> "#" + hex.map { "$it$it" }.joinToString("")
@@ -188,7 +190,7 @@ internal object EpubCssValues {
         }
     }
 
-    private fun parseRgb(input: String): Int? {
+    internal fun parseRgb(input: String): Int? {
         val start = input.indexOf('(')
         val end = input.lastIndexOf(')')
         if (start < 0 || end <= start) return null
@@ -222,7 +224,7 @@ internal object EpubCssValues {
         )
     }
 
-    private fun toNamedColor(input: String): String? {
+    internal fun toNamedColor(input: String): String? {
         return when (input.lowercase()) {
             "black" -> "#000000"
             "white" -> "#FFFFFF"

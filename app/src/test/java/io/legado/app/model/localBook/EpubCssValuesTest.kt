@@ -1,4 +1,4 @@
-package io.legado.app.ui.book.read.page.provider
+package io.legado.app.model.localBook
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
