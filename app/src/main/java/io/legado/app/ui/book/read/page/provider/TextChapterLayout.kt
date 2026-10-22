@@ -1613,121 +1613,16 @@ class TextChapterLayout(
         )
     }
 
-    private fun String.toEpubBoxLengths(): List<String> {
-        val parts = trim().split(' ', '\t', '\n')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-        return when (parts.size) {
-            0 -> emptyList()
-            1 -> listOf(parts[0], parts[0], parts[0], parts[0])
-            2 -> listOf(parts[0], parts[1], parts[0], parts[1])
-            3 -> listOf(parts[0], parts[1], parts[2], parts[1])
-            else -> parts.take(4)
-        }
-    }
+    // Epub CSS 值解析已抽到 EpubCssValues（纯对象，可单测）；这里只保留一行委托，调用点不变。
+    private fun String.toEpubBoxLengths(): List<String> = EpubCssValues.toBoxLengths(this)
 
-    private fun String.extractCssColor(): String? {
-        val clean = trim()
-        if (clean.startsWith("#") || clean.startsWith("rgb", true)) return clean
-        val parts = clean.split(' ', ',', '/')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-        return parts.firstOrNull { part ->
-            part.startsWith("#") || part.startsWith("rgb", true) || part.toNamedCssColor() != null
-        }
-    }
+    private fun String.extractCssColor(): String? = EpubCssValues.extractColor(this)
 
-    private fun String.extractCssLength(): String? {
-        return trim().split(' ', '\t', '\n')
-            .map { it.trim() }
-            .firstOrNull { value ->
-                value.endsWith("px", true) || value.endsWith("em", true) ||
-                    value.endsWith("rem", true) || value.toFloatOrNull() != null
-            }
-    }
+    private fun String.extractCssLength(): String? = EpubCssValues.extractLength(this)
 
-    private fun String.toEpubCssColor(): Int? {
-        val clean = trim().trimMatchingQuote()
-        return when {
-            clean.startsWith("rgba", true) || clean.startsWith("rgb", true) -> clean.parseRgbCssColor()
-            clean.startsWith("#") -> runCatching { Color.parseColor(clean.normalizeHexColor()) }.getOrNull()
-            else -> clean.toNamedCssColor()?.let { runCatching { Color.parseColor(it) }.getOrNull() }
-        }
-    }
+    private fun String.toEpubCssColor(): Int? = EpubCssValues.parseColor(this)
 
-    private fun String.toEpubTagColor(): Int? {
-        val clean = trim().takeIf { it.length == 6 || it.length == 8 } ?: return null
-        return runCatching { Color.parseColor("#$clean") }.getOrNull()
-    }
-
-    private fun String.trimMatchingQuote(): String {
-        val clean = trim()
-        if (clean.length >= 2) {
-            val first = clean.first()
-            val last = clean.last()
-            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
-                return clean.substring(1, clean.lastIndex)
-            }
-        }
-        return clean
-    }
-
-    private fun String.normalizeHexColor(): String {
-        val hex = trim().removePrefix("#")
-        return when (hex.length) {
-            3 -> "#" + hex.map { "$it$it" }.joinToString("")
-            4 -> "#" + hex.map { "$it$it" }.joinToString("")
-            else -> "#$hex"
-        }
-    }
-
-    private fun String.parseRgbCssColor(): Int? {
-        val start = indexOf('(')
-        val end = lastIndexOf(')')
-        if (start < 0 || end <= start) return null
-        val parts = substring(start + 1, end)
-            .split(',', ' ', '/')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-        if (parts.size < 3) return null
-        fun component(value: String): Int {
-            return if (value.endsWith("%")) {
-                ((value.dropLast(1).toFloatOrNull() ?: 0f) * 2.55f).toInt()
-            } else {
-                value.toFloatOrNull()?.toInt() ?: 0
-            }.coerceIn(0, 255)
-        }
-        val alpha = parts.getOrNull(3)?.let { value ->
-            if (value.endsWith("%")) {
-                ((value.dropLast(1).toFloatOrNull() ?: 100f) * 2.55f).toInt()
-            } else {
-                ((value.toFloatOrNull() ?: 1f) * 255f).toInt()
-            }
-        } ?: 255
-        return Color.argb(alpha.coerceIn(0, 255), component(parts[0]), component(parts[1]), component(parts[2]))
-    }
-
-    private fun String.toNamedCssColor(): String? {
-        return when (lowercase()) {
-            "black" -> "#000000"
-            "white" -> "#FFFFFF"
-            "red" -> "#FF0000"
-            "green" -> "#008000"
-            "blue" -> "#0000FF"
-            "cyan", "aqua" -> "#00FFFF"
-            "magenta", "fuchsia" -> "#FF00FF"
-            "yellow" -> "#FFFF00"
-            "gray", "grey" -> "#808080"
-            "silver" -> "#C0C0C0"
-            "maroon" -> "#800000"
-            "purple" -> "#800080"
-            "teal" -> "#008080"
-            "navy" -> "#000080"
-            "orange" -> "#FFA500"
-            "transparent" -> "#00000000"
-            else -> null
-        }
-    }
+    private fun String.toEpubTagColor(): Int? = EpubCssValues.parseTagColor(this)
 
     private data class EpubBlockDecorationStyle(
         val backgroundColor: Int?,

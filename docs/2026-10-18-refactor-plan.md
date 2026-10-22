@@ -502,6 +502,23 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   - 综上：4 个新类的**可单测纯逻辑均已落网**，UI 编排层由全量"不崩"+既有纯逻辑测试兜底。
 - 全量单测 **1675 用例 0 失败**（251 测试类，较 1.12.4 的 1663 再 +12）。
 
+### 2026-10-22 读者核心最后一环：TextChapterLayout 的 Epub CSS 值解析抽出
+
+- **新增 `provider/EpubCssValues.kt`**（纯对象）：把 `TextChapterLayout` 里 9 个私有的
+  Epub CSS 值解析函数（颜色 hex/rgb/rgba/命名色、长度 token、引号剥离、盒长度简写）
+  抽成独立纯逻辑。**关键改动**：原逻辑依赖 `android.graphics.Color.parseColor`
+  （纯 JVM 单测是 Stub，会抛），改为**手写 ARGB 打包**（`(a shl 24) or (r shl 16) or
+  (g shl 8) or b`），逐字节等价于 `Color.parseColor`，从而纯 JVM 可测。
+- **`TextChapterLayout` 只换 5 个一行扩展委托**，调用点零改动（沿用"不碰调用点"教训，
+  避免动摇 `AdvancedTitle*` 等已有的源码契约测试）。文件 3021→2916 行（−105）。
+- **`EpubCssValuesTest` 31 个纯 JVM 用例**：覆盖 3/4/6/8 位 hex 展开、rgb/rgba 分数与
+  百分比 alpha、命名色（含别名 aqua/fuchsia/grey）、引号剥离、垃圾输入返回 null、
+  长度 token 提取（px/em/rem/裸数）、盒长度 1–4 值展开、空串。两个初始失败是**测试期望
+  写错**（gray 应为 `0xFF808080`、rgba 绿通道应为 0），代码行为正确。
+- 全量单测 **1706 用例 0 失败**（252 测试类，较硬化轮 1675 再 +31）。
+- **后续读者核心可选**：TextChapterLayout 的纯算法分段/分页测量（行宽测算、段落切分、
+  图片/缩进处理）风险更高，仍建议"只抽纯逻辑建网、不整块搬"；或转 Epub 子系统/Epubcore。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
