@@ -4,6 +4,11 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.12.4 · 2026/10/22**
+
+- 修复预下载章节索引越界：前向区间会把不存在的"第总章数章"加进下载计划、后向会加入负索引，下游会为不存在的章节建缓存任务，已夹到合法范围
+- ReadBook 拆分（行为保持）：章节内容管线（取正文→下载→装槽位，含竞态守卫）独立为 ReadBookContentLoader，ReadBook 2080→1362 行；排版键、进度同步决策、预下载选章等抽为可单测的纯函数；对外调用面零改动
+
 **vH.1.12.3 · 2026/10/22**
 
 - 阅读页纯内部重构（无功能变化，F/G 区拆分收尾）：F 区章节标题装载抽为 AdvancedTitleLottieController，PageView 2074→1200 行，全量 1637 单测 0 失败
