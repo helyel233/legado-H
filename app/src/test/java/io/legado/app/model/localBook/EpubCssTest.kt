@@ -1,6 +1,8 @@
 package io.legado.app.model.localBook
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -94,5 +96,84 @@ class EpubCssTest {
     @Test
     fun skipsEntriesWithoutAColon() {
         assertEquals(0, EpubCss.declarations("no-colon-here").size)
+    }
+
+    // --- 支持属性过滤与盒简写展开 -------------------------------------------
+
+    @Test
+    fun supportedStyleDropsUnknownProperties() {
+        val style = EpubCss.normalizeSupportedStyle("color:red;unknown-prop:1")
+        assertTrue(style.contains("color:red"))
+        assertFalse(style.contains("unknown-prop"))
+    }
+
+    @Test
+    fun supportedDeclarationsExpandMarginIntoSides() {
+        val byName = EpubCss.normalizeSupportedDeclarations("margin:1px 2px").associateBy { it.name }
+        assertEquals("1px", byName["margin-top"]?.value)
+        assertEquals("2px", byName["margin-right"]?.value)
+        assertEquals("1px", byName["margin-bottom"]?.value)
+        assertEquals("2px", byName["margin-left"]?.value)
+    }
+
+    // --- @font-face ----------------------------------------------------------
+
+    @Test
+    fun fontFacesExtractFamilyAndSrc() {
+        val faces = EpubCss.parseFontFaces("@font-face{font-family:'MyFont';src:url(a.otf)}")
+        assertEquals(1, faces.size)
+        assertTrue(faces[0].family.contains("MyFont"))
+        assertTrue(faces[0].src.contains("a.otf"))
+    }
+
+    @Test
+    fun fontFacesRunSrcThroughTheResolver() {
+        val faces = EpubCss.parseFontFaces(
+            "@font-face{font-family:'F';src:url(a.otf)}",
+            resolveUrl = { "resolved/$it" }
+        )
+        assertEquals(1, faces.size)
+        assertTrue("resolveUrl 必须作用于 src", faces[0].src.startsWith("resolved/"))
+    }
+
+    @Test
+    fun fontFaceWithoutSrcIsDropped() {
+        assertEquals(0, EpubCss.parseFontFaces("@font-face{font-family:'F'}").size)
+    }
+
+    @Test
+    fun fontFacesInsideCommentsAreIgnored() {
+        assertEquals(
+            0,
+            EpubCss.parseFontFaces("/* @font-face{font-family:'F';src:url(a.otf)} */").size
+        )
+    }
+
+    @Test
+    fun blankCssYieldsNothing() {
+        assertEquals(0, EpubCss.parseFontFaces("   ").size)
+        assertEquals(0, EpubCss.parseRules("   ").size)
+    }
+
+    // --- 规则解析 ------------------------------------------------------------
+
+    @Test
+    fun rulesSplitCommaSeparatedSelectors() {
+        assertEquals(2, EpubCss.parseRules("p, div { color: red }").size)
+    }
+
+    @Test
+    fun rulesHonourTheSupportedOnlyFlag() {
+        val css = "p { color:red; unknown-prop:1 }"
+        val supported = EpubCss.parseRules(css, supportedOnly = true)
+        val all = EpubCss.parseRules(css, supportedOnly = false)
+        assertTrue(supported.isNotEmpty() && all.isNotEmpty())
+        assertFalse(supported[0].style.contains("unknown-prop"))
+        assertTrue(all[0].style.contains("unknown-prop"))
+    }
+
+    @Test
+    fun rulesAreParsedThroughComments() {
+        assertTrue(EpubCss.parseRules("/* 注释 */ p { color: red }").isNotEmpty())
     }
 }

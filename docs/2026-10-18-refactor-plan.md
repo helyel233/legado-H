@@ -556,6 +556,23 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   `EpubDirectWebLayer`(8913 行) 等自包含大件仍不建议整块搬。
 - 全量单测 **1738 用例 0 失败**（253 测试类，较上轮 1719 再 +19）。
 
+### 2026-10-23 review 1.12.4 之后 + 续建 EpubCss 回归网
+
+- **review `H-1.12.4..HEAD` 全部 5 个提交**：两个独立代理并行交叉审 + git 历史逐字落锤，
+  结论**零隐藏 bug**。代理无 shell，改用**作者自己复制到 Epub 子系统多处
+  （`EpubFile`/`EpubLayoutEngine`/`EpubBoxBuilder`/`EpubDomBuilder`）的同源副本**做旁证，
+  `parseRgb`/命名色表/引号剥离逐字一致。落锤：`upWebBook` 三点语义一致；
+  **原文 `toEpubCssColor` 无 hsl 分支**（`EpubLayoutEngine` 的 hsl 是另一套实现），抽取无遗漏；
+  rem 修复的调用方影响安全（各调用链均有 `?:` 兜底/`<=0f` 守卫，无 NPE）。
+- **修复唯一实质差异**：抽取后 `getContentRule().imageStyle` 作为参数被无条件求值，
+  而原实现仅在 `getImageStyle()` 为空时才调用（`getContentRule` 有惰性缓存）。
+  无用户可见差异，但违反"只搬不改"，已恢复原求值时机。
+- **续建 `EpubCss` 回归网（+10 用例，共 24）**：新增覆盖支持属性过滤
+  （`normalizeSupportedStyle` 丢弃未知属性）、`margin` 盒简写展开为四边、
+  `@font-face` 解析（family/src、`resolveUrl` 生效、缺 src 丢弃、注释内忽略）、
+  规则解析（逗号选择器拆分、`supportedOnly` 标志、注释剥离）。
+- 全量单测 **1748 用例 0 失败**（253 测试类，较上轮 1738 再 +10）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
