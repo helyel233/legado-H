@@ -1472,64 +1472,17 @@ class TextChapterLayout(
         return if (style.isBlank()) emptyMap() else EpubCss.declarations(style)
     }
 
-    private fun String.isEpubAlwaysBreak(): Boolean {
-        val value = trim().lowercase()
-        return value == "always" || value == "page" || value == "left" || value == "right"
-    }
+    // 间距/断点判定同样抽到 EpubCssValues（纯逻辑，可单测）；visibleWidth 为排版可视宽度，
+    // contentPaintTextHeight 为 em/rem 的换算基准。
+    private fun String.isEpubAlwaysBreak(): Boolean = EpubCssValues.isAlwaysBreak(this)
 
-    private fun String.isLargeEpubSpacing(): Boolean {
-        val value = trim().lowercase()
-        if (value.isBlank() || value == "0") return false
-        return when {
-            value.endsWith("em") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 1f
-            value.endsWith("rem") -> (value.dropLast(3).toFloatOrNull() ?: 0f) >= 1f
-            value.endsWith("%") -> (value.dropLast(1).toFloatOrNull() ?: 0f) >= 8f
-            value.endsWith("px") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 16f
-            else -> (value.toFloatOrNull() ?: 0f) >= 16f
-        }
-    }
+    private fun String.isLargeEpubSpacing(): Boolean = EpubCssValues.isLargeSpacing(this)
 
-    private fun String.toEpubSpacingPx(): Float? {
-        val value = trim().lowercase()
-        if (value.isBlank() || value == "0") return 0f
-        return when {
-            value.endsWith("%") -> {
-                val percentage = value.dropLast(1).toFloatOrNull() ?: return null
-                visibleWidth * percentage / 100f
-            }
-            value.endsWith("em") -> {
-                val em = value.dropLast(2).toFloatOrNull() ?: return null
-                contentPaintTextHeight * em
-            }
-            value.endsWith("rem") -> {
-                val rem = value.dropLast(3).toFloatOrNull() ?: return null
-                contentPaintTextHeight * rem
-            }
-            value.endsWith("px") -> value.dropLast(2).toFloatOrNull()
-            else -> value.toFloatOrNull()
-        }
-    }
+    private fun String.toEpubSpacingPx(): Float? =
+        EpubCssValues.toSpacingPx(this, visibleWidth.toFloat(), contentPaintTextHeight)
 
-    private fun String.toEpubHorizontalPx(): Float? {
-        val value = trim().lowercase()
-        if (value.isBlank() || value == "0" || value == "auto") return 0f
-        return when {
-            value.endsWith("%") -> {
-                val percentage = value.dropLast(1).toFloatOrNull() ?: return null
-                visibleWidth * percentage / 100f
-            }
-            value.endsWith("em") -> {
-                val em = value.dropLast(2).toFloatOrNull() ?: return null
-                contentPaintTextHeight * em
-            }
-            value.endsWith("rem") -> {
-                val rem = value.dropLast(3).toFloatOrNull() ?: return null
-                contentPaintTextHeight * rem
-            }
-            value.endsWith("px") -> value.dropLast(2).toFloatOrNull()
-            else -> value.toFloatOrNull()
-        }
-    }
+    private fun String.toEpubHorizontalPx(): Float? =
+        EpubCssValues.toHorizontalPx(this, visibleWidth.toFloat(), contentPaintTextHeight)
 
     private fun Element.hasEpubBlockBoxStyle(): Boolean {
         val declarations = EpubCss.declarations(attr("style"))

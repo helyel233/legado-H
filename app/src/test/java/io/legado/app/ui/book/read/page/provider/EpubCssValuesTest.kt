@@ -1,7 +1,10 @@
 package io.legado.app.ui.book.read.page.provider
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpubCssValuesTest {
@@ -188,5 +191,114 @@ class EpubCssValuesTest {
     @Test
     fun boxEmptyString() {
         assertEquals(emptyList<String>(), EpubCssValues.toBoxLengths("   "))
+    }
+
+    // --- break decisions -----------------------------------------------------
+
+    @Test
+    fun breakKeywordsForceABreak() {
+        assertTrue(EpubCssValues.isAlwaysBreak("always"))
+        assertTrue(EpubCssValues.isAlwaysBreak("page"))
+        assertTrue(EpubCssValues.isAlwaysBreak("left"))
+        assertTrue(EpubCssValues.isAlwaysBreak("right"))
+    }
+
+    @Test
+    fun avoidAndAutoDoNotBreak() {
+        assertFalse(EpubCssValues.isAlwaysBreak("avoid"))
+        assertFalse(EpubCssValues.isAlwaysBreak("auto"))
+        assertFalse(EpubCssValues.isAlwaysBreak(""))
+    }
+
+    @Test
+    fun breakCheckIsCaseInsensitive() {
+        assertTrue(EpubCssValues.isAlwaysBreak("ALWAYS"))
+    }
+
+    // --- spacing decisions ---------------------------------------------------
+
+    @Test
+    fun largeSpacingThresholds() {
+        assertTrue(EpubCssValues.isLargeSpacing("1em"))
+        assertTrue(EpubCssValues.isLargeSpacing("8%"))
+        assertTrue(EpubCssValues.isLargeSpacing("16px"))
+        assertTrue(EpubCssValues.isLargeSpacing("16"))
+    }
+
+    @Test
+    fun smallSpacingIsNotLarge() {
+        assertFalse(EpubCssValues.isLargeSpacing("0.5em"))
+        assertFalse(EpubCssValues.isLargeSpacing("7%"))
+        assertFalse(EpubCssValues.isLargeSpacing("15px"))
+        assertFalse(EpubCssValues.isLargeSpacing("15"))
+    }
+
+    @Test
+    fun zeroAndBlankAreNotLargeSpacing() {
+        assertFalse(EpubCssValues.isLargeSpacing("0"))
+        assertFalse(EpubCssValues.isLargeSpacing("  "))
+        assertFalse(EpubCssValues.isLargeSpacing("auto")) // 无单位 -> 0 -> 小于 16
+    }
+
+    // --- px conversion -------------------------------------------------------
+
+    private val width = 1000f
+    private val emBase = 20f
+
+    private fun assertPx(expected: Float, actual: Float?, what: String) {
+        assertNotNull("$what 不应为 null", actual)
+        assertEquals(what, expected, actual!!, 0.001f)
+    }
+
+    @Test
+    fun spacingConvertsPercentageOffTheVisibleWidth() {
+        assertPx(500f, EpubCssValues.toSpacingPx("50%", width, emBase), "50% 间距")
+    }
+
+    @Test
+    fun spacingConvertsEmOffTheTextHeight() {
+        assertPx(40f, EpubCssValues.toSpacingPx("2em", width, emBase), "2em 间距")
+    }
+
+    /**
+     * 固化现状（非期望行为）：`rem` 单位目前解析不到——`endsWith("em")` 对 "2rem" 同样成立，
+     * 会先命中 em 分支，`dropLast(2)` 得到 "2r" 解析失败，于是返回 null（间距被忽略）；
+     * `isLargeSpacing` 同理得到 0，判定为"非大间距"。
+     * 后果：Epub 里用 rem 写的 margin/padding 实际不生效。
+     * 如需修复，应把 rem 分支提到 em 之前，并同步修改本用例的期望值。
+     */
+    @Test
+    fun remIsCurrentlyShadowedByTheEmCheck() {
+        assertNull(EpubCssValues.toSpacingPx("2rem", width, emBase))
+        assertFalse(EpubCssValues.isLargeSpacing("2rem"))
+    }
+
+    @Test
+    fun spacingPassesPxAndBareNumbersThrough() {
+        assertPx(12f, EpubCssValues.toSpacingPx("12px", width, emBase), "12px 间距")
+        assertPx(12f, EpubCssValues.toSpacingPx("12", width, emBase), "裸数间距")
+    }
+
+    @Test
+    fun zeroAndBlankCollapseToZero() {
+        assertPx(0f, EpubCssValues.toSpacingPx("0", width, emBase), "0 间距")
+        assertPx(0f, EpubCssValues.toSpacingPx("  ", width, emBase), "空白间距")
+        assertPx(0f, EpubCssValues.toHorizontalPx("0", width, emBase), "0 水平")
+    }
+
+    /**
+     * 两个转换函数唯一的行为差异：`auto` 在水平方向视为 0（宽度自适应），
+     * 在垂直间距上不是有效值（返回 null）。后续若被误统一，Epub 排版会错。
+     */
+    @Test
+    fun autoIsZeroHorizontallyButInvalidVertically() {
+        assertEquals(0f, EpubCssValues.toHorizontalPx("auto", width, emBase))
+        assertNull(EpubCssValues.toSpacingPx("auto", width, emBase))
+    }
+
+    @Test
+    fun unparsableValuesReturnNull() {
+        assertNull(EpubCssValues.toSpacingPx("abc", width, emBase))
+        assertNull(EpubCssValues.toHorizontalPx("abc", width, emBase))
     }
 }

@@ -74,6 +74,62 @@ internal object EpubCssValues {
         }
     }
 
+    // --- spacing and break decisions -----------------------------------------
+
+    /** Whether a `page-break-before`/`break-before` value forces a page break. */
+    fun isAlwaysBreak(input: String): Boolean {
+        val value = input.trim().lowercase()
+        return value == "always" || value == "page" || value == "left" || value == "right"
+    }
+
+    /** Whether a margin/padding value is big enough to count as a visible block gap. */
+    fun isLargeSpacing(input: String): Boolean {
+        val value = input.trim().lowercase()
+        if (value.isBlank() || value == "0") return false
+        return when {
+            value.endsWith("em") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 1f
+            value.endsWith("rem") -> (value.dropLast(3).toFloatOrNull() ?: 0f) >= 1f
+            value.endsWith("%") -> (value.dropLast(1).toFloatOrNull() ?: 0f) >= 8f
+            value.endsWith("px") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 16f
+            else -> (value.toFloatOrNull() ?: 0f) >= 16f
+        }
+    }
+
+    /** Vertical spacing in px. Unlike [toHorizontalPx], `auto` yields null, not 0. */
+    fun toSpacingPx(input: String, visibleWidth: Float, emBase: Float): Float? =
+        toPx(input, visibleWidth, emBase, treatAutoAsZero = false)
+
+    /** Horizontal length in px; `auto` and `0` both collapse to 0. */
+    fun toHorizontalPx(input: String, visibleWidth: Float, emBase: Float): Float? =
+        toPx(input, visibleWidth, emBase, treatAutoAsZero = true)
+
+    private fun toPx(
+        input: String,
+        visibleWidth: Float,
+        emBase: Float,
+        treatAutoAsZero: Boolean
+    ): Float? {
+        val value = input.trim().lowercase()
+        if (value.isBlank() || value == "0") return 0f
+        if (treatAutoAsZero && value == "auto") return 0f
+        return when {
+            value.endsWith("%") -> {
+                val percentage = value.dropLast(1).toFloatOrNull() ?: return null
+                visibleWidth * percentage / 100f
+            }
+            value.endsWith("em") -> {
+                val em = value.dropLast(2).toFloatOrNull() ?: return null
+                emBase * em
+            }
+            value.endsWith("rem") -> {
+                val rem = value.dropLast(3).toFloatOrNull() ?: return null
+                emBase * rem
+            }
+            value.endsWith("px") -> value.dropLast(2).toFloatOrNull()
+            else -> value.toFloatOrNull()
+        }
+    }
+
     // --- internals -----------------------------------------------------------
 
     private fun String.trimMatchingQuote(): String {

@@ -519,6 +519,23 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - **后续读者核心可选**：TextChapterLayout 的纯算法分段/分页测量（行宽测算、段落切分、
   图片/缩进处理）风险更高，仍建议"只抽纯逻辑建网、不整块搬"；或转 Epub 子系统/Epubcore。
 
+### 2026-10-22 续：Epub 间距/断点判定抽出（并发现 rem 单位潜在 bug）
+
+- **再抽出 4 个函数进 `EpubCssValues`**：`isAlwaysBreak`（分页断点关键字）、
+  `isLargeSpacing`（是否算可见段间空距）、`toSpacingPx`（垂直间距）、
+  `toHorizontalPx`（水平长度）。原依赖类的 `visibleWidth`(Int)/`contentPaintTextHeight`(Float)，
+  抽出时改为**显式入参**，委托处传 `visibleWidth.toFloat()`（原表达式本就提升为 Float，等价）。
+  两个转换函数合并为共享 `toPx(..., treatAutoAsZero)`：`auto` 在水平方向为 0、
+  在垂直间距上是无效值（null）——这是二者唯一差异，已单测钉住防被误统一。
+- `TextChapterLayout` 再换 4 个一行委托，调用点仍零改动。文件 2916→2861 行（累计 −160）。
+- **⚠️ 发现潜在 bug（未改，仅固化现状）**：`rem` 单位**永远解析不到**——
+  `endsWith("em")` 对 `"2rem"` 同样成立，会先命中 em 分支，`dropLast(2)` 得到 `"2r"`
+  解析失败 → 间距返回 null（被忽略）、`isLargeSpacing` 得到 0（判为非大间距）。
+  后果：**Epub 里用 rem 写的 margin/padding 实际不生效**。按"只搬不改"原则如实搬移了原
+  行为，并在 `remIsCurrentlyShadowedByTheEmCheck` 用例里固化现状 + 注明修复方式
+  （把 rem 分支提到 em 之前，并同步改期望值）。**是否修复待定**。
+- `EpubCssValuesTest` 44 个用例全过；全量单测 **1719 用例 0 失败**（较上轮 1706 再 +13）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
