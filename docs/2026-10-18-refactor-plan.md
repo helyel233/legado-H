@@ -465,6 +465,19 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - **ReadBook 2080 → 1362 行（-35%）**；内容管线（取正文 + 装槽位）整体独立成类。
 - 编译通过，全量单测 **1654 用例 0 失败**（纯搬移 + 1 处测试健壮性改进）。
 
+### 2026-10-22 发版 H.1.12.4 + 显示样式策略抽出
+
+- **发版前 review**：两个独立代理并行交叉审（ReadBook 拆分 / PageView 拆分），所有
+  存疑项与 git 历史逐字比对——结论零隐藏 bug（代理报的 P1 经查为误报：原实现本就用
+  `Coroutine.defaultScope`；其余均为既有行为忠实搬移）。锁拆分的两个竞态窗口有
+  generation guard 兜底，判定可接受。
+- **发版 H.1.12.4**（1.12.3 已由用户当日发布，故本次为 patch 累加）：含预下载越界
+  修复与 ReadBook 拆分；双包已上传，SHA-256 远端/本地一致。
+- **新增 `model/BookDisplayStylePolicy.kt`**：把 `upWebBook` 的显示样式决策搬成纯函数
+  （本地图画书默认整页样式、网络书取书源定义、single 样式重置翻页动画、
+  无样式时清空防止沿用上一本的）。**注意 `Set(null)` 是真实结果**（清空），
+  用 sealed interface 区分「保持」与「设置」。单测 9 个。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到

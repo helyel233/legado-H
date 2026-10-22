@@ -353,21 +353,30 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     fun upWebBook(book: Book) {
+        // 样式决策规则在 BookDisplayStylePolicy（可单测）
         if (book.isLocal) {
             bookSource = null
-            if (book.getImageStyle().isNullOrBlank() && (book.isImage || book.isPdf)) {
-                book.setImageStyle(Book.imgStyleFull)
+            val decision = BookDisplayStylePolicy.decide(
+                isLocal = true,
+                isImageOrPdf = book.isImage || book.isPdf,
+                currentStyle = book.getImageStyle(),
+                sourceStyle = null
+            )
+            if (decision is BookDisplayStyleDecision.Set) {
+                book.setImageStyle(decision.style)
             }
         } else {
             appDb.bookSourceDao.getBookSource(book.origin)?.let {
                 bookSource = it
-                if (book.getImageStyle().isNullOrBlank()) {
-                    var imageStyle = it.getContentRule().imageStyle
-                    if (imageStyle.isNullOrBlank() && (book.isImage || book.isPdf)) {
-                        imageStyle = Book.imgStyleFull
-                    }
-                    book.setImageStyle(imageStyle)
-                    if (imageStyle.equals(Book.imgStyleSingle, true)) {
+                val decision = BookDisplayStylePolicy.decide(
+                    isLocal = false,
+                    isImageOrPdf = book.isImage || book.isPdf,
+                    currentStyle = book.getImageStyle(),
+                    sourceStyle = it.getContentRule().imageStyle
+                )
+                if (decision is BookDisplayStyleDecision.Set) {
+                    book.setImageStyle(decision.style)
+                    if (decision.resetPageAnim) {
                         book.setPageAnim(0)
                     }
                 }
