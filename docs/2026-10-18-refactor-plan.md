@@ -478,6 +478,30 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   无样式时清空防止沿用上一本的）。**注意 `Set(null)` 是真实结果**（清空），
   用 sealed interface 区分「保持」与「设置」。单测 9 个。
 
+### 2026-10-22 硬化本轮成果（关掉 review defer 的锁竞态窗口 P2）
+
+- **新增 `model/ChapterLoadRegistryTest.kt`（12 个）**：Registry 是 ReadBook 拆分时
+  "锁拆分"的症结（原 `loadingChapters`/世代号等原本在 ReadBook 一把 `@Synchronized`
+  锁内，拆分后落到 Registry 自己的锁）。测试分三块：① 生命周期（begin 幂等、
+  finish/cancel 按世代开闭、updateLayoutKey 受世代门控、job 取消）；② **跨锁世代守卫**：
+  `clearLoads()`（模拟 resetData 离开书籍）抹掉世代后，带着旧世代飞回来的 `finish`/
+  `cancel` 必须被丢弃、绝不"复活"加载记录——这正是 P2 窗口的真实安全机制（靠世代号
+  而非锁原子性）；③ **8 线程并发压测**：交替 begin/finish/cancel + 一个线程不停
+  `clearLoads`，断言不变量 `isLoading(idx) <=> generationOf(idx) != null` 始终成立、
+  无异常、不死锁。实证证明 `@Synchronized` 序列化 + 世代守卫足以关掉该窗口。
+- **其余 3 个新类的测试覆盖边界（务实结论）**：
+  - `ReadBookContentLoader`：内部的三个加载守卫（`isChapterLoadRequestCurrent`/
+    `TokenCurrent`/`SlotCurrent`）是 private 且**已委托给已测的 `ChapterLoadGuard`**
+    （`ChapterLoadGuardTest` 6.3KB 覆盖），再测即重复；其公开方法（loadContent/
+    contentLoadFinish）需要宿主+数据库+协程上下文，纯单测需 Robolectric 且 ROI 低。
+  - `AdvancedTitleLottieController` / `AdvancedTipLottieController`：是 UI 编排层，
+    其纯逻辑（几何 clamp、动画冻结恢复、留存身份比较、滚动视口、页面键）已被
+    `AdvancedTitleGeometryTest`/`AdvancedTitleAnimationFreezeTest`/`AdvancedTitleRetentionPolicyTest`/
+    `AdvancedTitleScrollGeometryTest`/`AdvancedTitlePageKeysTest`/`LottieTitleJsonStylerTest`
+    等覆盖；强上 Robolectric 视图膨胀测试属低 ROI、易 flaky，违背"风险最低"，暂缓。
+  - 综上：4 个新类的**可单测纯逻辑均已落网**，UI 编排层由全量"不崩"+既有纯逻辑测试兜底。
+- 全量单测 **1675 用例 0 失败**（251 测试类，较 1.12.4 的 1663 再 +12）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
