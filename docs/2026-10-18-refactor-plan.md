@@ -416,6 +416,30 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
 - **单测 6 个**（`PreDownloadPlanTest`）：前后窗口、越界夹除、跳过已下载、
   跳过失败满 3 次（失败 2 次仍会试）、空书、前向贴到最后一章。
 
+### 2026-10-22 第四步（上）：内容加载入口搬出（ReadBookContentLoader）
+
+`contentLoadFinish` 还没搬（它 ~260 行、深耦合 prev/cur/next 槽位），所以本子步先搬
+「取内容」这一侧，`contentLoadFinish` 暂时以宿主方法的形式被回调。
+
+- **新增 `model/ReadBookContentLoader.kt`**：搬走 `loadContent` / `loadContentAwait` /
+  `download` / `downloadAwait` / `logContentLoadSkip` / `clearExpiredChapterLoadingJob`，
+  以及下载用的 `downloadScope`（ReadBook 的两个调用点改为 `contentLoader.release()`）。
+- **宿主接口 `ReadBookContentHost`（14 项）**：book / bookSource / chapterSize /
+  durChapterIndex / callBack / contentProcessor / chapterLoads、currentChapterLayoutKey、
+  textChapter、invalidateDirectTextContent、refreshParagraphRuleLayoutKey、
+  finishChapterLoad、cancelChapterLoading、showCurrentChapterLoadError，
+  以及暂未搬走的 `contentLoadFinish` / `contentLoadFinishAwait`。
+- **ReadBook 对外签名不变**：`loadContent` / `loadContentAwait` 变成一行薄委托，
+  60+ 处调用方零改动。
+- 踩坑：`object` 里**不能声明 `inner class`**（报 "Modifier 'inner' is not applicable
+  inside 'standalone object'"，且会连带一堆莫名其妙的 "Unresolved reference"），
+  宿主类改成嵌套类后所有成员要用 `ReadBook.xxx` 限定；
+  另外删字段时误把紧邻的 `contentProcessor` 一起删了（它正好在被删字段的上一行），
+  编译器报的却是别处引用失败——**删字段必须逐行确认相邻行**。
+- 编译通过，全量单测 **1654 用例 0 失败**（纯搬移，无新增单测）。
+- ReadBook 2080 → 1932 行（搬出 235 行，新增 90 行宿主实现；净搬出约 145 行，
+  加载器自身 350 行）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
