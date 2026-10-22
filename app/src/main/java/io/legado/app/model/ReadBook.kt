@@ -1926,21 +1926,15 @@ object ReadBook : CoroutineScope by MainScope() {
             preDownloadTask?.cancel()
             preDownloadTask = launch(IO) {
                 val cacheBook = book ?: return@launch
-                val indexes = linkedSetOf<Int>()
-                //预下载
-                val maxChapterIndex =
-                    min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
-                for (i in durChapterIndex.plus(2)..maxChapterIndex) {
-                    if (downloadedChapters.contains(i)) continue
-                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                    indexes.add(i)
-                }
-                val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
-                for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
-                    if (downloadedChapters.contains(i)) continue
-                    if ((downloadFailChapters[i] ?: 0) >= 3) continue
-                    indexes.add(i)
-                }
+                // 选章规则在 PreDownloadPlan（可单测）：只选存在的章节，跳过已下载与
+                // 连续失败的章节
+                val indexes = PreDownloadPlan.of(
+                    durChapterIndex = durChapterIndex,
+                    chapterSize = chapterSize,
+                    preDownloadNum = AppConfig.preDownloadNum,
+                    isDownloaded = { downloadedChapters.contains(it) },
+                    failCount = { downloadFailChapters[it] ?: 0 }
+                )
                 if (indexes.isEmpty()) return@launch
                 if (ReadBook.book?.bookUrl != cacheBook.bookUrl) return@launch
                 runCatching {

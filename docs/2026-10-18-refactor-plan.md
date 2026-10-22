@@ -403,6 +403,19 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   忽略返回值，注册表返回"是否真的取消了一个任务"，调用方同样忽略。
 - 编译通过，全量单测 **1648 用例 0 失败**（本步纯机械收拢，无新增单测）。
 
+### 2026-10-22 预下载选章逻辑抽出（顺带修一个越界）
+
+- **新增 `model/PreDownloadPlan.kt`**：把 `preDownload()` 里"选哪些章预下载"的两段循环
+  搬成纯函数。规则：向后 `preDownloadNum` 章内、向前最多 5 章（同样受 `preDownloadNum`
+  约束），跳过已下载的和连续失败满 3 次的。
+- **顺带修掉一个真实越界**：原实现前向用 `min(durChapterIndex + preDownloadNum,
+  chapterSize)` 作**闭区间**上界，会把 `chapterSize` 这个并不存在的章节也加进计划；
+  后向 `durChapterIndex - min(5, preDownloadNum)` 没有下限，会加入负索引。下游
+  `CacheCoordinator.submitTextDownload` 只做 `distinct().sorted()`，**不校验范围**，
+  于是会为一个不存在的章节建缓存任务。抽出时把索引夹到 `0 until chapterSize`。
+- **单测 6 个**（`PreDownloadPlanTest`）：前后窗口、越界夹除、跳过已下载、
+  跳过失败满 3 次（失败 2 次仍会试）、空书、前向贴到最后一章。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
