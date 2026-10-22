@@ -105,49 +105,70 @@ class PageView(context: Context) : FrameLayout(context) {
     }
     private var currentTextPage: TextPage? = null
     private var pairedTextPage: TextPage? = null
-    private val advancedTitleRequestGate = AdvancedTitleRequestGate()
     /**
-     * 标题槽位的全部状态（F 区）：每个槽位正在画的组合/键/渲染配置/所属 block、
-     * 翻页期间待提交的组合、图片解码任务，以及按键保留的已提交组合。
-     * 收拢在 AdvancedTitleSlotState 里，装载逻辑不再按索引摸十几个数组。
+     * 进阶章节标题装载（F 区），逻辑在 AdvancedTitleLottieController 里，
+     * 这里只提供它需要的宿主环境。
      */
-    private val advancedTitleState = AdvancedTitleSlotState(MAX_COMMITTED_TITLES)
+    private val title = AdvancedTitleLottieController(
+        TitleHost(),
+        MAX_TITLE_KEYS_BY_PAGE,
+        MAX_COMMITTED_TITLES
+    )
 
-    /**
-     * Composition key last bound for a page, keyed by that page's position.
-     *
-     * Two things have to be true before a composition may go back up, and they need
-     * separate mechanisms:
-     *
-     * The *lookup* is keyed by position — chapter index and page number — because that is
-     * what stays stable when the reader turns away and back. Title text cannot be used:
-     * chapter names repeat ("序", "第一章", "番外"), so two unrelated positions would
-     * collide and one chapter could show another's composition.
-     *
-     * The *decision* stays with the recorded key, which encodes the styled JSON hash and
-     * the view size. Changing the font, rotating, or swapping the title package therefore
-     * produces a key that no longer resolves, and the page rebuilds instead of reusing a
-     * composition built for different conditions — something position alone cannot detect.
-     */
-    private val advancedTitleKeysByPage = AdvancedTitlePageKeyCache(MAX_TITLE_KEYS_BY_PAGE)
+    private inner class TitleHost : AdvancedTitleHost {
 
-    /**
-     * Stable identity for a page's position within a book.
-     *
-     * Chapter and page numbers repeat across books, so the book has to take part or a stale
-     * entry from a previously open book could answer for this one.
-     */
-    private fun advancedTitlePageKey(textPage: TextPage): String {
-        return AdvancedTitlePageKeys.of(
-            bookUrl = ReadBook.book?.bookUrl.orEmpty(),
-            chapterIndex = textPage.chapterIndex,
-            pageIndex = textPage.index
-        )
+        override fun titleViews(slot: AdvancedTitleSlot): Pair<LottieAnimationView, TextView> {
+            return this@PageView.titleViews(slot)
+        }
+
+        override fun contentViewWidth(): Int = binding.contentTextView.width
+
+        override fun contentViewHeight(): Int = binding.contentTextView.height
+
+        override fun scrollOverlayHeight(): Float {
+            return binding.advancedTitleOverlay.height.toFloat()
+                .takeIf { it > 0f }
+                ?: (binding.llHeader.height + binding.contentTextView.height).toFloat()
+                    .coerceAtLeast(1f)
+        }
+
+        override val isScroll: Boolean
+            get() = this@PageView.isScroll
+
+        override val isMainView: Boolean
+            get() = this@PageView.isMainView
+
+        override fun currentTextPage(): TextPage? = this@PageView.currentTextPage
+
+        override fun pairedTextPage(): TextPage? = this@PageView.pairedTextPage
+
+        override fun isHorizontalPageTurnActive(): Boolean =
+            (parent as? ReadView)?.isHorizontalPageTurnActive == true
+
+        override fun markSnapDirty() = this@PageView.markSnapDirty()
+
+        override fun clearAdvancedTitleLoadingState(view: LottieAnimationView) =
+            this@PageView.clearAdvancedTitleLoadingState(view)
+
+        override fun defaultFontAssetDelegate(): AdvancedTitleFontAssetDelegate =
+            this@PageView.defaultFontAssetDelegate
+
+        override fun scheduleOverlayBind() = this@PageView.scheduleOverlayBind()
+
+        override fun bookUrl(): String = ReadBook.book?.bookUrl.orEmpty()
+
+        override fun androidContext(): Context = context
+
+        override fun hasScrollRelativePage(pos: Int): Boolean =
+            binding.contentTextView.hasScrollRelativePage(pos)
+
+        override fun scrollRelativePage(pos: Int): TextPage =
+            binding.contentTextView.scrollRelativePage(pos)
+
+        override fun scrollRelativeOffset(pos: Int): Float =
+            binding.contentTextView.scrollRelativeOffset(pos)
     }
-    private val advancedTitleAnimations = AdvancedTitleAnimationFreeze()
-    private var scrollTitleLinger: List<ScrollAdvTitle> = emptyList()
-    private var lastScrollPageOffsetForTitle: Int = Int.MIN_VALUE
-    private var boundScrollTitleIds: Array<String?> = arrayOf(null, null)
+
     /**
      * 页眉页脚要显示的阅读信息。经典文本 tip 与进阶动效包都从它渲染，
      * 所以这份状态放在 PageView，双方共用。
@@ -170,7 +191,7 @@ class PageView(context: Context) : FrameLayout(context) {
 
         override fun contentWidth(): Int = binding.contentTextView.width
 
-        override fun contentGeneration(): Long = advancedTitleRequestGate.contentGeneration
+        override fun contentGeneration(): Long = title.contentGeneration
 
         override val isMainView: Boolean
             get() = this@PageView.isMainView
@@ -197,7 +218,7 @@ class PageView(context: Context) : FrameLayout(context) {
 
         override fun markSnapDirty() = this@PageView.markSnapDirty()
 
-        override fun animationFreeze(): AdvancedTitleAnimationFreeze = advancedTitleAnimations
+        override fun animationFreeze(): AdvancedTitleAnimationFreeze = title.animations
 
         override fun clearAdvancedTitleLoadingState(view: LottieAnimationView) =
             this@PageView.clearAdvancedTitleLoadingState(view)
@@ -254,7 +275,7 @@ class PageView(context: Context) : FrameLayout(context) {
         // reattach does not guarantee onSizeChanged, so restore it explicitly here.
         upBg()
         val textPage = currentTextPage ?: return
-        showSynchronousAdvancedTitleFallbacks(textPage, pairedTextPage)
+        title.showSynchronousFallbacks(textPage, pairedTextPage)
         scheduleOverlayBind()
     }
 
@@ -607,49 +628,26 @@ class PageView(context: Context) : FrameLayout(context) {
         }
     }
 
-    private fun clearPendingAdvancedTitleComposition(slot: AdvancedTitleSlot) {
-        advancedTitleState.setPendingComposition(slot, null)
-    }
-
-    private fun cancelAdvancedTitleImagePreparation(slot: AdvancedTitleSlot) {
-        advancedTitleState.cancelImagePrepareJob(slot)
-    }
-
-    private fun clearAppliedAdvancedTitle(slot: AdvancedTitleSlot) {
-        advancedTitleState.clearApplied(slot)
-    }
-
-    internal fun clearPendingAdvancedTitleCompositions() {
-        advancedTitleState.clearPendingCompositions()
-        AdvancedTitleSlot.entries.forEach(::cancelAdvancedTitleImagePreparation)
-    }
-
     internal fun disposeAdvancedTitleRequests() {
-        advancedTitleRequestGate.nextContent()
+        title.nextContent()
         overlayBindToken++
         overlayBindScheduledToken = overlayBindToken
         removeCallbacks(overlayBindRunnable)
-        clearPendingAdvancedTitleCompositions()
+        title.clearInFlight()
         advancedTip.dispose()
-        advancedTitleAnimations.reset()
-        AdvancedTitleSlot.entries.forEach { slot ->
-            hideAdvancedTitleSlot(slot)
-            val (lottieView, _) = titleViews(slot)
-            lottieView.setImageAssetDelegate(null)
-            lottieView.setTextDelegate(null)
-            clearAppliedAdvancedTitle(slot)
-        }
+        title.animations.reset()
+        AdvancedTitleSlot.entries.forEach { title.disposeSlot(it) }
         advancedTip.clearAllSlots()
     }
 
     internal fun freezeAdvancedTitleAnimationsForPageTurn() {
         if (isScroll) return
-        if (!advancedTitleAnimations.beginFreeze()) return
+        if (!title.animations.beginFreeze()) return
         var pixelsWereChanging = false
         AdvancedTitleSlot.entries.forEach { slot ->
             val (lottieView, _) = titleViews(slot)
             if (lottieView.visibility == VISIBLE && lottieView.isAnimating) {
-                advancedTitleAnimations.markTitleToResume(slot)
+                title.animations.markTitleToResume(slot)
                 lottieView.pauseAnimation()
                 pixelsWereChanging = true
             }
@@ -657,7 +655,7 @@ class PageView(context: Context) : FrameLayout(context) {
         AdvancedTipSlot.entries.forEach { slot ->
             val lottieView = advancedTip.viewOf(slot)
             if (lottieView.visibility == VISIBLE && lottieView.isAnimating) {
-                advancedTitleAnimations.markTipToResume(slot)
+                title.animations.markTipToResume(slot)
                 lottieView.pauseAnimation()
                 pixelsWereChanging = true
             }
@@ -670,14 +668,14 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     internal fun resumeAdvancedTitleAnimationsAfterPageTurn() {
-        if (!advancedTitleAnimations.isFrozen) return
-        advancedTitleAnimations.endFreeze()
+        if (!title.animations.isFrozen) return
+        title.animations.endFreeze()
         if (isMainView && !isScroll) {
             AdvancedTitleSlot.entries.forEach { slot ->
-                val shouldResume = advancedTitleAnimations.consumeTitleResume(slot)
+                val shouldResume = title.animations.consumeTitleResume(slot)
                 val (lottieView, _) = titleViews(slot)
                 if (!shouldResume || lottieView.visibility != VISIBLE ||
-                    !isAdvancedTitleReady(slot)
+                    !title.isReady(slot)
                 ) return@forEach
                 runCatching {
                     if (!lottieView.isAnimating) lottieView.playAnimation()
@@ -687,7 +685,7 @@ class PageView(context: Context) : FrameLayout(context) {
                 }
             }
             AdvancedTipSlot.entries.forEach { slot ->
-                val shouldResume = advancedTitleAnimations.consumeTipResume(slot)
+                val shouldResume = title.animations.consumeTipResume(slot)
                 val lottieView = advancedTip.viewOf(slot)
                 if (shouldResume && lottieView.visibility == VISIBLE &&
                     advancedTip.hasKey(slot) && !lottieView.isAnimating
@@ -701,279 +699,7 @@ class PageView(context: Context) : FrameLayout(context) {
                 }
             }
         } else {
-            advancedTitleAnimations.clearResumePlan()
-        }
-    }
-
-    /**
-     * Slots whose composed title also belongs to the page being bound, so re-binding would
-     * only rebuild what is already correct on screen.
-     *
-     * Deliberately strict: retention is only claimed when the slot is drawing a composition
-     * for the identical block instance the incoming page carries. Retaining a slot wrongly
-     * would leave one page's title sitting over another, which is worse than a flash.
-     */
-    /**
-     * Slots already drawing the incoming page's title, so tearing them down would only
-     * rebuild what is correct on screen.
-     *
-     * Must be called before the content generation is bumped: the proof it relies on is the
-     * presented token, which the bump discards.
-     */
-    private fun advancedTitleSlotsAlreadyShowing(
-        textPage: TextPage,
-        pairedTextPage: TextPage?
-    ): Set<AdvancedTitleSlot> {
-        if (isScroll) return emptySet()
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) return emptySet()
-        val pages = arrayOf<TextPage?>(textPage, pairedTextPage)
-        return AdvancedTitleSlot.entries.filterTo(mutableSetOf()) { slot ->
-            val incoming = advancedTitleBlock(pages[slot.ordinal]) ?: return@filterTo false
-            val (lottieView, _) = titleViews(slot)
-            AdvancedTitleRetentionPolicy.canRetain(
-                boundBlock = advancedTitleState.boundBlock(slot),
-                incomingBlock = incoming,
-                isPresented = isAdvancedTitlePresented(slot),
-                hasComposition = lottieView.composition != null,
-                isVisible = lottieView.visibility == VISIBLE
-            )
-        }
-    }
-
-    /**
-     * Put back the titles of pages being returned to, within the current frame.
-     *
-     * Must be called after the content generation is bumped, since the tokens it opens have
-     * to belong to the generation now being bound.
-     */
-    private fun restoreCommittedAdvancedTitles(
-        textPage: TextPage,
-        pairedTextPage: TextPage?,
-        skip: Set<AdvancedTitleSlot>
-    ): Set<AdvancedTitleSlot> {
-        if (isScroll) return emptySet()
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) return emptySet()
-        val pages = arrayOf<TextPage?>(textPage, pairedTextPage)
-        return AdvancedTitleSlot.entries.filterTo(mutableSetOf()) { slot ->
-            if (slot in skip) return@filterTo false
-            val block = advancedTitleBlock(pages[slot.ordinal]) ?: return@filterTo false
-            restoreCommittedAdvancedTitle(slot, pages[slot.ordinal], block)
-        }
-    }
-
-    /**
-     * Re-show a title whose composition is still held, within the current frame.
-     *
-     * Returns true only once the slot is actually drawing it. Anything unproven is left to
-     * the normal bind, which repaints from scratch: showing the wrong title would be a far
-     * worse outcome than the flash this avoids.
-     */
-    private fun restoreCommittedAdvancedTitle(
-        slot: AdvancedTitleSlot,
-        textPage: TextPage?,
-        block: TextPage.EpubEmbeddedBlock
-    ): Boolean {
-        val page = textPage ?: return false
-        val key = advancedTitleKeysByPage[advancedTitlePageKey(page)] ?: return false
-        val committed = advancedTitleState.committed(key) ?: return false
-        val (lottieView, fallbackView) = titleViews(slot)
-        // The size baked into the key has to still be the size this slot renders at, or the
-        // composition would be drawn for bounds it was not built for.
-        val (targetWidth, targetHeight) = resolveTitleViewSize(block)
-        if (!AdvancedTitleLottieKeys.matchesViewSize(key, targetWidth, targetHeight)) return false
-        return runCatching {
-            // Geometry first: committing only swaps the composition in, so without this the
-            // title would be drawn wherever the previous page left the slot.
-            val params = lottieView.layoutParams as ViewGroup.LayoutParams
-            if (params.width != targetWidth || params.height != targetHeight) {
-                params.width = targetWidth
-                params.height = targetHeight
-                lottieView.layoutParams = params
-            }
-            lottieView.scaleType = ImageView.ScaleType.FIT_CENTER
-            val pageOffsetX = if (slot == AdvancedTitleSlot.PAIR && ChapterProvider.doublePage) {
-                binding.contentTextView.width / 2f
-            } else {
-                0f
-            }
-            lottieView.translationX = resolveTitleTranslationX(block, targetWidth, pageOffsetX)
-            lottieView.translationY = resolveTitleTranslationY(block, targetHeight, 0f)
-            lottieView.clipBounds = null
-            val token = advancedTitleRequestGate.begin(
-                slot,
-                key,
-                "content:${advancedTitleRequestGate.contentGeneration}:${slot.name}"
-            )
-            lottieView.tag = key
-            commitAdvancedTitleComposition(
-                AdvancedTitleSlotState.PendingComposition(
-                    token,
-                    committed.composition,
-                    committed.renderConfig
-                )
-            )
-            val restored = isAdvancedTitleReady(slot) && lottieView.visibility == VISIBLE
-            if (restored) {
-                advancedTitleState.setBoundBlock(slot, block)
-                fallbackView.visibility = GONE
-            }
-            restored
-        }.getOrDefault(false)
-    }
-
-    private fun hideAdvancedTitleSlot(slot: AdvancedTitleSlot) {
-        val (lottieView, fallbackView) = titleViews(slot)
-        val pixelsChanged = lottieView.visibility != GONE || fallbackView.visibility != GONE
-        // This slot no longer shows anything, so it must not claim retention on the next bind.
-        advancedTitleState.setBoundBlock(slot, null)
-        advancedTitleRequestGate.clear(slot)
-        clearPendingAdvancedTitleComposition(slot)
-        cancelAdvancedTitleImagePreparation(slot)
-        clearAdvancedTitleLoadingState(lottieView)
-        lottieView.cancelAnimation()
-        lottieView.renderMode = RenderMode.AUTOMATIC
-        lottieView.visibility = GONE
-        fallbackView.visibility = GONE
-        if (pixelsChanged) markSnapDirty()
-    }
-
-    private fun advancedTitleBlock(textPage: TextPage?): TextPage.EpubEmbeddedBlock? {
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) return null
-        return textPage?.epubEmbeddedBlocks?.firstOrNull {
-            it.role == AdvancedTitleConfig.LOTTIE_BLOCK_ROLE
-        }
-    }
-
-    private fun resolveTitleViewSize(block: TextPage.EpubEmbeddedBlock): Pair<Int, Int> {
-        return AdvancedTitleGeometry.viewSize(block.width, block.height)
-    }
-
-    private fun resolveTitleTranslationX(
-        block: TextPage.EpubEmbeddedBlock,
-        targetWidth: Int,
-        pageOffsetX: Float
-    ): Float {
-        return AdvancedTitleGeometry.translationX(
-            blockOffsetX = block.offsetX,
-            targetWidth = targetWidth,
-            contentWidth = binding.contentTextView.width,
-            pageOffsetX = pageOffsetX
-        )
-    }
-
-    private fun resolveTitleTranslationY(
-        block: TextPage.EpubEmbeddedBlock,
-        targetHeight: Int,
-        scrollBaseY: Float
-    ): Float {
-        if (isScroll) {
-            return AdvancedTitleGeometry.scrollTranslationY(block.offsetY, scrollBaseY)
-        }
-        return AdvancedTitleGeometry.translationY(
-            blockOffsetY = block.offsetY,
-            targetHeight = targetHeight,
-            contentHeight = binding.contentTextView.height
-        )
-    }
-
-    /**
-     * Lay out the plain-text title for [block]. [revealText] decides whether the text is
-     * actually painted: while an advanced composition is still loading the slot only
-     * reserves its geometry (INVISIBLE), so the reader never sees the plain title flash
-     * before the advanced one. It is revealed only when the composition genuinely fails.
-     */
-    private fun showAdvancedTitleFallback(
-        slot: AdvancedTitleSlot,
-        textPage: TextPage,
-        block: TextPage.EpubEmbeddedBlock,
-        pageOffsetX: Float,
-        scrollBaseY: Float = 0f,
-        revealText: Boolean = false
-    ) {
-        hideAdvancedTitleSlot(slot)
-        val (lottieView, fallbackView) = titleViews(slot)
-        val (targetWidth, targetHeight) = resolveTitleViewSize(block)
-        val params = fallbackView.layoutParams as ViewGroup.LayoutParams
-        if (params.width != targetWidth || params.height != targetHeight) {
-            params.width = targetWidth
-            params.height = targetHeight
-            fallbackView.layoutParams = params
-        }
-        fallbackView.translationX = resolveTitleTranslationX(block, targetWidth, pageOffsetX)
-        fallbackView.translationY = resolveTitleTranslationY(block, targetHeight, scrollBaseY)
-        if (isScroll) {
-            applyTitleContentClip(
-                fallbackView,
-                fallbackView.translationY,
-                targetWidth,
-                targetHeight
-            )
-        } else {
-            fallbackView.clipBounds = null
-        }
-        fallbackView.gravity = Gravity.CENTER
-        fallbackView.text = textPage.title
-        // Reserve geometry without painting text until the advanced title is known to fail.
-        fallbackView.visibility = if (revealText) VISIBLE else INVISIBLE
-        lottieView.visibility = GONE
-        markSnapDirty()
-    }
-
-    private fun showSynchronousAdvancedTitleFallbacks(
-        textPage: TextPage,
-        pairedTextPage: TextPage?,
-        retainedSlots: Set<AdvancedTitleSlot> = emptySet()
-    ) {
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) {
-            AdvancedTitleSlot.entries.forEach(::hideAdvancedTitleSlot)
-            return
-        }
-        if (isScroll) {
-            val titles = collectScrollAdvancedTitles(
-                binding.contentTextView.width.toFloat().coerceAtLeast(1f)
-            )
-            AdvancedTitleSlot.entries.forEach { slot ->
-                val title = titles.getOrNull(slot.ordinal)
-                boundScrollTitleIds[slot.ordinal] = title?.id
-                if (title == null) {
-                    hideAdvancedTitleSlot(slot)
-                } else {
-                    showAdvancedTitleFallback(
-                        slot = slot,
-                        textPage = title.textPage,
-                        block = title.block,
-                        pageOffsetX = 0f,
-                        scrollBaseY = title.y - title.block.offsetY
-                    )
-                    val (_, fallbackView) = titleViews(slot)
-                    fallbackView.translationX = title.x
-                    fallbackView.translationY = title.y
-                    applyTitleContentClip(fallbackView, title.y, title.width, title.height)
-                }
-            }
-            return
-        }
-
-        val contentWidth = binding.contentTextView.width
-        val useDoublePage = ChapterProvider.doublePage
-        val pairOffsetX = if (useDoublePage) contentWidth / 2f else 0f
-        val pages = arrayOf(textPage, pairedTextPage)
-        AdvancedTitleSlot.entries.forEach { slot ->
-            // A retained slot is already showing this page's title; touching it here would
-            // hide the composition and reintroduce the flash this retention exists to avoid.
-            if (slot in retainedSlots) return@forEach
-            val page = pages[slot.ordinal]
-            val block = advancedTitleBlock(page)
-            if (page == null || block == null) {
-                hideAdvancedTitleSlot(slot)
-            } else {
-                showAdvancedTitleFallback(
-                    slot = slot,
-                    textPage = page,
-                    block = block,
-                    pageOffsetX = if (slot == AdvancedTitleSlot.PAIR) pairOffsetX else 0f
-                )
-            }
+            title.animations.clearResumePlan()
         }
     }
 
@@ -993,20 +719,20 @@ class PageView(context: Context) : FrameLayout(context) {
     ) {
         // Note which slots are already drawing this page's title before the generation bump
         // retires the tokens that proves it.
-        val alreadyShowing = advancedTitleSlotsAlreadyShowing(textPage, pairedTextPage)
-        advancedTitleRequestGate.nextContent()
-        clearPendingAdvancedTitleCompositions()
+        val alreadyShowing = title.slotsAlreadyShowing(textPage, pairedTextPage)
+        title.nextContent()
+        title.clearInFlight()
         advancedTip.dispose()
-        boundScrollTitleIds.fill(null)
+        title.clearScrollBinding()
         AdvancedTitleSlot.entries.forEach { slot ->
-            if (slot !in alreadyShowing) hideAdvancedTitleSlot(slot)
+            if (slot !in alreadyShowing) title.hideSlot(slot)
         }
         // Now that tokens belong to this generation, put back any title whose composition is
         // still held. Doing it here rather than in the posted bind keeps the slot from
         // sitting blank for a frame, which is what shows as a flash when turning back and
         // forth quickly.
         val retainedSlots = alreadyShowing +
-            restoreCommittedAdvancedTitles(textPage, pairedTextPage, alreadyShowing)
+            title.restoreCommitted(textPage, pairedTextPage, alreadyShowing)
         currentTextPage = textPage
         this.pairedTextPage = pairedTextPage
         markSnapDirty()
@@ -1018,7 +744,7 @@ class PageView(context: Context) : FrameLayout(context) {
         binding.contentTextView.setContent(textPage, pairedTextPage, resetPageOffset)
         // Never let a previous page's composition survive beside the new body. The cheap,
         // correct-page fallback stays visible until the matching composition is drawable.
-        showSynchronousAdvancedTitleFallbacks(textPage, pairedTextPage, retainedSlots)
+        title.showSynchronousFallbacks(textPage, pairedTextPage, retainedSlots)
         // Classic tip TextViews are cheap; keep them in sync for non-advanced chrome.
         applyProgressTexts(textPage)
         // If tip Lottie already composed, only refresh TextDelegate variables (no re-parse).
@@ -1037,12 +763,12 @@ class PageView(context: Context) : FrameLayout(context) {
 
     private fun bindAdvancedOverlaysIdle() {
         val textPage = currentTextPage ?: return
-        val contentGeneration = advancedTitleRequestGate.contentGeneration
+        val contentGeneration = title.contentGeneration
         runCatching {
-            upAdvancedTitleLotties(textPage, pairedTextPage, contentGeneration)
+            title.upLotties(textPage, pairedTextPage, contentGeneration)
         }.onFailure { error ->
             AppLog.put("PageView advanced title bind failed", error)
-            showSynchronousAdvancedTitleFallbacks(textPage, pairedTextPage)
+            title.showSynchronousFallbacks(textPage, pairedTextPage)
         }
         runCatching {
             if (ReadTipConfig.isHeaderAdvanced() || ReadTipConfig.isFooterAdvanced()) {
@@ -1053,7 +779,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }
         // Warm the next page's title so the first flip does not parse it on the hot path.
         runCatching {
-            prewarmAdvancedTitleFromPage(pairedTextPage)
+            title.prewarmFromPage(pairedTextPage)
         }.onFailure { error ->
             AppLog.put("PageView advanced title prewarm failed", error)
         }
@@ -1144,26 +870,6 @@ class PageView(context: Context) : FrameLayout(context) {
      */
     private fun refreshAdvancedTipFieldsIfBound() = advancedTip.refreshFieldsIfBound()
 
-    /** Best-effort: parse title payload of an adjacent page into Lottie cache off the hot path. */
-    private fun prewarmAdvancedTitleFromPage(textPage: TextPage?) {
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) return
-        val block = textPage?.epubEmbeddedBlocks?.firstOrNull {
-            it.role == AdvancedTitleConfig.LOTTIE_BLOCK_ROLE
-        } ?: return
-        val json = block.payload?.takeIf { it.isNotBlank() } ?: return
-        val pageWidth = binding.contentTextView.width.toFloat().coerceAtLeast(1f)
-        val styled = LottieTitleJsonStyler.applyFallbackStyle(
-            json,
-            advancedTitleTextLayerScale(block, pageWidth),
-            ReadBookConfig.textColor
-        )
-        val tw = block.width.toInt().coerceAtLeast(1)
-        val th = block.height.toInt().coerceAtLeast(1)
-        val key = AdvancedTitleLottieKeys.composition(styled.json, tw, th)
-        if (LottieCompositionCache.getInstance().get(key) != null) return
-        LottieCompositionFactory.fromJsonString(styled.json, key)
-    }
-
     fun invalidateContentView() {
         binding.contentTextView.invalidate()
     }
@@ -1211,20 +917,17 @@ class PageView(context: Context) : FrameLayout(context) {
         val changed = isScroll != value
         isScroll = value
         if (changed && !value) {
-            scrollTitleLinger = emptyList()
-            lastScrollPageOffsetForTitle = Int.MIN_VALUE
-            boundScrollTitleIds[0] = null
-            boundScrollTitleIds[1] = null
+            title.resetScrollState()
         }
         binding.contentTextView.setIsScroll(value)
         if (value) {
             AdvancedTitleSlot.entries.forEach { slot ->
                 titleViews(slot).first.pauseAnimation()
             }
-        } else if (!advancedTitleAnimations.isFrozen && isMainView) {
+        } else if (!title.animations.isFrozen && isMainView) {
             AdvancedTitleSlot.entries.forEach { slot ->
                 val lottieView = titleViews(slot).first
-                if (lottieView.visibility == VISIBLE && isAdvancedTitleReady(slot)) {
+                if (lottieView.visibility == VISIBLE && title.isReady(slot)) {
                     lottieView.playAnimation()
                 }
             }
@@ -1241,7 +944,7 @@ class PageView(context: Context) : FrameLayout(context) {
         binding.contentTextView.scroll(offset)
         if (isScroll) {
             // Position-only sync: never reparse/reload Lottie during finger scroll (avoids jitter).
-            syncScrollAdvancedTitlePositions()
+            title.syncScrollPositions()
             // Root wallpaper is driven by backgroundScrollOffset; invalidate for follow-bg.
             if (AppConfig.readScrollFollowBackground) {
                 binding.vwRoot.invalidate()
@@ -1415,574 +1118,9 @@ class PageView(context: Context) : FrameLayout(context) {
         return binding.contentTextView.relativePage(relativePagePos)
     }
 
-    private fun upAdvancedTitleLotties(
-        textPage: TextPage,
-        pairedTextPage: TextPage?,
-        contentGeneration: Long
-    ) {
-        if (contentGeneration != advancedTitleRequestGate.contentGeneration) return
-        val contentWidth = binding.contentTextView.width
-        if (isScroll) {
-            val pageWidth = contentWidth.toFloat().coerceAtLeast(1f)
-            val titles = collectScrollAdvancedTitles(pageWidth)
-            bindScrollAdvancedTitle(
-                title = titles.getOrNull(0),
-                pageWidth = pageWidth,
-                slot = AdvancedTitleSlot.PRIMARY,
-                contentGeneration = contentGeneration
-            )
-            bindScrollAdvancedTitle(
-                title = titles.getOrNull(1),
-                pageWidth = pageWidth,
-                slot = AdvancedTitleSlot.PAIR,
-                contentGeneration = contentGeneration
-            )
-            boundScrollTitleIds[0] = titles.getOrNull(0)?.id
-            boundScrollTitleIds[1] = titles.getOrNull(1)?.id
-            return
-        }
-        val useDoublePage = ChapterProvider.doublePage
-        val pairOffsetX = if (useDoublePage) contentWidth / 2f else 0f
-        val pageWidth = if (useDoublePage) {
-            contentWidth / 2f
-        } else {
-            contentWidth.toFloat()
-        }.coerceAtLeast(1f)
-        bindAdvancedTitleSlotSafely(
-            slot = AdvancedTitleSlot.PRIMARY,
-            textPage = textPage,
-            pageOffsetX = 0f,
-            pageWidth = pageWidth,
-            scrollBaseY = 0f,
-            contentGeneration = contentGeneration
-        )
-        bindAdvancedTitleSlotSafely(
-            slot = AdvancedTitleSlot.PAIR,
-            textPage = pairedTextPage,
-            pageOffsetX = pairOffsetX,
-            pageWidth = pageWidth,
-            scrollBaseY = 0f,
-            contentGeneration = contentGeneration
-        )
-    }
-    private data class ScrollAdvTitle(
-        val id: String,
-        val textPage: TextPage,
-        val block: TextPage.EpubEmbeddedBlock,
-        val x: Float,
-        val y: Float,
-        val width: Int,
-        val height: Int
-    )
-
-    /**
-     * Gather advanced titles still intersecting the reading viewport.
-     * Titles stay mounted until fully outside (top or bottom), like normal painted titles.
-     */
-    private fun collectScrollAdvancedTitles(pageWidth: Float): List<ScrollAdvTitle> {
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) {
-            scrollTitleLinger = emptyList()
-            return scrollTitleLinger
-        }
-        val content = binding.contentTextView
-        // Overlay is content-sized: same coordinate space as painted text pages.
-        val contentHeight = content.height.toFloat().coerceAtLeast(1f)
-        val contentWidth = content.width.toFloat().coerceAtLeast(1f)
-        val live = ArrayList<ScrollAdvTitle>(3)
-        for (pos in 0..2) {
-            if (!content.hasScrollRelativePage(pos)) continue
-            val page = content.scrollRelativePage(pos)
-            val block = page.epubEmbeddedBlocks.firstOrNull {
-                it.role == AdvancedTitleConfig.LOTTIE_BLOCK_ROLE
-            } ?: continue
-            val placement = AdvancedTitleScrollGeometry.place(
-                blockOffsetX = block.offsetX,
-                blockOffsetY = block.offsetY,
-                blockWidth = block.width,
-                blockHeight = block.height,
-                relativeOffsetY = content.scrollRelativeOffset(pos),
-                contentWidth = contentWidth,
-                contentHeight = contentHeight
-            ) ?: continue
-            val id = AdvancedTitleScrollGeometry.id(page.chapterIndex, page.index, page.title)
-            live.add(
-                ScrollAdvTitle(
-                    id = id,
-                    textPage = page,
-                    block = block,
-                    x = placement.x,
-                    y = placement.y,
-                    width = placement.width,
-                    height = placement.height
-                )
-            )
-        }
-        live.sortBy { it.y }
-        scrollTitleLinger = live.take(2)
-        return scrollTitleLinger
-    }
-
-    /**
-     * Finger-scroll path: only move overlays. Reload happens in setContent via full bind.
-     */
-    private fun syncScrollAdvancedTitlePositions() {
-        if (!isScroll) return
-        if (ReadBookConfig.titleMode != AdvancedTitleConfig.TITLE_MODE_ADVANCED) {
-            boundScrollTitleIds.fill(null)
-            AdvancedTitleSlot.entries.forEach(::hideAdvancedTitleSlot)
-            return
-        }
-        val pageWidth = binding.contentTextView.width.toFloat().coerceAtLeast(1f)
-        val titles = collectScrollAdvancedTitles(pageWidth)
-        val id0 = titles.getOrNull(0)?.id
-        val id1 = titles.getOrNull(1)?.id
-        val sameBinding =
-            boundScrollTitleIds[0] == id0 &&
-                boundScrollTitleIds[1] == id1 &&
-                (id0 == null || isAdvancedTitleReady(AdvancedTitleSlot.PRIMARY) ||
-                    binding.advancedTitleFallback.visibility == VISIBLE) &&
-                (id1 == null || isAdvancedTitleReady(AdvancedTitleSlot.PAIR) ||
-                    binding.advancedTitleFallbackPair.visibility == VISIBLE)
-        if (!sameBinding) {
-            // Keep JSON rewrite/parsing out of MotionEvent.MOVE. Publish the new page's
-            // lightweight fallback now and let the posted idle bind load its composition.
-            currentTextPage?.let { textPage ->
-                showSynchronousAdvancedTitleFallbacks(textPage, pairedTextPage)
-                scheduleOverlayBind()
-            }
-            return
-        }
-        applyScrollTitlePosition(AdvancedTitleSlot.PRIMARY, titles.getOrNull(0))
-        applyScrollTitlePosition(AdvancedTitleSlot.PAIR, titles.getOrNull(1))
-    }
-
-    private fun applyTitleContentClip(view: android.view.View, y: Float, width: Int, height: Int) {
-        if (y >= 0f) {
-            view.clipBounds = null
-            return
-        }
-        val top = (-y).toInt().coerceIn(0, height)
-        view.clipBounds = if (top >= height) {
-            android.graphics.Rect(0, 0, 0, 0)
-        } else {
-            android.graphics.Rect(0, top, width.coerceAtLeast(1), height.coerceAtLeast(1))
-        }
-    }
-
-    private fun applyScrollTitlePosition(
-        slot: AdvancedTitleSlot,
-        title: ScrollAdvTitle?
-    ) {
-        val (lottieView, fallbackView) = titleViews(slot)
-        if (title == null) {
-            hideAdvancedTitleSlot(slot)
-            return
-        }
-        arrayOf<android.view.View>(lottieView, fallbackView).forEach { view ->
-            val params = view.layoutParams
-            if (params.width != title.width || params.height != title.height) {
-                params.width = title.width
-                params.height = title.height
-                view.layoutParams = params
-            }
-            view.translationX = title.x
-            view.translationY = title.y
-            applyTitleContentClip(view, title.y, title.width, title.height)
-        }
-        if (isAdvancedTitleReady(slot)) {
-            lottieView.visibility = VISIBLE
-            lottieView.pauseAnimation()
-            lottieView.progress = 0f
-            fallbackView.visibility = if (isAdvancedTitlePresented(slot)) GONE else VISIBLE
-        } else {
-            lottieView.pauseAnimation()
-            lottieView.visibility = GONE
-            fallbackView.text = title.textPage.title
-            // Blank while still loading; only a failed request may paint the plain title.
-            fallbackView.visibility =
-                if (advancedTitleRequestGate.hasFailed(slot)) VISIBLE else INVISIBLE
-        }
-    }
-
-    private fun isAdvancedTitleReady(slot: AdvancedTitleSlot): Boolean {
-        val token = advancedTitleRequestGate.readyToken(slot) ?: return false
-        val (lottieView, _) = titleViews(slot)
-        return advancedTitleRequestGate.accepts(token) &&
-            lottieView.tag == token.compositionKey &&
-            advancedTitleState.appliedKey(slot) == token.compositionKey &&
-            lottieView.composition != null
-    }
-
-    private fun isAdvancedTitlePresented(slot: AdvancedTitleSlot): Boolean {
-        val token = advancedTitleRequestGate.presentedToken(slot) ?: return false
-        return advancedTitleRequestGate.accepts(token) && isAdvancedTitleReady(slot)
-    }
-
-    private fun bindScrollAdvancedTitle(
-        title: ScrollAdvTitle?,
-        pageWidth: Float,
-        slot: AdvancedTitleSlot,
-        contentGeneration: Long
-    ): String? {
-        if (title == null) {
-            boundScrollTitleIds[slot.ordinal] = null
-            hideAdvancedTitleSlot(slot)
-            return null
-        }
-        boundScrollTitleIds[slot.ordinal] = title.id
-        // Absolute content coordinates: scrollBaseY carries full Y (contentOrigin=0 for content overlay).
-        val key = bindAdvancedTitleSlotSafely(
-            slot = slot,
-            textPage = title.textPage,
-            pageOffsetX = 0f,
-            pageWidth = pageWidth,
-            scrollBaseY = title.y - title.block.offsetY,
-            forceVisibleInScroll = true,
-            sourceId = title.id,
-            contentGeneration = contentGeneration
-        )
-        // Force exact live position after bind (avoid recomputation drift).
-        applyScrollTitlePosition(slot, title)
-        return key
-    }
-
-    private fun bindAdvancedTitleSlotSafely(
-        slot: AdvancedTitleSlot,
-        textPage: TextPage?,
-        pageOffsetX: Float,
-        pageWidth: Float,
-        scrollBaseY: Float,
-        forceVisibleInScroll: Boolean = false,
-        contentGeneration: Long,
-        sourceId: String = "content:$contentGeneration:${slot.name}"
-    ): String? {
-        val (lottieView, fallbackView) = titleViews(slot)
-        return runCatching {
-            upAdvancedTitleLottie(
-                textPage = textPage,
-                lottieView = lottieView,
-                fallbackView = fallbackView,
-                pageOffsetX = pageOffsetX,
-                pageWidth = pageWidth,
-                scrollBaseY = scrollBaseY,
-                forceVisibleInScroll = forceVisibleInScroll,
-                slot = slot,
-                contentGeneration = contentGeneration,
-                sourceId = sourceId
-            )
-        }.getOrElse { error ->
-            AppLog.put("PageView advanced title bind failed: $slot", error)
-            val block = advancedTitleBlock(textPage)
-            if (textPage != null && block != null) {
-                showAdvancedTitleFallback(slot, textPage, block, pageOffsetX, scrollBaseY)
-            } else {
-                hideAdvancedTitleSlot(slot)
-            }
-            null
-        }
-    }
-    private fun upAdvancedTitleLottie(
-        textPage: TextPage?,
-        lottieView: LottieAnimationView,
-        fallbackView: TextView,
-        pageOffsetX: Float,
-        pageWidth: Float,
-        scrollBaseY: Float = 0f,
-        forceVisibleInScroll: Boolean = false,
-        slot: AdvancedTitleSlot,
-        contentGeneration: Long,
-        sourceId: String
-    ): String? {
-        if (contentGeneration != advancedTitleRequestGate.contentGeneration) return null
-        val page = textPage ?: run {
-            hideAdvancedTitleSlot(slot)
-            return null
-        }
-        val block = advancedTitleBlock(page) ?: run {
-            hideAdvancedTitleSlot(slot)
-            return null
-        }
-        // Scroll: still show Lottie, but freeze on keyframe (progress=0) and follow pageOffset.
-        val (targetWidth, targetHeight) = resolveTitleViewSize(block)
-        val params = lottieView.layoutParams as ViewGroup.LayoutParams
-        if (params.width != targetWidth || params.height != targetHeight) {
-            params.width = targetWidth
-            params.height = targetHeight
-            lottieView.layoutParams = params
-        }
-        lottieView.scaleType = ImageView.ScaleType.FIT_CENTER
-        lottieView.translationX = resolveTitleTranslationX(block, targetWidth, pageOffsetX)
-        lottieView.translationY = resolveTitleTranslationY(block, targetHeight, scrollBaseY)
-        if (isScroll && !forceVisibleInScroll) {
-            val overlayHeight = binding.advancedTitleOverlay.height.toFloat()
-                .takeIf { it > 0f }
-                ?: (binding.llHeader.height + binding.contentTextView.height).toFloat().coerceAtLeast(1f)
-            val y = lottieView.translationY
-            // Fully outside the reading overlay (top or bottom edge) — same as normal painted titles.
-            val offScreen = y + targetHeight <= 0f || y >= overlayHeight
-            if (offScreen) {
-                hideAdvancedTitleSlot(slot)
-                return null
-            }
-        }
-        // Non-scroll may loop; scroll freezes on keyframe (progress 0).
-        lottieView.repeatCount = if (isScroll) 0 else LottieDrawable.INFINITE
-        lottieView.setFontAssetDelegate(defaultFontAssetDelegate)
-        val json = block.payload?.takeIf { it.isNotBlank() }
-        val textScale = advancedTitleTextLayerScale(block, pageWidth)
-        val styled = json?.let {
-            LottieTitleJsonStyler.applyFallbackStyle(it, textScale, ReadBookConfig.textColor)
-        }
-        val resolvedJson = styled?.json
-        val nextKey = resolvedJson?.let {
-            AdvancedTitleLottieKeys.composition(it, targetWidth, targetHeight)
-        } ?: AdvancedTitleLottieKeys.rawComposition(targetWidth, targetHeight)
-        val compositionSize = styled?.compositionSize
-        val renderConfig = AdvancedTitleSlotState.RenderConfig(
-            imageAssetResolver = LottieImageAssetResolver(
-                viewWidth = targetWidth,
-                viewHeight = targetHeight,
-                compositionWidth = compositionSize?.width ?: targetWidth,
-                compositionHeight = compositionSize?.height ?: targetHeight,
-                fallbackAssets = block.lottieFallbackAssets
-            ),
-            cacheComposition = resolvedJson == null
-        )
-
-        // Remember which title this slot is working on so a later page turn can tell that a
-        // slot already holds the incoming page's title and leave it up.
-        advancedTitleState.setBoundBlock(slot, block)
-        // Record against the page's position too, so returning to it can find this key back
-        // without restyling the JSON on the page-turn path.
-        advancedTitleKeysByPage.put(advancedTitlePageKey(page), nextKey)
-
-        if (advancedTitleRequestGate.hasCurrent(slot, nextKey, sourceId) && lottieView.tag == nextKey) {
-            if (advancedTitleState.pendingComposition(slot) != null) return nextKey
-            if (isAdvancedTitleReady(slot)) {
-                lottieView.visibility = VISIBLE
-                fallbackView.visibility = if (isAdvancedTitlePresented(slot)) GONE else VISIBLE
-                if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen &&
-                    !lottieView.isAnimating
-                ) {
-                    lottieView.playAnimation()
-                } else {
-                    lottieView.pauseAnimation()
-                    if (!isMainView || isScroll) lottieView.progress = 0f
-                }
-            }
-            return nextKey
-        }
-
-        // The slot may already be drawing exactly this composition: a page turn bumps the
-        // content generation, which retires the token above even though nothing about what
-        // is on screen changed. Re-adopt it instead of composing again — going through
-        // setComposition would blank the slot for a frame and read as a flash.
-        val liveComposition = advancedTitleState.appliedComposition(slot)
-        if (advancedTitleState.appliedKey(slot) == nextKey &&
-            liveComposition != null &&
-            lottieView.composition === liveComposition &&
-            lottieView.visibility == VISIBLE &&
-            advancedTitleState.appliedRenderConfig(slot) != null
-        ) {
-            val token = advancedTitleRequestGate.begin(slot, nextKey, sourceId)
-            lottieView.tag = nextKey
-            if (advancedTitleRequestGate.markReady(token)) {
-                // Already on screen, so it has provably rendered; no pre-draw wait needed.
-                advancedTitleRequestGate.markPresented(token)
-                fallbackView.visibility = GONE
-                if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen) {
-                    if (!lottieView.isAnimating) lottieView.playAnimation()
-                } else {
-                    lottieView.pauseAnimation()
-                    if (!isMainView || isScroll) lottieView.progress = 0f
-                }
-                return nextKey
-            }
-        }
-
-        // Bind identity changed even when the package renders to the same composition key.
-        // Publish the new page's text/geometry before reusing or loading any Lottie content.
-        showAdvancedTitleFallback(slot, page, block, pageOffsetX, scrollBaseY)
-
-        // A composition committed earlier can be put straight back: this is the returning
-        // page's path, where the slot itself has since been handed to another page. Skipping
-        // the reload keeps the JSON parse, the image decode and the async hop out of the
-        // page turn — that round trip is what the reader sees as a flash.
-        val reusable = advancedTitleState.appliedComposition(slot)
-            ?.takeIf { advancedTitleState.appliedKey(slot) == nextKey }
-            ?.let { composition ->
-                advancedTitleState.appliedRenderConfig(slot)
-                    ?.let { AdvancedTitleSlotState.CommittedComposition(composition, it) }
-            }
-            ?: advancedTitleState.committed(nextKey)
-        if (reusable != null) {
-            val token = advancedTitleRequestGate.begin(slot, nextKey, sourceId)
-            lottieView.tag = nextKey
-            commitOrDeferAdvancedTitleComposition(token, reusable.composition, reusable.renderConfig)
-            return nextKey
-        }
-
-        val token = advancedTitleRequestGate.begin(slot, nextKey, sourceId)
-        lottieView.animate().cancel()
-        lottieView.removeAllLottieOnCompositionLoadedListener()
-        lottieView.setFailureListener(null)
-        lottieView.tag = nextKey
-        lottieView.alpha = 1f
-        lottieView.visibility = GONE
-
-        fun showFailureFallback() {
-            if (!advancedTitleRequestGate.fail(token)) return
-            cancelAdvancedTitleImagePreparation(slot)
-            clearPendingAdvancedTitleComposition(slot)
-            lottieView.cancelAnimation()
-            lottieView.visibility = GONE
-            // The fallback has followed any intervening scroll; never restore captured Y.
-            fallbackView.visibility = VISIBLE
-        }
-
-        fun applyLoaded(composition: com.airbnb.lottie.LottieComposition) {
-            cancelAdvancedTitleImagePreparation(slot)
-            lateinit var prepareJob: Coroutine<Boolean>
-            prepareJob = Coroutine.async(Coroutine.defaultScope, start = CoroutineStart.LAZY) {
-                renderConfig.imageAssetResolver.prepareCompositionImages(composition)
-            }.onSuccess { ready ->
-                if (advancedTitleState.imagePrepareJob(slot) !== prepareJob) return@onSuccess
-                advancedTitleState.setImagePrepareJob(slot, null)
-                if (!advancedTitleRequestGate.accepts(token)) return@onSuccess
-                // The composition parsed, so it stays. Undecodable images are skipped by
-                // Lottie; never drop a valid advanced title back to the plain-text one.
-                if (!ready) {
-                    AppLog.put("PageView advanced title images unavailable, rendering without them: $slot")
-                }
-                commitOrDeferAdvancedTitleComposition(token, composition, renderConfig)
-            }.onError { error ->
-                if (advancedTitleState.imagePrepareJob(slot) !== prepareJob) return@onError
-                advancedTitleState.setImagePrepareJob(slot, null)
-                AppLog.put("PageView advanced title image preparation failed: $slot", error)
-                // Images are best-effort; the parsed composition is still valid.
-                if (advancedTitleRequestGate.accepts(token)) {
-                    commitOrDeferAdvancedTitleComposition(token, composition, renderConfig)
-                }
-            }
-            advancedTitleState.setImagePrepareJob(slot, prepareJob)
-            prepareJob.start()
-        }
-
-        if (resolvedJson != null) {
-            LottieCompositionCache.getInstance().get(nextKey)?.let { composition ->
-                applyLoaded(composition)
-                return nextKey
-            }
-            LottieCompositionFactory.fromJsonString(resolvedJson, nextKey)
-                .addListener { composition -> composition?.let(::applyLoaded) }
-                .addFailureListener { showFailureFallback() }
-        } else {
-            LottieCompositionFactory.fromRawRes(context, R.raw.advanced_title_lottie)
-                .addListener { composition -> composition?.let(::applyLoaded) }
-                .addFailureListener { showFailureFallback() }
-        }
-        return nextKey
-    }
-
-    private fun commitOrDeferAdvancedTitleComposition(
-        token: AdvancedTitleRequestToken,
-        composition: com.airbnb.lottie.LottieComposition,
-        renderConfig: AdvancedTitleSlotState.RenderConfig
-    ) {
-        if (!advancedTitleRequestGate.accepts(token)) return
-        val readView = parent as? ReadView
-        if (!isScroll && readView?.isHorizontalPageTurnActive == true) {
-            advancedTitleState.setPendingComposition(
-                token.slot,
-                AdvancedTitleSlotState.PendingComposition(token, composition, renderConfig)
-            )
-            return
-        }
-        commitAdvancedTitleComposition(
-            AdvancedTitleSlotState.PendingComposition(token, composition, renderConfig)
-        )
-    }
-
-    private fun commitAdvancedTitleComposition(pending: AdvancedTitleSlotState.PendingComposition) {
-        val token = pending.token
-        if (!advancedTitleRequestGate.accepts(token)) return
-        val (lottieView, fallbackView) = titleViews(token.slot)
-        if (lottieView.tag != token.compositionKey) return
-        clearPendingAdvancedTitleComposition(token.slot)
-        runCatching {
-            // Hardware/automatic rendering. Software rendering makes Lottie allocate a
-            // view-sized backing bitmap per animation view and rasterize it on the main
-            // thread; across three PageViews times title and tip slots that reproduced the
-            // 2026-07-23 regression (heap exhausted, main thread hung, reader killed with a
-            // black screen and no crash dialog) which the 2026-07-24 repair fixed by
-            // removing software rendering.
-            lottieView.renderMode = RenderMode.AUTOMATIC
-            lottieView.setMaintainOriginalImageBounds(pending.renderConfig.maintainOriginalImageBounds)
-            lottieView.setImageAssetDelegate(pending.renderConfig.imageAssetResolver)
-            lottieView.setCacheComposition(pending.renderConfig.cacheComposition)
-            lottieView.setComposition(pending.composition)
-            advancedTitleState.setApplied(
-                token.slot,
-                token.compositionKey,
-                pending.composition,
-                pending.renderConfig
-            )
-            // Outlives the slot: the next page overwrites the entries above, and without a
-            // copy here a page the reader returns to would have to be composed again.
-            advancedTitleState.putCommitted(
-                token.compositionKey,
-                AdvancedTitleSlotState.CommittedComposition(
-                    pending.composition,
-                    pending.renderConfig
-                )
-            )
-            lottieView.progress = 0f
-            lottieView.alpha = 1f
-            lottieView.visibility = VISIBLE
-            if (isMainView && !isScroll && !advancedTitleAnimations.isFrozen) {
-                lottieView.playAnimation()
-            } else {
-                lottieView.pauseAnimation()
-                if (isMainView && !isScroll && advancedTitleAnimations.isFrozen) {
-                    advancedTitleAnimations.markTitleToResume(token.slot)
-                }
-            }
-            if (!advancedTitleRequestGate.markReady(token)) {
-                lottieView.cancelAnimation()
-                lottieView.visibility = GONE
-                clearAppliedAdvancedTitle(token.slot)
-                return@runCatching
-            }
-            // Composition success is not proof that a vendor renderer produced a frame. Keep
-            // the correct-page fallback until this exact request participates in pre-draw.
-            lottieView.doOnPreDraw {
-                if (lottieView.tag == token.compositionKey &&
-                    lottieView.visibility == VISIBLE &&
-                    lottieView.composition != null &&
-                    advancedTitleRequestGate.markPresented(token)
-                ) {
-                    fallbackView.visibility = GONE
-                    markSnapDirty()
-                }
-            }
-            lottieView.invalidate()
-        }.onFailure { error ->
-            AppLog.put("PageView advanced title composition failed: ${token.slot}", error)
-            clearAppliedAdvancedTitle(token.slot)
-            if (advancedTitleRequestGate.fail(token)) {
-                lottieView.cancelAnimation()
-                lottieView.visibility = GONE
-                fallbackView.visibility = VISIBLE
-            }
-        }
-    }
-
     internal fun flushPendingAdvancedTitleCompositions() {
-        val readView = parent as? ReadView
-        if (!isScroll && readView?.isHorizontalPageTurnActive == true) return
-        advancedTitleState.pendingCompositions().forEach { pending ->
-            commitAdvancedTitleComposition(pending)
-        }
+        if (!title.canCommitPendingNow()) return
+        title.commitPending()
         advancedTip.commitPending()
         resumeAdvancedTitleAnimationsAfterPageTurn()
     }
@@ -2022,18 +1160,6 @@ class PageView(context: Context) : FrameLayout(context) {
         view.setFailureListener(null)
         view.tag = null
         view.alpha = 1f
-    }
-
-    private fun advancedTitleTextLayerScale(block: TextPage.EpubEmbeddedBlock, pageWidth: Float): Float {
-        // 纯计算已搬到 LottieTitleJsonStyler（可单测），这里只负责把阅读器配置喂进去
-        return LottieTitleJsonStyler.textLayerScale(
-            block = block,
-            pageWidth = pageWidth,
-            textSize = ReadBookConfig.textSize.toFloat(),
-            titleSize = ReadBookConfig.titleSize.toFloat(),
-            heightFactorRatio = AdvancedTitleConfig.heightFactor /
-                AdvancedTitleConfig.DEFAULT_HEIGHT_FACTOR.toFloat()
-        )
     }
 
     private val defaultFontAssetDelegate = AdvancedTitleFontAssetDelegate {

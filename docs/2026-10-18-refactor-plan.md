@@ -333,6 +333,34 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   `= null` 因 `clearApplied` 要先整块替换否则计数对不上，都靠断言挡下来了），
   再编译验证。阅读页包 **111 个单测全绿**。
 
+### 2026-10-22 F 区拆分（PageView 2074 → 1200 行，F/G 区拆分完成）
+
+**新增 `AdvancedTitleLottieController.kt`（1034 行），F 区整体搬出。**
+
+- **搬走的内容**：装载主流程 `upLottie`（键生成/复用判定/组合加载/图片解码任务）、
+  `commit`/`commitOrDefer`（提交与翻页延迟提交）、恢复路径（`slotsAlreadyShowing` /
+  `restoreCommitted`）、兜底绘制（`showFallback` / `showSynchronousFallbacks`）、
+  滚动模式全块（`collectScrollTitles` / `syncScrollPositions` / `applyScrollTitlePosition` /
+  内容裁剪）、预热（`prewarmFromPage`）、就绪判定（`isReady` / `isPresented`）、
+  以及全部槽位状态（`state` / `keysByPage` / `requestGate` / `animations` /
+  滚动 lingering 三件套）与 `ScrollAdvTitle`。
+- **宿主接口 `AdvancedTitleHost`（18 个方法）**：titleViews、内容宽高、滚动 overlay 高度、
+  isScroll/isMainView、当前页/配对页、翻页中判定、markSnapDirty、加载态清理、
+  字体委托、调度 overlay bind、bookUrl、Context、滚动相对页三件套。
+- **留在 PageView 的**：`disposeAdvancedTitleRequests`（管理 overlay 调度令牌与
+  tip 控制器）、freeze/resume 动画（同时管标题与 tip）、`setContent` 调度骨架、
+  `flushPendingAdvancedTitleCompositions`（按 canCommitPendingNow → title/tip 依次提交
+  → 恢复动画）。两者通过 `title.xxx` 单向调用。
+- **只搬不改**：逐字复制，环境访问改走 host；判定顺序、runCatching 边界、
+  全部"看似 bug 但是行为"的长注释（软渲染回归、首帧黑屏、图片解不出不降级、
+  双重防闪烁校验）随代码一起走。
+- **踩坑**：`LottieCompositionCache` 的包是 `com.airbnb.lottie.model.*`（写错包名
+  连带报出一个莫名其妙的 MatchGroup 推断错误，修 import 即消）；
+  函数按「签名锚点 + 首个 `    }` 收尾」整块删除比行号区间可靠（此前两次
+  行号区间删除都因上下文行数漂移而断言失败——都是断言拦下的，没有误写）。
+- **阅读页包 111 个单测全绿，全量 1637 用例 0 失败。**
+  PageView 从最初的 **2821 行降到 1200 行**（-57%），标题/tip 装载各自独立成类。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到
