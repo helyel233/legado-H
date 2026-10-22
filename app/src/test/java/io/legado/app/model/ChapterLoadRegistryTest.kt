@@ -129,8 +129,9 @@ class ChapterLoadRegistryTest {
 
     /**
      * 多个线程交替 begin/finish/cancel，外加一个线程不停地 clearLoads，模拟"飞行中加载"
-     * 与"离开书籍清加载"在真实调度下交错。注册表全方法 @Synchronized，且跨锁安全靠世代
-     * 守卫，因此无论交错顺序如何，不变量都必须保持：isLoading(idx) <=> generationOf(idx) != null。
+     * 与"离开书籍清加载"在真实调度下交错。注册表的变更方法全 @Synchronized（读方法走
+     * ConcurrentHashMap 无锁读），且跨锁安全靠世代守卫，因此无论交错顺序如何，
+     * 不变量都必须保持：isLoading(idx) <=> generationOf(idx) != null。
      */
     @Test
     fun concurrentBeginFinishAndClearLoadsStayConsistent() {

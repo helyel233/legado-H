@@ -368,11 +368,13 @@ object ReadBook : CoroutineScope by MainScope() {
         } else {
             appDb.bookSourceDao.getBookSource(book.origin)?.let {
                 bookSource = it
+                // 与原实现一致：仅样式为空时才取书源样式（getContentRule 有惰性缓存，勿提前求值）
+                val currentStyle = book.getImageStyle()
                 val decision = BookDisplayStylePolicy.decide(
                     isLocal = false,
                     isImageOrPdf = book.isImage || book.isPdf,
-                    currentStyle = book.getImageStyle(),
-                    sourceStyle = it.getContentRule().imageStyle
+                    currentStyle = currentStyle,
+                    sourceStyle = if (currentStyle.isNullOrBlank()) it.getContentRule().imageStyle else null
                 )
                 if (decision is BookDisplayStyleDecision.Set) {
                     book.setImageStyle(decision.style)
