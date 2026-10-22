@@ -1,5 +1,27 @@
 # 更新日志
 
+## 1.12.5 版（2026-10-23）
+
+本版修复 Epub 排版中 rem 单位失效的问题，并继续把阅读器与 Epub 子系统的解析逻辑抽成可单测的纯逻辑、消除重复实现。发布前经两个独立代理交叉审查，全部存疑项与 git 历史逐字比对落锤。
+
+### 修复
+
+- **Epub 的 rem 间距失效**：解析 CSS 长度时先判 `endsWith("em")`，而 `"2rem"` 同样以 `"em"` 结尾，会先命中 em 分支并把 `"2r"` 当作数值解析失败，导致 rem 分支永远不可达——**用 rem 写的 margin/padding 实际被忽略**。已把 rem 判定提到 em 之前，并用测试锁定顺序（防再次被颠倒）。这是本版唯一的用户可见变化。
+
+### 重构（行为保持，靠新增单测锁行为）
+
+- **Epub CSS 值解析抽为纯对象**：`TextChapterLayout` 中 14 个私有的颜色/长度/间距/盒简写解析函数抽为 `EpubCssValues`。原实现依赖 `android.graphics.Color.parseColor`（无法在纯 JVM 单测中使用），改为手写 ARGB 打包，行为与 `Color.parseColor` 逐个取值比对一致，从而可在 JVM 上直接单测。`TextChapterLayout` 只保留一行委托，调用点零改动（行 2869→2859）。
+- **消除 Epub 子系统的重复副本（−200 行）**：同一套 CSS 解析此前被复制到 `EpubFile`/`EpubLayoutEngine`/`EpubBoxBuilder`/`EpubDomBuilder`。逐函数比对确认行为完全等价后统一到 `EpubCssValues`；顺带修正层级倒挂（`EpubCssValues` 从 ui 层移到 model 层，避免 model 依赖 ui）。**hsl 差异保守处理**：`EpubLayoutEngine` 支持 hsl、`TextChapterLayout` 不支持，本次不擅自增删任一侧的 hsl 能力。
+- **书籍显示样式决策抽为纯策略**：`upWebBook` 中的"图片样式默认值 / 翻页动画重置"规则抽为 `BookDisplayStylePolicy`（9 个单测）。
+- **锁竞态窗口补测并关闭**：ReadBook 拆分时加载状态由一把锁拆到多把锁，跨锁安全靠世代号守卫。新增 `ChapterLoadRegistry` 并发测试（8 线程交替 begin/finish/cancel + 常驻 clearLoads）与"旧世代结果不得复活加载记录"用例，实证该窗口安全。
+- **Epub CSS 解析基础建回归网**：`EpubCss`（906 行纯 Kotlin）新增 24 个单测，覆盖括号/引号内分隔符不被误切、`!important` 剥离、引号归一、`@font-face` 解析、规则与选择器拆分等边界。
+
+### 审查
+
+- 对 1.12.4 之后的全部提交做交叉审查：两个独立代理并行审 + git 历史逐字落锤，结论零隐藏 bug；修复唯一发现的求值时机差异（`getContentRule()` 恢复为仅在样式为空时调用）。
+
+全量单测 1748 用例 0 失败。
+
 ## 1.12.4 版（2026-10-22）
 
 本版完成 `ReadBook` 的拆分重构，并修复一个预下载越界问题。发布前经独立交叉审查，全部存疑项与 git 历史逐字比对落锤。

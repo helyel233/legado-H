@@ -4,6 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.12.5 · 2026/10/23**
+
+- 修复 Epub 的 rem 间距失效：解析时 em 判定先于 rem，"2rem" 会被误当作 em 解析失败，导致用 rem 写的 margin/padding 实际被忽略；已调整判定顺序并用测试锁定
+- Epub CSS 值解析抽为可单测的纯对象 EpubCssValues（颜色/长度/间距/盒简写），并消除 Epub 子系统里 4 处重复副本（-200 行），顺带修正 model 层不应依赖 ui 层的层级倒挂
+- 书籍显示样式决策抽为纯策略 BookDisplayStylePolicy；ReadBook 拆分后的锁竞态窗口补并发测试实证关闭
+- 对 1.12.4 之后改动做交叉审查（零隐藏 bug）；Epub CSS 解析基础新增 24 个单测
+- 全量单测 1748 用例 0 失败
+
 **vH.1.12.4 · 2026/10/22**
 
 - 修复预下载章节索引越界：前向区间会把不存在的"第总章数章"加进下载计划、后向会加入负索引，下游会为不存在的章节建缓存任务，已夹到合法范围
