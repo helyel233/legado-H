@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.12.3 · 2026/10/22**
+
+- 阅读页纯内部重构（无功能变化，F/G 区拆分收尾）：F 区章节标题装载抽为 AdvancedTitleLottieController，PageView 2074→1200 行，全量 1637 单测 0 失败
+
 **vH.1.12.2 · 2026/10/21**
 
 - 阅读页纯内部重构（无功能变化）：PageView 拆分为标题/动效纯逻辑模块，章节加载竞态守卫与阅读进度百分比计算抽为独立纯规则，新增大量单测锁行为、补真机验收清单
