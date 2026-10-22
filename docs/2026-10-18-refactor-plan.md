@@ -536,6 +536,26 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   （把 rem 分支提到 em 之前，并同步改期望值）。**是否修复待定**。
 - `EpubCssValuesTest` 44 个用例全过；全量单测 **1719 用例 0 失败**（较上轮 1706 再 +13）。
 
+### 2026-10-22 续 2：修 rem bug + TextChapterLayout 盒简写抽出 + Epub 子系统回归网
+
+- **修复 rem 单位 bug（用户拍板）**：`isLargeSpacing` 与 `toPx` 里把 `rem` 分支提到 `em`
+  之前，并加注释说明原因。"2rem" 此前因 `endsWith("em")` 先命中 em 分支而永远走不到 rem，
+  导致 **Epub 里 rem 写的 margin/padding 静默失效**；修复后 rem 按 `emBase * rem` 正常换算。
+  测试由"固化 bug"翻转为 `remMustBeCheckedBeforeEm`（锁定修复，防再次被颠倒）。
+- **TextChapterLayout 再抽出盒简写展开** `EpubCssValues.resolveBoxSide(values, side)`：
+  margin/padding 的 1–4 值按 CSS 规则映射为 top/right/bottom/left（1 值全用、2 值为
+  上下/左右、3 值时 left 镜像 right、空或未知边返回空串）。委托后 `epubCssValue` 更短，
+  调用点仍零改动。文件 2869→2859 行。
+- **Epub 子系统切入：给 `EpubCss` 建回归网**（`EpubCssTest` 14 个用例）。`EpubCss` 是
+  906 行的 `internal object`、**纯 Kotlin**（仅 import `java.util.Locale`），是整套 Epub
+  渲染的 CSS 解析基础，且 `splitValueList`/`declarations` 被 `TextChapterLayout` 直接调用。
+  测试锁住：`splitDeclarations` 不切分括号/引号内的分号、`splitValueList` 不切分
+  `rgb(1, 2, 3)` 与引号内的空格、多余空白折叠、属性名转小写、`!important` 剥离、
+  双引号归一为单引号、`duokan-text-indent` 映射为 `text-indent` 且取最后一个值。
+  **这是 Epub 子系统里价值最高、风险最低的一刀**（纯逻辑建网，不整块搬）。
+  `EpubDirectWebLayer`(8913 行) 等自包含大件仍不建议整块搬。
+- 全量单测 **1738 用例 0 失败**（253 测试类，较上轮 1719 再 +19）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到

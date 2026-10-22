@@ -1453,18 +1453,8 @@ class TextChapterLayout(
             else -> return ""
         }
         val values = declarations[shorthand]?.let { EpubCss.splitValueList(it) }.orEmpty()
-        if (values.isEmpty()) return ""
-        val top = values.getOrNull(0).orEmpty()
-        val right = values.getOrNull(1) ?: top
-        val bottom = values.getOrNull(2) ?: top
-        val left = values.getOrNull(3) ?: right
-        return when (name.substringAfter('-')) {
-            "top" -> top
-            "right" -> right
-            "bottom" -> bottom
-            "left" -> left
-            else -> ""
-        }
+        // 四边简写展开规则见 EpubCssValues.resolveBoxSide（纯逻辑，可单测）
+        return EpubCssValues.resolveBoxSide(values, name.substringAfter('-'))
     }
 
     private fun Element.epubCssDeclarations(): Map<String, String> {

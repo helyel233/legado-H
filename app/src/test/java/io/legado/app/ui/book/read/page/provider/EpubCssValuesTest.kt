@@ -193,6 +193,51 @@ class EpubCssValuesTest {
         assertEquals(emptyList<String>(), EpubCssValues.toBoxLengths("   "))
     }
 
+    // --- box side resolution (margin/padding shorthand -> a single side) -------
+
+    @Test
+    fun oneValueAppliesToAllSides() {
+        val values = listOf("1px")
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "top"))
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "right"))
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "bottom"))
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "left"))
+    }
+
+    @Test
+    fun twoValuesAreTopBottomAndLeftRight() {
+        val values = listOf("1px", "2px")
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "top"))
+        assertEquals("2px", EpubCssValues.resolveBoxSide(values, "right"))
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "bottom"))
+        assertEquals("2px", EpubCssValues.resolveBoxSide(values, "left"))
+    }
+
+    @Test
+    fun threeValuesLeaveLeftMirroringRight() {
+        val values = listOf("1px", "2px", "3px")
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "top"))
+        assertEquals("2px", EpubCssValues.resolveBoxSide(values, "right"))
+        assertEquals("3px", EpubCssValues.resolveBoxSide(values, "bottom"))
+        assertEquals("2px", EpubCssValues.resolveBoxSide(values, "left"))
+    }
+
+    @Test
+    fun fourValuesAreTakenAsGiven() {
+        val values = listOf("1px", "2px", "3px", "4px")
+        assertEquals("1px", EpubCssValues.resolveBoxSide(values, "top"))
+        assertEquals("2px", EpubCssValues.resolveBoxSide(values, "right"))
+        assertEquals("3px", EpubCssValues.resolveBoxSide(values, "bottom"))
+        assertEquals("4px", EpubCssValues.resolveBoxSide(values, "left"))
+    }
+
+    @Test
+    fun noValuesOrUnknownSideYieldsEmpty() {
+        val values = emptyList<String>()
+        assertEquals("", EpubCssValues.resolveBoxSide(values, "top"))
+        assertEquals("", EpubCssValues.resolveBoxSide(listOf("1px"), "center"))
+    }
+
     // --- break decisions -----------------------------------------------------
 
     @Test
@@ -220,6 +265,7 @@ class EpubCssValuesTest {
     @Test
     fun largeSpacingThresholds() {
         assertTrue(EpubCssValues.isLargeSpacing("1em"))
+        assertTrue(EpubCssValues.isLargeSpacing("1rem"))
         assertTrue(EpubCssValues.isLargeSpacing("8%"))
         assertTrue(EpubCssValues.isLargeSpacing("16px"))
         assertTrue(EpubCssValues.isLargeSpacing("16"))
@@ -256,21 +302,21 @@ class EpubCssValuesTest {
     }
 
     @Test
-    fun spacingConvertsEmOffTheTextHeight() {
+    fun spacingConvertsEmAndRemOffTheTextHeight() {
         assertPx(40f, EpubCssValues.toSpacingPx("2em", width, emBase), "2em 间距")
+        assertPx(40f, EpubCssValues.toSpacingPx("2rem", width, emBase), "2rem 间距")
     }
 
     /**
-     * 固化现状（非期望行为）：`rem` 单位目前解析不到——`endsWith("em")` 对 "2rem" 同样成立，
-     * 会先命中 em 分支，`dropLast(2)` 得到 "2r" 解析失败，于是返回 null（间距被忽略）；
-     * `isLargeSpacing` 同理得到 0，判定为"非大间距"。
-     * 后果：Epub 里用 rem 写的 margin/padding 实际不生效。
-     * 如需修复，应把 rem 分支提到 em 之前，并同步修改本用例的期望值。
+     * 回归锁定：`rem` 必须排在 `em` 之前判定——"2rem" 同样 endsWith("em")，
+     * 若顺序颠倒 rem 分支会永远不可达，Epub 里用 rem 写的 margin/padding 会静默失效。
      */
     @Test
-    fun remIsCurrentlyShadowedByTheEmCheck() {
-        assertNull(EpubCssValues.toSpacingPx("2rem", width, emBase))
-        assertFalse(EpubCssValues.isLargeSpacing("2rem"))
+    fun remMustBeCheckedBeforeEm() {
+        assertPx(40f, EpubCssValues.toSpacingPx("2rem", width, emBase), "2rem 间距")
+        assertTrue(EpubCssValues.isLargeSpacing("2rem"))
+        // em 仍然正常
+        assertPx(40f, EpubCssValues.toSpacingPx("2em", width, emBase), "2em 间距")
     }
 
     @Test

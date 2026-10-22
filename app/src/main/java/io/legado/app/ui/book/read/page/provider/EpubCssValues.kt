@@ -86,9 +86,10 @@ internal object EpubCssValues {
     fun isLargeSpacing(input: String): Boolean {
         val value = input.trim().lowercase()
         if (value.isBlank() || value == "0") return false
+        // rem 必须排在 em 之前："2rem" 同样 endsWith("em")，否则 rem 分支永远不可达。
         return when {
-            value.endsWith("em") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 1f
             value.endsWith("rem") -> (value.dropLast(3).toFloatOrNull() ?: 0f) >= 1f
+            value.endsWith("em") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 1f
             value.endsWith("%") -> (value.dropLast(1).toFloatOrNull() ?: 0f) >= 8f
             value.endsWith("px") -> (value.dropLast(2).toFloatOrNull() ?: 0f) >= 16f
             else -> (value.toFloatOrNull() ?: 0f) >= 16f
@@ -102,6 +103,28 @@ internal object EpubCssValues {
     /** Horizontal length in px; `auto` and `0` both collapse to 0. */
     fun toHorizontalPx(input: String, visibleWidth: Float, emBase: Float): Float? =
         toPx(input, visibleWidth, emBase, treatAutoAsZero = true)
+
+    /**
+     * One side of a `margin`/`padding` shorthand written with 1–4 values.
+     *
+     * CSS fills the missing sides from the ones that were given: one value applies to all
+     * four, two are top/bottom and left/right, three leave the left to mirror the right.
+     * An empty list or an unknown side yields an empty string, which callers treat as
+     * "no value declared".
+     */
+    fun resolveBoxSide(values: List<String>, side: String): String {
+        val top = values.getOrNull(0).orEmpty()
+        val right = values.getOrNull(1) ?: top
+        val bottom = values.getOrNull(2) ?: top
+        val left = values.getOrNull(3) ?: right
+        return when (side) {
+            "top" -> top
+            "right" -> right
+            "bottom" -> bottom
+            "left" -> left
+            else -> ""
+        }
+    }
 
     private fun toPx(
         input: String,
@@ -117,13 +140,14 @@ internal object EpubCssValues {
                 val percentage = value.dropLast(1).toFloatOrNull() ?: return null
                 visibleWidth * percentage / 100f
             }
-            value.endsWith("em") -> {
-                val em = value.dropLast(2).toFloatOrNull() ?: return null
-                emBase * em
-            }
+            // 同上：rem 必须先于 em 判定
             value.endsWith("rem") -> {
                 val rem = value.dropLast(3).toFloatOrNull() ?: return null
                 emBase * rem
+            }
+            value.endsWith("em") -> {
+                val em = value.dropLast(2).toFloatOrNull() ?: return null
+                emBase * em
             }
             value.endsWith("px") -> value.dropLast(2).toFloatOrNull()
             else -> value.toFloatOrNull()
