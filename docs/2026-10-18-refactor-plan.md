@@ -387,6 +387,22 @@ Web 前端（`modules/web/src`）已经有 `Authorization` header 机制（原�
   `paragraphIndent` 是 String、`delTag` 是 Long、两个 revision 是 String——
   搬成强类型数据类时编译器才暴露，已按真实类型修正。
 
+### 2026-10-22 第二步：加载状态收拢（ChapterLoadRegistry）
+
+- **新增 `model/ChapterLoadRegistry.kt`**：把章节加载的 6 个并发容器收进一个对象——
+  在途列表、任务句柄、加载排版键、加载世代号、世代号种子、已排版章节的键。
+  「在途」与「已排版」分开：前者回答"这个加载还能不能用"，后者回答"这章还需不需要
+  重新排版"。
+- **ReadBook 侧**：`cancel/begin/updateLayoutKey/finish/generationOf/removeLoading`
+  等 5 个 `@Synchronized` 函数变成对注册表的薄委托；三个守卫取值点
+  （`generationOf` / `layoutKeyOf`）统一从注册表读；`resetData`/`upData` 的清理
+  改为 `clearLoads() + clearChapterLayoutKeys()`（下载相关的两个集合仍留在 ReadBook）。
+- **锁的范围没变**：原来 5 个函数各自 `@Synchronized` 在 ReadBook 单例上，现在收敛到
+  注册表内部同一把锁——所有对这些容器的访问都走注册表，锁的粒度等价。
+- 注意 `cancel` 的返回值语义：原代码 `chapterLoadingJobs.remove(index)?.cancel()`
+  忽略返回值，注册表返回"是否真的取消了一个任务"，调用方同样忽略。
+- 编译通过，全量单测 **1648 用例 0 失败**（本步纯机械收拢，无新增单测）。
+
 ### 2026-10-20 阅读进度百分比（可测化）
 
 - **新增 `entities/ReadProgressCalculator.kt`**：把 `TextPage.readProgress` 的计算搬到

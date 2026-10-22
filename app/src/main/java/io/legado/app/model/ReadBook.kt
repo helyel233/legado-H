@@ -104,14 +104,13 @@ object ReadBook : CoroutineScope by MainScope() {
             directTextRevisionSeed.incrementAndGet()
         }
     var msg: String? = null
-    private val loadingChapters = arrayListOf<Int>()
     private val readRecord = ReadRecord()
-    private val chapterLoadingJobs = ConcurrentHashMap<Int, Coroutine<*>>()
     private val paragraphRuleProcessingSemaphore = Semaphore(1)
-    private val chapterLoadingLayoutKeys = ConcurrentHashMap<Int, String>()
-    private val chapterLoadGenerations = ConcurrentHashMap<Int, Long>()
-    private val chapterLoadGenerationSeed = AtomicLong(0L)
-    private val chapterLayoutKeys = ConcurrentHashMap<Int, String>()
+    /**
+     * 章节加载的在途记录（哪个章在加载、加载到第几代、用的哪个排版键、任务句柄）。
+     * 判定规则在 ChapterLoadGuard，取值在这里。
+     */
+    private val chapterLoads = ChapterLoadRegistry()
     @Volatile
     private var paragraphRuleLayoutKey: String = ""
     @Volatile
@@ -209,11 +208,9 @@ object ReadBook : CoroutineScope by MainScope() {
         lastBookProgress = null
         webBookProgress = null
         TextFile.clear()
+        chapterLoads.clearLoads()
+        chapterLoads.clearChapterLayoutKeys()
         synchronized(this) {
-            loadingChapters.clear()
-            chapterLoadingLayoutKeys.clear()
-            chapterLoadGenerations.clear()
-            chapterLayoutKeys.clear()
             downloadedChapters.clear()
             downloadFailChapters.clear()
         }
@@ -246,11 +243,9 @@ object ReadBook : CoroutineScope by MainScope() {
         }
         callBack?.upMenuView()
         upWebBook(book)
+        chapterLoads.clearLoads()
+        chapterLoads.clearChapterLayoutKeys()
         synchronized(this) {
-            loadingChapters.clear()
-            chapterLoadingLayoutKeys.clear()
-            chapterLoadGenerations.clear()
-            chapterLayoutKeys.clear()
             downloadedChapters.clear()
             downloadFailChapters.clear()
         }
@@ -353,7 +348,7 @@ object ReadBook : CoroutineScope by MainScope() {
         prevTextChapter = null
         curTextChapter = null
         nextTextChapter = null
-        chapterLayoutKeys.clear()
+        chapterLoads.clearChapterLayoutKeys()
     }
 
     fun reloadCurrentContent(reason: String = "", keepPosition: Boolean = true) {
@@ -369,7 +364,7 @@ object ReadBook : CoroutineScope by MainScope() {
         }
         refreshParagraphRuleLayoutKey()
         cancelChapterLoading(chapterIndex)
-        chapterLayoutKeys.remove(chapterIndex)
+        chapterLoads.removeChapterLayoutKey(chapterIndex)
         loadContent(
             chapterIndex,
             upContent = true,
@@ -411,7 +406,7 @@ object ReadBook : CoroutineScope by MainScope() {
             cancelChapterLoading(chapterIndex)
             curTextChapter?.takeIf { it.chapter.index == chapterIndex }?.cancelLayout()
             curTextChapter = null
-            chapterLayoutKeys.remove(chapterIndex)
+            chapterLoads.removeChapterLayoutKey(chapterIndex)
             callBack?.upContent(resetPageOffset = false)
             loadContent(chapterIndex, upContent = true, resetPageOffset = false)
         }
@@ -946,11 +941,12 @@ object ReadBook : CoroutineScope by MainScope() {
             book?.let { invalidateDirectTextContent(it.bookUrl) }
             refreshParagraphRuleLayoutKey()
             cancelChapterLoading(index)
-            chapterLayoutKeys.remove(index)
+            chapterLoads.removeChapterLayoutKey(index)
         }
         val layoutKey = currentChapterLayoutKey()
         val cached = textChapter(index - durChapterIndex)
-        if (!forceReload && cached?.isCompleted == true && chapterLayoutKeys[index] == layoutKey) {
+        if (!forceReload && cached?.isCompleted == true &&
+            chapterLoads.chapterLayoutKey(index) == layoutKey) {
             if (upContent) {
                 callBack?.upContent(index - durChapterIndex, resetPageOffset)
             }
@@ -1138,19 +1134,14 @@ object ReadBook : CoroutineScope by MainScope() {
         AppLog.put(
             "read-load skip: reason=$reason, index=$index, " +
                 "durChapterIndex=$durChapterIndex, chapterSize=$chapterSize, " +
-                "loading=${loadingChapters.contains(index)}, dbChapterCount=$dbChapterCount, " +
+                "loading=${chapterLoads.isLoading(index)}, dbChapterCount=$dbChapterCount, " +
                 "bookUrl=${activeBook?.bookUrl}, origin=${activeBook?.origin}, " +
                 "bookSource=${bookSource?.bookSourceUrl}"
         )
     }
 
-    @Synchronized
     private fun cancelChapterLoading(index: Int, expectedGeneration: Long? = null) {
-        if (expectedGeneration != null && chapterLoadGenerations[index] != expectedGeneration) return
-        chapterLoadGenerations.remove(index)
-        chapterLoadingJobs.remove(index)?.cancel()
-        chapterLoadingLayoutKeys.remove(index)
-        loadingChapters.remove(index)
+        chapterLoads.cancel(index, expectedGeneration)
         sequenceOf(prevTextChapter, curTextChapter, nextTextChapter)
             .filterNotNull()
             .filter { it.chapter.index == index && !it.isCompleted }
@@ -1158,38 +1149,20 @@ object ReadBook : CoroutineScope by MainScope() {
             .forEach { clearIncompleteChapterSlot(index, it) }
     }
 
-    @Synchronized
-    private fun beginChapterLoad(index: Int, layoutKey: String): Long? {
-        if (loadingChapters.contains(index)) return null
-        loadingChapters.add(index)
-        val generation = chapterLoadGenerationSeed.incrementAndGet()
-        chapterLoadGenerations[index] = generation
-        chapterLoadingLayoutKeys[index] = layoutKey
-        return generation
-    }
+    private fun beginChapterLoad(index: Int, layoutKey: String): Long? =
+        chapterLoads.begin(index, layoutKey)
 
-    @Synchronized
     private fun updateChapterLoadLayoutKey(
         index: Int,
         generation: Long,
         layoutKey: String
-    ): Long? {
-        if (chapterLoadGenerations[index] != generation) return null
-        chapterLoadingLayoutKeys[index] = layoutKey
-        return generation
-    }
+    ): Long? = chapterLoads.updateLayoutKey(index, generation, layoutKey)
 
-    @Synchronized
-    private fun finishChapterLoad(index: Int, generation: Long) {
-        if (chapterLoadGenerations[index] == generation) {
-            chapterLoadGenerations.remove(index)
-            chapterLoadingLayoutKeys.remove(index)
-            loadingChapters.remove(index)
-        }
-    }
+    private fun finishChapterLoad(index: Int, generation: Long) =
+        chapterLoads.finish(index, generation)
 
     private fun currentChapterLoadGeneration(index: Int): Long? =
-        chapterLoadGenerations[index]
+        chapterLoads.generationOf(index)
 
     internal fun cancelContentLoad(index: Int, generation: Long) {
         finishChapterLoad(index, generation)
@@ -1206,9 +1179,9 @@ object ReadBook : CoroutineScope by MainScope() {
             requestBookUrl = bookUrl,
             chapterIndex = chapterIndex,
             currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            recordedGeneration = chapterLoads.generationOf(chapterIndex),
             requestGeneration = generation,
-            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
             requestLayoutKey = layoutKey,
             currentLayoutKey = currentChapterLayoutKey()
         )
@@ -1225,9 +1198,9 @@ object ReadBook : CoroutineScope by MainScope() {
             requestBookUrl = bookUrl,
             chapterIndex = chapterIndex,
             currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            recordedGeneration = chapterLoads.generationOf(chapterIndex),
             requestGeneration = generation,
-            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
             requestLayoutKey = layoutKey
         )
     }
@@ -1245,9 +1218,9 @@ object ReadBook : CoroutineScope by MainScope() {
             requestBookUrl = bookUrl,
             chapterIndex = chapterIndex,
             currentChapterIndex = durChapterIndex,
-            recordedGeneration = chapterLoadGenerations[chapterIndex],
+            recordedGeneration = chapterLoads.generationOf(chapterIndex),
             requestGeneration = generation,
-            recordedLayoutKey = chapterLoadingLayoutKeys[chapterIndex],
+            recordedLayoutKey = chapterLoads.layoutKeyOf(chapterIndex),
             requestLayoutKey = layoutKey,
             expectedOffset = expectedOffset,
             slotMatches = expectedChapter == null || textChapter(expectedOffset) === expectedChapter
@@ -1281,13 +1254,12 @@ object ReadBook : CoroutineScope by MainScope() {
             }
             else -> return false
         }
-        chapterLayoutKeys[chapterIndex] = layoutKey
+        chapterLoads.setChapterLayoutKey(chapterIndex, layoutKey)
         return true
     }
 
-    @Synchronized
     fun removeLoading(index: Int) {
-        loadingChapters.remove(index)
+        chapterLoads.removeLoading(index)
     }
 
     @Synchronized
@@ -1308,7 +1280,7 @@ object ReadBook : CoroutineScope by MainScope() {
         }
         if (cleared) {
             expectedChapter.cancelLayout()
-            chapterLayoutKeys.remove(chapterIndex)
+            chapterLoads.removeChapterLayoutKey(chapterIndex)
         }
     }
 
@@ -1327,7 +1299,7 @@ object ReadBook : CoroutineScope by MainScope() {
         success: (() -> Unit)? = null
     ) {
         val generation = requestGeneration ?: return
-        val requestedLayoutKey = chapterLoadingLayoutKeys[chapter.index]
+        val requestedLayoutKey = chapterLoads.layoutKeyOf(chapter.index)
         if (requestedLayoutKey == null || chapter.bookUrl != book.bookUrl || canceled ||
             !isChapterLoadRequestCurrent(
                 book.bookUrl,
@@ -1339,7 +1311,7 @@ object ReadBook : CoroutineScope by MainScope() {
             finishChapterLoad(chapter.index, generation)
             return
         }
-        if (chapterLoadingJobs[chapter.index]?.isActive == true) {
+        if (chapterLoads.jobOf(chapter.index)?.isActive == true) {
             return
         }
         var installedTextChapter: TextChapter? = null
@@ -1567,9 +1539,9 @@ object ReadBook : CoroutineScope by MainScope() {
         }.onSuccess { applied ->
             if (applied) success?.invoke()
         }
-        chapterLoadingJobs[chapter.index] = job
+        chapterLoads.setJob(chapter.index, job)
         job.invokeOnCompletion {
-            if (chapterLoadingJobs.remove(chapter.index, job)) {
+            if (chapterLoads.removeJob(chapter.index, job)) {
                 clearIncompleteChapterSlot(chapter.index, installedTextChapter)
                 finishChapterLoad(chapter.index, generation)
             }
@@ -1586,7 +1558,7 @@ object ReadBook : CoroutineScope by MainScope() {
         requestGeneration: Long
     ): Boolean {
         if (chapter.bookUrl != book.bookUrl) return false
-        val requestedLayoutKey = chapterLoadingLayoutKeys[chapter.index] ?: return false
+        val requestedLayoutKey = chapterLoads.layoutKeyOf(chapter.index) ?: return false
         if (!isChapterLoadRequestCurrent(
                 book.bookUrl,
                 chapter.index,
@@ -2014,14 +1986,14 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     private fun clearExpiredChapterLoadingJob(clearAll: Boolean = false) {
-        for ((index, job) in chapterLoadingJobs.entries.toList()) {
+        for ((index, job) in chapterLoads.allJobs()) {
             if (clearAll || index !in durChapterIndex - 1..durChapterIndex + 1) {
-                if (chapterLoadingJobs.remove(index, job)) {
+                if (chapterLoads.removeJob(index, job)) {
                     job.cancel()
                 }
             }
         }
-        for ((index, generation) in chapterLoadGenerations.entries.toList()) {
+        for ((index, generation) in chapterLoads.allGenerations()) {
             if (clearAll || index !in durChapterIndex - 1..durChapterIndex + 1) {
                 cancelChapterLoading(index, generation)
             }
