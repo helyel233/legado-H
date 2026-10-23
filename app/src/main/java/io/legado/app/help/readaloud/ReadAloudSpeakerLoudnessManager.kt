@@ -37,7 +37,7 @@ object ReadAloudSpeakerLoudnessManager {
         val learned: Boolean
     )
 
-    private data class LoudnessStat(
+    internal data class LoudnessStat(
         val count: Int,
         val activeRmsDb: Float,
         val fullRmsDb: Float,
@@ -199,7 +199,7 @@ object ReadAloudSpeakerLoudnessManager {
         }
     }
 
-    private fun speakerKey(
+    internal fun speakerKey(
         item: ReadAloudSpeechPlanItem?,
         route: SpeechRoute?
     ): String {
@@ -232,7 +232,7 @@ object ReadAloudSpeakerLoudnessManager {
         }
     }
 
-    private fun parse(raw: String): MutableMap<String, LoudnessStat> {
+    internal fun parse(raw: String): MutableMap<String, LoudnessStat> {
         if (raw.isBlank()) return linkedMapOf()
         return runCatching {
             val root = JSONObject(raw)
@@ -421,7 +421,7 @@ object ReadAloudSpeakerLoudnessManager {
         return activeRmsDb.takeIf { it.isFinite() } ?: fullRmsDb
     }
 
-    private fun medianDb(values: Collection<LoudnessStat>): Float? {
+    internal fun medianDb(values: Collection<LoudnessStat>): Float? {
         val learned = values
             .mapNotNull { it.dbForGain().takeIf(Float::isFinite) }
             .sorted()
@@ -434,19 +434,19 @@ object ReadAloudSpeakerLoudnessManager {
         }
     }
 
-    private fun rmsToDb(rms: Float): Float {
+    internal fun rmsToDb(rms: Float): Float {
         return 20f * log10(rms.coerceAtLeast(MIN_RMS))
     }
 
-    private fun dbToRms(db: Float): Float {
+    internal fun dbToRms(db: Float): Float {
         return 10f.pow(db / 20f).coerceIn(0f, 1f)
     }
 
-    private fun dbToGain(db: Float): Float {
+    internal fun dbToGain(db: Float): Float {
         return 10f.pow(db / 20f)
     }
 
-    private fun dbForGain(gain: Float): Float {
+    internal fun dbForGain(gain: Float): Float {
         return 20f * log10(gain.coerceAtLeast(0.01f))
     }
 }

@@ -206,7 +206,7 @@ object ReadAloudSpeechPlanner {
         return result
     }
 
-    private fun characterNameKey(value: String): String {
+    internal fun characterNameKey(value: String): String {
         return value.trim()
             .replace(Regex("\\s+"), "")
             .trim('《', '》', '“', '”', '"', '\'', '：', ':')
@@ -229,7 +229,7 @@ object ReadAloudSpeechPlanner {
         }
     }
 
-    private fun assignConversationSides(
+    internal fun assignConversationSides(
         items: List<ReadAloudSpeechPlanItem>
     ): List<ReadAloudSpeechPlanItem> {
         if (items.none { !it.narrator }) return items
@@ -292,7 +292,7 @@ object ReadAloudSpeechPlanner {
         }
     }
 
-    private fun completeCueSegments(
+    internal fun completeCueSegments(
         cueIndex: Int,
         cueText: String,
         rawSegments: List<AiReadAloudRoleService.Segment>
@@ -339,7 +339,7 @@ object ReadAloudSpeechPlanner {
         )
     }
 
-    private fun mergeAdjacentSegments(
+    internal fun mergeAdjacentSegments(
         segments: List<AiReadAloudRoleService.Segment>
     ): List<AiReadAloudRoleService.Segment> {
         if (segments.size <= 1) return segments

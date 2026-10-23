@@ -1,5 +1,18 @@
 # 更新日志
 
+## 1.12.6 版（2026-10-23）
+
+本版为朗读（Read Aloud）子系统补全纯逻辑回归网，把语音规划、响度/压限、角色预处理中的可测算法抽到可单测的纯函数并锁定行为。全部为内部重构，无用户可见的功能变化。
+
+### 重构（行为保持，靠新增单测锁行为）
+
+- **响度/压限算法抽为可测纯函数**：`ReadAloudSpeakerLoudnessManager` 中的 `rmsToDb`/`dbToRms`/`dbToGain`/`dbForGain`/`medianDb`/`speakerKey`/`parse`（含 legacy `rms` 字段推导与零计数过滤）提为 `internal`，新增单测覆盖 dB 互逆换算、说话人键分支、JSON 解析与旧格式兼容。
+- **语音规划纯逻辑抽为可测**：`ReadAloudSpeechPlanner` 中的角色名归一化、段补全（越界收敛）、相邻段合并、对话左右侧分配（主角优先右侧）提为 `internal`，新增单测覆盖各分支。
+- **朗读角色预处理建黑盒回归网**：`ReadAloudRolePreprocessor.process`（公开入口）新增单测，覆盖旁白/对话/冒号提示/跨段引用/心理活动/配置回退。
+- **语音引擎配置 JSON 往返建回归网**：`SpeechRoute` 的 `fromJson`/`toJson`/`fromTtsEngineValue`（含 `toneId` 别名兼容、损坏容错、配置判定）与 `SpeechVoiceCatalogParser` 分组解析新增单测。
+
+全量单测 1792 用例 0 失败（较 1.12.5 的 1748 +44）。
+
 ## 1.12.5 版（2026-10-23）
 
 本版修复 Epub 排版中 rem 单位失效的问题，并继续把阅读器与 Epub 子系统的解析逻辑抽成可单测的纯逻辑、消除重复实现。发布前经两个独立代理交叉审查，全部存疑项与 git 历史逐字比对落锤。
