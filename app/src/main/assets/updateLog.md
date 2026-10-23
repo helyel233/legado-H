@@ -4,6 +4,11 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.12.7 · 2026/10/23**
+
+- 朗读（Read Aloud）子系统继续补全纯逻辑回归网：音效预筛黑盒（空输入/cue 模式 trim+去重/单命中字段/同 cue 重复/段落偏移/exclude 上下文过滤/上下文字符数边界/排序）、BGM 播放器纯函数抽取（buildCueKey 构造、computeVolume 音量计算，bgm 与 sfx 共用）
+- 全部为内部重构（仅抽取文件级 internal 纯函数，行为零变化），无用户可见功能变化；全量单测 1814 用例 0 失败
+
 **vH.1.12.6 · 2026/10/23**
 
 - 朗读（Read Aloud）子系统补全纯逻辑回归网：响度/压限算法（dB 换算、说话人键、JSON 解析与旧格式兼容）、语音规划（角色名归一化、段补全、相邻合并、对话分侧）、角色预处理黑盒、语音引擎配置 JSON 往返——抽为可单测纯函数并锁定行为

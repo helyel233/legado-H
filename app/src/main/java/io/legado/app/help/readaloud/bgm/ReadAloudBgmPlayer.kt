@@ -95,7 +95,7 @@ class ReadAloudBgmPlayer(
             stopSoundEffects()
             return
         }
-        val cueKey = "$bookUrl|$chapterIndex|$cueIndex"
+        val cueKey = buildCueKey(bookUrl, chapterIndex, cueIndex)
         val bgmHandled = cueKey == currentCueKey &&
                 (currentTrackId == null || player?.isPlaying == true)
         val soundEffectsHandled = cueKey == currentSoundEffectCueKey
@@ -142,10 +142,11 @@ class ReadAloudBgmPlayer(
             return
         }
         val bgmPlayer = ensurePlayer()
-        val targetVolume = (resolved.assignment.volume *
-                resolved.track.defaultVolume *
-                AppConfig.aiReadAloudBgmVolumeScale)
-            .coerceIn(0f, 1f)
+        val targetVolume = computeVolume(
+            resolved.assignment.volume,
+            resolved.track.defaultVolume,
+            AppConfig.aiReadAloudBgmVolumeScale
+        )
         if (currentTrackId == resolved.track.id) {
             if (!bgmPlayer.isPlaying) {
                 bgmPlayer.play()
@@ -187,10 +188,11 @@ class ReadAloudBgmPlayer(
         }
         val effectPlayer = ExoPlayer.Builder(appContext).build()
         soundEffectPlayers += effectPlayer
-        effectPlayer.volume = (resolved.event.volume *
-                resolved.track.defaultVolume *
-                AppConfig.aiReadAloudSfxVolumeScale)
-            .coerceIn(0f, 1f)
+        effectPlayer.volume = computeVolume(
+            resolved.event.volume,
+            resolved.track.defaultVolume,
+            AppConfig.aiReadAloudSfxVolumeScale
+        )
         effectPlayer.repeatMode = Player.REPEAT_MODE_OFF
         effectPlayer.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
         effectPlayer.addListener(
@@ -275,3 +277,12 @@ class ReadAloudBgmPlayer(
         }
     }
 }
+
+internal fun buildCueKey(bookUrl: String, chapterIndex: Int, cueIndex: Int): String =
+    "$bookUrl|$chapterIndex|$cueIndex"
+
+internal fun computeVolume(
+    assignmentVolume: Float,
+    trackDefaultVolume: Float,
+    scale: Float
+): Float = (assignmentVolume * trackDefaultVolume * scale).coerceIn(0f, 1f)
