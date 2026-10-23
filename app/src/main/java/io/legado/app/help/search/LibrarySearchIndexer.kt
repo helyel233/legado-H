@@ -75,6 +75,16 @@ object LibrarySearchIndexer {
         }
     }
 
+    /**
+     * 单章是否已建索引。本地 txt 正文不落盘、每次阅读都现读，
+     * 用它在阅读时懒加载建索引并避免重复建同一章。
+     */
+    fun hasChapterIndexed(bookUrl: String, chapterIndex: Int): Boolean {
+        return runCatching {
+            appDb.libraryContentFtsDao.countChapter(bookUrl, chapterIndex) > 0
+        }.getOrDefault(false)
+    }
+
     suspend fun indexChapter(
         book: Book,
         chapter: BookChapter,

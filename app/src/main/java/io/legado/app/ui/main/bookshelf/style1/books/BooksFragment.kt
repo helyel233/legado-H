@@ -68,6 +68,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfSnapshotStore
 import io.legado.app.ui.main.bookshelf.compose.buildBookshelfItems
+import io.legado.app.ui.main.bookshelf.compose.computeLocalChangedBookUrls
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.main.bookshelf.compose.updateBookshelfItemUpdating
 import io.legado.app.ui.widget.compose.ComposeLazyGridFastScroller
@@ -137,6 +138,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     private var composeItems by mutableStateOf<List<BookshelfItemUi>>(emptyList())
     private var collectionItems by mutableStateOf<List<BookshelfCollectionItemUi>>(emptyList())
     private var shelfDisplays: List<BookShelfDisplay> = emptyList()
+    private var localChangedUrls: Set<String> = emptySet()
     private var composeCanScrollBackward by mutableStateOf(false)
     private var composeScrollToTopTick by mutableStateOf(0)
     private var composeImmediateScrollToTopTick by mutableStateOf(0)
@@ -619,7 +621,8 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                             books = filteredList,
                             isRootGroup = false,
                             groupId = groupId,
-                            isUpdating = ::isUpdate
+                            isUpdating = ::isUpdate,
+                            localChangedUrls = computeLocalChangedBookUrls(filteredList)
                         )
                     )
                 }.flowWithLifecycleAndDatabaseChangeFirst(
@@ -800,7 +803,8 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
             books = list,
             isRootGroup = false,
             groupId = groupId,
-            isUpdating = ::isUpdate
+            isUpdating = ::isUpdate,
+            localChangedUrls = localChangedUrls
         )
     }
 

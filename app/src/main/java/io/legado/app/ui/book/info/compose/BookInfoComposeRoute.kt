@@ -111,6 +111,7 @@ import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.compose.releaseComposeImage
 import androidx.compose.ui.zIndex
 import io.legado.app.R
+import io.legado.app.constant.AppConst
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.BookInfoQuickActionConfig
 import io.legado.app.help.config.BookInfoQuickActionItem
@@ -184,6 +185,8 @@ data class BookInfoUiState(
     val hasBookSource: Boolean = false,
     val canUpdate: Boolean = true,
     val cloudEntryMode: BookCloudEntryMode = BookCloudEntryMode.CACHE_PACKAGE,
+    val isLocalTxt: Boolean = false,
+    val charset: String = "",
     val loading: Boolean = false
 ) {
     val canScheduleUpdate: Boolean get() = inBookshelf && hasBookSource
@@ -220,6 +223,7 @@ data class BookInfoActions(
     val onCopyBookUrl: () -> Unit = {},
     val onCopyTocUrl: () -> Unit = {},
     val onClearCache: () -> Unit = {},
+    val onChangeCharset: (String) -> Unit = {},
     val onSetupWebIntro: (WebView) -> Unit = {},
     val onRefreshEnabledChanged: (Boolean) -> Unit = {},
     val onQuickActionsChanged: () -> Unit = {},
@@ -381,6 +385,7 @@ fun BookInfoComposeRoute(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showQuickActionEditor by remember { mutableStateOf(false) }
     var showCloudEntrySelector by remember { mutableStateOf(false) }
+    var showCharsetSelector by remember { mutableStateOf(false) }
     var quickActionConfigVersion by remember { mutableStateOf(0) }
     var metricPreview by remember { mutableStateOf<BookInfoMetricPreview?>(null) }
     var metricPreviewVisible by remember { mutableStateOf(false) }
@@ -528,6 +533,10 @@ fun BookInfoComposeRoute(
                     showMoreMenu = false
                     showQuickActionEditor = true
                 },
+                onSelectCharset = {
+                    showMoreMenu = false
+                    showCharsetSelector = true
+                },
                 onDismiss = { showMoreMenu = false }
             )
         }
@@ -548,6 +557,17 @@ fun BookInfoComposeRoute(
                 style = style,
                 actions = actions,
                 onDismiss = { showCloudEntrySelector = false }
+            )
+        }
+        if (showCharsetSelector) {
+            BookInfoCharsetSelectorDialog(
+                state = state,
+                style = style,
+                onSelect = { charset ->
+                    showCharsetSelector = false
+                    actions.onChangeCharset(charset)
+                },
+                onDismiss = { showCharsetSelector = false }
             )
         }
         metricPreview?.let { preview ->
@@ -1078,6 +1098,7 @@ private fun BookInfoMoreActionSheet(
     style: BookInfoComposeStyle,
     actions: BookInfoActions,
     onEditQuickActions: () -> Unit,
+    onSelectCharset: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1182,6 +1203,20 @@ private fun BookInfoMoreActionSheet(
                 ) {
                     onDismiss()
                     actions.onClearCache()
+                }
+                if (state.isLocalTxt) {
+                    //本地 txt 自动探测编码不可靠（GBK/UTF-8 混排等），给手动切换入口
+                    BookInfoMoreActionItem(
+                        text = if (state.charset.isBlank()) {
+                            "切换编码"
+                        } else {
+                            "切换编码（${state.charset}）"
+                        },
+                        style = style
+                    ) {
+                        onDismiss()
+                        onSelectCharset()
+                    }
                 }
                 if (state.hasCustomButton) {
                     BookInfoMoreActionItem(stringResource(R.string.custom_button), style) {
@@ -1309,6 +1344,47 @@ private fun BookInfoCloudEntrySelectorDialog(
     }
 }
 
+/** 本地 txt 编码切换弹窗：候选与阅读菜单保持一致（AppConst.charsets） */
+@Composable
+private fun BookInfoCharsetSelectorDialog(
+    state: BookInfoUiState,
+    style: BookInfoComposeStyle,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    BookInfoCenterDialog(onDismiss = onDismiss, style = style) {
+        Text(
+            text = "切换编码",
+            color = style.colors.primaryText,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "自动探测可能误判（GBK/UTF-8 混排等），乱码时逐个尝试",
+            color = style.colors.secondaryText,
+            fontSize = 12.sp
+        )
+        AppConst.charsets.forEach { charset ->
+            BookInfoCloudEntryModeRow(
+                title = charset,
+                summary = "",
+                checked = state.charset.equals(charset, ignoreCase = true),
+                style = style
+            ) {
+                onSelect(charset)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.cancel), color = style.colors.secondaryText)
+            }
+        }
+    }
+}
+
 @Composable
 private fun BookInfoCloudEntryModeRow(
     title: String,
@@ -1316,8 +1392,7 @@ private fun BookInfoCloudEntryModeRow(
     checked: Boolean,
     style: BookInfoComposeStyle,
     onClick: () -> Unit
-) {
-    Row(
+) {    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(style.metrics.actionRadius))

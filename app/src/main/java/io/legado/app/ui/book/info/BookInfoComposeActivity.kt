@@ -40,6 +40,7 @@ import io.legado.app.help.book.addType
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.book.removeType
@@ -47,6 +48,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.ui.book.audio.AudioPlayActivity
@@ -415,6 +417,7 @@ class BookInfoComposeActivity :
             onCopyBookUrl = ::copyBookUrl,
             onCopyTocUrl = ::copyTocUrl,
             onClearCache = ::clearBookCache,
+            onChangeCharset = { charset -> changeBookCharset(charset) },
             onSetupWebIntro = ::setupWebIntro,
             onIntroButtonClick = { name, click ->
                 viewModel.onButtonClick(this@BookInfoComposeActivity, "info button $name", click)
@@ -489,6 +492,28 @@ class BookInfoComposeActivity :
                 null
             ) {
                 viewModel.clearCache(book)
+            }
+        }
+    }
+
+    /**
+     * 切换本地 txt 的编码。编码只影响正文解码与目录解析（章节偏移是字节级，不受影响），
+     * 改完立即刷新：正在读这本书时通知阅读器重载，否则只落库等下次打开生效。
+     */
+    private fun changeBookCharset(charset: String) {
+        val book = viewModel.getBook() ?: return
+        if (book.isLocalTxt && charset.isNotBlank() && book.charset != charset) {
+            book.charset = charset
+            lifecycleScope.launch {
+                withContext(IO) {
+                    appDb.bookDao.update(book)
+                }
+                if (ReadBook.book?.bookUrl == book.bookUrl) {
+                    ReadBook.setCharset(charset)
+                } else {
+                    toastOnUi("已切换编码：$charset")
+                }
+                updateUiState()
             }
         }
     }
@@ -569,6 +594,8 @@ class BookInfoComposeActivity :
             hasBookSource = viewModel.bookSource != null,
             canUpdate = book.canUpdate,
             cloudEntryMode = BookCloudEntryModeStore.get(book.bookUrl),
+            isLocalTxt = book.isLocalTxt,
+            charset = book.charset.orEmpty(),
             loading = tocPhase.isLoading
         )
         if (::refreshLayout.isInitialized && !tocPhase.isLoading) {

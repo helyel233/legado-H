@@ -12,11 +12,13 @@ import io.legado.app.exception.EmptyFileException
 import io.legado.app.help.DefaultData
 import io.legado.app.help.book.isLocalModified
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.search.LibrarySearchIndexer
 import io.legado.app.utils.EncodingDetect
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.StringUtils
 import io.legado.app.utils.Utf8BomUtils
 import java.io.FileNotFoundException
+import java.io.InputStream
 import java.nio.charset.Charset
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -43,8 +45,12 @@ class TextFile(private var book: Book) {
         }
 
         @Throws(FileNotFoundException::class)
-        fun getChapterList(book: Book): ArrayList<BookChapter> {
-            return getTextFile(book).getChapterList()
+        fun getChapterList(
+            book: Book,
+            onProgress: ((Int) -> Unit)? = null,
+            onCharsetSuspect: (() -> Unit)? = null
+        ): ArrayList<BookChapter> {
+            return getTextFile(book).getChapterList(onProgress, onCharsetSuspect)
         }
 
         @Synchronized
@@ -70,7 +76,17 @@ class TextFile(private var book: Book) {
     //使用正则划分目录，每个章节的最大允许长度
     private val maxLengthWithToc = 102400
 
+    //已读章节正文内存缓存：最多缓存的章节数与单章字数上限
+    private val maxCachedChapters = 12
+    private val maxCachedChapterLength = 300_000
+
     private var charset: Charset = book.fileCharset()
+
+    /**
+     * 已解码章节正文的 LRU 缓存。本地 txt 正文不落盘，翻回看过的章节
+     * 不必再读文件+解码；仅缓存本章（TextFile 单例只持有一本书）。
+     */
+    private val contentCache = LinkedHashMap<String, String>()
 
     private var txtBuffer: ByteArray? = null
     private var bufferStart = -1L
@@ -84,17 +100,40 @@ class TextFile(private var book: Book) {
 
     /**
      * 获取目录
+     *
+     * @param onProgress 分章进度回调，参数为百分比 0-100（仅 txt 解析时回调）
+     * @param onCharsetSuspect 自动检测的编码疑似不正确时的回调
      */
     @Throws(FileNotFoundException::class, SecurityException::class, EmptyFileException::class)
-    fun getChapterList(): ArrayList<BookChapter> {
+    fun getChapterList(
+        onProgress: ((Int) -> Unit)? = null,
+        onCharsetSuspect: (() -> Unit)? = null
+    ): ArrayList<BookChapter> {
         val modified = book.isLocalModified()
-        if (book.charset == null || book.tocUrl.isBlank() || modified) {
+        //用户在阅读菜单/详情页改过编码时，TextFile 单例会被复用（同 bookUrl 且文件未变），
+        //必须在此刷新 charset 字段，否则 getContent 仍按旧编码解码
+        val charsetChanged = charset != book.fileCharset()
+        if (charsetChanged) {
+            synchronized(contentCache) { contentCache.clear() }
+        }
+        if (book.charset == null || book.tocUrl.isBlank() || modified || charsetChanged) {
             LocalBook.getBookInputStream(book).use { bis ->
                 val buffer = ByteArray(bufferSize)
                 val length = bis.read(buffer)
                 if (length == -1) throw EmptyFileException("Unexpected Empty Txt File")
                 if (book.charset.isNullOrBlank() || modified) {
                     book.charset = EncodingDetect.getEncode(buffer.copyOf(length))
+                    charset = book.fileCharset()
+                    /**
+                     * 编码检测只采样前 bufferSize 字节且不可靠（GBK/UTF-8 混排尤其容易误判），
+                     * 解码样本中替换符比例过高时说明大概率是乱码，提示用户可在阅读菜单中手动切换编码。
+                     */
+                    val sample = String(buffer, 0, length, charset)
+                    if (sample.length > 1000 &&
+                        sample.count { it == '\uFFFD' } > sample.length * 0.01
+                    ) {
+                        onCharsetSuspect?.invoke()
+                    }
                 }
                 charset = book.fileCharset()
                 if (book.tocUrl.isBlank() || modified) {
@@ -104,7 +143,12 @@ class TextFile(private var book: Book) {
                 }
             }
         }
-        val (toc, wordCount) = analyze(book.tocUrl.split(spaceChars, limit = 2))
+        val fileSize = LocalBook.getBookSize(book)
+        val (toc, wordCount) = analyze(
+            book.tocUrl.split(spaceChars, limit = 2),
+            fileSize,
+            onProgress
+        )
         book.wordCount = StringUtils.wordCountFormat(wordCount)
         toc.forEachIndexed { index, bookChapter ->
             bookChapter.index = index
@@ -118,13 +162,20 @@ class TextFile(private var book: Book) {
     fun getContent(chapter: BookChapter): String {
         val start = chapter.start!!
         val end = chapter.end!!
+        synchronized(contentCache) { contentCache[chapter.url] }?.let { return it }
         if (txtBuffer == null || start > bufferEnd || end < bufferStart) {
             LocalBook.getBookInputStream(book).use { bis ->
                 bufferStart = txtBufferSize * (start / txtBufferSize)
-                txtBuffer = ByteArray(min(txtBufferSize, bis.available() - bufferStart.toInt()))
+                bis.skipFully(bufferStart)
+                val buf = ByteArray(txtBufferSize)
+                var read = 0
+                while (read < buf.size) {
+                    val r = bis.read(buf, read, buf.size - read)
+                    if (r < 0) break
+                    read += r
+                }
+                txtBuffer = if (read == buf.size) buf else buf.copyOf(read)
                 bufferEnd = bufferStart + txtBuffer!!.size
-                bis.skip(bufferStart)
-                bis.read(txtBuffer)
             }
         }
 
@@ -135,8 +186,8 @@ class TextFile(private var book: Book) {
         if (start < bufferEnd && end > bufferEnd || start < bufferStart && end > bufferStart) {
             /** 章节内容在缓冲区交界处 */
             LocalBook.getBookInputStream(book).use { bis ->
-                bis.skip(start)
-                bis.read(buffer)
+                bis.skipFully(start)
+                bis.readFully(buffer)
             }
         } else {
             /** 章节内容在缓冲区内 */
@@ -148,15 +199,42 @@ class TextFile(private var book: Book) {
             )
         }
 
-        return String(buffer, charset)
+        val content = String(buffer, charset)
             //.substringAfter(chapter.title) //之前裁切没有间隙，所以正文保留了标题，需要在这儿去掉
             .replace(padRegex, "　　")
+        putContentCache(chapter.url, content)
+        //本地 txt 正文不落盘，网络书靠 saveText 钩子建的全库索引对本地书不生效；
+        //在读到的瞬间补建索引，让全库搜索能搜到本地 txt（只建一次，重复阅读不重复建；
+        //索引内容上限由 LibrarySearchIndexer 内部截断，文件被外部改动后需手动重建索引）
+        if (!LibrarySearchIndexer.hasChapterIndexed(book.bookUrl, chapter.index)) {
+            LibrarySearchIndexer.indexChapterAsync(book, chapter, content)
+        }
+        return content
+    }
+
+    private fun putContentCache(url: String, content: String) {
+        if (content.length > maxCachedChapterLength) return
+        synchronized(contentCache) {
+            contentCache.remove(url)
+            contentCache[url] = content
+            while (contentCache.size > maxCachedChapters) {
+                val eldest = contentCache.keys.iterator().next()
+                contentCache.remove(eldest)
+            }
+        }
     }
 
     /**
      * 按规则解析目录
+     *
+     * @param fileSize 文件总字节数，>0 时才上报进度
+     * @param onProgress 每解析约 1% 回调一次当前进度（0-99）
      */
-    private fun analyze(rr: List<String>): Pair<ArrayList<BookChapter>, Int> {
+    private fun analyze(
+        rr: List<String>,
+        fileSize: Long = 0L,
+        onProgress: ((Int) -> Unit)? = null
+    ): Pair<ArrayList<BookChapter>, Int> {
         val pattern = rr[0].toPattern(Pattern.MULTILINE)
         val jsStr = rr.getOrNull(1)
         if (rr[0].isEmpty()) {
@@ -165,6 +243,7 @@ class TextFile(private var book: Book) {
         lastVolumeTitle.value = ""
         val toc = arrayListOf<BookChapter>()
         var bookWordCount = 0
+        var lastPercent = -1
         LocalBook.getBookInputStream(book).use { bis ->
             var blockContent: String
             //加载章节
@@ -358,6 +437,13 @@ class TextFile(private var book: Book) {
                 lastChapterWordCount += wordCount
                 //block的偏移点
                 curOffset += length.toLong()
+                if (fileSize > 0) {
+                    val percent = (curOffset * 100 / fileSize).toInt().coerceIn(0, 99)
+                    if (percent != lastPercent) {
+                        lastPercent = percent
+                        onProgress?.invoke(percent)
+                    }
+                }
                 //设置上一章的结尾
                 toc.lastOrNull()?.let {
                     it.end = curOffset
@@ -383,8 +469,6 @@ class TextFile(private var book: Book) {
                 }
             }
         }
-        System.gc()
-        System.runFinalization()
         return toc to bookWordCount
     }
 
@@ -621,4 +705,35 @@ class TextFile(private var book: Book) {
         }
     }
 
+}
+
+/**
+ * 完整跳过 n 字节。InputStream.skip 允许跳过少于请求的字节数，
+ * 直接信任其返回值会导致后续读取错位。
+ */
+private fun InputStream.skipFully(count: Long) {
+    var skipped = 0L
+    while (skipped < count) {
+        val r = skip(count - skipped)
+        if (r > 0) {
+            skipped += r
+        } else if (read() == -1) {
+            break
+        } else {
+            skipped++
+        }
+    }
+}
+
+/**
+ * 尽量读满 buffer。InputStream.read 同样允许部分读取，
+ * 跨界章节只读一次会静默截断内容。
+ */
+private fun InputStream.readFully(buffer: ByteArray) {
+    var read = 0
+    while (read < buffer.size) {
+        val r = read(buffer, read, buffer.size - read)
+        if (r < 0) break
+        read += r
+    }
 }

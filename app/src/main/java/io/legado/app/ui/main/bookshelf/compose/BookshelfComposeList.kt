@@ -453,6 +453,18 @@ private fun BookshelfBookMeta(
         text = book.latestChapterTitle,
         palette = palette
     )
+    if (item.localFileChanged) {
+        //本地 txt 文件在磁盘上被改动过，打开时会自动重新分割目录
+        Text(
+            text = "本地文件已更新",
+            color = palette.accent,
+            fontSize = 12.sp,
+            fontFamily = palette.bodyFontFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 3.dp)
+        )
+    }
     if (showIntro && introMaxLines > 0) {
         // 简介清洗有正则开销，缓存到书籍维度，重组不重复计算
         val intro = remember(book) { BookIntroUtils.listIntro(book.getDisplayIntro()) }

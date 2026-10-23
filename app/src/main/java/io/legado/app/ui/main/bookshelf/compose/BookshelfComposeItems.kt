@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.bookshelf.compose
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.data.dao.BookShelfDisplay
@@ -44,7 +46,13 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.titleTextColor
+import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.isUri
 import io.legado.app.utils.toTimeAgo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import splitties.init.appCtx
+import java.io.File
 
 sealed interface BookshelfItemUi {
     val key: String
@@ -78,7 +86,8 @@ data class BookshelfBookItemUi(
     val unreadCount: Int,
     val hasNewChapter: Boolean,
     val tags: List<String>,
-    val lastUpdateText: String?
+    val lastUpdateText: String?,
+    val localFileChanged: Boolean = false
 ) : BookshelfItemUi {
     override val key: String = "book:${display.bookUrl}"
     override val contentType: String = "book"
@@ -89,7 +98,8 @@ fun buildBookshelfItems(
     books: List<BookShelfDisplay>,
     isRootGroup: Boolean,
     groupId: Long,
-    isUpdating: (String) -> Boolean
+    isUpdating: (String) -> Boolean,
+    localChangedUrls: Set<String> = emptySet()
 ): List<BookshelfItemUi> {
     val configuredTags = AppConfig.bookshelfGroupTags[groupId].orEmpty()
     val hiddenTags = AppConfig.bookshelfHiddenTags[groupId].orEmpty()
@@ -105,13 +115,47 @@ fun buildBookshelfItems(
                 book.latestChapterTime.toTimeAgo()
             } else {
                 null
-            }
+            },
+            localFileChanged = book.isLocal && book.bookUrl in localChangedUrls
         )
     }
     if (!isRootGroup) {
         return bookItems
     }
     return groups.map(::BookshelfFolderItemUi) + bookItems
+}
+
+/**
+ * 本地书籍文件在磁盘上被改动过（相对上次解析目录的时间）的书目集合。
+ * 打开这些书时阅读器会自动重新分割目录，书架先给用户一个可见的提示。
+ * 只做轻量判断：content:// 走 DocumentFile 查询，文件路径直接取 mtime；
+ * 取不到（如文件被移动）时返回 false，不影响书架展示。
+ */
+suspend fun computeLocalChangedBookUrls(books: List<BookShelfDisplay>): Set<String> {
+    if (books.none { it.isLocal }) return emptySet()
+    return withContext(Dispatchers.IO) {
+        books.asSequence()
+            .filter { it.isLocal }
+            .filter { it.latestChapterTime > 0L }
+            .filter { it.isLocalFileModified() }
+            .mapTo(hashSetOf()) { it.bookUrl }
+    }
+}
+
+private fun BookShelfDisplay.isLocalFileModified(): Boolean {
+    return runCatching {
+        val lastModified = if (bookUrl.isUri()) {
+            val uri = bookUrl.toUri()
+            if (uri.isContentScheme()) {
+                DocumentFile.fromSingleUri(appCtx, uri)?.lastModified() ?: return false
+            } else {
+                File(uri.path ?: return false).lastModified()
+            }
+        } else {
+            File(bookUrl).lastModified()
+        }
+        lastModified > latestChapterTime
+    }.getOrDefault(false)
 }
 
 private fun BookShelfDisplay.displayUserTags(
@@ -194,6 +238,11 @@ fun BookshelfGridItem(
             if (item is BookshelfBookItemUi) {
                 BookshelfStatusBadge(item)
             }
+            if (item is BookshelfBookItemUi && item.localFileChanged && !item.isUpdating) {
+                BookshelfLocalFileChangedBadge(
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
+            }
             if (showBookName == 2) {
                 Text(
                     text = item.displayName,
@@ -269,9 +318,25 @@ private fun BookshelfCover(
     )
 }
 
+/** 本地 txt 文件在磁盘上被改动过的角标（打开时会自动重新分割目录） */
 @Composable
-private fun BookshelfStatusBadge(item: BookshelfBookItemUi) {
-    if (item.isUpdating) {
+private fun BookshelfLocalFileChangedBadge(modifier: Modifier = Modifier) {
+    Text(
+        text = "已更新",
+        modifier = modifier
+            .padding(5.dp)
+            .clip(CircleShape)
+            .background(Color(LocalContext.current.accentColor))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+        color = Color.White,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1
+    )
+}
+
+@Composable
+private fun BookshelfStatusBadge(item: BookshelfBookItemUi) {    if (item.isUpdating) {
         CircularProgressIndicator(
             modifier = Modifier
                 .padding(5.dp)

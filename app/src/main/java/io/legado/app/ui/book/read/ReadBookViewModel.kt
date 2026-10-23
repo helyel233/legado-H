@@ -279,7 +279,15 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     ): Boolean {
         if (book.isLocal) {
             kotlin.runCatching {
-                LocalBook.getChapterList(book).let {
+                LocalBook.getChapterList(
+                    book,
+                    onProgress = { percent ->
+                        ReadBook.upMsg("正在解析目录 $percent%")
+                    },
+                    onCharsetSuspect = {
+                        context.toastOnUi("检测到文件编码可能不正确，如乱码可在阅读菜单中切换编码")
+                    }
+                ).let {
                     appDb.runInTransaction {
                         appDb.bookChapterDao.delByBook(book.bookUrl)
                         appDb.bookChapterDao.insert(*it.toTypedArray())

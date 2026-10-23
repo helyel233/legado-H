@@ -121,8 +121,29 @@ object LocalBook {
         }
     }
 
+    /**
+     * 获取本地书籍文件大小（字节），取不到返回 0。
+     * 仅用于 txt 分章进度百分比，取不到时静默不显示进度。
+     */
+    fun getBookSize(book: Book): Long {
+        return try {
+            val uri = book.getLocalUri()
+            if (uri.isContentScheme()) {
+                DocumentFile.fromSingleUri(appCtx, uri)?.length()?.takeIf { it > 0 } ?: 0L
+            } else {
+                File(uri.path ?: return 0L).length()
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
     @Throws(TocEmptyException::class)
-    fun getChapterList(book: Book): ArrayList<BookChapter> {
+    fun getChapterList(
+        book: Book,
+        onProgress: ((Int) -> Unit)? = null,
+        onCharsetSuspect: (() -> Unit)? = null
+    ): ArrayList<BookChapter> {
         val chapters = when {
             book.isEpub -> {
                 EpubFile.getChapterList(book)
@@ -141,7 +162,7 @@ object LocalBook {
             }
 
             else -> {
-                TextFile.getChapterList(book)
+                TextFile.getChapterList(book, onProgress, onCharsetSuspect)
             }
         }
         if (chapters.isEmpty()) {

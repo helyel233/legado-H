@@ -42,6 +42,11 @@ interface LibraryContentFtsDao {
     @Query("SELECT chapterIndex FROM libraryContentFts WHERE bookUrl = :bookUrl")
     fun indexedChapterIndexes(bookUrl: String): List<Int>
 
+    @Query(
+        "SELECT count(*) FROM libraryContentFts WHERE bookUrl = :bookUrl AND chapterIndex = :chapterIndex"
+    )
+    fun countChapter(bookUrl: String, chapterIndex: Int): Int
+
     @Query("SELECT DISTINCT bookUrl FROM libraryContentFts")
     fun indexedBookUrls(): List<String>
 }

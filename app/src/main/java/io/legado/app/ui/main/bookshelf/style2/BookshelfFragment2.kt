@@ -58,6 +58,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfCollectionItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfFolderItemUi
 import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfItemUi
+import io.legado.app.ui.main.bookshelf.compose.computeLocalChangedBookUrls
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfSnapshotStore
 import io.legado.app.ui.main.bookshelf.compose.buildBookshelfItems
@@ -108,6 +109,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     override var groupId = BookGroup.IdRoot
     override var books: List<Book> = emptyList()
     private var shelfDisplays: List<BookShelfDisplay> = emptyList()
+    private var localChangedUrls: Set<String> = emptySet()
 
     /**
      * 在列表数据 collect 到、首帧渲染之前，先把前几本书的封面解码进进程缓存。
@@ -452,7 +454,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                         books = sortedList,
                         isRootGroup = groupId == BookGroup.IdRoot,
                         groupId = groupId,
-                        isUpdating = ::isUpdate
+                        isUpdating = ::isUpdate,
+                        localChangedUrls = computeLocalChangedBookUrls(sortedList)
                     )
                     sortedList to items
                 }.flowWithLifecycleAndDatabaseChangeFirst(
@@ -569,7 +572,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             books = list,
             isRootGroup = groupId == BookGroup.IdRoot,
             groupId = groupId,
-            isUpdating = ::isUpdate
+            isUpdating = ::isUpdate,
+            localChangedUrls = localChangedUrls
         )
         composeDataVersion++
     }
