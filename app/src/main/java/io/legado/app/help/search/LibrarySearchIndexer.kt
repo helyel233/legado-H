@@ -24,6 +24,18 @@ object LibrarySearchIndexer {
 
     private val cjkRegex = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\p{IsHangul}]")
 
+    /** 全库重建进行中标志：重建覆盖全部章节，期间不再接受单章懒索引 */
+    @Volatile
+    private var rebuilding = false
+
+    /** 已装载过索引清单的书（避免每章都查一次 FTS） */
+    private val loadedBooks = HashSet<String>()
+
+    /** 已索引的章节键 "<bookUrl>|<chapterIndex>" */
+    private val indexedKeys = HashSet<String>()
+
+    private fun keyOf(bookUrl: String, chapterIndex: Int) = "$bookUrl|$chapterIndex"
+
     /** 单章索引正文上限，超过则截断，避免 FTS 行过大 */
     private const val MaxIndexContentLength = 512_000
 
@@ -62,10 +74,11 @@ object LibrarySearchIndexer {
     }
 
     /**
-     * 单章索引（异步 fire-and-forget），供 BookHelp.saveText 钩子调用。
+     * 单章索引（异步 fire-and-forget），供 BookHelp.saveText 钩子与本地 txt 懒索引调用。
+     * 全库重建期间跳过：重建本就覆盖全部章节，避免并发重复插入。
      */
     fun indexChapterAsync(book: Book, chapter: BookChapter, content: String) {
-        if (book.isImage) return
+        if (book.isImage || rebuilding) return
         scope.launch {
             runCatching {
                 indexChapterInternal(book.bookUrl, chapter.index, chapter.title, content)
@@ -78,11 +91,27 @@ object LibrarySearchIndexer {
     /**
      * 单章是否已建索引。本地 txt 正文不落盘、每次阅读都现读，
      * 用它在阅读时懒加载建索引并避免重复建同一章。
+     *
+     * FTS 虚表无法为 bookUrl/chapterIndex 建普通索引，直接 count 查询会退化为全表扫描
+     * （索引大时是每次读章的隐形开销），所以在进程内维护一份已索引键集合，
+     * 每本书首次查询时整取一次，之后都是 O(1) 命中。
      */
     fun hasChapterIndexed(bookUrl: String, chapterIndex: Int): Boolean {
-        return runCatching {
-            appDb.libraryContentFtsDao.countChapter(bookUrl, chapterIndex) > 0
-        }.getOrDefault(false)
+        val key = keyOf(bookUrl, chapterIndex)
+        synchronized(indexedKeys) {
+            if (indexedKeys.contains(key)) return true
+            if (bookUrl !in loadedBooks) {
+                loadedBooks.add(bookUrl)
+                runCatching {
+                    appDb.libraryContentFtsDao.indexedChapterIndexes(bookUrl).forEach {
+                        indexedKeys.add(keyOf(bookUrl, it))
+                    }
+                }.onFailure {
+                    AppLog.put("全库搜索装载已索引章节失败: $bookUrl", it)
+                }
+            }
+            return indexedKeys.contains(key)
+        }
     }
 
     suspend fun indexChapter(
@@ -106,7 +135,10 @@ object LibrarySearchIndexer {
         content: String
     ) {
         appDb.libraryContentFtsDao.deleteChapter(bookUrl, chapterIndex)
-        if (content.isBlank()) return
+        if (content.isBlank()) {
+            synchronized(indexedKeys) { indexedKeys.remove(keyOf(bookUrl, chapterIndex)) }
+            return
+        }
         val bounded = if (content.length > MaxIndexContentLength) {
             content.substring(0, MaxIndexContentLength)
         } else {
@@ -120,6 +152,7 @@ object LibrarySearchIndexer {
                 content = segmentText(bounded)
             )
         )
+        synchronized(indexedKeys) { indexedKeys.add(keyOf(bookUrl, chapterIndex)) }
     }
 
     /**
@@ -129,6 +162,7 @@ object LibrarySearchIndexer {
         scope.launch {
             runCatching {
                 appDb.libraryContentFtsDao.deleteChapter(bookUrl, chapterIndex)
+                synchronized(indexedKeys) { indexedKeys.remove(keyOf(bookUrl, chapterIndex)) }
             }.onFailure {
                 AppLog.put("全库搜索删除章索引失败: $bookUrl:$chapterIndex", it)
             }
@@ -137,11 +171,16 @@ object LibrarySearchIndexer {
 
     /**
      * 删除整书索引（异步），供 BookHelp.clearCache(book) 钩子调用。
+     * 本地 txt 切换编码时也会调用（旧索引是旧编码的产物）。
      */
     fun deleteBookAsync(bookUrl: String) {
         scope.launch {
             runCatching {
                 appDb.libraryContentFtsDao.deleteByBook(bookUrl)
+                synchronized(indexedKeys) {
+                    loadedBooks.remove(bookUrl)
+                    indexedKeys.removeAll { it.startsWith("$bookUrl|") }
+                }
             }.onFailure {
                 AppLog.put("全库搜索删除书索引失败: $bookUrl", it)
             }
@@ -154,9 +193,14 @@ object LibrarySearchIndexer {
      * @return 索引的章节数
      */
     suspend fun rebuildAll(onProgress: (String) -> Unit): Int = withContext(Dispatchers.IO) {
+        rebuilding = true
         runCatching {
             val dao = appDb.libraryContentFtsDao
             dao.deleteAll()
+            synchronized(indexedKeys) {
+                indexedKeys.clear()
+                loadedBooks.clear()
+            }
             val books = appDb.bookDao.all
             val validUrls = books.map { it.bookUrl }.toHashSet()
             var indexed = 0
@@ -184,6 +228,8 @@ object LibrarySearchIndexer {
         }.getOrElse {
             AppLog.put("全库搜索重建索引失败", it)
             -1
+        }.also {
+            rebuilding = false
         }
     }
 }

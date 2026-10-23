@@ -50,6 +50,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
+import io.legado.app.model.localBook.TextFile
 import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.cache.CacheManageActivity
@@ -509,8 +510,11 @@ class BookInfoComposeActivity :
                     appDb.bookDao.update(book)
                 }
                 if (ReadBook.book?.bookUrl == book.bookUrl) {
+                    //正在读这本书：通知阅读器重新解析目录（会刷新 TextFile 的 charset）
                     ReadBook.setCharset(charset)
                 } else {
+                    //没有在读：丢弃 TextFile 单例，下次打开时用新编码重建（避免复用旧 charset 字段）
+                    TextFile.clear()
                     toastOnUi("已切换编码：$charset")
                 }
                 updateUiState()

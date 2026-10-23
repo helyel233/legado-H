@@ -282,7 +282,11 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 LocalBook.getChapterList(
                     book,
                     onProgress = { percent ->
-                        ReadBook.upMsg("正在解析目录 $percent%")
+                        //每 1% 都 upMsg 会触发一次正文视图更新，解析大文件时会明显重排，
+                        //这里按 5% 节流（最多约 20 次）
+                        if (percent % 5 == 0 || percent >= 99) {
+                            ReadBook.upMsg("正在解析目录 $percent%")
+                        }
                     },
                     onCharsetSuspect = {
                         context.toastOnUi("检测到文件编码可能不正确，如乱码可在阅读菜单中切换编码")

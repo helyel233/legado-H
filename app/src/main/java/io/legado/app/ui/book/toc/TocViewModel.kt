@@ -11,6 +11,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.ReadBook
+import io.legado.app.help.search.LibrarySearchIndexer
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
@@ -40,6 +41,8 @@ class TocViewModel(application: Application) : BaseViewModel(application) {
                     appDb.bookChapterDao.replaceByBook(book.bookUrl, it)
                     appDb.bookDao.update(book)
                 }
+                //重新分章后章节偏移全变了，已建的全文索引是旧偏移的产物，作废等重新读到时重建
+                LibrarySearchIndexer.deleteBookAsync(book.bookUrl)
                 ReadBook.onChapterListUpdated(book)
                 bookData.postValue(book)
             }

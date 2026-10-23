@@ -633,6 +633,11 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                     AppLog.put("涔︽灦鏇存柊鍑洪敊", it)
                 }.conflate().flowOn(Dispatchers.Default).collect { (allBooks, list, items) ->
                     shelfDisplays = list
+                    //保存本轮「本地文件已更新」的书目，供 updateComposeItems 等重建路径复用
+                    localChangedUrls = items
+                        .filterIsInstance<BookshelfBookItemUi>()
+                        .filter { it.localFileChanged }
+                        .mapTo(hashSetOf()) { it.display.bookUrl }
                     collectionItems = items.filterIsInstance<BookshelfCollectionItemUi>()
                     (parentFragment as? io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1)
                         ?.onShelfDisplaysChanged(groupId, allBooks)

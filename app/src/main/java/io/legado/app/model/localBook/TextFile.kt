@@ -44,6 +44,11 @@ class TextFile(private var book: Book) {
             return textFile!!
         }
 
+        /**
+         * 与 getContent 共用 companion 监视器：分章会重置正文缓存并刷新 charset，
+         * 必须与正文读取串行，避免读到「旧编码/旧偏移」的中间状态。
+         */
+        @Synchronized
         @Throws(FileNotFoundException::class)
         fun getChapterList(
             book: Book,
@@ -83,10 +88,10 @@ class TextFile(private var book: Book) {
     private var charset: Charset = book.fileCharset()
 
     /**
-     * 已解码章节正文的 LRU 缓存。本地 txt 正文不落盘，翻回看过的章节
-     * 不必再读文件+解码；仅缓存本章（TextFile 单例只持有一本书）。
+     * 已解码章节正文的 LRU 缓存（accessOrder = true，命中会保活）。
+     * 本地 txt 正文不落盘，翻回看过的章节不必再读文件+解码；仅缓存本书（TextFile 单例只持有一本书）。
      */
-    private val contentCache = LinkedHashMap<String, String>()
+    private val contentCache = LinkedHashMap<String, String>(16, 0.75f, true)
 
     private var txtBuffer: ByteArray? = null
     private var bufferStart = -1L
@@ -110,13 +115,21 @@ class TextFile(private var book: Book) {
         onCharsetSuspect: (() -> Unit)? = null
     ): ArrayList<BookChapter> {
         val modified = book.isLocalModified()
-        //用户在阅读菜单/详情页改过编码时，TextFile 单例会被复用（同 bookUrl 且文件未变），
-        //必须在此刷新 charset 字段，否则 getContent 仍按旧编码解码
-        val charsetChanged = charset != book.fileCharset()
-        if (charsetChanged) {
-            synchronized(contentCache) { contentCache.clear() }
+        /**
+         * 用户在阅读菜单/详情页改过编码时，TextFile 单例会被复用（同 bookUrl 且文件未变），
+         * 必须在此刷新 charset 字段，否则 getContent 仍按旧编码解码。
+         * 编码变了意味着已建的全文索引也是旧编码产物，一并作废。
+         */
+        if (charset != book.fileCharset()) {
+            charset = book.fileCharset()
+            LibrarySearchIndexer.deleteBookAsync(book.bookUrl)
         }
-        if (book.charset == null || book.tocUrl.isBlank() || modified || charsetChanged) {
+        /**
+         * 每次解析目录都会重算所有章节偏移，缓存的正文可能已与偏移不符，先清空。
+         * 缓存的价值是「一次阅读会话内翻回旧章」，逐次打开重新解析清空没有损失。
+         */
+        synchronized(contentCache) { contentCache.clear() }
+        if (book.charset == null || book.tocUrl.isBlank() || modified) {
             LocalBook.getBookInputStream(book).use { bis ->
                 val buffer = ByteArray(bufferSize)
                 val length = bis.read(buffer)
@@ -163,7 +176,11 @@ class TextFile(private var book: Book) {
         val start = chapter.start!!
         val end = chapter.end!!
         synchronized(contentCache) { contentCache[chapter.url] }?.let { return it }
-        if (txtBuffer == null || start > bufferEnd || end < bufferStart) {
+        /**
+         * 缓冲区间是半开的 [bufferStart, bufferEnd)：章节只要没完整落在里面就重新装载 8MB 块，
+         * 避免原来「跨界判断」用严格大于/小于、在边界相等时走错分支的问题。
+         */
+        if (txtBuffer == null || start < bufferStart || end > bufferEnd) {
             LocalBook.getBookInputStream(book).use { bis ->
                 bufferStart = txtBufferSize * (start / txtBufferSize)
                 bis.skipFully(bufferStart)
@@ -181,22 +198,20 @@ class TextFile(private var book: Book) {
 
         val count = (end - start).toInt()
         val buffer = ByteArray(count)
-
-        @Suppress("ConvertTwoComparisonsToRangeCheck")
-        if (start < bufferEnd && end > bufferEnd || start < bufferStart && end > bufferStart) {
-            /** 章节内容在缓冲区交界处 */
-            LocalBook.getBookInputStream(book).use { bis ->
-                bis.skipFully(start)
-                bis.readFully(buffer)
-            }
-        } else {
-            /** 章节内容在缓冲区内 */
+        if (start >= bufferStart && end <= bufferEnd) {
+            /** 章节内容完整落在缓冲区内 */
             txtBuffer!!.copyInto(
                 buffer,
                 0,
                 (start - bufferStart).toInt(),
                 (end - bufferStart).toInt()
             )
+        } else {
+            /** 章节跨块或已到文件末尾：按偏移直接读文件 */
+            LocalBook.getBookInputStream(book).use { bis ->
+                bis.skipFully(start)
+                bis.readFully(buffer)
+            }
         }
 
         val content = String(buffer, charset)
@@ -238,7 +253,8 @@ class TextFile(private var book: Book) {
         val pattern = rr[0].toPattern(Pattern.MULTILINE)
         val jsStr = rr.getOrNull(1)
         if (rr[0].isEmpty()) {
-            return analyze()
+            //没有匹配到目录规则时走无规则切块，进度同样要上报（大文件恰恰是这种）
+            return analyze(fileSize = fileSize, onProgress = onProgress)
         }
         lastVolumeTitle.value = ""
         val toc = arrayListOf<BookChapter>()
@@ -474,12 +490,18 @@ class TextFile(private var book: Book) {
 
     /**
      * 无规则拆分目录
+     *
+     * @param fileSize 文件总字节数，>0 时才上报进度（长章递归拆分不传，避免噪声）
      */
     private fun analyze(
-        fileStart: Long = 0L, fileEnd: Long = Long.MAX_VALUE
+        fileStart: Long = 0L,
+        fileEnd: Long = Long.MAX_VALUE,
+        fileSize: Long = 0L,
+        onProgress: ((Int) -> Unit)? = null
     ): Pair<ArrayList<BookChapter>, Int> {
         val toc = arrayListOf<BookChapter>()
         var bookWordCount = 0
+        var lastPercent = -1
         LocalBook.getBookInputStream(book).use { bis ->
             //block的个数
             var blockPos = 0
@@ -553,6 +575,13 @@ class TextFile(private var book: Book) {
                 }
                 //block的偏移点
                 curOffset += length.toLong()
+                if (fileSize > 0) {
+                    val percent = (curOffset * 100 / fileSize).toInt().coerceIn(0, 99)
+                    if (percent != lastPercent) {
+                        lastPercent = percent
+                        onProgress?.invoke(percent)
+                    }
+                }
             }
             //设置结尾章节
             val content = String(buffer, 0, bufferStart, charset)

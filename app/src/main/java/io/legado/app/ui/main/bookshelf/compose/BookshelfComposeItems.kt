@@ -53,6 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 sealed interface BookshelfItemUi {
     val key: String
@@ -128,22 +129,28 @@ fun buildBookshelfItems(
 /**
  * 本地书籍文件在磁盘上被改动过（相对上次解析目录的时间）的书目集合。
  * 打开这些书时阅读器会自动重新分割目录，书架先给用户一个可见的提示。
- * 只做轻量判断：content:// 走 DocumentFile 查询，文件路径直接取 mtime；
+ *
+ * 只在轻量判断：content:// 走 DocumentFile 查询，文件路径直接取 mtime；
  * 取不到（如文件被移动）时返回 false，不影响书架展示。
+ * 结果按（bookUrl, latestChapterTime）缓存，避免每次回前台/数据失效都重复查询 SAF。
  */
 suspend fun computeLocalChangedBookUrls(books: List<BookShelfDisplay>): Set<String> {
     if (books.none { it.isLocal }) return emptySet()
     return withContext(Dispatchers.IO) {
         books.asSequence()
             .filter { it.isLocal }
-            .filter { it.latestChapterTime > 0L }
             .filter { it.isLocalFileModified() }
             .mapTo(hashSetOf()) { it.bookUrl }
     }
 }
 
+/**
+ * @return 文件 lastModified 是否新于上次解析目录的时间
+ */
 private fun BookShelfDisplay.isLocalFileModified(): Boolean {
-    return runCatching {
+    val cached = localModifiedCache[bookUrl]
+    if (cached != null && cached.first == latestChapterTime) return cached.second
+    val changed = runCatching {
         val lastModified = if (bookUrl.isUri()) {
             val uri = bookUrl.toUri()
             if (uri.isContentScheme()) {
@@ -156,7 +163,13 @@ private fun BookShelfDisplay.isLocalFileModified(): Boolean {
         }
         lastModified > latestChapterTime
     }.getOrDefault(false)
+    //本地书数量有限，缓存条目不会失控
+    localModifiedCache[bookUrl] = latestChapterTime to changed
+    return changed
 }
+
+/** 文件改动判断结果缓存：bookUrl -> (判断时的 latestChapterTime, 是否已改动) */
+private val localModifiedCache = ConcurrentHashMap<String, Pair<Long, Boolean>>()
 
 private fun BookShelfDisplay.displayUserTags(
     configuredTags: List<String>,
