@@ -34,6 +34,36 @@ object NetworkUtils {
         }
     }
 
+    /**
+     * 是否为不计流量网络（WiFi / 以太网）。
+     * 段评预热「仅 WiFi」开关使用：移动数据与 VPN 均视为计流量网络。
+     */
+    @SuppressLint("ObsoleteSdkInt")
+    @Suppress("DEPRECATION")
+    fun isWifi(): Boolean {
+        return try {
+            queryWifiAvailable()
+        } catch (_: OutOfMemoryError) {
+            false
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+
+    @SuppressLint("ObsoleteSdkInt")
+    @Suppress("DEPRECATION")
+    private fun queryWifiAvailable(): Boolean {
+        if (Build.VERSION.SDK_INT < 23) {
+            val info = connectivityManager.activeNetworkInfo ?: return false
+            return info.type == ConnectivityManager.TYPE_WIFI ||
+                info.type == ConnectivityManager.TYPE_ETHERNET
+        }
+        val network = connectivityManager.activeNetwork ?: return false
+        val nc = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
+
     @SuppressLint("ObsoleteSdkInt")
     @Suppress("DEPRECATION")
     private fun queryNetworkAvailable(): Boolean {

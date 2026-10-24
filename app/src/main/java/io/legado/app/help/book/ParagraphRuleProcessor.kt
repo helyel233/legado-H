@@ -119,6 +119,26 @@ object ParagraphRuleProcessor {
         return click?.startsWith(CLICK_PREFIX) == true || click?.startsWith(RULE_PREFIX) == true
     }
 
+    /**
+     * 从段落规则点击值里取规则 id（[wrapClick] / [wrapRuleClick] 两种格式都认）。
+     * 取不到返回 null。供快照弹窗按 `paragraph_rule_<id>` 源键加载规则宿主。
+     */
+    fun ruleIdOfClick(click: String?): Long? {
+        if (!isParagraphClick(click)) return null
+        val body = click!!.removePrefix(CLICK_PREFIX)
+        if (!body.startsWith(RULE_PREFIX)) return null
+        // wrapRuleClick 格式（rule:<id>:<js>）的 js 含真实换行时，第一个换行落在
+        // js 内部，按换行截出的 id 段解析必然失败——此时须回退冒号分隔分支，
+        // 否则多行 js 的规则点击整体失效。
+        val lineEnd = body.indexOf('\n')
+        if (lineEnd > RULE_PREFIX.length) {
+            body.substring(RULE_PREFIX.length, lineEnd).toLongOrNull()?.let { return it }
+        }
+        val colon = body.indexOf(':', startIndex = RULE_PREFIX.length)
+        if (colon <= RULE_PREFIX.length) return null
+        return body.substring(RULE_PREFIX.length, colon).toLongOrNull()
+    }
+
     fun wrapClick(ruleId: Long, js: String): String = "$CLICK_PREFIX$RULE_PREFIX$ruleId\n$js"
 
     private fun wrapRuleClick(ruleId: Long, js: String): String = "$RULE_PREFIX$ruleId:$js"
@@ -657,10 +677,12 @@ object ParagraphRuleProcessor {
     private fun parseClick(click: String): Pair<Long, String>? {
         val body = click.removePrefix(CLICK_PREFIX)
         if (!body.startsWith(RULE_PREFIX)) return null
+        // 与 ruleIdOfClick 同语义：换行分支解析失败回退冒号分支（多行 js 死区修复）
         val lineEnd = body.indexOf('\n')
         if (lineEnd > RULE_PREFIX.length) {
-            val id = body.substring(RULE_PREFIX.length, lineEnd).toLongOrNull() ?: return null
-            return id to body.substring(lineEnd + 1)
+            body.substring(RULE_PREFIX.length, lineEnd).toLongOrNull()?.let { id ->
+                return id to body.substring(lineEnd + 1)
+            }
         }
         val colon = body.indexOf(':', startIndex = RULE_PREFIX.length)
         if (colon <= RULE_PREFIX.length) return null

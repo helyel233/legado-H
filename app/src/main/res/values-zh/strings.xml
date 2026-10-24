@@ -2542,6 +2542,9 @@ bookUrl：%7$s
     <string name="review_no_cached_snapshot">当前章节没有缓存评论</string>
     <!-- legadoC 离线评论 -->
     <string name="menu_offline_review_mode">离线评论模式</string>
+    <string name="menu_review_preheat_wifi_only">仅WiFi预热段评</string>
+    <string name="review_preheat_wifi_only_on">已开启：段评预热仅在WiFi/以太网下进行</string>
+    <string name="review_preheat_wifi_only_off">已关闭：段评预热会使用移动数据</string>
     <string name="menu_send_offline_reviews">发送离线评论</string>
     <string name="menu_export_offline_reviews">导出离线评论</string>
     <string name="menu_clear_offline_reviews">清除离线评论</string>

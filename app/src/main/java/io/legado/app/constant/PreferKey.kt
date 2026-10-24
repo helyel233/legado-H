@@ -488,6 +488,8 @@ object PreferKey {
     const val exportReviews = "exportReviews"
     const val reviewOpenMode = "reviewOpenMode"
     const val offlineReviewMode = "offlineReviewMode"
+    const val reviewPreheatWifiOnly = "reviewPreheatWifiOnly"
+    const val reviewSnapshotTtlDays = "reviewSnapshotTtlDays"
     const val downloadChapterIntervalMillis = "downloadChapterIntervalMillis"
     const val downloadChapterRetryCount = "downloadChapterRetryCount"
     const val homepageSourceHidden = "homepageSourceHidden"

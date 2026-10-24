@@ -3070,6 +3070,27 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?: ReviewOpenMode.NETWORK
 
     /**
+     * 段评预热是否仅限 WiFi/以太网（默认关闭）。
+     * 只影响「阅读页提前抓取段评快照」的后台流量，不影响用户主动点击时的打开方式。
+     */
+    var reviewPreheatWifiOnly: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.reviewPreheatWifiOnly, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.reviewPreheatWifiOnly, value)
+        }
+
+    /**
+     * 段评快照保鲜期（天，默认 3 天）。
+     * 过期不删除：点击时仍先用旧快照保证 0 秒可见，同时后台刷新覆盖；
+     * 预热时对过期快照按「需重抓」处理。设为 0 表示不保鲜（永不过期）。
+     */
+    var reviewSnapshotTtlDays: Int
+        get() = appCtx.getPrefInt(PreferKey.reviewSnapshotTtlDays, 3).coerceAtLeast(0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.reviewSnapshotTtlDays, value.coerceAtLeast(0))
+        }
+
+    /**
      * 离线评论模式：只控制发送策略，不代表真实网络状态。
      * 开启后，评论弹窗内的发表动作一律拦截记录为离线评论，不立即发送（无论有无网络）；
      * 关闭后不拦截，走书源原有发送流程，真实无网时由原流程自行失败。

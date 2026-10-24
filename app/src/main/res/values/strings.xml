@@ -2764,6 +2764,9 @@ Selected text or question:
     <string name="review_no_cached_snapshot">No cached comments for this chapter</string>
     <!-- legadoC 离线评论 -->
     <string name="menu_offline_review_mode">Offline review mode</string>
+    <string name="menu_review_preheat_wifi_only">Pre-cache reviews on Wi-Fi only</string>
+    <string name="review_preheat_wifi_only_on">On: review pre-caching runs on Wi-Fi/Ethernet only</string>
+    <string name="review_preheat_wifi_only_off">Off: review pre-caching may use mobile data</string>
     <string name="menu_send_offline_reviews">Send offline reviews</string>
     <string name="menu_export_offline_reviews">Export offline reviews</string>
     <string name="menu_clear_offline_reviews">Clear offline reviews</string>

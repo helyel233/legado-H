@@ -9,6 +9,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.BookImgClick
+import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.cache.CacheOperationDiagnostics
@@ -122,14 +123,17 @@ object ReviewSnapshotManager {
         var stopRequested: Boolean = false,
     )
 
-    /** 评论按钮模型：click / 旧源 js 二选一 */
+    /** 评论按钮模型：段落规则 pclick / click / 旧源 js */
     data class ReviewButton(
         val src: String,
         val click: String? = null,
         val js: String? = null,
-        val urlNoOption: String? = null
+        val urlNoOption: String? = null,
+        /** 段落规则点击值（[ParagraphRuleProcessor.wrapClick] 包装后的 pclick） */
+        val pclick: String? = null
     ) {
-        val hasAction: Boolean get() = !click.isNullOrBlank() || !js.isNullOrBlank()
+        val hasAction: Boolean
+            get() = !pclick.isNullOrBlank() || !click.isNullOrBlank() || !js.isNullOrBlank()
     }
 
     private val channel = Channel<Task>(Channel.UNLIMITED)
@@ -1270,67 +1274,95 @@ object ReviewSnapshotManager {
             resolvedPage.complete(ReviewPage(url, html, preloadJs))
         }
         return withTimeout(RESOLVE_TIMEOUT_MS) {
-            if (!button.click.isNullOrBlank()) {
-                val host = object : SourceLoginJsExtensions(null, bookSource, BookType.text) {
-                    override fun startBrowser(url: String, title: String) {
-                        record(url)
+            when {
+                !button.pclick.isNullOrBlank() -> {
+                    // 段落规则点击：与用户点击同一执行环境（[ParagraphRuleProcessor.evalClick]），
+                    // 仅把 java 宿主换成录音回调，不弹窗。evalClick 是阻塞式 Rhino 求值，
+                    // 传入当前协程上下文，翻章取消/超时可穿透进脚本。
+                    val callback = object : ParagraphRuleProcessor.BrowserCallback {
+                        override fun showBrowser(
+                            url: String,
+                            html: String?,
+                            preloadJs: String?,
+                            config: String?,
+                            sourceKey: String?
+                        ): Boolean {
+                            record(url, html, preloadJs)
+                            return true
+                        }
                     }
-
-                    override fun startBrowser(url: String, title: String, html: String?) {
-                        record(url, html)
-                    }
-
-                    override fun startBrowserAwait(url: String, title: String): StrResponse {
-                        record(url)
-                        return StrResponse(url, "")
-                    }
-
-                    override fun startBrowserAwait(
-                        url: String,
-                        title: String,
-                        refetchAfterSuccess: Boolean
-                    ): StrResponse {
-                        record(url)
-                        return StrResponse(url, "")
-                    }
-
-                    override fun startBrowserAwait(
-                        url: String,
-                        title: String,
-                        refetchAfterSuccess: Boolean,
-                        html: String?
-                    ): StrResponse {
-                        record(url, html)
-                        return StrResponse(url, "")
-                    }
-
-                    /** 改版 app 弹窗路径：书源评论实际走这里 */
-                    override fun showBrowser(
-                        url: String,
-                        html: String?,
-                        preloadJs: String?,
-                        config: String?
-                    ) {
-                        record(url, html, preloadJs)
-                    }
-
-                    /** qread 弹窗路径兼容 */
-                    fun startBrowserDp(url: String, title: String) {
-                        record(url)
-                    }
+                    ParagraphRuleProcessor.evalClick(
+                        book,
+                        chapter,
+                        button.pclick,
+                        button.src,
+                        callback,
+                        currentCoroutineContext()
+                    )
                 }
-                BookImgClick.executeClick(book, bookSource, chapter, button.click, button.src) { host }
-            } else {
-                val js = button.js.orEmpty()
-                val urlNoOption = button.urlNoOption.orEmpty()
-                BookImgClick.executeJs(book, bookSource, chapter, js, urlNoOption) {
-                    onBrowserOpenRequestedHook = { url, _, _ ->
-                        record(url)
-                        true
+                !button.click.isNullOrBlank() -> {
+                    val host = object : SourceLoginJsExtensions(null, bookSource, BookType.text) {
+                        override fun startBrowser(url: String, title: String) {
+                            record(url)
+                        }
+
+                        override fun startBrowser(url: String, title: String, html: String?) {
+                            record(url, html)
+                        }
+
+                        override fun startBrowserAwait(url: String, title: String): StrResponse {
+                            record(url)
+                            return StrResponse(url, "")
+                        }
+
+                        override fun startBrowserAwait(
+                            url: String,
+                            title: String,
+                            refetchAfterSuccess: Boolean
+                        ): StrResponse {
+                            record(url)
+                            return StrResponse(url, "")
+                        }
+
+                        override fun startBrowserAwait(
+                            url: String,
+                            title: String,
+                            refetchAfterSuccess: Boolean,
+                            html: String?
+                        ): StrResponse {
+                            record(url, html)
+                            return StrResponse(url, "")
+                        }
+
+                        /** 改版 app 弹窗路径：书源评论实际走这里 */
+                        override fun showBrowser(
+                            url: String,
+                            html: String?,
+                            preloadJs: String?,
+                            config: String?
+                        ) {
+                            record(url, html, preloadJs)
+                        }
+
+                        /** qread 弹窗路径兼容 */
+                        fun startBrowserDp(url: String, title: String) {
+                            record(url)
+                        }
                     }
-                    onBrowserAwaitRequestedHook = { url, _, _ ->
-                        record(url)
-                        StrResponse(url, "")
+                    BookImgClick.executeClick(book, bookSource, chapter, button.click, button.src) { host }
+                }
+                else -> {
+                    val js = button.js.orEmpty()
+                    val urlNoOption = button.urlNoOption.orEmpty()
+                    BookImgClick.executeJs(book, bookSource, chapter, js, urlNoOption) {
+                        onBrowserOpenRequestedHook = { url, _, _ ->
+                            record(url)
+                            true
+                        }
+                        onBrowserAwaitRequestedHook = { url, _, _ ->
+                            record(url)
+                            StrResponse(url, "")
+                        }
                     }
                 }
             }
@@ -1341,6 +1373,9 @@ object ReviewSnapshotManager {
     /**
      * 提取正文里的评论按钮：img 标签选项 JSON 带 style=TEXT 的评论泡。
      * click 与旧源 js 原样带出，交给与用户点击共用的执行逻辑。
+     * 段落规则 pclick 与 click 同权识别（pclick 优先，与排版端
+     * `ImageInfo.click = pclick ?: click` 一致），否则段落规则段评
+     * 永远进不了快照管线。
      * 附带诊断统计：img 总数、选项 JSON 解析失败数、style 非 TEXT 数、click/js 都为空数。
      */
     fun extractReviewButtons(content: String): List<ReviewButton> {
@@ -1396,11 +1431,14 @@ object ReviewSnapshotManager {
             val urlNoOption = AnalyzeUrl.paramPattern.matcher(src).let { m ->
                 if (m.find()) src.take(m.start()) else null
             }
+            val pclick = options["pclick"]?.takeIf { it.isNotBlank() }
+            val click = options["click"]?.takeIf { it.isNotBlank() }
             val button = ReviewButton(
                 src = key,
-                click = options["click"]?.takeIf { it.isNotBlank() },
+                click = click,
                 js = options["js"]?.takeIf { it.isNotBlank() },
-                urlNoOption = urlNoOption
+                urlNoOption = urlNoOption,
+                pclick = pclick
             )
             if (!button.hasAction) noAction++
             result[key] = button

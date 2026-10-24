@@ -190,6 +190,7 @@ import io.legado.app.ui.book.read.page.LottieImageBitmapCache
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.ReviewButton
+import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.review.SyntheticParaContent
 import io.legado.app.help.review.SyntheticReviewEntry
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxDispatcher
@@ -1123,6 +1124,8 @@ class ReadBookActivity : BaseReadBookActivity(),
                     R.id.menu_reverse_content -> item.isVisible = onLine && !isEpubCoreMode()
                     R.id.menu_paragraph_rule_manage -> item.isVisible = !book.isEpub && !isEpubCoreMode()
                     R.id.menu_offline_review_mode -> item.isChecked = AppConfig.offlineReviewMode
+                    R.id.menu_review_preheat_wifi_only ->
+                        item.isChecked = AppConfig.reviewPreheatWifiOnly
                 }
             }
         }
@@ -1319,6 +1322,22 @@ class ReadBookActivity : BaseReadBookActivity(),
                 AppLog.putDebug(
                     "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}"
                 )
+            }
+
+            R.id.menu_review_preheat_wifi_only -> {
+                AppConfig.reviewPreheatWifiOnly = !AppConfig.reviewPreheatWifiOnly
+                item.isChecked = AppConfig.reviewPreheatWifiOnly
+                toastOnUi(
+                    if (AppConfig.reviewPreheatWifiOnly) {
+                        R.string.review_preheat_wifi_only_on
+                    } else {
+                        R.string.review_preheat_wifi_only_off
+                    }
+                )
+                // 关闭限制后立即补一次预热，不必等下次翻章
+                if (!AppConfig.reviewPreheatWifiOnly) {
+                    preheatReviewSnapshots()
+                }
             }
 
             R.id.menu_send_offline_reviews -> {
@@ -2569,10 +2588,21 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
             if (relativePosition == 0) {
                 upSeekBarProgress()
+                preheatReviewSnapshots()
             }
             loadStates = false
             success?.invoke()
         }
+    }
+
+    /**
+     * 段评预热带：当前章排版完成后，后台抓取上一章/本章/下一章的评论快照，
+     * 使用户点段评图标时本地已有快照（快照优先/仅快照模式下 0 秒可见）。
+     * 翻章时自动取消在途任务，同时最多一轮三章预热在跑。
+     */
+    private fun preheatReviewSnapshots() {
+        val book = ReadBook.book ?: return
+        ReviewPreheatCoordinator.preheat(book, ReadBook.durChapterIndex)
     }
 
     override suspend fun upContentAwait(
@@ -2612,6 +2642,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
         if (relativePosition == 0) {
             upSeekBarProgress()
+            preheatReviewSnapshots()
         }
         loadStates = false
     }
@@ -5356,12 +5387,57 @@ class ReadBookActivity : BaseReadBookActivity(),
             val book = ReadBook.book ?: return@async
             val chapter = currentChapterForClick()
                 ?: throw Exception("no find chapter")
+            // 图标路径快照消费：按打开模式决定是否先用本地快照（IO 上判定读文件，
+            // 不卡主线程；快照打开=0 秒可见，后台刷新由弹窗自带器完成）
+            when (
+                BookImgClick.clickImgSnapshotFirst(
+                    this@ReadBookActivity,
+                    src,
+                    chapter,
+                    pclick = clickValue,
+                    onDismiss = {
+                        commentBrowserShowing = false
+                        commentBrowserOpening = false
+                    }
+                )
+            ) {
+                BookImgClick.ReviewSnapshotConsumption.Opened -> {
+                    commentBrowserShowing = true
+                    return@async
+                }
+                BookImgClick.ReviewSnapshotConsumption.Miss -> {
+                    commentBrowserOpening = false
+                    return@async
+                }
+                BookImgClick.ReviewSnapshotConsumption.NotConsumed -> Unit
+            }
+            // 网络链路：click JS 执行环境与弹窗路径不变，仅把 showBrowser 录音，
+            // 顺手把本次点击解析出的真实评论页抓成快照（点击即缓存）
+            val baseCallback = paragraphRuleBrowserCallback()
+            val recordingCallback = object : ParagraphRuleProcessor.BrowserCallback {
+                override fun showBrowser(
+                    url: String,
+                    html: String?,
+                    preloadJs: String?,
+                    config: String?,
+                    sourceKey: String?
+                ): Boolean {
+                    val handled =
+                        baseCallback.showBrowser(url, html, preloadJs, config, sourceKey)
+                    if (handled) {
+                        ReviewPreheatCoordinator.captureFromClick(
+                            book, chapter, src, url, html, preloadJs
+                        )
+                    }
+                    return handled
+                }
+            }
             ParagraphRuleProcessor.evalClick(
                 book,
                 chapter,
                 clickValue,
                 src,
-                paragraphRuleBrowserCallback(),
+                recordingCallback,
                 coroutineContext
             )
         }.onError {
@@ -5452,9 +5528,22 @@ class ReadBookActivity : BaseReadBookActivity(),
             if (!click.isNullOrBlank()) {
                 Coroutine.async(lifecycleScope,IO) {
                     val source = ReadBook.bookSource ?: return@async
-                    val java = SourceLoginJsExtensions(this@ReadBookActivity, source, BookType.text)
                     val book = ReadBook.book ?: return@async
                     val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
+                    // 旧源 click 按打开模式消费本地快照：Opened=已打开、Miss=已提示
+                    // （仅快照模式无快照，不得回落网络），NotConsumed 继续网络链路
+                    if (
+                        BookImgClick.clickImgSnapshotFirst(this@ReadBookActivity, src, chapter)
+                        != BookImgClick.ReviewSnapshotConsumption.NotConsumed
+                    ) {
+                        return@async
+                    }
+                    val java = SourceLoginJsExtensions(
+                        this@ReadBookActivity,
+                        source,
+                        BookType.text,
+                        callback = reviewClickRecordingCallback(book, chapter, src)
+                    )
                     ensureCurrentChapterCacheForClick(book, chapter)
                     runScriptWithContext {
                         source.evalJS(click) {
@@ -5474,6 +5563,13 @@ class ReadBookActivity : BaseReadBookActivity(),
                 val source = ReadBook.bookSource ?: return@async
                 val book = ReadBook.book ?: return@async
                 val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
+                // 旧源 js 同样按打开模式消费本地快照（对齐 BookImgClick.oldClickImg）
+                if (
+                    BookImgClick.clickImgSnapshotFirst(this@ReadBookActivity, src, chapter)
+                    != BookImgClick.ReviewSnapshotConsumption.NotConsumed
+                ) {
+                    return@async
+                }
                 val urlNoOption = src.take(urlMatcher.start())
                 AnalyzeRule(book, source).apply {
                     setCoroutineContext(coroutineContext)
@@ -5493,9 +5589,22 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (evalParagraphRuleClick(click, src)) return
         Coroutine.async(lifecycleScope,IO) {
             val source = ReadBook.bookSource ?: return@async
-            val java = SourceLoginJsExtensions(this@ReadBookActivity, source, BookType.text)
             val book = ReadBook.book ?: return@async
             val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
+            // 旧源 click 同样按打开模式消费本地快照（与段评菜单同一语义）：
+            // Miss（仅快照模式无快照）已提示且不得回落网络
+            if (
+                BookImgClick.clickImgSnapshotFirst(this@ReadBookActivity, src, chapter)
+                != BookImgClick.ReviewSnapshotConsumption.NotConsumed
+            ) {
+                return@async
+            }
+            val java = SourceLoginJsExtensions(
+                this@ReadBookActivity,
+                source,
+                BookType.text,
+                callback = reviewClickRecordingCallback(book, chapter, src)
+            )
             ensureCurrentChapterCacheForClick(book, chapter)
             runScriptWithContext {
                 source.evalJS(click) {
@@ -5507,6 +5616,40 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
         }.onError {
             AppLog.put("执行图片链接click键值出错\n${it.localizedMessage}", it, true)
+        }
+    }
+
+    /**
+     * 旧源 click/js 的点击即缓存录音回调：showBrowser 时顺手把本次点击解析出的
+     * 真实评论页抓成快照，下次同章再点可 0 秒打开。返回 false 让默认弹窗路径
+     * 照常执行——点击行为零变化，只是多攒一份离线快照。
+     */
+    private fun reviewClickRecordingCallback(
+        book: Book,
+        chapter: BookChapter,
+        src: String
+    ): SourceLoginJsExtensions.Callback {
+        return object : SourceLoginJsExtensions.Callback {
+            override fun showBrowser(
+                url: String,
+                html: String?,
+                preloadJs: String?,
+                config: String?
+            ): Boolean {
+                ReviewPreheatCoordinator.captureFromClick(book, chapter, src, url, html, preloadJs)
+                return false
+            }
+
+            override fun upUiData(data: Map<String, Any?>?) = Unit
+
+            override fun reUiView(deltaUp: Boolean) = Unit
+
+            override fun open(
+                name: String,
+                url: String?,
+                title: String?,
+                origin: String?
+            ): Boolean = false
         }
     }
 
@@ -6403,6 +6546,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         commentWebViewSession = null
         commentBrowserOpening = false
         commentBrowserShowing = false
+        // 离开阅读页：取消在途的段评预热（翻章取消由预热带内部 supersede 处理）
+        ReviewPreheatCoordinator.cancelPreheat()
         handler.removeCallbacksAndMessages(null) // 清理Handler消息
         if (!ReadBook.inBookshelf && !isChangingConfigurations) {
             viewModel.removeFromBookshelf(null)

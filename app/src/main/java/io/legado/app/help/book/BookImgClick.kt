@@ -16,6 +16,7 @@ import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.review.ReviewSnapshot
 import io.legado.app.help.review.ReviewParagraphTemplate
+import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.review.ReviewSnapshotCapture
 import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.help.review.ReviewSnapshotStore
@@ -121,13 +122,18 @@ object BookImgClick {
         source: BookSource? = null,
         networkRefresher: (suspend () -> Pair<String, String>?)? = null,
         offlineOnly: Boolean,
+        sourceKeyOverride: String? = null,
+        onDismiss: (() -> Unit)? = null,
     ): Boolean {
         if (context.isFinishing || context.isDestroyed) return false
+        // 段落规则段评：弹窗按 paragraph_rule_<id> 源键加载规则宿主（页内 ajax /
+        // 发表评论都走规则的登录态），与点击网络打开时的源键保持一致。
+        val sourceKey = sourceKeyOverride ?: source?.getKey().orEmpty()
         context.runOnUiThread {
             if (context.isFinishing || context.isDestroyed) return@runOnUiThread
             context.showDialogFragment(
                 BottomWebViewDialog(
-                    source?.getKey().orEmpty(),
+                    sourceKey,
                     BookType.text,
                     cached.snapshot.url.ifBlank { "about:blank" },
                     cached.snapshot.html,
@@ -140,12 +146,13 @@ object BookImgClick {
                         chapterUrl = cached.chapter.url,
                         chapterIndex = cached.chapter.index,
                         chapterTitle = cached.chapter.title,
-                        origin = source?.getKey() ?: cached.book.origin,
+                        origin = sourceKey.ifBlank { cached.book.origin },
                         buttonSrc = cached.snapshot.buttonSrc.ifBlank { null },
                         pageUrl = cached.snapshot.url,
                     ),
                     // 内容来自 ReviewSnapshotStore 的快照：身份为离线，允许离线接管
                     isSnapshotHtml = true,
+                    onDismiss = onDismiss,
                 )
             )
         }
@@ -156,6 +163,7 @@ object BookImgClick {
      * 打开评论快照。
      * @param refreshToNetwork 快照优先：后台刷新为最新网络评论页（成功后覆盖）
      * @param offlineOnly 仅使用快照：WebView 禁止一切 http/https 网络请求
+     * @param pclick 段落规则点击值；非空时后台刷新走规则点击脚本解析真实评论页
      * @return true 表示已用快照打开
      */
     private fun openSnapshotIfCached(
@@ -165,6 +173,8 @@ object BookImgClick {
         refreshToNetwork: Boolean,
         offlineOnly: Boolean,
         syntheticPara: SyntheticParaContent? = null,
+        pclick: String? = null,
+        onDismiss: (() -> Unit)? = null,
     ): Boolean {
         val chapter = currentChapter(hostChapter) ?: return false
         // 先持有本地快照；网络刷新条件不得影响离线快照可用性。
@@ -194,7 +204,81 @@ object BookImgClick {
                 }
             }
         }
-        return showSnapshot(context, cached, snapshotSource, refresher, offlineOnly)
+        val ruleSourceKey = pclick
+            ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
+            ?.let { "paragraph_rule_$it" }
+        if (offlineOnly) {
+            // 仅快照模式没有「打开时刷新」器：过期快照（超过保鲜期）由后台
+            // 刷新覆盖，弹窗本身仍纯离线渲染，先用旧快照保证 0 秒可见
+            val ttlDays = AppConfig.reviewSnapshotTtlDays
+            if (ReviewPreheatCoordinator.isStale(
+                    cached.snapshot.savedAt, System.currentTimeMillis(), ttlDays
+                )
+            ) {
+                ReviewPreheatCoordinator.refreshButton(cached.book, cached.chapter, src)
+            }
+        }
+        return showSnapshot(
+            context, cached, snapshotSource, refresher, offlineOnly,
+            sourceKeyOverride = ruleSourceKey, onDismiss = onDismiss
+        )
+    }
+
+    /**
+     * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套三模式语义）：
+     * - 仅使用快照：有快照 → 立即打开；无快照 → 提示且不回落网络；
+     * - 快照优先：有快照 → 立即打开（后台刷新最新网络页）；无快照 → 回落网络；
+     * - 网络优先（默认）：直接回落网络，绝不因存在快照改变点击行为。
+     *
+     * 在 IO 线程调用（内部会读快照文件），弹窗经 runOnUiThread 展示。
+     *
+     * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于后台刷新与弹窗源键
+     * @param onDismiss 快照弹窗关闭回调（调用方据此复位防重入标记）
+     */
+    fun clickImgSnapshotFirst(
+        context: AppCompatActivity,
+        src: String,
+        hostChapter: BookChapter? = null,
+        pclick: String? = null,
+        onDismiss: (() -> Unit)? = null,
+    ): ReviewSnapshotConsumption {
+        when (openMode()) {
+            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY -> {
+                val opened = openSnapshotIfCached(
+                    context, src, hostChapter,
+                    refreshToNetwork = false, offlineOnly = true,
+                    pclick = pclick, onDismiss = onDismiss
+                )
+                if (opened) return ReviewSnapshotConsumption.Opened
+                context.toastOnUi(R.string.review_no_cached_snapshot)
+                return ReviewSnapshotConsumption.Miss
+            }
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
+                val opened = openSnapshotIfCached(
+                    context, src, hostChapter,
+                    refreshToNetwork = true, offlineOnly = false,
+                    pclick = pclick, onDismiss = onDismiss
+                )
+                return if (opened) {
+                    ReviewSnapshotConsumption.Opened
+                } else {
+                    ReviewSnapshotConsumption.NotConsumed
+                }
+            }
+            else -> return ReviewSnapshotConsumption.NotConsumed
+        }
+    }
+
+    /** [clickImgSnapshotFirst] 的消费结果 */
+    sealed interface ReviewSnapshotConsumption {
+        /** 已用快照打开弹窗：调用方不得再执行 click/js */
+        object Opened : ReviewSnapshotConsumption
+
+        /** 未消费：调用方继续执行 click/js 网络链路 */
+        object NotConsumed : ReviewSnapshotConsumption
+
+        /** 仅快照模式且无快照：已提示用户，调用方应停止 */
+        object Miss : ReviewSnapshotConsumption
     }
 
     /**
@@ -405,7 +489,8 @@ object BookImgClick {
             src = src.trim(),
             click = options["click"]?.takeIf { it.isNotBlank() },
             js = options["js"]?.takeIf { it.isNotBlank() },
-            urlNoOption = urlNoOption
+            urlNoOption = urlNoOption,
+            pclick = options["pclick"]?.takeIf { it.isNotBlank() }
         )
     }
 
