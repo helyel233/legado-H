@@ -116,22 +116,11 @@
 
     <group android:id="@+id/menu_group_review_offline">
 
-        <item
-            android:id="@+id/menu_review_open_mode"
-            android:title="@string/menu_review_open_mode"
-            app:showAsAction="never" />
-
-        <item
-            android:id="@+id/menu_review_snapshot_ttl"
-            android:title="@string/menu_review_snapshot_ttl"
-            app:showAsAction="never" />
-
-        <item
-            android:id="@+id/menu_review_preheat_wifi_only"
-            android:checkable="true"
-            android:checked="false"
-            android:title="@string/menu_review_preheat_wifi_only"
-            app:showAsAction="never" />
+        <!--
+          评论/段评设置的真实入口是阅读页三点菜单（ReadMenuComposeComponents
+          .buildOverflowActions），optionsMenu 在阅读页无 UI 入口，
+          请勿再往这里加评论开关。
+        -->
 
         <item
             android:id="@+id/menu_offline_review_mode"

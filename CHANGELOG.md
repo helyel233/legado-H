@@ -1,5 +1,15 @@
 # 更新日志
 
+## 1.14.2 版（2026-10-24）
+
+本版修复段评/评论设置在阅读页不可达的问题，并收拢菜单逻辑，无新功能。
+
+### 修复 / 重构
+
+- **段评/评论设置搬到阅读页三点菜单**：1.13.1/1.14.1 加在 `book_read.xml` optionsMenu 里的「缓存评论 / 评论打开方式 / 段评快照保鲜期 / 仅 WiFi 预热 / 离线评论模式」在阅读页没有 UI 入口，等于点不到。现统一迁入真实入口——阅读页三点菜单的溢出操作（`ReadMenuComposeComponents.buildOverflowActions`），EPUB 直读模式按 `isEpub` 与图片样式/段落规则一致隐藏。
+- **菜单逻辑收拢**：`ReadBookActivity` 移除对 `book_read.xml` 里这些菜单项的 `onPrepareOptionsMenu`/`onMenuItemClick` 处理，改由 `ReadMenu.CallBack` 的 `toggleCacheReview` / `togglePreheatWifiOnly` / `toggleOfflineReviewMode` / `showReviewOpenModeDialog` / `showReviewSnapshotTtlDialog` 统一转调；「离线评论模式」原来两份切换逻辑合并为 `toggleOfflineReviewMode()`，避免双份漂移。
+- **新增提示文案**：缓存评论开关开/关的 toast（开启即恢复段评预热、关闭即停预热）。
+
 ## 1.14.1 版（2026-10-24）
 
 本版补齐段评/评论缓存的可视化设置，并加固点击与预热链路的健壮性。

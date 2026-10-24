@@ -2557,6 +2557,8 @@ bookUrl：%7$s
     <string name="ps_auto_download_review">阅读或书架刷新时，按正文预下载窗口自动执行评论下载；关闭后仅手动触发。</string>
     <string name="review_preheat_wifi_only_on">已开启：段评预热仅在WiFi/以太网下进行</string>
     <string name="review_preheat_wifi_only_off">已关闭：段评预热会使用移动数据</string>
+    <string name="review_cache_review_on">已开启：缓存书籍时抓取评论快照，段评预热同步恢复</string>
+    <string name="review_cache_review_off">已关闭：不再抓取新评论快照，段评预热停止（已缓存的评论仍可离线查看）</string>
     <string name="menu_send_offline_reviews">发送离线评论</string>
     <string name="menu_export_offline_reviews">导出离线评论</string>
     <string name="menu_clear_offline_reviews">清除离线评论</string>

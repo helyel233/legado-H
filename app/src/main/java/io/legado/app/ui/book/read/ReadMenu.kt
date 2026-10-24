@@ -461,7 +461,22 @@ class ReadMenu @JvmOverloads constructor(
                             onHighlightRuleClick = { callBack.showHighlightRuleManage() },
                             onEffectiveReplacesClick = { callBack.showEffectiveReplaces() },
                             onLogClick = { callBack.showLog() },
-                            onHelpClick = { callBack.showHelp() }
+                            onHelpClick = { callBack.showHelp() },
+                            onToggleCacheReviewClick = {
+                                callBack.toggleCacheReview()
+                            },
+                            onReviewOpenModeClick = {
+                                callBack.showReviewOpenModeDialog()
+                            },
+                            onReviewSnapshotTtlClick = {
+                                callBack.showReviewSnapshotTtlDialog()
+                            },
+                            onTogglePreheatWifiOnlyClick = {
+                                callBack.togglePreheatWifiOnly()
+                            },
+                            onToggleOfflineReviewModeClick = {
+                                callBack.toggleOfflineReviewMode()
+                            }
                         ),
                         style = style,
                         modifier = Modifier.fillMaxWidth()
@@ -900,5 +915,12 @@ class ReadMenu @JvmOverloads constructor(
         fun showLog()
         fun showGetProgress()
         fun showCoverProgress()
+
+        /** 评论/段评设置（阅读页三点菜单真实入口） */
+        fun toggleCacheReview() = Unit
+        fun showReviewOpenModeDialog() = Unit
+        fun showReviewSnapshotTtlDialog() = Unit
+        fun togglePreheatWifiOnly() = Unit
+        fun toggleOfflineReviewMode() = Unit
     }
 }

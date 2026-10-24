@@ -1124,12 +1124,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                     R.id.menu_reverse_content -> item.isVisible = onLine && !isEpubCoreMode()
                     R.id.menu_paragraph_rule_manage -> item.isVisible = !book.isEpub && !isEpubCoreMode()
                     R.id.menu_offline_review_mode -> item.isChecked = AppConfig.offlineReviewMode
-                    R.id.menu_review_preheat_wifi_only ->
-                        item.isChecked = AppConfig.reviewPreheatWifiOnly
-                    R.id.menu_review_open_mode ->
-                        item.title = "${getString(R.string.menu_review_open_mode)}（${reviewOpenModeLabel()}）"
-                    R.id.menu_review_snapshot_ttl ->
-                        item.title = "${getString(R.string.menu_review_snapshot_ttl)}（${reviewSnapshotTtlLabel()}）"
                 }
             }
         }
@@ -1316,37 +1310,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_effective_replaces -> showEffectiveReplaces()
 
             R.id.menu_offline_review_mode -> {
-                AppConfig.offlineReviewMode = !AppConfig.offlineReviewMode
+                // 逻辑统一走 toggleOfflineReviewMode（三点菜单真实入口），避免双份漂移
+                toggleOfflineReviewMode()
                 item.isChecked = AppConfig.offlineReviewMode
-                if (AppConfig.offlineReviewMode) {
-                    toastOnUi(R.string.offline_review_mode_on)
-                } else {
-                    toastOnUi(R.string.offline_review_mode_off)
-                }
-                AppLog.putDebug(
-                    "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}"
-                )
             }
-
-            R.id.menu_review_preheat_wifi_only -> {
-                AppConfig.reviewPreheatWifiOnly = !AppConfig.reviewPreheatWifiOnly
-                item.isChecked = AppConfig.reviewPreheatWifiOnly
-                toastOnUi(
-                    if (AppConfig.reviewPreheatWifiOnly) {
-                        R.string.review_preheat_wifi_only_on
-                    } else {
-                        R.string.review_preheat_wifi_only_off
-                    }
-                )
-                // 关闭限制后立即补一次预热，不必等下次翻章
-                if (!AppConfig.reviewPreheatWifiOnly) {
-                    preheatReviewSnapshots()
-                }
-            }
-
-            R.id.menu_review_open_mode -> showReviewOpenModeDialog()
-
-            R.id.menu_review_snapshot_ttl -> showReviewSnapshotTtlDialog()
 
             R.id.menu_send_offline_reviews -> {
                 binding.readMenu.runMenuOut()
@@ -2613,32 +2580,57 @@ class ReadBookActivity : BaseReadBookActivity(),
         ReviewPreheatCoordinator.preheat(book, ReadBook.durChapterIndex)
     }
 
-    /** 评论打开方式当前值的中文标签（菜单标题与选择器共用） */
-    private fun reviewOpenModeLabel(): String {
-        return when (AppConfig.reviewOpenMode) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST ->
-                getString(R.string.menu_review_open_mode_snapshot_first)
-            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY ->
-                getString(R.string.menu_review_open_mode_snapshot_only)
-            else -> getString(R.string.menu_review_open_mode_network)
+    // region 评论/段评设置（阅读页三点菜单真实入口，经 ReadMenu.CallBack 转调）
+    override fun toggleCacheReview() {
+        AppConfig.syncCacheReview = !AppConfig.syncCacheReview
+        toastOnUi(
+            if (AppConfig.syncCacheReview) {
+                R.string.review_cache_review_on
+            } else {
+                R.string.review_cache_review_off
+            }
+        )
+        // 重新打开总闸后立即补一次预热，不必等下次翻章
+        if (AppConfig.syncCacheReview) {
+            preheatReviewSnapshots()
         }
     }
 
-    /** 快照保鲜期当前值的展示文本（0 = 不保鲜） */
-    private fun reviewSnapshotTtlLabel(): String {
-        val days = AppConfig.reviewSnapshotTtlDays
-        return if (days <= 0) {
-            getString(R.string.menu_review_snapshot_ttl_never)
-        } else {
-            getString(R.string.menu_review_snapshot_ttl_days, days)
+    override fun togglePreheatWifiOnly() {
+        AppConfig.reviewPreheatWifiOnly = !AppConfig.reviewPreheatWifiOnly
+        toastOnUi(
+            if (AppConfig.reviewPreheatWifiOnly) {
+                R.string.review_preheat_wifi_only_on
+            } else {
+                R.string.review_preheat_wifi_only_off
+            }
+        )
+        // 关闭限制后立即补一次预热，不必等下次翻章
+        if (!AppConfig.reviewPreheatWifiOnly) {
+            preheatReviewSnapshots()
         }
     }
+
+    override fun toggleOfflineReviewMode() {
+        AppConfig.offlineReviewMode = !AppConfig.offlineReviewMode
+        toastOnUi(
+            if (AppConfig.offlineReviewMode) {
+                R.string.offline_review_mode_on
+            } else {
+                R.string.offline_review_mode_off
+            }
+        )
+        AppLog.putDebug(
+            "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}"
+        )
+    }
+    // endregion
 
     /**
      * 评论打开方式选择：网络优先 / 快照优先 / 仅快照。
      * 段评菜单（选中文字）与段评图标直点共用此值，三模式语义见 [BookImgClick]。
      */
-    private fun showReviewOpenModeDialog() {
+    override fun showReviewOpenModeDialog() {
         val modes = listOf(
             AppConfig.ReviewOpenMode.NETWORK to R.string.menu_review_open_mode_network,
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first,
@@ -2655,8 +2647,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             val mode = modes.getOrNull(index) ?: return@selector
             if (mode.first == AppConfig.reviewOpenMode) return@selector
             AppConfig.reviewOpenMode = mode.first
-            menu?.findItem(R.id.menu_review_open_mode)?.title =
-                "${getString(R.string.menu_review_open_mode)}（${getString(mode.second)}）"
         }
     }
 
@@ -2664,7 +2654,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 段评快照保鲜期选择：超过该天数的快照在预热/刷新时按需重抓；
      * 过期不删除，点击时仍先用旧快照保证 0 秒可见。
      */
-    private fun showReviewSnapshotTtlDialog() {
+    override fun showReviewSnapshotTtlDialog() {
         val presets = listOf(1, 3, 7, 30, 0)
         val current = AppConfig.reviewSnapshotTtlDays
         selector(
@@ -2681,8 +2671,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             val days = presets.getOrNull(index) ?: return@selector
             if (days == AppConfig.reviewSnapshotTtlDays) return@selector
             AppConfig.reviewSnapshotTtlDays = days
-            menu?.findItem(R.id.menu_review_snapshot_ttl)?.title =
-                "${getString(R.string.menu_review_snapshot_ttl)}（${reviewSnapshotTtlLabel()}）"
         }
     }
 

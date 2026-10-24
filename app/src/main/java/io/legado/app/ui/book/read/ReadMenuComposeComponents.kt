@@ -54,12 +54,14 @@ import android.graphics.PorterDuff
 import io.legado.app.R
 import io.legado.app.data.entities.ReadMenuCustomButton
 import io.legado.app.help.book.library.LibraryCloudState
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.read.ReadMenuButtonConfig
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.dpToPx
+import splitties.init.appCtx
 
 private const val MENU_BUTTONS_PER_PAGE = 4
 private val READ_MENU_BUTTON_MIN_HEIGHT = 52.dp
@@ -99,7 +101,12 @@ data class ReadMenuTitleBarActions(
     val onHighlightRuleClick: () -> Unit,
     val onEffectiveReplacesClick: () -> Unit,
     val onLogClick: () -> Unit,
-    val onHelpClick: () -> Unit
+    val onHelpClick: () -> Unit,
+    val onToggleCacheReviewClick: () -> Unit,
+    val onReviewOpenModeClick: () -> Unit,
+    val onReviewSnapshotTtlClick: () -> Unit,
+    val onTogglePreheatWifiOnlyClick: () -> Unit,
+    val onToggleOfflineReviewModeClick: () -> Unit
 )
 
 data class ReadMenuActionBarState(
@@ -238,7 +245,12 @@ fun ReadMenuTitleBar(
                             onHighlightRuleClick = actions.onHighlightRuleClick,
                             onEffectiveReplacesClick = actions.onEffectiveReplacesClick,
                             onLogClick = actions.onLogClick,
-                            onHelpClick = actions.onHelpClick
+                            onHelpClick = actions.onHelpClick,
+                            onToggleCacheReviewClick = actions.onToggleCacheReviewClick,
+                            onReviewOpenModeClick = actions.onReviewOpenModeClick,
+                            onReviewSnapshotTtlClick = actions.onReviewSnapshotTtlClick,
+                            onTogglePreheatWifiOnlyClick = actions.onTogglePreheatWifiOnlyClick,
+                            onToggleOfflineReviewModeClick = actions.onToggleOfflineReviewModeClick
                         )
                         popupHandle = ModernActionPopup.show(
                             context,
@@ -827,7 +839,12 @@ private fun buildOverflowActions(
     onHighlightRuleClick: () -> Unit,
     onEffectiveReplacesClick: () -> Unit,
     onLogClick: () -> Unit,
-    onHelpClick: () -> Unit
+    onHelpClick: () -> Unit,
+    onToggleCacheReviewClick: () -> Unit,
+    onReviewOpenModeClick: () -> Unit,
+    onReviewSnapshotTtlClick: () -> Unit,
+    onTogglePreheatWifiOnlyClick: () -> Unit,
+    onToggleOfflineReviewModeClick: () -> Unit
 ): List<ModernActionPopup.Action> {
     val actions = mutableListOf<ModernActionPopup.Action>()
     actions.add(ModernActionPopup.Action(title = "添加书签", invoke = onAddBookmarkClick))
@@ -872,6 +889,51 @@ private fun buildOverflowActions(
     }
     actions.add(ModernActionPopup.Action(title = "高亮规则", invoke = onHighlightRuleClick))
     if (!isEpub) actions.add(ModernActionPopup.Action(title = "起效的替换", invoke = onEffectiveReplacesClick))
+    // 评论/段评设置（真实入口：阅读页三点菜单；book_read.xml 的 optionsMenu 在
+    // 阅读页无 UI 入口，勿再把开关加进去）。
+    // 直读（EPUB core）模式无段评泡、预热取不到正文，这些项均为 no-op，与
+    // 图片样式/段落规则一致按 isEpub 隐藏。
+    if (!isEpub) {
+        val cacheReviewOn = AppConfig.syncCacheReview
+        actions.add(
+            ModernActionPopup.Action(
+                title = appCtx.getString(R.string.menu_sync_cache_review),
+                checked = cacheReviewOn,
+                persistent = true,
+                invoke = onToggleCacheReviewClick
+            )
+        )
+        actions.add(
+            ModernActionPopup.Action(
+                title = appCtx.getString(R.string.menu_review_open_mode),
+                invoke = onReviewOpenModeClick
+            )
+        )
+        if (cacheReviewOn) {
+            actions.add(
+                ModernActionPopup.Action(
+                    title = appCtx.getString(R.string.menu_review_snapshot_ttl),
+                    invoke = onReviewSnapshotTtlClick
+                )
+            )
+            actions.add(
+                ModernActionPopup.Action(
+                    title = appCtx.getString(R.string.menu_review_preheat_wifi_only),
+                    checked = AppConfig.reviewPreheatWifiOnly,
+                    persistent = true,
+                    invoke = onTogglePreheatWifiOnlyClick
+                )
+            )
+        }
+        actions.add(
+            ModernActionPopup.Action(
+                title = appCtx.getString(R.string.menu_offline_review_mode),
+                checked = AppConfig.offlineReviewMode,
+                persistent = true,
+                invoke = onToggleOfflineReviewModeClick
+            )
+        )
+    }
     actions.add(ModernActionPopup.Action(title = "日志", invoke = onLogClick))
     actions.add(ModernActionPopup.Action(title = "帮助", invoke = onHelpClick))
     return actions
