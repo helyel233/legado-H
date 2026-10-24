@@ -1126,6 +1126,10 @@ class ReadBookActivity : BaseReadBookActivity(),
                     R.id.menu_offline_review_mode -> item.isChecked = AppConfig.offlineReviewMode
                     R.id.menu_review_preheat_wifi_only ->
                         item.isChecked = AppConfig.reviewPreheatWifiOnly
+                    R.id.menu_review_open_mode ->
+                        item.title = "${getString(R.string.menu_review_open_mode)}（${reviewOpenModeLabel()}）"
+                    R.id.menu_review_snapshot_ttl ->
+                        item.title = "${getString(R.string.menu_review_snapshot_ttl)}（${reviewSnapshotTtlLabel()}）"
                 }
             }
         }
@@ -1339,6 +1343,10 @@ class ReadBookActivity : BaseReadBookActivity(),
                     preheatReviewSnapshots()
                 }
             }
+
+            R.id.menu_review_open_mode -> showReviewOpenModeDialog()
+
+            R.id.menu_review_snapshot_ttl -> showReviewSnapshotTtlDialog()
 
             R.id.menu_send_offline_reviews -> {
                 binding.readMenu.runMenuOut()
@@ -2603,6 +2611,79 @@ class ReadBookActivity : BaseReadBookActivity(),
     private fun preheatReviewSnapshots() {
         val book = ReadBook.book ?: return
         ReviewPreheatCoordinator.preheat(book, ReadBook.durChapterIndex)
+    }
+
+    /** 评论打开方式当前值的中文标签（菜单标题与选择器共用） */
+    private fun reviewOpenModeLabel(): String {
+        return when (AppConfig.reviewOpenMode) {
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST ->
+                getString(R.string.menu_review_open_mode_snapshot_first)
+            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY ->
+                getString(R.string.menu_review_open_mode_snapshot_only)
+            else -> getString(R.string.menu_review_open_mode_network)
+        }
+    }
+
+    /** 快照保鲜期当前值的展示文本（0 = 不保鲜） */
+    private fun reviewSnapshotTtlLabel(): String {
+        val days = AppConfig.reviewSnapshotTtlDays
+        return if (days <= 0) {
+            getString(R.string.menu_review_snapshot_ttl_never)
+        } else {
+            getString(R.string.menu_review_snapshot_ttl_days, days)
+        }
+    }
+
+    /**
+     * 评论打开方式选择：网络优先 / 快照优先 / 仅快照。
+     * 段评菜单（选中文字）与段评图标直点共用此值，三模式语义见 [BookImgClick]。
+     */
+    private fun showReviewOpenModeDialog() {
+        val modes = listOf(
+            AppConfig.ReviewOpenMode.NETWORK to R.string.menu_review_open_mode_network,
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first,
+            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY to R.string.menu_review_open_mode_snapshot_only
+        )
+        val current = AppConfig.reviewOpenMode
+        selector(
+            R.string.menu_review_open_mode,
+            modes.map { (key, labelRes) ->
+                val label = getString(labelRes)
+                if (key == current) "$label（${getString(R.string.menu_current_option)}）" else label
+            }
+        ) { _, index ->
+            val mode = modes.getOrNull(index) ?: return@selector
+            if (mode.first == AppConfig.reviewOpenMode) return@selector
+            AppConfig.reviewOpenMode = mode.first
+            menu?.findItem(R.id.menu_review_open_mode)?.title =
+                "${getString(R.string.menu_review_open_mode)}（${getString(mode.second)}）"
+        }
+    }
+
+    /**
+     * 段评快照保鲜期选择：超过该天数的快照在预热/刷新时按需重抓；
+     * 过期不删除，点击时仍先用旧快照保证 0 秒可见。
+     */
+    private fun showReviewSnapshotTtlDialog() {
+        val presets = listOf(1, 3, 7, 30, 0)
+        val current = AppConfig.reviewSnapshotTtlDays
+        selector(
+            R.string.menu_review_snapshot_ttl,
+            presets.map { days ->
+                val label = if (days <= 0) {
+                    getString(R.string.menu_review_snapshot_ttl_never)
+                } else {
+                    getString(R.string.menu_review_snapshot_ttl_days, days)
+                }
+                if (days == current) "$label（${getString(R.string.menu_current_option)}）" else label
+            }
+        ) { _, index ->
+            val days = presets.getOrNull(index) ?: return@selector
+            if (days == AppConfig.reviewSnapshotTtlDays) return@selector
+            AppConfig.reviewSnapshotTtlDays = days
+            menu?.findItem(R.id.menu_review_snapshot_ttl)?.title =
+                "${getString(R.string.menu_review_snapshot_ttl)}（${reviewSnapshotTtlLabel()}）"
+        }
     }
 
     override suspend fun upContentAwait(

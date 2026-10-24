@@ -1291,7 +1291,7 @@ object ReviewSnapshotManager {
                             return true
                         }
                     }
-                    ParagraphRuleProcessor.evalClick(
+                    val accepted = ParagraphRuleProcessor.evalClick(
                         book,
                         chapter,
                         button.pclick,
@@ -1299,6 +1299,11 @@ object ReviewSnapshotManager {
                         callback,
                         currentCoroutineContext()
                     )
+                    if (!accepted) {
+                        // 规则已删除/点击值解析失败：脚本不会触发 showBrowser，
+                        // 立即以「无 URL」收场，不空转等满超时。
+                        resolvedPage.complete(ReviewPage("", null, null))
+                    }
                 }
                 !button.click.isNullOrBlank() -> {
                     val host = object : SourceLoginJsExtensions(null, bookSource, BookType.text) {

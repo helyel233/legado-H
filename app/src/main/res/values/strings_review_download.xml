@@ -25,6 +25,12 @@
     <string name="review_download_require_fonts">字体候选全部失败标记部分快照</string>
     <string name="review_download_requirement_summary">关闭后仍保留失败记录和缺失数量，但此类资源失败不影响任务成功。关闭缓存该类内容时不发起请求。</string>
     <string name="review_download_protocol">评论数据协议（snapshotProtocol：留空自动识别；idea_comment 支持段评及楼中楼）</string>
+    <string name="cache_review_replies">缓存楼中楼回复</string>
+    <string name="cache_review_replies_summary">关闭后所有评论快照（段评、章评、书评）都不包含回复层；章评按章、书评整本各只缓存一份，不受此开关影响。</string>
+    <string name="cache_review_avatars">缓存评论者头像</string>
+    <string name="cache_review_images">缓存评论图片</string>
+    <string name="compress_review_avatars">压缩评论者头像</string>
+    <string name="cache_review_resource_summary">写入离线资源库；关闭后快照内仍保留原始地址，离线查看时无法显示。</string>
     <string name="review_download_numeric_summary">当前：%1$d；默认：%2$d。%3$s</string>
     <string-array name="review_download_engine_entries"><item>自动按协议能力选择</item><item>强制数据接口</item><item>强制网页快照</item></string-array>
     <string-array name="review_download_engine_values"><item>auto</item><item>data</item><item>web</item></string-array>

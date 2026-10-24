@@ -2543,6 +2543,18 @@ bookUrl：%7$s
     <!-- legadoC 离线评论 -->
     <string name="menu_offline_review_mode">离线评论模式</string>
     <string name="menu_review_preheat_wifi_only">仅WiFi预热段评</string>
+    <string name="menu_review_open_mode">评论打开方式</string>
+    <string name="menu_review_open_mode_network">网络优先</string>
+    <string name="menu_review_open_mode_snapshot_first">快照优先</string>
+    <string name="menu_review_open_mode_snapshot_only">仅快照</string>
+    <string name="menu_review_snapshot_ttl">段评快照保鲜期</string>
+    <string name="menu_review_snapshot_ttl_days">%1$d 天</string>
+    <string name="menu_review_snapshot_ttl_never">不保鲜</string>
+    <string name="menu_current_option">当前</string>
+    <string name="menu_sync_cache_review">缓存评论</string>
+    <string name="ps_sync_cache_review">缓存书籍时抓取评论快照（段评/章评/书评）。关闭后不再抓取，已缓存的评论仍可离线查看，段评预热同步停止。</string>
+    <string name="menu_auto_download_review">自动下载评论</string>
+    <string name="ps_auto_download_review">阅读或书架刷新时，按正文预下载窗口自动执行评论下载；关闭后仅手动触发。</string>
     <string name="review_preheat_wifi_only_on">已开启：段评预热仅在WiFi/以太网下进行</string>
     <string name="review_preheat_wifi_only_off">已关闭：段评预热会使用移动数据</string>
     <string name="menu_send_offline_reviews">发送离线评论</string>

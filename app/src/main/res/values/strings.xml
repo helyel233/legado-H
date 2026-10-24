@@ -2765,6 +2765,18 @@ Selected text or question:
     <!-- legadoC 离线评论 -->
     <string name="menu_offline_review_mode">Offline review mode</string>
     <string name="menu_review_preheat_wifi_only">Pre-cache reviews on Wi-Fi only</string>
+    <string name="menu_review_open_mode">Review open mode</string>
+    <string name="menu_review_open_mode_network">Network first</string>
+    <string name="menu_review_open_mode_snapshot_first">Snapshot first</string>
+    <string name="menu_review_open_mode_snapshot_only">Snapshot only</string>
+    <string name="menu_review_snapshot_ttl">Review snapshot freshness</string>
+    <string name="menu_review_snapshot_ttl_days">%1$d day(s)</string>
+    <string name="menu_review_snapshot_ttl_never">Never expires</string>
+    <string name="menu_current_option">Current</string>
+    <string name="menu_sync_cache_review">Cache reviews</string>
+    <string name="ps_sync_cache_review">Capture review snapshots (paragraph/chapter/book reviews) while caching books. When off, no new snapshots are captured and review pre-caching stops; existing snapshots stay readable offline.</string>
+    <string name="menu_auto_download_review">Auto-download reviews</string>
+    <string name="ps_auto_download_review">Run review downloads within the text pre-download window when reading or refreshing the bookshelf; when off, downloads are manual only.</string>
     <string name="review_preheat_wifi_only_on">On: review pre-caching runs on Wi-Fi/Ethernet only</string>
     <string name="review_preheat_wifi_only_off">Off: review pre-caching may use mobile data</string>
     <string name="menu_send_offline_reviews">Send offline reviews</string>

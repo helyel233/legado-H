@@ -144,6 +144,52 @@ class OtherConfigFragment : ComposeSettingFragment() {
             )
         return listOf(
             SettingSectionSpec(
+                title = "评论缓存",
+                items = listOf(
+                    switch(
+                        key = PreferKey.syncCacheReview,
+                        title = getString(R.string.menu_sync_cache_review),
+                        summary = getString(R.string.ps_sync_cache_review),
+                        defaultValue = true
+                    ),
+                    switch(
+                        key = PreferKey.autoDownloadReview,
+                        title = getString(R.string.menu_auto_download_review),
+                        summary = getString(R.string.ps_auto_download_review),
+                        defaultValue = false,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
+                        key = PreferKey.cacheReviewReplies,
+                        title = getString(R.string.cache_review_replies),
+                        summary = getString(R.string.cache_review_replies_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
+                        key = PreferKey.cacheReviewAvatars,
+                        title = getString(R.string.cache_review_avatars),
+                        summary = getString(R.string.cache_review_resource_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
+                        key = PreferKey.cacheReviewImages,
+                        title = getString(R.string.cache_review_images),
+                        summary = getString(R.string.cache_review_resource_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
+                        key = PreferKey.compressReviewAvatars,
+                        title = getString(R.string.compress_review_avatars),
+                        summary = getString(R.string.cache_review_resource_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    )
+                )
+            ),
+            SettingSectionSpec(
                 title = "评论下载 · 抓取引擎",
                 items = listOf(
                     choice(

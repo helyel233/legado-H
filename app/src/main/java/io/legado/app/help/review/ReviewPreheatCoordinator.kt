@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -156,6 +157,11 @@ object ReviewPreheatCoordinator {
                 ReviewSnapshotStore.put(book, capture.snapshot)
                 AppLog.putDebug("$TAG 点击即缓存成功：${chapter.title} / ${buttonSrc.take(60)}")
             }.onFailure { error ->
+                // 解析/抓取超时按失败记日志，不当协程取消静默吞掉
+                if (error is TimeoutCancellationException) {
+                    AppLog.put("$TAG 点击即缓存失败：抓取超时", error)
+                    return@onFailure
+                }
                 if (error is CancellationException) throw error
                 AppLog.put("$TAG 点击即缓存失败\n${error.localizedMessage}", error)
             }
@@ -165,10 +171,12 @@ object ReviewPreheatCoordinator {
     /**
      * 刷新单个按钮的快照（快照过期时点击路径后台触发）。
      * 复用预热管线的 resolve + capture + put，失败只记日志，旧快照保留。
+     * 与 [preheat]/[captureFromClick] 共用同一套门控（缓存总闸 + 仅 WiFi）。
      */
     fun refreshButton(book: Book, chapter: BookChapter, buttonSrc: String) {
         if (!AppConfig.syncCacheReview) return
         if (book.isVideo) return
+        if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return
         scope.launch {
             runCatching {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return@launch
@@ -189,6 +197,11 @@ object ReviewPreheatCoordinator {
                 )
                 ReviewSnapshotStore.put(book, capture.snapshot)
             }.onFailure { error ->
+                // 解析/抓取超时按失败记日志，不当协程取消静默吞掉
+                if (error is TimeoutCancellationException) {
+                    AppLog.put("$TAG 快照刷新失败：解析或抓取超时", error)
+                    return@onFailure
+                }
                 if (error is CancellationException) throw error
                 AppLog.put("$TAG 快照刷新失败\n${error.localizedMessage}", error)
             }
@@ -234,6 +247,13 @@ object ReviewPreheatCoordinator {
                     )
                     ReviewSnapshotStore.put(book, capture.snapshot)
                 }.onFailure { error ->
+                    // 单按钮解析/抓取超时（withTimeout 的 TCE）按失败计入退避，
+                    // 绝不能当协程取消重抛——否则一个慢按钮会中止整轮预热，
+                    // 本章剩余按钮与后续章节永远预热不到。
+                    if (error is TimeoutCancellationException) {
+                        anyFailure = true
+                        return@onFailure
+                    }
                     if (error is CancellationException) throw error
                     anyFailure = true
                 }

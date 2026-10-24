@@ -100,8 +100,14 @@ object BookImgClick {
     }
 
     private fun cachedSnapshot(context: ReviewContext, src: String, syntheticPara: SyntheticParaContent? = null): CachedReviewSnapshot? {
-        val snapshot = ReviewSnapshotStore.get(context.book, context.chapter, src.trim())
-            ?: return null
+        // 快照文件损坏/身份不符（require 抛出）按无快照处理：
+        // 调用方按各自模式回落网络或提示，不让一个坏文件卡死点击链路
+        val snapshot = runCatching {
+            ReviewSnapshotStore.get(context.book, context.chapter, src.trim())
+        }.getOrElse { error ->
+            AppLog.put("ReviewSnapshot 快照读取失败，按无快照处理\n${error.localizedMessage}", error)
+            null
+        } ?: return null
         val page = if (syntheticPara?.snapshotFallbackAllowed == false) {
             ReviewParagraphTemplate.create(snapshot, syntheticPara)
         } else snapshot

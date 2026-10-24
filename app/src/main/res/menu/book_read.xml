@@ -117,6 +117,16 @@
     <group android:id="@+id/menu_group_review_offline">
 
         <item
+            android:id="@+id/menu_review_open_mode"
+            android:title="@string/menu_review_open_mode"
+            app:showAsAction="never" />
+
+        <item
+            android:id="@+id/menu_review_snapshot_ttl"
+            android:title="@string/menu_review_snapshot_ttl"
+            app:showAsAction="never" />
+
+        <item
             android:id="@+id/menu_review_preheat_wifi_only"
             android:checkable="true"
             android:checked="false"

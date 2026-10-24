@@ -60,6 +60,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         const val SNAPSHOT_FIRST = "snapshot_first"
         const val SNAPSHOT_ONLY = "snapshot_only"
     }
+
+    /** 段评快照默认保鲜期（天），见 [reviewSnapshotTtlDays] */
+    const val DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS = 3
     const val DISCOVERY_PAGE_MODE_LEGACY = "legacy"
     const val DISCOVERY_PAGE_MODE_MODERN = "modern"
     const val DISCOVERY_PAGE_MODE_SUITE = "suite"
@@ -3064,10 +3067,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val reviewImageCompressionMaxBytes: Long
         get() = reviewImageCompressionMaxKb.toLong() * 1024L
 
-    /** 评论打开方式：network / snapshot_first / snapshot_only */
-    val reviewOpenMode: String
+    /**
+     * 评论打开方式：network / snapshot_first / snapshot_only。
+     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的三模式语义）。
+     */
+    var reviewOpenMode: String
         get() = appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
             ?: ReviewOpenMode.NETWORK
+        set(value) {
+            appCtx.putPrefString(PreferKey.reviewOpenMode, value)
+        }
 
     /**
      * 段评预热是否仅限 WiFi/以太网（默认关闭）。
@@ -3085,7 +3094,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
      * 预热时对过期快照按「需重抓」处理。设为 0 表示不保鲜（永不过期）。
      */
     var reviewSnapshotTtlDays: Int
-        get() = appCtx.getPrefInt(PreferKey.reviewSnapshotTtlDays, 3).coerceAtLeast(0)
+        get() = appCtx.getPrefInt(
+            PreferKey.reviewSnapshotTtlDays,
+            DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS
+        ).coerceAtLeast(0)
         set(value) {
             appCtx.putPrefInt(PreferKey.reviewSnapshotTtlDays, value.coerceAtLeast(0))
         }
