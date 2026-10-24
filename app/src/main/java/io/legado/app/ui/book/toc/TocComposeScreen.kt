@@ -1006,19 +1006,15 @@ private fun TocChapterRow(
                 )
             }
         }
-        val iconRes = when {
-            isCurrent -> R.drawable.ic_check
-            !cached -> R.drawable.ic_outline_cloud_24
-            else -> null
-        }
-        iconRes?.let {
-            Icon(
-                painter = painterResource(id = it),
-                contentDescription = null,
-                tint = if (isCurrent) palette.settings.accent else palette.settings.secondaryText,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        // 每章显示缓存状态：已缓存打勾、未缓存显示云朵
+        Icon(
+            painter = painterResource(
+                id = if (cached) R.drawable.ic_check else R.drawable.ic_outline_cloud_24
+            ),
+            contentDescription = null,
+            tint = if (isCurrent) palette.settings.accent else palette.settings.secondaryText,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

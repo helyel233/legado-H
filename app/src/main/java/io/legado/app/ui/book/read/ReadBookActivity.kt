@@ -5354,7 +5354,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         getCommentWebViewSession().prepare(applicationContext)
         Coroutine.async(lifecycleScope, IO) {
             val book = ReadBook.book ?: return@async
-            val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex)
+            val chapter = currentChapterForClick()
                 ?: throw Exception("no find chapter")
             ParagraphRuleProcessor.evalClick(
                 book,
@@ -5375,6 +5375,20 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
     private fun getCommentWebViewSession(): CommentWebViewSession {
         return commentWebViewSession ?: CommentWebViewSession.shared.also { commentWebViewSession = it }
+    }
+
+    /**
+     * 段评/图片点击链路取当前章节：优先用内存中已排版好的当前章，避免每次
+     * 点击都查一次库（点击响应路径上少一次 Room 往返）；仅当内存章节与当前
+     * 阅读章节不一致时才回退数据库。内存命中须同时校验章节索引与书 URL，
+     * 防止跨书残留（对齐 ReadBook 内部其它 curTextChapter 归属判断）。
+     */
+    private fun currentChapterForClick(): BookChapter? {
+        val book = ReadBook.book
+        ReadBook.curTextChapter?.chapter
+            ?.takeIf { it.index == ReadBook.durChapterIndex && it.bookUrl == book?.bookUrl }
+            ?.let { return it }
+        return book?.let { appDb.bookChapterDao.getChapter(it.bookUrl, ReadBook.durChapterIndex) }
     }
 
     private fun ensureCurrentChapterCacheForClick(book: Book, chapter: BookChapter) {
@@ -5440,7 +5454,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     val source = ReadBook.bookSource ?: return@async
                     val java = SourceLoginJsExtensions(this@ReadBookActivity, source, BookType.text)
                     val book = ReadBook.book ?: return@async
-                    val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex) ?: throw Exception("no find chapter")
+                    val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
                     ensureCurrentChapterCacheForClick(book, chapter)
                     runScriptWithContext {
                         source.evalJS(click) {
@@ -5459,7 +5473,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             Coroutine.async(lifecycleScope, IO) {
                 val source = ReadBook.bookSource ?: return@async
                 val book = ReadBook.book ?: return@async
-                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex) ?: throw Exception("no find chapter")
+                val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
                 val urlNoOption = src.take(urlMatcher.start())
                 AnalyzeRule(book, source).apply {
                     setCoroutineContext(coroutineContext)
@@ -5481,7 +5495,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             val source = ReadBook.bookSource ?: return@async
             val java = SourceLoginJsExtensions(this@ReadBookActivity, source, BookType.text)
             val book = ReadBook.book ?: return@async
-            val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex) ?: throw Exception("no find chapter")
+            val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
             ensureCurrentChapterCacheForClick(book, chapter)
             runScriptWithContext {
                 source.evalJS(click) {

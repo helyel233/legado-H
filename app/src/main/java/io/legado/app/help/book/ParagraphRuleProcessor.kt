@@ -1,7 +1,9 @@
 package io.legado.app.help.book
 
+import androidx.collection.LruCache
 import com.google.gson.GsonBuilder
 import com.google.gson.internal.LinkedTreeMap
+import com.script.CompiledScript
 import com.script.ScriptBindings
 import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
@@ -36,6 +38,8 @@ object ParagraphRuleProcessor {
     private const val RULE_PREFIX = "rule:"
     private const val PROCESS_CACHE_MAX_SIZE = 16
     private const val PROCESS_CACHE_MAX_BYTES = 8L * 1024L * 1024L
+    private const val COMPILED_SCRIPT_CACHE_SIZE = 8
+    private const val PRELUDE_CACHE_KEY = "paragraphRule:compatPrelude"
     private const val PARAGRAPH_ANCHOR_MIN_CONTAINMENT_LENGTH = 13
     private const val PARAGRAPH_ANCHOR_GRAM_HASH_BASE = 1_000_003L
     private const val PARAGRAPH_ANCHOR_GRAM_INDEX_BUDGET = 32_768
@@ -60,6 +64,32 @@ object ParagraphRuleProcessor {
     private val compactGson = GsonBuilder().disableHtmlEscaping().create()
     private val processCache = LinkedHashMap<String, CachedBookContent>(PROCESS_CACHE_MAX_SIZE, 0.75f, true)
     private var processCacheBytes = 0L
+
+    /**
+     * 固定文本脚本（兼容层/jsLib/点击脚本）的编译结果缓存。
+     *
+     * Rhino 处于解释模式，每次 [RhinoScriptEngine.eval] 都会把整段脚本重新
+     * 解析并生成 IR。段评点击路径每次点击都把「兼容层 + jsLib + 点击脚本」
+     * 全量重新编译一遍，是点击响应慢的主要框架开销；这些文本在同一规则下
+     * 不变，按内容哈希缓存 [CompiledScript] 后只需执行不再编译。
+     * 键含内容哈希，规则编辑后键自然变化，无失效逻辑也不会用到旧脚本。
+     */
+    private val compiledScriptCache = LruCache<String, CompiledScript>(COMPILED_SCRIPT_CACHE_SIZE)
+
+    internal fun compiledScript(cacheKey: String, source: String): CompiledScript {
+        return synchronized(compiledScriptCache) {
+            compiledScriptCache.get(cacheKey)
+                ?: RhinoScriptEngine.compile(source).also { compiledScriptCache.put(cacheKey, it) }
+        }
+    }
+
+    private fun jsLibCacheKey(jsLib: String): String {
+        return "paragraphRule:jsLib:${MD5Utils.md5Encode(jsLib)}"
+    }
+
+    private fun clickCacheKey(js: String): String {
+        return "paragraphRule:click:${MD5Utils.md5Encode(js)}"
+    }
 
     interface BrowserCallback {
         fun showBrowser(
@@ -208,13 +238,15 @@ object ParagraphRuleProcessor {
         val rule = appDb.paragraphRuleDao.get(ruleId) ?: return false
         val ctx = buildCtx(rule, book, chapter, result, emptyList(), readVars(rule.id))
         val scope = buildScope(rule, book, chapter, result, ctx, coroutineContext, browserCallback)
-        val script = buildString {
-            append(jsCompatPrelude())
-            append(jsCtxPrelude(ctx))
-            if (rule.jsLib.isNotBlank()) append(rule.jsLib).append('\n')
-            append(js)
+        // 段评点击热路径：兼容层/jsLib/点击脚本均为固定文本，按内容哈希缓存
+        // 编译结果，每次点击只执行不再重新解析；ctx 前缀含本次点击的 src，
+        // 仍每次求值。求值顺序与原拼接脚本逐段一致。
+        compiledScript(PRELUDE_CACHE_KEY, jsCompatPrelude()).eval(scope, coroutineContext)
+        RhinoScriptEngine.eval(jsCtxPrelude(ctx), scope, coroutineContext)
+        if (rule.jsLib.isNotBlank()) {
+            compiledScript(jsLibCacheKey(rule.jsLib), rule.jsLib).eval(scope, coroutineContext)
         }
-        RhinoScriptEngine.eval(script, scope, coroutineContext)
+        compiledScript(clickCacheKey(js), js).eval(scope, coroutineContext)
         return true
     }
 
