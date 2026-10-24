@@ -79,6 +79,29 @@ object ReviewSnapshotResourceStore {
      */
     private val lock = Any()
 
+    /** resources.json 的失效指纹：文件是否存在 + 修改时间 + 长度。 */
+    private data class DatabaseStamp(
+        val exists: Boolean,
+        val modified: Long,
+        val length: Long,
+    )
+
+    /** 一本书的已解析索引，附带 key → 条目映射（图片请求按 key 直达）。 */
+    private data class CachedDatabase(
+        val stamp: DatabaseStamp,
+        val database: ReviewSnapshotResourceDatabase,
+        val byKey: Map<String, ReviewSnapshotResourceEntry>,
+    )
+
+    private const val DATABASE_CACHE_BOOKS = 4
+
+    /** 按书目目录缓存，LRU 保留最近几本；索引只是元数据，单本仅几 KB。 */
+    private val databaseCache = object : LinkedHashMap<String, CachedDatabase>(4, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, CachedDatabase>?,
+        ): Boolean = size > DATABASE_CACHE_BOOKS
+    }
+
     fun referenceFor(key: String): String {
         require(keyPattern.matches(key)) { "非法评论资源键: $key" }
         return "$RESOURCE_SCHEME://$key"
@@ -113,12 +136,7 @@ object ReviewSnapshotResourceStore {
 
     /** Returns the validated index for an existing current-format review cache. */
     fun requireDatabase(book: Book): ReviewSnapshotResourceDatabase = synchronized(lock) {
-        val dir = ReviewSnapshotStore.reviewsDir(book)
-        val database = databaseFile(dir)
-        check(database.isFile) {
-            "评论缓存缺少 $DATABASE_FILE_NAME，旧的非资源库格式不受支持: ${dir.absolutePath}"
-        }
-        return@synchronized readDatabase(dir)
+        requireCached(book).database
     }
 
     /** Returns every valid URL entry. Broken indexes are exposed instead of ignored. */
@@ -219,10 +237,10 @@ object ReviewSnapshotResourceStore {
     fun open(book: Book, key: String): ReviewSnapshotResourceHandle? = synchronized(lock) {
         if (!keyPattern.matches(key)) return null
         val dir = ReviewSnapshotStore.reviewsDir(book)
-        val database = requireDatabase(book)
+        // 走缓存取索引并按 key 直达，避免每张图片都重解析 resources.json
+        val entry = requireCached(book).byKey[key]
         val file = blobFile(dir, key)
         if (!file.isFile) return null
-        val entry = database.resources.firstOrNull { it.key == key }
         if (entry != null) {
             validateEntry(dir, entry)
         }
@@ -473,14 +491,58 @@ object ReviewSnapshotResourceStore {
         return file.name.removePrefix(BLOB_PREFIX).removeSuffix(BLOB_SUFFIX)
     }
 
-    private fun readDatabase(dir: File): ReviewSnapshotResourceDatabase {
-        val file = databaseFile(dir)
+    private fun readDatabase(dir: File): ReviewSnapshotResourceDatabase = cachedDatabase(dir).database
+
+    private fun parseDatabase(file: File): ReviewSnapshotResourceDatabase {
         if (!file.exists()) return ReviewSnapshotResourceDatabase()
         check(file.isFile) { "评论资源数据库不是文件: ${file.absolutePath}" }
         return file.bufferedReader(Charsets.UTF_8).use { reader ->
             GSON.fromJson(reader, ReviewSnapshotResourceDatabase::class.java)
                 ?: error("评论资源数据库为空: ${file.absolutePath}")
         }.also(::validateDatabase)
+    }
+
+    private fun stampOf(file: File): DatabaseStamp =
+        if (file.isFile) {
+            DatabaseStamp(exists = true, modified = file.lastModified(), length = file.length())
+        } else {
+            DatabaseStamp(exists = false, modified = 0L, length = 0L)
+        }
+
+    /**
+     * 取一本书的索引（带 Java 堆缓存），失败/变更时重新解析。
+     *
+     * 评论页渲染时 WebView 会为每张图片、头像单独发一次 review-resource:// 请求，
+     * 取字节前都要先定位到索引条目。若每次都读盘 + GSON 解析 + 全条目校验，
+     * 一张有几十张图的评论页就等于把索引重复解析几十次，而且全部压在 [lock] 上，
+     * 与后台抓取写库互相争抢。索引只是元数据（URL → 内容寻址 key），缓存安全：
+     * 进程内写入全部经过 [writeDatabase]（写后立即刷新缓存），外部改写由
+     * mtime + 文件长度校验兜底。
+     */
+    private fun cachedDatabase(dir: File): CachedDatabase {
+        val file = databaseFile(dir)
+        if (file.exists()) {
+            check(file.isFile) { "评论资源数据库不是文件: ${file.absolutePath}" }
+        }
+        val stamp = stampOf(file)
+        databaseCache[dir.absolutePath]?.let { cached ->
+            if (cached.stamp == stamp) return cached
+        }
+        val database = parseDatabase(file)
+        return CachedDatabase(
+            stamp = stamp,
+            database = database,
+            byKey = database.resources.associateBy { it.key },
+        ).also { databaseCache[dir.absolutePath] = it }
+    }
+
+    /** 同 [requireDatabase]，额外带 key → 索引条目映射，供图片请求快速定位。 */
+    private fun requireCached(book: Book): CachedDatabase {
+        val dir = ReviewSnapshotStore.reviewsDir(book)
+        check(databaseFile(dir).isFile) {
+            "评论缓存缺少 $DATABASE_FILE_NAME，旧的非资源库格式不受支持: ${dir.absolutePath}"
+        }
+        return cachedDatabase(dir)
     }
 
     private fun readDatabaseFile(file: File): ReviewSnapshotResourceDatabase {
@@ -553,6 +615,15 @@ object ReviewSnapshotResourceStore {
         } catch (error: Throwable) {
             output?.let(atomicFile::failWrite)
             throw error
+        }
+        // 写成功后同步刷新缓存；只更新已缓存的书目录，避免导入/导出目录挤掉热点。
+        val cacheKey = dir.absolutePath
+        if (databaseCache.containsKey(cacheKey)) {
+            databaseCache[cacheKey] = CachedDatabase(
+                stamp = stampOf(databaseFile(dir)),
+                database = database,
+                byKey = database.resources.associateBy { it.key },
+            )
         }
     }
 

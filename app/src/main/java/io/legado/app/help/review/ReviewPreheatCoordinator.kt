@@ -10,6 +10,7 @@ import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.widget.dialog.CommentWebViewSession
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.mapAsyncIndexed
 import kotlinx.coroutines.CancellationException
@@ -224,18 +225,21 @@ object ReviewPreheatCoordinator {
         ReviewSnapshotResourceStore.prepareForCapture(book)
         val ttlDays = AppConfig.reviewSnapshotTtlDays
         var anyFailure = false
+        // 当前章的预渲染候选：按钮并发抓取，用「按钮序号 → 快照」收集后取文档序第一个
+        val candidates = ConcurrentHashMap<Int, ReviewSnapshot>()
         val concurrency = maxOf(
             ReviewDownloadConfig.Number.DATA.value,
             ReviewDownloadConfig.Number.PAGES.value
         ).coerceAtMost(buttons.size.coerceAtLeast(1))
         buttons.asFlow()
-            .mapAsyncIndexed(concurrency) { _, button ->
+            .mapAsyncIndexed(concurrency) { index, button ->
                 runCatching {
                     val existing = ReviewSnapshotStore.get(book, chapter, button.src)
                     if (existing != null && !existing.partial &&
                         !isStale(existing.savedAt, System.currentTimeMillis(), ttlDays)
                     ) {
-                        // 已有未过期完整快照：跳过
+                        // 已有未过期完整快照：跳过（但仍可作为预渲染候选）
+                        collectPrerenderCandidate(chapter, index, existing, candidates)
                         return@runCatching
                     }
                     val page = ReviewSnapshotManager.resolveReviewPageUrl(
@@ -246,6 +250,7 @@ object ReviewPreheatCoordinator {
                         bookSource, book, chapter, button.src, url, page.html, page.preloadJs
                     )
                     ReviewSnapshotStore.put(book, capture.snapshot)
+                    collectPrerenderCandidate(chapter, index, capture.snapshot, candidates)
                 }.onFailure { error ->
                     // 单按钮解析/抓取超时（withTimeout 的 TCE）按失败计入退避，
                     // 绝不能当协程取消重抛——否则一个慢按钮会中止整轮预热，
@@ -263,6 +268,47 @@ object ReviewPreheatCoordinator {
             failedUntil[key] = System.currentTimeMillis() + FAIL_BACKOFF_MS
         } else {
             failedUntil.remove(key)
+        }
+        prerenderFirstCandidate(book, chapter, candidates)
+    }
+
+    /**
+     * 收集当前章的预渲染候选。只收「正在读的那一章」——预渲染槽位只有一份，
+     * 上一章/下一章的成品页在用户翻过去之前就会过期，没有收益。
+     */
+    private fun collectPrerenderCandidate(
+        chapter: BookChapter,
+        buttonIndex: Int,
+        snapshot: ReviewSnapshot,
+        candidates: MutableMap<Int, ReviewSnapshot>,
+    ) {
+        if (chapter.index != ReadBook.durChapterIndex) return
+        if (snapshot.partial || snapshot.html.isEmpty()) return
+        candidates[buttonIndex] = snapshot
+    }
+
+    /**
+     * 把当前章文档序第一个快照预渲染进评论 WebView 池：用户点该段评时
+     * 弹窗直接接管成品页，连 HTML 解析与首帧布局都省掉。
+     *
+     * 池里没有空闲实例时由 [CommentWebViewSession] 自行挂起，等阅读页的
+     * WebView 预热建出实例后接着渲染，因此这里不需要关心两者时序。
+     */
+    private fun prerenderFirstCandidate(
+        book: Book,
+        chapter: BookChapter,
+        candidates: Map<Int, ReviewSnapshot>,
+    ) {
+        if (chapter.index != ReadBook.durChapterIndex) return
+        val snapshot = candidates.minByOrNull { it.key }?.value ?: return
+        runCatching {
+            CommentWebViewSession.shared.prerender(
+                injectSnapshotImageDeferralStyle(snapshot.html),
+                snapshot.url.takeIf { it.isNotBlank() },
+                book,
+            )
+        }.onFailure { error ->
+            AppLog.put("$TAG 预渲染评论页失败\n${error.localizedMessage}", error)
         }
     }
 

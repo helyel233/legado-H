@@ -426,6 +426,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var backupJob: Job? = null
     private var tts: TTS? = null
     private var commentWebViewSession: CommentWebViewSession? = null
+    private var warmUpCommentWebViewJob: Job? = null
     private var shareNotePreviewOverlay: ShareNotePreviewOverlay? = null
     @Volatile
     private var commentBrowserOpening = false
@@ -2578,6 +2579,26 @@ class ReadBookActivity : BaseReadBookActivity(),
     private fun preheatReviewSnapshots() {
         val book = ReadBook.book ?: return
         ReviewPreheatCoordinator.preheat(book, ReadBook.durChapterIndex)
+        warmUpCommentWebView()
+    }
+
+    /**
+     * 段评 WebView 实例预热。
+     *
+     * 建 WebView（含 WebSettings 初始化与首次加载 libwebviewchromium）通常要
+     * 50~200ms 主线程耗时；这段成本若落在点击路径上，会直接拖慢首次弹窗出现。
+     * 这里延后 1.2s（让本章排版/翻章先跑完）再静默建好放进复用池，
+     * 用户点段评时池里已有闲置实例，点击路径零创建成本。
+     */
+    private fun warmUpCommentWebView() {
+        val session = getCommentWebViewSession()
+        if (session.isPrepared) return
+        warmUpCommentWebViewJob?.cancel()
+        warmUpCommentWebViewJob = lifecycleScope.launch {
+            delay(COMMENT_WEB_VIEW_WARM_UP_DELAY_MS)
+            if (isFinishing || isDestroyed) return@launch
+            session.prepare(applicationContext)
+        }
     }
 
     // region 评论/段评设置（阅读页三点菜单真实入口，经 ReadMenu.CallBack 转调）
@@ -5452,6 +5473,25 @@ class ReadBookActivity : BaseReadBookActivity(),
         val clickValue = click ?: return false
         commentBrowserOpening = true
         getCommentWebViewSession().prepare(applicationContext)
+        // 快照热命中（点击即弹）：纯内存查询，命中则主线程直接构造弹窗——
+        // 零协程调度、零文件 IO、零 Bundle 大对象，是快照模式的最快路径。
+        // 章节只认内存中已排版的当前章（本路径不查库）；未命中回落下方 IO 链路。
+        val hotChapter = ReadBook.curTextChapter?.chapter?.takeIf {
+            it.index == ReadBook.durChapterIndex && it.bookUrl == ReadBook.book?.bookUrl
+        }
+        if (hotChapter != null &&
+            BookImgClick.tryOpenCachedSnapshotImmediately(
+                this, src, hotChapter,
+                pclick = clickValue,
+                onDismiss = {
+                    commentBrowserShowing = false
+                    commentBrowserOpening = false
+                }
+            )
+        ) {
+            commentBrowserShowing = true
+            return true
+        }
         Coroutine.async(lifecycleScope, IO) {
             val book = ReadBook.book ?: return@async
             val chapter = currentChapterForClick()
@@ -6848,6 +6888,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         const val RESULT_DELETED = 100
         private const val EPUB_PREPARE_TIMEOUT_MS = 15_000L
         private const val HOST_OVERLAY_SETTLE_TIMEOUT_MS = 500L
+        private const val COMMENT_WEB_VIEW_WARM_UP_DELAY_MS = 1_200L
         private val shareNoteProgressPercentRegex = Regex("""(\d+(?:[,.]\d+)?)\s*%""")
     }
 

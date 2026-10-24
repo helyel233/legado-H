@@ -114,6 +114,8 @@ import io.legado.app.help.review.ReviewSnapshotResourceStore
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.ReviewSupplementInjector
 import io.legado.app.help.review.SyntheticParaContent
+import io.legado.app.help.review.injectSnapshotImageDeferralStyle
+import io.legado.app.help.review.reviewPageIdentity
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxBridge
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxContext
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
@@ -130,6 +132,14 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         const val ARG_FALLBACK_HTML_FILE = "fallbackHtmlFile"
         const val ARG_IS_SNAPSHOT_HTML = "isSnapshotHtml"
         const val ARG_REVIEW_RESOURCE_BOOK = "reviewResourceBook"
+        const val ARG_SNAPSHOT_CHAPTER_URL = "snapshotChapterUrl"
+        const val ARG_SNAPSHOT_BUTTON_SRC = "snapshotButtonSrc"
+
+        /** 快照补充注入的延后时长：让首帧先绘制、用户先能滚动，再补 tab/楼中楼。 */
+        const val SNAPSHOT_DEFERRED_INJECT_DELAY_MS = 120L
+
+        /** 骨架屏最长显示时长：超过就收起，避免网络异常时骨架一直盖住 WebView。 */
+        const val LOADING_SKELETON_TIMEOUT_MS = 4_000L
     }
 
     /**
@@ -144,8 +154,21 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private var fallbackHtml: String? = null
     private var htmlFileReference: String? = null
     private var fallbackHtmlFileReference: String? = null
+
+    /**
+     * 快照 HTML 内存直传（快照点击链路用）：首次渲染不走临时文件。
+     * 进程重建后为 null，此时按快照身份从本地重新读取。
+     */
+    private var htmlDirect: String? = null
+
+    /** 快照身份（进程重建用）：与 [reviewResourceBook] 一起定位本地快照文件 */
+    private var snapshotChapterUrl: String? = null
+    private var snapshotButtonSrc: String? = null
     private var fallbackApplied = false
     private var fallbackTimeoutRunnable: Runnable? = null
+
+    /** 骨架屏兜底收起：网络迟迟无响应时不能让骨架永远挡着 WebView。 */
+    private val loadingSkeletonTimeout = Runnable { hideLoadingSkeleton() }
 
     /**
      * 离线模式（仅使用快照/快照兜底已启用）：WebView 禁止一切 http/https 网络请求，
@@ -195,13 +218,25 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         outboxContext: ReviewOutboxContext? = null,
         syntheticParaContent: SyntheticParaContent? = null,
         isSnapshotHtml: Boolean = false,
+        htmlFileReference: String? = null,
+        htmlDirect: String? = null,
+        snapshotChapterUrl: String? = null,
+        snapshotButtonSrc: String? = null,
     ) : this() {
         this.webViewSession = webViewSession
         this.onDismissAction = onDismiss
         this.networkRefresher = networkRefresher
         this.fallbackHtml = fallbackHtml
-        htmlFileReference = html?.let(WebViewHtmlStore::write)
+        // 调用方（快照点击链路，已在 IO 协程）可预先写盘传入引用，
+        // 避免主线程构造对话框时同步写大 HTML；未传则按原逻辑在此写盘。
+        this.htmlFileReference = htmlFileReference ?: html?.let(WebViewHtmlStore::write)
         fallbackHtmlFileReference = fallbackHtml?.let(WebViewHtmlStore::write)
+        // 快照 HTML 内存直传：不过 Bundle、不写临时文件，主线程构造即可渲染。
+        // 进程重建时 htmlDirect 丢失，靠 snapshotChapterUrl/snapshotButtonSrc
+        // + reviewResourceBook 从 arguments 恢复身份后重新读本地快照。
+        this.htmlDirect = htmlDirect
+        this.snapshotChapterUrl = snapshotChapterUrl
+        this.snapshotButtonSrc = snapshotButtonSrc
         offlineMode = offlineOnly
         this.reviewResourceBook = reviewResourceBook
         this.outboxContext = outboxContext
@@ -219,6 +254,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             putBoolean("useCommentWebViewSession", webViewSession != null)
             putBoolean(ARG_IS_SNAPSHOT_HTML, isSnapshotHtml)
             putParcelable(ARG_REVIEW_RESOURCE_BOOK, reviewResourceBook)
+            // 快照身份：进程重建时按主键重读本地快照（替代把大 HTML 塞进 Bundle）
+            putString(ARG_SNAPSHOT_CHAPTER_URL, snapshotChapterUrl)
+            putString(ARG_SNAPSHOT_BUTTON_SRC, snapshotButtonSrc)
             outboxContext?.putTo(this)
             syntheticParaContent?.putTo(this)
         }
@@ -605,6 +643,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         needClearHistory = true
         view.setBackgroundColor(0)
         binding.webViewContainer.addView(currentWebView)
+        // 首帧出来之前的这段窗口里 WebView 是透明的，用户看到的是空壳。
+        // 先铺骨架给出「正在加载」的反馈，内容可见后由 onPageCommitVisible 收起。
+        binding.reviewLoadingSkeleton.show()
+        mHandler.postDelayed(
+            loadingSkeletonTimeout,
+            LOADING_SKELETON_TIMEOUT_MS
+        )
         val args = arguments?.let(::Bundle)
         val initialPage = lease.currentPage() ?: return
         initialPage.scope.launch(Dispatchers.Main) {
@@ -620,6 +665,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             reviewResourceBook = args.getParcelable(ARG_REVIEW_RESOURCE_BOOK)
             outboxContext = ReviewOutboxContext.fromBundle(args)
             syntheticParaContent = SyntheticParaContent.fromBundle(args)
+            // 快照身份从 arguments 恢复：进程重建后 htmlDirect 丢失，靠它重新读本地快照
+            snapshotChapterUrl = args.getString(ARG_SNAPSHOT_CHAPTER_URL) ?: snapshotChapterUrl
+            snapshotButtonSrc = args.getString(ARG_SNAPSHOT_BUTTON_SRC) ?: snapshotButtonSrc
             try {
                 args.getString("config")?.let { json ->
                     try {
@@ -644,21 +692,46 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                         }
                     }
                 }
-                val htmlArgument = args.getString(ARG_HTML_FILE)?.let { reference ->
+                // HTML 三源优先级：内存直传 > 临时文件引用 > 快照身份重读（进程重建）。
+                // 文件读取一律下沉 IO：主线程读百 KB~MB 级快照会卡弹窗出现动画。
+                val htmlArgument = htmlDirect ?: args.getString(ARG_HTML_FILE)?.let { reference ->
                     htmlFileReference = reference
-                    WebViewHtmlStore.read(reference)
-                        ?: throw NoStackTraceException("WebView HTML file is missing: $reference")
+                    withContext(IO) {
+                        WebViewHtmlStore.read(reference)
+                            ?: throw NoStackTraceException("WebView HTML file is missing: $reference")
+                    }
+                } ?: run {
+                    val identityBook = reviewResourceBook
+                    val identityChapterUrl = snapshotChapterUrl
+                    val identityButtonSrc = snapshotButtonSrc
+                    if (identityBook != null && !identityChapterUrl.isNullOrBlank() &&
+                        !identityButtonSrc.isNullOrBlank()
+                    ) {
+                        // 进程重建：按身份重读本地快照（内存缓存优先，文件兜底）
+                        withContext(IO) {
+                            ReviewSnapshotStore.getByKey(
+                                identityBook, identityChapterUrl, identityButtonSrc
+                            )
+                        }?.also { displayingSnapshotHtml = true }
+                            ?.html?.takeIf { it.isNotBlank() }
+                            ?: throw NoStackTraceException("review snapshot is missing after recreate")
+                    } else {
+                        null
+                    }
                 }
                 if (htmlArgument != null) {
                     // 身份只认构造时传入的来源标记，不再用 html 是否非空推断：
                     // showBrowser 活页 html 同样非空，但身份是在线，禁止离线接管。
-                    displayingSnapshotHtml = args.getBoolean(ARG_IS_SNAPSHOT_HTML, false)
+                    displayingSnapshotHtml =
+                        args.getBoolean(ARG_IS_SNAPSHOT_HTML, false) || displayingSnapshotHtml
                 }
                 val fallbackReference = args.getString(ARG_FALLBACK_HTML_FILE)
                 if (fallbackReference != null) {
                     fallbackHtmlFileReference = fallbackReference
-                    fallbackHtml = WebViewHtmlStore.read(fallbackReference)
-                        ?: throw NoStackTraceException("WebView fallback HTML file is missing: $fallbackReference")
+                    fallbackHtml = withContext(IO) {
+                        WebViewHtmlStore.read(fallbackReference)
+                            ?: throw NoStackTraceException("WebView fallback HTML file is missing: $fallbackReference")
+                    }
                 }
                 val loadedSource = withContext(IO) {
                     if (sourceKey.startsWith(PARAGRAPH_RULE_SOURCE_PREFIX)) {
@@ -717,7 +790,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     } else {
                         val html = fetchedHtml
                         if (html.isNullOrEmpty()) throw NoStackTraceException("html is NullOrEmpty")
-                        if (requestedPreloadJs.isNullOrEmpty()) {
+                        val spliced = if (requestedPreloadJs.isNullOrEmpty()) {
                             html
                         } else {
                             val headIndex = html.indexOf("<head", ignoreCase = true)
@@ -725,6 +798,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             if (headEnd >= 0) StringBuilder(html).insert(headEnd + 1, JS_URL).toString()
                             else JS_URL + html
                         }
+                        // 快照页图片让位：视口外图片不参与首屏布局与解码，正文先出来
+                        if (displayingSnapshotHtml) injectSnapshotImageDeferralStyle(spliced) else spliced
                     }
                     Triple(analyzeUrl.url, analyzeUrl.headerMap, spliceHtml)
                 }
@@ -733,7 +808,21 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 if (html == null) {
                     initWebViewForUrl(document.first, document.second, bookType, lease)
                 } else {
-                    initWebView(document.first, html, document.second, bookType, lease)
+                    val session = webViewSession
+                    // 预热阶段可能已经把这一页渲染好了：内容指纹一致就直接接管，
+                    // 省掉 loadDataWithBaseURL 的整段「跨进程传 HTML + 解析 + 布局 + 首帧」
+                    val prerenderIdentity = if (displayingSnapshotHtml && session != null) {
+                        reviewPageIdentity(html, AppConfig.isNightTheme, currentWebView.settings.textZoom)
+                    } else {
+                        null
+                    }
+                    if (prerenderIdentity != null && session != null &&
+                        session.isPagePrerendered(pooledWebView, prerenderIdentity)
+                    ) {
+                        adoptPrerenderedPage(document.first, document.second, bookType, lease)
+                    } else {
+                        initWebView(document.first, html, document.second, bookType, lease)
+                    }
                 }
                 currentWebView.clearHistory()
                 // “快照优先”：快照先显示，后台刷新真实网络评论页成功后覆盖。
@@ -871,6 +960,125 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     ) {
         prepareWebView(headerMap, bookType, lease)
         currentWebView.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
+    }
+
+    /**
+     * 接管预热阶段已经渲染完成的快照页。
+     *
+     * 这里只做「换 client / 挂 JS 桥」，不重新加载内容：页面 DOM 与首帧绘制都是现成的，
+     * 用户点开弹窗看到的就是成品，省掉 loadDataWithBaseURL 的整段链路。
+     *
+     * 注意：换 client 之后，那一次加载的 onPageFinished 不会再派发给新 client，
+     * 因此必须手动补跑 [handlePageReady]，否则补充 section 与离线接管脚本会缺失。
+     */
+    private fun adoptPrerenderedPage(
+        url: String,
+        headerMap: HashMap<String, String>,
+        bookType: Int,
+        lease: WebViewRequestLifecycle
+    ) {
+        prepareWebView(headerMap, bookType, lease)
+        currentWebView.resumeTimers()
+        currentWebView.onResume()
+        hideLoadingSkeleton()
+        handlePageReady(currentWebView, url, lease)
+    }
+
+    /**
+     * 页面加载结束后的全部后置动作。
+     *
+     * 抽成独立函数的原因：正常路径由 [CustomWebViewClient.onPageFinished] 触发，
+     * 而「接管预渲染页」路径不会再触发一次 onPageFinished（页面早就加载完了，
+     * 只是换了 client），必须手动补跑同一份逻辑——两条路径共用本函数才不会漂移。
+     */
+    private fun handlePageReady(
+        view: WebView,
+        url: String?,
+        lease: WebViewRequestLifecycle
+    ) {
+        // 页面加载成功：取消超时定时任务
+        cancelFallbackTimeout()
+        // 合成段评入口（无泡段落）：注入段落原文回填脚本，评论弹窗经
+        // ?api=1 拉取到空原文时回填目标段落真实文本，保证发评引用正确；
+        // 注入幂等，发生在用户打开弹窗之前，时序安全
+        syntheticParaContent?.let { entry ->
+            view.evaluateJavascript(ReviewParaContentInjector.buildJs(entry), null)
+        }
+        // 离线评论模式：页面加载完成后注入接管脚本（快照=全接管，在线=拦截发评请求），
+        // 快照优先的在线覆盖页同样生效；注入幂等，脚本内部自带安装标记
+        val context = outboxContext
+        if (context != null && AppConfig.offlineReviewMode) {
+            view.evaluateJavascript(ReviewOutboxWireUp.buildJs(), null)
+            AppLog.putDebug(
+                "${ReviewOutboxStore.LogTag} 接管脚本已注入 " +
+                    "url=${url ?: ""} 书=${context.bookName} 章=${context.chapterTitle}"
+            )
+        }
+        // 快照显示中：注入章评/书评补充 section 与离线 tab/楼中楼交互。
+        // 这三件事都不影响首屏是否可见，却会在页面刚出来那一刻抢主线程与渲染线程
+        // （JS 编译执行 + 读库读快照文件），表现为「内容出来了但卡一下才能滑」。
+        // 推迟到首帧之后再注入，让用户先看到、先能滚动。
+        if (displayingSnapshotHtml) {
+            view.postDelayed({
+                if (!ownsLease(lease) || view !== currentWebView) return@postDelayed
+                ReviewSnapshotImages.install(view)
+                expandSnapshotSheet()
+                injectReviewSupplements(view)
+            }, SNAPSHOT_DEFERRED_INJECT_DELAY_MS)
+        }
+        // 骨架收起的兜底：主流机型在 onPageCommitVisible 就已收起，API 21/22
+        // 没有该回调，靠这里在加载结束时收起，避免占位条一直盖着内容。
+        hideLoadingSkeleton()
+    }
+
+    /**
+     * 离线评论快照弹窗直接展开：折叠态 sheet 底部必然溢出屏幕，
+     * fixed 在布局底的发送栏会被裁掉一半；展开后底回到屏内，栏自然完整。
+     * 只动快照路径，在线活页不受影响。
+     */
+    private fun expandSnapshotSheet() {
+        if (!displayingSnapshotHtml) return
+        behavior?.let {
+            it.skipCollapsed = true
+            it.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+    }
+
+    /**
+     * 读取本章章评、本书书评补充快照并注入当前快照页：
+     * 章评/书评 tab 从死链变成离线可切换的 section，楼中楼默认收起、
+     * 点击 toggle 离线展开/收起。
+     * 异步读取数据库与磁盘，evaluateJavascript 回到主线程执行。
+     */
+    private fun injectReviewSupplements(view: WebView) {
+        val context = outboxContext ?: return
+        val book = reviewResourceBook ?: return
+        viewLifecycleOwner.lifecycleScope.launch(IO) {
+            val js = runCatching {
+                val chapter = context.chapterUrl.takeIf { it.isNotBlank() }?.let { chapterUrl ->
+                    appDb.bookChapterDao.getChapterByUrl(book.bookUrl, chapterUrl)
+                }
+                val chapterTab = chapter?.let {
+                    ReviewSnapshotStore.getChapterTab(book, it)
+                }
+                val bookTab = ReviewSnapshotStore.getBookTab(book)
+                ReviewSupplementInjector.buildInjectionJs(chapterTab, bookTab)
+            }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) {
+                if (!isAdded || isHidden) return@withContext
+                view.evaluateJavascript(js) { result ->
+                    AppLog.putDebug(
+                        "[评论快照] 章评/书评补充注入：${result ?: "null"} " +
+                            "书=${context.bookName} 章=${context.chapterTitle}"
+                    )
+                }
+            }
+        }
+    }
+
+    /** 内容已可见：收起加载骨架。重复调用无副作用。 */
+    private fun hideLoadingSkeleton() {
+        binding.reviewLoadingSkeleton.hide()
     }
 
     private fun prepareWebView(
@@ -1013,6 +1221,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     override fun onDestroyView() {
         closeViewRequests()
         cancelFallbackTimeout()
+        mHandler.removeCallbacks(loadingSkeletonTimeout)
         customWebViewCallback?.onCustomViewHidden()
         customWebViewCallback = null
         isFullScreen = false
@@ -1262,76 +1471,18 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
+            if (view == null || !ownsLease(lease) || view !== currentWebView) return
+            handlePageReady(view, url, lease)
+        }
+
+        /**
+         * 首帧已经绘制出来：这是隐藏骨架屏最准确的时机（内容真的可见了），
+         * 比 onPageFinished 更早，用户不会看到「骨架闪一下再变内容」。
+         */
+        override fun onPageCommitVisible(view: WebView?, url: String?) {
+            super.onPageCommitVisible(view, url)
             if (!ownsLease(lease) || view !== currentWebView) return
-            // 页面加载成功：取消超时定时任务
-            cancelFallbackTimeout()
-            // 合成段评入口（无泡段落）：注入段落原文回填脚本，评论弹窗经
-            // ?api=1 拉取到空原文时回填目标段落真实文本，保证发评引用正确；
-            // 注入幂等，发生在用户打开弹窗之前，时序安全
-            syntheticParaContent?.let { entry ->
-                view?.evaluateJavascript(ReviewParaContentInjector.buildJs(entry), null)
-            }
-            // 离线评论模式：页面加载完成后注入接管脚本（快照=全接管，在线=拦截发评请求），
-            // 快照优先的在线覆盖页同样生效；注入幂等，脚本内部自带安装标记
-            val context = outboxContext
-            if (context != null && AppConfig.offlineReviewMode) {
-                view?.evaluateJavascript(ReviewOutboxWireUp.buildJs(), null)
-                AppLog.putDebug(
-                    "${ReviewOutboxStore.LogTag} 接管脚本已注入 " +
-                        "url=${url ?: ""} 书=${context.bookName} 章=${context.chapterTitle}"
-                )
-            }
-            // 快照显示中：注入章评/书评补充 section 与离线 tab/楼中楼交互
-            if (displayingSnapshotHtml && view != null) {
-                ReviewSnapshotImages.install(view)
-                expandSnapshotSheet()
-                injectReviewSupplements(view)
-            }
-        }
-
-        /**
-         * 离线评论快照弹窗直接展开：折叠态 sheet 底部必然溢出屏幕，
-         * fixed 在布局底的发送栏会被裁掉一半；展开后底回到屏内，栏自然完整。
-         * 只动快照路径，在线活页不受影响。
-         */
-        private fun expandSnapshotSheet() {
-            if (!displayingSnapshotHtml) return
-            behavior?.let {
-                it.skipCollapsed = true
-                it.state = BottomSheetBehavior.STATE_EXPANDED
-            }
-        }
-
-        /**
-         * 读取本章章评、本书书评补充快照并注入当前快照页：
-         * 章评/书评 tab 从死链变成离线可切换的 section，楼中楼默认收起、
-         * 点击 toggle 离线展开/收起。
-         * 异步读取数据库与磁盘，evaluateJavascript 回到主线程执行。
-         */
-        private fun injectReviewSupplements(view: WebView) {
-            val context = outboxContext ?: return
-            val book = reviewResourceBook ?: return
-            viewLifecycleOwner.lifecycleScope.launch(IO) {
-                val js = runCatching {
-                    val chapter = context.chapterUrl.takeIf { it.isNotBlank() }?.let { chapterUrl ->
-                        appDb.bookChapterDao.getChapterByUrl(book.bookUrl, chapterUrl)
-                    }
-                    val chapterTab = chapter?.let {
-                        ReviewSnapshotStore.getChapterTab(book, it)
-                    }
-                    val bookTab = ReviewSnapshotStore.getBookTab(book)
-                    ReviewSupplementInjector.buildInjectionJs(chapterTab, bookTab)
-                }.getOrNull() ?: return@launch
-                withContext(Dispatchers.Main) {
-                    if (!isAdded || isHidden) return@withContext
-                    view.evaluateJavascript(js) { result ->
-                        AppLog.putDebug(
-                            "[评论快照] 章评/书评补充注入：${result ?: "null"} " +
-                                "书=${context.bookName} 章=${context.chapterTitle}"
-                        )
-                    }
-                }
-            }
+            hideLoadingSkeleton()
         }
 
         @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")

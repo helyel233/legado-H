@@ -130,6 +130,10 @@ object BookImgClick {
         offlineOnly: Boolean,
         sourceKeyOverride: String? = null,
         onDismiss: (() -> Unit)? = null,
+        htmlDirect: String? = null,
+        // 未走 htmlDirect 的调用方（网络失败回退快照）才传 html：对话框构造时
+        // 会同步写临时文件（进程重建兜底）；热点路径一律走 htmlDirect 不写盘。
+        html: String? = null,
     ): Boolean {
         if (context.isFinishing || context.isDestroyed) return false
         // 段落规则段评：弹窗按 paragraph_rule_<id> 源键加载规则宿主（页内 ajax /
@@ -142,7 +146,7 @@ object BookImgClick {
                     sourceKey,
                     BookType.text,
                     cached.snapshot.url.ifBlank { "about:blank" },
-                    cached.snapshot.html,
+                    html,
                     networkRefresher = networkRefresher,
                     offlineOnly = offlineOnly,
                     reviewResourceBook = cached.book,
@@ -159,10 +163,45 @@ object BookImgClick {
                     // 内容来自 ReviewSnapshotStore 的快照：身份为离线，允许离线接管
                     isSnapshotHtml = true,
                     onDismiss = onDismiss,
+                    // htmlDirect：快照 HTML 内存直传，主线程构造即渲染（不过 Bundle/不写文件）
+                    htmlDirect = htmlDirect,
+                    // 进程重建身份：dialog 按此主键重读本地快照
+                    snapshotChapterUrl = cached.chapter.url,
+                    snapshotButtonSrc = cached.snapshot.buttonSrc,
                 )
             )
         }
         return true
+    }
+
+    /**
+     * 构造「快照优先」模式的后台刷新器：解析真实评论页并取回在线 HTML。
+     * 纯本地构造（不产生 IO），可安全在主线程构造后交给对话框异步执行。
+     */
+    private fun buildNetworkRefresher(
+        src: String,
+        cached: CachedReviewSnapshot,
+        snapshotSource: BookSource?,
+        syntheticPara: SyntheticParaContent? = null,
+    ): (suspend () -> Pair<String, String>?)? {
+        if (snapshotSource == null) return null
+        val button = reviewButtonOf(src) ?: return null
+        return refresh@{
+            if (syntheticPara?.snapshotFallbackAllowed == false) {
+                return@refresh fetchOnlineHtml(cached.snapshot.url, snapshotSource)
+            }
+            val page = ReviewSnapshotManager.resolveReviewPageUrl(
+                cached.book, snapshotSource, cached.chapter, button
+            )
+            val onlineUrl = page.url ?: return@refresh null
+            // showBrowser 已带回渲染 HTML 且有效：直接用，不再重复请求
+            val onlineHtml = when {
+                !page.html.isNullOrBlank() &&
+                    ReviewSnapshotCapture.isValidCommentHtml(page.html) -> page.html
+                else -> fetchOnlineHtml(onlineUrl, snapshotSource)?.second
+            } ?: return@refresh null
+            onlineUrl to onlineHtml
+        }
     }
 
     /**
@@ -187,28 +226,11 @@ object BookImgClick {
         val resolvedContext = reviewContext(chapter, src) ?: return false
         val cached = cachedSnapshot(resolvedContext, src, syntheticPara) ?: return false
         // 快照优先：后台解析真实评论页并加载在线内容，成功后覆盖当前快照
-        var refresher: (suspend () -> Pair<String, String>?)? = null
         val snapshotSource = resolveNetworkSource(resolvedContext)
-        if (refreshToNetwork && snapshotSource != null) {
-            val button = reviewButtonOf(src)
-            if (button != null) {
-                refresher = refresh@{
-                    if (syntheticPara?.snapshotFallbackAllowed == false) {
-                        return@refresh fetchOnlineHtml(cached.snapshot.url, snapshotSource)
-                    }
-                    val page = ReviewSnapshotManager.resolveReviewPageUrl(
-                        cached.book, snapshotSource, cached.chapter, button
-                    )
-                    val onlineUrl = page.url ?: return@refresh null
-                    // showBrowser 已带回渲染 HTML 且有效：直接用，不再重复请求
-                    val onlineHtml = when {
-                        !page.html.isNullOrBlank() &&
-                            ReviewSnapshotCapture.isValidCommentHtml(page.html) -> page.html
-                        else -> fetchOnlineHtml(onlineUrl, snapshotSource)?.second
-                    } ?: return@refresh null
-                    onlineUrl to onlineHtml
-                }
-            }
+        val refresher = if (refreshToNetwork) {
+            buildNetworkRefresher(src, cached, snapshotSource, syntheticPara)
+        } else {
+            null
         }
         val ruleSourceKey = pclick
             ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
@@ -224,9 +246,81 @@ object BookImgClick {
                 ReviewPreheatCoordinator.refreshButton(cached.book, cached.chapter, src)
             }
         }
+        // 快照 HTML 内存直传对话框：不过 Bundle、不写临时文件，
+        // 主线程构造对话框即可渲染；进程重建时对话框按身份重读本地快照。
         return showSnapshot(
             context, cached, snapshotSource, refresher, offlineOnly,
-            sourceKeyOverride = ruleSourceKey, onDismiss = onDismiss
+            sourceKeyOverride = ruleSourceKey, onDismiss = onDismiss,
+            htmlDirect = cached.snapshot.html
+        )
+    }
+
+    /**
+     * 段评图标直点路径的**同步热命中**快速通道（点击即弹）。
+     *
+     * 只做一次 stat（校验快照文件仍在）+ 进程内快照内存缓存查询（无解析、
+     * 无协程调度），命中即在调用线程（主线程）直接构造并显示对话框——从点击
+     * 到窗口出现只剩一次内存查询 + Fragment 事务，是快照模式的最快路径。
+     *
+     * 未命中返回 false：调用方按原链路走 IO 协程读文件（首次/被淘汰），
+     * 那次读入后会热缓存，下次同一按钮即走本通道。
+     * 网络优先模式永远返回 false（不得因快照存在改变点击行为）。
+     *
+     * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于弹窗源键
+     * @param onDismiss 快照弹窗关闭回调（调用方据此复位防重入标记）
+     * @param hostChapter 调用方须传**内存中已排版好的当前章**（ReadBook.curTextChapter），
+     *   本通道在主线程执行、绝不查库（Room 禁止主线程查询）；为 null 直接放弃，
+     *   由调用方回落 IO 链路取章节。
+     * @return true = 已用内存快照打开弹窗
+     */
+    fun tryOpenCachedSnapshotImmediately(
+        context: AppCompatActivity,
+        src: String,
+        hostChapter: BookChapter? = null,
+        pclick: String? = null,
+        onDismiss: (() -> Unit)? = null,
+    ): Boolean {
+        if (openMode() == AppConfig.ReviewOpenMode.NETWORK) return false
+        if (context.isFinishing || context.isDestroyed) return false
+        // 主线程快速通道：只认调用方给的内存章节，不做任何数据库回退
+        val chapter = hostChapter ?: return false
+        val resolvedContext = reviewContext(chapter, src) ?: return false
+        val cached = ReviewSnapshotStore.getCached(resolvedContext.book, chapter, src.trim())
+            ?.let { snapshot ->
+                CachedReviewSnapshot(
+                    book = resolvedContext.book,
+                    chapter = resolvedContext.chapter,
+                    snapshot = snapshot
+                )
+            }
+            ?: return false
+        // 仅快照模式：过期快照仍先用（保证 0 秒可见），后台刷新照常触发
+        if (openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_ONLY) {
+            val ttlDays = AppConfig.reviewSnapshotTtlDays
+            if (ReviewPreheatCoordinator.isStale(
+                    cached.snapshot.savedAt, System.currentTimeMillis(), ttlDays
+                )
+            ) {
+                ReviewPreheatCoordinator.refreshButton(cached.book, cached.chapter, src)
+            }
+        }
+        val snapshotSource = resolveNetworkSource(resolvedContext)
+        // 快照优先模式同样保留后台刷新器：同步通道只省掉 IO，不改语义
+        val refresher = if (openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST) {
+            buildNetworkRefresher(src, cached, snapshotSource)
+        } else {
+            null
+        }
+        return showSnapshot(
+            context, cached,
+            source = snapshotSource,
+            networkRefresher = refresher,
+            offlineOnly = openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_ONLY,
+            sourceKeyOverride = pclick
+                ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
+                ?.let { "paragraph_rule_$it" },
+            onDismiss = onDismiss,
+            htmlDirect = cached.snapshot.html
         )
     }
 
@@ -237,6 +331,7 @@ object BookImgClick {
      * - 网络优先（默认）：直接回落网络，绝不因存在快照改变点击行为。
      *
      * 在 IO 线程调用（内部会读快照文件），弹窗经 runOnUiThread 展示。
+     * 热路径请先试 [tryOpenCachedSnapshotImmediately]（同步内存命中直开）。
      *
      * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于后台刷新与弹窗源键
      * @param onDismiss 快照弹窗关闭回调（调用方据此复位防重入标记）
@@ -472,7 +567,9 @@ object BookImgClick {
                 if (fallback != null && showSnapshot(
                         context, fallback,
                         networkRefresher = null,
-                        offlineOnly = true
+                        offlineOnly = true,
+                        // 该路径无 htmlDirect，显式传 html 走临时文件兜底
+                        html = fallback.snapshot.html
                     )
                 ) {
                     AppLog.put(

@@ -1,5 +1,17 @@
 # 更新日志
 
+## 1.14.3 版（2026-10-24）
+
+本版聚焦段评弹窗的打开速度与加载反馈，纯性能与体验优化，无新功能。
+
+### 优化
+
+- **加载骨架屏**（新增 `ReviewLoadingSkeletonView`）：弹窗从「点下」到 WebView 首帧之间原本是透明空壳、无任何「正在加载」反馈，主观上像卡住。现用几条与评论列表同构的灰条占位，内容出现后淡出。用自绘（仅一次 `onDraw`）而非塞子 View，避免骨架在弹窗打开动画期间参与测量/布局。
+- **快照 HTML 内存直传**（`htmlDirect`）：热点路径把快照 HTML 直接从内存交给对话框渲染，不再同步写临时文件、不过 Bundle，构造即渲染；未走 `htmlDirect` 的调用方（网络失败回退快照）仍写盘作进程重建兜底。进程重建身份改为按 `chapterUrl + buttonSrc` 重读本地快照。
+- **首屏图片让位**（新增 `ReviewSnapshotPageStyle`）：快照页图片是 `review-resource://` 自定义 scheme，每张都要跨进程回调取字节，若参与首屏布局与解码，正文就得等图片排完。现注入 `content-visibility:auto` + `contain-intrinsic-size:auto 160px`，视口外图片不解码不布局、文字先出来；`auto <fallback>` 让浏览器记住已渲染真实高度，回滚不二次跳动。注入幂等。
+- **WebView 复用与预热**：新增页面内容指纹 `reviewPageIdentity(html, nightMode, textZoom)`——除 HTML 本身，夜间模式与文字缩放也会改写绘制/布局，任一项变化即判定为不同页面，避免拿到上一种配色/字号的成品页。配合 `PooledWebView` / `CommentWebViewSession` 的复用与预热（延迟 1.2s 预热），热点命中当前章时 `tryOpenCachedSnapshotImmediately` 立即打开。
+- 新增 `ReviewSnapshotPageStyleTest` 锁样式注入与指纹判定行为。
+
 ## 1.14.2 版（2026-10-24）
 
 本版修复段评/评论设置在阅读页不可达的问题，并收拢菜单逻辑，无新功能。

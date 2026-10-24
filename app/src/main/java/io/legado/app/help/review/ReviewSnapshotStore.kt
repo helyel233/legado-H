@@ -1,6 +1,7 @@
 package io.legado.app.help.review
 
 import android.util.AtomicFile
+import androidx.collection.LruCache
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.BookHelp
@@ -106,6 +107,27 @@ object ReviewSnapshotStore {
     private const val FILE_SUFFIX = ".json"
 
     /**
+     * 段评快照内存缓存（点击即读路径专用）。
+     *
+     * 快照 JSON 含整份渲染 HTML（内联资源，几十 KB~2MB），每次点击都重新
+     * 读文件 + GSON 解析是快照模式剩余延迟的最大单点。按内容哈希容量缓存
+     * 解析结果后，命中即零文件 IO、零解析。
+     *
+     * 一致性：写入只经 [put]（原子写 + 同步刷新缓存）；外部删除缓存目录后
+     * [get] 的 isFile 前置检查自然 miss，不会返回已删快照。
+     */
+    private val snapshotCache = object : LruCache<String, ReviewSnapshot>(SNAPSHOT_CACHE_MAX_CHARS) {
+        override fun sizeOf(key: String, value: ReviewSnapshot): Int = value.html.length
+    }
+
+    /** 约 12MB 字符上限：覆盖预热带 3 章窗口 + 近期点击章，超出按 LRU 淘汰 */
+    private const val SNAPSHOT_CACHE_MAX_CHARS = 12 * 1024 * 1024
+
+    private fun snapshotCacheKey(bookUrl: String, chapterUrl: String, buttonSrc: String): String {
+        return "$bookUrl|$chapterUrl|$buttonSrc"
+    }
+
+    /**
      * 章评 tab 补充快照的保留 buttonSrc：主键 = (真实章节 url, CHAPTER_TAB_SRC)，
      * 每章只存一份，与该章评论按钮的段评快照互不覆盖。
      */
@@ -195,6 +217,11 @@ object ReviewSnapshotStore {
             // ByteArray；它们会在原 HTML 仍存活时额外复制完整快照，放大 Java heap 峰值。
             writeJsonAtomically(target) { writer -> GSON.toJson(snapshot, writer) }
             trace.done(CacheOperationDiagnostics.Metrics(outputBytes = target.length()))
+            // 写盘成功即刷新内存缓存：下次点击同一按钮零读文件、零解析
+            snapshotCache.put(
+                snapshotCacheKey(book.bookUrl, snapshot.chapterUrl, snapshot.buttonSrc),
+                snapshot
+            )
         } catch (error: Throwable) {
             trace.fail(error)
             throw error
@@ -205,7 +232,10 @@ object ReviewSnapshotStore {
         requireCurrentFormatIfReviewData(book)
         val dir = reviewsDir(book)
         val file = File(dir, fileName(chapter.url, buttonSrc))
+        // 先查文件存在性：缓存目录被删（删书缓存/清理）时自然 miss，不会返回陈旧快照
         if (!file.isFile) return null
+        val cacheKey = snapshotCacheKey(book.bookUrl, chapter.url, buttonSrc)
+        snapshotCache.get(cacheKey)?.let { return it }
         val snapshot = readCompleteSnapshot(book, file)
         require(snapshot.chapterUrl.trim() == chapter.url.trim()) {
             "review snapshot chapterUrl mismatch: ${file.absolutePath}"
@@ -213,6 +243,44 @@ object ReviewSnapshotStore {
         require(snapshot.buttonSrc.trim() == buttonSrc.trim()) {
             "review snapshot buttonSrc mismatch: ${file.absolutePath}"
         }
+        snapshotCache.put(cacheKey, snapshot)
+        return snapshot
+    }
+
+    /**
+     * 内存查询（只一次 stat，不解析、不抛异常）：快照点击链路的热命中快速路径用。
+     * 命中说明该按钮快照已被 [get] 或 [put] 加载/写入过，可直接弹窗。
+     *
+     * 必须校验文件仍然存在：缓存不随「删除书缓存」失效，若只信内存，
+     * 删缓存后点击仍会打开已删除的快照（且绕过了 [get] 的 isFile 前置）。
+     */
+    fun getCached(book: Book, chapter: BookChapter, buttonSrc: String): ReviewSnapshot? {
+        val file = File(reviewsDir(book), fileName(chapter.url, buttonSrc))
+        if (!file.isFile) {
+            snapshotCache.remove(snapshotCacheKey(book.bookUrl, chapter.url, buttonSrc))
+            return null
+        }
+        return snapshotCache.get(snapshotCacheKey(book.bookUrl, chapter.url, buttonSrc))
+    }
+
+    /**
+     * 按主键读取（弹窗进程重建用：只有 Book 与主键字符串，没有章节实体）。
+     * 与 [get] 同路径，校验放宽为主键相等（chapterUrl/buttonSrc 即主键）。
+     */
+    fun getByKey(book: Book, chapterUrl: String, buttonSrc: String): ReviewSnapshot? {
+        requireCurrentFormatIfReviewData(book)
+        val file = File(reviewsDir(book), fileName(chapterUrl, buttonSrc))
+        if (!file.isFile) return null
+        val cacheKey = snapshotCacheKey(book.bookUrl, chapterUrl, buttonSrc)
+        snapshotCache.get(cacheKey)?.let { return it }
+        val snapshot = readCompleteSnapshot(book, file)
+        require(snapshot.chapterUrl.trim() == chapterUrl.trim()) {
+            "review snapshot chapterUrl mismatch: ${file.absolutePath}"
+        }
+        require(snapshot.buttonSrc.trim() == buttonSrc.trim()) {
+            "review snapshot buttonSrc mismatch: ${file.absolutePath}"
+        }
+        snapshotCache.put(cacheKey, snapshot)
         return snapshot
     }
 
