@@ -4,12 +4,14 @@ import android.util.AtomicFile
 import androidx.collection.LruCache
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.constant.AppLog
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.cache.CacheOperationDiagnostics
 import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 评论页快照实体：一章的某个评论按钮对应一份“真实评论页”网页快照。
@@ -138,6 +140,16 @@ object ReviewSnapshotStore {
      * BOOK_TAB_SRC)，整本书只存一份。伪章节 url 不对应任何真实章节，
      * 章节统计与按章导出必须排除。
      */
+    /** 离线评论快照保留天数（与 TTL 无关：TTL 只决定是否重新抓取）。 */
+    private const val RETENTION_DAYS = 30
+
+    /** 单书离线评论快照总大小上限，超出按最旧优先清理。 */
+    private const val MAX_CACHE_BYTES = 32L * 1024 * 1024
+
+    private const val PRUNE_INTERVAL_MS = 10 * 60 * 1000L
+
+    private val lastPruneAt = ConcurrentHashMap<String, Long>()
+
     const val BOOK_TAB_CHAPTER_URL = "__book_tab__"
     const val BOOK_TAB_SRC = "__book_tab__"
 
@@ -222,6 +234,7 @@ object ReviewSnapshotStore {
                 snapshotCacheKey(book.bookUrl, snapshot.chapterUrl, snapshot.buttonSrc),
                 snapshot
             )
+            maybePrune(book)
         } catch (error: Throwable) {
             trace.fail(error)
             throw error
@@ -412,6 +425,60 @@ object ReviewSnapshotStore {
             }
         }
         File(reviewsDir(book), statusFileName(chapter.url)).delete()
+    }
+
+    /**
+     * 离线评论快照的保留策略：超过 [RETENTION_DAYS] 天未更新的快照删除；单书总量超过
+     * [MAX_CACHE_BYTES] 时按最旧优先删到上限内。
+     *
+     * 之前 TTL 只用于「是否过期需重新抓取」，从不删文件，快照目录只增不减。
+     * 这里只动快照文件本身，状态文件与资源库由各自的回收逻辑负责：
+     * 资源 blob 的孤儿回收是 [ReviewSnapshotResourceStore.gc]，由缓存管线在该书最后一个
+     * REVIEW 任务终态时触发，存活判定只看「是否仍被某个快照引用(快照的 resourceKeys)」，
+     * 因此这里删掉的快照不会造成「索引在而文件缺失」，只会让相关 blob 变成孤儿等待下次 GC。
+     *
+     * 内存缓存不必逐条失效：[get]/[getCached] 都以 isFile 前置检查为准，
+     * 文件被删后命中即失效并顺手清理缓存条目，不会返回已删除的快照。
+     */
+    fun prune(book: Book, now: Long = System.currentTimeMillis()): Int {
+        val files = reviewFiles(book)
+        if (files.isEmpty()) return 0
+        val expireBefore = now - RETENTION_DAYS * 24L * 60 * 60 * 1000
+        var removed = 0
+        val remaining = ArrayList<File>(files.size)
+        files.forEach { file ->
+            val modified = file.lastModified()
+            if (modified in 1 until expireBefore) {
+                if (file.delete()) removed++ else remaining.add(file)
+            } else {
+                remaining.add(file)
+            }
+        }
+        var total = remaining.sumOf { it.length() }
+        if (total <= MAX_CACHE_BYTES) return removed
+        remaining.sortBy { it.lastModified() }
+        for (file in remaining) {
+            if (total <= MAX_CACHE_BYTES) break
+            val size = file.length()
+            if (file.delete()) {
+                total -= size
+                removed++
+            }
+        }
+        return removed
+    }
+
+    /** 同一本书最多每 [PRUNE_INTERVAL_MS] 清理一次，避免每写一章都扫目录。 */
+    private fun maybePrune(book: Book) {
+        val now = System.currentTimeMillis()
+        val last = lastPruneAt.putIfAbsent(book.bookUrl, now)
+        if (last != null && now - last < PRUNE_INTERVAL_MS) return
+        if (last != null) lastPruneAt[book.bookUrl] = now
+        runCatching { prune(book, now) }
+            .onSuccess { count ->
+                if (count > 0) AppLog.put("清理过期/超额评论快照 $count 个：${book.name}")
+            }
+            .onFailure { AppLog.put("清理评论快照失败：${book.name}", it) }
     }
 
     /** 管理统计使用目录索引，书评补充快照不计入章节。 */

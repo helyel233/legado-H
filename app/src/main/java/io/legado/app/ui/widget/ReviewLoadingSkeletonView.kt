@@ -43,6 +43,13 @@ class ReviewLoadingSkeletonView @JvmOverloads constructor(
 
     private var pulse = MAX_PULSE
 
+    /** 慢加载提示：骨架超过兜底时限还在时显示的一行小字（null = 未进入慢加载态） */
+    private var slowHint: String? = null
+
+    private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+    }
+
     private val density by lazy { resources.displayMetrics.density }
 
     private fun dp(value: Float): Float = value * density
@@ -57,11 +64,25 @@ class ReviewLoadingSkeletonView @JvmOverloads constructor(
 
     /** 立即显示并开始呼吸；重复调用无副作用。 */
     fun show() {
+        slowHint = null
         if (visibility == VISIBLE && pulseAnimator.isStarted) return
         animate().cancel()
         alpha = 1f
         visibility = VISIBLE
         if (!pulseAnimator.isStarted) pulseAnimator.start()
+    }
+
+    /**
+     * 进入慢加载态：骨架不再只是几条灰条，底部多一行「仍在加载」的小字。
+     *
+     * 此前的兜底是超时后直接把骨架收起，但首帧还没来的这段时间里 WebView
+     * 仍是透明的，用户看到的是一片空白——比骨架更像是卡死了。
+     * 收起时机不变：首帧可见（onPageCommitVisible）、渲染失败页或弹窗销毁。
+     */
+    fun enterSlowMode(hint: String) {
+        if (visibility != VISIBLE || slowHint == hint) return
+        slowHint = hint
+        invalidate()
     }
 
     /** 内容已可见：淡出后彻底隐藏，避免挡住 WebView 的触摸。 */
@@ -139,6 +160,16 @@ class ReviewLoadingSkeletonView @JvmOverloads constructor(
             radius,
             paint
         )
+        // 慢加载提示：只有超时还在等时才出现，普通速度下用户看不到它
+        slowHint?.let { hint ->
+            hintPaint.color = if (AppConfig.isNightTheme) {
+                ColorUtils.setAlphaComponent(Color.WHITE, HINT_ALPHA_NIGHT)
+            } else {
+                ColorUtils.setAlphaComponent(Color.BLACK, HINT_ALPHA_DAY)
+            }
+            hintPaint.textSize = dp(13f)
+            canvas.drawText(hint, widthPx / 2f, heightPx - dp(24f), hintPaint)
+        }
     }
 
     private companion object {
@@ -148,5 +179,7 @@ class ReviewLoadingSkeletonView @JvmOverloads constructor(
         const val BASE_ALPHA_NIGHT = 30
         const val FADE_ALPHA_DAY = 10
         const val FADE_ALPHA_NIGHT = 14
+        const val HINT_ALPHA_DAY = 115
+        const val HINT_ALPHA_NIGHT = 135
     }
 }

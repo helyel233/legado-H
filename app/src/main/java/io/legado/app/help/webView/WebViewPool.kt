@@ -11,6 +11,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import io.legado.app.constant.AppLog
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.review.REVIEW_ERROR_BRIDGE_NAME
 import io.legado.app.ui.rss.read.VisibleWebView
 import io.legado.app.utils.setDarkeningAllowed
 import io.legado.app.utils.runOnUI
@@ -161,6 +162,9 @@ object WebViewPool {
             removeJavascriptInterface(WebJsExtensions.nameJava)
             removeJavascriptInterface(WebJsExtensions.nameSource)
             removeJavascriptInterface(WebJsExtensions.nameCache)
+            // 失败页桥只服务当时那个对话框，回池必须摘掉，否则池实例
+            // 会长期持有旧对话框的 lease（Fragment）并把它暴露给后续页面
+            removeJavascriptInterface(REVIEW_ERROR_BRIDGE_NAME)
             clearFormData() //清除表单数据
             clearMatches() //清除查找匹配项
             clearDisappearingChildren() //清除消失中的子视图

@@ -32,16 +32,74 @@ internal object ReviewDataCapture {
         maxRequests = Int.MAX_VALUE
         maxRequestsPerHost = Int.MAX_VALUE
     }).build()
+    const val PROTOCOL = "idea_comment"
+
+    /**
+     * 当前评论类型能否走数据接口。
+     *
+     * 书源声明的协议不是本适配器认识的类型时返回 false（让上层回退网页引擎），
+     * 而不是用 require 把整次抓取炸掉——协议是书源侧的声明，不该成为崩溃点。
+     */
     fun supports(url: String, html: String?, tab: ReviewSnapshotCapture.ReviewTab?, protocol: String): Boolean {
-        require(protocol.isEmpty() || protocol == "idea_comment") { "未知评论数据协议：$protocol" }
+        val declared = protocol.trim()
+        if (declared.isNotEmpty() && declared != PROTOCOL) return false
         val address = url.toHttpUrlOrNull() ?: return false
         return tab == null && address.encodedPath == "/idea_comment" &&
             listOf("book_id", "item_id", "para").all { address.queryParameter(it) != null } &&
-            (protocol == "idea_comment" || (html != null && html.contains("loadParaFromApi") && html.contains("reply_api")))
+            (declared == PROTOCOL || (html != null && html.contains("loadParaFromApi") && html.contains("reply_api")))
+    }
+
+    /**
+     * 最近成功结果窗口：同一评论页在短时间内被多个入口抓取（跨书同章节、预热 + 打开）时
+     * 直接复用，避免重复请求同一批接口。结果只依赖入参和三个渲染开关，因此键里带上它们。
+     */
+    private const val REUSE_WINDOW_MS = 15_000L
+    private const val REUSE_MAX_ENTRIES = 4
+
+    /** 快照 HTML 可能很大，超过该长度的结果不进复用窗口，避免常驻内存放大堆峰值。 */
+    private const val REUSE_MAX_CHARS = 512 * 1024
+    private val recentCaptures = object : LinkedHashMap<String, Pair<Long, String>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
+            size > REUSE_MAX_ENTRIES
     }
 
     suspend fun capture(url: String, headers: Map<String, String>, initialHtml: String?,
-                        trace: CacheOperationDiagnostics.Operation?): String = coroutineScope {
+                        trace: CacheOperationDiagnostics.Operation?): String {
+        val cacheKey = captureKey(url, headers, initialHtml)
+        synchronized(recentCaptures) {
+            val cached = recentCaptures[cacheKey]
+            if (cached != null) {
+                if (System.currentTimeMillis() - cached.first <= REUSE_WINDOW_MS) {
+                    trace?.mark(
+                        "DATA_REUSE",
+                        CacheOperationDiagnostics.Metrics(inputChars = cached.second.length),
+                        force = true
+                    )
+                    return cached.second
+                }
+                recentCaptures.remove(cacheKey)
+            }
+        }
+        val html = captureUncached(url, headers, initialHtml, trace)
+        if (html.length <= REUSE_MAX_CHARS) {
+            synchronized(recentCaptures) { recentCaptures[cacheKey] = System.currentTimeMillis() to html }
+        }
+        return html
+    }
+
+    private fun captureKey(url: String, headers: Map<String, String>, initialHtml: String?): String {
+        val text = initialHtml.orEmpty()
+        return buildString {
+            append(url).append('|').append(AppConfig.cacheReviewReplies)
+            append('|').append(AppConfig.cacheReviewAvatars)
+            append('|').append(AppConfig.cacheReviewImages)
+            append('|').append(text.length).append('|').append(text.hashCode())
+            headers.forEach { (name, value) -> append('|').append(name).append('=').append(value) }
+        }
+    }
+
+    private suspend fun captureUncached(url: String, headers: Map<String, String>, initialHtml: String?,
+                                        trace: CacheOperationDiagnostics.Operation?): String = coroutineScope {
         val base = requireNotNull(url.toHttpUrlOrNull())
         val emoji = Regex("""var\s+EM\s*=\s*(\{[^;]*});""").find(initialHtml.orEmpty())?.let {
             JsonParser.parseString(it.groupValues[1]).asJsonObject.entrySet().associate { entry ->

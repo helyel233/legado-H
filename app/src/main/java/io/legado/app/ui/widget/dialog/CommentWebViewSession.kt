@@ -15,6 +15,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import io.legado.app.data.entities.Book
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.review.REVIEW_ERROR_BRIDGE_NAME
 import io.legado.app.help.review.ReviewSnapshotResourceStore
 import io.legado.app.help.review.reviewPageIdentity
 import io.legado.app.help.webView.PooledWebView
@@ -313,6 +314,9 @@ class CommentWebViewSession {
             removeJavascriptInterface(WebJsExtensions.nameJava)
             removeJavascriptInterface(WebJsExtensions.nameSource)
             removeJavascriptInterface(WebJsExtensions.nameCache)
+            // 失败页桥只服务当时那个对话框，回池必须摘掉，否则池实例
+            // 会长期持有旧对话框的 lease（Fragment）并把它暴露给后续页面
+            removeJavascriptInterface(REVIEW_ERROR_BRIDGE_NAME)
             settings.apply {
                 blockNetworkImage = false
                 cacheMode = WebSettings.LOAD_DEFAULT

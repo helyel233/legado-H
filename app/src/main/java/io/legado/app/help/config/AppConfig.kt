@@ -68,6 +68,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     const val MIN_REVIEW_COMPRESSION_KB = 1
     const val DEFAULT_REVIEW_AVATAR_COMPRESSION_KB = 2
     const val DEFAULT_REVIEW_IMAGE_COMPRESSION_KB = 50
+
     const val DISCOVERY_PAGE_MODE_LEGACY = "legacy"
     const val DISCOVERY_PAGE_MODE_MODERN = "modern"
     const val DISCOVERY_PAGE_MODE_SUITE = "suite"
@@ -3062,11 +3063,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(
             PreferKey.reviewAvatarCompressionMaxKb,
             DEFAULT_REVIEW_AVATAR_COMPRESSION_KB
-        ).coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+        ).let(::normalizeReviewCompressionKb)
         set(value) {
             appCtx.putPrefInt(
                 PreferKey.reviewAvatarCompressionMaxKb,
-                value.coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+                normalizeReviewCompressionKb(value)
             )
         }
 
@@ -3075,11 +3076,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(
             PreferKey.reviewImageCompressionMaxKb,
             DEFAULT_REVIEW_IMAGE_COMPRESSION_KB
-        ).coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+        ).let(::normalizeReviewCompressionKb)
         set(value) {
             appCtx.putPrefInt(
                 PreferKey.reviewImageCompressionMaxKb,
-                value.coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+                normalizeReviewCompressionKb(value)
             )
         }
 
@@ -3142,3 +3143,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.exportReviews, value)
         }
 }
+
+/**
+ * 压缩阈值归一化：0/负数会让压缩失去意义，也会让抓取侧的资源判定失效，
+ * 因此读写两侧都收敛到 [AppConfig.MIN_REVIEW_COMPRESSION_KB]。
+ *
+ * 放在文件级而非 AppConfig 内：设置页与单测都能直接用，不必初始化整个配置对象。
+ */
+internal fun normalizeReviewCompressionKb(value: Int): Int =
+    value.coerceAtLeast(AppConfig.MIN_REVIEW_COMPRESSION_KB)

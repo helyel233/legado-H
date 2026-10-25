@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.14.6 · 2026/10/25**
+
+- 完善段评失败处理：新增加载失败页（六类原因+重试仅在有意义时出现，替代原异常堆栈）；评论引擎未知协议/数据接口不支持时回退网页而非崩溃；快照按保鲜期+容量自动清理；抓取结果 15s 复用窗口；高级设置补齐评论图片压缩开关与压缩上限
+
 **vH.1.14.5 · 2026/10/25**
 
 - 修复「我的」页 RSS 订阅管理/阅读记录/AI 设置图标崩溃：原指向 `<selector>` 双态 drawable 被 Compose painterResource 加载会抛 IllegalArgumentException 崩掉整个 Tab，改单态矢量并补注释

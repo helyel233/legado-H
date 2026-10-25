@@ -2629,6 +2629,24 @@ bookUrl：%7$s
     <string name="cache_manage_review_retry_all">全部重试失败项</string>
     <string name="cache_manage_review_status_missing">状态异常</string>
     <string name="cache_manage_review_persisted">已有%1$d份快照</string>
+
+    <!-- 段评弹窗加载失败页（替代原来直接显示异常堆栈） -->
+    <string name="review_error_title_network">段评没打开</string>
+    <string name="review_error_message_network">连不上对方站点，或者它暂时没有响应。检查一下网络再重试。</string>
+    <string name="review_error_title_timeout">加载太慢了</string>
+    <string name="review_error_message_timeout">等了一会儿还是没有内容，可能是网络太慢。可以重试，或者稍后再看。</string>
+    <string name="review_error_title_rule">这条段评规则失效了</string>
+    <string name="review_error_message_rule">书源里的段评规则没能取到内容，可能被删除或改动了。可以重试一次，或者更新书源。</string>
+    <string name="review_error_title_empty">这里没有段评内容</string>
+    <string name="review_error_message_empty">规则返回了空白页面。可能这一章确实没有评论，也可能规则需要更新。</string>
+    <string name="review_error_title_snapshot">没有找到这份段评</string>
+    <string name="review_error_message_snapshot">本地没有保存过这一页的评论快照。关掉后联网再打开试试。</string>
+    <string name="review_error_title_unknown">段评加载出错了</string>
+    <string name="review_error_message_unknown">遇到了一个没预料到的问题。可以重试一次；如果一直这样，麻烦把下面的技术细节反馈给开发者。</string>
+    <string name="review_error_detail">技术细节</string>
+    <string name="review_loading_slow">加载较慢，仍在努力…</string>
+    <string name="review_error_missing_args">段评参数缺失，请重新打开</string>
+    <string name="review_fallback_snapshot_toast">网络没连上，先显示本地缓存的段评</string>
     <string name="integer_input_range_hint">%1$d-%2$d</string>
     <string name="integer_input_range_invalid">请输入 %1$d 到 %2$d 之间的整数。</string>
 

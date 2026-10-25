@@ -14,6 +14,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.google.gson.stream.JsonReader
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -330,20 +331,32 @@ object ReviewSnapshotCapture {
         return try {
             val protocol = bookSource.ruleReview?.snapshotProtocol?.trim().orEmpty()
             val engine = ReviewDownloadConfig.engine
-            val supported = engine != ReviewDownloadConfig.Engine.WEB &&
-                ReviewDataCapture.supports(url, initialHtml, tab, protocol)
-            val useData = when (engine) {
+            val supported = ReviewDataCapture.supports(url, initialHtml, tab, protocol)
+            var useData = when (engine) {
                 ReviewDownloadConfig.Engine.WEB -> false
                 ReviewDownloadConfig.Engine.AUTO -> supported
-                ReviewDownloadConfig.Engine.DATA -> {
-                    check(supported) { "当前评论类型/书源不支持数据接口（目前支持 idea_comment 段评）；请选择自动或网页引擎" }
-                    true
+                // 显式选了数据接口但当前评论类型不支持时回退网页，而不是让整次抓取失败：
+                // 协议是书源侧的声明，用户选的引擎偏好不该变成硬失败。
+                ReviewDownloadConfig.Engine.DATA -> supported.also { ok ->
+                    if (!ok) AppLog.put("评论引擎=数据接口，但当前评论类型/书源不支持，已回退网页快照")
+                }
+            }
+            var preparedHtml = initialHtml
+            if (useData) {
+                preparedHtml = try {
+                    ReviewDataCapture.capture(
+                        url, AnalyzeUrl(url, source = bookSource).headerMap, initialHtml, trace
+                    )
+                } catch (error: Throwable) {
+                    if (error is CancellationException) throw error
+                    // 自动模式才回退：用户显式选数据接口时保留失败原因，便于定位书源问题。
+                    if (engine != ReviewDownloadConfig.Engine.AUTO) throw error
+                    AppLog.put("评论数据接口抓取失败，自动模式回退网页快照", error)
+                    useData = false
+                    initialHtml
                 }
             }
             trace?.mark(if (useData) "ENGINE_DATA" else "ENGINE_WEB", force = true)
-            val preparedHtml = if (useData) ReviewDataCapture.capture(
-                url, AnalyzeUrl(url, source = bookSource).headerMap, initialHtml, trace
-            ) else initialHtml
             if (!useData && initialHtml != null && !isValidCommentHtml(initialHtml)) {
                 throw NoStackTraceException(
                     "showBrowser 带回的 HTML 非有效评论页（疑似 ajax 错误/异常文本，" +

@@ -251,12 +251,14 @@ abstract class ComposeSettingFragment : Fragment(),
         min: Int,
         max: Int,
         value: Int,
+        visible: Boolean = true,
         onSelected: (Int) -> Unit
     ): SettingActionSpec {
         return SettingActionSpec(
             key = key,
             title = title,
             summary = summary,
+            visible = visible,
             onClick = {
                 showComposeNumberPickerDialog(
                     title = title,

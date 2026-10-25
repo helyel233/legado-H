@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="review_download_engine">评论抓取引擎</string>
-    <string name="review_download_engine_summary">自动按书源声明或页面协议特征选择。目前数据接口支持 idea_comment 段评及楼中楼；章评、书评自动选择网页。强制数据接口时不支持即报错，执行失败不会切换引擎。</string>
+    <string name="review_download_engine_summary">自动按书源声明或页面协议特征选择。目前数据接口支持 idea_comment 段评及楼中楼；章评、书评自动选择网页。自动模式下数据接口抓取失败会回退网页快照；强制数据接口但当前评论类型不支持时同样回退网页，并记录日志。</string>
     <string name="review_download_data_concurrency">评论数据请求并发数</string>
     <string name="review_download_reply_concurrency">楼中楼请求并发数</string>
     <string name="review_download_resource_concurrency">离线资源请求并发数</string>
@@ -30,6 +30,11 @@
     <string name="cache_review_avatars">缓存评论者头像</string>
     <string name="cache_review_images">缓存评论图片</string>
     <string name="compress_review_avatars">压缩评论者头像</string>
+    <string name="compress_review_images">压缩评论图片</string>
+    <string name="compress_review_images_summary">超过上限时压缩后再写入离线资源库，减小缓存体积；仅影响新写入的资源，关闭后保留原图。</string>
+    <string name="review_avatar_compression_max">头像压缩上限（KiB）</string>
+    <string name="review_image_compression_max">评论图片压缩上限（KiB）</string>
+    <string name="review_compression_max_summary">当前：%1$d KiB；默认：%2$d KiB。%3$s</string>
     <string name="cache_review_resource_summary">写入离线资源库；关闭后快照内仍保留原始地址，离线查看时无法显示。</string>
     <string name="review_download_numeric_summary">当前：%1$d；默认：%2$d。%3$s</string>
     <string-array name="review_download_engine_entries"><item>自动按协议能力选择</item><item>强制数据接口</item><item>强制网页快照</item></string-array>

@@ -116,7 +116,7 @@ class AdvancedConfigFragment : ComposeSettingFragment() {
                                 AppConfig.sourceEditMaxLine.toString()
                             ),
                             min = 10,
-                            max = Int.MAX_VALUE,
+                            max = 200_000,
                             value = AppConfig.sourceEditMaxLine,
                             onSelected = { AppConfig.sourceEditMaxLine = it }
                         )
@@ -258,7 +258,7 @@ class AdvancedConfigFragment : ComposeSettingFragment() {
                     setting.value, setting.default, help
                 ),
                 min = setting.minimum,
-                max = Int.MAX_VALUE,
+                max = setting.maximum,
                 value = setting.value,
                 onSelected = { setting.value = it }
             )
@@ -306,6 +306,45 @@ class AdvancedConfigFragment : ComposeSettingFragment() {
                         summary = getString(R.string.cache_review_resource_summary),
                         defaultValue = true,
                         visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
+                        key = PreferKey.compressReviewImages,
+                        title = getString(R.string.compress_review_images),
+                        summary = getString(R.string.compress_review_images_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    numberAction(
+                        key = PreferKey.reviewAvatarCompressionMaxKb,
+                        title = getString(R.string.review_avatar_compression_max),
+                        summary = getString(
+                            R.string.review_compression_max_summary,
+                            AppConfig.reviewAvatarCompressionMaxKb,
+                            AppConfig.DEFAULT_REVIEW_AVATAR_COMPRESSION_KB,
+                            "头像超过该大小才会压缩；阈值过小会明显降低清晰度。"
+                        ),
+                        min = AppConfig.MIN_REVIEW_COMPRESSION_KB,
+                        max = 1024,
+                        value = AppConfig.reviewAvatarCompressionMaxKb,
+                        onSelected = { AppConfig.reviewAvatarCompressionMaxKb = it },
+                        visible = booleanSetting(PreferKey.syncCacheReview, true) and
+                            booleanSetting(PreferKey.compressReviewAvatars, true)
+                    ),
+                    numberAction(
+                        key = PreferKey.reviewImageCompressionMaxKb,
+                        title = getString(R.string.review_image_compression_max),
+                        summary = getString(
+                            R.string.review_compression_max_summary,
+                            AppConfig.reviewImageCompressionMaxKb,
+                            AppConfig.DEFAULT_REVIEW_IMAGE_COMPRESSION_KB,
+                            "评论内图片超过该大小才会压缩；设为较小值可显著减小离线资源库。"
+                        ),
+                        min = AppConfig.MIN_REVIEW_COMPRESSION_KB,
+                        max = 10240,
+                        value = AppConfig.reviewImageCompressionMaxKb,
+                        onSelected = { AppConfig.reviewImageCompressionMaxKb = it },
+                        visible = booleanSetting(PreferKey.syncCacheReview, true) and
+                            booleanSetting(PreferKey.compressReviewImages, true)
                     )
                 )
             ),

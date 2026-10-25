@@ -2851,6 +2851,24 @@ Selected text or question:
     <string name="cache_manage_review_retry_all">Retry all failed</string>
     <string name="cache_manage_review_status_missing">Abnormal status</string>
     <string name="cache_manage_review_persisted">%1$d cached snapshots</string>
+
+    <!-- 段评弹窗加载失败页（替代原来直接显示异常堆栈） -->
+    <string name="review_error_title_network">Review did not open</string>
+    <string name="review_error_message_network">Can\'t reach the site, or it isn\'t responding right now. Check your network and try again.</string>
+    <string name="review_error_title_timeout">Loading took too long</string>
+    <string name="review_error_message_timeout">Nothing came back in time. The network may be slow — retry, or look again later.</string>
+    <string name="review_error_title_rule">The review rule stopped working</string>
+    <string name="review_error_message_rule">This book source\'s review rule returned nothing usable — it may have been deleted or edited. Retry once, or update the source.</string>
+    <string name="review_error_title_empty">No review content here</string>
+    <string name="review_error_message_empty">The rule came back empty. This chapter may genuinely have no reviews, or the rule needs updating.</string>
+    <string name="review_error_title_snapshot">That review isn\'t cached</string>
+    <string name="review_error_message_snapshot">No saved snapshot of this page was found. Close it and open again while online.</string>
+    <string name="review_error_title_unknown">Something went wrong</string>
+    <string name="review_error_message_unknown">An unexpected problem occurred. Retry once; if it keeps happening, please report the technical details below.</string>
+    <string name="review_error_detail">Technical details</string>
+    <string name="review_loading_slow">Still loading, hang on…</string>
+    <string name="review_error_missing_args">Review data is incomplete, please reopen it</string>
+    <string name="review_fallback_snapshot_toast">Network unavailable, showing cached reviews</string>
     <string name="integer_input_range_hint">%1$d-%2$d</string>
     <string name="integer_input_range_invalid">Enter an integer from %1$d to %2$d.</string>
 

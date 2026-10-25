@@ -102,11 +102,15 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.lang.ref.WeakReference
 import java.net.URLDecoder
 import java.util.Date
 import androidx.core.graphics.createBitmap
 import io.legado.app.data.entities.Book
+import io.legado.app.help.review.REVIEW_ERROR_BRIDGE_NAME
+import io.legado.app.help.review.ReviewErrorKind
+import io.legado.app.help.review.ReviewErrorPageContent
 import io.legado.app.help.review.ReviewParaContentInjector
 import io.legado.app.help.review.ReviewSnapshotImages
 import io.legado.app.help.review.ReviewSnapshotManager
@@ -114,7 +118,9 @@ import io.legado.app.help.review.ReviewSnapshotResourceStore
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.ReviewSupplementInjector
 import io.legado.app.help.review.SyntheticParaContent
+import io.legado.app.help.review.classifyReviewError
 import io.legado.app.help.review.injectSnapshotImageDeferralStyle
+import io.legado.app.help.review.reviewErrorPageHtml
 import io.legado.app.help.review.reviewPageIdentity
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxBridge
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxContext
@@ -138,8 +144,15 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         /** 快照补充注入的延后时长：让首帧先绘制、用户先能滚动，再补 tab/楼中楼。 */
         const val SNAPSHOT_DEFERRED_INJECT_DELAY_MS = 120L
 
-        /** 骨架屏最长显示时长：超过就收起，避免网络异常时骨架一直盖住 WebView。 */
-        const val LOADING_SKELETON_TIMEOUT_MS = 4_000L
+        /** 骨架屏进入慢加载态的时长：超过就不再只是灰条，补一行「仍在加载」提示。 */
+        const val LOADING_SLOW_HINT_DELAY_MS = 4_000L
+
+        /**
+         * 加载看门狗：无快照兜底时，网络挂起会让页面永远等不到首帧，
+         * 超过此时长直接渲染失败页（可重试）。取值与一般网络超时上限对齐，
+         * 慢但在动的加载宁可让它跑完，也不中途打断。
+         */
+        const val LOAD_WATCHDOG_TIMEOUT_MS = 45_000L
     }
 
     /**
@@ -167,8 +180,50 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private var fallbackApplied = false
     private var fallbackTimeoutRunnable: Runnable? = null
 
-    /** 骨架屏兜底收起：网络迟迟无响应时不能让骨架永远挡着 WebView。 */
-    private val loadingSkeletonTimeout = Runnable { hideLoadingSkeleton() }
+    /** 兜底快照提示只弹一次：超时与 onReceivedError 可能先后触发同一件事 */
+    private var fallbackNoticeShown = false
+
+    /**
+     * 当前 WebView 显示的是「首屏加载失败页」（见 [showInitialLoadError]）。
+     *
+     * 失败页也是 loadDataWithBaseURL 进来的普通页面，会照常走 onPageFinished →
+     * [handlePageReady]。这里必须显式区分身份，否则会在失败页上注入段落回填、
+     * 离线接管、快照补充 section 等一堆对失败页毫无意义甚至有害的脚本。
+     */
+    @Volatile
+    private var displayingErrorPage = false
+
+    /**
+     * 主框架资源不可用的错误描述，等 onPageFinished 再渲染失败页。
+     *
+     * 为什么不在 onReceivedError 里立刻渲染：错误回调之后 WebView 还会把
+     * 自己的默认错误页推进来，直接渲染会被盖掉；而且部分可恢复错误
+     * （如 ERR_ABORTED）之后页面仍可能正常绘制，见 onPageCommitVisible 的清空逻辑。
+     */
+    private var pendingMainFrameError: String? = null
+
+    /** 骨架屏兜底：迟迟无首帧时进入慢加载态（灰条 + 「仍在加载」小字）。 */
+    private val loadingSlowHintRunnable = Runnable {
+        currentBinding?.reviewLoadingSkeleton?.enterSlowMode(
+            getString(R.string.review_loading_slow)
+        )
+    }
+
+    /**
+     * 加载看门狗：无快照兜底且首帧一直没来时，与其让用户对着空白/骨架
+     * 无限等，不如给出失败页和重试入口。取消时机 = 任何一次页面就绪
+     * （handlePageReady，预渲染接管路径也会走到）或内容已画出首帧。
+     */
+    private val loadWatchdogRunnable = Runnable {
+        val lease = requestLifecycle ?: return@Runnable
+        if (displayingSnapshotHtml || displayingErrorPage) return@Runnable
+        if (!ownsLease(lease)) return@Runnable
+        showInitialLoadError(
+            NoStackTraceException("review page not ready in ${LOAD_WATCHDOG_TIMEOUT_MS}ms"),
+            "about:blank",
+            lease
+        )
+    }
 
     /**
      * 离线模式（仅使用快照/快照兜底已启用）：WebView 禁止一切 http/https 网络请求，
@@ -645,14 +700,34 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         binding.webViewContainer.addView(currentWebView)
         // 首帧出来之前的这段窗口里 WebView 是透明的，用户看到的是空壳。
         // 先铺骨架给出「正在加载」的反馈，内容可见后由 onPageCommitVisible 收起。
-        binding.reviewLoadingSkeleton.show()
-        mHandler.postDelayed(
-            loadingSkeletonTimeout,
-            LOADING_SKELETON_TIMEOUT_MS
-        )
+        showLoadingSkeleton()
         val args = arguments?.let(::Bundle)
         val initialPage = lease.currentPage() ?: return
-        initialPage.scope.launch(Dispatchers.Main) {
+        launchInitialLoad(lease, args, initialPage)
+        dialog?.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                return@setOnKeyListener handleBackPressed()
+            }
+            false
+        }
+        registerBackPressedCallbacks()
+    }
+
+    /**
+     * 首屏加载（含失败重试，见 [ReviewErrorBridge.retry]）。
+     *
+     * 抽成独立函数是为了让失败页的「重试」能原样再跑一遍同一条链路，
+     * 而不是复制一份加载逻辑——两份代码一旦漂移，重试就会走到不同行为。
+     */
+    private fun launchInitialLoad(
+        lease: WebViewRequestLifecycle,
+        args: Bundle?,
+        page: WebViewRequestLifecycle.Page
+    ) {
+        displayingErrorPage = false
+        // 重试前摘掉上一次失败页的桥：同一实例上不应残留只服务旧失败页的接口
+        currentWebView.removeJavascriptInterface(REVIEW_ERROR_BRIDGE_NAME)
+        page.scope.launch(Dispatchers.Main) {
             if (args == null) {
                 dismiss()
                 return@launch
@@ -741,13 +816,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                         appDb.bookSourceDao.getBookSource(sourceKey)
                     }
                 }
-                if (!ownsPage(lease, initialPage)) return@launch
+                if (!ownsPage(lease, page)) return@launch
                 if (loadedSource == null && htmlArgument == null) {
                     // 评论快照等本地 HTML 可在无书源时离线渲染，不再强制要求书源存在
-                    activity?.toastOnUi(
-                        if (sourceKey.startsWith(PARAGRAPH_RULE_SOURCE_PREFIX)) "no find paragraphRule"
-                        else "no find bookSource"
-                    )
+                    activity?.toastOnUi(getString(R.string.review_error_missing_args))
                     dismiss()
                     return@launch
                 }
@@ -782,6 +854,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 // 内容即快照，身份同步置为快照（同一权责的另一面）。
                                 offlineMode = true
                                 displayingSnapshotHtml = true
+                                // 内容来源已从在线变为缓存，告知用户（只提示一次）
+                                notifyFallbackShown()
                             } ?: throw error
                         }
                     }
@@ -803,7 +877,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     }
                     Triple(analyzeUrl.url, analyzeUrl.headerMap, spliceHtml)
                 }
-                if (!ownsPage(lease, initialPage)) return@launch
+                if (!ownsPage(lease, page)) return@launch
                 val html = document.third
                 if (html == null) {
                     initWebViewForUrl(document.first, document.second, bookType, lease)
@@ -852,19 +926,111 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                if (!ownsPage(lease, initialPage)) return@launch
-                currentWebView.webViewClient = CustomWebViewClient(lease)
-                currentWebView.loadDataWithBaseURL(url, error.stackTraceToString(), "text/html", "utf-8", url)
-                currentWebView.clearHistory()
+                if (!ownsPage(lease, page)) return@launch
+                showInitialLoadError(error, url, lease)
             }
         }
-        dialog?.setOnKeyListener { _, keyCode, event ->
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                return@setOnKeyListener handleBackPressed()
+    }
+
+    /**
+     * 首屏加载失败的兜底页。
+     *
+     * 旧实现把 `error.stackTraceToString()` 整个丢进 WebView：用户看到一屏异常堆栈，
+     * 既读不懂发生了什么，也没有任何自救入口——唯一出路是关掉弹窗重新点一次图标。
+     * 这里换成「一句人话 + 重试/关闭（+ 可折叠的技术细节）」，并把重试接回同一条
+     * 加载链路（见 [launchInitialLoad]）。
+     *
+     * 重试有没有意义由 [classifyReviewError] 决定：快照缺失是本地没有数据，
+     * 重试必然再失败，所以失败页只留「关闭」（见 [ReviewErrorPageContent.retryLabel]）。
+     */
+    private fun showInitialLoadError(
+        error: Throwable,
+        baseUrl: String,
+        lease: WebViewRequestLifecycle
+    ) {
+        // 失败页一出现就不能再让骨架屏盖着，也不能留兜底超时/看门狗在后台偷偷换页
+        cancelFallbackTimeout()
+        cancelLoadingTimers()
+        hideLoadingSkeleton()
+        displayingErrorPage = true
+        currentWebView.webViewClient = CustomWebViewClient(lease)
+        // 失败页的按钮通过 JS 桥回到原生：重试 / 关闭
+        currentWebView.addJavascriptInterface(
+            ReviewErrorBridge(this, lease),
+            REVIEW_ERROR_BRIDGE_NAME
+        )
+        val content = reviewErrorPageContent(error)
+        currentWebView.loadDataWithBaseURL(
+            baseUrl,
+            reviewErrorPageHtml(content),
+            "text/html",
+            "utf-8",
+            baseUrl
+        )
+        currentWebView.clearHistory()
+        AppLog.put("段评首屏加载失败：${content.title} / ${error.javaClass.simpleName}")
+    }
+
+    /** 把异常分类翻译成失败页文案；细节保留一句 message，够定位又不糊一屏堆栈。 */
+    private fun reviewErrorPageContent(error: Throwable): ReviewErrorPageContent {
+        val kind = classifyReviewError(error)
+        val titleRes: Int
+        val messageRes: Int
+        when (kind) {
+            ReviewErrorKind.NETWORK -> {
+                titleRes = R.string.review_error_title_network
+                messageRes = R.string.review_error_message_network
             }
-            false
+
+            ReviewErrorKind.TIMEOUT -> {
+                titleRes = R.string.review_error_title_timeout
+                messageRes = R.string.review_error_message_timeout
+            }
+
+            ReviewErrorKind.RULE -> {
+                titleRes = R.string.review_error_title_rule
+                messageRes = R.string.review_error_message_rule
+            }
+
+            ReviewErrorKind.EMPTY_CONTENT -> {
+                titleRes = R.string.review_error_title_empty
+                messageRes = R.string.review_error_message_empty
+            }
+
+            ReviewErrorKind.SNAPSHOT_MISSING -> {
+                titleRes = R.string.review_error_title_snapshot
+                messageRes = R.string.review_error_message_snapshot
+            }
+
+            ReviewErrorKind.UNKNOWN -> {
+                titleRes = R.string.review_error_title_unknown
+                messageRes = R.string.review_error_message_unknown
+            }
         }
-        registerBackPressedCallbacks()
+        return ReviewErrorPageContent(
+            title = getString(titleRes),
+            message = getString(messageRes),
+            retryLabel = if (kind == ReviewErrorKind.SNAPSHOT_MISSING) null else getString(R.string.retry),
+            closeLabel = getString(R.string.close),
+            detailLabel = getString(R.string.review_error_detail),
+            detail = error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName,
+            night = AppConfig.isNightTheme
+        )
+    }
+
+    /** 重试：把首屏加载原样再跑一遍（失败页由 [launchInitialLoad] 自己撤掉）。 */
+    private fun retryInitialLoad() {
+        // 只在失败页显示中受理：快速连点第二次时首屏加载已经启动
+        // （displayingErrorPage 已被 launchInitialLoad 复位），直接忽略防并发双载
+        if (!displayingErrorPage) return
+        val lease = requestLifecycle ?: return
+        // 失败页本身也是一次页面加载，lease 的 currentPage 已经换代，
+        // 不能用首屏那个 page 续用（它已被判定过期）。
+        val page = lease.currentPage() ?: return
+        if (!ownsPage(lease, page)) return
+        val args = arguments?.let(::Bundle) ?: return
+        showLoadingSkeleton()
+        launchInitialLoad(lease, args, page)
     }
 
     private fun registerBackPressedCallbacks() {
@@ -947,6 +1113,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         bookType: Int,
         lease: WebViewRequestLifecycle
     ) {
+        // 真实内容开始加载：看门狗此前若已弹出失败页，现在必须撤销其身份，
+        // 否则内容回来后 handlePageReady 会把这次加载当失败页、跳过全部注入
+        displayingErrorPage = false
         prepareWebView(headerMap, bookType, lease)
         currentWebView.loadUrl(url, webViewExtraHeaders(headerMap))
     }
@@ -958,6 +1127,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         bookType: Int,
         lease: WebViewRequestLifecycle
     ) {
+        // 同上：真实内容覆盖失败页时要复位身份，恢复段落回填/离线接管/补充 section
+        displayingErrorPage = false
         prepareWebView(headerMap, bookType, lease)
         currentWebView.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
     }
@@ -996,8 +1167,24 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         url: String?,
         lease: WebViewRequestLifecycle
     ) {
-        // 页面加载成功：取消超时定时任务
+        // 页面加载成功：取消超时定时任务与看门狗（预渲染接管路径没有
+        // onPageCommitVisible，必须在这里兜底取消）
         cancelFallbackTimeout()
+        cancelLoadingTimers()
+        if (displayingErrorPage) {
+            // 失败页不需要任何注入：段落回填/离线接管/快照补充 section 全都没有意义，
+            // 注入反而可能往失败页里塞脚本、抢渲染线程。收起骨架即收工。
+            hideLoadingSkeleton()
+            return
+        }
+        val mainFrameError = pendingMainFrameError
+        if (mainFrameError != null) {
+            // 主框架资源压根没拿到：此时 WebView 里是系统默认错误页（英文错误码），
+            // 换成带「重试/关闭」的失败页，用户至少有一条自救路径。
+            pendingMainFrameError = null
+            showInitialLoadError(IOException(mainFrameError), "about:blank", lease)
+            return
+        }
         // 合成段评入口（无泡段落）：注入段落原文回填脚本，评论弹窗经
         // ?api=1 拉取到空原文时回填目标段落真实文本，保证发评引用正确；
         // 注入幂等，发生在用户打开弹窗之前，时序安全
@@ -1078,7 +1265,28 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
     /** 内容已可见：收起加载骨架。重复调用无副作用。 */
     private fun hideLoadingSkeleton() {
-        binding.reviewLoadingSkeleton.hide()
+        // 兜底任务（超时/失败页）可能在视图销毁后仍被投递到主线程，
+        // 这里用可空 binding 而不是 checkNotNull 的 binding，避免收尾阶段抛 ISE。
+        currentBinding?.reviewLoadingSkeleton?.hide()
+    }
+
+    /** 重新铺骨架（首屏加载与失败重试共用），并重置慢加载提示与看门狗计时。 */
+    private fun showLoadingSkeleton() {
+        val binding = currentBinding ?: return
+        binding.reviewLoadingSkeleton.show()
+        armLoadingTimers()
+    }
+
+    private fun armLoadingTimers() {
+        mHandler.removeCallbacks(loadingSlowHintRunnable)
+        mHandler.removeCallbacks(loadWatchdogRunnable)
+        mHandler.postDelayed(loadingSlowHintRunnable, LOADING_SLOW_HINT_DELAY_MS)
+        mHandler.postDelayed(loadWatchdogRunnable, LOAD_WATCHDOG_TIMEOUT_MS)
+    }
+
+    private fun cancelLoadingTimers() {
+        mHandler.removeCallbacks(loadingSlowHintRunnable)
+        mHandler.removeCallbacks(loadWatchdogRunnable)
     }
 
     private fun prepareWebView(
@@ -1123,6 +1331,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     /** 网络优先兑底：主框架开始加载时启动真正的超时定时任务 */
     private fun scheduleFallbackTimeout() {
         if (fallbackHtml == null) return
+        // 失败页也是一次页面加载；此时再用快照覆盖会把刚给用户看的
+        // 「重试/关闭」入口顶掉，且兜底快照在前面的加载链路里已被尝试过了
+        if (displayingErrorPage) return
+        cancelLoadingTimers()
         fallbackTimeoutRunnable?.let { mHandler.removeCallbacks(it) }
         fallbackTimeoutRunnable = Runnable { applyFallbackSnapshot() }
         mHandler.postDelayed(
@@ -1146,6 +1358,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         // 兑底快照属于离线内容：切换后禁止一切网络请求
         offlineMode = true
         displayingSnapshotHtml = true
+        // 内容来源从在线换成了缓存：得让用户知道「现在看到的是旧内容」，
+        // 否则会把过期评论当成最新状态去点赞/回复
+        notifyFallbackShown()
         currentWebView.settings.configureOfflineResourceLoading(true)
         currentWebView.loadDataWithBaseURL(
             currentWebView.url ?: "https://localhost/",
@@ -1154,6 +1369,18 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             "utf-8",
             null
         )
+    }
+
+    /**
+     * 提示「现在显示的是本地缓存快照」。
+     *
+     * 只在第一次切换时提示：网络优先模式下超时与 onReceivedError 可能先后触发，
+     * 重复弹 toast 会更像故障而不是说明。
+     */
+    private fun notifyFallbackShown() {
+        if (fallbackNoticeShown) return
+        fallbackNoticeShown = true
+        activity?.toastOnUi(getString(R.string.review_fallback_snapshot_toast))
     }
 
     private fun saveImage(webPic: String) {
@@ -1221,7 +1448,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     override fun onDestroyView() {
         closeViewRequests()
         cancelFallbackTimeout()
-        mHandler.removeCallbacks(loadingSkeletonTimeout)
+        cancelLoadingTimers()
         customWebViewCallback?.onCustomViewHidden()
         customWebViewCallback = null
         isFullScreen = false
@@ -1279,6 +1506,43 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 throw error
             } catch (error: Exception) {
                 AppLog.put("config err", error)
+            }
+        }
+    }
+
+    /**
+     * 失败页的两个按钮：重试 / 关闭。
+     *
+     * 与 [JSInterface] 同一套约定：持有 WebView 回调线程 → 切主线程 → 校验 lease，
+     * 只保留弱引用，避免失败页把对话框钉在 WebView 的 JS 桥里。
+     */
+    @Suppress("unused")
+    private class ReviewErrorBridge(
+        dialog: BottomWebViewDialog,
+        lease: WebViewRequestLifecycle
+    ) {
+        private val dialogRef: WeakReference<BottomWebViewDialog> = WeakReference(dialog)
+
+        // lease 也只持弱引用：桥对象会随 WebView 池化复用长期存活，
+        // 强引用会把已销毁 Fragment 的 lifecycleScope 钉在池里。
+        private val leaseRef: WeakReference<WebViewRequestLifecycle> = WeakReference(lease)
+
+        @JavascriptInterface
+        fun retry() {
+            val fra = dialogRef.get() ?: return
+            val lease = leaseRef.get() ?: return
+            val page = lease.currentPage() ?: return
+            page.scope.launch(Dispatchers.Main) {
+                if (!fra.ownsPage(lease, page)) return@launch
+                fra.retryInitialLoad()
+            }
+        }
+
+        @JavascriptInterface
+        fun close() {
+            val fra = dialogRef.get() ?: return
+            fra.mHandler.post {
+                if (fra.isAdded) fra.dismissAllowingStateLoss()
             }
         }
     }
@@ -1464,6 +1728,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 currentWebView.clearHistory() //清除历史
             }
             super.onPageStarted(view, url, favicon)
+            pendingMainFrameError = null
             currentWebView.evaluateJavascript(basicJs, null)
             // 网络优先：主框架开始加载时启动真正的超时定时任务
             scheduleFallbackTimeout()
@@ -1482,6 +1747,11 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         override fun onPageCommitVisible(view: WebView?, url: String?) {
             super.onPageCommitVisible(view, url)
             if (!ownsLease(lease) || view !== currentWebView) return
+            // 只要有内容画出第一帧，就说明主框架其实是可用的
+            // （曾收到过 ERR_ABORTED 之类可恢复错误的页面会走到这里），
+            // 此时不该再拿失败页去覆盖它，看门狗与慢加载提示也一并收掉。
+            pendingMainFrameError = null
+            cancelLoadingTimers()
             hideLoadingSkeleton()
         }
 
@@ -1493,9 +1763,16 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             failingUrl: String?
         ) {
             super.onReceivedError(view, errorCode, description, failingUrl)
-            if (ownsLease(lease) && fallbackHtml != null && !fallbackApplied) {
+            if (!ownsLease(lease)) return
+            if (fallbackHtml != null && !fallbackApplied) {
                 applyFallbackSnapshot()
+                return
             }
+            // 老回调在部分 ROM 上连子资源失败也会报上来（API 23 以下没有
+            // isForMainFrame 可用）。只认「失败的正是当前主文档」这一种，
+            // 否则图片挂了也会被换成一整页错误提示。
+            if (failingUrl == null || failingUrl != view?.url) return
+            rememberMainFrameError(description)
         }
 
         override fun onReceivedError(
@@ -1504,11 +1781,40 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             error: android.webkit.WebResourceError?
         ) {
             super.onReceivedError(view, request, error)
-            if (ownsLease(lease) && fallbackHtml != null && !fallbackApplied &&
-                request?.isForMainFrame == true
-            ) {
+            if (!ownsLease(lease) || request?.isForMainFrame != true) return
+            if (fallbackHtml != null && !fallbackApplied) {
                 applyFallbackSnapshot()
+                return
             }
+            rememberMainFrameError(error?.description?.toString())
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            errorResponse: WebResourceResponse?
+        ) {
+            super.onReceivedHttpError(view, request, errorResponse)
+            if (!ownsLease(lease) || request?.isForMainFrame != true) return
+            val code = errorResponse?.statusCode ?: return
+            if (fallbackHtml != null && !fallbackApplied) {
+                applyFallbackSnapshot()
+                return
+            }
+            // 4xx/5xx：站点活着但评论页拿不到，与网络层错误一样交给
+            // onPageFinished 统一渲染失败页（detail 里能看到状态码）
+            rememberMainFrameError("HTTP $code")
+        }
+
+        /**
+         * 记下主框架错误，交给 onPageFinished 统一决定是否渲染失败页。
+         *
+         * 有缓存快照时前面已经切快照了；已经在显示快照（离线内容）或失败页时
+         * 更不能覆盖——那会把「已经能看的内容」换成错误提示。
+         */
+        private fun rememberMainFrameError(description: String?) {
+            if (displayingSnapshotHtml || displayingErrorPage) return
+            pendingMainFrameError = description ?: "net::ERR_UNKNOWN"
         }
 
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {
