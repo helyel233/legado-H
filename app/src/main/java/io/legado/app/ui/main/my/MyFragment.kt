@@ -401,7 +401,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     ),
                     actionRow(
                         "rssSourceManage", R.string.rss_source_manage,
-                        R.string.rss_source_manage_summary, R.drawable.ic_bottom_rss_feed
+                        R.string.rss_source_manage_summary, R.drawable.ic_bottom_rss_feed_e
                     ),
                     actionRow(
                         "replaceManage", R.string.replace_purify,
@@ -435,7 +435,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     ),
                     actionRow(
                         "readRecord", R.string.read_record,
-                        R.string.read_record_summary, R.drawable.ic_bottom_read_record
+                        R.string.read_record_summary, R.drawable.ic_bottom_read_record_e
                     )
                 )
             ),
@@ -474,7 +474,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 rows = listOf(
                     actionRow(
                         "ai_setting", R.string.ai_setting,
-                        R.string.ai_setting_summary, R.drawable.ic_bottom_ai
+                        R.string.ai_setting_summary, R.drawable.ic_bottom_ai_e
                     ),
                     MySettingsRowModel(
                         key = PreferKey.autoTaskService,

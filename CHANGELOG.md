@@ -1,5 +1,13 @@
 # 更新日志
 
+## 1.14.5 版（2026-10-25）
+
+本版修复「我的」页若干设置项图标崩溃，无功能变化。
+
+### 修复
+
+- **「我的」页图标崩溃**：`MyFragment` 里 RSS 订阅管理、阅读记录、AI 设置三个入口的图标原指向 `<selector>` 双态 drawable（`ic_bottom_rss_feed` / `ic_bottom_read_record` / `ic_bottom_ai`），被 Compose `painterResource` 加载 `<selector>` 时抛 `IllegalArgumentException`，会崩掉整个「我的」Tab。现改用单态矢量（`*_e`）。`MySettingsScreen.SettingsLeadingIcon` 补注释说明 iconRes 必须传 vector/位图，选择器不可直接喂给 `painterResource`。
+
 ## 1.14.4 版（2026-10-25）
 
 本版重构设置页（原「其它设置」30+ 项平铺拆成四个分类页），并加固评论压缩/重试的健壮性，无新功能。

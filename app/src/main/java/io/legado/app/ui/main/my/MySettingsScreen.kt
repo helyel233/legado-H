@@ -263,6 +263,8 @@ private fun SettingsLeadingIcon(
     item: MySettingsRowModel,
     colors: AppSettingPalette
 ) {
+    // iconRes 必须是 vector/位图：painterResource 不支持 <selector>（如底部导航的
+    // ic_bottom_ai/xxx_*_e 双态选择器），传进去会在组合期抛 IllegalArgumentException 崩掉整个 Tab。
     val iconRes = item.iconRes ?: return
     Icon(
         painter = painterResource(iconRes),

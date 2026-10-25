@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.14.5 · 2026/10/25**
+
+- 修复「我的」页 RSS 订阅管理/阅读记录/AI 设置图标崩溃：原指向 `<selector>` 双态 drawable 被 Compose painterResource 加载会抛 IllegalArgumentException 崩掉整个 Tab，改单态矢量并补注释
+
 **vH.1.14.4 · 2026/10/25**
 
 - 重构设置页：原「其它设置」30+ 项平铺拆为阅读/网络/存储/高级四分类页 + 面包屑导航，抽出共用声明式 helper；修复评论压缩阈值下限钳制、坏配置降级而非崩溃、未知退避方式不再 error、折叠分区静默失效
