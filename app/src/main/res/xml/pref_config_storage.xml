@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <io.legado.app.lib.prefs.Preference
+            android:key="defaultBookTreeUri"
+            android:summary="@string/book_tree_uri_s"
+            android:title="@string/book_tree_uri_t" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:key="autoClearExpired"
+            android:summary="@string/auto_clear_expired_summary"
+            android:title="@string/auto_clear_expired" />
+
+    <io.legado.app.lib.prefs.Preference
+            android:key="cleanCache"
+            android:summary="@string/clear_cache_summary"
+            android:title="@string/clear_cache"
+            app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
+            android:key="clearWebViewData"
+            android:summary="@string/clear_webview_data_summary"
+            android:title="@string/clear_webview_data"
+            app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
+            android:key="shrinkDatabase"
+            android:summary="@string/shrink_database_summary"
+            android:title="@string/shrink_database"
+            app:iconSpaceReserved="false" />
+
+</androidx.preference.PreferenceScreen>

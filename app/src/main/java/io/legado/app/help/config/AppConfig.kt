@@ -63,6 +63,11 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     /** 段评快照默认保鲜期（天），见 [reviewSnapshotTtlDays] */
     const val DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS = 3
+
+    /** 评论头像/图片压缩阈值下限（KiB），0 或负数会让压缩失去意义。 */
+    const val MIN_REVIEW_COMPRESSION_KB = 1
+    const val DEFAULT_REVIEW_AVATAR_COMPRESSION_KB = 2
+    const val DEFAULT_REVIEW_IMAGE_COMPRESSION_KB = 50
     const val DISCOVERY_PAGE_MODE_LEGACY = "legacy"
     const val DISCOVERY_PAGE_MODE_MODERN = "modern"
     const val DISCOVERY_PAGE_MODE_SUITE = "suite"
@@ -3047,18 +3052,35 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.compressReviewImages, value)
         }
 
-    /** 评论头像压缩后的最大大小，单位 KiB。 */
+    /**
+     * 评论头像压缩后的最大大小，单位 KiB。
+     *
+     * 阈值必须为正：0 或负数会让压缩没有意义，还会让抓取侧的资源处理判定失效。
+     * 读写两侧都钳到 [MIN_REVIEW_COMPRESSION_KB]，历史坏值读取时自动修正。
+     */
     var reviewAvatarCompressionMaxKb: Int
-        get() = appCtx.getPrefInt(PreferKey.reviewAvatarCompressionMaxKb, 2)
+        get() = appCtx.getPrefInt(
+            PreferKey.reviewAvatarCompressionMaxKb,
+            DEFAULT_REVIEW_AVATAR_COMPRESSION_KB
+        ).coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
         set(value) {
-            appCtx.putPrefInt(PreferKey.reviewAvatarCompressionMaxKb, value)
+            appCtx.putPrefInt(
+                PreferKey.reviewAvatarCompressionMaxKb,
+                value.coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+            )
         }
 
-    /** 评论内图片压缩后的最大大小，单位 KiB。 */
+    /** 评论内图片压缩后的最大大小，单位 KiB；下限同 [reviewAvatarCompressionMaxKb]。 */
     var reviewImageCompressionMaxKb: Int
-        get() = appCtx.getPrefInt(PreferKey.reviewImageCompressionMaxKb, 50)
+        get() = appCtx.getPrefInt(
+            PreferKey.reviewImageCompressionMaxKb,
+            DEFAULT_REVIEW_IMAGE_COMPRESSION_KB
+        ).coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
         set(value) {
-            appCtx.putPrefInt(PreferKey.reviewImageCompressionMaxKb, value)
+            appCtx.putPrefInt(
+                PreferKey.reviewImageCompressionMaxKb,
+                value.coerceAtLeast(MIN_REVIEW_COMPRESSION_KB)
+            )
         }
 
     val reviewAvatarCompressionMaxBytes: Long

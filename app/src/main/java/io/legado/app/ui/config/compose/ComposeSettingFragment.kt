@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment
 import io.legado.app.R
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
+import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
@@ -151,6 +152,121 @@ abstract class ComposeSettingFragment : Fragment(),
         value: Int
     ) {
         requireContext().putPrefInt(key, value)
+    }
+
+    /**
+     * 下面这组是各设置页共用的声明式写法（原来每个 Fragment 各抄一份 private 副本）。
+     * 新增设置页直接继承即可，不用再复制一轮。
+     */
+    protected fun switch(
+        key: String,
+        title: String,
+        summary: String? = null,
+        defaultValue: Boolean,
+        visible: Boolean = true
+    ): SettingSwitchSpec {
+        return SettingSwitchSpec(
+            key = key,
+            title = title,
+            summary = summary,
+            checked = booleanSetting(key, defaultValue),
+            visible = visible,
+            onCheckedChange = { updateBooleanSetting(key, it) }
+        )
+    }
+
+    protected fun choice(
+        key: String,
+        title: String,
+        entriesRes: Int,
+        valuesRes: Int,
+        defaultValue: String,
+        summary: String? = null
+    ): SettingChoiceSpec {
+        val options = choiceOptionList(entriesRes, valuesRes)
+        val selectedValue = stringSetting(key, defaultValue)
+        return SettingChoiceSpec(
+            key = key,
+            title = title,
+            summary = summary ?: choiceDisplayLabel(options, selectedValue),
+            options = options,
+            selectedValue = selectedValue,
+            onSelected = { updateStringSetting(key, it) }
+        )
+    }
+
+    protected fun intChoice(
+        key: String,
+        title: String,
+        entriesRes: Int,
+        valuesRes: Int,
+        defaultValue: Int,
+        summary: String? = null
+    ): SettingChoiceSpec {
+        val options = choiceOptionList(entriesRes, valuesRes)
+        val selectedValue = intSetting(key, defaultValue).toString()
+        return SettingChoiceSpec(
+            key = key,
+            title = title,
+            summary = summary ?: choiceDisplayLabel(options, selectedValue),
+            options = options,
+            selectedValue = selectedValue,
+            onSelected = { updateIntSetting(key, it.toIntOrNull() ?: defaultValue) }
+        )
+    }
+
+    /**
+     * 注意这两个叫 *_list / *_label 而不是 choiceOptions / choiceLabel：
+     * MoreConfigDialog、ReadAloudConfigDialog、BackupConfigFragment 里早已各有一份
+     * 同名 private 实现，用通用名会触发 "hides member of supertype" 编译错误。
+     */
+    protected fun choiceOptionList(
+        entriesRes: Int,
+        valuesRes: Int
+    ): List<SettingChoiceOption> {
+        val entries = resources.getStringArray(entriesRes)
+        val values = resources.getStringArray(valuesRes)
+        return values.mapIndexed { index, value ->
+            SettingChoiceOption(
+                value = value,
+                label = entries.getOrElse(index) { value }
+            )
+        }
+    }
+
+    protected fun choiceDisplayLabel(
+        options: List<SettingChoiceOption>,
+        selectedValue: String
+    ): String {
+        return options.firstOrNull { it.value == selectedValue }
+            ?.label
+            ?.toString()
+            ?: selectedValue
+    }
+
+    protected fun numberAction(
+        key: String,
+        title: String,
+        summary: String,
+        min: Int,
+        max: Int,
+        value: Int,
+        onSelected: (Int) -> Unit
+    ): SettingActionSpec {
+        return SettingActionSpec(
+            key = key,
+            title = title,
+            summary = summary,
+            onClick = {
+                showComposeNumberPickerDialog(
+                    title = title,
+                    value = value,
+                    minValue = min,
+                    maxValue = max,
+                    onValue = onSelected
+                )
+            }
+        )
     }
 
     private fun consumeTargetKey() {

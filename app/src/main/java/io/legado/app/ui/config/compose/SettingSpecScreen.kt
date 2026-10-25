@@ -23,8 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -32,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import io.legado.app.R
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppSettingPalette
@@ -75,7 +79,14 @@ fun SettingSpecScreen(
         page.sections.mapNotNull { section ->
             val rows = section.items.filter { it.visible }
             rows.takeIf { it.isNotEmpty() }?.let {
-                SettingSectionSpec(title = section.title, items = it)
+                // 这里过滤 visible 后重建了 SectionSpec，折叠相关字段必须透传，
+                // 否则所有 collapsible 分区都会静默退化成普通分区（折叠完全失效）
+                SettingSectionSpec(
+                    title = section.title,
+                    items = it,
+                    collapsible = section.collapsible,
+                    collapsedByDefault = section.collapsedByDefault
+                )
             }
         }
     }
@@ -129,6 +140,9 @@ fun SettingSpecScreen(
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
                     drawPanelImage = drawPanelImage,
+                    // 带 targetKey 进来说明是要定位到某一项，此时所有分区必须展开，
+                    // 否则目标项根本不在列表里，定位会静默失败
+                    forceExpanded = !scrollTargetKey.isNullOrBlank(),
                     onItemClick = onItemClick
                 )
             }
@@ -142,6 +156,7 @@ private fun SettingSectionPanel(
     colors: AppSettingPalette,
     panelRadiusPx: Float,
     drawPanelImage: Boolean,
+    forceExpanded: Boolean,
     onItemClick: (SettingItemSpec) -> Unit
 ) {
     val context = LocalContext.current
@@ -151,6 +166,22 @@ private fun SettingSectionPanel(
         }
     } else {
         null
+    }
+    val stateKey = section.title?.toString()
+        ?: section.items.firstOrNull()?.key
+        ?: ""
+    var expanded by rememberSaveable(stateKey) {
+        mutableStateOf(!section.collapsedByDefault)
+    }
+    // 首组合可能早于 onResume 里 consumeTargetKey() 设置 targetKey，
+    // 所以不能用 init 时的 forceExpanded 一次性决定展开状态：
+    // targetKey 到位后（含从 null 变非空）强制展开一次，
+    // 消费完置回 null 时 forceExpanded 变 false，LaunchedEffect 重启但不改状态，
+    // 用户手动展开/收起的状态不会被重置
+    LaunchedEffect(forceExpanded) {
+        if (forceExpanded) {
+            expanded = true
+        }
     }
     Column(
         modifier = Modifier
@@ -163,16 +194,28 @@ private fun SettingSectionPanel(
                 radiusPx = panelRadiusPx
             )
     ) {
-        AppSettingSectionTitle(title = section.title, palette = colors)
-        section.items.forEachIndexed { index, item ->
-            SettingRow(
-                item = item,
-                colors = colors,
-                panelRadiusPx = panelRadiusPx,
-                showDivider = index != section.items.lastIndex,
-                isLast = index == section.items.lastIndex,
-                onItemClick = onItemClick
-            )
+        AppSettingSectionTitle(
+            title = section.title,
+            palette = colors,
+            collapsible = section.collapsible,
+            expanded = expanded,
+            onToggle = if (section.collapsible) {
+                { expanded = !expanded }
+            } else {
+                null
+            }
+        )
+        if (expanded) {
+            section.items.forEachIndexed { index, item ->
+                SettingRow(
+                    item = item,
+                    colors = colors,
+                    panelRadiusPx = panelRadiusPx,
+                    showDivider = index != section.items.lastIndex,
+                    isLast = index == section.items.lastIndex,
+                    onItemClick = onItemClick
+                )
+            }
         }
     }
 }
@@ -301,7 +344,17 @@ private fun SettingRow(
             }
 
             is SettingSliderSpec -> Unit
-            is SettingActionSpec -> Unit
+            is SettingActionSpec -> {
+                if (item.navigates && item.enabled) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_right),
+                        contentDescription = null,
+                        tint = colors.secondaryText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }

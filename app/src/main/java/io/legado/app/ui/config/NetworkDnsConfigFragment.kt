@@ -78,17 +78,17 @@ class NetworkDnsConfigFragment : ComposeSettingFragment() {
                     showComposeConfirmDialog("重启应用", "已保存的网络设置将在重启后生效。", onPositive = ::restartWithSavedSettings)
                 }
             )),
-            SettingSectionSpec(title = "按功能选择", items = DnsScope.entries.map { scope ->
+            SettingSectionSpec(title = getString(R.string.dns_section_by_feature), items = DnsScope.entries.map { scope ->
                 SettingSwitchSpec("dns_scope_${scope.key}", scope.title, scope in config.scopes,
                     { checked -> save(config.copy(scopes = if (checked) config.scopes + scope else config.scopes - scope)) },
                     if (scope in config.scopes) "DoH 开启后使用 DoH" else "使用系统 DNS")
             }),
-            SettingSectionSpec(title = "域名例外", items = listOf(
+            SettingSectionSpec(title = getString(R.string.dns_section_domain_exceptions), items = listOf(
                 action("dns_rule_add", "添加域名规则", "可为域名指定 DoH 或系统 DNS，优先于功能选择") { editRule(null) }
             ) + config.rules.map { rule ->
                 action("dns_rule_${rule.pattern}", rule.pattern, if (rule.doh) "使用 DoH" else "使用系统 DNS") { editRule(rule) }
             }),
-            SettingSectionSpec(title = "DNS 测速", items = buildList {
+            SettingSectionSpec(title = getString(R.string.dns_section_benchmark), items = buildList {
                 add(action("dns_test_host", "测试域名", stringSetting(TEST_HOST, "example.com")) { editTestHost() })
                 add(action("dns_benchmark", if (running) "停止测速" else "开始测速",
                     if (running) progress else "系统 DNS 与各 DoH 服务各查询 3 次，只比较解析耗时") {
@@ -101,7 +101,7 @@ class NetworkDnsConfigFragment : ComposeSettingFragment() {
                     })
                 }
             }),
-            SettingSectionSpec(title = "高级", items = listOf(
+            SettingSectionSpec(title = getString(R.string.dns_section_advanced), items = listOf(
                 SettingSwitchSpec("dns_ipv6", "查询 IPv6 地址", config.includeIpv6, { save(config.copy(includeIpv6 = it)) }, "同时查询 A 和 AAAA；系统 DNS 由系统决定"),
                 SettingSwitchSpec("dns_local", "局域网名称使用系统 DNS", config.localNamesUseSystem, { save(config.copy(localNamesUseSystem = it)) }, "单标签域名、localhost、.local、.lan 等；域名例外可覆盖"),
                 SettingSwitchSpec("dns_fallback", "DoH 失败时回退系统 DNS", config.fallbackToSystem, { save(config.copy(fallbackToSystem = it)) }, "关闭时解析失败会报错；测速始终不回退"),

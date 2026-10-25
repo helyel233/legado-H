@@ -1301,20 +1301,14 @@ object ReviewSnapshotCapture {
         private fun parseResourceUrls(json: String?): ResourceUrls {
             val cacheAvatars = AppConfig.cacheReviewAvatars
             val cacheCommentImages = AppConfig.cacheReviewImages
-            val compressAvatars = cacheAvatars && AppConfig.compressReviewAvatars
-            val compressCommentImages = cacheCommentImages && AppConfig.compressReviewImages
             val avatarCompressionMaxBytes = AppConfig.reviewAvatarCompressionMaxBytes
             val imageCompressionMaxBytes = AppConfig.reviewImageCompressionMaxBytes
-            if (compressAvatars) {
-                require(avatarCompressionMaxBytes > 0L) {
-                    "评论头像压缩上限必须大于 0"
-                }
-            }
-            if (compressCommentImages) {
-                require(imageCompressionMaxBytes > 0L) {
-                    "评论图片压缩上限必须大于 0"
-                }
-            }
+            // 阈值非正时按「不压缩」处理，而不是抛异常：AppConfig 已钳制下限，
+            // 这里是最后一道兜底，坏配置只该降级，不该让整次抓取失败。
+            val compressAvatars = cacheAvatars && AppConfig.compressReviewAvatars &&
+                avatarCompressionMaxBytes > 0L
+            val compressCommentImages = cacheCommentImages && AppConfig.compressReviewImages &&
+                imageCompressionMaxBytes > 0L
             json ?: return ResourceUrls(
                 cacheAvatars = cacheAvatars,
                 cacheCommentImages = cacheCommentImages,

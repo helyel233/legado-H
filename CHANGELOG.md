@@ -1,5 +1,21 @@
 # 更新日志
 
+## 1.14.4 版（2026-10-25）
+
+本版重构设置页（原「其它设置」30+ 项平铺拆成四个分类页），并加固评论压缩/重试的健壮性，无新功能。
+
+### 重构 / 优化
+
+- **设置页拆分与归组**：删除 `OtherConfigFragment` 与 `pref_config_other.xml`，按主题拆为「阅读 / 网络 / 存储 / 高级」四个分类页（`ReadingConfigFragment` / `NetworkConfigFragment` / `StorageConfigFragment` / `AdvancedConfigFragment`，对应 `ConfigTag` 与 `pref_config_*.xml`）。`ConfigActivity` 顶栏新增面包屑（`parentPath`），进入子页显示路径。评论下载、DNS、主题等内部再按主题分节（评论缓存 / 抓取引擎 / 评论数据 / 楼中楼 / 网页快照 / 离线资源 / 重处理 / 超时重试 / 完整性；DNS 按功能 / 域名例外 / 测速 / 高级）。
+- **共用声明式 helper**：`switch` / `choice` / `intChoice` 等各设置页共用的写法抽到 `ComposeSettingFragment`，新页面直接继承，不再每份各抄一份。
+
+### 修复
+
+- **评论压缩阈值下限钳制**：`reviewAvatarCompressionMaxKb` / `reviewImageCompressionMaxKb` 读写两侧钳到 `MIN_REVIEW_COMPRESSION_KB`（=1 KiB），历史坏值（0/负）读取时自动修正，避免压缩判定失效。
+- **坏配置降级而非崩溃**：`ReviewSnapshotCapture` 阈值非正时按「不压缩」处理，不再 `require` 抛异常——坏配置只该降级，不该让整次抓取失败。
+- **未知退避方式不再 error**：`ReviewDownloadConfig` 移除 `else -> error("未知评论重试退避方式")` 的硬失败分支。
+- **折叠分区不静默失效**：`SettingSpecScreen` 过滤 `visible` 后重建 `SettingSpec` 时透传 `collapsible` / `collapsedByDefault`；带 `scrollTargetKey` 定位进来时 `forceExpanded`，否则目标项不在列表里定位会静默失败。
+
 ## 1.14.3 版（2026-10-24）
 
 本版聚焦段评弹窗的打开速度与加载反馈，纯性能与体验优化，无新功能。

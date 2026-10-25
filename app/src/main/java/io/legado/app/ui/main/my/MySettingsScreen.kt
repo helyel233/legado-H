@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -69,8 +72,14 @@ internal data class MySettingsRowModel(
     val title: String,
     val summary: String? = null,
     val kind: MySettingsRowKind = MySettingsRowKind.Action,
-    val danger: Boolean = false
-)
+    val danger: Boolean = false,
+    /** 行首图标，主流设置页靠图标扫读；为 null 时退化成原来的纯文字行 */
+    val iconRes: Int? = null
+) {
+    /** 可点进下一层的行才显示箭头；「退出」这类动作行显示箭头会误导 */
+    val showChevron: Boolean
+        get() = !danger && (kind == MySettingsRowKind.Action || kind == MySettingsRowKind.ThemeMode)
+}
 
 internal data class MySettingsSectionModel(
     val title: String,
@@ -250,6 +259,21 @@ private fun SettingsSectionCard(
 }
 
 @Composable
+private fun SettingsLeadingIcon(
+    item: MySettingsRowModel,
+    colors: AppSettingPalette
+) {
+    val iconRes = item.iconRes ?: return
+    Icon(
+        painter = painterResource(iconRes),
+        contentDescription = null,
+        tint = if (item.danger) colors.danger else colors.accent,
+        modifier = Modifier.size(22.dp)
+    )
+    Spacer(modifier = Modifier.width(14.dp))
+}
+
+@Composable
 private fun SettingsActionRow(
     item: VisibleRow,
     colors: AppSettingPalette,
@@ -285,6 +309,7 @@ private fun SettingsActionRow(
             )
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
+        SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.row.title,
@@ -303,6 +328,21 @@ private fun SettingsActionRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+        if (item.row.showChevron) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                painter = painterResource(
+                    if (item.row.kind == MySettingsRowKind.ThemeMode) {
+                        R.drawable.ic_arrow_drop_down
+                    } else {
+                        R.drawable.ic_arrow_right
+                    }
+                ),
+                contentDescription = null,
+                tint = colors.secondaryText,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -342,6 +382,7 @@ private fun ServiceSwitchRow(
             )
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
+        SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.row.title,
@@ -388,7 +429,10 @@ private fun EmptySettingsFrame(
                 radiusPx = panelRadiusPx
             )
     ) {
-        AppSettingSectionTitle(title = "搜索结果", palette = colors)
+        AppSettingSectionTitle(
+            title = context.getString(R.string.settings_search_results),
+            palette = colors
+        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -397,7 +441,7 @@ private fun EmptySettingsFrame(
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Text(
-                text = "没有匹配的设置",
+                text = context.getString(R.string.settings_search_empty),
                 color = colors.secondaryText,
                 fontSize = 14.sp
             )
@@ -405,6 +449,12 @@ private fun EmptySettingsFrame(
     }
 }
 
+/**
+ * 搜索时除了保留命中的一级行，还把命中的深层设置项单独列成行：
+ * 用户搜「沉浸」看到的就是「沉浸式状态栏」这样的具体开关，而不是只看到
+ * 「界面设置」一行还要自己进去再找一遍。子项行用所属页面名当副标题，
+ * 点击直接深链到该设置并定位。
+ */
 private fun buildVisibleSections(
     sections: List<MySettingsSectionModel>,
     subSearchItems: List<MySettingsSubSearchItem>,
@@ -415,7 +465,7 @@ private fun buildVisibleSections(
 ): List<VisibleSection> {
     val query = searchQuery.trim().lowercase()
     return sections.mapNotNull { section ->
-        val rows = section.rows.mapNotNull { row ->
+        val rows = section.rows.flatMap { row ->
             val summary = row.effectiveSummary(
                 webServiceState = webServiceState,
                 autoTaskServiceState = autoTaskServiceState,
@@ -428,20 +478,32 @@ private fun buildVisibleSections(
                     item.ownerKey == row.key && item.searchText.contains(query)
                 }
             }
-            val visible = query.isBlank()
+            val selfMatched = query.isBlank()
                 || row.title.lowercase().contains(query)
                 || summary.lowercase().contains(query)
                 || row.key.lowercase().contains(query)
-                || matchedSubItems.isNotEmpty()
-            if (visible) {
-                VisibleRow(
-                    row = row,
-                    summary = matchedSubItems.firstOrNull()?.title ?: summary,
-                    searchTarget = matchedSubItems.firstOrNull()
-                )
-            } else {
-                null
+            val visibleRows = ArrayList<VisibleRow>(matchedSubItems.size + 1)
+            if (selfMatched) {
+                visibleRows.add(VisibleRow(row = row, summary = summary, searchTarget = null))
             }
+            // 子项行一律按普通可点行渲染：开关/主题模式那几种行需要外部状态，
+            // 子项没有，走了会显示成未勾选的空壳。
+            // 副标题写成「分区 › 页面」的面包屑，和 iOS 设置搜索结果一致，
+            // 用户点进去之前就知道这项在哪
+            val parentPath = "${section.title} › ${row.title}"
+            matchedSubItems.mapTo(visibleRows) { item ->
+                VisibleRow(
+                    row = MySettingsRowModel(
+                        key = item.key,
+                        title = item.title,
+                        summary = parentPath,
+                        iconRes = row.iconRes
+                    ),
+                    summary = parentPath,
+                    searchTarget = item
+                )
+            }
+            visibleRows
         }
         rows.takeIf { it.isNotEmpty() }?.let { VisibleSection(section.title, it) }
     }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -638,21 +639,65 @@ fun AppManagementIconAction(
 fun AppSettingSectionTitle(
     title: CharSequence?,
     palette: AppSettingPalette,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    collapsible: Boolean = false,
+    expanded: Boolean = true,
+    onToggle: (() -> Unit)? = null
 ) {
     if (title.isNullOrBlank()) return
-    Text(
-        text = title.toString(),
-        color = palette.accent,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        fontFamily = palette.titleFontFamily,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    if (!collapsible || onToggle == null) {
+        Text(
+            text = title.toString(),
+            color = palette.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = palette.titleFontFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+        )
+        return
+    }
+    val context = LocalContext.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
-    )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle
+            )
+            .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 8.dp)
+    ) {
+        Text(
+            text = title.toString(),
+            color = palette.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = palette.titleFontFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = context.getString(if (expanded) R.string.collapse else R.string.expand),
+            color = palette.accent,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.width(2.dp))
+        Icon(
+            painter = painterResource(
+                if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more
+            ),
+            contentDescription = null,
+            tint = palette.accent,
+            modifier = Modifier.size(18.dp)
+        )
+    }
 }
 
 fun Modifier.appSettingPanelBackground(

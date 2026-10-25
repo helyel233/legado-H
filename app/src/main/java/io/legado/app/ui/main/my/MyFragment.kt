@@ -343,8 +343,15 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             "txtTocRuleManage" -> startActivity<TxtTocRuleActivity>()
             "autoTaskManage" -> startActivity<AutoTaskActivity>()
             "bookmark" -> startActivity<AllBookmarkActivity>()
-            "setting" -> startActivity<ConfigActivity> {
-                putExtra("configTag", ConfigTag.OTHER_CONFIG)
+            // 一级行里凡是直接用 ConfigTag 常量做 key 的，都是二级设置页直达入口，
+            // 跳转目标就是它自己，不需要再写一遍 mapping
+            ConfigTag.READING_CONFIG,
+            ConfigTag.NETWORK_CONFIG,
+            ConfigTag.STORAGE_CONFIG,
+            ConfigTag.ADVANCED_CONFIG,
+            ConfigTag.COVER_CONFIG,
+            ConfigTag.WELCOME_CONFIG -> startActivity<ConfigActivity> {
+                putExtra("configTag", key)
             }
 
             "web_dav_setting" -> startActivity<ConfigActivity> {
@@ -372,16 +379,64 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         }
     }
 
+    /**
+     * 「我的」页的一级分类。
+     *
+     * 排布原则：按**用户的任务域**划分（内容的来龙去脉 → 怎么读 → 长什么样 →
+     * 智能与自动化 → 网络与同步 → 本机数据 → 兜底高级项），而不是按代码模块。
+     * 顺序是「日常常用在前，少见维护在后」，每区 3~6 项，避免一项独占一区。
+     *
+     * 关键约定 1：**行的 key 就是搜索深链的 ownerKey**，改 key 会连带断开
+     * [buildSubSearchItems] 里子项到一级行的挂载，两者必须同时改。
+     * 关键约定 2：一级行尽量用 [ConfigTag] 常量做 key，跳转、搜索、层级三者自动对齐。
+     */
     private fun buildSections(): List<MySettingsSectionModel> {
         return listOf(
             MySettingsSectionModel(
                 title = getString(R.string.config_category_content),
                 rows = listOf(
-                    actionRow("bookSourceManage", R.string.book_source_manage, R.string.book_source_manage_desc),
-                    actionRow("rssSourceManage", R.string.rss_source_manage, R.string.rss_source_manage_summary),
-                    actionRow("txtTocRuleManage", R.string.txt_toc_rule, R.string.config_txt_toc_rule),
-                    actionRow("replaceManage", R.string.replace_purify, R.string.replace_purify_desc),
-                    actionRow("dictRuleManage", R.string.dict_rule, R.string.config_dict_rule)
+                    actionRow(
+                        "bookSourceManage", R.string.book_source_manage,
+                        R.string.book_source_manage_desc, R.drawable.ic_cfg_source
+                    ),
+                    actionRow(
+                        "rssSourceManage", R.string.rss_source_manage,
+                        R.string.rss_source_manage_summary, R.drawable.ic_bottom_rss_feed
+                    ),
+                    actionRow(
+                        "replaceManage", R.string.replace_purify,
+                        R.string.replace_purify_desc, R.drawable.ic_cfg_replace
+                    ),
+                    actionRow(
+                        "txtTocRuleManage", R.string.txt_toc_rule,
+                        R.string.config_txt_toc_rule, R.drawable.ic_toc
+                    ),
+                    actionRow(
+                        "dictRuleManage", R.string.dict_rule,
+                        R.string.config_dict_rule, R.drawable.ic_translate
+                    ),
+                    // 回收站装的是删掉的书源/订阅源，属于内容域而不是本机存储
+                    actionRow(
+                        "sourceRecycleBin", R.string.source_recycle_bin,
+                        R.string.source_recycle_bin_summary, R.drawable.ic_restore
+                    )
+                )
+            ),
+            MySettingsSectionModel(
+                title = getString(R.string.config_category_reading),
+                rows = listOf(
+                    actionRow(
+                        ConfigTag.READING_CONFIG, R.string.reading_setting,
+                        R.string.reading_setting_s, R.drawable.ic_book_has
+                    ),
+                    actionRow(
+                        "bookmark", R.string.bookmark,
+                        R.string.all_bookmark, R.drawable.ic_bookmark
+                    ),
+                    actionRow(
+                        "readRecord", R.string.read_record,
+                        R.string.read_record_summary, R.drawable.ic_bottom_read_record
+                    )
                 )
             ),
             MySettingsSectionModel(
@@ -391,65 +446,104 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         key = PreferKey.themeMode,
                         title = getString(R.string.theme_mode),
                         summary = getString(R.string.theme_mode_desc),
-                        kind = MySettingsRowKind.ThemeMode
+                        kind = MySettingsRowKind.ThemeMode,
+                        iconRes = R.drawable.ic_daytime
                     ),
                     MySettingsRowModel(
                         key = "appearanceKit",
                         title = getString(R.string.appearance_kit_manage),
-                        summary = getString(R.string.appearance_kit_summary)
+                        summary = getString(R.string.appearance_kit_summary),
+                        iconRes = R.drawable.ic_cfg_theme
                     ),
-                    actionRow("theme_setting", R.string.theme_setting, R.string.theme_setting_s),
-                    actionRow("ai_setting", R.string.ai_setting, R.string.ai_setting_summary)
+                    actionRow(
+                        "theme_setting", R.string.theme_setting,
+                        R.string.theme_setting_s, R.drawable.ic_interface_setting
+                    ),
+                    actionRow(
+                        ConfigTag.COVER_CONFIG, R.string.cover_config,
+                        R.string.cover_config_summary, R.drawable.ic_image
+                    ),
+                    actionRow(
+                        ConfigTag.WELCOME_CONFIG, R.string.welcome_style,
+                        R.string.welcome_style_summary, R.drawable.ic_screen
+                    )
                 )
             ),
             MySettingsSectionModel(
-                title = getString(R.string.config_category_sync),
+                title = getString(R.string.config_category_ai_automation),
                 rows = listOf(
-                    actionRow("web_dav_setting", R.string.backup_restore, R.string.web_dav_set_import_old),
-                    actionRow("cacheManage", R.string.cache_manage_title, R.string.cache_manage_summary),
                     actionRow(
-                        "sourceRecycleBin",
-                        R.string.source_recycle_bin,
-                        R.string.source_recycle_bin_summary
+                        "ai_setting", R.string.ai_setting,
+                        R.string.ai_setting_summary, R.drawable.ic_bottom_ai
+                    ),
+                    MySettingsRowModel(
+                        key = PreferKey.autoTaskService,
+                        title = getString(R.string.auto_task_service),
+                        summary = getString(R.string.auto_task_service_desc),
+                        kind = MySettingsRowKind.AutoTaskService,
+                        iconRes = R.drawable.ic_timer_black_24dp
                     ),
                     actionRow(
-                        "publicWebRelay",
-                        R.string.public_web_relay,
-                        R.string.public_web_relay_summary
+                        key = "autoTaskManage",
+                        titleRes = R.string.auto_task_manage,
+                        summaryRes = R.string.auto_task_manage_desc,
+                        iconRes = R.drawable.ic_time_add_24dp
+                    )
+                )
+            ),
+            MySettingsSectionModel(
+                title = getString(R.string.config_category_network_sync),
+                rows = listOf(
+                    actionRow(
+                        ConfigTag.NETWORK_CONFIG, R.string.network_setting,
+                        R.string.network_setting_s, R.drawable.ic_network_check
+                    ),
+                    actionRow(
+                        "web_dav_setting", R.string.backup_restore,
+                        R.string.web_dav_set_import_old, R.drawable.ic_cfg_backup
                     ),
                     MySettingsRowModel(
                         key = PreferKey.webService,
                         title = getString(R.string.web_service),
                         summary = getString(R.string.web_service_desc),
-                        kind = MySettingsRowKind.WebService
-                    )
-                )
-            ),
-            MySettingsSectionModel(
-                title = getString(R.string.auto_task_group),
-                rows = listOf(
-                    MySettingsRowModel(
-                        key = PreferKey.autoTaskService,
-                        title = getString(R.string.auto_task_service),
-                        summary = getString(R.string.auto_task_service_desc),
-                        kind = MySettingsRowKind.AutoTaskService
+                        kind = MySettingsRowKind.WebService,
+                        iconRes = R.drawable.ic_cfg_web
                     ),
                     actionRow(
-                        key = "autoTaskManage",
-                        titleRes = R.string.auto_task_manage,
-                        summaryRes = R.string.auto_task_manage_desc
+                        "publicWebRelay",
+                        R.string.public_web_relay,
+                        R.string.public_web_relay_summary,
+                        R.drawable.ic_web_outline
                     )
                 )
             ),
             MySettingsSectionModel(
-                title = getString(R.string.config_category_tools),
+                title = getString(R.string.config_category_data_device),
                 rows = listOf(
-                    actionRow("setting", R.string.other_setting, R.string.other_setting_s),
-                    actionRow("bookmark", R.string.bookmark, R.string.all_bookmark),
-                    actionRow("readRecord", R.string.read_record, R.string.read_record_summary),
-                    actionRow("fileManage", R.string.file_manage, R.string.file_manage_summary),
-                    actionRow("about", R.string.about, null),
-                    actionRow("exit", R.string.exit, null)
+                    actionRow(
+                        "cacheManage", R.string.cache_manage_title,
+                        R.string.cache_manage_summary, R.drawable.ic_download
+                    ),
+                    actionRow(
+                        ConfigTag.STORAGE_CONFIG, R.string.storage_cleanup_title,
+                        R.string.storage_cleanup_s, R.drawable.ic_storage_black_24dp
+                    ),
+                    actionRow(
+                        "fileManage", R.string.file_manage,
+                        R.string.file_manage_summary, R.drawable.ic_folder
+                    )
+                )
+            ),
+            MySettingsSectionModel(
+                title = getString(R.string.config_category_advanced),
+                rows = listOf(
+                    actionRow(
+                        ConfigTag.ADVANCED_CONFIG, R.string.advanced_setting,
+                        R.string.advanced_setting_s, R.drawable.ic_settings
+                    ),
+                    actionRow("about", R.string.about, null, R.drawable.ic_cfg_about),
+                    // 退出不是「进入下一层」，所以标红 + 不带箭头：避免和跳转项混淆
+                    actionRow("exit", R.string.exit, null, R.drawable.ic_exit, danger = true)
                 )
             )
         )
@@ -459,12 +553,14 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         key: String,
         titleRes: Int,
         summaryRes: Int?,
+        iconRes: Int? = null,
         danger: Boolean = false
     ): MySettingsRowModel {
         return MySettingsRowModel(
             key = key,
             title = getString(titleRes),
             summary = summaryRes?.let(::getString),
+            iconRes = iconRes,
             danger = danger
         )
     }
@@ -482,15 +578,26 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         }
     }
 
+    /**
+     * 二级设置项（Kotlin spec 里的每一项）挂到一级行的 [MySettingsSubSearchItem.ownerKey] 上，
+     * 这样搜索命中深层设置时能直接从一级行跳进去并定位。
+     *
+     * ownerKey 必须等于 [buildSections] 里某一行的 key：封面与欢迎页已各自成为一级行，
+     * 就各自挂自己的 key，不再全挂在 "theme_setting" 下（否则搜一个问题会出现三行同结果）。
+     */
     private fun buildSubSearchItems(): List<MySettingsSubSearchItem> {
         return listOf(
+            Triple(ConfigTag.READING_CONFIG, R.xml.pref_config_reading, ConfigTag.READING_CONFIG),
             Triple("theme_setting", R.xml.pref_config_theme, ConfigTag.THEME_CONFIG),
-            Triple("theme_setting", R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
-            Triple("theme_setting", R.xml.pref_config_welcome, ConfigTag.WELCOME_CONFIG),
+            Triple(ConfigTag.COVER_CONFIG, R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
+            Triple(ConfigTag.WELCOME_CONFIG, R.xml.pref_config_welcome, ConfigTag.WELCOME_CONFIG),
             Triple("web_dav_setting", R.xml.pref_config_backup, ConfigTag.BACKUP_CONFIG),
             Triple("ai_setting", R.xml.pref_config_ai, ConfigTag.AI_CONFIG),
-            Triple("setting", R.xml.pref_config_other, ConfigTag.OTHER_CONFIG),
-            Triple("setting", R.xml.pref_config_network_dns, ConfigTag.NETWORK_DNS_CONFIG),
+            Triple(ConfigTag.NETWORK_CONFIG, R.xml.pref_config_network, ConfigTag.NETWORK_CONFIG),
+            // DNS 是「网络设置」的下一层，所以它的子项挂在「网络设置」这一行下面
+            Triple(ConfigTag.NETWORK_CONFIG, R.xml.pref_config_network_dns, ConfigTag.NETWORK_DNS_CONFIG),
+            Triple(ConfigTag.STORAGE_CONFIG, R.xml.pref_config_storage, ConfigTag.STORAGE_CONFIG),
+            Triple(ConfigTag.ADVANCED_CONFIG, R.xml.pref_config_advanced, ConfigTag.ADVANCED_CONFIG),
             Triple(
                 "theme_setting",
                 R.xml.pref_config_discovery_subscription,
@@ -498,15 +605,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             )
         ).flatMap { (ownerKey, xmlRes, ownerConfigTag) ->
             buildPreferenceXmlSearchItems(ownerKey, xmlRes, ownerConfigTag)
-        } + listOf(
-            MySettingsSubSearchItem(
-                ownerKey = "theme_setting",
-                title = getString(R.string.welcome_style),
-                summary = getString(R.string.welcome_style_summary),
-                key = PreferKey.welcomeShowTime,
-                ownerConfigTag = ConfigTag.WELCOME_CONFIG
-            )
-        )
+        }
     }
 
     private fun buildPreferenceXmlSearchItems(
@@ -520,6 +619,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 if (eventType == XmlPullParser.START_TAG) {
+                    // 分组头（PreferenceCategory）也可能带 key+title，但它们不是设置项，
+                    // 收进来会出现一条"点过去永远定位不到"的死搜索结果
+                    if (parser.name?.endsWith("PreferenceCategory") == true) {
+                        eventType = parser.next()
+                        continue
+                    }
                     val title = collectPreferenceAttr(parser, "title").orEmpty()
                     val key = collectPreferenceAttr(parser, "key").orEmpty()
                     if (title.isNotBlank() && key.isNotBlank()) {

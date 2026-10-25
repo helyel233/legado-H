@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.widget.Toolbar
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +52,7 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
     private lateinit var titleComposeView: ComposeView
     private lateinit var menuToolbar: Toolbar
     private var titleText by mutableStateOf("")
+    private var parentPathText by mutableStateOf<String?>(null)
 
     override val binding: ViewBinding by lazy {
         titleText = getString(R.string.setting)
@@ -130,11 +132,17 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
         titleComposeView.setContent {
             ConfigTopBar(
                 title = titleText,
+                parentPath = parentPathText,
                 onBack = ::supportFinishAfterTransition
             )
         }
-        when (val configTag = intent.getStringExtra("configTag")) {
-            ConfigTag.OTHER_CONFIG -> replaceFragment(configTag, OtherConfigFragment::class.java)
+        val configTag = intent.getStringExtra("configTag")
+        parentPathText = breadcrumbOf(configTag)
+        when (configTag) {
+            ConfigTag.READING_CONFIG -> replaceFragment(configTag, ReadingConfigFragment::class.java)
+            ConfigTag.NETWORK_CONFIG -> replaceFragment(configTag, NetworkConfigFragment::class.java)
+            ConfigTag.STORAGE_CONFIG -> replaceFragment(configTag, StorageConfigFragment::class.java)
+            ConfigTag.ADVANCED_CONFIG -> replaceFragment(configTag, AdvancedConfigFragment::class.java)
             ConfigTag.NETWORK_DNS_CONFIG -> replaceFragment(configTag, NetworkDnsConfigFragment::class.java)
             ConfigTag.THEME_CONFIG -> replaceFragment(configTag, ThemeConfigFragment::class.java)
             ConfigTag.BACKUP_CONFIG -> replaceFragment(configTag, BackupConfigFragment::class.java)
@@ -159,6 +167,36 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
         titleText = title?.toString().orEmpty()
     }
 
+    /**
+     * 顶栏副标题显示「这一页是从哪个一级分类进来的」，是设置页父子体系的可见线索。
+     * 只列父级、不含页面自身（自身已经是标题），避免重复。
+     * 新增 ConfigTag 时记得在这里补一条，否则该页顶栏会没有路径提示。
+     */
+    private fun breadcrumbOf(configTag: String?): String? {
+        val parents = when (configTag) {
+            ConfigTag.READING_CONFIG -> listOf(R.string.config_category_reading)
+            ConfigTag.NETWORK_CONFIG -> listOf(R.string.config_category_network_sync)
+            ConfigTag.STORAGE_CONFIG -> listOf(R.string.config_category_data_device)
+            ConfigTag.ADVANCED_CONFIG -> listOf(R.string.config_category_advanced)
+            ConfigTag.NETWORK_DNS_CONFIG ->
+                listOf(R.string.config_category_network_sync, R.string.network_setting)
+
+            ConfigTag.THEME_CONFIG,
+            ConfigTag.COVER_CONFIG,
+            ConfigTag.WELCOME_CONFIG -> listOf(R.string.config_category_appearance)
+
+            ConfigTag.AI_CONFIG -> listOf(R.string.config_category_ai_automation)
+            ConfigTag.BACKUP_CONFIG -> listOf(R.string.config_category_network_sync)
+            ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
+            ConfigTag.DISCOVERY_CONFIG,
+            ConfigTag.SUBSCRIPTION_CONFIG ->
+                listOf(R.string.config_category_appearance, R.string.theme_setting)
+
+            else -> return null
+        }
+        return parents.joinToString(" › ") { getString(it) }
+    }
+
     fun <T : Fragment> replaceFragment(configTag: String, fragmentClass: Class<T>) {
         intent.putExtra("configTag", configTag)
         val configFragment = supportFragmentManager.findFragmentByTag(configTag)
@@ -180,9 +218,11 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
 @Composable
 private fun ConfigTopBar(
     title: String,
+    parentPath: String?,
     onBack: () -> Unit
 ) {
     val palette = rememberAppSettingPalette()
+    val hasPath = !parentPath.isNullOrBlank()
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.bodyFontFamily)
     ) {
@@ -190,7 +230,7 @@ private fun ConfigTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(56.dp),
+                .height(if (hasPath) 64.dp else 56.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -200,16 +240,27 @@ private fun ConfigTopBar(
                     tint = palette.primaryText
                 )
             }
-            Text(
-                text = title,
-                color = palette.primaryText,
-                fontFamily = palette.titleFontFamily,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = palette.primaryText,
+                    fontFamily = palette.titleFontFamily,
+                    fontSize = if (hasPath) 18.sp else 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (hasPath) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = parentPath.orEmpty(),
+                        color = palette.secondaryText,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Spacer(modifier = Modifier.width(CONFIG_MENU_HOST_WIDTH_DP.dp))
         }
     }

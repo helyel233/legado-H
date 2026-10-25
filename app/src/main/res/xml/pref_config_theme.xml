@@ -74,4 +74,9 @@
         android:title="@string/cover_config"
         app:iconSpaceReserved="false" />
 
+    <io.legado.app.lib.prefs.Preference
+            android:key="share_note_template_manage"
+            android:summary="@string/share_note_template_manage_summary"
+            android:title="@string/share_note_template_manage" />
+
 </androidx.preference.PreferenceScreen>
