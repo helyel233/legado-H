@@ -2867,6 +2867,8 @@ Selected text or question:
     <string name="review_error_message_unknown">An unexpected problem occurred. Retry once; if it keeps happening, please report the technical details below.</string>
     <string name="review_error_detail">Technical details</string>
     <string name="review_loading_slow">Still loading, hang on…</string>
+    <string name="book_source_empty_import">No sources yet.\nTap + on the top bar to create one, or import from the ⋮ menu.</string>
+    <string name="book_source_empty_filter">No matching sources. Try another keyword or clear the search.</string>
     <string name="review_error_missing_args">Review data is incomplete, please reopen it</string>
     <string name="review_fallback_snapshot_toast">Network unavailable, showing cached reviews</string>
     <string name="integer_input_range_hint">%1$d-%2$d</string>

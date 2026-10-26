@@ -132,6 +132,12 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private val hostMap = hashMapOf<String, String>()
     private val finalMessageRegex = Regex("成功|失败")
     private val sourcesState = mutableStateListOf<BookSourcePart>()
+
+    /**
+     * 首批书源数据是否尚未到达。为 true 时不渲染「还没有书源」空态，
+     * 否则冷启动（Room 查询未返回）会先闪出误导性的空态再变成列表。
+     */
+    private val isListLoading = mutableStateOf(true)
     private val selectedUrls = mutableStateOf<Set<String>>(emptySet())
     private val isSelectMode = mutableStateOf(false)
     private val searchQueryState = mutableStateOf("")
@@ -171,6 +177,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        restoreViewStates()
         initComposeContent()
         upBookSource()
         initLiveDataGroup()
@@ -178,6 +185,20 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         if (!LocalConfig.bookSourcesHelpVersionIsLast) {
             showHelp("SourceMBookHelp")
         }
+    }
+
+    /**
+     * 恢复上次离开时的排序/分组视图状态。
+     *
+     * 排序是高频个人习惯：用户如果习惯按更新时间看源，每次进页面都被
+     * 重置回手动排序就得重新设置一遍。存 name 而非 ordinal，
+     * 枚举成员增删时不会错位（非法值静默回退手动排序）。
+     */
+    private fun restoreViewStates() {
+        sort = parseBookSourceSort(LocalConfig.bookSourceSortName)
+        sortAscending = LocalConfig.bookSourceSortAscending
+        groupSourcesByDomain = LocalConfig.bookSourceGroupByDomain
+        showSourceHostState.value = groupSourcesByDomain
     }
 
     private fun initComposeContent() {
@@ -303,7 +324,15 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         onToggleSelect = ::toggleSourceSelection,
                         onToggleEnabled = ::toggleSourceEnabled,
                         onEdit = ::edit,
-                        sourceMenuActions = ::sourceMenuActions
+                        sourceMenuActions = ::sourceMenuActions,
+                        emptyHint = when {
+                            sourcesState.isNotEmpty() || isListLoading.value -> null
+                            searchQueryState.value.isBlank() ->
+                                getString(R.string.book_source_empty_import)
+
+                            else ->
+                                getString(R.string.book_source_empty_filter)
+                        }
                     )
                 }
             }
@@ -423,15 +452,18 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     private fun showSortMenu() {
+        // 菜单项不带选中态，当前排序用「（当前）」后缀标记，
+        // 否则用户无法分辨现在处于哪种排序、点了哪一项生效
+        val currentMark = "（${getString(R.string.menu_current_option)}）"
         val labels = listOf(
-            getString(R.string.sort_desc),
-            getString(R.string.sort_manual),
-            getString(R.string.sort_auto),
-            getString(R.string.sort_by_name),
-            getString(R.string.sort_by_url),
-            getString(R.string.sort_by_lastUpdateTime),
-            getString(R.string.sort_by_respondTime),
-            getString(R.string.is_enabled)
+            getString(R.string.sort_desc) + if (!sortAscending) currentMark else "",
+            getString(R.string.sort_manual) + if (sort == BookSourceSort.Default) currentMark else "",
+            getString(R.string.sort_auto) + if (sort == BookSourceSort.Weight) currentMark else "",
+            getString(R.string.sort_by_name) + if (sort == BookSourceSort.Name) currentMark else "",
+            getString(R.string.sort_by_url) + if (sort == BookSourceSort.Url) currentMark else "",
+            getString(R.string.sort_by_lastUpdateTime) + if (sort == BookSourceSort.Update) currentMark else "",
+            getString(R.string.sort_by_respondTime) + if (sort == BookSourceSort.Respond) currentMark else "",
+            getString(R.string.is_enabled) + if (sort == BookSourceSort.Enable) currentMark else ""
         )
         showComposeActionListDialog(
             title = getString(R.string.sort),
@@ -454,15 +486,28 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     private fun showFilterMenu() {
+        // 与排序菜单同理：当前生效的筛选在菜单里标记出来。
+        // 注意标签加了后缀后不能再用标签文本反推筛选条件，
+        // 分组走 groups[index - 固定项数] 取原始名。
+        val currentMark = "（${getString(R.string.menu_current_option)}）"
+        val query = searchQueryState.value
+        fun marked(labelRes: Int): String {
+            val label = getString(labelRes)
+            return if (query == label) label + currentMark else label
+        }
+
         val fixedLabels = listOf(
             getString(R.string.group_manage),
-            getString(R.string.enabled),
-            getString(R.string.disabled),
-            getString(R.string.need_login),
-            getString(R.string.no_group),
-            getString(R.string.enabled_explore),
-            getString(R.string.disabled_explore)
+            marked(R.string.enabled),
+            marked(R.string.disabled),
+            marked(R.string.need_login),
+            marked(R.string.no_group),
+            marked(R.string.enabled_explore),
+            marked(R.string.disabled_explore)
         )
+        fun groupLabel(group: String): String =
+            if (query == "group:$group") group + currentMark else group
+
         if (groups.size > GROUP_ACTION_LIST_LIMIT) {
             val labels = fixedLabels + getString(R.string.group_select)
             showComposeActionListDialog(
@@ -482,7 +527,9 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             }
             return
         }
-        val labels = fixedLabels + groups
+        // 对话框打开期间分组列表可能被后台 flow 刷新，回调里用的是打开时的快照
+        val groupSnapshot = groups.toList()
+        val labels = fixedLabels + groupSnapshot.map(::groupLabel)
         showComposeActionListDialog(
             title = getString(R.string.menu_action_group),
             labels = labels
@@ -495,7 +542,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 4 -> updateSearchQuery(getString(R.string.no_group))
                 5 -> updateSearchQuery(getString(R.string.enabled_explore))
                 6 -> updateSearchQuery(getString(R.string.disabled_explore))
-                else -> updateSearchQuery("group:${labels[index]}")
+                else -> updateSearchQuery("group:${groupSnapshot[index - fixedLabels.size]}")
             }
         }
     }
@@ -522,7 +569,10 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             AppManagementMenuAction(getString(R.string.import_by_qr_code)) {
                 qrResult.launch()
             },
-            AppManagementMenuAction(getString(R.string.group_sources_by_domain)) {
+            AppManagementMenuAction(
+                text = getString(R.string.group_sources_by_domain),
+                checked = groupSourcesByDomain
+            ) {
                 setGroupSourcesByDomain(!groupSourcesByDomain)
             },
             AppManagementMenuAction(getString(R.string.help)) {
@@ -539,11 +589,15 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private fun setGroupSourcesByDomain(enabled: Boolean) {
         groupSourcesByDomain = enabled
         showSourceHostState.value = enabled
+        LocalConfig.bookSourceGroupByDomain = enabled
         updateSourceHostHeaders(sourcesState)
         refreshBookSources()
     }
 
     private fun refreshBookSources() {
+        // 所有排序入口都汇聚到这里，持久化放在这一处即可全覆盖
+        LocalConfig.bookSourceSortName = sort.name
+        LocalConfig.bookSourceSortAscending = sortAscending
         upBookSource(searchQueryState.value)
     }
 
@@ -640,7 +694,9 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 table = AppDatabase.BOOK_SOURCE_TABLE_NAME
             ).catch {
                 AppLog.put("书源界面更新书源出错", it)
-            }.flowOn(IO).conflate().collect { data ->
+            }            .flowOn(IO).conflate().collect { data ->
+                // 首批数据已到（哪怕为空）：空态提示可以显示了
+                isListLoading.value = false
                 sourcesState.replaceByIndex(data, ::sameBookSourcePartContent)
                 val currentUrls = data.mapTo(mutableSetOf()) { it.bookSourceUrl }
                 selectedUrls.value = selectedUrls.value.filter { it in currentUrls }.toSet()

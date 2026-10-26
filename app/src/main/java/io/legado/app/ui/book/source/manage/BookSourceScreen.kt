@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,7 +51,8 @@ internal fun BookSourceScreen(
     onToggleSelect: (BookSourcePart) -> Unit,
     onToggleEnabled: (BookSourcePart, Boolean) -> Unit,
     onEdit: (BookSourcePart) -> Unit,
-    sourceMenuActions: (BookSourcePart) -> List<AppManagementMenuAction>
+    sourceMenuActions: (BookSourcePart) -> List<AppManagementMenuAction>,
+    emptyHint: String? = null
 ) {
     val palette = rememberAppManagementPalette()
     val lazyListState = rememberLazyListState()
@@ -111,6 +113,19 @@ internal fun BookSourceScreen(
         state = lazyListState,
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
+        if (sourceSnapshot.isEmpty() && !emptyHint.isNullOrBlank()) {
+            item(key = "empty", contentType = "empty") {
+                Text(
+                    text = emptyHint,
+                    color = palette.settings.secondaryText,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 72.dp)
+                )
+            }
+        }
         if (reorderEnabled) {
             // 手动排序:扁平列表 + 拖动手柄重排(长按仍为多选,不冲突)。
             items(

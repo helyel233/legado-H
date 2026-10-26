@@ -2645,6 +2645,8 @@ bookUrl：%7$s
     <string name="review_error_message_unknown">遇到了一个没预料到的问题。可以重试一次；如果一直这样，麻烦把下面的技术细节反馈给开发者。</string>
     <string name="review_error_detail">技术细节</string>
     <string name="review_loading_slow">加载较慢，仍在努力…</string>
+    <string name="book_source_empty_import">还没有书源\n点顶栏 + 新建，或从 ⋮ 菜单导入</string>
+    <string name="book_source_empty_filter">没有匹配的书源，换个关键词或清除搜索再试试</string>
     <string name="review_error_missing_args">段评参数缺失，请重新打开</string>
     <string name="review_fallback_snapshot_toast">网络没连上，先显示本地缓存的段评</string>
     <string name="integer_input_range_hint">%1$d-%2$d</string>

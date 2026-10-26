@@ -203,4 +203,30 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             putString("crashSummary", value)
         }
 
+    /**
+     * 书源管理页的上次排序方式（BookSourceSort.name）。
+     *
+     * 排序是高频个人习惯（常按更新时间/权重看源），每次进页面都回到手动排序
+     * 意味着用户要重新设置一遍；存名字而不是序号，枚举成员调整时不会错位。
+     */
+    var bookSourceSortName: String
+        get() = getString("bookSourceSortName", "") ?: ""
+        set(value) {
+            putString("bookSourceSortName", value)
+        }
+
+    /** 书源管理页：上次排序是否为降序 */
+    var bookSourceSortAscending: Boolean
+        get() = getBoolean("bookSourceSortAscending", true)
+        set(value) {
+            putBoolean("bookSourceSortAscending", value)
+        }
+
+    /** 书源管理页：上次是否按域名分组显示 */
+    var bookSourceGroupByDomain: Boolean
+        get() = getBoolean("bookSourceGroupByDomain")
+        set(value) {
+            putBoolean("bookSourceGroupByDomain", value)
+        }
+
 }
