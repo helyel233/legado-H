@@ -378,6 +378,8 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             R.id.menu_switch_layout -> {
                 viewModel.switchLayout()
                 upFragments()
+                // 样式切换后没有任何提示，用户不知道当前是第几种排版
+                toastOnUi(getString(R.string.rss_article_style_toast, (viewModel.articleStyle ?: 0) + 1))
             }
 
             R.id.menu_read_record -> showDialogFragment(ReadRecordDialog(viewModel.rssSource?.sourceUrl))

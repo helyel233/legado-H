@@ -1,11 +1,14 @@
 package io.legado.app.ui.rss.source.manage
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -39,7 +43,10 @@ internal fun RssSourceScreen(
     onToggleSelect: (RssSource) -> Unit,
     onToggleEnabled: (RssSource, Boolean) -> Unit,
     onEdit: (RssSource) -> Unit,
-    sourceMenuActions: (RssSource) -> List<AppManagementMenuAction>
+    sourceMenuActions: (RssSource) -> List<AppManagementMenuAction>,
+    debugMessages: Map<String, String> = emptyMap(),
+    isChecking: Boolean = false,
+    emptyHint: String? = null
 ) {
     val palette = rememberAppManagementPalette()
     val lazyListState = rememberLazyListState()
@@ -68,9 +75,14 @@ internal fun RssSourceScreen(
 
     @Composable
     fun itemRow(source: RssSource, dragHandle: (@Composable () -> Unit)? = null) {
+        val message = debugMessages[source.sourceUrl].orEmpty()
         RssSourceItemRow(
             source = source,
             palette = palette,
+            debugMessage = message,
+            debugInProgress = message.isNotBlank() &&
+                isChecking &&
+                !message.contains(FINAL_DEBUG_MESSAGE_REGEX),
             isSelected = source.sourceUrl in selectedUrls,
             isSelectMode = isSelectMode,
             onToggleSelect = { onToggleSelect(source) },
@@ -83,7 +95,8 @@ internal fun RssSourceScreen(
 
     if (!isSelectMode && sourceSnapshot.isEmpty()) {
         ListStatePlaceholder(
-            text = stringResource(R.string.rss_source_empty),
+            // 空库与"搜索无结果"给不同文案：前者引导去导入，后者引导换关键词
+            text = emptyHint ?: stringResource(R.string.rss_source_empty),
             textColor = palette.settings.secondaryText,
             accentColor = palette.settings.accent,
             fontFamily = palette.settings.bodyFontFamily
@@ -135,6 +148,8 @@ internal fun RssSourceScreen(
 private fun RssSourceItemRow(
     source: RssSource,
     palette: AppManagementPalette,
+    debugMessage: String,
+    debugInProgress: Boolean,
     isSelected: Boolean,
     isSelectMode: Boolean,
     onToggleSelect: () -> Unit,
@@ -145,7 +160,8 @@ private fun RssSourceItemRow(
 ) {
     AppManagementListRow(
         title = source.sourceName,
-        subtitle = source.sourceGroup,
+        // 校验期间副标题让位给校验消息（成功/失败与耗时），平时显示分组
+        subtitle = debugMessage.ifBlank { source.sourceGroup },
         palette = palette,
         selected = isSelected,
         selectionVisible = isSelectMode,
@@ -164,6 +180,24 @@ private fun RssSourceItemRow(
         onLongClick = onToggleSelect,
         onEdit = onEdit,
         moreActions = moreActions,
-        leadingContent = dragHandle
+        leadingContent = dragHandle,
+        trailingBeforeSwitch = {
+            Box(
+                modifier = Modifier.width(30.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (debugInProgress) {
+                    CircularProgressIndicator(
+                        color = palette.settings.accent,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
     )
 }
+
+// 与 RssSourceActivity.finalMessageRegex 同语义：只认「校验成功/校验失败」终态，
+// 宽泛的「成功|失败」会命中解析链路的中间消息（「≡获取成功:…」）
+private val FINAL_DEBUG_MESSAGE_REGEX = Regex("校验成功|校验失败")

@@ -180,6 +180,8 @@ class RssSourceEditActivity :
             R.id.menu_fullscreen_edit -> onFullEditClicked()
 
             R.id.menu_save -> viewModel.save(getRssSource()) {
+                // 保存后页面立刻关闭，没有提示的话用户不确定到底存没存上
+                toastOnUi(R.string.save_success)
                 setResult(RESULT_OK)
                 finish()
             }

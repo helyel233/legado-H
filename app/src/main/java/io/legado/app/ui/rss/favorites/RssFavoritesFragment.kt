@@ -14,11 +14,15 @@ import io.legado.app.data.entities.RssStar
 import io.legado.app.databinding.FragmentRssArticlesBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.rss.read.ReadRss
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyNavigationBarPadding
+import io.legado.app.utils.gone
 import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.undoSnackbar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -53,6 +57,7 @@ class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fr
         }
         recyclerView.adapter = adapter
         recyclerView.applyNavigationBarPadding()
+        tvEmpty.setTextColor(secondaryTextColor)
     }
 
     private fun loadArticles() {
@@ -64,7 +69,20 @@ class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fr
                 AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).collect {
                 adapter.setItems(it)
+                // 空分组原本是一片空白，用户不知道是加载失败还是本来就没收藏
+                showEmpty(it.isEmpty())
             }
+        }
+    }
+
+    private fun showEmpty(empty: Boolean) = binding.run {
+        if (empty) {
+            tvEmpty.setText(R.string.rss_favorites_empty)
+            tvEmpty.visible()
+            recyclerView.gone()
+        } else {
+            tvEmpty.gone()
+            recyclerView.visible()
         }
     }
 
@@ -78,6 +96,15 @@ class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fr
             noButton()
             yesButton {
                 appDb.rssStarDao.delete(rssStar.origin, rssStar.link)
+                // 收藏删掉就找不回来了，给一个撤销窗口
+                binding.root.undoSnackbar(
+                    getString(R.string.deleted_rss_favorites),
+                    getString(R.string.undo)
+                ) {
+                    lifecycleScope.launch(IO) {
+                        appDb.rssStarDao.insert(rssStar)
+                    }
+                }
             }
         }
     }

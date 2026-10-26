@@ -175,7 +175,8 @@ class MainTopBarView @JvmOverloads constructor(
 
     fun setMode(mode: Mode) {
         this.mode = mode
-        moreButton.isVisible = mode == Mode.BOOKSHELF || mode == Mode.READ_RECORD || mode == Mode.DISCOVERY
+        moreButton.isVisible = mode == Mode.BOOKSHELF || mode == Mode.READ_RECORD ||
+            mode == Mode.DISCOVERY || mode == Mode.RSS
         searchButton.isVisible = mode == Mode.DISCOVERY || mode == Mode.RSS
         filterButton.isVisible = mode == Mode.DISCOVERY
         starButton.isVisible = mode == Mode.RSS

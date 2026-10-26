@@ -7,6 +7,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.DefaultData
 import io.legado.app.help.source.SourceHelp
+import io.legado.app.help.source.SourceRecycleBinHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.normalizeFileName
@@ -48,6 +49,27 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
     fun del(vararg rssSource: RssSource) {
         execute {
             SourceHelp.deleteRssSources(rssSource.toList())
+        }
+    }
+
+    /** 带撤销的删除：删除完成即回调，调用方展示 undoSnackbar，撤销窗口内可恢复 */
+    fun delWithUndo(sources: List<RssSource>, onDeleted: (List<RssSource>) -> Unit) {
+        execute {
+            SourceHelp.deleteRssSourcesWithUndo(sources, onDeleted)
+        }
+    }
+
+    /** 撤销删除：源插回原表，并从回收站清掉对应条目（否则回收站里残留已恢复的源） */
+    fun restoreDeleted(sources: List<RssSource>) {
+        if (sources.isEmpty()) return
+        execute {
+            appDb.runInTransaction {
+                appDb.rssSourceDao.insert(*sources.toTypedArray())
+                appDb.sourceRecycleBinDao.deleteByKeys(
+                    SourceRecycleBinHelp.TYPE_RSS_SOURCE,
+                    sources.map { it.sourceUrl }
+                )
+            }
         }
     }
 

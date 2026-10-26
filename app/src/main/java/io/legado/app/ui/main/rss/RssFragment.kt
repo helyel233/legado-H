@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
@@ -46,6 +47,7 @@ import io.legado.app.ui.rss.favorites.RssFavoritesActivity
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
+import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.applyStatusBarPadding
 import io.legado.app.utils.applyTint
@@ -53,9 +55,12 @@ import io.legado.app.utils.dpToPx
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.gone
 import io.legado.app.utils.openUrl
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.share
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.toastOnUi
+import splitties.init.appCtx
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
@@ -276,6 +281,9 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.swipeRefreshLayout.setOnRefreshListener {
             refreshCurrentRssContent()
         }
+        binding.topBar.moreButton.setOnClickListener {
+            showModernRssMoreMenu()
+        }
         binding.topBar.titleSelect.setOnClickListener {
             showSourceSelector()
         }
@@ -324,6 +332,40 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.topBar.setOnHeightChangedListener {
             updateModernRssTopBarOverlay()
         }
+    }
+
+    /**
+     * 现代模式下的「更多」菜单。
+     *
+     * 现代模式没有传统 optionsMenu（经典模式的菜单项在现代模式下全部隐藏），
+     * 导致「订阅源管理」「我的收藏」这些入口在默认界面里找不到——收藏甚至只藏在
+     * 长按星标里。这里补一个显式入口，并给出回到经典布局的退路。
+     */
+    private fun showModernRssMoreMenu() {
+        val labels = listOf(
+            getString(R.string.rss_source_manage),
+            getString(R.string.favorite),
+            getString(R.string.history),
+            getString(R.string.switch_classic_rss)
+        )
+        showComposeActionListDialog(
+            title = getString(R.string.menu),
+            labels = labels
+        ) { index ->
+            when (index) {
+                0 -> startActivity<RssSourceActivity>()
+                1 -> startActivity<RssFavoritesActivity>()
+                2 -> showDialogFragment<ReadRecordDialog>()
+                3 -> switchToClassicRss()
+            }
+        }
+    }
+
+    /** 切回经典布局：经典模式才有源宫格列数、文章样式切换等完整入口 */
+    private fun switchToClassicRss() {
+        requireContext().putPrefBoolean(PreferKey.modernRssPage, false)
+        applyRssMode()
+        toastOnUi(getString(R.string.switch_classic_rss_toast))
     }
 
     private fun updateModernRssTopBarOverlay() {

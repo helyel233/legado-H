@@ -157,6 +157,28 @@ object SourceHelp {
         AppCacheManager.clearSourceVariables()
     }
 
+    /**
+     * 带撤销的订阅源删除：删除完成后把完整实体回调给调用方，
+     * 由调用方在撤销窗口内提供 undo 入口（见 RssSourceActivity 的 undoSnackbar）。
+     *
+     * 与 [deleteRssSources] 的差别只是回调：删除链路本身（入回收站、删源、
+     * 删文章、按回收站开关决定是否清源变量）完全一致，两条路径不会漂移。
+     * 管理页列表持有的是完整 RssSource 实体，无需像书源那样回读。
+     */
+    fun deleteRssSourcesWithUndo(
+        sources: List<RssSource>,
+        onDeleted: (List<RssSource>) -> Unit
+    ) {
+        appDb.runInTransaction {
+            SourceRecycleBinHelp.recycleRssSources(sources)
+            sources.forEach {
+                deleteRssSourceInternal(it.sourceUrl)
+            }
+        }
+        AppCacheManager.clearSourceVariables()
+        onDeleted(sources)
+    }
+
     private fun deleteRssSourceInternal(key: String) {
         appDb.rssSourceDao.delete(key)
         appDb.rssArticleDao.delete(key)

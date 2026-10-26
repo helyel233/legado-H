@@ -19,6 +19,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
 import io.legado.app.help.IntentData
 import io.legado.app.help.source.exploreKinds
+import io.legado.app.model.CheckRssSource
 import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
 import io.legado.app.model.webBook.WebBook
@@ -105,7 +106,11 @@ class CheckSourceService : BaseService() {
             toastOnUi("已有书源在校验,等完成后再试")
             return
         }
-        Debug.clearCheckingCache()
+        // 订阅源校验进行中时不能清共享消息缓存：那会把 RSS 管理页
+        // 正在显示的校验消息清空；残留的上次书源消息由书源校验逐源覆盖
+        if (!CheckRssSource.isRunning()) {
+            Debug.clearCheckingCache()
+        }
         checkJob = lifecycleScope.launch(searchCoroutine) {
             flow {
                 for (origin in ids) {

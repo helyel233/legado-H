@@ -26,6 +26,10 @@ object Debug {
     private val debugTimeMap = HashMap<String, Long>()
     var isChecking: Boolean = false
 
+    /** 订阅源校验在跑：与书源校验并存，两套会话不能共用一个布尔互相覆写 */
+    @Volatile
+    var rssChecking: Boolean = false
+
     @SuppressLint("ConstantLocale")
     private val debugTimeFormat = SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault())
     private var startTime: Long = System.currentTimeMillis()
@@ -55,7 +59,7 @@ object Debug {
             }
             it.printLog(state, printMsg)
         }
-        if (isChecking && sourceUrl != null && (msg).length < 30) {
+        if ((isChecking || rssChecking) && sourceUrl != null && (msg).length < 30) {
             var printMsg = msg
             if (isHtml) {
                 printMsg = HtmlFormatter.format(msg)
@@ -100,12 +104,27 @@ object Debug {
 
     fun startChecking(source: BookSource) {
         isChecking = true
-        debugTimeMap[source.bookSourceUrl] = System.currentTimeMillis()
-        debugMessageMap[source.bookSourceUrl] = "${debugTimeFormat.format(Date(0))} 开始校验"
+        startCheckingInternal(source.bookSourceUrl)
+    }
+
+    /** 供订阅源校验等非 BookSource 场景复用同一套消息/计时缓存 */
+    fun startChecking(sourceUrl: String) {
+        rssChecking = true
+        startCheckingInternal(sourceUrl)
+    }
+
+    private fun startCheckingInternal(sourceUrl: String) {
+        debugTimeMap[sourceUrl] = System.currentTimeMillis()
+        debugMessageMap[sourceUrl] = "${debugTimeFormat.format(Date(0))} 开始校验"
     }
 
     fun finishChecking() {
         isChecking = false
+    }
+
+    /** 订阅源校验结束时复位自己的标志，绝不能动书源校验的 [isChecking] */
+    fun finishRssChecking() {
+        rssChecking = false
     }
 
     fun clearCheckingCache() {

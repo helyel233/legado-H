@@ -6,14 +6,17 @@ import android.view.MenuItem
 import android.view.SubMenu
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.activity.viewModels
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.snackbar.Snackbar
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
@@ -21,10 +24,14 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ActivityRssSourceBinding
 import io.legado.app.help.DirectLinkUpload
+import io.legado.app.model.CheckRssSource
+import io.legado.app.model.Debug
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.association.showShibbolethDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.rss.article.RssSortActivity
+import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.SelectActionBar
 import io.legado.app.ui.widget.compose.AppManagementAction
@@ -34,7 +41,6 @@ import io.legado.app.ui.widget.compose.replaceByIndex
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeSuggestionTextInputDialog
-import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.ACache
 import io.legado.app.utils.ShibbolethCodec
 import io.legado.app.utils.isAbsUrl
@@ -45,7 +51,9 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.transaction
+import io.legado.app.utils.undoSnackbar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
@@ -53,6 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -72,6 +81,14 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     private val selectedUrls = mutableStateOf<Set<String>>(emptySet())
     private val isSelectMode = mutableStateOf(false)
     private val searchQueryState = mutableStateOf("")
+    private val debugMessagesState = mutableStateMapOf<String, String>()
+    private val isCheckingState = mutableStateOf(false)
+    private var checkMessageRefreshJob: Job? = null
+    private var checkSnackBar: Snackbar? = null
+    private var checkTotal = 0
+    // 只认 check() 写出的终态文案：宽泛的「成功|失败」会把中间消息
+    // （如 Rss 解析链路的「≡获取成功:…」）误判成已完成，进度虚高
+    private val finalMessageRegex = Regex("校验成功|校验失败")
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
         showDialogFragment(ImportRssSourceDialog(it))
@@ -154,6 +171,10 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                             onClick = ::disableSelected
                         ),
                         AppManagementAction(
+                            text = getString(R.string.check_select_source),
+                            onClick = ::checkSource
+                        ),
+                        AppManagementAction(
                             text = getString(R.string.add_group),
                             onClick = ::selectionAddToGroups
                         ),
@@ -200,7 +221,17 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                         onToggleSelect = ::toggleSourceSelection,
                         onToggleEnabled = ::toggleSourceEnabled,
                         onEdit = ::editSource,
-                        sourceMenuActions = ::sourceMenuActions
+                        sourceMenuActions = ::sourceMenuActions,
+                        debugMessages = debugMessagesState,
+                        isChecking = isCheckingState.value,
+                        emptyHint = when {
+                            sourcesState.isNotEmpty() -> null
+                            searchQueryState.value.isBlank() ->
+                                getString(R.string.rss_source_empty_import)
+
+                            else ->
+                                getString(R.string.rss_source_empty_filter)
+                        }
                     )
                 }
             }
@@ -256,14 +287,27 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     }
 
     private fun showFilterMenu() {
+        // 与书源管理页一致：当前生效的筛选在菜单里标记出来。
+        // 标签加了后缀后不能再用标签文本反推筛选条件，分组走快照索引取原始名。
+        val currentMark = "（${getString(R.string.menu_current_option)}）"
+        val query = searchQueryState.value
+        fun marked(labelRes: Int): String {
+            val label = getString(labelRes)
+            return if (query == label) label + currentMark else label
+        }
+
         val fixedLabels = listOf(
             getString(R.string.group_manage),
-            getString(R.string.enabled),
-            getString(R.string.disabled),
-            getString(R.string.need_login),
-            getString(R.string.no_group)
+            marked(R.string.enabled),
+            marked(R.string.disabled),
+            marked(R.string.need_login),
+            marked(R.string.no_group)
         )
-        val labels = fixedLabels + groups
+        // 对话框打开期间分组列表可能被后台 flow 刷新，回调里用的是打开时的快照
+        val groupSnapshot = groups.toList()
+        val labels = fixedLabels + groupSnapshot.map { group ->
+            if (query == "group:$group") group + currentMark else group
+        }
         showComposeActionListDialog(
             title = getString(R.string.menu_action_group),
             labels = labels
@@ -274,7 +318,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 2 -> updateSearchQuery(getString(R.string.disabled))
                 3 -> updateSearchQuery(getString(R.string.need_login))
                 4 -> updateSearchQuery(getString(R.string.no_group))
-                else -> updateSearchQuery("group:${labels[index]}")
+                else -> updateSearchQuery("group:${groupSnapshot[index - fixedLabels.size]}")
             }
         }
     }
@@ -338,22 +382,147 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         val selection = getSelectedSources()
         updateSelectedEnabled(enabled = true)
         viewModel.enableSelection(selection)
+        toastCount(R.string.rss_source_enabled_toast, selection.size)
     }
 
     private fun disableSelected() {
         val selection = getSelectedSources()
         updateSelectedEnabled(enabled = false)
         viewModel.disableSelection(selection)
+        toastCount(R.string.rss_source_disabled_toast, selection.size)
     }
 
     private fun topSelected() {
         val selection = getSelectedSources()
         viewModel.topSource(*selection.toTypedArray())
+        toastCount(R.string.rss_source_top_toast, selection.size)
     }
 
     private fun bottomSelected() {
         val selection = getSelectedSources()
         viewModel.bottomSource(*selection.toTypedArray())
+        toastCount(R.string.rss_source_bottom_toast, selection.size)
+    }
+
+    /**
+     * 批量操作的即时反馈。
+     *
+     * 启用/禁用/置顶/置底/改分组之后，行的位置或开关状态要等数据库回流才变，
+     * 用户容易以为没点上；给一句明确结果最省事。
+     */
+    private fun toastCount(resId: Int, count: Int) {
+        if (count <= 0) return
+        toastOnUi(getString(resId, count))
+    }
+
+    /**
+     * 校验所选订阅源；没有勾选时校验全部。
+     * 校验是页面级任务（离开页面即停），用 Snackbar 提供「取消」入口。
+     */
+    private fun checkSource() {
+        val sources = getSelectedSources().ifEmpty { sourcesState.toList() }
+        startCheck(sources)
+    }
+
+    private fun startCheck(sources: List<RssSource>) {
+        if (sources.isEmpty()) return
+        CheckRssSource.stop()
+        checkTotal = sources.size
+        keepScreenOn(true)
+        updateCheckingState(true)
+        refreshDebugMessages(force = true)
+        checkSnackBar?.dismiss()
+        checkSnackBar = Snackbar
+            .make(
+                binding.root,
+                getString(R.string.check_rss_progress, 0, checkTotal),
+                Snackbar.LENGTH_INDEFINITE
+            )
+            .setAction(R.string.cancel) { stopCheck() }
+            .apply { show() }
+        // 必须先 start 再启动轮询：lifecycleScope 是 Main.immediate，
+        // 轮询首循环会同步执行，若此刻校验 job 还没建立，isRunning()==false
+        // 会让轮询立即自毁（加载圈被改回、Snackbar 被 dismiss、常亮被清除）
+        CheckRssSource.start(lifecycleScope, sources)
+        startCheckMessageRefreshJob()
+    }
+
+    private fun stopCheck() {
+        CheckRssSource.stop()
+        updateCheckingState(false)
+        refreshDebugMessages(force = true)
+        checkSnackBar?.dismiss()
+        checkSnackBar = null
+        checkMessageRefreshJob?.cancel()
+        keepScreenOn(false)
+    }
+
+    /** 校验进度轮询：把 Debug 消息缓存同步进 Compose 状态，并更新 Snackbar 进度 */
+    private fun startCheckMessageRefreshJob() {
+        checkMessageRefreshJob?.cancel()
+        checkMessageRefreshJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    refreshDebugMessages()
+                    val done = debugMessagesState.values.count { it.contains(finalMessageRegex) }
+                    checkSnackBar?.setText(getString(R.string.check_rss_progress, done, checkTotal))
+                    if (!CheckRssSource.isRunning()) {
+                        updateCheckingState(false)
+                        refreshDebugMessages(force = true)
+                        checkSnackBar?.dismiss()
+                        checkSnackBar = null
+                        keepScreenOn(false)
+                        checkMessageRefreshJob?.cancel()
+                    }
+                    delay(500L)
+                }
+            }
+        }
+    }
+
+    private fun updateCheckingState(checking: Boolean) {
+        if (isCheckingState.value != checking) {
+            isCheckingState.value = checking
+        }
+    }
+
+    private fun keepScreenOn(on: Boolean) {
+        val isScreenOn =
+            (window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0
+        if (on == isScreenOn) return
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun refreshDebugMessages(force: Boolean = false) {
+        val next = buildDebugMessagesSnapshot()
+        debugMessagesState.keys
+            .filter { it !in next }
+            .toList()
+            .forEach { debugMessagesState.remove(it) }
+        next.forEach { (url, message) ->
+            if (force || debugMessagesState[url] != message) {
+                debugMessagesState[url] = message
+            }
+        }
+    }
+
+    /** 与书源管理页同语义：校验停了但还没写出终态的源，补记为失败 */
+    private fun buildDebugMessagesSnapshot(): Map<String, String> {
+        return sourcesState.mapNotNull { source ->
+            val initial = Debug.debugMessageMap[source.sourceUrl].orEmpty()
+            if (initial.isBlank()) {
+                null
+            } else {
+                if (!CheckRssSource.isRunning() && !initial.contains(finalMessageRegex)) {
+                    Debug.updateFinalMessage(source.sourceUrl, "校验失败")
+                }
+                source.sourceUrl to Debug.debugMessageMap[source.sourceUrl].orEmpty()
+            }
+        }.toMap()
     }
 
     private fun exportSelected() {
@@ -386,6 +555,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 if (text.isNotEmpty()) {
                     val selection = getSelectedSources()
                     viewModel.selectionAddToGroups(selection, text)
+                    toastCount(R.string.rss_source_group_added_toast, selection.size)
                 }
             }
         )
@@ -402,6 +572,7 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 if (text.isNotEmpty()) {
                     val selection = getSelectedSources()
                     viewModel.selectionRemoveFromGroups(selection, text)
+                    toastCount(R.string.rss_source_group_removed_toast, selection.size)
                 }
             }
         )
@@ -437,7 +608,18 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             dangerPositive = true,
             onPositive = {
                 val selection = getSelectedSources()
-                viewModel.del(*selection.toTypedArray())
+                viewModel.delWithUndo(selection) { deleted ->
+                    runOnUiThread {
+                        if (deleted.isNotEmpty()) {
+                            binding.root.undoSnackbar(
+                                getString(R.string.deleted_rss_sources, deleted.size),
+                                getString(R.string.undo)
+                            ) {
+                                viewModel.restoreDeleted(deleted)
+                            }
+                        }
+                    }
+                }
                 selectedUrls.value = emptySet()
                 isSelectMode.value = false
             }
@@ -505,9 +687,12 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             .getAsString(importRecordKey)
             ?.splitNotBlank(",")
             ?.toMutableList() ?: mutableListOf()
-        showComposeTextInputDialog(
+        // 与书源管理页一致：输入框下方带历史导入地址，可一键填入/删除
+        showComposeSuggestionTextInputDialog(
             title = getString(R.string.import_on_line),
             hint = "url",
+            suggestions = cacheUrls,
+            deletable = true,
             positiveText = getString(android.R.string.ok),
             negativeText = getString(R.string.cancel),
             onPositive = { text ->
@@ -518,6 +703,10 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                     }
                     showDialogFragment(ImportRssSourceDialog(text))
                 }
+            },
+            onSuggestionDeleted = { url ->
+                cacheUrls.remove(url)
+                aCache.put(importRecordKey, cacheUrls.joinToString(","))
             }
         )
     }
@@ -584,13 +773,40 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     }
 
     private fun sourceMenuActions(source: RssSource): List<AppManagementMenuAction> {
-        return listOf(
-            AppManagementMenuAction(getString(R.string.selection_to_top)) {
-                viewModel.topSource(source)
-            },
-            AppManagementMenuAction(getString(R.string.selection_to_bottom)) {
-                viewModel.bottomSource(source)
-            },
+        return buildList {
+            add(
+                AppManagementMenuAction(getString(R.string.view_rss_source)) {
+                    // 直接进入该源的目录/文章页，省去先回订阅 tab 再找源的绕路
+                    RssSortActivity.start(this@RssSourceActivity, null, source.sourceUrl)
+                }
+            )
+            add(
+                AppManagementMenuAction(getString(R.string.selection_to_top)) {
+                    viewModel.topSource(source)
+                }
+            )
+            add(
+                AppManagementMenuAction(getString(R.string.selection_to_bottom)) {
+                    viewModel.bottomSource(source)
+                }
+            )
+            add(
+                AppManagementMenuAction(getString(R.string.check_rss_source)) {
+                    startCheck(listOf(source))
+                }
+            )
+            // 与编辑页的登录入口同一规则：配置了登录地址才出现
+            if (!source.loginUrl.isNullOrBlank()) {
+                add(
+                    AppManagementMenuAction(getString(R.string.login)) {
+                        startActivity<SourceLoginActivity> {
+                            putExtra("type", "rssSource")
+                            putExtra("key", source.sourceUrl)
+                        }
+                    }
+                )
+            }
+            add(
             AppManagementMenuAction(
                 text = getString(R.string.delete),
                 danger = true
@@ -601,10 +817,24 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                     positiveText = getString(R.string.yes),
                     negativeText = getString(R.string.no),
                     dangerPositive = true,
-                    onPositive = { viewModel.del(source) }
+                    onPositive = {
+                        viewModel.delWithUndo(listOf(source)) { deleted ->
+                            runOnUiThread {
+                                if (deleted.isNotEmpty()) {
+                                    binding.root.undoSnackbar(
+                                        getString(R.string.deleted_rss_sources, deleted.size),
+                                        getString(R.string.undo)
+                                    ) {
+                                        viewModel.restoreDeleted(deleted)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 )
             }
-        )
+            )
+        }
     }
 
     private fun getSelectedSources(): List<RssSource> {
@@ -636,6 +866,14 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             getSelectedSources().size,
             sourcesState.size
         )
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 校验挂在页面生命周期上：离开页面即停止，不留僵尸任务
+        if (CheckRssSource.isRunning()) {
+            CheckRssSource.stop()
+        }
     }
 
 }
