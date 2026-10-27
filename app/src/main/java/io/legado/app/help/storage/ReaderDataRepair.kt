@@ -12,7 +12,9 @@ import splitties.init.appCtx
 
 object ReaderDataRepair {
 
-    const val REPAIR_VERSION = 112
+    // 新增修复规则（bookshelfSort/bookshelfLayout/chineseConverterType/systemTypefaces）时
+    // 必须递增版本：marker >= REPAIR_VERSION 的设备不会再跑，不递增等于新规则白加
+    const val REPAIR_VERSION = 113
     private const val TAG = "ReaderDataRepair"
 
     data class Report(
@@ -188,6 +190,20 @@ object ReaderDataRepair {
             if (it) changed += 1 else removed += 1
         }
         coerceIntPref(all, PreferKey.advancedTitleHeightFactor, 30, 120, edit)?.let {
+            if (it) changed += 1 else removed += 1
+        }
+        // 与上面几项同类：这些也是「按序号取枚举/布局」的偏好，坏值会让书架排序、
+        // 繁简转换、系统字体落到未定义分支，统一在修复时夹回合法区间
+        coerceIntPref(all, PreferKey.bookshelfSort, 0, 5, edit)?.let {
+            if (it) changed += 1 else removed += 1
+        }
+        coerceIntPref(all, PreferKey.bookshelfLayout, 0, 6, edit)?.let {
+            if (it) changed += 1 else removed += 1
+        }
+        coerceIntPref(all, PreferKey.chineseConverterType, 0, 2, edit)?.let {
+            if (it) changed += 1 else removed += 1
+        }
+        coerceIntPref(all, PreferKey.systemTypefaces, 0, 2, edit)?.let {
             if (it) changed += 1 else removed += 1
         }
 

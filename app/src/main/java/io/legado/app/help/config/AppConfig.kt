@@ -61,6 +61,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         const val SNAPSHOT_ONLY = "snapshot_only"
     }
 
+    /** [reviewOpenMode] 的合法取值白名单，坏值统一回退到网络优先 */
+    private val REVIEW_OPEN_MODES = setOf(
+        ReviewOpenMode.NETWORK,
+        ReviewOpenMode.SNAPSHOT_FIRST,
+        ReviewOpenMode.SNAPSHOT_ONLY
+    )
+
     /** 段评快照默认保鲜期（天），见 [reviewSnapshotTtlDays] */
     const val DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS = 3
 
@@ -2156,29 +2163,26 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var threadCount: Int
-        get() = appCtx.getPrefInt(PreferKey.threadCount, 16)
+        // 直接作为并发数传给 flatMapMerge、作 Semaphore 许可数：0 会抛异常、负数会死锁，
+        // 设置页的 min/max 只护 UI，坏偏好（旧备份/手工改 SP）必须在这里兜住
+        get() = appCtx.getPrefInt(PreferKey.threadCount, 16).coerceIn(1, 999)
         set(value) {
-            appCtx.putPrefInt(PreferKey.threadCount, value)
+            appCtx.putPrefInt(PreferKey.threadCount, value.coerceIn(1, 999))
         }
 
     /** Minimum spacing between starts of Coordinator-owned primary chapter downloads. */
     var downloadChapterIntervalMillis: Long
-        get() = appCtx.getPrefLong(PreferKey.downloadChapterIntervalMillis, 0L).also {
-            require(it >= 0L) { "download chapter interval must not be negative: $it" }
-        }
+        // 坏值降级而不是抛异常：getter 在章节下载热路径被读，require 会把坏偏好变成崩溃
+        get() = appCtx.getPrefLong(PreferKey.downloadChapterIntervalMillis, 0L).coerceAtLeast(0L)
         set(value) {
-            require(value >= 0L) { "download chapter interval must not be negative: $value" }
-            appCtx.putPrefLong(PreferKey.downloadChapterIntervalMillis, value)
+            appCtx.putPrefLong(PreferKey.downloadChapterIntervalMillis, value.coerceAtLeast(0L))
         }
 
     /** Extra attempts after a primary chapter download failure. */
     var downloadChapterRetryCount: Int
-        get() = appCtx.getPrefInt(PreferKey.downloadChapterRetryCount, 2).also {
-            require(it >= 0) { "download chapter retry count must not be negative: $it" }
-        }
+        get() = appCtx.getPrefInt(PreferKey.downloadChapterRetryCount, 2).coerceAtLeast(0)
         set(value) {
-            require(value >= 0) { "download chapter retry count must not be negative: $value" }
-            appCtx.putPrefInt(PreferKey.downloadChapterRetryCount, value)
+            appCtx.putPrefInt(PreferKey.downloadChapterRetryCount, value.coerceAtLeast(0))
         }
 
     /** 聚合主页中隐藏的集 URL 列表（GSON 序列化的 Set<String>） */
@@ -2235,7 +2239,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var ttsTimer: Int
-        get() = appCtx.getPrefInt(PreferKey.ttsTimer, 0)
+        get() = appCtx.getPrefInt(PreferKey.ttsTimer, 0).coerceAtLeast(0)
         set(value) {
             appCtx.putPrefInt(PreferKey.ttsTimer, value)
         }
@@ -2243,13 +2247,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val speechRatePlay: Int get() = if (ttsFlowSys) defaultSpeechRate else ttsSpeechRate
 
     var chineseConverterType: Int
-        get() = appCtx.getPrefInt(PreferKey.chineseConverterType)
+        // 0 不转换 / 1 繁转简 / 2 简转繁；坏值回退到 0（不转换）
+        get() = appCtx.getPrefInt(PreferKey.chineseConverterType).coerceIn(0, 2)
         set(value) {
             appCtx.putPrefInt(PreferKey.chineseConverterType, value)
         }
 
     var systemTypefaces: Int
-        get() = appCtx.getPrefInt(PreferKey.systemTypefaces)
+        // 0 无衬线 / 1 衬线 / 2 等宽；坏值回退到 0
+        get() = appCtx.getPrefInt(PreferKey.systemTypefaces).coerceIn(0, 2)
         set(value) {
             appCtx.putPrefInt(PreferKey.systemTypefaces, value)
         }
@@ -2470,9 +2476,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var webPort: Int
-        get() = appCtx.getPrefInt(PreferKey.webPort, 1122)
+        // 端口 0/负数/超范围会让 HttpServer 绑定失败，夹到可用端口区间；
+        // 上限对齐 WebService.getPort 的 65530（WebSocketServer 需要 port+1），
+        // 否则备份还原出 65531-65535 时 UI 显示该值而服务端静默回退 1122
+        get() = appCtx.getPrefInt(PreferKey.webPort, 1122).coerceIn(1024, 65530)
         set(value) {
-            appCtx.putPrefInt(PreferKey.webPort, value)
+            appCtx.putPrefInt(PreferKey.webPort, value.coerceIn(1024, 65530))
         }
 
     /**
@@ -2561,15 +2570,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var contentSelectSpeakMod: Int
-        get() = appCtx.getPrefInt(PreferKey.contentSelectSpeakMod)
+        // 0 关闭 / 1 开启；坏值回退到 0
+        get() = appCtx.getPrefInt(PreferKey.contentSelectSpeakMod).coerceIn(0, 1)
         set(value) {
-            appCtx.putPrefInt(PreferKey.contentSelectSpeakMod, value)
+            appCtx.putPrefInt(PreferKey.contentSelectSpeakMod, value.coerceIn(0, 1))
         }
 
     var batchChangeSourceDelay: Int
-        get() = appCtx.getPrefInt(PreferKey.batchChangeSourceDelay)
+        get() = appCtx.getPrefInt(PreferKey.batchChangeSourceDelay).coerceAtLeast(0)
         set(value) {
-            appCtx.putPrefInt(PreferKey.batchChangeSourceDelay, value)
+            appCtx.putPrefInt(PreferKey.batchChangeSourceDelay, value.coerceAtLeast(0))
         }
 
     var importKeepName: Boolean
@@ -2597,9 +2607,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefString(PreferKey.clickImgWay)
 
     var preDownloadNum
-        get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 2)
+        // 负数会生成反向/越界章节区间，下限夹到 0
+        get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 2).coerceAtLeast(0)
         set(value) {
-            appCtx.putPrefInt(PreferKey.preDownloadNum, value)
+            appCtx.putPrefInt(PreferKey.preDownloadNum, value.coerceAtLeast(0))
         }
 
     /**
@@ -2824,9 +2835,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var imageRetainNum: Int
-        get() = appCtx.getPrefInt(PreferKey.imageRetainNum, 0)
+        get() = appCtx.getPrefInt(PreferKey.imageRetainNum, 0).coerceAtLeast(0)
         set(value) {
-            appCtx.putPrefInt(PreferKey.imageRetainNum, value)
+            appCtx.putPrefInt(PreferKey.imageRetainNum, value.coerceAtLeast(0))
         }
 
     var showReadTitleBarAddition: Boolean
@@ -2903,9 +2914,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     //漫画预加载数量
     var mangaPreDownloadNum
-        get() = appCtx.getPrefInt(PreferKey.mangaPreDownloadNum, 10)
+        get() = appCtx.getPrefInt(PreferKey.mangaPreDownloadNum, 10).coerceAtLeast(0)
         set(value) {
-            appCtx.putPrefInt(PreferKey.mangaPreDownloadNum, value)
+            appCtx.putPrefInt(PreferKey.mangaPreDownloadNum, value.coerceAtLeast(0))
         }
 
     //点击翻页
@@ -2917,9 +2928,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     //漫画滚动速度
     var mangaAutoPageSpeed
-        get() = appCtx.getPrefInt(PreferKey.mangaAutoPageSpeed, 3)
+        // 0 会让自动翻页间隔计算失去意义，下限夹到 1
+        get() = appCtx.getPrefInt(PreferKey.mangaAutoPageSpeed, 3).coerceAtLeast(1)
         set(value) {
-            appCtx.putPrefInt(PreferKey.mangaAutoPageSpeed, value)
+            appCtx.putPrefInt(PreferKey.mangaAutoPageSpeed, value.coerceAtLeast(1))
         }
 
     //漫画页脚配置
@@ -2957,9 +2969,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var mangaEInkThreshold
-        get() = appCtx.getPrefInt(PreferKey.mangaEInkThreshold, 150)
+        // 阈值语义是 0..255 的灰度值（对齐 EpaperTransformation 的 @IntRange），越界已无意义
+        get() = appCtx.getPrefInt(PreferKey.mangaEInkThreshold, 150).coerceIn(0, 255)
         set(value) {
-            appCtx.putPrefInt(PreferKey.mangaEInkThreshold, value)
+            appCtx.putPrefInt(PreferKey.mangaEInkThreshold, value.coerceIn(0, 255))
         }
 
     var disableHorizontalPageSnap
@@ -3114,10 +3127,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
      * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的三模式语义）。
      */
     var reviewOpenMode: String
+        // 未知值统一回退到网络优先，避免消费端 when 落到意外分支
         get() = appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
+            ?.takeIf { it in REVIEW_OPEN_MODES }
             ?: ReviewOpenMode.NETWORK
         set(value) {
-            appCtx.putPrefString(PreferKey.reviewOpenMode, value)
+            appCtx.putPrefString(
+                PreferKey.reviewOpenMode,
+                value.takeIf { it in REVIEW_OPEN_MODES } ?: ReviewOpenMode.NETWORK
+            )
         }
 
     /**

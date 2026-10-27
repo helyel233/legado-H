@@ -58,6 +58,15 @@ internal object ReviewDataCapture {
 
     /** 快照 HTML 可能很大，超过该长度的结果不进复用窗口，避免常驻内存放大堆峰值。 */
     private const val REUSE_MAX_CHARS = 512 * 1024
+
+    /**
+     * 单个分页循环的页数上限。
+     *
+     * 数据接口路径不走网页引擎的 PAGE_EXECUTION_TIMEOUT，只有单次请求超时；若接口持续返回
+     * has_more=true 且 cursor 不重复，循环永不结束，而评论抓取只有 1 个消费者，会永久占住 worker。
+     * 200 页（每页默认 20 条）已远超正常段评规模。
+     */
+    private const val MAX_PAGES = 200
     private val recentCaptures = object : LinkedHashMap<String, Pair<Long, String>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
             size > REUSE_MAX_ENTRIES
@@ -140,7 +149,9 @@ internal object ReviewDataCapture {
         val ids = hashSetOf<String>()
         var cursor = "0"
         var sourceText = ""
+        var pageCount = 0
         while (true) {
+            check(++pageCount <= MAX_PAGES) { "段评分页超过上限($MAX_PAGES)" }
             check(cursors.add(cursor)) { "段评游标循环: $cursor" }
             val response = fetch(false, mapOf("api" to "1", "cursor" to cursor,
                 "count" to ReviewDownloadConfig.Number.PAGE_SIZE.value.toString(), "sort" to "1"))
@@ -174,7 +185,9 @@ internal object ReviewDataCapture {
             val seenCursors = hashSetOf<String>()
             val seenIds = hashSetOf<String>()
             var offset = "0"
+            var replyPageCount = 0
             while (true) {
+                check(++replyPageCount <= MAX_PAGES) { "楼中楼分页超过上限($MAX_PAGES)" }
                 check(seenCursors.add(offset)) { "楼中楼游标循环: $offset" }
                 val response = fetch(true, mapOf("reply_api" to "1",
                     "comment_id" to comment.get("comment_id").asString, "cursor" to offset,

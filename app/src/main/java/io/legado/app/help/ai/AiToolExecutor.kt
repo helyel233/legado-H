@@ -1,6 +1,7 @@
 package io.legado.app.help.ai
 
 import io.legado.app.help.config.AppConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -90,6 +91,11 @@ internal object AiToolExecutor {
             }
             throw lastError ?: IllegalStateException("Tool failed")
         }.getOrElse { throwable ->
+            // 用户点「停止」产生的是真正的取消，必须向上抛：把它降级成 {"ok":false} 会让
+            // agent 当作普通工具失败继续下一轮（内层 withTimeout 的 TCE 仍按超时处理）
+            if (throwable is CancellationException && throwable !is TimeoutCancellationException) {
+                throw throwable
+            }
             JSONObject().apply {
                 put("ok", false)
                 put(

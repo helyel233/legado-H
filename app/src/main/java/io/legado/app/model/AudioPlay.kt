@@ -16,6 +16,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.ReadRecentBook
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.ReadRecordDailyHelper
+import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.CacheManifestHelper
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
@@ -103,9 +104,10 @@ object AudioPlay : CoroutineScope by MainScope() {
         } else {
             chapterSize
         }
-        if (durChapterIndex != book.durChapterIndex) {
+        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        if (durChapterIndex != targetChapterIndex) {
             stopPlay()
-            durChapterIndex = book.durChapterIndex
+            durChapterIndex = targetChapterIndex
             durChapterPos = book.durChapterPos
             durPlayUrl = ""
             durLyric = null
@@ -128,6 +130,8 @@ object AudioPlay : CoroutineScope by MainScope() {
         bookSource = book.getBookSource()
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
+        // 目录变短后旧章节号会越界，夹回有效范围（与 ReadBook 同策略）
+        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
         PlayMode.entries.getOrNull(book.getPlayMode())?.let{
             playMode = it
             postEvent(EventBus.PLAY_MODE_CHANGED, it)
@@ -445,6 +449,9 @@ object AudioPlay : CoroutineScope by MainScope() {
     fun next() {
         stopPlay()
         upReadTime()
+        // 目录还没拉到（simulatedChapterSize == 0）时：RANDOM 分支 random() 空区间抛
+        // IllegalArgumentException、LIST_LOOP 分支 % 0 抛 ArithmeticException，先退出
+        if (simulatedChapterSize <= 0) return
         when (playMode) {
             PlayMode.LIST_END_STOP -> {
                 if (durChapterIndex + 1 < simulatedChapterSize) {

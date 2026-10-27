@@ -846,9 +846,14 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                     analyzeUrl.getStrResponseAwait().body
                                 }
                             }
-                        } catch (error: CancellationException) {
-                            throw error
                         } catch (error: Throwable) {
+                            // 内层 withTimeout 的超时（TCE 是 CancellationException 子类）同样是
+                            // 「网络获取失败」，应走快照兜底；只有真正的取消（离开页面）才向上抛。
+                            if (error is CancellationException &&
+                                error !is kotlinx.coroutines.TimeoutCancellationException
+                            ) {
+                                throw error
+                            }
                             fallbackHtml?.takeIf { it.isNotBlank() }?.also {
                                 // 已用快照兜底：进入离线模式，不再允许任何网络请求；
                                 // 内容即快照，身份同步置为快照（同一权责的另一面）。

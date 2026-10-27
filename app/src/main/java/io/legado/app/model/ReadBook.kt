@@ -284,6 +284,8 @@ object ReadBook : CoroutineScope by MainScope() {
         }
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
+        // 目录可能变短（换源/删章），持久化章节号需夹回有效范围，否则打开即「索引超出范围」且翻不动
+        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
         isLocalBook = book.isLocal
         clearTextChapter()
         if (notifyContent) {
@@ -315,8 +317,9 @@ object ReadBook : CoroutineScope by MainScope() {
         } else {
             chapterSize
         }
-        if (durChapterIndex != book.durChapterIndex) {
-            durChapterIndex = book.durChapterIndex
+        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        if (durChapterIndex != targetChapterIndex) {
+            durChapterIndex = targetChapterIndex
             durChapterPos = book.durChapterPos
             clearTextChapter()
         }

@@ -1,5 +1,18 @@
 # 更新日志
 
+## 1.18.3 版（2026-10-28）
+
+本版是一轮防御性加固：把各处「坏偏好值 / 目录变短 / 导出途中目录变短 / 超时与取消语义」会引发的崩溃都兜住，并修一个缓存文件名正则 bug。
+
+### 修复 / 优化
+
+- **偏好坏值防御**：`AppConfig` 多处把会崩的 `require` 改为降级夹取——`threadCount` 夹 1–999（0 抛异常、负数死锁）、`downloadChapterIntervalMillis` 非负、`mangaAutoPageSpeed` ≥1、`mangaEInkThreshold` 夹 0–255、`reviewOpenMode` 白名单回退网络优先。设置页的 min/max 只护 UI，旧备份/手工改 SP 的坏值由这里兜住。
+- **数据修复新增坏值夹取**：`ReaderDataRepair` 把「按序号取枚举/布局」的 `bookshelfSort`(0–5)、`bookshelfLayout`(0–6)、`chineseConverterType`(0–2)、`systemTypefaces`(0–2) 统一夹回合法区间，坏值不再让书架排序/繁简转换/系统字体落到未定义分支；`REPAIR_VERSION` 112→113（新规则必须递增，否则已修复设备不再跑等于白加）。
+- **目录变短章节号越界**：`BookHelp` 新增 `clampChapterIndex`（目录变短、换源删章、模拟章节数变化时把持久化 `durChapterIndex` 夹回有效范围），`ReadBook`/`ReadManga`/`AudioPlay` 进入阅读态前夹取（不再「下一章永远翻不动 / 越界报错」），`CacheManageActivity` 打开缓存章节时按当前目录长度夹取再写回；`AudioPlay.next/prev` 在目录未到位（`chapterSize==0`）时退出，避免 random 空区间、`%0` 抛异常。
+- **段评 / WebView / AI 超时与取消语义修正**：`ReviewDataCapture`、`BottomWebViewDialog` 内层 `withTimeout` 的超时（TCE）按「网络获取失败」走快照兜底，只有真正取消（离开页面）才向上抛；`AiToolExecutor` 用户点「停止」产生的真正取消必须上抛，不再降级成 `{"ok":false}` 让 agent 继续下一轮（内层超时仍按超时处理）。
+- **导出优化与健壮性**：`ExportBookService` 章节收集够了即 `break`（原 `return@forEachIndexed` 只跳过当次迭代、白跑整目录）；导出途中目录变短时 `subList(from>to)` 会越界，端点按真实条数 `coerce` 夹取。
+- **缓存文件名正则 bug**：`BookHelp` 误写双反斜杠 `\\d`（在 raw string 里匹配字面 `\d`），导致带序号的缓存文件名（`%05d-…nb`）识别不到，改回单反斜杠。
+
 ## 1.18.2 版（2026-10-27）
 
 本版修复离线缓存起点章节错判（跳章后从第一章重抓）与目录变短后的反向区间。

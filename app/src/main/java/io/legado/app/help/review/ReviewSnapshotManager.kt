@@ -1091,7 +1091,11 @@ object ReviewSnapshotManager {
         }
         if (resolveResult.isFailure) {
             val error = resolveResult.exceptionOrNull()!!
-            if (error is CancellationException) throw error
+            // TimeoutCancellationException 是 CancellationException 的子类：解析超时属于「本按钮失败」，
+            // 不是「任务被取消」。必须先于取消判断，否则单个慢按钮的超时会取消整章并发抓取。
+            if (error is CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) {
+                throw error
+            }
             val reason = when (error) {
                 is kotlinx.coroutines.TimeoutCancellationException ->
                     "click/js 执行与 browser open/showBrowser 等待总超时(${RESOLVE_TIMEOUT_MS / 1000}s)"
@@ -1149,7 +1153,10 @@ object ReviewSnapshotManager {
         }
         if (outcome.isFailure) {
             val e = outcome.exceptionOrNull()!!
-            if (e is CancellationException) throw e
+            // 同 3.x：抓取超时（TCE）属本次失败，不能当成外层取消重抛。
+            if (e is CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) {
+                throw e
+            }
             val reason = when {
                 e is kotlinx.coroutines.TimeoutCancellationException -> "评论抓取超时"
                 e is kotlinx.coroutines.CancellationException -> "任务被取消"

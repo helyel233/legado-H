@@ -62,8 +62,8 @@ object BookHelp {
     private const val cacheFolderName = "book_cache"
     /** 从缓存恢复的章节 url 前缀，见 [recoverChaptersFromCache]。 */
     private const val CACHE_CHAPTER_PREFIX = "cache://"
-    /** 带章节序号的缓存文件名：`%05d-{titleMD5}.nb`。 */
-    private val indexedCacheFileNameRegex = Regex("""^(\\d{5})-([a-fA-F0-9]+)\\.nb$""")
+    /** 带章节序号的缓存文件名：`%05d-{titleMD5}.nb`。（raw string 里用单反斜杠，双写会匹配字面 `\d`） */
+    private val indexedCacheFileNameRegex = Regex("""^(\d{5})-([a-fA-F0-9]+)\.nb$""")
     private const val cacheImageFolderName = "images"
     private const val cacheEpubFolderName = "epub"
     private val downloadImages = ConcurrentHashMap<String, Mutex>()
@@ -754,6 +754,19 @@ object BookHelp {
     private val jaccardSimilarity by lazy {
         JaccardSimilarity()
     }
+
+    /**
+     * 把持久化的章节号夹回有效范围。
+     *
+     * 目录可能变短（换源后章数变少、源删章、模拟章节数变化），而 Book.durChapterIndex 仍是旧值。
+     * 直接用旧值会让加载器判定「索引超出范围」并让「下一章」永远翻不动，因此在进入阅读态前统一夹取。
+     *
+     * chapterSize <= 0 表示目录还没拉到：此时不能把进度重置成 0（会丢阅读位置），
+     * 只把负索引归零，等目录到位后由 onChapterListUpdated 再夹。
+     */
+    fun clampChapterIndex(chapterIndex: Int, chapterSize: Int): Int =
+        if (chapterSize <= 0) chapterIndex.coerceAtLeast(0)
+        else chapterIndex.coerceIn(0, chapterSize - 1)
 
     /**
      * 根据目录名获取当前章节

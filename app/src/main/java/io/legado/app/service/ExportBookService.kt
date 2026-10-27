@@ -738,22 +738,23 @@ class ExportBookService : BaseService() {
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             val replaceBook = book.toReplaceBook()
             var chapterList: MutableList<BookChapter> = ArrayList()
-            appDb.bookChapterDao.getChapterList(book.bookUrl).forEachIndexed { index, chapter ->
+            val allChapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+            for ((index, chapter) in allChapters.withIndex()) {
                 if (scope.contains(index)) {
                     chapterList.add(chapter)
                 }
-                if (scope.size == chapterList.size) {
-                    return@forEachIndexed
-                }
+                // 收集够了就结束（原来用 return@forEachIndexed 只是跳过当次迭代，白跑整目录）
+                if (chapterList.size >= scope.size) break
             }
             // val totalChapterNum = book.totalChapterNum / scope.size
             if (chapterList.isEmpty()) {
                 throw RuntimeException("书籍<${book.name}>(${epubBookIndex + 1})未找到章节信息")
             }
-            chapterList = chapterList.subList(
-                epubBookIndex * size,
-                min(scope.size, (epubBookIndex + 1) * size)
-            )
+            // 端点必须按 chapterList.size（重新查库得到的真实条数）取：导出途中目录变短时
+            // scope.size 会大于实际条数，subList(from > to) 会直接抛 IndexOutOfBoundsException
+            val fromIndex = (epubBookIndex * size).coerceIn(0, chapterList.size)
+            val toIndex = min((epubBookIndex + 1) * size, chapterList.size).coerceAtLeast(fromIndex)
+            chapterList = chapterList.subList(fromIndex, toIndex)
             chapterList.forEachIndexed { index, chapter ->
                 currentCoroutineContext().ensureActive()
                 updateProgress(chapterList, index)

@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -63,8 +64,11 @@ object ReadManga : CoroutineScope by MainScope() {
     var simulatedChapterSize = 0
     var mCallback: Callback? = null
     var preDownloadTask: Job? = null
-    val downloadedChapters = hashSetOf<Int>()
-    val downloadFailChapters = hashMapOf<Int, Int>()
+    // 线程安全容器：downloadScope(IO) 回调与 preDownload(IO) 并发读写、
+    // resetData 主线程 clear——普通 HashSet/HashMap 会 CME/结构损坏
+    // （ReadBook 同位置的同款竞态已修，这里补齐）
+    val downloadedChapters: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    val downloadFailChapters: MutableMap<Int, Int> = ConcurrentHashMap()
     val downloadScope = CoroutineScope(SupervisorJob() + IO)
     val preDownloadSemaphore = Semaphore(2)
     var rateLimiter = ConcurrentRateLimiter(null)
@@ -83,6 +87,8 @@ object ReadManga : CoroutineScope by MainScope() {
         }
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
+        // 目录变短后旧章节号会越界，夹回有效范围（与 ReadBook 同策略）
+        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
         clearMangaChapter()
         upWebBook(book)
         synchronized(this) {
@@ -101,8 +107,9 @@ object ReadManga : CoroutineScope by MainScope() {
             chapterSize
         }
 
-        if (durChapterIndex != book.durChapterIndex) {
-            durChapterIndex = book.durChapterIndex
+        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        if (durChapterIndex != targetChapterIndex) {
+            durChapterIndex = targetChapterIndex
             durChapterPos = book.durChapterPos
             clearMangaChapter()
         }
@@ -396,8 +403,9 @@ object ReadManga : CoroutineScope by MainScope() {
             preDownloadTask = launch(IO) {
                 //预下载
                 launch {
+                    // chapterSize 是章节数，合法下标上界是 chapterSize - 1（与 PreDownloadPlan 同规则）
                     val maxChapterIndex =
-                        min(durChapterIndex + AppConfig.preDownloadNum, chapterSize)
+                        min(durChapterIndex + AppConfig.preDownloadNum, chapterSize - 1)
                     for (i in durChapterIndex.plus(2)..maxChapterIndex) {
                         if (downloadedChapters.contains(i)) continue
                         if ((downloadFailChapters[i] ?: 0) >= 3) continue
@@ -407,6 +415,8 @@ object ReadManga : CoroutineScope by MainScope() {
                 launch {
                     val minChapterIndex = durChapterIndex - min(5, AppConfig.preDownloadNum)
                     for (i in durChapterIndex.minus(2) downTo minChapterIndex) {
+                        // 前几章时后向窗口会落到负索引，直接结束（下游不校验范围）
+                        if (i < 0) break
                         if (downloadedChapters.contains(i)) continue
                         if ((downloadFailChapters[i] ?: 0) >= 3) continue
                         downloadIndex(i)
