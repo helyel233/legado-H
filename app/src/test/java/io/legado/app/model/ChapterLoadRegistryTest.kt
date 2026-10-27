@@ -195,4 +195,42 @@ class ChapterLoadRegistryTest {
         assertTrue("清加载后新 begin 必须拿到更大的世代", second > first)
         registry.finish(1, second)
     }
+
+    /** 卡死看门狗靠这个时间戳判断一次加载是否滞留，必须随登记的建立与释放同步维护。 */
+    @Test
+    fun beginRecordsWhenTheLoadStartedAndReleasesItOnFinish() {
+        val before = System.currentTimeMillis()
+        val generation = registry.begin(2, "k")!!
+        val startedAt = registry.loadingStartedAt(2)
+        assertNotNull("begin 之后必须有开始时间", startedAt)
+        assertTrue("开始时间不得早于调用前", startedAt!! >= before)
+
+        registry.finish(2, generation)
+        assertNull("结束之后不得留下开始时间", registry.loadingStartedAt(2))
+    }
+
+    @Test
+    fun cancelAndClearLoadsAlsoDropTheStartTime() {
+        val generation = registry.begin(4, "k")!!
+        registry.cancel(4, generation)
+        assertNull("取消之后不得留下开始时间", registry.loadingStartedAt(4))
+
+        registry.begin(5, "k")
+        registry.clearLoads()
+        assertNull("清加载之后不得留下开始时间", registry.loadingStartedAt(5))
+    }
+
+    @Test
+    fun staleFinishKeepsTheStartTimeOfTheRunningLoad() {
+        val first = registry.begin(6, "k")!!
+        val second = registry.begin(6, "k")
+        assertNull("同一章重复 begin 必须被挡住", second)
+
+        registry.finish(6, first + 1)
+        assertNotNull("过期的 finish 不得释放仍在进行的加载", registry.loadingStartedAt(6))
+        assertTrue(registry.isLoading(6))
+
+        registry.finish(6, first)
+        assertNull("自己的 finish 才能释放开始时间", registry.loadingStartedAt(6))
+    }
 }

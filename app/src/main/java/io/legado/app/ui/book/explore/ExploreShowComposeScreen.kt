@@ -61,6 +61,7 @@ fun ExploreShowComposeScreen(
     onBookClick: (SearchBook) -> Unit,
     onLoadMore: () -> Unit,
     onLoadPrevious: () -> Unit,
+    onCanScrollBackwardChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val renderConfig = rememberBookshelfListRenderConfig()
@@ -90,6 +91,15 @@ fun ExploreShowComposeScreen(
                 listState.firstVisibleItemIndex == 0 &&
                 listState.firstVisibleItemScrollOffset == 0
         }
+    }
+    val canScrollBackward by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                    listState.firstVisibleItemScrollOffset > 0
+        }
+    }
+    LaunchedEffect(canScrollBackward) {
+        onCanScrollBackwardChanged(canScrollBackward)
     }
 
     LaunchedEffect(shouldLoadMore) {

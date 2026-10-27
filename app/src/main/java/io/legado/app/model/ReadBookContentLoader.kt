@@ -23,12 +23,15 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * What the content loader needs from the reader.
@@ -119,6 +122,16 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
      */
     private var readAloudPendingLoadChapterIndex = -1
 
+    /**
+     * 正文已经被取回却被丢弃（排版键在下载窗口内变了、槽位被换掉、排版任务被取消）时，
+     * 界面会一直停在「加载数据中…」占位页：丢弃之后没有任何路径会再发起一次加载。
+     * 这里记录每章已经自动重试过几次，正文真的装进槽位后清零。
+     */
+    private val contentRetryCounts = ConcurrentHashMap<Int, Int>()
+
+    /** 正在等待自动重试的章节，防止同一章堆出多个重试任务。 */
+    private val contentRetryPending = ConcurrentHashMap.newKeySet<Int>()
+
     /** Records that the next load of this chapter comes from read-aloud navigation. */
     fun markReadAloudPendingLoad(index: Int) {
         readAloudPendingLoadChapterIndex = index
@@ -205,6 +218,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 )
             } else {
                 logContentLoadSkip("already_loading", index, book)
+                recoverStalledLoad(index)
             }
         }.onError {
             requestGeneration?.let { generation -> host.finishChapterLoad(index, generation) }
@@ -378,6 +392,104 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         downloadScope.coroutineContext.cancelChildren()
     }
 
+    /** 换书/重排时重置「正文被丢弃后自动重试」的预算。 */
+    fun resetRetryBudget() {
+        contentRetryCounts.clear()
+        contentRetryPending.clear()
+    }
+
+    private fun logContentLoadDrop(
+        book: Book,
+        chapter: BookChapter,
+        requestedLayoutKey: String?,
+        generation: Long,
+        canceled: Boolean
+    ) {
+        val currentLayoutKey = host.currentChapterLayoutKey()
+        // 排版键是长指纹串，只留前缀防止 drop 风暴刷屏；比对结果才是诊断重点。
+        fun String.shortKey() = take(40)
+        AppLog.put(
+            "read-load drop: index=${chapter.index}, gen=$generation, " +
+                "recordedGen=${host.chapterLoads.generationOf(chapter.index)}, " +
+                "canceled=$canceled, bookMatched=${host.book?.bookUrl == book.bookUrl}, " +
+                "layoutKeyMatched=${requestedLayoutKey != null && currentLayoutKey == requestedLayoutKey}, " +
+                "requestedKey=${requestedLayoutKey?.shortKey()}, currentKey=${currentLayoutKey.shortKey()}"
+        )
+    }
+
+    /**
+     * 当前章的正文被丢弃后补一次自动重试。
+     *
+     * 下载往往要几秒到几十秒，这期间排版键（视口尺寸落定、每书样式绑定、高亮规则修订）
+     * 很容易变化，结果会被判定过期而整章丢掉；丢掉之后没有任何路径会再触发加载，
+     * 界面就永远停在「加载数据中…」占位页，只能退出重进。这里用有限次数把这种情况补回来：
+     * 已经有内容/已有在途加载/已经重试够了都不再发起，避免重复请求与死循环。
+     */
+    private fun retryMissingCurrentChapter(
+        index: Int,
+        reason: String,
+        refreshIfReady: Boolean = true
+    ) {
+        // 记住触发时的书：延迟结束书已换掉就放弃，避免对旧书发起多余请求。
+        val requestBookUrl = host.book?.bookUrl
+        if (!contentRetryPending.add(index)) return
+        launch {
+            try {
+                delay(CONTENT_LOAD_RETRY_DELAY_MS)
+                // 已经离开阅读页（unregister 把 callBack 置空）就不再补请求。
+                if (host.callBack == null) return@launch
+                if (host.book?.bookUrl != requestBookUrl) return@launch
+                if (index != host.durChapterIndex) return@launch
+                val currentChapter = host.textChapter(0)
+                if (currentChapter != null && currentChapter.chapter.index == index &&
+                    currentChapter.isCompleted && !refreshIfReady
+                ) {
+                    // 内容已就绪且无需补刷新（后台缓存命中等场景）。
+                    return@launch
+                }
+                if (host.chapterLoads.isLoading(index)) {
+                    // 在途加载还没结束：没到滞留阈值就交给它，到了就强制丢掉这次登记再重试。
+                    if (!isLoadStalled(index)) return@launch
+                    AppLog.put("read-load stalled: index=$index, force cancel before retry")
+                    host.cancelChapterLoading(index)
+                }
+                val attempt = (contentRetryCounts[index] ?: 0) + 1
+                if (attempt > MAX_CONTENT_LOAD_RETRIES) {
+                    AppLog.put(
+                        "read-load retry give up: reason=$reason, index=$index, " +
+                            "attempts=$MAX_CONTENT_LOAD_RETRIES"
+                    )
+                    return@launch
+                }
+                contentRetryCounts[index] = attempt
+                AppLog.put("read-load retry: reason=$reason, index=$index, attempt=$attempt")
+                // 交给 loadContent 统一判定：排版键没变就只补一次刷新（缓存快路径），
+                // 键变了就按新键重新加载——绝不能把槽位里旧键的正文直接刷上屏。
+                loadContent(index, upContent = true, resetPageOffset = false)
+            } finally {
+                contentRetryPending.remove(index)
+            }
+        }
+    }
+
+    /**
+     * 一次加载登记迟迟不结束（下载卡死、排版任务丢失、登记没被释放）时，后续同一章的所有
+     * 请求都会被挡成 already_loading，界面就永远停在占位页。超过阈值就强制丢弃这次登记并重试。
+     */
+    private fun recoverStalledLoad(index: Int) {
+        val startedAt = host.chapterLoads.loadingStartedAt(index) ?: return
+        val elapsed = System.currentTimeMillis() - startedAt
+        if (elapsed < CONTENT_LOAD_STALL_TIMEOUT_MS) return
+        AppLog.put("read-load stalled: index=$index, elapsed=${elapsed}ms, force cancel")
+        host.cancelChapterLoading(index)
+        retryMissingCurrentChapter(index, "load_stalled")
+    }
+
+    private fun isLoadStalled(index: Int): Boolean {
+        val startedAt = host.chapterLoads.loadingStartedAt(index) ?: return false
+        return System.currentTimeMillis() - startedAt >= CONTENT_LOAD_STALL_TIMEOUT_MS
+    }
+
     // ---- 安装：把加载到的正文装进槽位（自 ReadBook 搬入）----
 
     private fun isChapterLoadRequestCurrent(
@@ -470,6 +582,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             else -> return false
         }
         host.chapterLoads.setChapterLayoutKey(chapterIndex, layoutKey)
+        contentRetryCounts.remove(chapterIndex)
         return true
     }
 
@@ -511,7 +624,18 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         requestGeneration: Long? = null,
         success: (() -> Unit)? = null
     ) {
-        val generation = requestGeneration ?: return
+        val generation = requestGeneration ?: run {
+            // 拿不到加载登记（请求记录被提前消费掉）时，这一章没人会去安装；当前章补一次重试。
+            // 这条路径也会被后台缓存完成命中，内容已就绪时不要再补刷新。
+            if (chapter.index == host.durChapterIndex) {
+                retryMissingCurrentChapter(
+                    chapter.index,
+                    "generation_missing",
+                    refreshIfReady = false
+                )
+            }
+            return
+        }
         val requestedLayoutKey = host.chapterLoads.layoutKeyOf(chapter.index)
         if (requestedLayoutKey == null || chapter.bookUrl != book.bookUrl || canceled ||
             !isChapterLoadRequestCurrent(
@@ -521,13 +645,20 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 generation
             )
         ) {
+            logContentLoadDrop(book, chapter, requestedLayoutKey, generation, canceled)
             host.finishChapterLoad(chapter.index, generation)
+            // 当前章的正文被丢弃后就再也没有人触发加载了，界面会永远停在占位页。
+            retryMissingCurrentChapter(chapter.index, "request_dropped")
             return
         }
         if (host.chapterLoads.jobOf(chapter.index)?.isActive == true) {
+            // 这一代的排版任务还在跑：正文已经交给它了，等它自己安装。
+            // 注意这里不能 finishChapterLoad：那个任务就是本次登记的任务，
+            // 提前清掉 generation 会让它安装时自我否决。
             return
         }
         var installedTextChapter: TextChapter? = null
+        var contentApplied = false
         lateinit var job: Coroutine<Boolean>
         job = Coroutine.async(this, start = CoroutineStart.LAZY) {
             if (!isChapterLoadRequestCurrent(
@@ -750,6 +881,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             }
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
         }.onSuccess { applied ->
+            contentApplied = applied
             if (applied) success?.invoke()
         }
         host.chapterLoads.setJob(chapter.index, job)
@@ -757,6 +889,11 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             if (host.chapterLoads.removeJob(chapter.index, job)) {
                 clearIncompleteChapterSlot(chapter.index, installedTextChapter)
                 host.finishChapterLoad(chapter.index, generation)
+                if (!contentApplied) {
+                    // 排版结果没落到槽位（布局键变了 / 槽位被别的章节换掉 / 任务被取消），
+                    // 当前章会一直空着，补一次重试。
+                    retryMissingCurrentChapter(chapter.index, "layout_not_applied")
+                }
             }
         }
         job.start()
@@ -977,6 +1114,18 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         } finally {
             if (!applied) clearIncompleteChapterSlot(chapter.index, textChapter)
         }
+    }
+
+    private companion object {
+
+        /** 正文被丢弃后最多自动重试几次：够补上排版键漂移，又不会无限循环。 */
+        const val MAX_CONTENT_LOAD_RETRIES = 3
+
+        /** 重试前等一小会儿，让尺寸/样式落定，避免用同一个正在变化的键再撞一次。 */
+        const val CONTENT_LOAD_RETRY_DELAY_MS = 200L
+
+        /** 一次加载登记超过这个时间还没结束，就认为它卡死了（正常请求的超时远小于它）。 */
+        const val CONTENT_LOAD_STALL_TIMEOUT_MS = 120_000L
     }
 
 }

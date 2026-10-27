@@ -428,6 +428,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun initClassicMode() {
         if (!oldModeInitialized) {
             oldModeInitialized = true
+            //视图重建后把上次离开时的展开源与滚动位置交给 adapter，首个非空列表落地时恢复
+            adapter.setPendingViewRestore(classicExpandedSourceUrl, classicLastScrollPosition)
+            classicLastScrollPosition = -1
             initSearchView()
             initRecyclerView()
             initGroupData()
@@ -3673,6 +3676,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             adapter.upResumed(false)
             searchView?.clearFocus()
             adapter.onPause()
+            classicRememberViewPosition()
         }
         if (usingModernDiscovery) {
             discoverLoadJob?.cancel()
@@ -3694,6 +3698,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     override fun onDestroyView() {
+        if (!usingModernDiscovery && !usingSuiteDiscovery) {
+            //onPause 不总是先于视图销毁（如 recreate 路径差异），兜底再记一次
+            classicRememberViewPosition()
+        }
         stopModernMode()
         stopSuiteMode()
         WebViewPool.destroyScope(WebViewPool.Scope.DISCOVERY)
@@ -3723,6 +3731,13 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     override fun scrollTo(pos: Int) {
         (binding.rvFind.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(pos, 0)
+    }
+
+    /** 记住经典模式的浏览位置与展开源，供视图/Fragment 重建后恢复 */
+    private fun classicRememberViewPosition() {
+        if (view == null) return
+        classicLastScrollPosition = linearLayoutManager.findFirstVisibleItemPosition()
+        classicExpandedSourceUrl = adapter.expandedSourceUrl
     }
 
     override fun openExplore(sourceUrl: String, title: String, exploreUrl: String?) {
@@ -4036,6 +4051,14 @@ private const val DISCOVERY_SUITE_SNAPSHOT_WIDGET_LIMIT = 20
 private const val DISCOVERY_MODERN_CACHE_BOOK_LIMIT = 80
 private const val DISCOVERY_CACHE_TTL_MS = 72L * 60L * 60L * 1000L
 private const val DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS = 120L
+
+/**
+ * 进程内记忆经典发现模式的浏览位置与展开的源。
+ * 主页 ViewPager 用 FragmentStatePagerAdapter，tab 切远后 Fragment 实例会被销毁，
+ * 仅靠实例成员无法恢复，须放在跨实例存活的地方（不落盘，重启后从头浏览）。
+ */
+private var classicLastScrollPosition = -1
+private var classicExpandedSourceUrl: String? = null
 private const val DISCOVERY_MODERN_CACHE_PREFIX = "discovery_modern_result_"
 private const val DISCOVERY_SUITE_CACHE_PREFIX = "discovery_suite_snapshot_"
 

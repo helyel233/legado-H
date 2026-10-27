@@ -23,6 +23,9 @@ internal class ChapterLoadRegistry {
     private val generations = ConcurrentHashMap<Int, Long>()
     private val generationSeed = AtomicLong(0L)
 
+    /** When each in-flight load started, so a load that never ends can be noticed. */
+    private val loadingStartedAt = ConcurrentHashMap<Int, Long>()
+
     /** Layout key a chapter was laid out with, for chapters that are already laid out. */
     private val chapterLayoutKeys = ConcurrentHashMap<Int, String>()
 
@@ -40,6 +43,7 @@ internal class ChapterLoadRegistry {
         val generation = generationSeed.incrementAndGet()
         generations[index] = generation
         layoutKeys[index] = layoutKey
+        loadingStartedAt[index] = System.currentTimeMillis()
         return generation
     }
 
@@ -58,6 +62,7 @@ internal class ChapterLoadRegistry {
             generations.remove(index)
             layoutKeys.remove(index)
             loadingChapters.remove(index)
+            loadingStartedAt.remove(index)
         }
     }
 
@@ -77,12 +82,14 @@ internal class ChapterLoadRegistry {
         } ?: false
         layoutKeys.remove(index)
         loadingChapters.remove(index)
+        loadingStartedAt.remove(index)
         return cancelled
     }
 
     @Synchronized
     fun removeLoading(index: Int) {
         loadingChapters.remove(index)
+        loadingStartedAt.remove(index)
     }
 
     /** Drops every load: the reader is leaving this book. */
@@ -91,11 +98,15 @@ internal class ChapterLoadRegistry {
         loadingChapters.clear()
         layoutKeys.clear()
         generations.clear()
+        loadingStartedAt.clear()
     }
 
     // --- what a load is allowed to see ---------------------------------------------
 
     fun isLoading(index: Int): Boolean = loadingChapters.contains(index)
+
+    /** Wall-clock time the in-flight load of this chapter started, null when idle. */
+    fun loadingStartedAt(index: Int): Long? = loadingStartedAt[index]
 
     fun generationOf(index: Int): Long? = generations[index]
 

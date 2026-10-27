@@ -294,6 +294,7 @@ object ReadBook : CoroutineScope by MainScope() {
         TextFile.clear()
         chapterLoads.clearLoads()
         chapterLoads.clearChapterLayoutKeys()
+        contentLoader.resetRetryBudget()
         synchronized(this) {
             downloadedChapters.clear()
             downloadFailChapters.clear()
@@ -329,6 +330,7 @@ object ReadBook : CoroutineScope by MainScope() {
         upWebBook(book)
         chapterLoads.clearLoads()
         chapterLoads.clearChapterLayoutKeys()
+        contentLoader.resetRetryBudget()
         synchronized(this) {
             downloadedChapters.clear()
             downloadFailChapters.clear()

@@ -31,6 +31,7 @@ import io.legado.app.databinding.ActivityRssArtivlesBinding
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssStar
 import io.legado.app.help.source.sortUrls
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
@@ -370,8 +371,20 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             }
 
             R.id.menu_clear -> {
+                // 清缓存删掉该源全部已缓存文章且不可恢复，必须有确认
                 viewModel.url?.let {
-                    viewModel.clearArticles()
+                    alert(R.string.draw) {
+                        setMessage(
+                            getString(R.string.sure_del) + "\n<" +
+                                (viewModel.rssSource?.sourceName ?: "") + ">" +
+                                getString(R.string.rss_article_cache)
+                        )
+                        noButton()
+                        yesButton {
+                            viewModel.clearArticles()
+                            toastOnUi(getString(R.string.rss_article_cache_cleared))
+                        }
+                    }
                 }
             }
 

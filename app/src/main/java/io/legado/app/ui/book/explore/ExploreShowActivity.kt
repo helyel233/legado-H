@@ -13,9 +13,11 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ActivityExploreShowBinding
 import io.legado.app.help.webView.WebViewPool
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.number.NumberPickerDialog
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.stableSearchBookKey
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
@@ -40,6 +42,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     private val bookshelfTick = mutableIntStateOf(0)
     private var oldPage = -1
     private var isClearAll = false
+    private var composeListCanScrollBackward = false
 
     private val menuPage by lazy {
         binding.titleBar.menu.add(getString(R.string.menu_page, 1)).apply {
@@ -54,6 +57,10 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
                     .show { targetPage ->
                         if (page != targetPage) {
                             oldPage = targetPage
+                            // 跳页会作废在途请求（含下拉刷新的请求）：作废的结果
+                            // 不会走成功/失败回调，刷新圈必须在这里主动收起，
+                            // 否则下拉刷新与跳页连续操作时转圈卡死
+                            binding.swipeRefreshLayout.isRefreshing = false
                             viewModel.skipPage(targetPage)
                             isClearAll = true
                             composeBooks.clear()
@@ -72,25 +79,64 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.title = intent.getStringExtra("exploreName")
+        initSwipeRefresh()
         initComposeList()
         viewModel.booksData.observe(this) { upData(it) }
         viewModel.addBooksData.observe(this) { upDataTop(it) }
         viewModel.errorLiveData.observe(this) {
             composeBottomLoading.value = false
             composeBottomError.value = it
+            binding.swipeRefreshLayout.isRefreshing = false
         }
         viewModel.errorTopLiveData.observe(this) {
             composeTopLoading.value = false
             composeTopError.value = it
             composeHasPrevious.value = oldPage > 1
+            binding.swipeRefreshLayout.isRefreshing = false
         }
         viewModel.upAdapterLiveData.observe(this) {
             bookshelfTick.intValue++
         }
         viewModel.pageLiveData.observe(this) {
+            //统一维护"当前页"：正常翻页、跳页、快照恢复都从这里校准，
+            //并让恢复到多页快照时立即可向上翻页
+            oldPage = it
             menuPage.title = getString(R.string.menu_page, it)
+            composeHasPrevious.value = it > 1
         }
         viewModel.initData(intent)
+    }
+
+    private fun initSwipeRefresh() {
+        binding.swipeRefreshLayout.setColorSchemeColors(accentColor)
+        binding.swipeRefreshLayout.setProgressViewOffset(true, (-28).dpToPx(), 56.dpToPx())
+        //ComposeView 自身不产生 View 级滚动偏移，须由列表回传滚动状态
+        binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
+            composeListCanScrollBackward
+        }
+        binding.swipeRefreshLayout.setOnRefreshListener { refreshBooks() }
+    }
+
+    /**
+     * 下拉刷新：回到第 1 页重新加载。skipPage 作废所有在途请求，
+     * 成功后覆盖列表与快照缓存。
+     */
+    private fun refreshBooks() {
+        if (composeTopLoading.value) return
+        oldPage = 1
+        // skipPage 会作废在途请求（不会走成功/失败回调）：先收起刷新圈，
+        // 加载指示交由 composeBottomLoading 的底部加载态接管
+        binding.swipeRefreshLayout.isRefreshing = false
+        viewModel.skipPage(1)
+        isClearAll = true
+        composeBooks.clear()
+        composeHasMore.value = true
+        composeHasPrevious.value = false
+        composeBottomError.value = null
+        composeTopError.value = null
+        composeTopLoading.value = false
+        composeBottomLoading.value = true
+        viewModel.explore()
     }
 
     private fun initComposeList() {
@@ -116,7 +162,8 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
                     lifecycle = lifecycle,
                     onBookClick = { book -> showBookInfo(book) },
                     onLoadMore = { scrollToBottom(forceLoad = composeBottomError.value != null) },
-                    onLoadPrevious = { scrollToTop(forceLoad = composeTopError.value != null) }
+                    onLoadPrevious = { scrollToTop(forceLoad = composeTopError.value != null) },
+                    onCanScrollBackwardChanged = { composeListCanScrollBackward = it }
                 )
             }
         }
@@ -146,6 +193,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         val oldSize = composeBooks.size
         composeBottomLoading.value = false
         composeBottomError.value = null
+        binding.swipeRefreshLayout.isRefreshing = false
         if (books.isEmpty() && oldSize == 0) {
             composeHasMore.value = false
             replaceComposeBooks(emptyList())
@@ -165,6 +213,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         val oldFirstKey = composeBooks.firstOrNull()?.stableSearchBookKey()
         composeTopLoading.value = false
         composeTopError.value = null
+        binding.swipeRefreshLayout.isRefreshing = false
         replaceComposeBooks(books, resetPrepend = false)
         val prependedCount = oldFirstKey?.let { key ->
             books.indexOfFirst { it.stableSearchBookKey() == key }

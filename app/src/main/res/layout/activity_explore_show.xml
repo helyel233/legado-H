@@ -22,10 +22,17 @@
         app:layout_constraintTop_toBottomOf="@id/title_bar">
 
 
-        <androidx.compose.ui.platform.ComposeView
-            android:id="@+id/compose_list"
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_layout"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent">
+
+            <androidx.compose.ui.platform.ComposeView
+                android:id="@+id/compose_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     </io.legado.app.ui.widget.dynamiclayout.DynamicFrameLayout>
 

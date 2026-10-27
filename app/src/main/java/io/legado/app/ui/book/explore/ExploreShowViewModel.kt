@@ -67,8 +67,32 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
             if (bookSource == null && sourceUrl != null) {
                 bookSource = appDb.bookSourceDao.getBookSource(sourceUrl)
             }
+            restoreFromCache()
             explore()
         }
+    }
+
+    /**
+     * 恢复上次浏览快照：先展示缓存内容让页面立即有数据，
+     * 网络加载从快照记录的下一页续拉，成功后覆盖合并。
+     */
+    private fun restoreFromCache() {
+        val source = bookSource ?: return
+        val url = exploreUrl ?: return
+        val snapshot = ExploreShowCache.read(source.bookSourceUrl, url) ?: return
+        if (snapshot.books.isEmpty()) return
+        books = snapshot.books
+        page = snapshot.page
+        booksData.postValue(books)
+        //对用户而言"当前页"是快照里最后加载的一页
+        pageLiveData.postValue((snapshot.page - 1).coerceAtLeast(1))
+    }
+
+    private fun saveSnapshotToCache() {
+        val source = bookSource ?: return
+        val url = exploreUrl ?: return
+        if (books.isEmpty()) return
+        ExploreShowCache.write(source.bookSourceUrl, url, ExploreShowCache.Snapshot(page, books))
     }
 
     /**
@@ -93,6 +117,7 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
                 addBooksData.postValue(books)
                 appDb.searchBookDao.insert(*searchBooks.toTypedArray())
                 pageLiveData.postValue(page)
+                saveSnapshotToCache()
             }.onError {
                 if (version != requestVersion) return@onError
                 it.printOnDebug()
@@ -128,6 +153,7 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
                 appDb.searchBookDao.insert(*searchBooks.toTypedArray())
                 pageLiveData.postValue(page)
                 page++
+                saveSnapshotToCache()
             }.onError {
                 if (version != requestVersion) return@onError
                 it.printOnDebug()

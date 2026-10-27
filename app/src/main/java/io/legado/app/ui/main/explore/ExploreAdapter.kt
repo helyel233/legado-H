@@ -76,6 +76,11 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     private val selectRecycler = arrayListOf<LinearLayout>()
 
     private var exIndex = -1
+    /** 展开行的源 URL：exIndex 会随数据集变化漂移，锚定/恢复都以它为准 */
+    var expandedSourceUrl: String? = null
+        private set
+    /** 视图重建后待恢复的（展开源, 滚动位置），首个非空列表落地时消费 */
+    private var pendingViewRestore: Pair<String?, Int>? = null
     private var scrollTo = -1
     private var lastClickTime: Long = 0
     private val sourceKinds = ConcurrentHashMap<String, List<ExploreKind>>()
@@ -105,7 +110,11 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
             if (payloads.isEmpty()) {
                 tvName.text = item.bookSourceName
             }
-            if (exIndex == holder.layoutPosition) {
+            //展开判定须校验该位置的源仍是当初展开的源：
+            //exIndex 是位置，数据集变化（diff/置顶/删除）后可能已漂移到别的源
+            val expandedHere = exIndex == holder.layoutPosition &&
+                getItemByLayoutPosition(exIndex)?.bookSourceUrl == item.bookSourceUrl
+            if (expandedHere) {
                 ivStatus.setImageResource(R.drawable.ic_arrow_down)
                 rotateLoading.loadingColor = context.accentColor
                 rotateLoading.visible()
@@ -136,10 +145,22 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     @SuppressLint("SetTextI18n", "ClickableViewAccessibility")
     private fun upKindList(binding: ItemFindBookBinding, item: BookSourcePart, kinds: List<ExploreKind>, exIndex: Int) {
+        val flexbox = binding.flexbox
         if (kinds.isEmpty()) {
+            //解析不到分类时给一行提示，而不是无声的空白展开行（下拉刷新可重试）
+            kotlin.runCatching {
+                recyclerFlexbox(flexbox)
+                val tv = ItemFilletTextBinding.inflate(inflater, flexbox, false).root
+                flexbox.addView(tv)
+                flexbox.visible()
+                tv.text = context.getString(R.string.explore_kinds_empty)
+                tv.gravity = Gravity.CENTER
+                tv.isClickable = false
+                tv.setOnTouchListener(null)
+                tv.alpha = 0.65f
+            }
             return
         }
-        val flexbox = binding.flexbox
         val sourceUrl = item.bookSourceUrl
         kotlin.runCatching {
             recyclerFlexbox(flexbox)
@@ -609,6 +630,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                 val position = holder.layoutPosition
                 val oldEx = exIndex
                 exIndex = if (exIndex == position) -1 else position
+                expandedSourceUrl = if (exIndex == -1) null else getItem(position)?.bookSourceUrl
                 notifyItemChanged(oldEx, false)
                 if (exIndex != -1) {
                     scrollTo = position
@@ -628,9 +650,73 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         } else {
             val oldExIndex = exIndex
             exIndex = -1
+            expandedSourceUrl = null
             notifyItemChanged(oldExIndex)
             true
         }
+    }
+
+    /**
+     * 数据集变化（diff/排序/增删）落地后，把展开锚点按源 URL 重新定位，
+     * 防止 exIndex 停在旧位置造成展开行错行或丢失。由 onCurrentListChanged 调用。
+     */
+    private fun reanchorExpanded() {
+        val url = expandedSourceUrl ?: return
+        val oldIndex = exIndex
+        if (oldIndex >= 0 && getItem(oldIndex)?.bookSourceUrl == url) return
+        val newIndex = getItems().indexOfFirst { it.bookSourceUrl == url }
+        if (newIndex < 0) {
+            exIndex = -1
+            expandedSourceUrl = null
+            if (oldIndex >= 0) notifyItemChanged(oldIndex, false)
+            return
+        }
+        exIndex = newIndex
+        if (oldIndex >= 0 && oldIndex != newIndex) notifyItemChanged(oldIndex, false)
+        notifyItemChanged(newIndex, false)
+    }
+
+    /**
+     * 记住视图重建前的状态（展开的源、滚动位置），首个非空列表落地时恢复。
+     * 展开源恢复成功则滚动到该行（与手动展开行为一致），否则退回滚动位置。
+     */
+    fun setPendingViewRestore(expandedSourceUrl: String?, scrollPosition: Int) {
+        pendingViewRestore = expandedSourceUrl to scrollPosition
+    }
+
+    private fun consumePendingViewRestore() {
+        val pending = pendingViewRestore ?: return
+        if (isEmpty()) return
+        pendingViewRestore = null
+        if (pending.first == null || !restoreExpanded(pending.first)) {
+            val saved = pending.second
+            if (saved >= 0) {
+                val target = saved.coerceAtMost(itemCount - 1)
+                if (target >= 0) callBack.scrollTo(target)
+            }
+        }
+    }
+
+    /**
+     * 视图重建后恢复记忆的展开源；找不到返回 false。
+     * 需当前没有已展开行（exIndex < 0）才生效。
+     */
+    private fun restoreExpanded(sourceUrl: String?): Boolean {
+        if (sourceUrl == null || exIndex >= 0) return false
+        val index = getItems().indexOfFirst { it.bookSourceUrl == sourceUrl }
+        if (index < 0) return false
+        exIndex = index
+        expandedSourceUrl = sourceUrl
+        notifyItemChanged(index, false)
+        callBack.scrollTo(index)
+        return true
+    }
+
+    override fun onCurrentListChanged() {
+        super.onCurrentListChanged()
+        //在 items 真正落地（diff 派发完成）后执行，此时按位置查询才是新数据
+        reanchorExpanded()
+        consumePendingViewRestore()
     }
 
     fun refreshExpandedIfNoKinds(): Boolean {

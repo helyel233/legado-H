@@ -342,23 +342,42 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
      * 长按星标里。这里补一个显式入口，并给出回到经典布局的退路。
      */
     private fun showModernRssMoreMenu() {
-        val labels = listOf(
-            getString(R.string.rss_source_manage),
-            getString(R.string.favorite),
-            getString(R.string.history),
-            getString(R.string.switch_classic_rss)
+        // 标签与动作绑在一起分发，避免按索引对位时插入条件项后错位
+        val items = mutableListOf<Pair<String, () -> Unit>>(
+            getString(R.string.rss_source_manage) to { startActivity<RssSourceActivity>() },
+            getString(R.string.favorite) to { startActivity<RssFavoritesActivity>() },
+            getString(R.string.history) to { showDialogFragment<ReadRecordDialog>() }
         )
+        // 只有当前源是「规则文章列表」时才有文章样式可言（网页态源没有列表）
+        if (selectedRssSource?.ruleArticles?.isNotBlank() == true) {
+            items.add(getString(R.string.switch_rss_article_style) to { switchArticleStyle() })
+        }
+        items.add(getString(R.string.switch_classic_rss) to { switchToClassicRss() })
         showComposeActionListDialog(
             title = getString(R.string.menu),
-            labels = labels
+            labels = items.map { it.first }
         ) { index ->
-            when (index) {
-                0 -> startActivity<RssSourceActivity>()
-                1 -> startActivity<RssFavoritesActivity>()
-                2 -> showDialogFragment<ReadRecordDialog>()
-                3 -> switchToClassicRss()
-            }
+            items.getOrNull(index)?.second?.invoke()
         }
+    }
+
+    /**
+     * 切换当前源的文章排版样式（5 种循环）。
+     *
+     * 内嵌的文章列表读的是本 Fragment 的 RssSortViewModel（与经典模式同一套
+     * articleStyle 数据源），重建内嵌 Fragment 即生效。
+     */
+    private fun switchArticleStyle() {
+        val source = selectedRssSource ?: return
+        val next = (source.articleStyle + 1) % 5
+        val updated = source.copy(articleStyle = next)
+        selectedRssSource = updated
+        sortHostViewModel.rssSource = updated
+        lifecycleScope.launch(IO) {
+            appDb.rssSourceDao.update(updated)
+        }
+        toastOnUi(getString(R.string.rss_article_style_toast, next + 1))
+        renderCurrentSort()
     }
 
     /** 切回经典布局：经典模式才有源宫格列数、文章样式切换等完整入口 */
