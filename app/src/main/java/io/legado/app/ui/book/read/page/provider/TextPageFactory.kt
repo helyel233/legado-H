@@ -262,7 +262,20 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
         if (page != null) {
             return if (removeAloudSpan) page.removePageAloudSpan() else page
         }
-        return TextPage(title = title).apply { textChapter = this@pageOrPlaceholder }.format()
+        return skeletonPage(title, this@pageOrPlaceholder)
+    }
+
+    /**
+     * 正文尚未就绪时的占位页：灰色骨架条 + 加载提示。
+     *
+     * 代替原先「整页只有一句加载文案」的空白页，正文到达时由骨架过渡到正文，
+     * 视觉跳变更小，不会像卡住不动。
+     */
+    private fun skeletonPage(title: String?, chapter: TextChapter? = null): TextPage {
+        return (if (title != null) TextPage(title = title) else TextPage()).apply {
+            isSkeleton = true
+            if (chapter != null) textChapter = chapter
+        }.format()
     }
 
     private fun spreadStartIndex(index: Int): Int {
@@ -289,9 +302,9 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
             return@with TextPage(text = it).format()
         }
         currentChapter?.let {
-            return@with TextPage(title = it.title).apply { textChapter = it }.format()
+            return@with skeletonPage(it.title, it)
         }
-        TextPage().format()
+        skeletonPage(null)
     }
 
     private fun nextFallbackPage(): TextPage = with(dataSource) {
@@ -300,14 +313,14 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
         }
         currentChapter?.let {
             if (!it.isCompleted) {
-                return@with TextPage(title = it.title).format()
+                return@with skeletonPage(it.title, it)
             }
         }
         nextChapter?.let {
             return@with it.getPage(0)?.removePageAloudSpan()
-                ?: TextPage(title = it.title).format()
+                ?: skeletonPage(it.title, it)
         }
-        TextPage().format()
+        skeletonPage(null)
     }
 
     private fun prevFallbackPage(): TextPage = with(dataSource) {
@@ -316,13 +329,13 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
         }
         currentChapter?.let {
             if (!it.isCompleted) {
-                return@with TextPage(title = it.title).format()
+                return@with skeletonPage(it.title, it)
             }
         }
         prevChapter?.let {
             return@with it.getPage(spreadStartIndex(it.lastIndex))?.removePageAloudSpan()
-                ?: TextPage(title = it.title).format()
+                ?: skeletonPage(it.title, it)
         }
-        TextPage().format()
+        skeletonPage(null)
     }
 }

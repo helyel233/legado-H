@@ -2602,6 +2602,25 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.preDownloadNum, value)
         }
 
+    /**
+     * 预取下一章：当前章正文就绪后后台抓下一章并落盘，
+     * 翻到下一章时直接读本地缓存，不再等网络。
+     */
+    var prefetchNextChapter
+        get() = appCtx.getPrefBoolean(PreferKey.prefetchNextChapter, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.prefetchNextChapter, value)
+        }
+
+    /**
+     * 预下载仅在 WiFi 下进行：移动数据下不自动预下载整本，避免与首屏抢带宽。
+     */
+    var preDownloadWifiOnly
+        get() = appCtx.getPrefBoolean(PreferKey.preDownloadWifiOnly, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.preDownloadWifiOnly, value)
+        }
+
     val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
 
     val syncBookProgressPlus get() = appCtx.getPrefBoolean(PreferKey.syncBookProgressPlus, false)

@@ -292,7 +292,9 @@ object WebBook {
         bookSource: BookSource,
         book: Book,
         runPerJs: Boolean = false,
-        isFromBookInfo : Boolean = false
+        isFromBookInfo : Boolean = false,
+        loadState: TocLoadState? = null,
+        onProgress: ((loaded: Int, total: Int) -> Unit)? = null
     ): Result<List<BookChapter>> {
         book.removeAllBookType()
         book.addType(bookSource.getBookType())
@@ -307,7 +309,9 @@ object WebBook {
                     baseUrl = book.tocUrl,
                     redirectUrl = book.tocUrl,
                     body = book.tocHtml,
-                    isFromBookInfo = isFromBookInfo
+                    isFromBookInfo = isFromBookInfo,
+                    onProgress = onProgress,
+                    loadState = loadState
                 )
             } else {
                 val analyzeUrl = AnalyzeUrl(
@@ -349,7 +353,9 @@ object WebBook {
                     baseUrl = book.tocUrl,
                     redirectUrl = res.url,
                     body = res.body,
-                    isFromBookInfo = isFromBookInfo
+                    isFromBookInfo = isFromBookInfo,
+                    onProgress = onProgress,
+                    loadState = loadState
                 )
             }
         }.onFailure {

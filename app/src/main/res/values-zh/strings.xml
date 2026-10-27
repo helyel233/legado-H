@@ -547,6 +547,8 @@
     <string name="error_read_file">文件读取失败</string>
     <string name="error_load_toc">加载目录失败</string>
     <string name="toc_cache_recovered">目录加载失败，已切换为本地缓存目录</string>
+    <string name="toc_loading_pages">正在加载目录 %1$d/%2$d 页…</string>
+    <string name="toc_loading_chapters">正在加载目录，已加载 %1$d 章…</string>
     <string name="error_get_data">获取数据失败！</string>
     <string name="error_load_msg">加载失败\n%s</string>
     <string name="net_error_10001">没有网络</string>
@@ -1007,6 +1009,11 @@
     <string name="pre_download">预下载</string>
     <string name="pre_download_m">预下载%s页</string>
     <string name="pre_download_s">预先下载 %s 章正文</string>
+    <string name="prefetch_next_chapter">预取下一章</string>
+    <string name="prefetch_next_chapter_summary">阅读时后台抓取下一章，翻到下一章不用等网络</string>
+    <string name="pre_download_wifi_only">仅 WiFi 预下载</string>
+    <string name="pre_download_wifi_only_summary">移动数据下不自动预下载正文，避免和阅读抢流量</string>
+    <string name="no_network_content">当前无网络连接</string>
     <string name="is_enabled">是否启用</string>
     <string name="background_image">背景图片</string>
     <string name="read_scroll_follow_background">背景滚动跟随</string>

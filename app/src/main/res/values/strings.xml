@@ -546,6 +546,8 @@
     <string name="error_read_file">Failed to read file</string>
     <string name="error_load_toc">Failed to load chapters list</string>
     <string name="toc_cache_recovered">Failed to load the table of contents, switched to the cached one</string>
+    <string name="toc_loading_pages">Loading chapters list %1$d/%2$d pages…</string>
+    <string name="toc_loading_chapters">Loading chapters list, %1$d chapters loaded…</string>
     <string name="error_get_data">Failed to get data</string>
     <string name="error_load_msg">Failed to load\n%s</string>
     <string name="net_error_10001">No network</string>
@@ -1317,6 +1319,11 @@
     <string name="pre_download">Download in advance</string>
     <string name="pre_download_m">Pre-download %s pages</string>
     <string name="pre_download_s">Download %s chapters in advance</string>
+    <string name="prefetch_next_chapter">Prefetch next chapter</string>
+    <string name="prefetch_next_chapter_summary">Fetch the next chapter in the background while reading, so turning a chapter is instant</string>
+    <string name="pre_download_wifi_only">Pre-download on Wi-Fi only</string>
+    <string name="pre_download_wifi_only_summary">Do not auto pre-download chapters on mobile data</string>
+    <string name="no_network_content">No network connection</string>
     <string name="is_enabled">Is enabled</string>
     <string name="background_image">Background image</string>
     <string name="read_scroll_follow_background">Scroll Follow Background</string>

@@ -14,6 +14,7 @@ import io.legado.app.exception.TocEmptyException
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.http.StrResponse
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
@@ -21,17 +22,47 @@ import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.isTrue
 import io.legado.app.utils.mapAsync
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flow
 import org.mozilla.javascript.Context
 import splitties.init.appCtx
 import io.legado.app.constant.AppPattern
 import kotlinx.coroutines.currentCoroutineContext
+import java.util.concurrent.atomic.AtomicInteger
+
+/**
+ * 目录抓取状态：记录分页失败情况，供调用方判断这次拿到的目录是否完整。
+ */
+class TocLoadState {
+
+    /**
+     * 抓取失败的目录页数，0 表示目录完整
+     */
+    @Volatile
+    var failedPages: Int = 0
+        internal set
+
+    internal fun onPageFailed() {
+        failedPages++
+    }
+}
 
 /**
  * 获取目录
  */
 object BookChapterList {
+
+    /**
+     * 目录单页抓取失败后的重试次数（不含首次请求）
+     */
+    private const val TOC_PAGE_MAX_RETRY = 2
+
+    /**
+     * 目录单页重试的基础间隔，按重试次数递增
+     */
+    private const val TOC_PAGE_RETRY_DELAY_MS = 500L
 
     suspend fun analyzeChapterList(
         bookSource: BookSource,
@@ -39,7 +70,9 @@ object BookChapterList {
         baseUrl: String,
         redirectUrl: String,
         body: String?,
-        isFromBookInfo: Boolean = false
+        isFromBookInfo: Boolean = false,
+        onProgress: ((loaded: Int, total: Int) -> Unit)? = null,
+        loadState: TocLoadState? = null
     ): List<BookChapter> {
         body ?: throw NoStackTraceException(
             appCtx.getString(R.string.error_get_web_content, baseUrl)
@@ -71,50 +104,78 @@ object BookChapterList {
                 var nextUrl = chapterData.second[0]
                 while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                     nextUrlList.add(nextUrl)
-                    val analyzeUrl = AnalyzeUrl(
-                        mUrl = nextUrl,
-                        source = bookSource,
-                        ruleData = book,
-                        coroutineContext = currentCoroutineContext()
-                    )
-                    val res = analyzeUrl.getStrResponseAwait() //控制并发访问
-                    res.body?.let { nextBody ->
-                        chapterData = analyzeChapterList(
-                            book, nextUrl, nextUrl,
-                            nextBody, tocRule, listRule, bookSource,
-                            isFromBookInfo = isFromBookInfo
+                    val res = fetchTocPage(bookSource, book, nextUrl)
+                    val nextBody = res?.body
+                    if (nextBody.isNullOrEmpty()) {
+                        // 本页取不到内容：已解析出的章节照常使用（部分目录可用），
+                        // 不再因为个别分页失败把整本目录作废
+                        loadState?.onPageFailed()
+                        Debug.log(
+                            bookSource.bookSourceUrl,
+                            "◇目录第${nextUrlList.size}页获取失败，沿用已解析的${chapterList.size}章"
                         )
-                        nextUrl = chapterData.second.firstOrNull() ?: ""
-                        chapterList.addAll(chapterData.first)
+                        break
                     }
+                    chapterData = analyzeChapterList(
+                        book, nextUrl, nextUrl,
+                        nextBody, tocRule, listRule, bookSource,
+                        isFromBookInfo = isFromBookInfo
+                    )
+                    nextUrl = chapterData.second.firstOrNull() ?: ""
+                    chapterList.addAll(chapterData.first)
+                    onProgress?.invoke(chapterList.size, -1)
                 }
                 Debug.log(bookSource.bookSourceUrl, "◇目录总页数:${nextUrlList.size}")
             }
 
             else -> {
+                val totalPages = chapterData.second.size
                 Debug.log(
                     bookSource.bookSourceUrl,
-                    "◇并发解析目录,总页数:${chapterData.second.size}"
+                    "◇并发解析目录,总页数:${totalPages}"
                 )
+                val failedPages = AtomicInteger(0)
                 flow {
                     for (urlStr in chapterData.second) {
                         emit(urlStr)
                     }
                 }.mapAsync(AppConfig.threadCount) { urlStr ->
-                    val analyzeUrl = AnalyzeUrl(
-                        mUrl = urlStr,
-                        source = bookSource,
-                        ruleData = book,
-                        coroutineContext = currentCoroutineContext()
-                    )
-                    val res = analyzeUrl.getStrResponseAwait() //控制并发访问
-                    analyzeChapterList(
-                        book, urlStr, res.url,
-                        res.body ?: "", tocRule, listRule, bookSource, false,
-                        isFromBookInfo = isFromBookInfo
-                    ).first
+                    try {
+                        val res = fetchTocPage(bookSource, book, urlStr)
+                        val resBody = res?.body
+                        if (resBody.isNullOrEmpty()) {
+                            failedPages.incrementAndGet()
+                            loadState?.onPageFailed()
+                            emptyList()
+                        } else {
+                            analyzeChapterList(
+                                book, urlStr, res?.url ?: urlStr,
+                                resBody, tocRule, listRule, bookSource, false,
+                                isFromBookInfo = isFromBookInfo
+                            ).first
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        // 单页失败只跳过这一页，其余页照常解析
+                        failedPages.incrementAndGet()
+                        loadState?.onPageFailed()
+                        Debug.log(
+                            bookSource.bookSourceUrl,
+                            "◇目录页解析失败:$urlStr ${e.localizedMessage}"
+                        )
+                        emptyList()
+                    }
                 }.collect {
                     chapterList.addAll(it)
+                    onProgress?.invoke(chapterList.size, totalPages)
+                }
+                val failed = failedPages.get()
+                if (failed > 0) {
+                    Debug.log(
+                        bookSource.bookSourceUrl,
+                        "◇目录有$failed 页获取失败，已跳过，剩余${chapterList.size}章"
+                    )
                 }
             }
         }
@@ -179,6 +240,46 @@ object BookChapterList {
         currentCoroutineContext().ensureActive()
         upChapterInfo(list, book)
         return list
+    }
+
+    /**
+     * 抓取目录分页，失败自动重试。
+     *
+     * 网络抖动是目录拉取失败最常见的原因，重试比整本重头再来划算得多。
+     *
+     * @return 成功返回响应；重试后仍失败返回 null，由调用方按「部分目录可用」处理。
+     */
+    private suspend fun fetchTocPage(
+        bookSource: BookSource,
+        book: Book,
+        url: String
+    ): StrResponse? {
+        var attempt = 0
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            try {
+                val analyzeUrl = AnalyzeUrl(
+                    mUrl = url,
+                    source = bookSource,
+                    ruleData = book,
+                    coroutineContext = currentCoroutineContext()
+                )
+                return analyzeUrl.getStrResponseAwait()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                currentCoroutineContext().ensureActive()
+                attempt++
+                if (attempt > TOC_PAGE_MAX_RETRY) {
+                    Debug.log(
+                        bookSource.bookSourceUrl,
+                        "◇目录页获取失败(已重试${attempt - 1}次):$url ${e.localizedMessage}"
+                    )
+                    return null
+                }
+                delay(TOC_PAGE_RETRY_DELAY_MS * attempt)
+            }
+        }
     }
 
     private suspend fun analyzeChapterList(

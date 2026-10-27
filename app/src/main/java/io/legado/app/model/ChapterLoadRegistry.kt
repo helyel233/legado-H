@@ -76,14 +76,15 @@ internal class ChapterLoadRegistry {
     fun cancel(index: Int, expectedGeneration: Long? = null): Boolean {
         if (expectedGeneration != null && generations[index] != expectedGeneration) return false
         generations.remove(index)
-        val cancelled = jobs.remove(index)?.let { job ->
-            job.cancel()
-            true
-        } ?: false
+        val job = jobs.remove(index)
         layoutKeys.remove(index)
         loadingChapters.remove(index)
         loadingStartedAt.remove(index)
-        return cancelled
+        // 锁外取消：job 的 completion 回调会去拿 loader 锁
+        // （clearIncompleteChapterSlot），在本锁内取消会与 contentLoadFinish
+        // 的「loader → registry」锁序形成 ABBA 死锁窗口
+        job?.cancel()
+        return job != null
     }
 
     @Synchronized
@@ -103,6 +104,9 @@ internal class ChapterLoadRegistry {
 
     // --- what a load is allowed to see ---------------------------------------------
 
+    // 读也必须持同一把锁：loadingChapters 是普通 ArrayList，写方（begin/finish/
+    // cancel/clearLoads）都在锁内，无锁的 contains 会与写并发遍历（CME/撕裂读）
+    @Synchronized
     fun isLoading(index: Int): Boolean = loadingChapters.contains(index)
 
     /** Wall-clock time the in-flight load of this chapter started, null when idle. */

@@ -50,6 +50,14 @@ object CacheBook {
     private val workingState = MutableStateFlow(true)
     private val mutex = Mutex()
 
+    /**
+     * 该章节当前是否正在下载（阅读页预取下一章时用来避免重复抓取）
+     */
+    fun isDownloading(chapter: BookChapter): Boolean {
+        val model = cacheBookMap[chapter.bookUrl] ?: return false
+        return model.isDownloading(chapter.index)
+    }
+
     @Synchronized
     fun getOrCreate(bookUrl: String): CacheBookModel? {
         val book = appDb.bookDao.getBook(bookUrl) ?: return null
@@ -202,6 +210,14 @@ object CacheBook {
             return waitDownloadSet.isNotEmpty() || onDownloadSet.isNotEmpty() || isLoading
         }
 
+        /**
+         * 该章节当前是否正在下载（避免重复抓取同一章）
+         */
+        @Synchronized
+        fun isDownloading(index: Int): Boolean {
+            return onDownloadSet.contains(index)
+        }
+
         @Synchronized
         fun isStop(): Boolean {
             return isStopped || (!isRun() && !waitingRetry)
@@ -344,13 +360,12 @@ object CacheBook {
                 waitDownloadSet.remove(chapterIndex)
                 return
             }
-            if (BookHelp.hasImageContent(book, chapter)) {
-                waitDownloadSet.remove(chapterIndex)
-                return
-            }
             waitDownloadSet.remove(chapterIndex)
             onDownloadSet.add(chapterIndex)
             if (BookHelp.hasContent(book, chapter)) {
+                // 正文已在本地：只补齐缺失的图片即可。
+                // 原先这里还额外做一次「读全文 + 逐图解码」的重量级检查，
+                // 缓存整本书时那才是主要开销。
                 Coroutine.async(scope, context, executeContext = context) {
                     BookHelp.getContent(book, chapter)?.let {
                         BookHelp.saveImages(bookSource, book, chapter, it, 1)

@@ -37,6 +37,7 @@ import io.legado.app.ui.book.read.page.entities.TextChapter.Companion.emptyTextC
 import io.legado.app.ui.book.read.page.entities.column.TextBaseColumn
 import io.legado.app.ui.book.read.page.entities.column.TextColumn
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.book.read.page.provider.SkeletonLayout
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.canvasrecorder.recordIfNeeded
 import io.legado.app.utils.dpToPx
@@ -81,6 +82,12 @@ data class TextPage(
     val chapterPosition: Int get() = textLines.firstOrNull()?.chapterPosition ?: fallbackChapterPosition
     val searchResult = hashSetOf<TextBaseColumn>()
     var isMsgPage: Boolean = false
+
+    /**
+     * 骨架占位页：正文还没就绪时显示灰色骨架条，
+     * 代替「整页只有一句加载文案」的空白页，消除正文到达时的整页闪烁。
+     */
+    var isSkeleton: Boolean = false
     var canvasRecorder = CanvasRecorderFactory.create(true)
     private var epubBackgroundRecorder = CanvasRecorderFactory.create(true)
     var doublePage = false
@@ -197,6 +204,9 @@ data class TextPage(
         if (isNativeEpubPage()) {
             return this
         }
+        if (isSkeleton) {
+            return formatSkeleton()
+        }
         if (textLines.isEmpty()) isMsgPage = true
         if (isMsgPage && ChapterProvider.viewWidth > 0) {
             textLines.clear()
@@ -239,6 +249,17 @@ data class TextPage(
             invalidate()
             isCompleted = true
         }
+        return this
+    }
+
+    /**
+     * 骨架占位页不排版文字，只占满一屏并记录可绘制高度。
+     */
+    private fun formatSkeleton(): TextPage {
+        if (ChapterProvider.viewWidth <= 0) return this
+        height = ChapterProvider.visibleHeight.toFloat()
+        renderHeight = ChapterProvider.viewHeight
+        isCompleted = true
         return this
     }
 
@@ -550,6 +571,10 @@ data class TextPage(
     }
 
     private fun drawPageContent(view: ContentTextView, canvas: Canvas) {
+        if (isSkeleton) {
+            drawSkeleton(canvas)
+            return
+        }
         drawEpubEmbeddedBlocks(view, canvas)
         drawEpubNativeCommands(view, canvas)
         drawEpubDecorations(canvas)
@@ -560,6 +585,72 @@ data class TextPage(
                 line.draw(view, this)
             }
         }
+    }
+
+    /**
+     * 绘制骨架占位：若干条灰色圆角横线模拟段落，底部给一行加载提示。
+     *
+     * 颜色取当前主题的文字色压低透明度，日间是浅灰、夜间是深灰，自动跟随日夜。
+     */
+    private fun drawSkeleton(canvas: Canvas) {
+        val visible = ChapterProvider.visibleRect
+        val top = max(ChapterProvider.paddingTop.toFloat(), visible.top)
+        val bottom = min(ChapterProvider.visibleBottom.toFloat(), visible.bottom)
+        val left = ChapterProvider.paddingLeft.toFloat()
+        val right = ChapterProvider.visibleRight.toFloat()
+        val textHeight = ChapterProvider.contentPaintTextHeight
+        if (textHeight <= 0f || right <= left || bottom <= top) return
+        val lineHeight = textHeight * 0.56f
+        val lineGap = (textHeight - lineHeight) + ChapterProvider.lineSpacingExtra
+        val hintHeight = textHeight * 1.4f
+        val lines = SkeletonLayout.lines(
+            top = top,
+            bottom = bottom - hintHeight,
+            left = left,
+            right = right,
+            lineHeight = lineHeight,
+            lineGap = lineGap
+        )
+        if (lines.isNotEmpty()) {
+            val paint = PaintPool.obtain()
+            paint.style = Paint.Style.FILL
+            paint.isAntiAlias = true
+            paint.color = skeletonColor()
+            val radius = lineHeight / 2f
+            lines.forEach { line ->
+                canvas.drawRoundRect(
+                    line.left, line.top, line.right, line.top + line.height,
+                    radius, radius, paint
+                )
+            }
+            PaintPool.recycle(paint)
+        }
+        drawSkeletonHint(canvas, left, right, bottom - hintHeight * 0.55f)
+    }
+
+    /**
+     * 骨架底部的加载提示文字
+     */
+    private fun drawSkeletonHint(canvas: Canvas, left: Float, right: Float, baseline: Float) {
+        val hint = appCtx.getString(R.string.data_loading)
+        val paint = PaintPool.obtain()
+        paint.style = Paint.Style.FILL
+        paint.isAntiAlias = true
+        paint.color = skeletonColor(0.34f)
+        paint.textSize = ChapterProvider.contentPaint.textSize * 0.85f
+        paint.typeface = ChapterProvider.contentPaint.typeface ?: ChapterProvider.typeface
+        val textWidth = paint.measureText(hint)
+        canvas.drawText(hint, left + (right - left - textWidth) / 2f, baseline, paint)
+        PaintPool.recycle(paint)
+    }
+
+    /**
+     * 骨架颜色：取当前文字色压低透明度，日夜主题自动适配
+     */
+    private fun skeletonColor(alphaRatio: Float = 0.14f): Int {
+        val base = ChapterProvider.contentPaint.color
+        val alpha = (((base ushr 24) and 0xFF) * alphaRatio).toInt().coerceIn(0, 255)
+        return (alpha shl 24) or (base and 0x00FFFFFF)
     }
 
     private fun drawEpubBackground(view: ContentTextView, canvas: Canvas) {

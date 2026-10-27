@@ -266,8 +266,9 @@ object BookHelp {
             )
             return
         }
-        //保存文本
-        getPrimaryContentFile(book, bookChapter).createFileIfNotExist().writeText(content)
+        //保存文本：临时文件 + rename 原子替换——预取、缓存下载、阅读加载可能
+        //同时写同一章，直接 writeText 会截断/交错，读到残缺正文
+        writeTextAtomically(getPrimaryContentFile(book, bookChapter).createFileIfNotExist(), content)
         // 同步全库搜索索引（异步，不影响保存路径）
         LibrarySearchIndexer.indexChapterAsync(book, bookChapter, content)
         // 清理旧的 index 型文件，避免重复占用和命中过期缓存
@@ -278,6 +279,26 @@ object BookHelp {
             val wordCount = StringUtils.wordCountFormat(content.length)
             bookChapter.wordCount = wordCount
             appDb.bookChapterDao.upWordCount(bookChapter.bookUrl, bookChapter.url, wordCount)
+        }
+    }
+
+    /**
+     * 原子写正文：先写同目录临时文件再 rename 覆盖。
+     * 多个写入者（预取/缓存下载/阅读加载）同时写同一章时，直接 writeText
+     * 会让读者看到截断或交错的内容；rename 在应用私有目录内是原子的。
+     * rename 失败（跨分区/文件系统不支持）时回退直接写，保证功能可用。
+     */
+    private fun writeTextAtomically(file: File, content: String) {
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        try {
+            tmp.writeText(content)
+            if (!tmp.renameTo(file)) {
+                file.writeText(content)
+                tmp.delete()
+            }
+        } catch (e: Exception) {
+            file.writeText(content)
+            tmp.delete()
         }
     }
 
@@ -523,7 +544,10 @@ object BookHelp {
         val candidates = getContentFileCandidates(book, bookChapter)
         val file = candidates.firstOrNull { it.exists() }
         if (file != null) {
-            val string = file.readText()
+            // 命中内存缓存就不必再读盘：翻章、排版重算、滚动预览会反复读同一章
+            val cacheKey = ChapterContentCache.keyOf(file)
+            val string = ChapterContentCache.get(cacheKey)
+                ?: file.readText().also { ChapterContentCache.put(cacheKey, it) }
             if (EpubContentCachePolicy.isFailurePayload(book.isEpub, string)) {
                 candidates.forEach { cached -> cached.delete() }
                 AppLog.put(
@@ -576,6 +600,8 @@ object BookHelp {
         getContentFileCandidates(book, bookChapter).forEach {
             if (it.exists()) it.delete()
         }
+        // 文件已删，同一份内容不能再从内存缓存里返回
+        ChapterContentCache.clear()
     }
 
     /**

@@ -13,6 +13,7 @@ import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.ReadRecordDailyHelper
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ChapterPrefetcher
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.help.book.isEpub
@@ -62,6 +63,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import io.legado.app.utils.NetworkUtils
 import splitties.init.appCtx
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -1000,7 +1003,12 @@ object ReadBook : CoroutineScope by MainScope() {
 
     private fun showCurrentChapterLoadError(index: Int, message: String, throwable: Throwable? = null) {
         if (index != durChapterIndex) return
-        val msg = "加载正文失败\n$message"
+        val msg = if (!NetworkUtils.isAvailable()) {
+            // 断网时给出可判断的原因，别让用户以为是书源坏了
+            appCtx.getString(R.string.no_network_content) + "\n" + message
+        } else {
+            "加载正文失败\n$message"
+        }
         if (throwable != null) {
             AppLog.put(msg, throwable)
         } else {
@@ -1049,7 +1057,18 @@ object ReadBook : CoroutineScope by MainScope() {
         success: (() -> Unit)? = null
     ) = contentLoader.contentLoadFinish(
         book, chapter, content, upContent, resetPageOffset, canceled, requestGeneration, success
-    )
+    ).also {
+        // 正文就绪后后台预取下一章：翻过去时直接命中本地缓存，不再等网络。
+        // 只对「当前阅读章」的就绪回调触发：缓存服务/朗读预加载完成任意章
+        // 也会走到这里，若不加门控会把当前章的预取反复取消重启。
+        // bookSource 与 book 在同一时刻捕获，防止换书窗口内错源抓旧章
+        if (!canceled &&
+            chapter.index == durChapterIndex &&
+            !ChapterPrefetchPolicy.isLoadFailureContent(content)
+        ) {
+            ChapterPrefetcher.prefetchNextChapter(book, chapter, bookSource, this)
+        }
+    }
 
     suspend fun contentLoadFinishAwait(
         book: Book,
@@ -1060,7 +1079,14 @@ object ReadBook : CoroutineScope by MainScope() {
         requestGeneration: Long
     ): Boolean = contentLoader.contentLoadFinishAwait(
         book, chapter, content, upContent, resetPageOffset, requestGeneration
-    )
+    ).also { applied ->
+        if (applied &&
+            chapter.index == durChapterIndex &&
+            !ChapterPrefetchPolicy.isLoadFailureContent(content)
+        ) {
+            ChapterPrefetcher.prefetchNextChapter(book, chapter, bookSource, this)
+        }
+    }
 
     private fun cancelChapterLoading(index: Int, expectedGeneration: Long? = null) {
         chapterLoads.cancel(index, expectedGeneration)
@@ -1247,6 +1273,10 @@ object ReadBook : CoroutineScope by MainScope() {
      */
     private fun preDownload() {
         if (book?.isLocal == true) return
+        if (AppConfig.preDownloadWifiOnly && !NetworkUtils.isWifi()) {
+            // 仅 WiFi 预下载：移动数据下不自动拉整本，避免和首屏抢带宽
+            return
+        }
         executor.execute {
             if (AppConfig.preDownloadNum < 2) {
                 upToc()
@@ -1329,6 +1359,7 @@ object ReadBook : CoroutineScope by MainScope() {
     private fun releaseAndCancel() {
         msg = null
         preDownloadTask?.cancel()
+        ChapterPrefetcher.cancel()
         contentLoader.release()
         coroutineContext.cancelChildren()
         ImageProvider.clear()

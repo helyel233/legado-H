@@ -34,6 +34,8 @@ import io.legado.app.model.inheritNotShelfStateFrom
 import io.legado.app.model.resolveStoredBookshelfState
 import io.legado.app.model.SourceCallBack
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.model.webBook.TocIntegrity
+import io.legado.app.model.webBook.TocLoadState
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.entities.TextChapter
@@ -43,6 +45,7 @@ import io.legado.app.utils.FileUtils
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.mapParallelSafe
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.runOnUI
 import io.legado.app.utils.toStringArray
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.currentCoroutineContext
@@ -320,7 +323,16 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                     "read-toc: start, book=${book.name}, bookUrl=${book.bookUrl}, " +
                         "origin=${book.origin}, source=${it.bookSourceUrl}"
                 )
-                WebBook.getChapterListAwait(it, book, true)
+                val tocLoadState = TocLoadState()
+                WebBook.getChapterListAwait(it, book, true, loadState = tocLoadState) { loaded, total ->
+                    // 目录分页较多时给出进度反馈，避免长时间没有任何动静
+                    val progressText = if (total > 0) {
+                        context.getString(R.string.toc_loading_pages, loaded, total)
+                    } else {
+                        context.getString(R.string.toc_loading_chapters, loaded)
+                    }
+                    runOnUI { ReadBook.upMsg(progressText) }
+                }
                     .onSuccess { cList ->
                         AppLog.put(
                             "read-toc: success, size=${cList.size}, oldBookUrl=${oldBook.bookUrl}, " +
@@ -328,6 +340,37 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                                 "last=${cList.lastOrNull()?.title}"
                         )
                         val oldChapterList = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
+                        // 有分页失败时按旧章 url 覆盖率判定：源新增尾部章节会让
+                        // newSize >= oldSize，仅比长度会漏掉「更长但缺中间页」的残缺目录
+                        val missingOldUrls = if (tocLoadState.failedPages > 0 && oldChapterList.isNotEmpty()) {
+                            val newUrls = cList.mapTo(hashSetOf()) { it.url }
+                            oldChapterList.count { it.url !in newUrls }
+                        } else {
+                            0
+                        }
+                        // 目录分页抓取不完整（部分页失败）且库里已有更完整的目录时，
+                        // 沿用旧目录：既避免把完整目录覆盖成残缺目录，
+                        // 也避免已缓存正文失去章节索引
+                        if (TocIntegrity.shouldKeepOldToc(
+                                tocLoadState.failedPages,
+                                cList.size,
+                                oldChapterList.size,
+                                missingOldUrls
+                            )
+                        ) {
+                            AppLog.put(
+                                "read-toc: keep old toc, new=${cList.size}, old=${oldChapterList.size}, " +
+                                    "failedPages=${tocLoadState.failedPages}"
+                            )
+                            // 恢复被目录解析改写的统计字段，保持内存与库内目录一致
+                            book.totalChapterNum = oldChapterList.size
+                            book.durChapterTitle = oldBook.durChapterTitle
+                            book.latestChapterTitle = oldBook.latestChapterTitle
+                            book.lastCheckTime = oldBook.lastCheckTime
+                            book.lastCheckCount = oldBook.lastCheckCount
+                            ReadBook.onChapterListUpdated(book, loadContentAfterUpdate)
+                            return true
+                        }
                         BookHelp.remapContentCache(oldBook, oldChapterList, cList)
                         // Loading the table of contents must not promote a sampled book onto
                         // the shelf. The url may have been re-derived while fetching, so the

@@ -76,6 +76,18 @@ class ReadingConfigFragment : ComposeSettingFragment() {
                             onSelected = { AppConfig.preDownloadNum = it }
                         ),
                         switch(
+                            key = PreferKey.prefetchNextChapter,
+                            title = getString(R.string.prefetch_next_chapter),
+                            summary = getString(R.string.prefetch_next_chapter_summary),
+                            defaultValue = true
+                        ),
+                        switch(
+                            key = PreferKey.preDownloadWifiOnly,
+                            title = getString(R.string.pre_download_wifi_only),
+                            summary = getString(R.string.pre_download_wifi_only_summary),
+                            defaultValue = false
+                        ),
+                        switch(
                             key = PreferKey.replaceEnableDefault,
                             title = getString(R.string.replace_enable_default_t),
                             summary = getString(R.string.replace_enable_default_s),

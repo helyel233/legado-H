@@ -120,6 +120,8 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
      * Read-aloud turns pages on its own; a load it triggered must not be mistaken for a
      * turn the reader made.
      */
+    // IO 协程写（markReadAloudPendingLoad）、Main 读（withLock 块内判定），跨线程可见
+    @Volatile
     private var readAloudPendingLoadChapterIndex = -1
 
     /**
