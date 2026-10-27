@@ -26,6 +26,7 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogSelectSectionExportBinding
 import io.legado.app.help.book.getExportFileName
 import io.legado.app.help.book.isAudio
+import io.legado.app.model.ReadBook
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.tryParesExportFileName
 import io.legado.app.help.cache.CacheCoordinator
@@ -180,7 +181,16 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_download_after -> {
                 if (!CacheCoordinator.snapshot.value.hasActiveTasks()) sureCacheBook {
                     adapter.getItems().forEach { book ->
-                        submitBookDownload(book, book.durChapterIndex, book.lastChapterIndex)
+                        // 起点用内存实时进度（仅当缓存对象就是当前在读的那本书）：
+                        // book.durChapterIndex 是落库进度，本次会话跳章后未必同步，
+                        // 可能退回第 1 章；评论增量缓存跟随正文缓存范围，会一起从第一章开始。
+                        // 末章 clamp 防目录变短后出现反向区间
+                        val start = (if (ReadBook.book?.bookUrl == book.bookUrl) {
+                            maxOf(ReadBook.durChapterIndex, book.durChapterIndex)
+                        } else {
+                            book.durChapterIndex
+                        }).coerceAtMost(book.lastChapterIndex.coerceAtLeast(0))
+                        submitBookDownload(book, start, book.lastChapterIndex)
                     }
                 } else {
                     CacheCoordinator.cancelAll()

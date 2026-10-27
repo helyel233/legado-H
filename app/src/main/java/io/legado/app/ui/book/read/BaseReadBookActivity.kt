@@ -286,9 +286,15 @@ abstract class BaseReadBookActivity :
     @SuppressLint("InflateParams", "SetTextI18n")
     fun showDownloadDialog() {
         ReadBook.book?.let { book ->
+            // 起点取内存里的实时阅读进度：book.durChapterIndex 是落库进度，
+            // 本次会话跳章后未必已同步（仍显示「第 1 章」）。评论增量缓存
+            // 跟随正文缓存任务的章节集合，起点错了评论也会从第一章开始抓。
+            // 末章 clamp：目录刷新变短后 durChapterIndex 可能越界，反向区间会让提交直接报错
+            val startIndex = maxOf(ReadBook.durChapterIndex, book.durChapterIndex)
+                .coerceAtMost((book.totalChapterNum - 1).coerceAtLeast(0))
             alert(titleResource = R.string.offline_cache) {
                 val alertBinding = DialogDownloadChoiceBinding.inflate(layoutInflater).apply {
-                    editStart.setText((book.durChapterIndex + 1).toString())
+                    editStart.setText((startIndex + 1).toString())
                     editEnd.setText(book.totalChapterNum.toString())
                 }
                 customView { alertBinding.root }
