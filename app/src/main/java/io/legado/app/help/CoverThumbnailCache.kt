@@ -19,6 +19,11 @@ object CoverThumbnailCache {
     private const val thumbWidth = 240
     private const val thumbHeight = 320
     private const val dirName = "cover_thumbs_v2"
+
+    /** 缩略图目录上限（字节）与最长保留天数：原来只增不减，目录会无限膨胀 */
+    private const val MAX_CACHE_BYTES = 64L * 1024 * 1024
+    private const val MAX_AGE_MS = 60L * 24 * 60 * 60 * 1000
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun file(context: Context, key: String?, extension: String): File? {
@@ -68,8 +73,35 @@ object CoverThumbnailCache {
             FileOutputStream(target).use { out ->
                 thumb.compressPreservingAlpha(out, 86)
             }
+            trimIfNeeded(target.parentFile)
         } finally {
             if (thumb !== source) thumb.recycle()
+        }
+    }
+
+    /**
+     * 目录回收：先删超过保留期的旧文件，仍超上限时按最旧优先删到上限内。
+     * 全部在 IO 线程（调用方是 IO 协程），失败不影响缓存写入。
+     */
+    private fun trimIfNeeded(dir: File?) {
+        if (dir == null) return
+        runCatching {
+            val files = dir.listFiles()?.filter { it.isFile } ?: return
+            val removable = CoverThumbnailPolicy.selectForRemoval(
+                entries = files.map {
+                    CoverThumbnailPolicy.Entry(
+                        name = it.name,
+                        lastModified = it.lastModified(),
+                        length = it.length()
+                    )
+                },
+                now = System.currentTimeMillis(),
+                maxAgeMs = MAX_AGE_MS,
+                maxBytes = MAX_CACHE_BYTES
+            )
+            if (removable.isEmpty()) return
+            val names = removable.toHashSet()
+            files.filter { it.name in names }.forEach { it.delete() }
         }
     }
 }

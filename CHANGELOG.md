@@ -1,5 +1,27 @@
 # 更新日志
 
+## 1.19.1 版（2026-10-28）
+
+本版新增「评论缓存静默通知」开关，并把评论缓存从前台服务改为进程内抓取（不再常驻通知栏）；同时把一批易崩 / 易膨胀的逻辑抽成纯函数策略并配单测。
+
+### 新增
+
+- **评论缓存静默通知**（高级设置新增 `cacheReviewSilent`，默认开）：开启后评论缓存的进度、完成与失败都不再出现在通知栏，仅正文 / 媒体缓存任务继续正常通知。仅在「同步缓存评论」开启时显示。判定逻辑抽到 `CacheNotificationPolicy`——静默时评论任务从通知可见列表剔除，仅剩评论任务在跑（或刚跑完）就不再打扰，正文 / 媒体完成通知照旧。
+- **评论缓存改为进程内抓取**：删除前台服务 `ReviewCacheService`，改由进程内 `ReviewCaptureHost` 完成抓取。Android 规定前台服务必须挂一条通知，改后评论缓存默认不再产生任何持久通知；进程被回收时任务状态落盘，下次启动把 RUNNING 恢复成 INTERRUPTED 再由 `CacheWorkerDispatcher` 重新派发，评论不会丢、只是重跑一轮。
+
+### 优化 / 修复
+
+- **策略逻辑纯函数化 + 单测**（新增 9 个 Policy / Host + 对应测试，边界可锁定）：
+  - `SqliteInQueryPolicy`：IN 查询参数分片（上限 999、取 500），一次传上千 bookUrl/id 不再抛 SQLiteException；`BookCollectionDao`/`LibrarySearchIndexer` 等改用之。
+  - `CacheExpiryPolicy`：内存缓存层此前不看 deadline，导致「设了 TTL 的缓存」在内存命中时一直返回过期数据（TTL 形同虚设），统一两层判定（MEMORY_HIT / MEMORY_EXPIRED / DISK_HIT / MISS）。
+  - `CoverThumbnailPolicy`：封面缩略图目录原来只增不减会无限膨胀，按保留期 + 大小上限回收；`CoverThumbnailCache` 接入之。
+  - `CacheRetryPolicy`：终态副作用重试设上限 20，避免无上限每 15 秒空转常驻协程。
+  - `ReviewBackoffPolicy`：退避键改用 `bookUrl|chapterUrl`（原用章节序号，换源后同一序号指向另一章被旧章退避白白跳过）；`ReviewPreheatCoordinator` 接入。
+  - `ReviewPaginationPolicy`：评论分页页数上限 200，防止接口一直 `has_more=true` 且 cursor 不重复的死循环占住唯一 worker；`ReviewDataCapture` 接入。
+  - `IconSampleSizePolicy`：底栏 / 主题图标（用户自备大图）先按 2 的幂降采样，避免主线程解码几十 MB 卡 UI。
+  - `ReadBookChapterIndexPolicy`：承接 `BookHelp.clampChapterIndex`（目录变短时夹回章节号），阅读 / 漫画 / 听书统一调用。
+- **并发安全**：`ReadBook.preDownloadTask` 加 `@Volatile`，后台 executor 写入、主线程换书 / 退出读取，避免读到过期值漏取消留下孤儿 Job。
+
 ## 1.18.3 版（2026-10-28）
 
 本版是一轮防御性加固：把各处「坏偏好值 / 目录变短 / 导出途中目录变短 / 超时与取消语义」会引发的崩溃都兜住，并修一个缓存文件名正则 bug。

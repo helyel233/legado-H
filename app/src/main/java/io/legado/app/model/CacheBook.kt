@@ -184,8 +184,13 @@ object CacheBook {
             return false
         }
 
-    val successDownloadSet = linkedSetOf<String>()
-    val errorDownloadMap = hashMapOf<String, Int>()
+    /**
+     * 全局集合：不同 CacheBookModel 实例的 @Synchronized 锁互不排斥，
+     * 用普通 LinkedHashSet/HashMap 会出现并发 add 破坏桶链（Java 8 下 get/size 可能死循环），
+     * 因此这里必须用并发集合。
+     */
+    val successDownloadSet: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    val errorDownloadMap: MutableMap<String, Int> = ConcurrentHashMap()
 
     class CacheBookModel(var bookSource: BookSource, var book: Book) {
 
@@ -283,8 +288,8 @@ object CacheBook {
         private fun onPreError(chapter: BookChapter, error: Throwable) {
             waitingRetry = true
             if (error !is ConcurrentException) {
-                errorDownloadMap[chapter.primaryStr()] =
-                    (errorDownloadMap[chapter.primaryStr()] ?: 0) + 1
+                // 原子自增，避免多本书的失败计数互相覆盖
+                errorDownloadMap.merge(chapter.primaryStr(), 1) { old, add -> old + add }
             }
             onDownloadSet.remove(chapter.index)
         }

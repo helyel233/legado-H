@@ -492,6 +492,8 @@ object PreferKey {
     const val offlineReviewMode = "offlineReviewMode"
     const val reviewPreheatWifiOnly = "reviewPreheatWifiOnly"
     const val reviewSnapshotTtlDays = "reviewSnapshotTtlDays"
+    /** 评论缓存的进度/完成通知是否静默（不进通知栏）。 */
+    const val cacheReviewSilent = "cacheReviewSilent"
     const val downloadChapterIntervalMillis = "downloadChapterIntervalMillis"
     const val downloadChapterRetryCount = "downloadChapterRetryCount"
     const val homepageSourceHidden = "homepageSourceHidden"

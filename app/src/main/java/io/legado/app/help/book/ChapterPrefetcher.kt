@@ -11,6 +11,7 @@ import io.legado.app.model.ChapterPrefetchPolicy
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.NetworkUtils
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -24,6 +25,11 @@ import kotlinx.coroutines.launch
  */
 object ChapterPrefetcher {
 
+    /**
+     * 当前预取任务。调度方在 IO 线程写入、取消方在主线程读写，
+     * 不加 volatile 会读到过期值（漏取消或产生孤儿 Job）。
+     */
+    @Volatile
     private var prefetchJob: Job? = null
 
     /**
@@ -44,8 +50,9 @@ object ChapterPrefetcher {
         if (!AppConfig.prefetchNextChapter) return
         if (book.isLocal) return
         if (source == null) return
-        prefetchJob?.cancel()
-        prefetchJob = scope.launch(Dispatchers.IO) {
+        // 先建不启动的任务，再在锁内「取消旧 + 装新」，避免两个调度方并发时
+        // 后写者覆盖先写者、先写者的 Job 变成孤儿仍在跑
+        val newJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val next = appDb.bookChapterDao.getChapter(book.bookUrl, current.index + 1)
                 ?: return@launch
             val shouldPrefetch = ChapterPrefetchPolicy.shouldPrefetch(
@@ -64,13 +71,20 @@ object ChapterPrefetcher {
                 AppLog.put("预取下一章失败 " + book.name + " #" + next.index + ": " + it.localizedMessage)
             }
         }
+        synchronized(this) {
+            prefetchJob?.cancel()
+            prefetchJob = newJob
+        }
+        newJob.start()
     }
 
     /**
      * 取消预取（离开书时调用）
      */
     fun cancel() {
-        prefetchJob?.cancel()
-        prefetchJob = null
+        synchronized(this) {
+            prefetchJob?.cancel()
+            prefetchJob = null
+        }
     }
 }

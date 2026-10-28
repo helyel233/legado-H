@@ -17,21 +17,24 @@ import io.legado.app.utils.stackTraceStr
 import kotlinx.coroutines.CoroutineScope
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 object Debug {
     var callback: Callback? = null
     private var debugSource: String? = null
     private val tasks: CompositeCoroutine = CompositeCoroutine()
-    val debugMessageMap = HashMap<String, String>()
-    private val debugTimeMap = HashMap<String, Long>()
+    // 校验在后台线程写、UI 线程读/清：普通 HashMap 并发 clear/put 会破坏桶链，必须用并发集合
+    val debugMessageMap: MutableMap<String, String> = ConcurrentHashMap()
+    private val debugTimeMap: MutableMap<String, Long> = ConcurrentHashMap()
     var isChecking: Boolean = false
 
     /** 订阅源校验在跑：与书源校验并存，两套会话不能共用一个布尔互相覆写 */
     @Volatile
     var rssChecking: Boolean = false
 
-    @SuppressLint("ConstantLocale")
-    private val debugTimeFormat = SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault())
+    /** SimpleDateFormat 非线程安全，而校验消息会在多线程格式化，这里按需新建实例 */
+    private fun formatDebugTime(millis: Long): String =
+        SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault()).format(Date(millis))
     private var startTime: Long = System.currentTimeMillis()
 
     @Synchronized
@@ -54,7 +57,7 @@ object Debug {
                 printMsg = HtmlFormatter.format(msg)
             }
             if (showTime) {
-                val time = debugTimeFormat.format(Date(System.currentTimeMillis() - startTime))
+                val time = formatDebugTime(System.currentTimeMillis() - startTime)
                 printMsg = "$time $printMsg"
             }
             it.printLog(state, printMsg)
@@ -66,7 +69,7 @@ object Debug {
             }
             if (showTime && debugTimeMap[sourceUrl] != null) {
                 val time =
-                    debugTimeFormat.format(Date(System.currentTimeMillis() - debugTimeMap[sourceUrl]!!))
+                    formatDebugTime(System.currentTimeMillis() - debugTimeMap[sourceUrl]!!)
                 printMsg = printMsg.replace(AppPattern.debugMessageSymbolRegex, "")
 
                 debugMessageMap[sourceUrl] = "$time $printMsg"
@@ -115,7 +118,7 @@ object Debug {
 
     private fun startCheckingInternal(sourceUrl: String) {
         debugTimeMap[sourceUrl] = System.currentTimeMillis()
-        debugMessageMap[sourceUrl] = "${debugTimeFormat.format(Date(0))} 开始校验"
+        debugMessageMap[sourceUrl] = "${formatDebugTime(0)} 开始校验"
     }
 
     fun finishChecking() {
@@ -141,7 +144,7 @@ object Debug {
             val spendingTime = System.currentTimeMillis() - debugTimeMap[sourceUrl]!!
             debugTimeMap[sourceUrl] =
                 if (state == "校验成功") spendingTime else CheckSource.timeout + spendingTime
-            val printTime = debugTimeFormat.format(Date(spendingTime))
+            val printTime = formatDebugTime(spendingTime)
             debugMessageMap[sourceUrl] = "$printTime $state"
         }
     }

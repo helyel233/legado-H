@@ -7,8 +7,11 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.LibraryContentFts
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isImage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -194,41 +197,51 @@ object LibrarySearchIndexer {
      */
     suspend fun rebuildAll(onProgress: (String) -> Unit): Int = withContext(Dispatchers.IO) {
         rebuilding = true
-        runCatching {
-            val dao = appDb.libraryContentFtsDao
-            dao.deleteAll()
-            synchronized(indexedKeys) {
-                indexedKeys.clear()
-                loadedBooks.clear()
-            }
-            val books = appDb.bookDao.all
-            val validUrls = books.map { it.bookUrl }.toHashSet()
-            var indexed = 0
-            books.forEachIndexed { index, book ->
-                onProgress("[${index + 1}/${books.size}] ${book.name}")
-                if (book.isImage) return@forEachIndexed
-                val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
-                chapters.forEach { chapter ->
-                    val content = BookHelp.getContent(book, chapter) ?: return@forEach
-                    runCatching {
-                        indexChapterInternal(book.bookUrl, chapter.index, chapter.title, content)
-                        indexed++
-                    }.onFailure {
-                        AppLog.put("全库搜索重建索引失败: ${book.name}:${chapter.index}", it)
+        try {
+            runCatching {
+                val dao = appDb.libraryContentFtsDao
+                dao.deleteAll()
+                synchronized(indexedKeys) {
+                    indexedKeys.clear()
+                    loadedBooks.clear()
+                }
+                val books = appDb.bookDao.all
+                val validUrls = books.map { it.bookUrl }.toHashSet()
+                var indexed = 0
+                books.forEachIndexed { index, book ->
+                    // 取消检查：全库扫描很慢，调用方离开页面时要能立刻停下，
+                    // 否则会空跑整个书库（且旧写法会让 rebuilding 永远复位不了）
+                    currentCoroutineContext().ensureActive()
+                    onProgress("[${index + 1}/${books.size}] ${book.name}")
+                    if (book.isImage) return@forEachIndexed
+                    val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+                    chapters.forEach { chapter ->
+                        currentCoroutineContext().ensureActive()
+                        val content = BookHelp.getContent(book, chapter) ?: return@forEach
+                        runCatching {
+                            indexChapterInternal(book.bookUrl, chapter.index, chapter.title, content)
+                            indexed++
+                        }.onFailure {
+                            AppLog.put("全库搜索重建索引失败: ${book.name}:${chapter.index}", it)
+                        }
                     }
                 }
-            }
-            // 清理已删除书籍的残留索引
-            appDb.libraryContentFtsDao.indexedBookUrls().forEach { url ->
-                if (url !in validUrls) {
-                    appDb.libraryContentFtsDao.deleteByBook(url)
+                // 清理已删除书籍的残留索引
+                appDb.libraryContentFtsDao.indexedBookUrls().forEach { url ->
+                    if (url !in validUrls) {
+                        appDb.libraryContentFtsDao.deleteByBook(url)
+                    }
                 }
+                indexed
+            }.getOrElse { error ->
+                // 取消不是失败：向上抛，让调用方真正结束协程
+                if (error is CancellationException) throw error
+                AppLog.put("全库搜索重建索引失败", error)
+                -1
             }
-            indexed
-        }.getOrElse {
-            AppLog.put("全库搜索重建索引失败", it)
-            -1
-        }.also {
+        } finally {
+            // 必须在 withContext 内部复位：写在 .also 里的话取消路径永远走不到，
+            // rebuilding 会一直是 true，之后新章节再也不进索引
             rebuilding = false
         }
     }

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.constant.AppLog
+import io.legado.app.data.SqliteInQueryPolicy
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssSource
@@ -104,10 +105,15 @@ class RssArticlesViewModel(application: Application) : BaseViewModel(application
         }
         //批量统计已在库中的数量：仅当整页均已存在时判定无更多，
         //避免首尾采样在部分重叠页上误判（重复 append 或提前终止）
-        val links = articles.map { it.link }.take(900) //SQLite 参数个数上限保护
-        val existLinks = appDb.rssArticleDao.existLinks(
-            articles.first().origin, articles.first().sort, links
-        ).toHashSet()
+        val links = articles.map { it.link }
+        // SQLite 绑定参数上限 999（Android 11 及以下），必须分批查询。
+        // 判定要用整页的 link：只查前 900 条会让「整页均已存在」永远不成立 → 无限翻页重复拉取。
+        val existLinks = hashSetOf<String>()
+        SqliteInQueryPolicy.chunk(links).forEach { chunk ->
+            existLinks += appDb.rssArticleDao.existLinks(
+                articles.first().origin, articles.first().sort, chunk
+            )
+        }
         val existCount = articles.count { it.link in existLinks }
         if (existCount == articles.size) {
             loadFinallyLiveData.postValue(false)

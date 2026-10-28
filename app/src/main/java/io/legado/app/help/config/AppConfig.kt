@@ -3057,6 +3057,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.autoDownloadReview, value)
         }
 
+    /**
+     * 评论缓存是否静默：开启后评论缓存的进度、完成、失败都不再进入通知栏。
+     * 评论抓取本身在应用进程内完成，不再使用前台服务，因此不会有任何通知。
+     */
+    var cacheReviewSilent: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewSilent, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.cacheReviewSilent, value)
+        }
+
     /** 缓存评论快照时保存评论者头像到资源库。 */
     var cacheReviewAvatars: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.cacheReviewAvatars, true)

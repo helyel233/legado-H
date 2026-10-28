@@ -66,7 +66,7 @@ class CacheBookService : BaseService() {
         isRun = false
         cachePool.close()
         CacheBook.close()
-        // 与 ReviewCacheService 一致：退出前台但保留 203 通知，由桥继续渲染
+        // 退出前台但保留 203 通知，由桥继续渲染
         stopForeground(false)
         super.onDestroy()
     }

@@ -46,6 +46,7 @@ import java.io.ObjectOutputStream
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.Charset
+import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -224,8 +225,12 @@ class EpubFile(var book: Book) {
     private var mCharset: Charset = Charset.defaultCharset()
     private val cssTextCache = linkedMapOf<String, String>()
     private val cssRuleCache = linkedMapOf<String, List<EpubCss.Rule>>()
-    private val nativeDomCache = linkedMapOf<String, EpubDomDocument>()
-    private val nativeLayoutCache = linkedMapOf<String, EpubLayoutDocument>()
+    // 前台路径（companion 的 @Synchronized）与后台预热路径（synchronized(file)）用的是两把不同的锁，
+    // 这里必须让 map 自带同步，否则两个线程会并发结构性修改同一 LinkedHashMap
+    private val nativeDomCache: MutableMap<String, EpubDomDocument> =
+        Collections.synchronizedMap(linkedMapOf<String, EpubDomDocument>())
+    private val nativeLayoutCache: MutableMap<String, EpubLayoutDocument> =
+        Collections.synchronizedMap(linkedMapOf<String, EpubLayoutDocument>())
     private val imageSizeCache = linkedMapOf<String, Size>()
     private val fontTypefaceCache = linkedMapOf<String, Typeface?>()
     private val fontFaceMatchCache = linkedMapOf<String, EpubFontFace?>()

@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
+import io.legado.app.data.SqliteInQueryPolicy
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiReadAloudUsageRecord
 import io.legado.app.databinding.ActivityThemeManageBinding
@@ -166,7 +167,11 @@ class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>(
                 dangerPositive = true,
                 onPositive = {
                     lifecycleScope.launch(Dispatchers.IO) {
-                        appDb.aiReadAloudUsageRecordDao.deleteByIds(ids)
+                        // SQLite 绑定参数上限 999（Android 11 及以下）：一次传入上千个 id 会抛
+                        // SQLiteException，这里按 500 分片
+                        SqliteInQueryPolicy.chunk(ids).forEach { chunk ->
+                            appDb.aiReadAloudUsageRecordDao.deleteByIds(chunk)
+                        }
                         selectedIds.clear()
                         launch(Dispatchers.Main) { load() }
                     }

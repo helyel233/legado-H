@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -164,6 +165,8 @@ object CacheCoordinator : CacheUiPort {
     private val terminalEffectsInProgress = ConcurrentHashMap.newKeySet<String>()
     private val terminalEffectsRetryAttempts = ConcurrentHashMap<String, Int>()
     private val terminalEffectsRetryScheduled = ConcurrentHashMap.newKeySet<String>()
+
+
 
     init {
         replayPendingTerminalEffects()
@@ -550,6 +553,12 @@ object CacheCoordinator : CacheUiPort {
                 while (true) {
                     val attempt = terminalEffectsRetryAttempts
                         .merge(effectKey, 1, Int::plus) ?: 1
+                    if (CacheRetryPolicy.shouldStop(attempt)) {
+                        // 持续失败时不再无限重试：否则这个协程会常驻并每 15s 唤醒一次
+                        AppLog.put("缓存终态副作用重试超过上限，放弃：$effectKey")
+                        terminalEffectsRetryAttempts.remove(effectKey)
+                        return@launch
+                    }
                     val delaySeconds = when (attempt) {
                         1 -> 1L
                         2 -> 2L

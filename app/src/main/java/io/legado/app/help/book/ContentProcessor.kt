@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
 import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 
@@ -93,7 +94,11 @@ class ContentProcessor private constructor(
     @Volatile
     private var ruleSnapshot = RuleSnapshot(emptyList(), emptyList(), TextReaderReplacementProcessor.Rules(), 0L)
     private val directProcessor = TextReaderReplacementProcessor()
-    val removeSameTitleCache = hashSetOf<String>()
+    /**
+     * 「去除重复标题」标记文件集合：正文处理线程（IO）读，规则刷新线程写，
+     * 普通 HashSet 并发读写会破坏桶链（contains 可能死循环），因此用并发集合。
+     */
+    val removeSameTitleCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     init {
         upReplaceRules()

@@ -35,14 +35,17 @@ object MediaTocRefresh {
             isFromBookInfo = fromBookInfo
         ).getOrThrow()
         validateChapters(oldChapters, chapters, index)
+        // 文件迁移放在事务外（对齐 ReadBook.upChapterList 的既有做法）：
+        // remapContentCache/updateCacheFolder 会做文件复制与目录移动，在事务内做会长时间
+        // 持有 Room 写锁，把其它所有写入一起阻塞
+        BookHelp.remapContentCache(oldBook, oldChapters, chapters)
+        if (oldBook.bookUrl == book.bookUrl) {
+            appDb.bookDao.update(book)
+        } else {
+            appDb.bookDao.replace(oldBook, book)
+            BookHelp.updateCacheFolder(oldBook, book)
+        }
         appDb.runInTransaction {
-            BookHelp.remapContentCache(oldBook, oldChapters, chapters)
-            if (oldBook.bookUrl == book.bookUrl) {
-                appDb.bookDao.update(book)
-            } else {
-                appDb.bookDao.replace(oldBook, book)
-                BookHelp.updateCacheFolder(oldBook, book)
-            }
             appDb.bookChapterDao.delByBook(oldBook.bookUrl)
             appDb.bookChapterDao.insert(*chapters.toTypedArray())
         }

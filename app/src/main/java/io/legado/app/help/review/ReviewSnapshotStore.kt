@@ -411,6 +411,7 @@ object ReviewSnapshotStore {
 
     fun delete(book: Book, chapter: BookChapter, buttonSrc: String) {
         File(reviewsDir(book), fileName(chapter.url, buttonSrc)).delete()
+        invalidateChapterCount(book.bookUrl)
     }
 
     /**
@@ -425,6 +426,7 @@ object ReviewSnapshotStore {
             }
         }
         File(reviewsDir(book), statusFileName(chapter.url)).delete()
+        invalidateChapterCount(book.bookUrl)
     }
 
     /**
@@ -454,6 +456,7 @@ object ReviewSnapshotStore {
                 remaining.add(file)
             }
         }
+        if (removed > 0) invalidateChapterCount(book.bookUrl)
         var total = remaining.sumOf { it.length() }
         if (total <= MAX_CACHE_BYTES) return removed
         remaining.sortBy { it.lastModified() }
@@ -466,6 +469,11 @@ object ReviewSnapshotStore {
             }
         }
         return removed
+    }
+
+    /** 快照被删除后，让内存里的「有快照章数」计数失效，下次查询重新按目录统计。 */
+    private fun invalidateChapterCount(bookUrl: String) {
+        ReviewSnapshotManager.invalidateCachedReviewChapters(bookUrl)
     }
 
     /** 同一本书最多每 [PRUNE_INTERVAL_MS] 清理一次，避免每写一章都扫目录。 */

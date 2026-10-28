@@ -128,6 +128,9 @@ object ReadBook : CoroutineScope by MainScope() {
     /* web端阅读进度记录 */
     var webBookProgress: BookProgress? = null
 
+    // 跨线程访问：后台 executor 线程写入、主线程换书/退出时读取取消，
+    // 不加 volatile 会读到过期值（旧书预下载 Job 漏取消，或留下孤儿 Job）
+    @Volatile
     var preDownloadTask: Job? = null
     // 跨线程访问：IO 线程下载回调 add/put，主线程 resetData/upData clear，
     // 必须用线程安全容器，否则 HashMap/HashSet 结构性并发修改会损坏或抛 ConcurrentModificationException
@@ -285,7 +288,7 @@ object ReadBook : CoroutineScope by MainScope() {
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         // 目录可能变短（换源/删章），持久化章节号需夹回有效范围，否则打开即「索引超出范围」且翻不动
-        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
+        durChapterIndex = ReadBookChapterIndexPolicy.clamp(durChapterIndex, simulatedChapterSize)
         isLocalBook = book.isLocal
         clearTextChapter()
         if (notifyContent) {
@@ -317,7 +320,7 @@ object ReadBook : CoroutineScope by MainScope() {
         } else {
             chapterSize
         }
-        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        val targetChapterIndex = ReadBookChapterIndexPolicy.clamp(book.durChapterIndex, simulatedChapterSize)
         if (durChapterIndex != targetChapterIndex) {
             durChapterIndex = targetChapterIndex
             durChapterPos = book.durChapterPos
@@ -1285,28 +1288,32 @@ object ReadBook : CoroutineScope by MainScope() {
                 upToc()
                 return@execute
             }
-            preDownloadTask?.cancel()
-            preDownloadTask = launch(IO) {
-                val cacheBook = book ?: return@launch
-                // 选章规则在 PreDownloadPlan（可单测）：只选存在的章节，跳过已下载与
-                // 连续失败的章节
-                val indexes = PreDownloadPlan.of(
-                    durChapterIndex = durChapterIndex,
-                    chapterSize = chapterSize,
-                    preDownloadNum = AppConfig.preDownloadNum,
-                    isDownloaded = { downloadedChapters.contains(it) },
-                    failCount = { downloadFailChapters[it] ?: 0 }
-                )
-                if (indexes.isEmpty()) return@launch
-                if (ReadBook.book?.bookUrl != cacheBook.bookUrl) return@launch
-                runCatching {
-                    CacheCoordinator.submitAutomaticBookDownload(
-                        book = cacheBook,
-                        chapterIndexes = indexes,
-                        source = CacheRequestSource.AUTO_PRECACHE,
+            // 「取消旧 + 装新」放在同一把锁里：否则主线程换书时 cancel 完，
+            // 后台线程紧接着又把新任务写进来，旧任务漏取消 / 新任务变孤儿
+            synchronized(this) {
+                preDownloadTask?.cancel()
+                preDownloadTask = launch(IO) {
+                    val cacheBook = book ?: return@launch
+                    // 选章规则在 PreDownloadPlan（可单测）：只选存在的章节，跳过已下载与
+                    // 连续失败的章节
+                    val indexes = PreDownloadPlan.of(
+                        durChapterIndex = durChapterIndex,
+                        chapterSize = chapterSize,
+                        preDownloadNum = AppConfig.preDownloadNum,
+                        isDownloaded = { downloadedChapters.contains(it) },
+                        failCount = { downloadFailChapters[it] ?: 0 }
                     )
-                }.onFailure {
-                    AppLog.put("自动预缓存提交失败\n${it.localizedMessage}", it)
+                    if (indexes.isEmpty()) return@launch
+                    if (ReadBook.book?.bookUrl != cacheBook.bookUrl) return@launch
+                    runCatching {
+                        CacheCoordinator.submitAutomaticBookDownload(
+                            book = cacheBook,
+                            chapterIndexes = indexes,
+                            source = CacheRequestSource.AUTO_PRECACHE,
+                        )
+                    }.onFailure {
+                        AppLog.put("自动预缓存提交失败\n${it.localizedMessage}", it)
+                    }
                 }
             }
         }

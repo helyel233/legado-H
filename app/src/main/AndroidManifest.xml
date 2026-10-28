@@ -712,9 +712,6 @@
         <service
             android:name=".service.CacheBookService"
             android:foregroundServiceType="dataSync" />
-        <service
-            android:name=".service.ReviewCacheService"
-            android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".help.cache.CacheCoordinatorActionReceiver"
             android:exported="false" />

@@ -1,5 +1,6 @@
 package io.legado.app.data.dao
 
+import io.legado.app.data.SqliteInQueryPolicy
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -205,7 +206,9 @@ interface BookCollectionDao {
         val uniqueBookUrls = bookUrls.distinct()
         if (uniqueBookUrls.isEmpty()) return
         val now = System.currentTimeMillis()
-        deleteItemsByBookUrls(uniqueBookUrls)
+        // SQLite 绑定参数上限 999（Android 11 及以下）：把整本书架加入合集时 bookUrl 会上千，
+        // 一次绑定会抛 SQLiteException，这里按 500 分片
+        SqliteInQueryPolicy.chunk(uniqueBookUrls).forEach { deleteItemsByBookUrls(it) }
         val startOrder = maxItemOrder(collectionId) + 1
         insertItems(
             uniqueBookUrls.mapIndexed { index, bookUrl ->
@@ -234,7 +237,7 @@ interface BookCollectionDao {
         val uniqueCollectionIds = collectionIds.distinct().filter { it > 0 }
         if (uniqueBookUrls.isEmpty() && uniqueCollectionIds.isEmpty()) return
         if (uniqueBookUrls.isNotEmpty()) {
-            deleteItemsByBookUrls(uniqueBookUrls)
+            SqliteInQueryPolicy.chunk(uniqueBookUrls).forEach { deleteItemsByBookUrls(it) }
         }
         if (uniqueCollectionIds.isNotEmpty()) {
             deleteParentsByChildCollectionIds(uniqueCollectionIds)
@@ -287,4 +290,5 @@ interface BookCollectionDao {
         updateCollectionTime(parentCollectionId, now)
         updateAllCollectionTimes(now)
     }
+
 }

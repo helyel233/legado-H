@@ -78,16 +78,36 @@ object ReviewSnapshotManager {
     /**
      * 进程内存计数：bookUrl → 有评论快照的章 url 集合。
      * 用于通知/缓存页显示的“评论 x/y”，只统计真实存在至少一个有效快照的章。
+     * value 也必须是并发集合：评论缓存服务可能同时起两个消费者（onCreate/onStartCommand），
+     * ConcurrentHashMap 只保护 map 本身，普通 LinkedHashSet 会被并发 add 破坏结构。
      */
-    private val cachedReviewChaptersMap = ConcurrentHashMap<String, MutableSet<String>>()
+    private val cachedReviewChaptersMap =
+        ConcurrentHashMap<String, MutableSet<String>>()
+
+    /** 已按磁盘快照建过计数的书，避免每次查询都全量扫目录 */
+    private val countedBookUrls = ConcurrentHashMap.newKeySet<String>()
 
     /**
      * 该书有评论快照的章数（内存计数，缺失时惰性扫描文件补齐）。
      */
     fun cachedReviewChapterCount(book: Book): Int {
-        return cachedReviewChaptersMap.computeIfAbsent(book.bookUrl) {
-            ReviewSnapshotStore.chapterUrls(book).toMutableSet()
-        }.size
+        val set = cachedReviewChaptersMap.computeIfAbsent(book.bookUrl) {
+            ConcurrentHashMap.newKeySet<String>()
+        }
+        // 首次计数时按磁盘上的实际快照补齐，之后靠增量 add 维护；
+        // 删除快照/清理缓存后由 invalidateCachedReviewChapters 失效重算。
+        if (countedBookUrls.add(book.bookUrl)) {
+            set.addAll(ReviewSnapshotStore.chapterUrls(book))
+        }
+        return set.size
+    }
+
+    /**
+     * 失效某本书的内存章数计数（删除快照、清理缓存、换源后调用）。
+     */
+    fun invalidateCachedReviewChapters(bookUrl: String) {
+        cachedReviewChaptersMap.remove(bookUrl)
+        countedBookUrls.remove(bookUrl)
     }
 
     /**
@@ -710,7 +730,9 @@ object ReviewSnapshotManager {
         // 并广播事件，避免抓失败的章虚增“评论 x/y”（事件载荷带 hasSnapshot）
         val chapterHasSnapshot = buttons.any { ReviewSnapshotStore.has(book, chapter, it.src) }
         if (chapterHasSnapshot) {
-            cachedReviewChaptersMap.computeIfAbsent(bookUrl) { mutableSetOf() }.add(chapter.url)
+            cachedReviewChaptersMap.computeIfAbsent(bookUrl) {
+                ConcurrentHashMap.newKeySet<String>()
+            }.add(chapter.url)
             io.legado.app.utils.postEvent(
                 io.legado.app.constant.EventBus.REVIEW_CACHE_SAVED,
                 Triple(book.bookUrl, chapter.url, true)

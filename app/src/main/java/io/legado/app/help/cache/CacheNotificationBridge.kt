@@ -6,6 +6,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.NotificationId
 import io.legado.app.data.appDb
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.activityPendingIntent
@@ -41,17 +42,28 @@ internal object CacheNotificationBridge {
             ?.let { sessionId -> activeSessions.firstOrNull { it.sessionId == sessionId } }
             ?: activeSessions.first()
         val activeTasks = session.tasks.filter { !CacheLifecycleRules.isTerminal(it.status) }
+        // 评论缓存静默时，通知里不允许出现评论内容：只展示非评论任务。
+        val visibleTasks = CacheNotificationPolicy.visibleTasks(
+            activeTasks,
+            reviewNotificationSilenced,
+        )
+        if (visibleTasks.isEmpty()) return
         val display = progress.display?.takeIf { state ->
-            activeTasks.any { task ->
+            visibleTasks.any { task ->
                 task.sessionId == state.sessionId &&
                     task.taskId == state.taskId &&
                     task.generation == state.generation
             }
         }
         val task = display?.let { state ->
-            activeTasks.first { it.taskId == state.taskId }
-        } ?: activeTasks.first()
-        val presentation = presentation(task, display)
+            visibleTasks.first { it.taskId == state.taskId }
+        } ?: visibleTasks.first()
+        val taskProgress = display ?: progress.states.firstOrNull { state ->
+            state.sessionId == task.sessionId &&
+                state.taskId == task.taskId &&
+                state.generation == task.generation
+        }
+        val presentation = presentation(task, taskProgress)
         notify(
             title = presentation.title,
             text = presentation.text,
@@ -89,6 +101,27 @@ internal object CacheNotificationBridge {
         }
         val active = snapshot.sessions.filter { activeSession ->
             activeSession.tasks.any { !CacheLifecycleRules.isTerminal(it.status) }
+        }
+        // 评论缓存静默时，只剩评论任务在跑（或刚跑完）就不再打扰通知栏。
+        // 但如果刚完成的是正文/媒体任务，仍旧给一条完成通知。
+        val silenced = reviewNotificationSilenced
+        if (silenced && !CacheNotificationPolicy.hasVisibleActiveTask(
+                active.flatMap { it.tasks },
+                silenced,
+                { CacheLifecycleRules.isTerminal(it.status) },
+            )
+        ) {
+            if (CacheNotificationPolicy.allowsTerminalNotice(task, silenced)) {
+                notify(
+                    title,
+                    text,
+                    ongoing = false,
+                    submission = null,
+                    paused = false,
+                    progress = task?.let(::chapterProgress),
+                )
+            }
+            return
         }
         if (active.isNotEmpty()) {
             renderActive(active, progress)
@@ -307,6 +340,10 @@ internal object CacheNotificationBridge {
     private fun chapterText(current: Int, total: Int): String = "$current/${total}章"
 
     private fun formatBytes(bytes: Long): String = ConvertUtils.formatFileSize(bytes.coerceAtLeast(0L))
+
+    /** 评论缓存的通知开关：开启后评论缓存的进度/完成都不进通知栏。 */
+    private val reviewNotificationSilenced: Boolean
+        get() = AppConfig.cacheReviewSilent
 
     private data class Presentation(
         val title: String,

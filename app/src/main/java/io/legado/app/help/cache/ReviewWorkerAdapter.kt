@@ -5,10 +5,10 @@ import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.data.appDb
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
-import io.legado.app.service.ReviewCacheService
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 
-/** Coordinator adapter for the review queue hosted by ReviewCacheService. */
+/** Coordinator adapter for the review queue hosted by ReviewCaptureHost. */
 internal class ReviewWorkerAdapter(
     private val workerPort: CacheWorkerPort,
 ) {
@@ -95,41 +95,43 @@ internal class ReviewWorkerAdapter(
             return
         }
         val retryTargetsByUnit = task.reviewRetryTargets.associateBy { it.unitKey }
-        chapters.forEach { (unitKey, chapter) ->
-            val retryButtonSources = retryTargetsByUnit[unitKey]
-                ?.buttonSources
-                ?.toSet()
-            ReviewSnapshotManager.enqueue(
-                book,
-                chapter,
-                // A management retry carries exact failed button identities. It must not
-                // become a chapter-wide force refresh merely because it is a REVIEW task.
-                force = retryButtonSources == null && (
-                    task.source != CacheRequestSource.READER ||
-                        ReviewSnapshotManager.isUserRefreshActive(book.bookUrl, chapter.index)
-                    ),
-                incremental = task.reviewIncremental && retryButtonSources == null,
-                retryButtonSources = retryButtonSources,
-                executionLease = lease,
-                commitIfLeaseActive = { action -> workerPort.commitIfLeaseActive(lease, action) },
-                reportProgress = { processedSnapshots, totalSnapshots, failedSnapshots ->
-                    CacheReviewWorkerRegistry.onSnapshotProgress(
-                        lease,
-                        chapter.index,
-                        processedSnapshots,
-                        totalSnapshots,
-                        failedSnapshots,
-                    )
-                },
-            )
-        }
-        if (!ReviewCacheService.startSelf()) {
-            ReviewSnapshotManager.stopTask(lease.sessionId, lease.taskId) {
-                CacheReviewWorkerRegistry.onServiceStartFailed(
-                    lease,
-                    "评论缓存宿主启动失败，任务未执行",
+        try {
+            chapters.forEach { (unitKey, chapter) ->
+                val retryButtonSources = retryTargetsByUnit[unitKey]
+                    ?.buttonSources
+                    ?.toSet()
+                ReviewSnapshotManager.enqueue(
+                    book,
+                    chapter,
+                    // A management retry carries exact failed button identities. It must not
+                    // become a chapter-wide force refresh merely because it is a REVIEW task.
+                    force = retryButtonSources == null && (
+                        task.source != CacheRequestSource.READER ||
+                            ReviewSnapshotManager.isUserRefreshActive(book.bookUrl, chapter.index)
+                        ),
+                    incremental = task.reviewIncremental && retryButtonSources == null,
+                    retryButtonSources = retryButtonSources,
+                    executionLease = lease,
+                    commitIfLeaseActive = { action -> workerPort.commitIfLeaseActive(lease, action) },
+                    reportProgress = { processedSnapshots, totalSnapshots, failedSnapshots ->
+                        CacheReviewWorkerRegistry.onSnapshotProgress(
+                            lease,
+                            chapter.index,
+                            processedSnapshots,
+                            totalSnapshots,
+                            failedSnapshots,
+                        )
+                    },
                 )
             }
+            // 抓取在应用进程内完成：不再启动前台服务，评论缓存不会产生任何通知。
+            ReviewCaptureHost.ensureStarted()
+        } catch (e: Throwable) {
+            if (e is CancellationException) throw e
+            // 半途失败：dispatcher 会把任务置 FAILED 并终结 binding；这里清掉
+            // 已入队的章节，避免队列里滞留绑定终态 lease、无人认领的任务
+            ReviewSnapshotManager.stopTask(task.sessionId, task.taskId) { }
+            throw e
         }
     }
 
@@ -207,10 +209,6 @@ internal object CacheReviewWorkerRegistry {
         if (requireWorkerPort().finish(lease, result, error)) {
             bindings.remove(taskKey(lease))
         }
-    }
-
-    fun onServiceStartFailed(lease: CacheWorkerLease, error: String) {
-        failTask(lease, error)
     }
 
     fun remove(sessionId: String, taskId: String) {

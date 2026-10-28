@@ -795,7 +795,10 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     }
 
     private fun openBookInfo(book: Book) {
-        BookInfoNavigator.open(requireContext(), book)
+        // 查库是挂起操作，期间 Fragment 可能已 detach：requireContext() 会抛
+        // IllegalStateException，这里用可空 context 兜住
+        val ctx = context ?: return
+        BookInfoNavigator.open(ctx, book)
     }
 
     private fun isUpdate(bookUrl: String): Boolean {

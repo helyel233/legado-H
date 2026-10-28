@@ -16,7 +16,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.ReadRecentBook
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.ReadRecordDailyHelper
-import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.CacheManifestHelper
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
@@ -104,7 +103,7 @@ object AudioPlay : CoroutineScope by MainScope() {
         } else {
             chapterSize
         }
-        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        val targetChapterIndex = ReadBookChapterIndexPolicy.clamp(book.durChapterIndex, simulatedChapterSize)
         if (durChapterIndex != targetChapterIndex) {
             stopPlay()
             durChapterIndex = targetChapterIndex
@@ -131,7 +130,7 @@ object AudioPlay : CoroutineScope by MainScope() {
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         // 目录变短后旧章节号会越界，夹回有效范围（与 ReadBook 同策略）
-        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
+        durChapterIndex = ReadBookChapterIndexPolicy.clamp(durChapterIndex, simulatedChapterSize)
         PlayMode.entries.getOrNull(book.getPlayMode())?.let{
             playMode = it
             postEvent(EventBus.PLAY_MODE_CHANGED, it)

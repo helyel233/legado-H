@@ -527,6 +527,15 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         }
     }
 
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        // diff 任务挂在进程级 scope 上，视图 detach 后它仍在跑：既强引用 adapter（进而拖住 Activity），
+        // 又可能往已回收的 RecyclerView 上 dispatch 更新，这里一并取消
+        diffJob?.cancel()
+        diffJob = null
+        handler.removeCallbacksAndMessages(null)
+    }
+
     fun upResumed(isResumed : Boolean) {
         if (!isResumed) {
             diffJob?.cancel()

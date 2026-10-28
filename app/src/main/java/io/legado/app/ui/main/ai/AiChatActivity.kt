@@ -152,7 +152,8 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     }
 
     override fun onDestroy() {
-        AiChatSpeechPlayer.stop()
+        // 停止播放并释放 TTS 引擎：否则它会在进程里常驻（binder + native 资源不回收）
+        AiChatSpeechPlayer.release()
         super.onDestroy()
     }
 

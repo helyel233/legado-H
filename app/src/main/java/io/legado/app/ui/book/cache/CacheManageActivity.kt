@@ -18,8 +18,8 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.databinding.ActivityCacheManageBinding
 import io.legado.app.help.AppCloudStorage
-import io.legado.app.help.book.BookHelp
 import io.legado.app.help.cache.CacheCoordinator
+import io.legado.app.model.ReadBookChapterIndexPolicy
 import io.legado.app.help.cache.CacheLifecycle
 import io.legado.app.help.cache.CachePhase
 import io.legado.app.help.cache.CacheSubmission
@@ -582,7 +582,7 @@ class CacheManageActivity :
                 book.apply {
                     // 缓存清单里的章节号可能是旧目录的序号，写回前按当前目录长度夹取，
                     // 否则打开阅读页会命中「章节索引超出范围」且翻不动下一章
-                    durChapterIndex = BookHelp.clampChapterIndex(chapter.index, chapterSize)
+                    durChapterIndex = ReadBookChapterIndexPolicy.clamp(chapter.index, chapterSize)
                     durChapterTitle = chapter.title
                     durChapterPos = 0
                 }.also { appDb.bookDao.update(it) }

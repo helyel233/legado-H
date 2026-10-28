@@ -901,6 +901,8 @@
     <!-- 「其它设置」内部的分区标题：原来 30 多项平铺在一个分区里，按主题归组后便于查找 -->
     <!-- 评论体系分区标题 -->
     <string name="review_cache_section">Review cache</string>
+    <string name="cache_review_silent">Silent review cache notifications</string>
+    <string name="cache_review_silent_summary">Review caching (progress, completion, failure) never appears in the notification shade.</string>
     <string name="review_download_engine_section">Review download · engine</string>
     <string name="review_download_data_section">Review download · comment data</string>
     <string name="review_download_replies_section">Review download · replies</string>

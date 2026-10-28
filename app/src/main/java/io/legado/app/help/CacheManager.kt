@@ -9,8 +9,15 @@ import io.legado.app.data.entities.Cache
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.utils.ACache
 import io.legado.app.utils.memorySize
+import java.util.concurrent.ConcurrentHashMap
 
 private val queryTTFMap = LruCache<String, QueryTTF>(4)
+
+/**
+ * 内存缓存条目的过期时间（毫秒时间戳），缺省表示永不过期。
+ * 文件级私有，AppCacheManager 与 CacheManager 共用同一份。
+ */
+private val memoryDeadlines = ConcurrentHashMap<String, Long>()
 
 /**
  * 最多只缓存50M的数据,防止OOM
@@ -60,8 +67,12 @@ object AppCacheManager {
                 || it.startsWith("userInfo_")
                 || it.startsWith("loginHeader_")
                 || it.startsWith("sourceVariable_")
+                // 与磁盘侧 CacheDao.deleteSourceVariables 保持一致：
+                // 发现页的 InfoMap 也带登录态，漏掉会让已删源的信息在重新导入后复活
+                || it.startsWith("infoMap_")
             ) {
                 memoryLruCache.remove(it)
+                memoryDeadlines.remove(it)
             }
         }
     }
@@ -85,6 +96,10 @@ object CacheManager {
             else -> {
                 val valueStr = value.toString()
                 putMemory(key, valueStr)
+                // 内存副本也要记过期时间：否则 TTL 只对磁盘生效，内存命中会把过期数据一直返回
+                if (deadline > 0L) {
+                    memoryDeadlines[key] = deadline
+                }
                 val cache = Cache(key, valueStr, deadline)
                 appDb.cacheDao.insert(cache)
             }
@@ -93,6 +108,8 @@ object CacheManager {
 
     fun putMemory(key: String, value: Any) {
         memoryLruCache.put(key, value)
+        // 重新写入视为刷新，过期时间一并清掉
+        memoryDeadlines.remove(key)
     }
 
     //从内存中获取数据 使用lruCache
@@ -102,16 +119,38 @@ object CacheManager {
 
     fun deleteMemory(key: String) {
         memoryLruCache.remove(key)
+        memoryDeadlines.remove(key)
     }
 
     fun get(key: String): String? {
-        getFromMemory(key)?.let {
-            if (it is String) return it
+        val now = System.currentTimeMillis()
+        val memoryValue = getFromMemory(key)
+        if (memoryValue is String) {
+            val memoryDecision = CacheExpiryPolicy.memoryDecision(
+                hasEntry = true,
+                deadline = memoryDeadlines[key] ?: 0L,
+                now = now
+            )
+            when (memoryDecision) {
+                CacheExpiryPolicy.Decision.MEMORY_HIT -> return memoryValue
+                // 内存副本已过期：清掉后回落到磁盘判定
+                CacheExpiryPolicy.Decision.MEMORY_EXPIRED -> deleteMemory(key)
+                else -> Unit
+            }
         }
         val cache = appDb.cacheDao.get(key)
-        if (cache != null && (cache.deadline == 0L || cache.deadline > System.currentTimeMillis())) {
-            return cache.value?.also {
+        val diskDecision = CacheExpiryPolicy.diskDecision(
+            hasEntry = cache != null,
+            deadline = cache?.deadline ?: 0L,
+            now = now
+        )
+        if (diskDecision == CacheExpiryPolicy.Decision.DISK_HIT) {
+            return cache?.value?.also {
                 putMemory(key, it)
+                // 回填内存时保留磁盘上的过期时间，避免 TTL 在内存层失效
+                if (cache.deadline > 0L) {
+                    memoryDeadlines[key] = cache.deadline
+                }
             }
         }
         return null
@@ -186,6 +225,7 @@ object WebCacheManager {
     @JavascriptInterface
     fun putMemory(key: String, value: String) {
         memoryLruCache.put(key, value)
+        memoryDeadlines.remove(key)
     }
     @JavascriptInterface
     fun getFromMemory(key: String): String? {
@@ -194,6 +234,7 @@ object WebCacheManager {
     @JavascriptInterface
     fun deleteMemory(key: String) {
         memoryLruCache.remove(key)
+        memoryDeadlines.remove(key)
     }
     @JavascriptInterface
     fun get(key: String): String? {

@@ -58,6 +58,8 @@ object NavigationBarIconConfig {
     const val STATE_SELECTED = "selected"
     const val EXTRA_SEARCH = "search"
     const val DEFAULT_DIR_NAME = "default"
+    /** 底栏图标解码后的最大边长（像素）：底栏图标实际只有几十 dp，超大图降采样即可 */
+    private const val MAX_ICON_DECODE_SIZE = 256
     private const val packageFileName = "navigation.json"
     private const val remoteListTimeoutMillis = 4_000L
     private const val activeDayKey = PreferKey.navigationBarPackageDay
@@ -982,7 +984,7 @@ object NavigationBarIconConfig {
         if (file.extension.equals("svg", ignoreCase = true) || bytes.looksLikeSvg()) {
             decodeRedNavigationSvg(file, bytes, targetSize)?.let { return it }
         }
-        BitmapFactory.decodeFile(file.absolutePath)?.let { return it }
+        decodeIconFileSampled(file.absolutePath)?.let { return it }
         if (!file.extension.equals("svg", ignoreCase = true)) {
             SvgUtils.createBitmap(file.absolutePath, targetSize, targetSize)?.let { return it }
         }
@@ -1195,11 +1197,30 @@ object NavigationBarIconConfig {
         val file = File(path)
         val cacheKey = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
         val bitmap = synchronized(iconBitmapCache) {
-            iconBitmapCache[cacheKey]?.takeIf { !it.isRecycled } ?: BitmapFactory.decodeFile(path)?.also {
+            iconBitmapCache[cacheKey]?.takeIf { !it.isRecycled } ?: decodeIconFileSampled(path)?.also {
                 iconBitmapCache[cacheKey] = it
             }
         } ?: return null
         return BitmapDrawable(context.resources, bitmap)
+    }
+
+    /**
+     * 底栏图标解码：先读尺寸再按需降采样，避免用户放一张大图时在主线程整图解码
+     * （4000px 的 PNG 会解码成几十 MB 并卡住 UI）。
+     */
+    private fun decodeIconFileSampled(path: String): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = IconSampleSizePolicy.inSampleSize(
+                bounds.outWidth,
+                bounds.outHeight,
+                MAX_ICON_DECODE_SIZE,
+                MAX_ICON_DECODE_SIZE
+            )
+        }
+        return BitmapFactory.decodeFile(path, options)
     }
 
     private fun clearRuntimeCache() {

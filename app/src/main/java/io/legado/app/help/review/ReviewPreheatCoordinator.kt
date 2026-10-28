@@ -57,16 +57,36 @@ object ReviewPreheatCoordinator {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** 章级失败退避表：key = bookUrl|chapterIndex → 退避截止时间戳 */
+    /**
+     * 章级失败退避表：key = bookUrl|chapterUrl → 退避截止时间戳。
+     * 用 chapterUrl 而不是 chapterIndex：换源后同一个 index 指向的是另一章，
+     * 用 index 会让新章被旧章的退避白白跳过。
+     */
     private val failedUntil = ConcurrentHashMap<String, Long>()
+
+    /** 退避表条目上限，超过后顺带清掉已过期的条目，防止随阅读过的书无限增长 */
+    private const val MAX_BACKOFF_ENTRIES = 512
 
     @Volatile
     private var preheatJob: Job? = null
+
+    /** 点击即缓存 / 快照刷新的任务句柄：离开阅读页时一并取消 */
+    @Volatile
+    private var captureJob: Job? = null
+
+    @Volatile
+    private var refreshJob: Job? = null
 
     /** 取消在途预热（离开阅读页/换书时调用）；点击即缓存是短任务，不在此列 */
     fun cancelPreheat() {
         preheatJob?.cancel()
         preheatJob = null
+        // 点击即缓存与快照刷新同样会抓 WebView（可达数十秒），离开阅读页时一并停掉，
+        // 否则会一直持有书籍/章节与快照 HTML
+        captureJob?.cancel()
+        captureJob = null
+        refreshJob?.cancel()
+        refreshJob = null
     }
 
     /**
@@ -96,7 +116,14 @@ object ReviewPreheatCoordinator {
      * 是否处于失败退避窗口内。纯函数（供单测）。
      */
     internal fun isInBackoff(failedUntil: Long?, now: Long): Boolean {
-        return failedUntil != null && now < failedUntil
+        return ReviewBackoffPolicy.isInBackoff(failedUntil, now)
+    }
+
+    /** 退避表超过上限时清掉已过期条目 */
+    private fun trimBackoff() {
+        if (!ReviewBackoffPolicy.shouldTrim(failedUntil.size, MAX_BACKOFF_ENTRIES)) return
+        val expired = ReviewBackoffPolicy.expiredKeys(failedUntil, System.currentTimeMillis())
+        expired.forEach { failedUntil.remove(it) }
     }
 
     /**
@@ -145,7 +172,7 @@ object ReviewPreheatCoordinator {
         if (book.isVideo) return
         if (url.isBlank()) return
         if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return
-        scope.launch {
+        captureJob = scope.launch {
             delay(CLICK_CAPTURE_DELAY_MS)
             runCatching {
                 if (ReviewSnapshotStore.hasComplete(book, chapter, buttonSrc)) return@launch
@@ -178,7 +205,7 @@ object ReviewPreheatCoordinator {
         if (!AppConfig.syncCacheReview) return
         if (book.isVideo) return
         if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return
-        scope.launch {
+        refreshJob = scope.launch {
             runCatching {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return@launch
                 // put 前置：资源库不存在时 requireDatabase 必抛（同缓存管线 prepareForCapture）
@@ -210,7 +237,7 @@ object ReviewPreheatCoordinator {
     }
 
     private suspend fun preheatChapter(book: Book, chapter: BookChapter) {
-        val key = "${book.bookUrl}|${chapter.index}"
+        val key = ReviewBackoffPolicy.key(book.bookUrl, chapter.url)
         if (isInBackoff(failedUntil[key], System.currentTimeMillis())) return
         val content = preheatContent(book, chapter) ?: return
         // 段落规则处理后提按钮：与用户点击看到的泡完全一致（含 pclick 包装），
@@ -266,6 +293,7 @@ object ReviewPreheatCoordinator {
             .toList()
         if (anyFailure) {
             failedUntil[key] = System.currentTimeMillis() + FAIL_BACKOFF_MS
+            trimBackoff()
         } else {
             failedUntil.remove(key)
         }

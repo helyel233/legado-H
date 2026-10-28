@@ -449,7 +449,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         if (parsedIds.isNotEmpty()) gateway.deleteStale(source.bookSourceUrl, parsedIds.toList())
     }
 
-    private fun loadModule(module: ModuleItem) {
+    private suspend fun loadModule(module: ModuleItem) {
         loadJobs[module.id]?.cancel()
         if (module.type == HomepageModuleType.ButtonGroup.key) {
             loadJobs[module.id] = viewModelScope.launch {
@@ -458,15 +458,18 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     if (selectedTitles.isNullOrEmpty()) {
                         emptyList<ExploreKind>()
                     } else {
-                        val rssSource = appDb.rssSourceDao.getByKey(module.sourceUrl)
+                        val rssSource = withContext(Dispatchers.IO) {
+                            appDb.rssSourceDao.getByKey(module.sourceUrl)
+                        }
                         if (rssSource != null) {
                             val allKinds = rssSource.sortUrls().map { (title, url) ->
                                 ExploreKind(title = title, url = url)
                             }
                             selectedTitles.mapNotNull { t -> allKinds.find { it.title == t } }
                         } else {
-                            val source = appDb.bookSourceDao.getBookSource(module.sourceUrl)
-                                ?: throw Exception("Source not found")
+                            val source = withContext(Dispatchers.IO) {
+                                appDb.bookSourceDao.getBookSource(module.sourceUrl)
+                            } ?: throw Exception("Source not found")
                             val allKinds = withContext(Dispatchers.IO) { source.exploreKinds() }
                             selectedTitles.mapNotNull { t -> allKinds.find { it.title == t } }
                         }
@@ -489,7 +492,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         }
 
         if (!rankingCategoryPairs.isNullOrEmpty()) {
-            val rssSource = appDb.rssSourceDao.getByKey(module.sourceUrl)
+            val rssSource = withContext(Dispatchers.IO) {
+                appDb.rssSourceDao.getByKey(module.sourceUrl)
+            }
             val initialTabs = rankingCategoryPairs.map { (title, url) ->
                 RankingTabData(
                     title = title,
@@ -509,7 +514,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         loadJobs[module.id] = viewModelScope.launch {
             kotlin.runCatching {
                 // 检查是否为订阅源模块
-                val rssSource = appDb.rssSourceDao.getByKey(module.sourceUrl)
+                val rssSource = withContext(Dispatchers.IO) {
+                    appDb.rssSourceDao.getByKey(module.sourceUrl)
+                }
                 if (rssSource != null) {
                     val sortUrl = module.url ?: rssSource.sourceUrl
                     val sortName = module.title.ifBlank { rssSource.sourceName }
@@ -632,7 +639,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
 
         viewModelScope.launch {
             val module = gateway.getById(globalId) ?: return@launch
-            val rssSource = appDb.rssSourceDao.getByKey(module.sourceUrl)
+            val rssSource = withContext(Dispatchers.IO) {
+                appDb.rssSourceDao.getByKey(module.sourceUrl)
+            }
             val state = _moduleContentStates.value[globalId] as? ModuleLoadState.RankingTabs
                 ?: return@launch
             val currentTab = state.tabs.getOrNull(index) ?: return@launch
@@ -760,7 +769,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
 
         viewModelScope.launch {
             val module = gateway.getById(globalId) ?: return@launch
-            val rssSource = appDb.rssSourceDao.getByKey(module.sourceUrl)
+            val rssSource = withContext(Dispatchers.IO) {
+                appDb.rssSourceDao.getByKey(module.sourceUrl)
+            }
             loadRankingTab(
                 moduleId = globalId,
                 sourceUrl = module.sourceUrl,
@@ -889,7 +900,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
 
     fun syncSourceModules(sourceUrl: String, onDone: (() -> Unit)? = null) {
         viewModelScope.launch {
-            val fullSource = appDb.bookSourceDao.getBookSource(sourceUrl) ?: return@launch
+            val fullSource = withContext(Dispatchers.IO) {
+                appDb.bookSourceDao.getBookSource(sourceUrl)
+            } ?: return@launch
             syncModulesFromSource(fullSource)
             notifyConfigChanged()
             onDone?.invoke()
@@ -974,7 +987,10 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     /** 获取书源发现分类（支持 @js:/<js> 动态分类） */
     suspend fun getExploreKinds(sourceUrl: String): List<ExploreKind> {
         return runCatching {
-            val source = appDb.bookSourceDao.getBookSource(sourceUrl) ?: return emptyList()
+            // 查库也要放 IO：调用方在主线程 launch，DAO 查询放在 withContext 之前等于没生效
+            val source = withContext(Dispatchers.IO) {
+                appDb.bookSourceDao.getBookSource(sourceUrl)
+            } ?: return emptyList()
             withContext(Dispatchers.IO) { source.exploreKinds() }
         }.getOrDefault(emptyList())
     }
@@ -982,7 +998,10 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     /** 获取订阅源分类列表 */
     suspend fun getRssKinds(sourceUrl: String): List<Pair<String, String>> {
         return runCatching {
-            val rssSource = appDb.rssSourceDao.getByKey(sourceUrl) ?: return emptyList()
+            // 同上：查库必须切到 IO 线程
+            val rssSource = withContext(Dispatchers.IO) {
+                appDb.rssSourceDao.getByKey(sourceUrl)
+            } ?: return emptyList()
             withContext(Dispatchers.IO) { rssSource.sortUrls() }
         }.getOrDefault(emptyList()).ifEmpty { listOf("" to sourceUrl) }
     }

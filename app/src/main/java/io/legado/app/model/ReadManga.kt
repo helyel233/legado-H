@@ -88,7 +88,7 @@ object ReadManga : CoroutineScope by MainScope() {
         durChapterIndex = book.durChapterIndex
         durChapterPos = book.durChapterPos
         // 目录变短后旧章节号会越界，夹回有效范围（与 ReadBook 同策略）
-        durChapterIndex = BookHelp.clampChapterIndex(durChapterIndex, simulatedChapterSize)
+        durChapterIndex = ReadBookChapterIndexPolicy.clamp(durChapterIndex, simulatedChapterSize)
         clearMangaChapter()
         upWebBook(book)
         synchronized(this) {
@@ -107,7 +107,7 @@ object ReadManga : CoroutineScope by MainScope() {
             chapterSize
         }
 
-        val targetChapterIndex = BookHelp.clampChapterIndex(book.durChapterIndex, simulatedChapterSize)
+        val targetChapterIndex = ReadBookChapterIndexPolicy.clamp(book.durChapterIndex, simulatedChapterSize)
         if (durChapterIndex != targetChapterIndex) {
             durChapterIndex = targetChapterIndex
             durChapterPos = book.durChapterPos

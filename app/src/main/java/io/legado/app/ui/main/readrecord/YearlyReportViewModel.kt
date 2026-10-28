@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
+import io.legado.app.data.SqliteInQueryPolicy
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.help.report.YearlyReportBuilder
@@ -53,7 +54,12 @@ class YearlyReportViewModel(application: Application) : BaseViewModel(applicatio
                 val map = if (urlSet.isEmpty()) {
                     emptyMap()
                 } else {
-                    appDb.bookDao.all.associateBy { it.bookUrl }.filterKeys { it in urlSet }
+                    // 查库必须切 IO；且只取用到的书（IN 查询按 500 分片，避开 SQLite 参数上限）
+                    withContext(Dispatchers.IO) {
+                        SqliteInQueryPolicy.chunk(urlSet.toList())
+                            .flatMap { appDb.bookDao.getBooks(it) }
+                            .associateBy { it.bookUrl }
+                    }
                 }
                 withContext(Dispatchers.Main) {
                     _data.value = report

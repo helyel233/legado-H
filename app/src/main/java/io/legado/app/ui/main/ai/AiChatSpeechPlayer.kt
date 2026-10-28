@@ -133,6 +133,21 @@ object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
         _playbackState.value = PlaybackState()
     }
 
+    /**
+     * 页面销毁时释放。
+     *
+     * TextToSpeech 引擎是系统服务的 binder + native 资源，只 stop 不会释放，
+     * 会在整个进程生命周期里常驻；这里必须 shutdown 并置空，下次朗读会重新建引擎。
+     */
+    fun release() {
+        stop()
+        runCatching { tts?.shutdown() }
+        tts = null
+        ready = false
+        enginePackage = null
+        // 注意：这是进程级单例，不能取消 scope，否则下次进入 AI 聊天页将无法再朗读
+    }
+
     override fun onInit(status: Int) {
         ready = status == TextToSpeech.SUCCESS
         if (!ready) {

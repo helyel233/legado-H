@@ -756,19 +756,6 @@ object BookHelp {
     }
 
     /**
-     * 把持久化的章节号夹回有效范围。
-     *
-     * 目录可能变短（换源后章数变少、源删章、模拟章节数变化），而 Book.durChapterIndex 仍是旧值。
-     * 直接用旧值会让加载器判定「索引超出范围」并让「下一章」永远翻不动，因此在进入阅读态前统一夹取。
-     *
-     * chapterSize <= 0 表示目录还没拉到：此时不能把进度重置成 0（会丢阅读位置），
-     * 只把负索引归零，等目录到位后由 onChapterListUpdated 再夹。
-     */
-    fun clampChapterIndex(chapterIndex: Int, chapterSize: Int): Int =
-        if (chapterSize <= 0) chapterIndex.coerceAtLeast(0)
-        else chapterIndex.coerceIn(0, chapterSize - 1)
-
-    /**
      * 根据目录名获取当前章节
      */
     fun getDurChapter(

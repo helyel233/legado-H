@@ -134,8 +134,10 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
             }.flowOn(Dispatchers.IO).conflate().collect {
                 adapter.setItems(it)
                 binding.tvEmptyMsg.isGone = it.isNotEmpty()
-                val title = appDb.bookCollectionDao.getCollection(collectionId)?.name
-                    ?: getString(R.string.book_collection)
+                // collect 体在主线程执行，flowOn 只影响上游：这里查库必须自己切 IO
+                val title = withContext(Dispatchers.IO) {
+                    appDb.bookCollectionDao.getCollection(collectionId)?.name
+                } ?: getString(R.string.book_collection)
                 binding.titleBar.title = "$title (${it.size})"
             }
         }

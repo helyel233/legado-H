@@ -7,6 +7,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.help.search.LibrarySearchIndexer
 import splitties.init.appCtx
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -113,23 +114,28 @@ class LibrarySearchViewModel(application: Application) : BaseViewModel(applicati
         if (_rebuilding.value) return
         _rebuilding.value = true
         viewModelScope.launch {
-            runCatching {
-                LibrarySearchIndexer.rebuildAll { progress ->
+            try {
+                val count = LibrarySearchIndexer.rebuildAll { progress ->
                     _rebuildProgress.value = progress
                 }
-            }.onSuccess { count ->
-                _indexedCount.value = appDb.libraryContentFtsDao.countAll()
+                _indexedCount.value = withContext(Dispatchers.IO) {
+                    appDb.libraryContentFtsDao.countAll()
+                }
                 _rebuildProgress.value = appCtx.getString(
                     io.legado.app.R.string.library_search_rebuild_done, count
                 )
-            }.onFailure {
-                AppLog.put("全库搜索重建索引失败", it)
+                // 重建后如有关键字，刷新结果
+                if (_query.value.isNotBlank()) {
+                    search(_query.value)
+                }
+            } catch (e: CancellationException) {
+                // 取消不是失败：吞掉它会让协程继续跑下去
+                throw e
+            } catch (e: Throwable) {
+                AppLog.put("全库搜索重建索引失败", e)
                 _rebuildProgress.value = ""
-            }
-            _rebuilding.value = false
-            // 重建后如有关键字，刷新结果
-            if (_query.value.isNotBlank()) {
-                search(_query.value)
+            } finally {
+                _rebuilding.value = false
             }
         }
     }

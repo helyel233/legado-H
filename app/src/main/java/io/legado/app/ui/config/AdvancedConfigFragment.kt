@@ -273,6 +273,13 @@ class AdvancedConfigFragment : ComposeSettingFragment() {
                         defaultValue = true
                     ),
                     switch(
+                        key = PreferKey.cacheReviewSilent,
+                        title = getString(R.string.cache_review_silent),
+                        summary = getString(R.string.cache_review_silent_summary),
+                        defaultValue = true,
+                        visible = booleanSetting(PreferKey.syncCacheReview, true)
+                    ),
+                    switch(
                         key = PreferKey.autoDownloadReview,
                         title = getString(R.string.menu_auto_download_review),
                         summary = getString(R.string.ps_auto_download_review),
