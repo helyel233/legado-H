@@ -1,5 +1,18 @@
 # 更新日志
 
+## 1.19.2 版（2026-10-28）
+
+本版是一轮缓存 / 媒体 / 漫画 / 并发相关的修复与内存治理，无新特性。
+
+### 修复 / 优化
+
+- **漫画进度监听按身份移除**：`MangaVH` 记录当前进度监听器引用与图片地址，回收 / 失败时按引用相等移除（`ProgressManager.removeListener`，新增），不再按 URL 无条件删除——避免误删同一地址在其它 VH 或重试后新注册的监听导致进度条停死；`MangaAdapter` 复用之。
+- **评论快照章数计数并发修复**：`ReviewSnapshotManager` 给「取 set + 标记已计数」与失效加同一把锁，否则 invalidate 在两步之间插入会留下永不回填磁盘的孤儿 set、计数长期偏低；`ReviewSnapshotStore` 在按龄 / 按总量两条删除路径之后都统一失效内存计数，尺寸回收删掉的快照不再让计数虚高。
+- **内存与缓存防无界增长**：`CacheManager` 容量淘汰时同步清掉 `memoryDeadlines` 条目（否则无界慢涨）；`AnalyzeRule.splitSourceRuleCacheString` 加列表上限 16，避免异常长规则串列表撑大单次解析任务内存；`VideoPlay.chapterLinkCache` 原本只按 TTL 过滤从不删除、条目滞留到进程结束，现每次写入顺手清掉过期条目；`RuleUpdate` 规则导入中转缓存新增 30 分钟 TTL，用户点了更新却取消导入时条目不再一直滞留。
+- **取消语义修正**：`CacheBook` 下载被取消（用户停止）时真正上抛取消，不再继续走云回退把「用户停止」当下载失败（计入重试预算、在已取消协程里继续网络请求）；`LibrarySearchViewModel` 被新搜索取代的取消复位 `_searching` 后向上抛，避免把新搜索刚写入的结果闪成空列表。
+- **插图编辑对话框读图移 IO**：`IllustrationEditDialog` 选择媒体后读字节放 IO 线程（避免整文件读进内存卡主线程 / ANR），并用代际号丢弃快速连续选择时的过期结果、对话框已关时不再对空 context 抛异常。
+- **并发可见性**：`AiReadAloudUsageRecordActivity` 的 `selectedIds` 改到主线程读写（与 bind/toggle 主线程访问竞争）；`Debug.isChecking` / `startTime` 加 `@Volatile` 保证校验线程写、UI / log 读可见。
+
 ## 1.19.1 版（2026-10-28）
 
 本版新增「评论缓存静默通知」开关，并把评论缓存从前台服务改为进程内抓取（不再常驻通知栏）；同时把一批易崩 / 易膨胀的逻辑抽成纯函数策略并配单测。

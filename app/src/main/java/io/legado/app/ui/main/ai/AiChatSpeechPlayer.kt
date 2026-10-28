@@ -53,6 +53,10 @@ object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
     private var mediaPlayer: MediaPlayer? = null
     private var speakJob: Job? = null
     private var ready = false
+
+    /** 引擎代际号：release/重建后，旧引擎迟到的 onInit 回调会被忽略 */
+    @Volatile
+    private var engineGeneration = 0L
     private var pendingText: String = ""
     private var pendingRouteJson: String = ""
     private var pendingPlaybackKey: String = ""
@@ -90,10 +94,12 @@ object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
             engine?.stop()
             engine?.shutdown()
             enginePackage = targetEnginePackage
+            engineGeneration++
+            val generation = engineGeneration
             tts = if (targetEnginePackage.isNullOrBlank()) {
-                TextToSpeech(appCtx, this)
+                TextToSpeech(appCtx) { status -> onInit(status, generation) }
             } else {
-                TextToSpeech(appCtx, this, targetEnginePackage)
+                TextToSpeech(appCtx, { status -> onInit(status, generation) }, targetEnginePackage)
             }
             return
         }
@@ -149,6 +155,14 @@ object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
     }
 
     override fun onInit(status: Int) {
+        onInit(status, engineGeneration)
+    }
+
+    private fun onInit(status: Int, generation: Long) {
+        if (generation != engineGeneration) {
+            // 旧引擎的迟到回调：引擎已被重建/释放，不能把 ready 置回 true
+            return
+        }
         ready = status == TextToSpeech.SUCCESS
         if (!ready) {
             pendingText = ""

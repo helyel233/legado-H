@@ -42,6 +42,18 @@ object ProgressManager {
         }
     }
 
+    /**
+     * 只移除当前注册的 [listener]（引用相等）。
+     *
+     * 失败回调可能晚到：此时用户可能已重试并注册了新 listener，
+     * 按 URL 无条件移除会把新 listener 删掉，进度条停死。
+     */
+    fun removeListener(url: String, listener: OnProgressListener) {
+        if (url.isNotEmpty()) {
+            listenersMap.remove(getUrlNoOption(url), listener)
+        }
+    }
+
     fun getProgressListener(url: String): OnProgressListener? {
         return if (url.isEmpty() || listenersMap.isEmpty()) {
             null

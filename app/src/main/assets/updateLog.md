@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.19.2 · 2026/10/28**
+
+- 修复漫画进度监听按身份移除(不再误删其它VH/重试的监听致进度条停死)；评论快照章数计数并发锁+失效防虚高；内存防无界(CacheManager淘汰清deadlines/解析规则缓存上限16/视频链接缓存过期清理/规则导入中转缓存30分TTL)；CacheBook用户停止真正上抛取消(不误当下载失败)；全库搜索被新搜索取代取消上抛；插图编辑读图移IO+代际号防过期结果；AI朗读selectedIds主线程写+Debug加Volatile
+
 **vH.1.19.1 · 2026/10/28**
 
 - 新增「评论缓存静默通知」开关(默认开，进度/完成/失败不进通知栏)；评论缓存从前台服务(ReviewCacheService)改为进程内抓取(ReviewCaptureHost)，默认不再常驻通知栏、进程回收后落盘重派不丢；一批易崩逻辑抽纯函数策略+单测(Sqlite IN 分片/CacheExpiry 内存TTL/CoverThumbnail 回收/重试上限/段评退避换源误伤/分页死循环上限/图标降采样/章节号夹取)；ReadBook.preDownloadTask 加 Volatile

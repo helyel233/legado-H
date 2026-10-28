@@ -22,6 +22,23 @@ object RuleUpdate {
     val cacheRssSourceMap = ConcurrentHashMap<String, List<RssSource>>()
     val cacheReplaceRuleMap = ConcurrentHashMap<String, List<ReplaceRule>>()
 
+    /** 中转缓存的写入时间：用户点了更新却取消导入时，条目会一直滞留，按 TTL 清理 */
+    private val cacheTimes = ConcurrentHashMap<String, Long>()
+
+    /** 30 分钟未消费视为放弃导入 */
+    private const val CACHE_TTL_MS = 30 * 60 * 1000L
+
+    private fun putCache(url: String) {
+        cacheTimes[url] = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        cacheTimes.filterValues { now - it > CACHE_TTL_MS }.keys.forEach { expired ->
+            cacheBookSourceMap.remove(expired)
+            cacheRssSourceMap.remove(expired)
+            cacheReplaceRuleMap.remove(expired)
+            cacheTimes.remove(expired)
+        }
+    }
+
     suspend fun cacheSource(ruleSub: RuleSub): Boolean {
         val url = ruleSub.url
         val type = ruleSub.type
@@ -62,6 +79,7 @@ object RuleUpdate {
                                     upRules = true
                                 }
                                 else {
+                                    putCache(url)
                                     cacheBookSourceMap[url] = lists
                                     return true
                                 }
@@ -83,6 +101,7 @@ object RuleUpdate {
                                     SourceHelp.insertRssSource(list)
                                 }
                                 else {
+                                    putCache(url)
                                     cacheRssSourceMap[url] = lists
                                     return true
                                 }
@@ -98,6 +117,7 @@ object RuleUpdate {
                                     upRules = true
                                 }
                                 else {
+                                    putCache(url)
                                     cacheReplaceRuleMap[url] = lists
                                     return true
                                 }

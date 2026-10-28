@@ -43,6 +43,7 @@ import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
+import splitties.init.appCtx
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,12 +57,16 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     override val viewModel by viewModels<BookshelfViewModel>()
 
     private val importBookshelf = registerForActivityResult(HandleFileContract()) {
-        kotlin.runCatching {
-            it.uri?.readText(requireContext())?.let { text ->
-                viewModel.importBookshelf(text, groupId)
+        // Activity 结果回调在主线程：书架导出 JSON 可达数 MB，读文件放 IO，
+        // 导入本身由 viewModel.execute 切后台。IO 里用回调时捕获的 context 与 appCtx toast，
+        // requireContext()/Fragment.toastOnUi(requireActivity()) 在页面已关闭时会抛未捕获异常
+        val context = context ?: return@registerForActivityResult
+        lifecycleScope.launch(IO) {
+            val text = kotlin.runCatching { it.uri?.readText(context) }.getOrElse { error ->
+                appCtx.toastOnUi(error.localizedMessage ?: "ERROR")
+                return@launch
             }
-        }.onFailure {
-            toastOnUi(it.localizedMessage ?: "ERROR")
+            text?.let { str -> viewModel.importBookshelf(str, groupId) }
         }
     }
     private val exportResult = registerForActivityResult(HandleFileContract()) {

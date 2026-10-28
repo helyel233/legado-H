@@ -67,23 +67,26 @@ class ParagraphRuleManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
 
     private val importDoc = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            lifecycleScope.launch {
-                kotlin.runCatching {
+            // Activity 结果回调在主线程：读文件与解析放 IO，写库后回主线程刷新
+            lifecycleScope.launch(Dispatchers.IO) {
+                val rules = kotlin.runCatching {
                     val bytes = uri.readBytes(
                         this@ParagraphRuleManageActivity,
                         ParagraphRuleImportPolicy.MAX_PACKAGE_BYTES
                     )
                     parseImportedRules(bytes.toString(Charsets.UTF_8))
-                }.onSuccess { rules ->
-                    if (rules.isEmpty()) {
-                        toastOnUi(R.string.wrong_format)
-                    } else {
-                        withContext(Dispatchers.IO) { insertImportedRules(rules) }
-                        load()
-                        toastOnUi(R.string.success)
-                    }
-                }.onFailure {
-                    toastOnUi(it.localizedMessage ?: getString(R.string.wrong_format))
+                }.getOrElse { error ->
+                    toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
+                    return@launch
+                }
+                if (rules.isEmpty()) {
+                    toastOnUi(R.string.wrong_format)
+                    return@launch
+                }
+                insertImportedRules(rules)
+                withContext(Dispatchers.Main) {
+                    load()
+                    toastOnUi(R.string.success)
                 }
             }
         }

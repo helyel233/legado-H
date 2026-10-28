@@ -111,6 +111,9 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
 
     private val loadJobs = ConcurrentHashMap<String, Job>()
 
+    /** 已派发但尚未在 [loadJobs] 注册的模块，防止并行 launch 的间隙里重复加载 */
+    private val loadingModuleIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     private val _isRefreshing = MutableStateFlow(false)
     private val _refreshingModuleIds = MutableStateFlow<Set<String>>(emptySet())
     private val _configVersion = MutableStateFlow(0L)
@@ -363,8 +366,20 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                             else -> true
                         }
                         if (shouldLoad) {
-                            val module = gateway.getById(ui.globalId)
-                            if (module != null) loadModule(module)
+                            // 在飞集合去重：launch 到 loadJobs[id] 真正注册之间有 await 间隙，
+                            // 期间任一次 uiState 再发射都会对同一模块再 launch 一次
+                            if (!loadingModuleIds.add(ui.globalId)) return@forEach
+                            // loadModule 现在是 suspend（内部切 IO 查库），在 collect 里直接
+                            // await 会把所有模块串行化、还阻塞本 collect 响应后续状态变化，
+                            // 每个模块用子协程并行加载
+                            launch {
+                                try {
+                                    val module = gateway.getById(ui.globalId)
+                                    if (module != null) loadModule(module)
+                                } finally {
+                                    loadingModuleIds.remove(ui.globalId)
+                                }
+                            }
                         }
                     }
                 }

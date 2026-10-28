@@ -90,24 +90,32 @@ object ReviewSnapshotManager {
     /**
      * 该书有评论快照的章数（内存计数，缺失时惰性扫描文件补齐）。
      */
+    /** 计数维护锁：让「取 set + 标记已计数」与失效互斥，否则 invalidate 会在两步之间
+     *  插进来，留下一个永不回填磁盘的孤儿 set，计数长期偏低 */
+    private val countLock = Any()
+
     fun cachedReviewChapterCount(book: Book): Int {
-        val set = cachedReviewChaptersMap.computeIfAbsent(book.bookUrl) {
-            ConcurrentHashMap.newKeySet<String>()
+        synchronized(countLock) {
+            val set = cachedReviewChaptersMap.computeIfAbsent(book.bookUrl) {
+                ConcurrentHashMap.newKeySet<String>()
+            }
+            // 首次计数时按磁盘上的实际快照补齐，之后靠增量 add 维护；
+            // 删除快照/清理缓存后由 invalidateCachedReviewChapters 失效重算。
+            if (countedBookUrls.add(book.bookUrl)) {
+                set.addAll(ReviewSnapshotStore.chapterUrls(book))
+            }
+            return set.size
         }
-        // 首次计数时按磁盘上的实际快照补齐，之后靠增量 add 维护；
-        // 删除快照/清理缓存后由 invalidateCachedReviewChapters 失效重算。
-        if (countedBookUrls.add(book.bookUrl)) {
-            set.addAll(ReviewSnapshotStore.chapterUrls(book))
-        }
-        return set.size
     }
 
     /**
      * 失效某本书的内存章数计数（删除快照、清理缓存、换源后调用）。
      */
     fun invalidateCachedReviewChapters(bookUrl: String) {
-        cachedReviewChaptersMap.remove(bookUrl)
-        countedBookUrls.remove(bookUrl)
+        synchronized(countLock) {
+            cachedReviewChaptersMap.remove(bookUrl)
+            countedBookUrls.remove(bookUrl)
+        }
     }
 
     /**

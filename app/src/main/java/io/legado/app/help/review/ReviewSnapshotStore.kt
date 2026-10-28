@@ -456,9 +456,11 @@ object ReviewSnapshotStore {
                 remaining.add(file)
             }
         }
-        if (removed > 0) invalidateChapterCount(book.bookUrl)
         var total = remaining.sumOf { it.length() }
-        if (total <= MAX_CACHE_BYTES) return removed
+        if (total <= MAX_CACHE_BYTES) {
+            if (removed > 0) invalidateChapterCount(book.bookUrl)
+            return removed
+        }
         remaining.sortBy { it.lastModified() }
         for (file in remaining) {
             if (total <= MAX_CACHE_BYTES) break
@@ -468,6 +470,9 @@ object ReviewSnapshotStore {
                 removed++
             }
         }
+        // 失效必须在两条删除路径（按龄/按总量）之后统一做：
+        // 尺寸回收删掉的快照同样会让内存计数虚高
+        if (removed > 0) invalidateChapterCount(book.bookUrl)
         return removed
     }
 

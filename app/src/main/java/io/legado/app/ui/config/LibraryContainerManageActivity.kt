@@ -54,10 +54,14 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
     private var pendingExportDecryptKey: String? = null
     private val importJson = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            lifecycleScope.launch {
-                runCatching { uri.readText(this@LibraryContainerManageActivity) }
-                    .onSuccess { handleImportText(it) }
-                    .onFailure { toastOnUi(it.localizedMessage ?: getString(R.string.wrong_format)) }
+            // Activity 结果回调在主线程，读文件放 IO，处理回主线程
+            lifecycleScope.launch(Dispatchers.IO) {
+                val text = runCatching { uri.readText(this@LibraryContainerManageActivity) }
+                    .getOrElse { error ->
+                        toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
+                        return@launch
+                    }
+                withContext(Dispatchers.Main) { handleImportText(text) }
             }
         }
     }

@@ -579,7 +579,8 @@ class AnalyzeRule(
      */
     private fun splitSourceRuleCacheString(ruleStr: String?): List<SourceRule> {
         if (ruleStr.isNullOrEmpty()) return emptyList()
-        return stringRuleCache.getOrPut(ruleStr) {
+        // 与同文件其它规则缓存一致加上限，避免异常长的规则串列表撑大单次解析任务的内存
+        return stringRuleCache.getOrPutLimit(ruleStr, 16) {
             splitSourceRule(ruleStr)
         }
     }

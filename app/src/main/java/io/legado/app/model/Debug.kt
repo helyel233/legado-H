@@ -26,6 +26,7 @@ object Debug {
     // 校验在后台线程写、UI 线程读/清：普通 HashMap 并发 clear/put 会破坏桶链，必须用并发集合
     val debugMessageMap: MutableMap<String, String> = ConcurrentHashMap()
     private val debugTimeMap: MutableMap<String, Long> = ConcurrentHashMap()
+    @Volatile
     var isChecking: Boolean = false
 
     /** 订阅源校验在跑：与书源校验并存，两套会话不能共用一个布尔互相覆写 */
@@ -35,6 +36,8 @@ object Debug {
     /** SimpleDateFormat 非线程安全，而校验消息会在多线程格式化，这里按需新建实例 */
     private fun formatDebugTime(millis: Long): String =
         SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault()).format(Date(millis))
+    // 校验线程写、log() 读，跨线程可见
+    @Volatile
     private var startTime: Long = System.currentTimeMillis()
 
     @Synchronized

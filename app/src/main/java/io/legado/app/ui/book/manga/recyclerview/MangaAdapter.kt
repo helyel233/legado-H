@@ -192,9 +192,9 @@ class MangaAdapter(private val context: Context) :
                     height = MATCH_PARENT
                 }
                 Glide.with(context.applicationContext ?: context).clear(vh.binding.image)
-                if (vh.binding.image.tag is String) {
-                    ProgressManager.removeListener(vh.binding.image.tag as String)
-                }
+                // 按身份移除本 VH 注册的监听：按 URL 无条件移除会误删同一地址
+                // 在其它 VH（或重试后新注册）的监听
+                vh.releaseProgressListener()
             }
         }
     }

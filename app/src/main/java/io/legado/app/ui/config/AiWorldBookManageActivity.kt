@@ -31,13 +31,15 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
     private var importRequestId = 0L
     private val importWorldBook = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            lifecycleScope.launch {
-                kotlin.runCatching {
+            // Activity 结果回调在主线程，读文件放 IO，处理回主线程
+            lifecycleScope.launch(Dispatchers.IO) {
+                val text = kotlin.runCatching {
                     uri.readText(this@AiWorldBookManageActivity)
-                }.onSuccess(::emitImportPayload)
-                    .onFailure {
-                        toastOnUi(it.localizedMessage ?: "世界书文件读取失败")
-                    }
+                }.getOrElse { error ->
+                    toastOnUi(error.localizedMessage ?: "世界书文件读取失败")
+                    return@launch
+                }
+                withContext(Dispatchers.Main) { emitImportPayload(text) }
             }
         }
     }

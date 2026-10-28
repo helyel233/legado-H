@@ -93,14 +93,15 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private val importCustomButton = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            lifecycleScope.launch {
-                kotlin.runCatching {
+            // Activity 结果回调在主线程，读文件与解析放 IO，导入回主线程
+            lifecycleScope.launch(Dispatchers.IO) {
+                val buttons = kotlin.runCatching {
                     parseImportedButtons(uri.readText(this@ReadMenuButtonManageActivity))
-                }.onSuccess { buttons ->
-                    importButtons(buttons)
-                }.onFailure {
-                    toastOnUi(it.localizedMessage ?: getString(R.string.wrong_format))
+                }.getOrElse { error ->
+                    toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
+                    return@launch
                 }
+                withContext(Dispatchers.Main) { importButtons(buttons) }
             }
         }
     }

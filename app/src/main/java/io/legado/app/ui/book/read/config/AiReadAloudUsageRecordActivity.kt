@@ -172,8 +172,11 @@ class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>(
                         SqliteInQueryPolicy.chunk(ids).forEach { chunk ->
                             appDb.aiReadAloudUsageRecordDao.deleteByIds(chunk)
                         }
-                        selectedIds.clear()
-                        launch(Dispatchers.Main) { load() }
+                        launch(Dispatchers.Main) {
+                            // selectedIds 同时被主线程的 bind/toggle 读写，只能在主线程改
+                            selectedIds.clear()
+                            load()
+                        }
                     }
                 }
             )
@@ -191,8 +194,11 @@ class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>(
                 onPositive = {
                     lifecycleScope.launch(Dispatchers.IO) {
                         appDb.aiReadAloudUsageRecordDao.clear()
-                        selectedIds.clear()
-                        launch(Dispatchers.Main) { load() }
+                        launch(Dispatchers.Main) {
+                            // 同上：跨线程改 selectedIds 会与主线程读写竞争
+                            selectedIds.clear()
+                            load()
+                        }
                     }
                 }
             )
@@ -210,8 +216,11 @@ class AiReadAloudUsageRecordActivity : BaseActivity<ActivityThemeManageBinding>(
                     if (index == 0) {
                         lifecycleScope.launch(Dispatchers.IO) {
                             appDb.aiReadAloudUsageRecordDao.delete(record.id)
-                            selectedIds.remove(record.id)
-                            launch(Dispatchers.Main) { load() }
+                            launch(Dispatchers.Main) {
+                                // 同上：跨线程改 selectedIds 会与主线程读写竞争
+                                selectedIds.remove(record.id)
+                                load()
+                            }
                         }
                     }
                 }

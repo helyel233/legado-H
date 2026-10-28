@@ -94,6 +94,12 @@ class LibrarySearchViewModel(application: Application) : BaseViewModel(applicati
         }.onSuccess {
             _items.value = it
         }.onFailure {
+            // 被新搜索取代的取消：清空结果会把新搜索刚写入的 items 闪成空列表，
+            // 复位状态后必须向上抛，让协程真正结束
+            if (it is CancellationException) {
+                _searching.value = false
+                throw it
+            }
             AppLog.put("全库搜索失败", it)
             _items.value = emptyList()
         }

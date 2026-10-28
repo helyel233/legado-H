@@ -1,6 +1,10 @@
 package io.legado.app.ui.book.read.config
 
 import android.net.Uri
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -32,6 +36,7 @@ import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
+import splitties.init.appCtx
 import io.legado.app.utils.visible
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import org.json.JSONObject
@@ -78,44 +83,62 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
     private val unitKeys = arrayListOf<Int>()
     private val unitNotes = LinkedHashMap<Int, String>() // 媒体下标 -> 备注（排版只管显示分组，不管备注）
 
-    private val selectImages = registerForActivityResult(SelectImagesContract()) {
-        if (it.uris.isNotEmpty()) {
-            val parsed = arrayListOf<Pair<ByteArray, String>>()
-            it.uris.forEach { uri ->
-                // 选择器放开 */* 后可能选到非媒体文件，先统一读取字节并解析类型
-                val bytes = kotlin.runCatching {
-                    requireContext().contentResolver.openInputStream(uri)?.use { s ->
-                        s.readBytes()
+    /** 选择代际号：快速连续选择时丢弃过期结果 */
+    private var selectRequestId = 0L
+
+    private val selectImages = registerForActivityResult(SelectImagesContract()) { result ->
+        if (result.uris.isNotEmpty()) {
+            // 回调在主线程，先取可空 context：IO 里读大文件期间对话框可能已关闭，
+            // IO 线程里 requireContext()/Fragment.toastOnUi(requireActivity()) 都会抛未捕获异常
+            val context = context ?: return@registerForActivityResult
+            // 代际号：快速连续两次选择时，完成顺序不定，过期结果不能覆盖最新选择
+            val requestId = ++selectRequestId
+            // 选择器回调在主线程：readBytes 会把选中的视频/音频整文件读进内存（可达数十~数百 MB），
+            // 必须放 IO；读完回主线程再更新 UI 状态
+            lifecycleScope.launch(Dispatchers.IO) {
+                val parsed = arrayListOf<Pair<ByteArray, String>>()
+                result.uris.forEach { uri ->
+                    // 选择器放开 */* 后可能选到非媒体文件，先统一读取字节并解析类型
+                    val bytes = kotlin.runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { s ->
+                            s.readBytes()
+                        }
+                    }.getOrNull()
+                    if (bytes == null || bytes.isEmpty()) {
+                        appCtx.toastOnUi("读取媒体文件失败")
+                        return@forEach
                     }
-                }.getOrNull()
-                if (bytes == null || bytes.isEmpty()) {
-                    toastOnUi("读取媒体文件失败")
-                    return@forEach
+                    // 文件选择器返回的 MIME 可能不可靠（null/octet-stream/报成 image 类），
+                    // 按文件名扩展名 → MIME → 文件头嗅探三级判断，确保视频/音频不会落成 jpg
+                    val name = IllustrationHelp.queryDisplayName(context, uri)
+                    val mime = context.contentResolver.getType(uri)
+                    val ext = IllustrationHelp.resolveMediaExt(name, mime, bytes)
+                    if (ext !in IllustrationHelp.VIDEO_EXTS &&
+                        ext !in IllustrationHelp.AUDIO_EXTS &&
+                        ext !in IllustrationHelp.IMAGE_EXTS
+                    ) {
+                        appCtx.toastOnUi("仅支持图片、视频、音频文件")
+                        return@forEach
+                    }
+                    parsed.add(bytes to ext)
                 }
-                // 文件选择器返回的 MIME 可能不可靠（null/octet-stream/报成 image 类），
-                // 按文件名扩展名 → MIME → 文件头嗅探三级判断，确保视频/音频不会落成 jpg
-                val name = IllustrationHelp.queryDisplayName(requireContext(), uri)
-                val mime = requireContext().contentResolver.getType(uri)
-                val ext = IllustrationHelp.resolveMediaExt(name, mime, bytes)
-                if (ext !in IllustrationHelp.VIDEO_EXTS &&
-                    ext !in IllustrationHelp.AUDIO_EXTS &&
-                    ext !in IllustrationHelp.IMAGE_EXTS
-                ) {
-                    toastOnUi("仅支持图片、视频、音频文件")
-                    return@forEach
+                launch(Dispatchers.Main) {
+                    if (requestId != selectRequestId) {
+                        // 已经有更新的选择，丢弃本次过期结果
+                        return@launch
+                    }
+                    if (parsed.size != result.uris.size) {
+                        // 有媒体读取或解析失败：本次选择整体不生效，直接暴露问题
+                        return@launch
+                    }
+                    selectedUris.clear()
+                    selectedUris.addAll(result.uris)
+                    parsedMedia.clear()
+                    parsedMedia.addAll(parsed)
+                    upSelected()
+                    rebuildNoteInputs()
                 }
-                parsed.add(bytes to ext)
             }
-            if (parsed.size != it.uris.size) {
-                // 有媒体读取或解析失败：本次选择整体不生效，直接暴露问题
-                return@registerForActivityResult
-            }
-            selectedUris.clear()
-            selectedUris.addAll(it.uris)
-            parsedMedia.clear()
-            parsedMedia.addAll(parsed)
-            upSelected()
-            rebuildNoteInputs()
         }
     }
 
@@ -316,47 +339,54 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
         val unified = binding.cbUnifiedNote.isChecked
         val unifiedNote = binding.etNote.text.toString()
         val units = computeUnits()
-        // 保存媒体文件，选择顺序与单元下标一致
-        val srcs = parsedMedia.map { (bytes, ext) ->
-            val src = IllustrationHelp.newSrc(ext)
-            IllustrationHelp.saveImage(book, src, bytes)
-            src
-        }
-        val records = arrayListOf<BookIllustration>()
-        units.forEach { unit ->
-            val unitSrcs = unit.indexes.map { srcs[it] }
-            //记录按排版分组存（宫格渲染靠它），备注按媒体各写各的：
-            //统一备注/单媒体组走 note 字段；多媒体组 note 置空，每图备注进 srcNotes
-            val (note, srcNotes) = if (unified) {
-                unifiedNote to "{}"
-            } else if (unit.indexes.size == 1) {
-                unitNotes[unit.firstIndex].orEmpty() to "{}"
-            } else {
-                val map = unit.indexes.mapNotNull { mediaIndex ->
-                    val text = unitNotes[mediaIndex].orEmpty()
-                    if (text.isBlank()) null else srcs[mediaIndex] to text
-                }.toMap()
-                "" to JSONObject(map as Map<*, *>).toString()
+        val parsed = parsedMedia.toList()
+        // 媒体写盘必须离开主线程：选择器允许选大视频，整段 writeBytes 会 ANR。
+        // 挂 viewLifecycleOwner.lifecycleScope：视图销毁即取消，协程内不再操作 binding
+        viewLifecycleOwner.lifecycleScope.launch {
+            // 保存媒体文件，选择顺序与单元下标一致
+            val srcs = withContext(Dispatchers.IO) {
+                parsed.map { (bytes, ext) ->
+                    val src = IllustrationHelp.newSrc(ext)
+                    IllustrationHelp.saveImage(book, src, bytes)
+                    src
+                }
             }
-            records.add(
-                newRecord(
-                    book,
-                    chapter,
-                    unitSrcs,
-                    displayHeight,
-                    pageBreak,
-                    records.size,
-                    note = note,
-                    srcNotes = srcNotes,
-                    single = unit.isAudio
+            val records = arrayListOf<BookIllustration>()
+            units.forEach { unit ->
+                val unitSrcs = unit.indexes.map { srcs[it] }
+                //记录按排版分组存（宫格渲染靠它），备注按媒体各写各的：
+                //统一备注/单媒体组走 note 字段；多媒体组 note 置空，每图备注进 srcNotes
+                val (note, srcNotes) = if (unified) {
+                    unifiedNote to "{}"
+                } else if (unit.indexes.size == 1) {
+                    unitNotes[unit.firstIndex].orEmpty() to "{}"
+                } else {
+                    val map = unit.indexes.mapNotNull { mediaIndex ->
+                        val text = unitNotes[mediaIndex].orEmpty()
+                        if (text.isBlank()) null else srcs[mediaIndex] to text
+                    }.toMap()
+                    "" to JSONObject(map as Map<*, *>).toString()
+                }
+                records.add(
+                    newRecord(
+                        book,
+                        chapter,
+                        unitSrcs,
+                        displayHeight,
+                        pageBreak,
+                        records.size,
+                        note = note,
+                        srcNotes = srcNotes,
+                        single = unit.isAudio
+                    )
                 )
-            )
+            }
+            if (records.isEmpty()) return@launch
+            appDb.bookIllustrationDao.insert(*records.toTypedArray())
+            dismissAllowingStateLoss()
+            appCtx.toastOnUi(R.string.illustration_inserted)
+            callback?.invoke()
         }
-        if (records.isEmpty()) return
-        appDb.bookIllustrationDao.insert(*records.toTypedArray())
-        dismissAllowingStateLoss()
-        toastOnUi(R.string.illustration_inserted)
-        callback?.invoke()
     }
 
     private fun newRecord(

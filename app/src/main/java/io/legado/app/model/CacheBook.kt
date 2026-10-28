@@ -439,8 +439,10 @@ object CacheBook {
                 return content
             } catch (e: Exception) {
                 if (e is CancellationException) {
+                    // 取消必须向上抛：继续走云回退会把「用户停止」当下载失败处理
+                    //（计入 3 次重试预算、在已取消的协程里继续做网络请求）
                     onCancel(chapter.index)
-                    if (failOnError) throw e
+                    throw e
                 }
                 LibraryCloudSync.tryCloudFallback(book, chapter)?.let { content ->
                     BookHelp.saveText(book, chapter, content)

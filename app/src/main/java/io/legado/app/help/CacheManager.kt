@@ -28,6 +28,14 @@ private val memoryLruCache = object : LruCache<String, Any>(1024 * 1024 * 50) {
         return value.estimatedMemorySize().coerceAtLeast(1)
     }
 
+    override fun entryRemoved(evicted: Boolean, key: String, oldValue: Any, newValue: Any?) {
+        super.entryRemoved(evicted, key, oldValue, newValue)
+        if (newValue == null) {
+            // 容量淘汰时同步清掉过期时间表条目，否则 memoryDeadlines 会无界慢涨
+            memoryDeadlines.remove(key)
+        }
+    }
+
 }
 
 private fun Any?.estimatedMemorySize(): Int {

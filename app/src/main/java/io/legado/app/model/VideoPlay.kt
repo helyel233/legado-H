@@ -87,6 +87,15 @@ object VideoPlay : CoroutineScope by MainScope(){
         val createdAt: Long
     )
     private val chapterLinkCache = ConcurrentHashMap<String, CachedPlayLink>()
+
+    /**
+     * chapterLinkCache 只在读时按 TTL 过滤、从不删除，条目会一直滞留到进程结束。
+     * 每次写入时顺手清掉已过期条目（单条 <1KB，遍历成本可忽略）。
+     */
+    private fun pruneExpiredPlayLinks() {
+        val now = System.currentTimeMillis()
+        chapterLinkCache.entries.removeIf { now - it.value.createdAt > CHAPTER_LINK_CACHE_TTL }
+    }
     private val preloadingKeys = ConcurrentHashMap.newKeySet<String>()
     private val preloadMutex = Mutex()
 
@@ -399,6 +408,7 @@ object VideoPlay : CoroutineScope by MainScope(){
                     mediaUrl = mUrl,
                     createdAt = System.currentTimeMillis()
                 )
+                pruneExpiredPlayLinks()
                 withContext(Main) {
                     player.mapHeadData = analyzeUrl.headerMap
                     player.setUp(playUrl, false, ExoPlayerHelper.videoBookCacheDir(book), chapter.title)
@@ -454,6 +464,7 @@ object VideoPlay : CoroutineScope by MainScope(){
                         mediaUrl = mUrl,
                         createdAt = System.currentTimeMillis()
                     )
+                    pruneExpiredPlayLinks()
                 } catch (e: Throwable) {
                     // 吞掉取消异常会破坏协程取消语义；其余失败记入调试日志
                     if (e is kotlinx.coroutines.CancellationException) throw e

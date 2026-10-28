@@ -40,14 +40,15 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
     private val currentProviderIdState = mutableStateOf("")
     private val importRule = registerForActivityResult(HandleFileContract()) { result ->
         result.uri?.let { uri ->
-            lifecycleScope.launch {
-                runCatching {
+            // Activity 结果回调在主线程，读文件与解析放 IO，导入回主线程
+            lifecycleScope.launch(Dispatchers.IO) {
+                val rules = runCatching {
                     parseImportedRules(uri.readText(this@AiImageProviderManageActivity))
-                }.onSuccess { rules ->
-                    importRules(rules)
-                }.onFailure {
-                    toastOnUi(it.localizedMessage ?: getString(R.string.wrong_format))
+                }.getOrElse { error ->
+                    toastOnUi(error.localizedMessage ?: getString(R.string.wrong_format))
+                    return@launch
                 }
+                withContext(Dispatchers.Main) { importRules(rules) }
             }
         }
     }
