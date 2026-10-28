@@ -2,6 +2,7 @@ package io.legado.app.help.gsyVideo
 
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.util.LruCache
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -15,11 +16,24 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.MalformedURLException
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import androidx.core.graphics.toColorInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer.Proxy() {
     private var mDrawable: Drawable? = null
 
+    companion object {
+        // 共享 IO 调度 + 内存缓存 + 在途去重：图文弹幕可能高频触发 prepareDrawing，
+        // 不再每条弹幕裸起一个 Thread（原 FIXME 遗留），重复 URL 也不重复下载
+        private val loadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val drawableCache = LruCache<String, Drawable>(8)
+        private val loadingUrls: MutableSet<String> = ConcurrentHashMap.newKeySet()
+        private const val EMOJI_URL = "http://www.bilibili.com/favicon.ico"
+    }
 
     override fun prepareDrawing(danmaku: BaseDanmaku, fromWorkerThread: Boolean) {
         if (danmaku.text is Spanned) { // 根据你的条件检查是否需要需要更新弹幕
@@ -31,34 +45,43 @@ class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer
                 mDanmakuView?.invalidateDanmaku(danmaku, false)
                 return
             }
-            // FIXME 这里只是简单启个线程来加载远程url图片，请使用你自己的异步线程池，最好加上你的缓存池
-            object : Thread() {
-                override fun run() {
-                    val url = "http://www.bilibili.com/favicon.ico"
+            drawableCache.get(EMOJI_URL)?.let { cached ->
+                mDrawable = cached
+                cached.setBounds(0, 0, 100, 100)
+                danmaku.text = createSpannable(cached)
+                mDanmakuView?.invalidateDanmaku(danmaku, false)
+                return
+            }
+            if (!loadingUrls.add(EMOJI_URL)) return
+            loadScope.launch {
+                // 无论成功、失败还是中途抛异常，都必须把 URL 从在途集合移除：
+                // 漏掉一次这条弹幕的图片会在此后整个进程生命周期内都加载不出来
+                try {
+                    var loaded: Drawable? = null
                     var inputStream: InputStream? = null
-                    var loaded = mDrawable
-                    if (loaded == null) {
-                        try {
-                            val urlConnection = URL(url).openConnection()
-                            inputStream = urlConnection.getInputStream()
-                            loaded = BitmapDrawable.createFromStream(inputStream, "bitmap")
-                            mDrawable = loaded
-                        } catch (e: MalformedURLException) {
-                            io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
-                        } catch (e: IOException) {
-                            io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
-                        } finally {
-                            IOUtils.closeQuietly(inputStream)
-                        }
+                    try {
+                        val urlConnection = URL(EMOJI_URL).openConnection()
+                        inputStream = urlConnection.getInputStream()
+                        loaded = BitmapDrawable.createFromStream(inputStream, "bitmap")
+                    } catch (e: MalformedURLException) {
+                        io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
+                    } catch (e: IOException) {
+                        io.legado.app.constant.AppLog.put("弹幕图片加载失败", e)
+                    } finally {
+                        IOUtils.closeQuietly(inputStream)
                     }
                     if (loaded != null) {
+                        drawableCache.put(EMOJI_URL, loaded)
+                        mDrawable = loaded
                         loaded.setBounds(0, 0, 100, 100)
                         val spannable = createSpannable(loaded)
                         danmaku.text = spannable
                         mDanmakuView?.invalidateDanmaku(danmaku, false)
                     }
+                } finally {
+                    loadingUrls.remove(EMOJI_URL)
                 }
-            }.start()
+            }
         }
     }
 

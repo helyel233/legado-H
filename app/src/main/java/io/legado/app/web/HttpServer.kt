@@ -21,7 +21,11 @@ import okio.buffer
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
-class HttpServer(port: Int) : NanoHTTPD(port) {
+/**
+ * @param hostname 绑定地址：null（默认）绑所有网卡；传 127.0.0.1 时仅本机可访问。
+ *   未设访问口令时由 WebService 传回环地址，避免局域网内任何人无鉴权增删书源。
+ */
+class HttpServer(port: Int, hostname: String? = null) : NanoHTTPD(hostname, port) {
     private val assetsWeb = AssetsWeb("web")
 
     override fun serve(session: IHTTPSession): Response {

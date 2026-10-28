@@ -1452,11 +1452,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         set(value) = appCtx.putPrefInt(PreferKey.aiAgentToolRetryBackoffMillis, value.coerceIn(0, 5_000))
 
     var aiTavilyApiKey: String
-        get() = appCtx.getPrefString(PreferKey.aiTavilyApiKey).orEmpty()
+        get() = SecurePrefs.read(PreferKey.aiTavilyApiKey).orEmpty()
         set(value) {
             val key = value.trim()
-            if (key.isBlank()) appCtx.removePref(PreferKey.aiTavilyApiKey)
-            else appCtx.putPrefString(PreferKey.aiTavilyApiKey, key)
+            SecurePrefs.write(PreferKey.aiTavilyApiKey, key.ifBlank { null })
         }
 
     var aiTavilyBaseUrl: String
@@ -2495,9 +2494,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
      * 之后同一浏览器不再需要带参数（前端无需任何改动）。
      */
     var webServiceToken: String
-        get() = appCtx.getPrefString(PreferKey.webServiceToken, "") ?: ""
+        get() = SecurePrefs.read(PreferKey.webServiceToken) ?: ""
         set(value) {
-            appCtx.putPrefString(PreferKey.webServiceToken, value.trim())
+            SecurePrefs.write(PreferKey.webServiceToken, value.trim().ifBlank { null })
         }
 
     var tocUiUseReplace: Boolean
@@ -2679,9 +2678,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val s3AccessKey get() = appCtx.getPrefString(PreferKey.s3AccessKey)
 
-    val s3SecretKey get() = appCtx.getPrefString(PreferKey.s3SecretKey)
+    val s3SecretKey get() = SecurePrefs.read(PreferKey.s3SecretKey)
 
-    val s3SessionToken get() = appCtx.getPrefString(PreferKey.s3SessionToken)
+    val s3SessionToken get() = SecurePrefs.read(PreferKey.s3SessionToken)
 
     val s3Containers get() = appCtx.getPrefString(PreferKey.s3Containers)
 

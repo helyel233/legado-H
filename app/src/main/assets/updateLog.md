@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.20.1 · 2026/10/28**
+
+- 新增凭据静态加密存储(SecurePrefs: AndroidKeyStore+AES-GCM，加密 WebDav密码/S3密钥/AI Key/Web口令，兼容明文降级、换设备恢复返回null按未设置)；Web服务无口令仅绑回环(防局域网无鉴权增删书源)，WebServiceGuard fail-closed；崩溃UX(后台线程不再二次崩+精简提示"崩溃日志已记录")；书源评分删除前缀关系误删修复；弹幕图文线程治理(共享IO+缓存+去重)；WebService加Volatile
+
 **vH.1.19.2 · 2026/10/28**
 
 - 修复漫画进度监听按身份移除(不再误删其它VH/重试的监听致进度条停死)；评论快照章数计数并发锁+失效防虚高；内存防无界(CacheManager淘汰清deadlines/解析规则缓存上限16/视频链接缓存过期清理/规则导入中转缓存30分TTL)；CacheBook用户停止真正上抛取消(不误当下载失败)；全库搜索被新搜索取代取消上抛；插图编辑读图移IO+代际号防过期结果；AI朗读selectedIds主线程写+Debug加Volatile

@@ -6,6 +6,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.lib.webdav.Authorization
 import io.legado.app.lib.webdav.WebDav
 import io.legado.app.lib.webdav.WebDavException
@@ -58,7 +59,7 @@ class WebDavCloudStorageBackend : CloudStorageBackend {
 
     private fun latestConfigOrNull(): WebDavConfig? {
         val account = appCtx.getPrefString(PreferKey.webDavAccount)?.trim().orEmpty()
-        val password = appCtx.getPrefString(PreferKey.webDavPassword).orEmpty()
+        val password = SecurePrefs.read(PreferKey.webDavPassword).orEmpty()
         if (account.isEmpty() || password.isEmpty()) return null
         return WebDavConfig(
             rootUrl = normalizedRootUrl(),

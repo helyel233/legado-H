@@ -22,6 +22,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.BackupConfig
@@ -514,7 +515,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun hasWebDavAccount(): Boolean {
         return !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
-                && !getPrefString(PreferKey.webDavPassword).isNullOrBlank()
+                && !SecurePrefs.read(PreferKey.webDavPassword).isNullOrBlank()
     }
 
     private fun hasS3Account(): Boolean {
@@ -527,7 +528,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private fun webDavAccountSummary(): String {
         val url = getPrefString(PreferKey.webDavUrl).orEmpty()
         val account = getPrefString(PreferKey.webDavAccount).orEmpty()
-        val password = getPrefString(PreferKey.webDavPassword).orEmpty()
+        val password = SecurePrefs.read(PreferKey.webDavPassword).orEmpty()
         return when {
             url.isBlank() && account.isBlank() && password.isBlank() ->
                 getString(R.string.webdav_account_manage_summary)
@@ -572,15 +573,16 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             initialValues = listOf(
                 getPrefString(PreferKey.webDavUrl).orEmpty(),
                 getPrefString(PreferKey.webDavAccount).orEmpty(),
-                getPrefString(PreferKey.webDavPassword).orEmpty()
+                SecurePrefs.read(PreferKey.webDavPassword).orEmpty()
             ),
             passwordFields = setOf(2),
             onPositive = { values ->
                 appCtx.defaultSharedPreferences.edit {
                     putString(PreferKey.webDavUrl, values.getOrNull(0).orEmpty().trim())
                     putString(PreferKey.webDavAccount, values.getOrNull(1).orEmpty().trim())
-                    putString(PreferKey.webDavPassword, values.getOrNull(2).orEmpty())
                 }
+                // 与旧版一致：密码不做 trim（可能合法包含首尾空格），仅空串视为删除
+                SecurePrefs.write(PreferKey.webDavPassword, values.getOrNull(2)?.ifEmpty { null })
                 refreshSettings()
                 viewModel.upCloudStorageConfig()
             }
@@ -713,7 +715,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private fun showS3FullWebDavFallbackDialog(backupPath: String) {
         pendingS3FullBackupPath = backupPath
         val hasWebDav = !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
-                && !getPrefString(PreferKey.webDavPassword).isNullOrBlank()
+                && !SecurePrefs.read(PreferKey.webDavPassword).isNullOrBlank()
         val messageRes = if (hasWebDav) {
             R.string.s3_full_webdav_fallback_message
         } else {

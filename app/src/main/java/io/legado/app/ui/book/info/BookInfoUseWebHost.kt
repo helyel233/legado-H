@@ -37,7 +37,8 @@ internal object BookInfoUseWebHost {
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true)
             mediaPlaybackRequiresUserGesture = false
-            allowContentAccess = true
+            // 同 WebViewPool：禁 content:// 读取面；file:// 保留（本地封面等资源）
+            allowContentAccess = false
             allowFileAccess = true
             textZoom = 100
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {

@@ -263,7 +263,8 @@ object ShareNoteImageRenderer {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.allowFileAccess = true
-        webView.settings.allowContentAccess = true
+        // 禁 content://：分享笔记是本地生成的 HTML，不需要也不该能读其它应用的 Provider
+        webView.settings.allowContentAccess = false
         webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
         webView.settings.loadWithOverviewMode = false
         webView.settings.useWideViewPort = false

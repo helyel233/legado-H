@@ -4,7 +4,11 @@ import fi.iki.elonen.NanoWSD
 import io.legado.app.service.WebService
 import io.legado.app.web.socket.*
 
-class WebSocketServer(port: Int) : NanoWSD(port) {
+/**
+ * @param hostname 绑定地址：null（默认）绑所有网卡；未设访问口令时传 127.0.0.1 仅本机可访问，
+ *   与 HttpServer 的回环约束保持一致（该端口上有远程执行面的调试端点）。
+ */
+class WebSocketServer(port: Int, hostname: String? = null) : NanoWSD(hostname, port) {
 
     override fun openWebSocket(handshake: IHTTPSession): WebSocket? {
         WebService.serve()

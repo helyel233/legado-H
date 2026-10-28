@@ -2313,7 +2313,7 @@ private fun BookInfoWebIntro(
                 javaScriptCanOpenWindowsAutomatically = true
                 setSupportMultipleWindows(true)
                 mediaPlaybackRequiresUserGesture = false
-                allowContentAccess = true
+                allowContentAccess = false
                 builtInZoomControls = false
                 displayZoomControls = false
                 textZoom = 100

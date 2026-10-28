@@ -97,6 +97,8 @@
     <string name="local_network_permission_rationale">需要「本地网络」权限才能访问局域网：Web 服务要被同一网络的其它设备打开，本地 AI、局域网书源和 WebDAV 也需要它</string>
     <string name="local_network_permission_denied">未授予本地网络权限，Web 服务只能在本机访问</string>
     <string name="local_network_permission_required">访问局域网失败，可能是系统拦截了本地网络访问，请在权限设置中授予「本地网络」权限后重试</string>
+    <string name="web_service_no_token_hint">未设置访问口令，Web 服务仅本机可访问；设置口令后局域网设备才能连接</string>
+    <string name="crash_recorded_hint">应用遇到错误，崩溃日志已记录，可在「关于」页查看详情</string>
     <string name="web_service_desc">用浏览器写源或看书</string>
     <string name="web_edit_source">Web 编辑书源</string>
     <string name="epub_read_engine">EPUB阅读引擎</string>

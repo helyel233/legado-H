@@ -27,8 +27,9 @@ internal object ReadProgressCalculator {
         pageIndex: Int,
         formatter: DecimalFormat
     ): String {
+        // 同样走 formatter，逗号小数地区才和后面两条分支风格一致
         if (chapterSize == 0 || pageSize == 0 && chapterIndex == 0) {
-            return "0.0%"
+            return formatter.format(0.0)
         }
         if (pageSize == 0) {
             return formatter.format((chapterIndex + 1.0f) / chapterSize.toDouble())
@@ -37,8 +38,14 @@ internal object ReadProgressCalculator {
             chapterIndex * 1.0f / chapterSize +
                 1.0f / chapterSize * (pageIndex + 1) / pageSize.toDouble()
         )
-        if (percent == "100.0%" && (chapterIndex + 1 != chapterSize || pageIndex + 1 != pageSize)) {
-            percent = "99.9%"
+        // 「未到最后一页却显示 100%」的特判必须与 formatter 的本地化格式比较：
+        // DecimalFormat("0.0%") 用默认语言环境，逗号小数点地区会产出 "100,0%"，
+        // 与硬编码 "100.0%" 比较永远失配，特判失效；「99.9%」也走 formatter
+        // 产出，保证同一页面上小数点风格一致
+        if (percent == formatter.format(1.0) &&
+            (chapterIndex + 1 != chapterSize || pageIndex + 1 != pageSize)
+        ) {
+            percent = formatter.format(0.999)
         }
         return percent
     }

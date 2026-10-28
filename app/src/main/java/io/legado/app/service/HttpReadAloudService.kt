@@ -71,6 +71,7 @@ import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -620,6 +621,19 @@ class HttpReadAloudService : BaseReadAloudService(),
         return NextChapterSpeechPlan(chapter, plan)
     }
 
+    /**
+     * runBlocking 时借用 lifecycleScope 的 Job 传播取消；Job 取不到（理论窗口）
+     * 也不能像旧代码那样用 !! 直接 NPE——降级为裸 runBlocking，仅失去取消联动。
+     */
+    private fun <T> runBlockingWithLifecycleJob(block: suspend CoroutineScope.() -> T): T {
+        val job = lifecycleScope.coroutineContext[Job]
+        return if (job != null) {
+            runBlocking(job, block)
+        } else {
+            runBlocking(block = block)
+        }
+    }
+
     private fun createDataSourceFactory(
         httpTts: HttpTTS?,
         speakText: String,
@@ -633,7 +647,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 } else if ((route?.engineType == SpeechRoute.ENGINE_SYSTEM || httpTts == null) && !fileName.isNullOrBlank()) {
                     val file = getSpeakFileAsMd5(fileName)
                     if (!hasSpeakFile(fileName)) {
-                        runBlocking(lifecycleScope.coroutineContext[Job]!!) {
+                        runBlockingWithLifecycleJob {
                             synthesizeSystemSpeakFile(fileName, speakText, route ?: defaultSystemRoute())
                         }
                     }
@@ -641,8 +655,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                         ?: resources.openRawResource(R.raw.silent_sound)
                 } else {
                     kotlin.runCatching {
-                        runBlocking(lifecycleScope.coroutineContext[Job]!!) {
-                            val sourceHttpTts = httpTts ?: return@runBlocking resources.openRawResource(R.raw.silent_sound)
+                        runBlockingWithLifecycleJob {
+                            val sourceHttpTts = httpTts ?: return@runBlockingWithLifecycleJob resources.openRawResource(R.raw.silent_sound)
                             getSpeakStreamWithFallback(sourceHttpTts, speakText, route, fileName)
                         }
                     }.onFailure {

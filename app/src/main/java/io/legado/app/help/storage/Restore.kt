@@ -53,6 +53,7 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
@@ -370,14 +371,16 @@ object Restore {
                     key != PreferKey.advancedTitleLottiePath
                 ) {
                     when (key) {
-                        PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken -> {
+                        PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken,
+                        PreferKey.webServiceToken -> {
                             // 解密失败说明本机加密密码与备份端不同：跳过该键，
-                            // 绝不能把密文当明文写入造成永久认证失败
+                            // 绝不能把密文当明文写入造成永久认证失败。
+                            // 经 SecurePrefs.write 落盘会用本机 KeyStore 重新加密
                             val decrypted = value?.toString()?.let { plain ->
                                 kotlin.runCatching { aes.decryptStr(plain) }.getOrNull()
                             }
                             if (decrypted != null) {
-                                edit.putString(key, decrypted)
+                                SecurePrefs.write(key, decrypted)
                             }
                         }
 

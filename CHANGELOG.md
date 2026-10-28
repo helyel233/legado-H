@@ -1,5 +1,21 @@
 # 更新日志
 
+## 1.20.1 版（2026-10-28）
+
+本版新增凭据静态加密存储（AndroidKeyStore + AES-GCM），并配套加固 Web 服务鉴权与若干健壮性 / UX 修复。
+
+### 新增
+
+- **凭据静态加密存储**（新增 `SecurePrefs`，附 `docs/hardening-and-ux-plan.md`）：WebDav 密码、S3 密钥 / SessionToken、AI Tavily Key、Web 服务访问口令此前以明文存于 SharedPreferences（设备遗失或越权读取 root / adb backup / 同签名应用即可拿到全部凭据），现改用 AndroidKeyStore 里的密钥做 AES-GCM 加密落盘（格式 `[前缀]+Base64(version|ivLen|iv|ciphertext)`，每条独立 IV）。兼容与降级：不带前缀的明文按原样返回（兼容历史数据）；KeyStore 异常（密钥丢失 / 硬件异常）时降级写明文不丢功能；密文解不开（典型是换了设备恢复备份）返回 null 按未设置处理、用户重填即恢复，绝不会把密文当明文导致认证永远失败。API < 23 无 KeyStore AES-GCM 直接明文（与旧行为一致）。`webServiceToken` 读取在 `[lock]` 内缓存解密结果与 SecretKey，避免每个 HTTP 请求多次 IPC 串行。
+
+### 修复 / 优化
+
+- **Web 服务无口令时仅本机可访问**：未设置访问口令时 `HttpServer` / `WebSocketServer` 绑回环地址 `127.0.0.1`，防止同局域网设备在无鉴权状态下增删书源、删书、读取登录态（设口令后才绑所有网卡放开局域网）；新增提示「未设置访问口令，Web 服务仅本机可访问」。`WebServiceGuard.isEnabled()` 改为看「键是否存着」而非「能否读出明文」——密文解不开时不再 fail-open 全部放行（已设口令却取不出明文一律拒绝）。
+- **崩溃 UX**：`CrashHandler` 后台线程不再 `Looper.loop()`（原会二次抛 "No Looper" 把进程判死），直接安静退出、与吸收语义一致；未捕获异常不再弹完整堆栈（暴露路径信息且对普通用户是噪音），改为简短提示「应用遇到错误，崩溃日志已记录，可在关于页查看详情」，详细日志已落盘、下次启动有崩溃提示。
+- **书源评分删除前缀关系修复**：`SourceConfig.removeSource` 原用 `startsWith(origin)`，源 URL 存在前缀关系（a.com 与 a.com.cn）时会误删他源评分，现按最长源 URL 匹配归属、无法无歧义判定的 key 保守保留（宁剩孤儿 key 不误删）。
+- **弹幕图文加载治理**：`DanmakuAdapter` 把「每条弹幕裸起一个 Thread」（原 FIXME 遗留）换成共享 IO 协程 + LruCache(8) + 在途 URL 去重，高频图文弹幕不再爆线程、重复 URL 不重复下载。
+- **并发可见性**：`WebService.isRun` / `hostAddress` 加 `@Volatile`（服务线程写、网络回调线程读）。
+
 ## 1.19.2 版（2026-10-28）
 
 本版是一轮缓存 / 媒体 / 漫画 / 并发相关的修复与内存治理，无新特性。

@@ -3,6 +3,7 @@ package io.legado.app.lib.cloud
 import cn.hutool.crypto.symmetric.AES
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.utils.GSON
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.fromJsonObject
@@ -213,7 +214,7 @@ object S3ContainerManager {
     private fun legacyContainer(): S3Container? {
         val endpoint = appCtx.getPrefString(PreferKey.s3Endpoint).orEmpty()
         val accessKey = appCtx.getPrefString(PreferKey.s3AccessKey).orEmpty()
-        val secretKey = appCtx.getPrefString(PreferKey.s3SecretKey).orEmpty()
+        val secretKey = SecurePrefs.read(PreferKey.s3SecretKey).orEmpty()
         if (endpoint.isBlank() || accessKey.isBlank() || secretKey.isBlank()) return null
         val pathStyle = appCtx.defaultSharedPreferences.all[PreferKey.s3PathStyle] as? Boolean
         val parsed = S3Config.parseAddress(
@@ -231,7 +232,7 @@ object S3ContainerManager {
             prefix = appCtx.getPrefString(PreferKey.s3Prefix, "legado").orEmpty(),
             accessKey = accessKey,
             secretKey = secretKey,
-            sessionToken = appCtx.getPrefString(PreferKey.s3SessionToken),
+            sessionToken = SecurePrefs.read(PreferKey.s3SessionToken),
             pathStyle = parsed.pathStyle,
             enabled = true
         ).normalized()

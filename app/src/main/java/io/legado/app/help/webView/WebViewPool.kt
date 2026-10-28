@@ -337,7 +337,9 @@ object WebViewPool {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            allowContentAccess = true
+            // 禁止页面 JS 读 content://（其它应用的通讯录/媒体等 Provider），
+            // 书源/快照页面不存在合法的 content:// 资源，收紧不影响功能
+            allowContentAccess = false
             builtInZoomControls = true
             displayZoomControls = false
             textZoom = 100

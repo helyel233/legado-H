@@ -11,6 +11,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.CacheCloudIndex
 import io.legado.app.help.book.CacheCloudIndexStore
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.webdav.Authorization
@@ -90,7 +91,7 @@ object AppWebDav {
             authorization = null
             defaultBookWebDav = null
             val account = appCtx.getPrefString(PreferKey.webDavAccount)
-            val password = appCtx.getPrefString(PreferKey.webDavPassword)
+            val password = SecurePrefs.read(PreferKey.webDavPassword)
             if (!account.isNullOrEmpty() && !password.isNullOrEmpty()) {
                 val mAuthorization = Authorization(account, password)
                 checkAuthorization(mAuthorization)

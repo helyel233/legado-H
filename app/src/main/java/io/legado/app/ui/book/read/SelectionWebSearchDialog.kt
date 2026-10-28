@@ -221,6 +221,8 @@ class SelectionWebSearchDialog() : BottomSheetDialogFragment(R.layout.dialog_sel
                 blockNetworkImage = false
                 cacheMode = WebSettings.LOAD_DEFAULT
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                // 默认是 true：搜索页是外部网页，禁 content:// 读取面（通讯录等）
+                allowContentAccess = false
                 useWideViewPort = true
                 loadWithOverviewMode = true
                 textZoom = 100

@@ -1,7 +1,9 @@
 package io.legado.app.web
 
 import fi.iki.elonen.NanoHTTPD
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.SecurePrefs
 import java.security.MessageDigest
 
 /**
@@ -35,8 +37,14 @@ object WebServiceGuard {
 
     private fun expected(): String = AppConfig.webServiceToken.trim()
 
-    /** 是否启用了口令。留空即未启用。 */
-    fun isEnabled(): Boolean = expected().isNotEmpty()
+    /**
+     * 是否启用了口令：看**键是否存着**，而不是「明文能否读出」。
+     *
+     * 若按读取结果判断，一旦密文解不开（KeyStore 密钥丢失、恢复了别的设备的
+     * 备份数据、keystore 守护进程临时不可用），口令就会被当成「未设置」而
+     * 全部放行 —— 那是 fail-open。这里宁可判为已启用，让请求一律被拒。
+     */
+    fun isEnabled(): Boolean = SecurePrefs.isStored(PreferKey.webServiceToken)
 
     /**
      * 本次请求是否放行。
@@ -50,8 +58,13 @@ object WebServiceGuard {
         return MessageDigest.isEqual(provided.toByteArray(), expected.toByteArray())
     }
 
-    fun isAuthorized(session: NanoHTTPD.IHTTPSession): Boolean =
-        isAuthorized(session, expected())
+    fun isAuthorized(session: NanoHTTPD.IHTTPSession): Boolean {
+        if (!isEnabled()) return true
+        val expected = expected()
+        // 已设置口令却取不出明文：一律拒绝，绝不退化成无鉴权
+        if (expected.isEmpty()) return false
+        return isAuthorized(session, expected)
+    }
 
     /**
      * 是否需要给本次响应种 Cookie。

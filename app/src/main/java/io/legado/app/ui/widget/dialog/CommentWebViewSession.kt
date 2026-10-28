@@ -274,7 +274,8 @@ class CommentWebViewSession {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            allowContentAccess = true
+            // 禁 content://（同 WebViewPool）；快照图片走 review-resource:// 定制 scheme
+            allowContentAccess = false
             builtInZoomControls = true
             displayZoomControls = false
             textZoom = 100

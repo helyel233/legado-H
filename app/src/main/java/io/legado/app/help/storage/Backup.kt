@@ -22,6 +22,7 @@ import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.BookCover
@@ -354,9 +355,13 @@ object Backup {
         appCtx.defaultSharedPreferences.all.forEach { (key, value) ->
             if (BackupConfig.keyIsNotIgnore(key)) {
                 when (key) {
-                    PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken -> {
+                    PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken,
+                    PreferKey.webServiceToken -> {
+                        // SecurePrefs 本地存储值可能是密文 blob：备份包里必须放
+                        // 「明文的二次加密」，否则跨设备恢复时本机 KeyStore 密钥解不开。
+                        // read 兼容明文（未迁移数据），解密失败按空处理即跳过该键。
                         // 加密失败跳过该键：绝不能把明文密码落进备份包
-                        val plain = value?.toString().orEmpty()
+                        val plain = SecurePrefs.read(key).orEmpty()
                         if (plain.isNotEmpty()) {
                             runCatching { aes.encryptBase64(plain) }.getOrNull()?.let {
                                 configValues[key] = it

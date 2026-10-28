@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Debug
 import android.os.Looper
 import android.webkit.WebSettings
+import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.data.repository.debug.DebugEventCenter
@@ -57,7 +58,12 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
     override fun uncaughtException(thread: Thread, ex: Throwable) {
         if (shouldAbsorb(ex)) {
             AppLog.put("发生未捕获的异常\n${ex.localizedMessage}", ex)
-            Looper.loop()
+            // 只在主线程重入消息循环“吸住”崩溃；后台线程没有准备 Looper，
+            // Looper.loop() 会再抛 "No Looper" 二次异常，反而把进程判死。
+            // 后台线程直接放行（线程安静退出、进程存活），与吸收语义一致。
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                Looper.loop()
+            }
         } else {
             runCatching { ReadAloud.stop(context) }
             handleException(ex)
@@ -103,7 +109,12 @@ class CrashHandler(val context: Context) : Thread.UncaughtExceptionHandler {
         if ((ex is OutOfMemoryError || ex.cause is OutOfMemoryError) && AppConfig.recordHeapDump) {
             doHeapDump()
         }
-        context.longToastOnUiLegacy(ex.stackTraceStr)
+        // 给用户的简短提示：不再弹完整堆栈（对普通用户是噪音且暴露路径信息）。
+        // 详细日志已同步落盘，下次启动有崩溃提示，关于页可复制诊断信息。
+        runCatching {
+            context.longToastOnUiLegacy(context.getString(R.string.crash_recorded_hint))
+        }
+        // 留出提示展示窗口后交给系统默认处理；崩溃收尾路径本身不允许再抛异常
         Thread.sleep(3000)
     }
 

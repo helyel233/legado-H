@@ -39,7 +39,10 @@ import java.io.IOException
 class WebService : BaseService() {
 
     companion object {
+        // 服务线程写、UI/网络回调线程读，需要保证可见性
+        @Volatile
         var isRun = false
+        @Volatile
         var hostAddress = ""
 
         fun start(context: Context) {
@@ -78,6 +81,13 @@ class WebService : BaseService() {
     }
     private var httpServer: HttpServer? = null
     private var webSocketServer: WebSocketServer? = null
+
+    /**
+     * 未设访问口令时只绑回环地址（127.0.0.1），Web 服务仅本机可访问，
+     * 防止同局域网设备在无鉴权状态下增删书源、删书、读取登录态。
+     * 设置口令后才绑所有网卡放开局域网访问。改口令会走 stop+start，此值随服务重建而刷新。
+     */
+    private val loopbackOnly: Boolean = AppConfig.webServiceToken.isBlank()
     private var notificationList = mutableListOf(appCtx.getString(R.string.service_starting))
     private val networkChangedListener by lazy {
         NetworkChangedListener(this)
@@ -94,21 +104,9 @@ class WebService : BaseService() {
         upTile(true)
         networkChangedListener.register()
         networkChangedListener.onNetworkChanged = {
-            val addressList = NetworkUtils.getLocalIPAddress()
             notificationList.clear()
-            if (addressList.any()) {
-                notificationList.addAll(addressList.map { address ->
-                    getString(
-                        R.string.http_ip,
-                        address.hostAddress,
-                        getPort()
-                    )
-                })
-                hostAddress = decorateAddress(notificationList.first())
-            } else {
-                hostAddress = getString(R.string.network_connection_unavailable)
-                notificationList.add(hostAddress)
-            }
+            notificationList.addAll(addressEntries())
+            hostAddress = decorateAddress(notificationList.first())
             startForegroundNotification()
             postEvent(EventBus.WEB_SERVICE, hostAddress)
         }
@@ -148,9 +146,10 @@ class WebService : BaseService() {
     }
 
     private fun upWebServer() {
-        // Android 17 起没有本地网络权限时，服务只能被本机（回环地址）访问，
+        // 绑所有网卡（已设口令）时需要本地网络权限：Android 17 起没有该权限时，
         // 其它设备一律连不上。这里兜底提示并停止，避免开关显示已开启却连不上。
-        if (!LocalNetworkAccess.isGranted(this)) {
+        // 未设口令走回环模式（仅本机访问），不依赖该权限。
+        if (!loopbackOnly && !LocalNetworkAccess.isGranted(this)) {
             toastOnUi(R.string.local_network_permission_required)
             postEvent(EventBus.LOCAL_NETWORK_PERMISSION_REQUIRED, true)
             stopSelf()
@@ -163,21 +162,19 @@ class WebService : BaseService() {
             webSocketServer?.stop()
         }
         val addressList = NetworkUtils.getLocalIPAddress()
-        if (addressList.any()) {
+        if (loopbackOnly || addressList.any()) {
             val port = getPort()
-            httpServer = HttpServer(port)
-            webSocketServer = WebSocketServer(port + 1)
+            httpServer = if (loopbackOnly) HttpServer(port, "127.0.0.1") else HttpServer(port)
+            webSocketServer = if (loopbackOnly) {
+                WebSocketServer(port + 1, "127.0.0.1")
+            } else {
+                WebSocketServer(port + 1)
+            }
             try {
                 httpServer?.start()
                 webSocketServer?.start(1000 * 30) // 通信超时设置
                 notificationList.clear()
-                notificationList.addAll(addressList.map { address ->
-                    getString(
-                        R.string.http_ip,
-                        address.hostAddress,
-                        getPort()
-                    )
-                })
+                notificationList.addAll(addressEntries())
                 hostAddress = decorateAddress(notificationList.first())
                 isRun = true
                 postEvent(EventBus.WEB_SERVICE, hostAddress)
@@ -190,6 +187,24 @@ class WebService : BaseService() {
         } else {
             toastOnUi("web service cant start, no ip address")
             stopSelf()
+        }
+    }
+
+    /** 通知与复制地址用的条目：回环模式只展示 127.0.0.1，并附未设口令的提示。 */
+    private fun addressEntries(): List<String> {
+        return if (loopbackOnly) {
+            listOf(
+                getString(R.string.http_ip, "127.0.0.1", getPort()),
+                getString(R.string.web_service_no_token_hint)
+            )
+        } else {
+            NetworkUtils.getLocalIPAddress().map { address ->
+                getString(
+                    R.string.http_ip,
+                    address.hostAddress,
+                    getPort()
+                )
+            }
         }
     }
 

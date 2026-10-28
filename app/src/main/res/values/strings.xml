@@ -98,6 +98,8 @@
     <string name="local_network_permission_rationale">需要「本地网络」权限才能访问局域网：Web 服务要被同一网络的其它设备打开，本地 AI、局域网书源和 WebDAV 也需要它</string>
     <string name="local_network_permission_denied">未授予本地网络权限，Web 服务只能在本机访问</string>
     <string name="local_network_permission_required">访问局域网失败，可能是系统拦截了本地网络访问，请在权限设置中授予「本地网络」权限后重试</string>
+    <string name="web_service_no_token_hint">No access token set: web service is limited to this device. Set a token in settings to allow LAN access</string>
+    <string name="crash_recorded_hint">The app ran into an error. A crash log has been saved — see About for details</string>
     <string name="web_service_desc">Web edit source and read book</string>
     <string name="web_edit_source">Edit book sources on the web</string>
     <string name="epub_read_engine">EPUB read engine</string>

@@ -47,6 +47,7 @@ import io.legado.app.help.book.BookshelfMatcher
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.lib.theme.ThemeRuntimeKeys
@@ -122,6 +123,11 @@ class App : Application() {
         DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         Coroutine.async(Coroutine.defaultScope) {
+            // 敏感凭据（WebDav 密码/S3 密钥/AI Key/Web 口令）明文遗留迁移为密文，
+            // 幂等：已是密文或无数据时为空操作；首次启动只付一次 KeyStore 加解密成本
+            runCatching {
+                SecurePrefs.migrateIfNeeded(*SecurePrefs.migrateKeys)
+            }
             // 数据库预热从主线程移到 IO 线程：Room 打开有毫秒级开销，
             // 放在后台最早位置，绝大多数 UI 读取发生在其完成之后
             runCatching {
