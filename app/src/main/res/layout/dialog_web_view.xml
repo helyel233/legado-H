@@ -30,6 +30,22 @@
             android:layout_height="0dp"
             android:visibility="gone" />
 
+        <!-- 快照来源标识：显示缓存快照时浮出，让用户知道看到的不是实时内容 -->
+        <TextView
+            android:id="@+id/review_source_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/shape_review_snapshot_badge"
+            android:paddingStart="12dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="4dp"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
     </FrameLayout>
 
     <FrameLayout

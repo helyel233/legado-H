@@ -476,6 +476,28 @@ object ReviewSnapshotStore {
         return removed
     }
 
+    /**
+     * 单书快照目录总占用（含章节状态文件），供缓存管理页展示。
+     */
+    fun totalBytes(book: Book): Long {
+        return reviewsDir(book).listFiles()?.sumOf { it.length() } ?: 0L
+    }
+
+    /**
+     * 清空单书全部评论快照（含章节状态文件），返回删除的文件数。
+     * 供缓存管理页的手动清理入口使用；内存缓存无需逐条失效，
+     * [get]/[getCached] 的 isFile 前置检查会自然 miss 并顺手清理。
+     */
+    fun clearAll(book: Book): Int {
+        val dir = reviewsDir(book)
+        var removed = 0
+        dir.listFiles()?.forEach { file ->
+            if (file.delete()) removed++
+        }
+        if (removed > 0) invalidateChapterCount(book.bookUrl)
+        return removed
+    }
+
     /** 快照被删除后，让内存里的「有快照章数」计数失效，下次查询重新按目录统计。 */
     private fun invalidateChapterCount(bookUrl: String) {
         ReviewSnapshotManager.invalidateCachedReviewChapters(bookUrl)

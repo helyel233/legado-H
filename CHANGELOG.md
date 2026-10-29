@@ -1,5 +1,19 @@
 # 更新日志
 
+## 1.21.1 版（2026-10-29）
+
+本版给评论快照加上「清空 / 占用统计」与「快照 · 非实时」来源标识，并修复日 / 夜切换后部分页面停留旧主题的问题。
+
+### 新增
+
+- **评论快照手动清空 + 占用统计**：「缓存管理 → 评论快照状态」对话框新增统计行「已缓存 X 章 · 占用 Y」与「清空」入口，确认后删除本书全部评论快照（含章节状态文件）并失效内存计数；阅读时重新联网加载、也可重新缓存。配套 `ReviewSnapshotStore.totalBytes` / `clearAll`。
+- **「快照 · 非实时」来源标识**：段评对话框显示缓存快照内容时浮出顶部徽标（在线覆盖 / 加载失败页时收起），让用户明确当前看到的是非实时快照而非实时页面。
+
+### 修复 / 优化
+
+- **日 / 夜切换后页面停留旧主题**：`ThemeConfig.applyDayNight` 三步（applyTheme / initNightMode / upDefaultCover）各自容错，任何一环异常都不阻断末尾 `MAIN_THEME_BACKGROUND_CHANGED` 与 `RECREATE` 事件投递（否则 View 版页面如经典发现页书源框停留旧主题）；`MainActivity` 的 `recreate()` 改到脱离系统配置分发同帧后再 `post` 执行（避免被 ActivityThread 合并丢弃），1.5s 安全网在事件后本实例仍存活时补发一次、`isFinishing/isDestroyed` 时不再 `recreate`（不遮挡退出流程）。`ExploreFragment` 订阅主题背景变化事件并自行 `refreshClassicRowTheme`（书源框及其内选项框实时换色），后台切换日 / 夜回到页面也补刷。
+- **清空快照后不崩**：`ReviewSnapshotResourceStore.open` 先判 blob 文件是否存在再读索引，清空快照连 resources.json 一起删掉时仍在途的图片请求按「资源不存在」走网络，不再因索引缺失抛异常。
+
 ## 1.20.1 版（2026-10-28）
 
 本版新增凭据静态加密存储（AndroidKeyStore + AES-GCM），并配套加固 Web 服务鉴权与若干健壮性 / UX 修复。

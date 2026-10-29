@@ -17,7 +17,10 @@ import io.legado.app.help.cache.CacheKind
 import io.legado.app.help.cache.CacheLifecycle
 import io.legado.app.help.cache.CachePhase
 import io.legado.app.help.cache.CacheSnapshot
+import io.legado.app.help.review.ReviewSnapshotStore
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.gone
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
@@ -62,6 +65,7 @@ class ReviewSnapshotStatusDialog :
         binding.btnRetryAll.setOnClickListener {
             retryFailed(reviewItems.filter { it.canRetryChapter })
         }
+        binding.btnClear.setOnClickListener { confirmClearAll() }
         loadItems()
     }
 
@@ -124,6 +128,7 @@ class ReviewSnapshotStatusDialog :
                 val items = viewModel.getReviewSnapshotItems(book)
                 reviewItems = items
                 adapter.setItems(items)
+                updateStats(items)
                 binding.tvEmpty.run {
                     if (items.isEmpty()) {
                         setText(R.string.cache_manage_review_empty)
@@ -138,6 +143,8 @@ class ReviewSnapshotStatusDialog :
             } catch (error: Throwable) {
                 reviewItems = emptyList()
                 adapter.setItems(emptyList())
+                binding.tvStats.gone()
+                binding.btnClear.gone()
                 binding.tvEmpty.text = error.localizedMessage ?: getString(R.string.error)
                 binding.tvEmpty.visible()
                 updateRetryAll(emptyList())
@@ -151,6 +158,44 @@ class ReviewSnapshotStatusDialog :
         val enabled = items.any { it.canRetryChapter }
         binding.btnRetryAll.isEnabled = enabled
         binding.btnRetryAll.alpha = if (enabled) 1f else 0.45f
+    }
+
+    /** 统计行：已缓存章数 + 目录占用；有快照才显示清空入口。 */
+    private suspend fun updateStats(items: List<ReviewSnapshotChapterItem>) {
+        val chapterCount = items.count { it.successfulSnapshots > 0 }
+        val totalBytes = withContext(Dispatchers.IO) {
+            ReviewSnapshotStore.totalBytes(book)
+        }
+        binding.tvStats.text = getString(
+            R.string.cache_manage_review_stats,
+            chapterCount,
+            ConvertUtils.formatFileSize(totalBytes),
+        )
+        val hasSnapshot = chapterCount > 0
+        if (hasSnapshot) {
+            binding.tvStats.visible()
+            binding.btnClear.visible()
+        } else {
+            binding.tvStats.gone()
+            binding.btnClear.gone()
+        }
+    }
+
+    private fun confirmClearAll() {
+        alert(R.string.cache_manage_review_clear, R.string.cache_manage_review_clear_confirm) {
+            yesButton { clearAllSnapshots() }
+            noButton()
+        }
+    }
+
+    private fun clearAllSnapshots() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val removed = withContext(Dispatchers.IO) {
+                ReviewSnapshotStore.clearAll(book)
+            }
+            toastOnUi(getString(R.string.cache_manage_review_cleared, removed))
+            loadItems()
+        }
     }
 
     companion object {

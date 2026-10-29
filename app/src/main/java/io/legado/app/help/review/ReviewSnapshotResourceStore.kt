@@ -237,10 +237,13 @@ object ReviewSnapshotResourceStore {
     fun open(book: Book, key: String): ReviewSnapshotResourceHandle? = synchronized(lock) {
         if (!keyPattern.matches(key)) return null
         val dir = ReviewSnapshotStore.reviewsDir(book)
+        val file = blobFile(dir, key)
+        // 先判 blob 是否存在：清空评论快照会连 resources.json 一起删掉，
+        // 此时仍在途的图片请求必须当作「资源不存在」返回 null 去走网络，
+        // 不能因为索引缺失就在 requireCached 里抛异常
+        if (!file.isFile) return null
         // 走缓存取索引并按 key 直达，避免每张图片都重解析 resources.json
         val entry = requireCached(book).byKey[key]
-        val file = blobFile(dir, key)
-        if (!file.isFile) return null
         if (entry != null) {
             validateEntry(dir, entry)
         }

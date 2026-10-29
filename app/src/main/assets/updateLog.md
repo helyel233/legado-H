@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.21.1 · 2026/10/29**
+
+- 新增评论快照手动清空+占用统计(缓存管理→评论快照状态：已缓存X章·占用Y+清空入口，配套ReviewSnapshotStore.clearAll/totalBytes)；段评显示快照时浮出"快照·非实时"徽标(在线覆盖/失败页收起)；修复日/夜切换后页面停留旧主题(ThemeConfig三步容错不阻断事件、MainActivity recreate改post防合并丢弃+1.5s安全网补发、ExploreFragment订阅主题变化补刷书源框)；清空快照后ResourceStore先判blob存在再读索引防崩
+
 **vH.1.20.1 · 2026/10/28**
 
 - 新增凭据静态加密存储(SecurePrefs: AndroidKeyStore+AES-GCM，加密 WebDav密码/S3密钥/AI Key/Web口令，兼容明文降级、换设备恢复返回null按未设置)；Web服务无口令仅绑回环(防局域网无鉴权增删书源)，WebServiceGuard fail-closed；崩溃UX(后台线程不再二次崩+精简提示"崩溃日志已记录")；书源评分删除前缀关系误删修复；弹幕图文线程治理(共享IO+缓存+去重)；WebService加Volatile

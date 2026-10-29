@@ -219,7 +219,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     /** 安全网：recreate() 万一未真正重建本实例（如 Activity 正在结束），1.5s 后必须解除抑制 */
     private val resetRecreatePendingRunnable = Runnable {
-        recreatePending = false
+        if (recreatePending) {
+            //事件后 1.5s 本实例仍存活，说明上一次 recreate() 未真正执行（如系统配置
+            //分发同帧被框架合并/丢弃），补发一次并解除抑制，避免外观刷新被长期跳过。
+            //仍是先解除抑制：即使这里不补发，也不能让外观刷新一直被跳过
+            recreatePending = false
+            // 与上面 post 里的守卫保持一致：本实例可能已在 finishing（用户刚退出），
+            // 对这样的 Activity 调 recreate() 会重新拉起一次，遮挡退出流程
+            if (!isFinishing && !isDestroyed) {
+                recreate()
+            }
+        }
     }
     private val appearanceRefreshRunnable = Runnable {
         if (recreatePending) return@Runnable
@@ -2385,7 +2395,14 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.root.removeCallbacks(resetRecreatePendingRunnable)
             binding.root.postDelayed(resetRecreatePendingRunnable, 1500L)
             refreshMainThemeBackground(force = true, scheduleWarmup = false)
-            recreate()
+            //脱离系统配置分发/appcompat 配置应用的同帧再请求重建：
+            //recreate() 在该窗口内可能被 ActivityThread 合并丢弃，导致 View 版
+            //页面（如经典发现页书源框）停留旧主题
+            binding.root.post {
+                if (!isFinishing && !isDestroyed) {
+                    recreate()
+                }
+            }
         }
         observeEvent<Boolean>(EventBus.NAVIGATION_BAR_CHANGED) {
             if (it == AppConfig.isNightTheme) {

@@ -54,6 +54,7 @@ import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
+import io.legado.app.constant.EventBus
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
@@ -119,6 +120,7 @@ import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.gone
 import io.legado.app.utils.InfoMap
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setSelectionSafely
 import io.legado.app.utils.startActivity
@@ -241,6 +243,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var discoverRequestVersion = 0L
     private var discoverSourceVersion = 0L
     private var lastExploreGlassLevel = Int.MIN_VALUE
+    private var lastExploreNightMode = AppConfig.isNightTheme
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
@@ -3649,6 +3652,26 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
     }
 
+    override fun observeLiveBus() {
+        super.observeLiveBus()
+        //经典模式行的背景在 bind 时取值（毛玻璃/选项框底色），换色依赖视图重建。
+        //系统切换日/夜时 MainActivity 的 recreate 可能未真正执行，收到主题背景
+        //变化事件后自行重绑，保证书源框与其内选项框实时换色
+        observeEvent<Boolean>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
+            if (!isAdded || view == null) return@observeEvent
+            if (usingModernDiscovery || usingSuiteDiscovery) return@observeEvent
+            if (it != lastExploreNightMode) {
+                lastExploreNightMode = it
+                refreshClassicRowTheme()
+            }
+        }
+    }
+
+    private fun refreshClassicRowTheme() {
+        binding.swipeRefreshLayout.setColorSchemeColors(accentColor)
+        adapter.notifyDataSetChanged()
+    }
+
     override fun onResume() {
         super.onResume()
         if (discoveryPageMode != AppConfig.discoveryPageMode || !discoveryModeLoaded) {
@@ -3665,7 +3688,12 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             val glassLevel = ExploreGlassBackdrop.level(requireContext())
             if (glassLevel != lastExploreGlassLevel) {
                 lastExploreGlassLevel = glassLevel
-                adapter.notifyDataSetChanged()
+                refreshClassicRowTheme()
+            }
+            // 系统日/夜切换发生在页面后台时（recreate 可能未生效），回到页面后补刷
+            if (AppConfig.isNightTheme != lastExploreNightMode) {
+                lastExploreNightMode = AppConfig.isNightTheme
+                refreshClassicRowTheme()
             }
             adapter.upResumed(true)
         }

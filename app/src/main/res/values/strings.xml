@@ -2834,6 +2834,11 @@ Selected text or question:
     <string name="cache_manage_review_retry_unavailable">Enable review caching before retrying</string>
     <string name="cache_manage_review_retry_failed">Review retry failed</string>
     <string name="cache_manage_review_success">Success</string>
+    <string name="cache_manage_review_stats">Cached %1$d chapter(s) · Size %2$s</string>
+    <string name="cache_manage_review_clear">Clear</string>
+    <string name="cache_manage_review_clear_confirm">Delete all review snapshots of this book? Reviews will be loaded from network again, and can be cached once more.</string>
+    <string name="cache_manage_review_cleared">Deleted %1$d snapshot file(s)</string>
+    <string name="review_snapshot_badge">Snapshot · Not live</string>
     <string name="offline_review_content_empty">Review content cannot be empty</string>
     <string name="offline_review_content_too_long">Review content cannot exceed %1$d characters</string>
     <string name="offline_review_enqueued">Recorded as offline review (%1$d pending in total)</string>

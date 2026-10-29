@@ -2612,6 +2612,11 @@ bookUrl：%7$s
     <string name="cache_manage_review_retry_unavailable">请先开启缓存评论</string>
     <string name="cache_manage_review_retry_failed">评论快照重试失败</string>
     <string name="cache_manage_review_success">成功</string>
+    <string name="cache_manage_review_stats">已缓存 %1$d 章 · 占用 %2$s</string>
+    <string name="cache_manage_review_clear">清空</string>
+    <string name="cache_manage_review_clear_confirm">确定清空本书全部评论快照？清空后阅读时将重新联网加载，也可重新缓存。</string>
+    <string name="cache_manage_review_cleared">已清空 %1$d 个快照文件</string>
+    <string name="review_snapshot_badge">快照 · 非实时</string>
     <string name="offline_review_content_empty">评论内容不能为空</string>
     <string name="offline_review_content_too_long">评论内容不能超过 %1$d 字</string>
     <string name="offline_review_enqueued">已记录为离线评论（共待发 %1$d 条）</string>

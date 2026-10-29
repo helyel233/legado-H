@@ -128,6 +128,7 @@ import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxWireUp
 import io.legado.app.help.webView.WebViewHtmlStore
 import io.legado.app.utils.configureOfflineResourceLoading
+import io.legado.app.utils.gone
 import kotlinx.coroutines.withTimeout
 
 class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view), WebJsExtensions.Callback {
@@ -916,6 +917,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 if (ownsLease(lease)) {
                                     // 在线覆盖页加载后不再是快照内容，撤回注入标记
                                     displayingSnapshotHtml = false
+                                    updateSourceBadge()
                                     currentWebView.loadDataWithBaseURL(
                                         refreshed.first.ifBlank { document.first },
                                         refreshed.second,
@@ -973,6 +975,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             baseUrl
         )
         currentWebView.clearHistory()
+        // 失败页不是快照内容：此刻显示的既不是实时页面也不是快照，
+        // 快照徽章必须收起，否则会盖在全屏错误页上误导用户
+        updateSourceBadge()
         AppLog.put("段评首屏加载失败：${content.title} / ${error.javaClass.simpleName}")
     }
 
@@ -1221,6 +1226,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         // 骨架收起的兜底：主流机型在 onPageCommitVisible 就已收起，API 21/22
         // 没有该回调，靠这里在加载结束时收起，避免占位条一直盖着内容。
         hideLoadingSkeleton()
+        // 页面就绪后同步快照标识（快照内容浮出徽章，在线内容不显示）
+        updateSourceBadge()
     }
 
     /**
@@ -1382,6 +1389,21 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      * 只在第一次切换时提示：网络优先模式下超时与 onReceivedError 可能先后触发，
      * 重复弹 toast 会更像故障而不是说明。
      */
+    /**
+     * 快照来源标识：显示的是缓存快照时浮出「快照」徽章，
+     * 让用户知道当前看到的不是实时内容（尤其 SNAPSHOT_FIRST 被静默替换、
+     * SNAPSHOT_ONLY 直接打开旧快照的场景）。在线覆盖后收起。
+     */
+    private fun updateSourceBadge() {
+        val badge = currentBinding?.reviewSourceBadge ?: return
+        if (displayingSnapshotHtml && !displayingErrorPage) {
+            badge.text = getString(R.string.review_snapshot_badge)
+            badge.visible()
+        } else {
+            badge.gone()
+        }
+    }
+
     private fun notifyFallbackShown() {
         if (fallbackNoticeShown) return
         fallbackNoticeShown = true

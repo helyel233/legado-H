@@ -104,9 +104,17 @@ object ThemeConfig {
 
     fun applyDayNight(context: Context, isNightTheme: Boolean = AppConfig.isNightTheme) {
         clearUsableBgImageCache()
-        applyTheme(context, isNightTheme)
-        initNightMode(isNightTheme)
-        BookCover.upDefaultCover()
+        //每步各自容错：任何一环异常都不能阻断末尾两个事件投递，
+        //否则 RECREATE 漏发，View 版页面（如经典发现页书源框）会停留旧主题
+        runCatching { applyTheme(context, isNightTheme) }.onFailure {
+            AppLog.put("applyDayNight applyTheme failed\n${it.localizedMessage}", it)
+        }
+        runCatching { initNightMode(isNightTheme) }.onFailure {
+            AppLog.put("applyDayNight initNightMode failed\n${it.localizedMessage}", it)
+        }
+        runCatching { BookCover.upDefaultCover() }.onFailure {
+            AppLog.put("applyDayNight upDefaultCover failed\n${it.localizedMessage}", it)
+        }
         postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, isNightTheme)
         postEvent(EventBus.RECREATE, "")
     }
