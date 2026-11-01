@@ -1679,6 +1679,8 @@
     <string name="expand">展开</string>
     <string name="collapse">收起</string>
     <string name="config_category_reading">阅读</string>
+    <string name="config_category_reading_ui">阅读与界面</string>
+    <string name="config_category_data_tools">数据与工具</string>
     <string name="config_category_network_sync">网络与同步</string>
     <string name="config_category_data_device">数据与设备</string>
     <string name="config_category_advanced">高级与关于</string>
@@ -2401,7 +2403,7 @@ bookUrl：%7$s
     <string name="main_layout_preset_sidebar">侧栏</string>
     <string name="main_layout_preset_sidebar_summary">侧边栏 + 默认顶栏</string>
     <string name="appearance_kit_manage">应用主题</string>
-    <string name="appearance_kit_summary">统一管理主题、顶栏、底栏和封面图集</string>
+    <string name="appearance_kit_summary">外观预设包：一键套用主题、顶栏、底栏与封面图集，逐项细节在界面设置里调</string>
     <string name="appearance_kit_actions">主题操作</string>
     <string name="appearance_kit_create">新建应用主题</string>
     <string name="appearance_kit_name">应用主题名称</string>

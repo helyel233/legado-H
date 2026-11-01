@@ -867,6 +867,8 @@
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
     <string name="config_category_reading">Reading</string>
+    <string name="config_category_reading_ui">Reading and interface</string>
+    <string name="config_category_data_tools">Data and tools</string>
     <string name="config_category_network_sync">Network and sync</string>
     <string name="config_category_data_device">Data and device</string>
     <string name="config_category_advanced">Advanced and about</string>
@@ -2569,7 +2571,7 @@ Selected text or question:
     <string name="main_layout_preset_sidebar">Sidebar</string>
     <string name="main_layout_preset_sidebar_summary">Sidebar navigation with default top bar</string>
     <string name="appearance_kit_manage">App themes</string>
-    <string name="appearance_kit_summary">Manage themes, top bar, bottom bar, and cover galleries together</string>
+    <string name="appearance_kit_summary">Preset bundles: apply theme, top bar, bottom bar and cover galleries in one tap</string>
     <string name="appearance_kit_actions">Theme actions</string>
     <string name="appearance_kit_create">Create app theme</string>
     <string name="appearance_kit_name">App theme name</string>

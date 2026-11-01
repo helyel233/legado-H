@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import io.legado.app.R
+import io.legado.app.BuildConfig
 import io.legado.app.base.BaseFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
@@ -86,6 +87,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
+        verifySubSearchOwners()
         initSearchView()
         applySearchBarStyle()
         installComposeContent()
@@ -156,12 +158,14 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     sections = sections,
                     subSearchItems = subSearchItems,
                     searchQuery = searchQueryState.value,
-                    themeModeLabel = currentThemeModeLabel(),
+                    themeOptions = themeOptions,
+                    themeModeValue = themeModeState.value,
                     webServiceState = webServiceState.value,
                     autoTaskServiceState = autoTaskServiceState.value,
-                    onThemeModeClick = ::showThemeModeActions,
+                    onThemeModeSelect = ::setThemeMode,
                     onWebServiceCheckedChange = ::setWebServiceEnabled,
                     onWebServiceClick = ::handleWebServiceClick,
+                    onWebServiceMoreClick = ::showWebServiceActions,
                     onAutoTaskServiceCheckedChange = ::setAutoTaskServiceEnabled,
                     onAutoTaskServiceClick = ::handleAutoTaskServiceClick,
                     onRowClick = ::handleRowClick
@@ -233,31 +237,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         }
     }
 
-    private fun currentThemeModeLabel(): String {
-        return themeOptions.firstOrNull { it.value == themeModeState.value }?.label
-            ?: themeOptions.firstOrNull()?.label
-            ?: getString(R.string.theme_mode)
-    }
-
-    private fun showThemeModeActions() {
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = getString(R.string.theme_mode),
-                labels = themeOptions.map { option ->
-                    if (option.value == themeModeState.value) {
-                        "${option.label}  ✓"
-                    } else {
-                        option.label
-                    }
-                },
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    themeOptions.getOrNull(index)?.value?.let(::setThemeMode)
-                }
-            )
-        )
-    }
-
     private fun setWebServiceEnabled(enabled: Boolean) {
         requireContext().putPrefBoolean(PreferKey.webService, enabled)
         if (enabled) {
@@ -284,12 +263,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         )
     }
 
+    /**
+     * 交互契约：开关行整行点击 = 切换，行为恒定可预测；
+     * 服务运行中的「复制地址/浏览器打开」收进 Switch 左侧的「⋯」入口。
+     */
     private fun handleWebServiceClick() {
-        if (WebService.isRun) {
-            showWebServiceActions()
-        } else {
-            setWebServiceEnabled(true)
-        }
+        setWebServiceEnabled(!WebService.isRun)
     }
 
     private fun setAutoTaskServiceEnabled(enabled: Boolean) {
@@ -382,13 +361,23 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     /**
      * 「我的」页的一级分类。
      *
-     * 排布原则：按**用户的任务域**划分（内容的来龙去脉 → 怎么读 → 长什么样 →
-     * 智能与自动化 → 网络与同步 → 本机数据 → 兜底高级项），而不是按代码模块。
+     * 排布原则：按**用户的任务域**划分（内容的来龙去脉 → 怎么读和看起来怎样 →
+     * 智能与自动化 → 网络与同步 → 我的数据 → 兜底高级项），而不是按代码模块。
      * 顺序是「日常常用在前，少见维护在后」，每区 3~6 项，避免一项独占一区。
      *
+     * 为什么「阅读」和「外观」合成一区：阅读设置里本来就管字号、行距、背景，
+     * 和界面设置管的是同一件事的两半，拆成两区后用户经常要在两处找字号。
+     * 合并为「阅读与界面」后一区覆盖「读起来长什么样」。
+     *
+     * 为什么书签/阅读记录归「数据与工具」：它们是用户攒下来的阅读数据，
+     * 和缓存、文件同属本机数据域（只是前者要保留、后者可清理），
+     * 也让原来的「阅读」区不至于只剩 3 行却独占一个分区标题。
+     *
      * 关键约定 1：**行的 key 就是搜索深链的 ownerKey**，改 key 会连带断开
-     * [buildSubSearchItems] 里子项到一级行的挂载，两者必须同时改。
+     * [buildSubSearchItems] 里子项到一级行的挂载，两者必须同时改
+     * （[verifySubSearchOwners] 会在 debug 包里把断链当场拦下来）。
      * 关键约定 2：一级行尽量用 [ConfigTag] 常量做 key，跳转、搜索、层级三者自动对齐。
+     * 行在哪个分区不影响深链，跨区搬行是安全操作。
      */
     private fun buildSections(): List<MySettingsSectionModel> {
         return listOf(
@@ -423,29 +412,15 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 )
             ),
             MySettingsSectionModel(
-                title = getString(R.string.config_category_reading),
+                title = getString(R.string.config_category_reading_ui),
                 rows = listOf(
                     actionRow(
                         ConfigTag.READING_CONFIG, R.string.reading_setting,
                         R.string.reading_setting_s, R.drawable.ic_book_has
                     ),
-                    actionRow(
-                        "bookmark", R.string.bookmark,
-                        R.string.all_bookmark, R.drawable.ic_bookmark
-                    ),
-                    actionRow(
-                        "readRecord", R.string.read_record,
-                        R.string.read_record_summary, R.drawable.ic_bottom_read_record_e
-                    )
-                )
-            ),
-            MySettingsSectionModel(
-                title = getString(R.string.config_category_appearance),
-                rows = listOf(
                     MySettingsRowModel(
                         key = PreferKey.themeMode,
                         title = getString(R.string.theme_mode),
-                        summary = getString(R.string.theme_mode_desc),
                         kind = MySettingsRowKind.ThemeMode,
                         iconRes = R.drawable.ic_daytime
                     ),
@@ -518,8 +493,17 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 )
             ),
             MySettingsSectionModel(
-                title = getString(R.string.config_category_data_device),
+                title = getString(R.string.config_category_data_tools),
                 rows = listOf(
+                    // 有价值的数据在前，可清理的维护项在后
+                    actionRow(
+                        "bookmark", R.string.bookmark,
+                        R.string.all_bookmark, R.drawable.ic_bookmark
+                    ),
+                    actionRow(
+                        "readRecord", R.string.read_record,
+                        R.string.read_record_summary, R.drawable.ic_bottom_read_record_e
+                    ),
                     actionRow(
                         "cacheManage", R.string.cache_manage_title,
                         R.string.cache_manage_summary, R.drawable.ic_download
@@ -547,6 +531,20 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 )
             )
         )
+    }
+
+    /**
+     * 搜索深链靠「子项 ownerKey == 一级行 key」这条隐式约定维系，搬行、改名的时候
+     * 很容易一边改一边忘。debug 包在进页面时校验一次：断链会当场崩溃并打印缺口的
+     * key，而不是等到用户搜不到东西才发现。release 包不做校验，避免线上无谓崩溃。
+     */
+    private fun verifySubSearchOwners() {
+        if (!BuildConfig.DEBUG) return
+        val rowKeys = sections.flatMap { it.rows }.mapTo(HashSet()) { it.key }
+        val orphanOwners = subSearchItems.map { it.ownerKey }.filterNot { it in rowKeys }.distinct()
+        check(orphanOwners.isEmpty()) {
+            "搜索子项挂载到不存在的一级行: $orphanOwners"
+        }
     }
 
     private fun actionRow(

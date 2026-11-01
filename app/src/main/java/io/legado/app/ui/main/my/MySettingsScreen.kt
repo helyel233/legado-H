@@ -1,10 +1,15 @@
 package io.legado.app.ui.main.my
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,16 +26,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,9 +87,9 @@ internal data class MySettingsRowModel(
     /** 行首图标，主流设置页靠图标扫读；为 null 时退化成原来的纯文字行 */
     val iconRes: Int? = null
 ) {
-    /** 可点进下一层的行才显示箭头；「退出」这类动作行显示箭头会误导 */
+    /** 可点进下一层的行才显示箭头；开关/选择/动作行的交互由行尾控件自说明 */
     val showChevron: Boolean
-        get() = !danger && (kind == MySettingsRowKind.Action || kind == MySettingsRowKind.ThemeMode)
+        get() = !danger && kind == MySettingsRowKind.Action
 }
 
 internal data class MySettingsSectionModel(
@@ -109,26 +120,37 @@ internal fun MySettingsScreen(
     sections: List<MySettingsSectionModel>,
     subSearchItems: List<MySettingsSubSearchItem>,
     searchQuery: String,
-    themeModeLabel: String,
+    themeOptions: List<MySettingsThemeOption>,
+    themeModeValue: String,
     webServiceState: MyWebServiceUiState,
     autoTaskServiceState: MyWebServiceUiState,
-    onThemeModeClick: () -> Unit,
+    onThemeModeSelect: (String) -> Unit,
     onWebServiceCheckedChange: (Boolean) -> Unit,
     onWebServiceClick: () -> Unit,
+    onWebServiceMoreClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
 ) {
     val colors = rememberAppSettingPalette()
     val panelRadiusPx = colors.panelRadiusPx
-    val visibleSections = buildVisibleSections(
-        sections = sections,
-        subSearchItems = subSearchItems,
-        searchQuery = searchQuery,
-        webServiceState = webServiceState,
-        autoTaskServiceState = autoTaskServiceState,
-        themeModeLabel = themeModeLabel,
-    )
+    // 过滤结果只依赖这几个输入；不 remember 的话每次重组（开关状态、主题切换）都要
+    // 重跑一遍全量过滤，列表越全越浪费
+    val visibleSections = remember(
+        sections,
+        subSearchItems,
+        searchQuery,
+        webServiceState,
+        autoTaskServiceState
+    ) {
+        buildVisibleSections(
+            sections = sections,
+            subSearchItems = subSearchItems,
+            searchQuery = searchQuery,
+            webServiceState = webServiceState,
+            autoTaskServiceState = autoTaskServiceState,
+        )
+    }
 
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = colors.bodyFontFamily)
@@ -151,12 +173,15 @@ internal fun MySettingsScreen(
                         section = section,
                         colors = colors,
                         panelRadiusPx = panelRadiusPx,
-                        themeModeLabel = themeModeLabel,
+                        searchQuery = searchQuery,
+                        themeOptions = themeOptions,
+                        themeModeValue = themeModeValue,
                         webServiceState = webServiceState,
                         autoTaskServiceState = autoTaskServiceState,
-                        onThemeModeClick = onThemeModeClick,
+                        onThemeModeSelect = onThemeModeSelect,
                         onWebServiceCheckedChange = onWebServiceCheckedChange,
                         onWebServiceClick = onWebServiceClick,
+                        onWebServiceMoreClick = onWebServiceMoreClick,
                         onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
                         onAutoTaskServiceClick = onAutoTaskServiceClick,
                         onRowClick = onRowClick
@@ -180,12 +205,15 @@ private fun SettingsSectionCard(
     section: VisibleSection,
     colors: AppSettingPalette,
     panelRadiusPx: Float,
-    themeModeLabel: String,
+    searchQuery: String,
+    themeOptions: List<MySettingsThemeOption>,
+    themeModeValue: String,
     webServiceState: MyWebServiceUiState,
     autoTaskServiceState: MyWebServiceUiState,
-    onThemeModeClick: () -> Unit,
+    onThemeModeSelect: (String) -> Unit,
     onWebServiceCheckedChange: (Boolean) -> Unit,
     onWebServiceClick: () -> Unit,
+    onWebServiceMoreClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
@@ -210,14 +238,16 @@ private fun SettingsSectionCard(
             val isLastRowInSection = index == section.rows.lastIndex
             val showDivider = !isLastRowInSection
             when (item.row.kind) {
-                MySettingsRowKind.ThemeMode -> SettingsActionRow(
-                    item = item.copy(summary = themeModeLabel),
+                MySettingsRowKind.ThemeMode -> ThemeModeRow(
+                    item = item,
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
-                    isFirst = false,
+                    searchQuery = searchQuery,
                     isLast = isLastRowInSection,
                     showDivider = showDivider,
-                    onClick = onThemeModeClick
+                    options = themeOptions,
+                    selectedValue = themeModeValue,
+                    onSelect = onThemeModeSelect
                 )
 
                 MySettingsRowKind.WebService -> ServiceSwitchRow(
@@ -225,9 +255,12 @@ private fun SettingsSectionCard(
                     state = webServiceState,
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
+                    searchQuery = searchQuery,
                     isFirst = false,
                     isLast = isLastRowInSection,
                     showDivider = showDivider,
+                    moreVisible = webServiceState.checked,
+                    onMoreClick = onWebServiceMoreClick,
                     onCheckedChange = onWebServiceCheckedChange,
                     onClick = onWebServiceClick
                 )
@@ -237,6 +270,7 @@ private fun SettingsSectionCard(
                     state = autoTaskServiceState,
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
+                    searchQuery = searchQuery,
                     isFirst = false,
                     isLast = isLastRowInSection,
                     showDivider = showDivider,
@@ -248,12 +282,39 @@ private fun SettingsSectionCard(
                     item = item,
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
+                    searchQuery = searchQuery,
                     isFirst = false,
                     isLast = isLastRowInSection,
                     showDivider = showDivider,
                     onClick = { onRowClick(item.row.key, item.searchTarget) }
                 )
             }
+        }
+    }
+}
+
+/**
+ * 把命中片段染成强调色：搜索时用户要一眼看出「这行为什么被搜出来」，
+ * 否则 20+ 行结果里只能自己逐字比对。区分大小写只用于定位，染色范围按 query 长度算。
+ *
+ * lowerText 只用于查找，索引必须先确认能映射回原文才染色：
+ * lowercase() 是全 Unicode 映射，个别字符小写后会变长（如 İ → "i̇" 占 2 个码元），
+ * 此时 lowerText 的下标会比原文偏移，直接染色轻则染错范围、重则 addStyle 收到
+ * start > end 抛 IllegalArgumentException。
+ */
+private fun highlightMatches(text: String, query: String, accent: Color): AnnotatedString {
+    if (query.isBlank() || text.isEmpty()) return AnnotatedString(text)
+    val lowerText = text.lowercase()
+    val lowerQuery = query.lowercase()
+    if (lowerText.length != text.length) return AnnotatedString(text)
+    var index = lowerText.indexOf(lowerQuery)
+    if (index < 0) return AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text)
+        while (index >= 0) {
+            val end = index + lowerQuery.length
+            addStyle(SpanStyle(color = accent), index, end)
+            index = lowerText.indexOf(lowerQuery, end)
         }
     }
 }
@@ -280,6 +341,7 @@ private fun SettingsActionRow(
     item: VisibleRow,
     colors: AppSettingPalette,
     panelRadiusPx: Float,
+    searchQuery: String,
     isFirst: Boolean,
     isLast: Boolean,
     showDivider: Boolean,
@@ -314,7 +376,7 @@ private fun SettingsActionRow(
         SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.row.title,
+                text = highlightMatches(item.row.title, searchQuery, colors.accent),
                 color = textColor,
                 fontSize = 16.sp,
                 maxLines = 1,
@@ -323,7 +385,7 @@ private fun SettingsActionRow(
             if (item.summary.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = item.summary,
+                    text = highlightMatches(item.summary, searchQuery, colors.accent),
                     color = colors.secondaryText,
                     fontSize = 14.sp,
                     maxLines = 2,
@@ -334,17 +396,108 @@ private fun SettingsActionRow(
         if (item.row.showChevron) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                painter = painterResource(
-                    if (item.row.kind == MySettingsRowKind.ThemeMode) {
-                        R.drawable.ic_arrow_drop_down
-                    } else {
-                        R.drawable.ic_arrow_right
-                    }
-                ),
+                painter = painterResource(R.drawable.ic_arrow_right),
                 contentDescription = null,
                 tint = colors.secondaryText,
                 modifier = Modifier.size(20.dp)
             )
+        }
+    }
+}
+
+/**
+ * 选择行（主题模式）：交互契约是「行内分段控件，当前项高亮，一次点击直达」，
+ * 不再经弹窗二次选择；整行不响应点击，避免与分段控件抢手势。
+ */
+@Composable
+private fun ThemeModeRow(
+    item: VisibleRow,
+    colors: AppSettingPalette,
+    panelRadiusPx: Float,
+    searchQuery: String,
+    isLast: Boolean,
+    showDivider: Boolean,
+    options: List<MySettingsThemeOption>,
+    selectedValue: String,
+    onSelect: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 60.dp)
+            .appSettingRowDecoration(
+                pressed = false,
+                pressedColor = colors.rowPressed,
+                dividerColor = colors.divider,
+                showDivider = showDivider,
+                radiusPx = panelRadiusPx,
+                isFirst = false,
+                isLast = isLast
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsLeadingIcon(item = item.row, colors = colors)
+            Text(
+                text = highlightMatches(item.row.title, searchQuery, colors.accent),
+                color = colors.primaryText,
+                fontSize = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        // 36dp = 行首图标 22dp + 间距 14dp，分段控件与标题左对齐
+        ThemeSegmentedControl(
+            options = options,
+            selectedValue = selectedValue,
+            colors = colors,
+            onSelect = onSelect,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 36.dp)
+        )
+    }
+}
+
+@Composable
+private fun ThemeSegmentedControl(
+    options: List<MySettingsThemeOption>,
+    selectedValue: String,
+    colors: AppSettingPalette,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(colors.rowPressed))
+            .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEach { option ->
+            val selected = option.value == selectedValue
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (selected) colors.accent else Color.Transparent)
+                    .clickable(role = Role.RadioButton) { onSelect(option.value) }
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = option.label,
+                    color = if (selected) colors.onAccent else colors.secondaryText,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
+                    maxLines = 1,
+                    // 「E-Ink(墨水屏)」这类长标签在窄屏下放不下，跑马灯兜底
+                    modifier = Modifier.basicMarquee(iterations = 1)
+                )
+            }
         }
     }
 }
@@ -355,9 +508,12 @@ private fun ServiceSwitchRow(
     state: MyWebServiceUiState,
     colors: AppSettingPalette,
     panelRadiusPx: Float,
+    searchQuery: String,
     isFirst: Boolean,
     isLast: Boolean,
     showDivider: Boolean,
+    moreVisible: Boolean = false,
+    onMoreClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
@@ -380,6 +536,7 @@ private fun ServiceSwitchRow(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Switch,
                 onClick = onClick
             )
             .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -387,7 +544,7 @@ private fun ServiceSwitchRow(
         SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.row.title,
+                text = highlightMatches(item.row.title, searchQuery, colors.accent),
                 color = colors.primaryText,
                 fontSize = 16.sp,
                 maxLines = 1,
@@ -395,12 +552,30 @@ private fun ServiceSwitchRow(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = state.summary,
+                text = highlightMatches(state.summary, searchQuery, colors.accent),
                 color = colors.secondaryText,
                 fontSize = 14.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (moreVisible && onMoreClick != null) {
+            // 服务运行中才露出「复制地址/浏览器打开」入口；独立于整行开关手势
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(role = Role.Button, onClick = onMoreClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_more),
+                    contentDescription = stringResource(R.string.more),
+                    tint = colors.secondaryText,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
         }
         Spacer(modifier = Modifier.width(8.dp))
         LegadoMiuixSwitch(
@@ -462,16 +637,14 @@ private fun buildVisibleSections(
     subSearchItems: List<MySettingsSubSearchItem>,
     searchQuery: String,
     webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState,
-    themeModeLabel: String
+    autoTaskServiceState: MyWebServiceUiState
 ): List<VisibleSection> {
     val query = searchQuery.trim().lowercase()
     return sections.mapNotNull { section ->
         val rows = section.rows.flatMap { row ->
             val summary = row.effectiveSummary(
                 webServiceState = webServiceState,
-                autoTaskServiceState = autoTaskServiceState,
-                themeModeLabel = themeModeLabel
+                autoTaskServiceState = autoTaskServiceState
             )
             val matchedSubItems = if (query.isBlank()) {
                 emptyList()
@@ -513,11 +686,11 @@ private fun buildVisibleSections(
 
 private fun MySettingsRowModel.effectiveSummary(
     webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState,
-    themeModeLabel: String
+    autoTaskServiceState: MyWebServiceUiState
 ): String {
     return when (kind) {
-        MySettingsRowKind.ThemeMode -> themeModeLabel
+        // 主题模式的当前值由分段控件自己展示，摘要保持静态描述
+        MySettingsRowKind.ThemeMode -> summary.orEmpty()
         MySettingsRowKind.WebService -> webServiceState.summary
         MySettingsRowKind.AutoTaskService -> autoTaskServiceState.summary
         MySettingsRowKind.Action -> summary.orEmpty()
