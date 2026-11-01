@@ -19,6 +19,21 @@ data class ReviewButton(
  */
 object ReviewBubble {
 
+    /**
+     * 书源原生段评气泡（未经 bubble:// 派生）的判定：内联 TEXT 样式的小图，
+     * 且 click 落在段评语义上。
+     *
+     * 用于给这类气泡补「已缓存」角标：派生气泡的标记由气泡包 SVG 自带
+     * （见 ParagraphBubbleRenderer），这里只认书源自己画的那种。
+     */
+    fun isParagraphBubble(style: String?, click: String?): Boolean {
+        if (click.isNullOrBlank()) return false
+        if (!style.isNullOrBlank() && !style.equals("TEXT", ignoreCase = true)) return false
+        val lower = click.lowercase()
+        return lower.contains("para") || lower.contains("cmt") ||
+            lower.contains("comment") || lower.contains("review")
+    }
+
     fun hasZeroCount(src: String): Boolean {
         val dataUrl = ImageSource.normalizeForStorage(src)
         val comma = dataUrl.indexOf(',')

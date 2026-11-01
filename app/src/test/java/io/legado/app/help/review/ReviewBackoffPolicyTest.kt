@@ -44,8 +44,8 @@ class ReviewBackoffPolicyTest {
 
     @Test
     fun `in backoff only while the deadline is in the future`() {
-        assertTrue(ReviewBackoffPolicy.isInBackoff(200L, 100L))
-        assertFalse(ReviewBackoffPolicy.isInBackoff(100L, 100L))
+        assertTrue(ReviewBackoffPolicy.isInBackoff(ReviewBackoffPolicy.Failure(1, 200L), 100L))
+        assertFalse(ReviewBackoffPolicy.isInBackoff(ReviewBackoffPolicy.Failure(1, 100L), 100L))
         assertFalse(ReviewBackoffPolicy.isInBackoff(null, 100L))
     }
 
@@ -59,13 +59,60 @@ class ReviewBackoffPolicyTest {
     @Test
     fun `expired keys are the ones whose deadline has passed`() {
         val entries = mapOf(
-            "a" to 50L,
-            "b" to 500L,
-            "c" to 100L
+            "a" to ReviewBackoffPolicy.Failure(1, 50L),
+            "b" to ReviewBackoffPolicy.Failure(1, 500L),
+            "c" to ReviewBackoffPolicy.Failure(2, 100L)
         )
         assertEquals(
             listOf("a", "c"),
             ReviewBackoffPolicy.expiredKeys(entries, now = 100L).sorted()
         )
+    }
+
+    @Test
+    fun `backoff grows exponentially and stops at the cap`() {
+        val base = ReviewBackoffPolicy.BASE_DELAY_MS
+        assertEquals(base, ReviewBackoffPolicy.delayFor(1))
+        assertEquals(base * 2, ReviewBackoffPolicy.delayFor(2))
+        assertEquals(base * 4, ReviewBackoffPolicy.delayFor(3))
+        // 次数再多也不会超过上限：坏源不该被无限期放弃
+        assertEquals(ReviewBackoffPolicy.MAX_DELAY_MS, ReviewBackoffPolicy.delayFor(99))
+        assertEquals(0L, ReviewBackoffPolicy.delayFor(0))
+    }
+
+    @Test
+    fun `each failure pushes the deadline further out`() {
+        val now = 1_000L
+        val first = ReviewBackoffPolicy.onFailure(null, now)
+        assertEquals(1, first.attempts)
+        assertEquals(now + ReviewBackoffPolicy.BASE_DELAY_MS, first.until)
+
+        val second = ReviewBackoffPolicy.onFailure(first, now)
+        assertEquals(2, second.attempts)
+        assertTrue(second.until > first.until)
+    }
+
+    @Test
+    fun `attempt count is capped so the deadline never overflows`() {
+        var failure = ReviewBackoffPolicy.Failure(ReviewBackoffPolicy.MAX_ATTEMPTS, 0L)
+        repeat(10) {
+            failure = ReviewBackoffPolicy.onFailure(failure, 1_000L)
+            assertEquals(ReviewBackoffPolicy.MAX_ATTEMPTS, failure.attempts)
+            assertEquals(1_000L + ReviewBackoffPolicy.MAX_DELAY_MS, failure.until)
+        }
+    }
+
+    @Test
+    fun `retained drops expired entries and keeps the stubborn ones`() {
+        val now = 100L
+        val entries = mapOf(
+            "expired" to ReviewBackoffPolicy.Failure(1, 50L),
+            "soon" to ReviewBackoffPolicy.Failure(1, 200L),
+            "later" to ReviewBackoffPolicy.Failure(3, 900L),
+        )
+        assertFalse(ReviewBackoffPolicy.retained(entries, now, 10).containsKey("expired"))
+        // 上限收紧时优先丢掉「最早解禁」的：越晚解禁说明失败越顽固
+        val trimmed = ReviewBackoffPolicy.retained(entries, now, 1)
+        assertEquals(setOf("later"), trimmed.keys)
     }
 }

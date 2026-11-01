@@ -49,22 +49,24 @@ object ReviewPreheatCoordinator {
     /** 预热窗口：当前章前后各一章 */
     internal const val PREHEAT_WINDOW = 1
 
-    /** 单章抓取失败后的退避时长：避免快速翻章时每章都浪费一轮 */
-    private const val FAIL_BACKOFF_MS = 10 * 60 * 1000L
-
     /** 点击即缓存的启动延迟：避开评论弹窗创建高峰，错开 WebView 使用 */
     private const val CLICK_CAPTURE_DELAY_MS = 3_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
-     * 章级失败退避表：key = bookUrl|chapterUrl → 退避截止时间戳。
+     * 章级失败退避表：key = bookUrl|chapterUrl → 失败次数 + 解禁时间戳。
      * 用 chapterUrl 而不是 chapterIndex：换源后同一个 index 指向的是另一章，
      * 用 index 会让新章被旧章的退避白白跳过。
+     *
+     * 首次加载时从 [ReviewBackoffStore] 恢复，跨进程重启有效。
      */
-    private val failedUntil = ConcurrentHashMap<String, Long>()
+    private val failures = ConcurrentHashMap<String, ReviewBackoffPolicy.Failure>()
 
-    /** 退避表条目上限，超过后顺带清掉已过期的条目，防止随阅读过的书无限增长 */
+    @Volatile
+    private var failuresLoaded = false
+
+    /** 退避表条目上限，超过后清掉已过期/最不顽固的条目，防止随阅读过的书无限增长 */
     private const val MAX_BACKOFF_ENTRIES = 512
 
     @Volatile
@@ -115,15 +117,42 @@ object ReviewPreheatCoordinator {
     /**
      * 是否处于失败退避窗口内。纯函数（供单测）。
      */
-    internal fun isInBackoff(failedUntil: Long?, now: Long): Boolean {
-        return ReviewBackoffPolicy.isInBackoff(failedUntil, now)
+    internal fun isInBackoff(failure: ReviewBackoffPolicy.Failure?, now: Long): Boolean {
+        return ReviewBackoffPolicy.isInBackoff(failure, now)
     }
 
-    /** 退避表超过上限时清掉已过期条目 */
-    private fun trimBackoff() {
-        if (!ReviewBackoffPolicy.shouldTrim(failedUntil.size, MAX_BACKOFF_ENTRIES)) return
-        val expired = ReviewBackoffPolicy.expiredKeys(failedUntil, System.currentTimeMillis())
-        expired.forEach { failedUntil.remove(it) }
+    /** 进程内首次访问退避表时从磁盘恢复（IO 线程调用） */
+    private fun ensureFailuresLoaded() {
+        if (failuresLoaded) return
+        synchronized(this) {
+            if (failuresLoaded) return
+            val now = System.currentTimeMillis()
+            ReviewBackoffStore.load(now, MAX_BACKOFF_ENTRIES).forEach { (key, failure) ->
+                failures.putIfAbsent(key, failure)
+            }
+            failuresLoaded = true
+        }
+    }
+
+    /** 记一次失败并落盘；次数越多退避越久，避免坏源每 10 分钟白抓一轮 */
+    private fun recordFailure(key: String, now: Long) {
+        failures[key] = ReviewBackoffPolicy.onFailure(failures[key], now)
+        pruneFailures(now)
+        ReviewBackoffStore.save(failures.toMap())
+    }
+
+    /** 成功一次即解除退避（并落盘），下次翻回来能正常预热 */
+    private fun clearFailure(key: String) {
+        if (failures.remove(key) != null) {
+            ReviewBackoffStore.save(failures.toMap())
+        }
+    }
+
+    /** 退避表超过上限时清掉已过期条目，仍超上限则保留最顽固的 */
+    private fun pruneFailures(now: Long) {
+        if (!ReviewBackoffPolicy.shouldTrim(failures.size, MAX_BACKOFF_ENTRIES)) return
+        val retained = ReviewBackoffPolicy.retained(failures, now, MAX_BACKOFF_ENTRIES)
+        failures.keys.retainAll(retained.keys)
     }
 
     /**
@@ -237,8 +266,9 @@ object ReviewPreheatCoordinator {
     }
 
     private suspend fun preheatChapter(book: Book, chapter: BookChapter) {
+        ensureFailuresLoaded()
         val key = ReviewBackoffPolicy.key(book.bookUrl, chapter.url)
-        if (isInBackoff(failedUntil[key], System.currentTimeMillis())) return
+        if (isInBackoff(failures[key], System.currentTimeMillis())) return
         val content = preheatContent(book, chapter) ?: return
         // 段落规则处理后提按钮：与用户点击看到的泡完全一致（含 pclick 包装），
         // 无段落规则时 process 原样返回，旧源 click/js 泡同样覆盖。
@@ -292,10 +322,9 @@ object ReviewPreheatCoordinator {
             }
             .toList()
         if (anyFailure) {
-            failedUntil[key] = System.currentTimeMillis() + FAIL_BACKOFF_MS
-            trimBackoff()
+            recordFailure(key, System.currentTimeMillis())
         } else {
-            failedUntil.remove(key)
+            clearFailure(key)
         }
         prerenderFirstCandidate(book, chapter, candidates)
     }

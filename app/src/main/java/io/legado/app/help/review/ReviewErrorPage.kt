@@ -55,6 +55,8 @@ internal fun classifyReviewError(error: Throwable?): ReviewErrorKind {
         error.hasMessage("no find") -> ReviewErrorKind.RULE
         // 看门狗的真实措辞（"review page not ready in <n>ms"）不含 timeout 字样
         error.hasMessage("not ready in") -> ReviewErrorKind.TIMEOUT
+        // 停滞判定（"review page stalled at <n>% for <n>ms"）同样属于等超时
+        error.hasMessage("stalled at") -> ReviewErrorKind.TIMEOUT
         error.hasMessage("timeout") -> ReviewErrorKind.TIMEOUT
         else -> ReviewErrorKind.UNKNOWN
     }
@@ -76,6 +78,10 @@ internal data class ReviewErrorPageContent(
     val closeLabel: String,
     val detailLabel: String,
     val detail: String? = null,
+    /** 「复制详情」按钮文案；为 null 时不显示该按钮（详情本身为空时也不显示） */
+    val copyLabel: String? = null,
+    /** 复制成功后的按钮反馈文案 */
+    val copiedLabel: String? = null,
     val night: Boolean = false
 )
 
@@ -104,8 +110,17 @@ internal fun reviewErrorPageHtml(content: ReviewErrorPageContent): String {
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
         ?.let { detail ->
+            // 折叠里的 <pre> 长按选中很难用（要拖两个手柄），给一个「复制详情」入口，
+            // 想反馈问题的用户一次点击就能拿到完整报错。
+            val copyButton = content.copyLabel
+                ?.takeIf { it.isNotBlank() }
+                ?.let { label ->
+                    "<button class=\"copy\" type=\"button\" data-done=\"" +
+                        escapeHtml(content.copiedLabel ?: label) + "\" onclick=\"copyDetail(this)\">" +
+                        escapeHtml(label) + "</button>"
+                } ?: ""
             "<details><summary>" + escapeHtml(content.detailLabel) + "</summary><pre>" +
-                escapeHtml(detail.take(MAX_DETAIL_CHARS)) + "</pre></details>"
+                escapeHtml(detail.take(MAX_DETAIL_CHARS)) + "</pre>" + copyButton + "</details>"
         } ?: ""
 
     return """
@@ -150,6 +165,17 @@ internal fun reviewErrorPageHtml(content: ReviewErrorPageContent): String {
         .primary:active { opacity: .85; }
         .ghost { background: transparent; color: $muted; border-color: $border; }
         .ghost:active { opacity: .7; }
+        .copy {
+            margin-top: 10px;
+            font-size: 12px;
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: transparent;
+            color: $accent;
+            border-color: $border;
+        }
+        .copy:active { opacity: .7; }
+        .copy[disabled] { color: $muted; }
         details { margin-top: 24px; text-align: left; font-size: 12px; color: $muted; }
         summary { cursor: pointer; opacity: .85; outline: none; }
         pre { margin: 8px 0 0; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; opacity: .8; }
@@ -169,6 +195,16 @@ internal fun reviewErrorPageHtml(content: ReviewErrorPageContent): String {
           <div class="actions">$retryButton$closeButton</div>
           $detailBlock
         </div>
+        <script>
+        function copyDetail(btn) {
+          var copied = false;
+          try { copied = $REVIEW_ERROR_BRIDGE_NAME.copy() === true; } catch (e) { copied = false; }
+          if (copied) {
+            btn.textContent = btn.getAttribute('data-done');
+            btn.disabled = true;
+          }
+        }
+        </script>
         </body>
         </html>
     """.trimIndent()

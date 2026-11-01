@@ -11,11 +11,14 @@ import io.legado.app.help.config.PackageSvgResourceResolver
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.SvgUtils
 import java.io.ByteArrayInputStream
+import java.util.Locale
 import kotlin.math.roundToInt
 
 object ParagraphBubbleRenderer {
 
     const val SCHEME_PREFIX = "bubble://paragraph"
+
+    private val viewBoxPattern = Regex("""viewBox\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
 
     fun isBubbleSrc(src: String): Boolean {
         return src.startsWith(SCHEME_PREFIX)
@@ -34,7 +37,7 @@ object ParagraphBubbleRenderer {
         return baseWidth * scale
     }
 
-    fun cacheKey(src: String, width: Int, height: Int?): String {
+    fun cacheKey(src: String, width: Int, height: Int?, cached: Boolean = false): String {
         val config = BubblePackageManager.currentEntry().config
         val color = resolveColor(config, status(src), displayColor(src))
         return buildString {
@@ -53,17 +56,21 @@ object ParagraphBubbleRenderer {
             append(if (AppConfig.isNightTheme) "night" else "day")
             append("#")
             append(color)
+            if (cached) append("#cached")
         }
     }
 
-    fun render(src: String, width: Int, height: Int?): Bitmap? {
+    fun render(src: String, width: Int, height: Int?, cached: Boolean = false): Bitmap? {
         val entry = BubblePackageManager.currentEntry()
         val config = entry.config
         val color = resolveColor(config, status(src), displayColor(src))
         val text = BubbleSvgPolicy.escapeText(displayText(src))
-        val svg = config.svgTemplate
+        var svg = config.svgTemplate
             .replaceBubbleValue(listOf("displayText", "num"), text)
             .replaceBubbleValue(listOf("displayColor", "color"), color)
+        if (cached) {
+            svg = injectCachedMark(svg, color)
+        }
         val targetWidth = width.coerceAtLeast(1)
         val targetHeight = height ?: targetWidth
         val input = ByteArrayInputStream(svg.toByteArray())
@@ -81,6 +88,51 @@ object ParagraphBubbleRenderer {
             }
         )
     }
+
+    /**
+     * 已缓存角标：直接补进渲染用的 SVG，而不是依赖气泡包模板预留占位符。
+     *
+     * 自定义气泡包的模板千差万别（viewBox、尺寸、留白都不同），要求作者加
+     * `${cachedMark}` 会让功能在旧包里静默失效。这里按模板自己的 viewBox
+     * 把「点 + 环」贴到右上角，任何包都能显示，也不占用数字区域。
+     */
+    internal fun injectCachedMark(svg: String, color: String): String {
+        val close = svg.lastIndexOf("</svg>")
+        if (close < 0) return svg
+        val box = viewBoxPattern.find(svg)?.groupValues?.getOrNull(1) ?: return svg
+        val parts = box.trim().split(Regex("[\\s,]+")).mapNotNull { it.toFloatOrNull() }
+        if (parts.size != 4) return svg
+        val (minX, minY, width, height) = parts
+        if (width <= 0f || height <= 0f) return svg
+        val outer = minOf(width, height) * 0.19f
+        val inner = outer * 0.5f
+        val cx = minX + width - outer * 0.94f
+        val cy = minY + outer * 0.94f
+        val mark = buildString {
+            append("<g><circle cx=\"")
+            append(fixed(cx))
+            append("\" cy=\"")
+            append(fixed(cy))
+            append("\" r=\"")
+            append(fixed(outer))
+            append("\" fill=\"none\" stroke=\"")
+            append(color)
+            append("\" stroke-width=\"")
+            append(fixed(outer * 0.32f))
+            append("\"/><circle cx=\"")
+            append(fixed(cx))
+            append("\" cy=\"")
+            append(fixed(cy))
+            append("\" r=\"")
+            append(fixed(inner))
+            append("\" fill=\"")
+            append(color)
+            append("\"/></g>")
+        }
+        return svg.substring(0, close) + mark + svg.substring(close)
+    }
+
+    internal fun fixed(value: Float): String = String.format(Locale.US, "%.2f", value)
 
     private fun resolveColor(
         config: BubblePackageManager.Config,

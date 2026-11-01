@@ -2614,24 +2614,37 @@ bookUrl：%7$s
     <string name="cache_manage_review_success">成功</string>
     <string name="cache_manage_review_stats">已缓存 %1$d 章 · 占用 %2$s</string>
     <string name="cache_manage_review_clear">清空</string>
-    <string name="cache_manage_review_clear_confirm">确定清空本书全部评论快照？清空后阅读时将重新联网加载，也可重新缓存。</string>
+    <string name="cache_manage_review_clear_confirm">确定清空本书全部评论快照（占用 %1$s）？评论图片等缓存资源将一并删除，之后阅读时重新联网加载，也可重新缓存。</string>
     <string name="cache_manage_review_cleared">已清空 %1$d 个快照文件</string>
     <string name="review_snapshot_badge">快照 · 非实时</string>
+    <string name="review_snapshot_badge_with_age">快照 · %1$s</string>
+    <string name="review_snapshot_badge_stale_suffix"> · 已过期</string>
+    <string name="review_snapshot_updated_toast">已更新为最新评论</string>
     <string name="offline_review_content_empty">评论内容不能为空</string>
     <string name="offline_review_content_too_long">评论内容不能超过 %1$d 字</string>
-    <string name="offline_review_enqueued">已记录为离线评论（共待发 %1$d 条）</string>
+    <string name="offline_review_enqueued">已记录为离线评论（共待发 %1$d 条），可在阅读页三点菜单发送</string>
     <string name="offline_review_kind_book_unsupported">书评暂不支持发表（与在线一致）</string>
     <string name="review_no_cached_snapshot">当前章节没有缓存评论</string>
     <!-- legadoC 离线评论 -->
     <string name="menu_offline_review_mode">离线评论模式</string>
     <string name="menu_review_preheat_wifi_only">仅WiFi预热段评</string>
     <string name="menu_review_open_mode">评论打开方式</string>
-    <string name="menu_review_open_mode_network">网络优先</string>
-    <string name="menu_review_open_mode_snapshot_first">快照优先</string>
-    <string name="menu_review_open_mode_snapshot_only">仅快照</string>
+    <string name="menu_review_open_mode_network">网络优先（快照秒开）</string>
+    <string name="menu_review_open_mode_network_only">纯联网（不用快照）</string>
+    <string name="menu_review_open_mode_snapshot_first">快照优先（先看缓存）</string>
+    <string name="menu_review_open_mode_snapshot_only">仅快照（不联网）</string>
     <string name="menu_review_snapshot_ttl">段评快照保鲜期</string>
     <string name="menu_review_snapshot_ttl_days">%1$d 天</string>
     <string name="menu_review_snapshot_ttl_never">不保鲜</string>
+    <!-- 三点菜单标题里的当前值短标签（长括注留给选择弹窗） -->
+    <string name="review_current_value">当前：%1$s</string>
+    <string name="review_open_mode_short_network">网络优先</string>
+    <string name="review_open_mode_short_network_only">纯联网</string>
+    <string name="review_open_mode_short_snapshot_first">快照优先</string>
+    <string name="review_open_mode_short_snapshot_only">仅快照</string>
+    <!-- 跨段选区时标出段评目标段位 -->
+    <string name="review_menu_target_suffix">·第 %1$d 段</string>
+    <string name="review_snapshot_offline_hint">这是离线快照（不联网）：发评前可先在三点菜单开启「离线评论模式」，评论会记录下来、之后统一发送</string>
     <string name="menu_current_option">当前</string>
     <string name="menu_sync_cache_review">缓存评论</string>
     <string name="ps_sync_cache_review">缓存书籍时抓取评论快照（段评/章评/书评）。关闭后不再抓取，已缓存的评论仍可离线查看，段评预热同步停止。</string>
@@ -2642,6 +2655,7 @@ bookUrl：%7$s
     <string name="review_cache_review_on">已开启：缓存书籍时抓取评论快照，段评预热同步恢复</string>
     <string name="review_cache_review_off">已关闭：不再抓取新评论快照，段评预热停止（已缓存的评论仍可离线查看）</string>
     <string name="menu_send_offline_reviews">发送离线评论</string>
+    <string name="menu_send_offline_reviews_count">发送离线评论（%1$d）</string>
     <string name="menu_export_offline_reviews">导出离线评论</string>
     <string name="menu_clear_offline_reviews">清除离线评论</string>
     <string name="offline_review_mode_on">离线评论模式已开启：发表评论将被记录，不立即发送</string>
@@ -2678,6 +2692,8 @@ bookUrl：%7$s
     <string name="review_error_title_unknown">段评加载出错了</string>
     <string name="review_error_message_unknown">遇到了一个没预料到的问题。可以重试一次；如果一直这样，麻烦把下面的技术细节反馈给开发者。</string>
     <string name="review_error_detail">技术细节</string>
+    <string name="review_error_copy_detail">复制详情</string>
+    <string name="review_error_copied">已复制</string>
     <string name="review_loading_slow">加载较慢，仍在努力…</string>
     <string name="book_source_empty_import">还没有书源\n点顶栏 + 新建，或从 ⋮ 菜单导入</string>
     <string name="book_source_empty_filter">没有匹配的书源，换个关键词或清除搜索再试试</string>

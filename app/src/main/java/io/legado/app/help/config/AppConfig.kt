@@ -56,7 +56,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     /** 评论打开方式取值 */
     object ReviewOpenMode {
+        /** 网络优先：新鲜快照可秒开，在线页为终态 */
         const val NETWORK = "network"
+
+        /** 纯联网：绝不先弹快照，只在线失败/超时时用快照兜底 */
+        const val NETWORK_ONLY = "network_only"
+
         const val SNAPSHOT_FIRST = "snapshot_first"
         const val SNAPSHOT_ONLY = "snapshot_only"
     }
@@ -64,6 +69,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     /** [reviewOpenMode] 的合法取值白名单，坏值统一回退到网络优先 */
     private val REVIEW_OPEN_MODES = setOf(
         ReviewOpenMode.NETWORK,
+        ReviewOpenMode.NETWORK_ONLY,
         ReviewOpenMode.SNAPSHOT_FIRST,
         ReviewOpenMode.SNAPSHOT_ONLY
     )
@@ -3132,8 +3138,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = reviewImageCompressionMaxKb.toLong() * 1024L
 
     /**
-     * 评论打开方式：network / snapshot_first / snapshot_only。
-     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的三模式语义）。
+     * 评论打开方式：network / network_only / snapshot_first / snapshot_only。
+     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的四模式语义）。
      */
     var reviewOpenMode: String
         // 未知值统一回退到网络优先，避免消费端 when 落到意外分支
@@ -3182,7 +3188,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.offlineReviewMode, value)
         }
 
-    /** TXT-ZIP 导出时附带评论页快照 */
+    /**
+     * 书籍缓存包（缓存管理 → 导出/导入）是否附带评论页快照。
+     * 关闭后 `reviews/` 子目录不打包；导入侧始终还原包内已有的评论目录。
+     */
     var exportReviews: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.exportReviews, true)
         set(value) {

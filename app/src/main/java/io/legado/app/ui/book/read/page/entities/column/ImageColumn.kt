@@ -15,6 +15,7 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.entities.TextLine
 import io.legado.app.ui.book.read.page.entities.TextLine.Companion.emptyTextLine
+import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
@@ -29,7 +30,14 @@ data class ImageColumn(
     var src: String,
     var click: String? = null,
     var lazyLoad: Boolean = false,
-    var mediaType: String = "image"
+    var mediaType: String = "image",
+    /**
+     * 书源原生段评气泡（未走 bubble:// 派生）：由绘制层补「已缓存」角标。
+     * 派生气泡的角标直接画进 SVG（见 ParagraphBubbleRenderer.render 的 cached 参数），不设此项。
+     */
+    var reviewBubble: Boolean = false,
+    /** 该段评气泡所属章节已有本地评论快照；排版期定标，快照写入后就地置位 */
+    var reviewCached: Boolean = false
 ) : BaseColumn {
 
     override var textLine: TextLine = emptyTextLine
@@ -62,7 +70,9 @@ data class ImageColumn(
                 book,
                 src,
                 width,
-                height.toInt()
+                height.toInt(),
+                // 已缓存状态会改变气泡渲染结果，传个后缀让两种位图各自缓存
+                cacheKeySuffix = if (reviewCached) "review_cached" else null
             )
         }
         val rectF = if (textLine.isImage) {
@@ -78,6 +88,31 @@ data class ImageColumn(
         }.onFailure { e ->
             appCtx.toastOnUi(e.localizedMessage)
         }
+        if (reviewBubble && reviewCached) {
+            drawReviewCacheMark(canvas, rectF)
+        }
+    }
+
+    /**
+     * 「已缓存」角标：气泡右上角一个实心点加细环。
+     *
+     * 画在绘制层而不是把标记焊进 src：书源原生 SVG 气泡无法重建模板，
+     * 且状态变化只需重绘这一行，不必重排整章。颜色跟正文文字色，
+     * 日夜/主题自动一致，也不会与气泡自身的强调色打架。
+     */
+    private fun drawReviewCacheMark(canvas: Canvas, rectF: RectF) {
+        val side = minOf(rectF.width(), rectF.height())
+        val radius = (side * 0.19f).coerceAtLeast(1.6f.dpToPx())
+        val cx = rectF.right - radius * 0.94f
+        val cy = rectF.top + radius * 0.94f
+        // 共用画笔：颜色/线宽每帧按需设置，避免绘制路径里每帧每个气泡 new 一把
+        val paint = reviewCacheMarkPaint
+        paint.color = ChapterProvider.contentPaint.color
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = (radius * 0.34f).coerceAtLeast(0.6f.dpToPx())
+        canvas.drawCircle(cx, cy, radius, paint)
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(cx, cy, radius * 0.5f, paint)
     }
 
     private fun drawVideo(view: ContentTextView, canvas: Canvas) {
@@ -254,6 +289,11 @@ data class ImageColumn(
 
     override fun isTouch(x: Float): Boolean {
         return x > start && x < end + 20.dpToPx()
+    }
+
+    companion object {
+        /** 「已缓存」角标共用画笔：颜色/线宽在绘制时按需设置（仅 UI 线程使用） */
+        private val reviewCacheMarkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     }
 
 }

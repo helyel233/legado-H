@@ -7,6 +7,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.help.book.BookContent
 import io.legado.app.model.localBook.EpubFile
+import io.legado.app.ui.book.read.page.entities.column.ImageColumn
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
 import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.utils.fastBinarySearchBy
@@ -52,6 +53,32 @@ data class TextChapter(
     val lastIndex: Int get() = pages.lastIndex
 
     val lastReadLength: Int get() = getReadLength(lastIndex)
+
+    /**
+     * 把本章对应按钮的段评气泡标成「已缓存」，并重绘所在行。
+     *
+     * 只改标记、不重排：快照是点击/预热过程中异步写入的，若靠重排来让角标
+     * 出现，用户正在读的这一页会被打散重刷。刷新行位图即可让标记生效。
+     * 主线程调用。
+     */
+    fun markReviewSnapshotCached(buttonSrc: String) {
+        val target = buttonSrc.trim()
+        if (target.isEmpty()) return
+        for (page in pages) {
+            for (line in page.lines) {
+                var hit = false
+                for (column in line.columns) {
+                    if (column is ImageColumn && !column.reviewCached &&
+                        column.src.trim() == target
+                    ) {
+                        column.reviewCached = true
+                        hit = true
+                    }
+                }
+                if (hit) line.invalidate()
+            }
+        }
+    }
 
     val pageSize: Int get() = pages.size
 

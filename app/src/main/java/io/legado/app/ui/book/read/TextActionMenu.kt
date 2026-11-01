@@ -186,12 +186,16 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
             TextMenuAction(
                 itemId = item.itemId,
                 actionId = actionId,
-                title = if (item.itemId == R.id.menu_aloud &&
-                    (BaseReadAloudService.isRun || AppConfig.contentSelectSpeakMod == 1)
-                ) {
-                    context.getString(R.string.read_aloud_from_here)
-                } else {
-                    item.title?.toString().orEmpty()
+                title = when {
+                    item.itemId == R.id.menu_aloud &&
+                        (BaseReadAloudService.isRun || AppConfig.contentSelectSpeakMod == 1) ->
+                        context.getString(R.string.read_aloud_from_here)
+
+                    // 段评：跨段选区时补一段位标注，说明看的是哪一段的评论
+                    item.itemId == R.id.menu_review ->
+                        item.title?.toString().orEmpty() + callBack.reviewMenuTargetSuffix().orEmpty()
+
+                    else -> item.title?.toString().orEmpty()
                 },
                 intent = item.intent
             )
@@ -421,6 +425,12 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
 
         /** 选区对应段落存在段评入口时返回 true，用于控制“段评”菜单项可见性 */
         fun supportsReview(): Boolean = false
+
+        /**
+         * 段评菜单项的标题后缀（如 `·第 12 段`）。
+         * 只在选区跨段、需要说明“看的是哪一段”时返回非空；单段选区返回 null。
+         */
+        fun reviewMenuTargetSuffix(): String? = null
 
         /** 选区处于可插入配图的段落边界时返回 true，用于控制“插入”菜单项可见性 */
         fun supportsIllustration(): Boolean = false

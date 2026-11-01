@@ -235,10 +235,31 @@ object ReviewSnapshotStore {
                 snapshot
             )
             maybePrune(book)
+            // 通知阅读页把对应段评气泡标成「已缓存」。观察者异常不得影响写入结果
+            runCatching {
+                writeObserver?.onSnapshotWritten(
+                    book.bookUrl, snapshot.chapterUrl, snapshot.buttonSrc
+                )
+            }
         } catch (error: Throwable) {
             trace.fail(error)
             throw error
         }
+    }
+
+    /**
+     * 快照写入观察者（IO 线程回调）：阅读页据此刷新段评气泡上的「已缓存」角标。
+     * 只通知，不参与写入；实现方需自行切回主线程。
+     */
+    fun interface WriteObserver {
+        fun onSnapshotWritten(bookUrl: String, chapterUrl: String, buttonSrc: String)
+    }
+
+    @Volatile
+    private var writeObserver: WriteObserver? = null
+
+    fun setWriteObserver(observer: WriteObserver?) {
+        writeObserver = observer
     }
 
     fun get(book: Book, chapter: BookChapter, buttonSrc: String): ReviewSnapshot? {
@@ -277,6 +298,22 @@ object ReviewSnapshotStore {
     }
 
     /**
+     * 排版期的存在性判定：内存缓存命中直接返回，否则只做一次 stat。
+     *
+     * 不解析 HTML、不校验格式、不碰资源库——只回答「这个按钮有没有本地快照」，
+     * 供阅读页给段评气泡定标「已缓存」。**只能在排版/后台线程调用**：
+     * 里面有一次文件系统查询，放到绘制路径会让翻页掉帧。
+     */
+    fun hasSnapshot(book: Book, chapterUrl: String, buttonSrc: String): Boolean {
+        if (chapterUrl.isBlank() || buttonSrc.isBlank()) return false
+        val key = snapshotCacheKey(book.bookUrl, chapterUrl, buttonSrc)
+        if (snapshotCache.get(key) != null) return true
+        return runCatching {
+            File(reviewsDir(book), fileName(chapterUrl, buttonSrc)).isFile
+        }.getOrDefault(false)
+    }
+
+    /**
      * 按主键读取（弹窗进程重建用：只有 Book 与主键字符串，没有章节实体）。
      * 与 [get] 同路径，校验放宽为主键相等（chapterUrl/buttonSrc 即主键）。
      */
@@ -308,6 +345,67 @@ object ReviewSnapshotStore {
         val file = File(reviewsDir(book), fileName(BOOK_TAB_CHAPTER_URL, BOOK_TAB_SRC))
         if (!file.isFile) return null
         return runCatching { readCompleteSnapshot(book, file) }.getOrNull()
+    }
+
+    /**
+     * 导入缓存包里的评论目录（书籍缓存目录下的 reviews/）。
+     *
+     * 归档里的快照、章节状态、资源库索引与 blob 是同一次导出产生的自洽集合，
+     * 因此按原文件合并即可：不逐条重解析，避免一条坏快照就让整本书的评论导入失败；
+     * 读不到的文件由 [hasPersistedReviewData]/[get] 各自的校验兜底忽略。
+     *
+     * 合并后清掉本书的快照内存缓存：[getCached] 只认内存，不清就会继续返回
+     * 导入前的旧快照（或返回 null 让用户以为导入失败）。
+     *
+     * @return 成功复制的文件数；归档目录不存在或为空时返回 0
+     */
+    fun restoreFromDirectory(book: Book, sourceDir: File): Int {
+        if (!sourceDir.isDirectory) return 0
+        val files = sourceDir.listFiles()?.filter(File::isFile).orEmpty()
+        if (files.isEmpty()) return 0
+        // 快照/状态文件必须与资源库索引一起搬：只有快照没有 resources.json 的目录
+        // （旧版本导出或半截归档）读一次抛一次异常，不如整目录放弃、保留现状
+        val hasSnapshotFiles = files.any {
+            isSnapshotFile(it) || it.name.startsWith(STATUS_FILE_PREFIX)
+        }
+        if (hasSnapshotFiles &&
+            files.none { it.name == ReviewSnapshotResourceStore.DATABASE_FILE_NAME }
+        ) {
+            AppLog.put("导入评论缓存缺少 ${ReviewSnapshotResourceStore.DATABASE_FILE_NAME}，已跳过")
+            return 0
+        }
+        val targetDir = reviewsDir(book)
+        check(targetDir.exists() || targetDir.mkdirs()) {
+            "无法创建评论缓存目录: ${targetDir.absolutePath}"
+        }
+        // 复制纳入资源库锁：导入会覆盖索引/blob，必须与并发 put/open 互斥，
+        // 否则在途图片请求可能读到半截文件、并发索引更新可能被旧文件盖掉
+        val restored = ReviewSnapshotResourceStore.inLock {
+            var count = 0
+            files.forEach { source ->
+                runCatching {
+                    val target = File(targetDir, source.name)
+                    source.copyTo(target, overwrite = true)
+                    check(target.length() == source.length()) {
+                        "评论缓存文件复制不完整: ${source.name}"
+                    }
+                    count++
+                }.onFailure { error ->
+                    AppLog.put("导入评论缓存文件失败: ${source.name}\n${error.localizedMessage}", error)
+                }
+            }
+            count
+        }
+        if (restored > 0) invalidateBookCache(book.bookUrl)
+        return restored
+    }
+
+    /** 只清掉某本书的快照内存缓存（导入覆盖后使用），其余书不受影响 */
+    private fun invalidateBookCache(bookUrl: String) {
+        val prefix = "$bookUrl|"
+        snapshotCache.snapshot().keys
+            .filter { it.startsWith(prefix) }
+            .forEach { snapshotCache.remove(it) }
     }
 
     /** Validate an extracted snapshot against the already-imported resource database. */
@@ -484,18 +582,28 @@ object ReviewSnapshotStore {
     }
 
     /**
-     * 清空单书全部评论快照（含章节状态文件），返回删除的文件数。
-     * 供缓存管理页的手动清理入口使用；内存缓存无需逐条失效，
-     * [get]/[getCached] 的 isFile 前置检查会自然 miss 并顺手清理。
+     * 清空单书全部评论缓存（快照 + 章节状态文件 + 资源库 blob/索引，同在
+     * reviews/ 目录），返回删除的**快照**文件数（不含状态/资源文件）。
+     * 供缓存管理页的手动清理入口使用；快照内存缓存同步失效（[hasSnapshot]
+     * 命中内存缓存时不再查文件），[get]/[getCached] 的 isFile 前置检查兜住残余。
+     * 资源库索引与 blob 经 [ReviewSnapshotResourceStore.deleteAllResources]
+     * 在资源库锁内删除（避免与并发抓取写入交错留下损坏中间态），删除后
+     * [ReviewSnapshotResourceStore.open] 对缺失索引容错返回 null，
+     * 在途图片请求自动回落网络，无「索引在而文件缺失」损坏态。
      */
     fun clearAll(book: Book): Int {
         val dir = reviewsDir(book)
-        var removed = 0
+        ReviewSnapshotResourceStore.deleteAllResources(book)
+        var removedSnapshots = 0
         dir.listFiles()?.forEach { file ->
-            if (file.delete()) removed++
+            val deleted = file.delete()
+            if (deleted && isSnapshotFile(file)) removedSnapshots++
         }
-        if (removed > 0) invalidateChapterCount(book.bookUrl)
-        return removed
+        // [hasSnapshot] 命中内存缓存时不再查文件，必须同步失效，
+        // 否则清空后重排的章节仍会把气泡标成「已缓存」
+        invalidateBookCache(book.bookUrl)
+        if (removedSnapshots > 0) invalidateChapterCount(book.bookUrl)
+        return removedSnapshots
     }
 
     /** 快照被删除后，让内存里的「有快照章数」计数失效，下次查询重新按目录统计。 */

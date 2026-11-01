@@ -191,6 +191,7 @@ import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.ReviewButton
 import io.legado.app.help.review.ReviewPreheatCoordinator
+import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.SyntheticParaContent
 import io.legado.app.help.review.SyntheticReviewEntry
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxDispatcher
@@ -434,6 +435,12 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var commentBrowserShowing = false
     private var selectedReviewButton: ReviewButton? = null
     private var selectedSyntheticPara: SyntheticParaContent? = null
+
+    /**
+     * 跨段选区时段评实际会打开哪一段（首段）；单段选区为 null。
+     * 菜单里据此显示「段评·第 N 段」，避免用户以为打开的是末段评论。
+     */
+    private var selectedReviewCrossParaNum: Int? = null
     private var illustrationAnchor: IllustrationAnchor? = null
     val textActionMenu: TextActionMenu by lazy {
         TextActionMenu(this, this)
@@ -949,9 +956,28 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     private var highlightRulesRevision: String? = null
 
+    /**
+     * 段评快照写盘后，把当前章对应气泡标成「已缓存」。
+     *
+     * 回调在 IO 线程：切主线程，且只认「同一本书、同一章」的写入——
+     * 预热会顺带抓前后章，那些章还没排版，标记无处可落。
+     */
+    private val reviewSnapshotWriteObserver =
+        ReviewSnapshotStore.WriteObserver { bookUrl, chapterUrl, buttonSrc ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val chapter = ReadBook.curTextChapter ?: return@runOnUiThread
+                if (ReadBook.book?.bookUrl != bookUrl) return@runOnUiThread
+                if (chapter.chapter.url != chapterUrl) return@runOnUiThread
+                chapter.markReviewSnapshotCached(buttonSrc)
+            }
+        }
+
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onResume() {
         super.onResume()
+        // 每次回前台重新挂上：段评快照可能在阅读期间由预热协程写入
+        ReviewSnapshotStore.setWriteObserver(reviewSnapshotWriteObserver)
         val highlightBookUrl = ReadBook.book?.bookUrl
         lifecycleScope.launch {
             val revision = withContext(IO) { HighlightRules.store.revision() }
@@ -1343,7 +1369,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         return super.onCompatOptionsItemSelected(item)
     }
 
-    private fun sendOfflineReviews() {
+    override fun sendOfflineReviews() {
         lifecycleScope.launch {
             val unknown = withContext(IO) { ReviewOutboxStore.unknownCount() }
             if (unknown > 0) {
@@ -1396,7 +1422,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
-    private fun exportOfflineReviews() {
+    override fun exportOfflineReviews() {
         lifecycleScope.launch {
             val json = withContext(IO) {
                 val items = ReviewOutboxStore.all()
@@ -1427,7 +1453,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
-    private fun clearOfflineReviews() {
+    override fun clearOfflineReviews() {
         lifecycleScope.launch {
             val total = withContext(IO) { ReviewOutboxStore.countAll() }
             if (total == 0) {
@@ -1640,6 +1666,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onCancelSelect() = binding.run {
         selectedReviewButton = null
         selectedSyntheticPara = null
+        selectedReviewCrossParaNum = null
         activeSelectionCursor = null
         if (epubCoreActive) {
             clearEpubSelectionUi()
@@ -1677,6 +1704,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         val reviewEntry = findSelectedReviewEntry()
         selectedReviewButton = reviewEntry?.button
         selectedSyntheticPara = reviewEntry?.syntheticPara
+        selectedReviewCrossParaNum = reviewEntry
+            ?.takeIf { it.spansParagraphs }
+            ?.paraNum
         val navigationBarHeight =
             if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
                 binding.navigationBar.height else 0
@@ -1714,6 +1744,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     ) = binding.run {
         selectedReviewButton = null
         selectedSyntheticPara = null
+        selectedReviewCrossParaNum = null
         illustrationAnchor = null
         val navigationBarHeight =
             if (!ReadBookConfig.hideNavigationBar && navigationBarGravity == Gravity.BOTTOM)
@@ -1755,6 +1786,10 @@ class ReadBookActivity : BaseReadBookActivity(),
     private data class SelectedReviewEntry(
         val button: ReviewButton,
         val syntheticPara: SyntheticParaContent?,
+        /** 段评实际走的是哪一段（跨段选区取首段） */
+        val paraNum: Int,
+        /** 选区是否跨了多段：跨段时菜单里要标出看的是哪一段 */
+        val spansParagraphs: Boolean,
     )
 
     /**
@@ -1774,6 +1809,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         val endParaNum = endPage.getLine(endPos.lineIndex).paragraphNum
         if (startParaNum <= 0 || endParaNum <= 0) return null
         val targetNum = minOf(startParaNum, endParaNum)
+        val spansParagraphs = startParaNum != endParaNum
         chapter.paragraphs
             .getOrNull(targetNum - 1)
             ?.hiddenReviewButtons
@@ -1786,7 +1822,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                         SyntheticParaContent(para, content)
                     }
                 }
-                return SelectedReviewEntry(button, syntheticPara)
+                return SelectedReviewEntry(button, syntheticPara, targetNum, spansParagraphs)
             }
         val synthesized = SyntheticReviewEntry.resolve(chapter, targetNum) ?: return null
         return SelectedReviewEntry(
@@ -1795,7 +1831,9 @@ class ReadBookActivity : BaseReadBookActivity(),
                 synthesized.para,
                 synthesized.paraContent,
                 snapshotFallbackAllowed = false,
-            )
+            ),
+            targetNum,
+            spansParagraphs,
         )
     }
 
@@ -1878,14 +1916,34 @@ class ReadBookActivity : BaseReadBookActivity(),
                     if (button.click.isNullOrBlank()) {
                         oldClickImg(button.src)
                     } else {
-                        BookImgClick.clickImg(
-                            this,
-                            lifecycleScope,
-                            button.click,
-                            button.src,
-                            ReadBook.curTextChapter?.chapter,
-                            selectedSyntheticPara
-                        )
+                        // 快照热命中：与气泡直点同一通道（主线程内存查询，命中即弹），
+                        // 网络优先模式下保鲜期内的快照同样先给 0 秒可见、后台再刷在线页。
+                        // 合成入口（选区无泡段落）走自己的模板，不能拿锚点段快照顶替。
+                        val hotChapter = ReadBook.curTextChapter?.chapter?.takeIf {
+                            it.index == ReadBook.durChapterIndex &&
+                                it.bookUrl == ReadBook.book?.bookUrl
+                        }
+                        val openedBySnapshot = selectedSyntheticPara == null &&
+                            hotChapter != null &&
+                            BookImgClick.tryOpenCachedSnapshotImmediately(
+                                this, button.src, hotChapter,
+                                onDismiss = {
+                                    commentBrowserShowing = false
+                                    commentBrowserOpening = false
+                                }
+                            )
+                        if (openedBySnapshot) {
+                            commentBrowserShowing = true
+                        } else {
+                            BookImgClick.clickImg(
+                                this,
+                                lifecycleScope,
+                                button.click,
+                                button.src,
+                                ReadBook.curTextChapter?.chapter,
+                                selectedSyntheticPara
+                            )
+                        }
                     }
                 }
                 return true
@@ -2648,12 +2706,14 @@ class ReadBookActivity : BaseReadBookActivity(),
     // endregion
 
     /**
-     * 评论打开方式选择：网络优先 / 快照优先 / 仅快照。
-     * 段评菜单（选中文字）与段评图标直点共用此值，三模式语义见 [BookImgClick]。
+     * 评论打开方式选择：网络优先 / 纯联网 / 快照优先 / 仅快照。
+     * 段评菜单（选中文字）与段评图标直点共用此值，四模式语义见 [BookImgClick]。
+     * 选项文案自带括注说明，避免只有「网络优先/快照优先」几个字看不出差别。
      */
     override fun showReviewOpenModeDialog() {
         val modes = listOf(
             AppConfig.ReviewOpenMode.NETWORK to R.string.menu_review_open_mode_network,
+            AppConfig.ReviewOpenMode.NETWORK_ONLY to R.string.menu_review_open_mode_network_only,
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first,
             AppConfig.ReviewOpenMode.SNAPSHOT_ONLY to R.string.menu_review_open_mode_snapshot_only
         )
@@ -2662,7 +2722,8 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.string.menu_review_open_mode,
             modes.map { (key, labelRes) ->
                 val label = getString(labelRes)
-                if (key == current) "$label（${getString(R.string.menu_current_option)}）" else label
+                // 当前项用前缀勾号标记：括注已经很长，再在后缀加「当前」会挤成一团
+                if (key == current) "✓ $label" else label
             }
         ) { _, index ->
             val mode = modes.getOrNull(index) ?: return@selector
@@ -6239,6 +6300,13 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun supportsReview(): Boolean = selectedReviewButton != null
 
+    /**
+     * 跨段选区时在段评菜单项后面标出目标段位（如「段评·第 12 段」）。
+     * 选中文字跨段时段评只走首段，不标出来用户会以为是末段或整段评论。
+     */
+    override fun reviewMenuTargetSuffix(): String? = selectedReviewCrossParaNum
+        ?.let { getString(R.string.review_menu_target_suffix, it) }
+
     override fun supportsIllustration(): Boolean = illustrationAnchor != null
 
     override fun epubCoreChapterTitle(): String? {
@@ -6614,6 +6682,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     override fun onDestroy() {
+        ReviewSnapshotStore.setWriteObserver(null)
         binding.epubReadView.setListener(null)
         epubLoadingWindow?.dismiss()
         epubLoadingWindow = null

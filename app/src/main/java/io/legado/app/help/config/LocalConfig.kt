@@ -78,6 +78,16 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             }
         }
 
+    /**
+     * 「离线快照里发评要先开离线评论模式」的一次性提示是否已展示。
+     * 属于本机引导状态，不进备份（AppConfig 会被写进 config.xml 带回别处）。
+     */
+    var reviewSnapshotOfflineHintShown: Boolean
+        get() = getBoolean("reviewSnapshotOfflineHintShown", false)
+        set(value) {
+            putBoolean("reviewSnapshotOfflineHintShown", value)
+        }
+
     var privacyPolicyOk: Boolean
         get() = getBoolean("privacyPolicyOk")
         set(value) {

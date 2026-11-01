@@ -56,9 +56,10 @@ class ReviewPreheatCoordinatorPolicyTest {
     @Test
     fun backoffWindowSkipsRecentFailuresOnly() {
         val now = 1_000L
+        fun failure(until: Long) = ReviewBackoffPolicy.Failure(1, until)
         assertFalse(ReviewPreheatCoordinator.isInBackoff(null, now))
-        assertFalse(ReviewPreheatCoordinator.isInBackoff(now - 1, now))
-        assertFalse(ReviewPreheatCoordinator.isInBackoff(now, now))
-        assertTrue(ReviewPreheatCoordinator.isInBackoff(now + 1, now))
+        assertFalse(ReviewPreheatCoordinator.isInBackoff(failure(now - 1), now))
+        assertFalse(ReviewPreheatCoordinator.isInBackoff(failure(now), now))
+        assertTrue(ReviewPreheatCoordinator.isInBackoff(failure(now + 1), now))
     }
 }

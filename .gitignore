@@ -44,6 +44,8 @@ cloudflare/**/.wrangler/
 /rb*.log
 /release-build*.log
 .legadoh/
+# WorkBuddy 项目运行时数据（记忆/日志），不推送
+.workbuddy/
 
 # 本地移植/对比工作文档（含 Max 仓库路径与未公开计划，不推送）
 docs/移植计划.md

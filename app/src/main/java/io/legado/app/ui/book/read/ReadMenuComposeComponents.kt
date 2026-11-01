@@ -73,7 +73,11 @@ data class ReadMenuTitleBarState(
     val bookName: String?,
     val isLocalBook: Boolean,
     val isEpub: Boolean,
-    val supportsReplaceRules: Boolean
+    val supportsReplaceRules: Boolean,
+    /** 离线评论待发送条数（PENDING + FAILED），>0 时三点菜单里出现「发送离线评论（N）」 */
+    val offlineReviewPending: Int = 0,
+    /** 离线评论全部记录数（含已发送），>0 时才提供导出/清除入口 */
+    val offlineReviewRecords: Int = 0
 )
 
 data class ReadMenuTitleBarActions(
@@ -106,7 +110,11 @@ data class ReadMenuTitleBarActions(
     val onReviewOpenModeClick: () -> Unit,
     val onReviewSnapshotTtlClick: () -> Unit,
     val onTogglePreheatWifiOnlyClick: () -> Unit,
-    val onToggleOfflineReviewModeClick: () -> Unit
+    val onToggleOfflineReviewModeClick: () -> Unit,
+    /** 三个入口只在有记录时出现在三点菜单里（见 [buildOverflowActions]） */
+    val onSendOfflineReviewsClick: () -> Unit = {},
+    val onExportOfflineReviewsClick: () -> Unit = {},
+    val onClearOfflineReviewsClick: () -> Unit = {}
 )
 
 data class ReadMenuActionBarState(
@@ -228,6 +236,8 @@ fun ReadMenuTitleBar(
                             isLocalBook = state.isLocalBook,
                             isEpub = state.isEpub,
                             supportsReplaceRules = state.supportsReplaceRules,
+                            offlineReviewPending = state.offlineReviewPending,
+                            offlineReviewRecords = state.offlineReviewRecords,
                             onAddBookmarkClick = actions.onAddBookmarkClick,
                             onEditContentClick = actions.onEditContentClick,
                             onPageAnimClick = actions.onPageAnimClick,
@@ -250,7 +260,10 @@ fun ReadMenuTitleBar(
                             onReviewOpenModeClick = actions.onReviewOpenModeClick,
                             onReviewSnapshotTtlClick = actions.onReviewSnapshotTtlClick,
                             onTogglePreheatWifiOnlyClick = actions.onTogglePreheatWifiOnlyClick,
-                            onToggleOfflineReviewModeClick = actions.onToggleOfflineReviewModeClick
+                            onToggleOfflineReviewModeClick = actions.onToggleOfflineReviewModeClick,
+                            onSendOfflineReviewsClick = actions.onSendOfflineReviewsClick,
+                            onExportOfflineReviewsClick = actions.onExportOfflineReviewsClick,
+                            onClearOfflineReviewsClick = actions.onClearOfflineReviewsClick
                         )
                         popupHandle = ModernActionPopup.show(
                             context,
@@ -266,10 +279,25 @@ fun ReadMenuTitleBar(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_more_vert),
-                    contentDescription = "更多选项",
+                    contentDescription = if (state.offlineReviewPending > 0) {
+                        "更多选项（${state.offlineReviewPending} 条离线评论待发送）"
+                    } else {
+                        "更多选项"
+                    },
                     tint = style.primaryText,
                     modifier = Modifier.size(18.dp)
                 )
+                // 待发离线评论的小圆点：入口藏在菜单里，不提示没人会为了找它翻菜单
+                if (state.offlineReviewPending > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 9.dp, end = 9.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(style.accent)
+                    )
+                }
             }
         }
     }
@@ -818,10 +846,20 @@ private fun readMenuButtonIconRes(
     }
 }
 
+/** 打开方式的短标签：悬在菜单标题里，不能带选项页那句很长的括注 */
+private fun reviewOpenModeShortLabelRes(mode: String): Int = when (mode) {
+    AppConfig.ReviewOpenMode.NETWORK_ONLY -> R.string.review_open_mode_short_network_only
+    AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> R.string.review_open_mode_short_snapshot_first
+    AppConfig.ReviewOpenMode.SNAPSHOT_ONLY -> R.string.review_open_mode_short_snapshot_only
+    else -> R.string.review_open_mode_short_network
+}
+
 private fun buildOverflowActions(
     isLocalBook: Boolean,
     isEpub: Boolean,
     supportsReplaceRules: Boolean,
+    offlineReviewPending: Int,
+    offlineReviewRecords: Int,
     onAddBookmarkClick: () -> Unit,
     onEditContentClick: () -> Unit,
     onPageAnimClick: () -> Unit,
@@ -844,7 +882,10 @@ private fun buildOverflowActions(
     onReviewOpenModeClick: () -> Unit,
     onReviewSnapshotTtlClick: () -> Unit,
     onTogglePreheatWifiOnlyClick: () -> Unit,
-    onToggleOfflineReviewModeClick: () -> Unit
+    onToggleOfflineReviewModeClick: () -> Unit,
+    onSendOfflineReviewsClick: () -> Unit,
+    onExportOfflineReviewsClick: () -> Unit,
+    onClearOfflineReviewsClick: () -> Unit
 ): List<ModernActionPopup.Action> {
     val actions = mutableListOf<ModernActionPopup.Action>()
     actions.add(ModernActionPopup.Action(title = "添加书签", invoke = onAddBookmarkClick))
@@ -905,14 +946,28 @@ private fun buildOverflowActions(
         )
         actions.add(
             ModernActionPopup.Action(
+                // 当前生效值放在副标题里：不开弹窗也能看出是哪一档，标题不用被拉长
                 title = appCtx.getString(R.string.menu_review_open_mode),
+                description = appCtx.getString(
+                    R.string.review_current_value,
+                    appCtx.getString(reviewOpenModeShortLabelRes(AppConfig.reviewOpenMode))
+                ),
                 invoke = onReviewOpenModeClick
             )
         )
         if (cacheReviewOn) {
+            val ttlDays = AppConfig.reviewSnapshotTtlDays
             actions.add(
                 ModernActionPopup.Action(
                     title = appCtx.getString(R.string.menu_review_snapshot_ttl),
+                    description = appCtx.getString(
+                        R.string.review_current_value,
+                        if (ttlDays <= 0) {
+                            appCtx.getString(R.string.menu_review_snapshot_ttl_never)
+                        } else {
+                            appCtx.getString(R.string.menu_review_snapshot_ttl_days, ttlDays)
+                        }
+                    ),
                     invoke = onReviewSnapshotTtlClick
                 )
             )
@@ -933,6 +988,32 @@ private fun buildOverflowActions(
                 invoke = onToggleOfflineReviewModeClick
             )
         )
+        // 离线评论的三个动作原先只挂在 optionsMenu 上（阅读页没有工具栏，进不去），
+        // 于是「记下了却发不出去」。这里按有无记录决定是否出现，标题直接带待发条数。
+        if (offlineReviewPending > 0) {
+            actions.add(
+                ModernActionPopup.Action(
+                    title = appCtx.getString(
+                        R.string.menu_send_offline_reviews_count, offlineReviewPending
+                    ),
+                    invoke = onSendOfflineReviewsClick
+                )
+            )
+        }
+        if (offlineReviewRecords > 0) {
+            actions.add(
+                ModernActionPopup.Action(
+                    title = appCtx.getString(R.string.menu_export_offline_reviews),
+                    invoke = onExportOfflineReviewsClick
+                )
+            )
+            actions.add(
+                ModernActionPopup.Action(
+                    title = appCtx.getString(R.string.menu_clear_offline_reviews),
+                    invoke = onClearOfflineReviewsClick
+                )
+            )
+        }
     }
     actions.add(ModernActionPopup.Action(title = "日志", invoke = onLogClick))
     actions.add(ModernActionPopup.Action(title = "帮助", invoke = onHelpClick))

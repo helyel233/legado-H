@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -75,6 +76,52 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             style = Paint.Style.FILL
         }
     }
+
+    /**
+     * 点击反馈（涟漪）：正文里的图片/段评气泡点击后可能要先跑 click/js、等网络，
+     * 这段时间既没有按压态也没有弹窗，用户容易以为「点了没反应」而反复点。
+     * 这里在点击处画一个 400ms 的扩散圆环，纯自绘、不依赖布局与动画库。
+     */
+    private val tapFeedbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * resources.displayMetrics.density
+    }
+    private var tapFeedbackX = Float.NaN
+    private var tapFeedbackY = Float.NaN
+    private var tapFeedbackStartAt = 0L
+    private var tapFeedbackRunning = false
+
+    /** 在点击坐标处触发一次点击反馈（主线程调用，坐标为本 View 内坐标）。 */
+    fun showTapFeedback(x: Float, y: Float) {
+        if (!x.isFinite() || !y.isFinite()) return
+        tapFeedbackX = x
+        tapFeedbackY = y
+        tapFeedbackStartAt = SystemClock.uptimeMillis()
+        if (!tapFeedbackRunning) {
+            tapFeedbackRunning = true
+            postInvalidateOnAnimation()
+        }
+    }
+
+    private fun drawTapFeedback(canvas: Canvas) {
+        if (!tapFeedbackRunning) return
+        val elapsed = SystemClock.uptimeMillis() - tapFeedbackStartAt
+        if (elapsed >= TAP_FEEDBACK_DURATION_MS) {
+            tapFeedbackRunning = false
+            // 再刷一帧把最后一圈擦掉，否则会留在页面上直到下一次重绘
+            postInvalidateOnAnimation()
+            return
+        }
+        val progress = elapsed.toFloat() / TAP_FEEDBACK_DURATION_MS
+        val density = resources.displayMetrics.density
+        val radius = (10f + 16f * progress) * density
+        // 与正文同色系：日夜主题下都跟随文字颜色，不额外引入主题分支
+        tapFeedbackPaint.color = ChapterProvider.contentPaint.color
+        tapFeedbackPaint.alpha = ((1f - progress) * 0.55f * 255).toInt().coerceIn(0, 255)
+        canvas.drawCircle(tapFeedbackX, tapFeedbackY, radius, tapFeedbackPaint)
+        postInvalidateOnAnimation()
+    }
+
     private var callBack: CallBack
     private val visibleRect = ChapterProvider.visibleRect
     val selectStart = TextPos(0, -1, -1)
@@ -212,6 +259,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
             canvas.clipRect(visibleRect)
         }
         drawPage(canvas)
+        drawTapFeedback(canvas)
     }
 
     /**
@@ -608,10 +656,14 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                         val click = column.click
                                         val src = column.src
                                         if (!click.isNullOrBlank()) {
+                                            // 段评气泡/图片 click 要跑 JS 或等网络，
+                                            // 先给一个点击处涟漪，别让用户以为没反应
+                                            showTapFeedback(x, y)
                                             callBack.clickImg(click, src)
                                             handled = true
                                         } else {
                                             handled = callBack.oldClickImg(src)
+                                            if (handled) showTapFeedback(x, y)
                                         }
                                     }
                                 }
@@ -623,6 +675,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                 if (doubleClick) {
                                     val click = column.click
                                     if (!click.isNullOrBlank()) {
+                                        showTapFeedback(x, y)
                                         callBack.clickImg(click, column.src)
                                         handled = true
                                     }
@@ -634,6 +687,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                 if (!debounceClick) {
                                     val click = column.click
                                     if (!click.isNullOrBlank()) {
+                                        showTapFeedback(x, y)
                                         callBack.clickImg(click, column.src)
                                         handled = true
                                     }
@@ -1421,6 +1475,9 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         }
         private val cursorWidth = 24.dpToPx()
         private const val EPUB_MEDIA_LINK_PREFIX = "legado-epub-media:"
+
+        /** 点击反馈持续时长：足够看到「点上了」，又不至于长时间压在内容上干扰阅读 */
+        private const val TAP_FEEDBACK_DURATION_MS = 400L
     }
 
     interface CallBack {

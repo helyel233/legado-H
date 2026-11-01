@@ -235,20 +235,51 @@ object ReviewSnapshotResourceStore {
 
     /** Opens a resource referenced by review-resource://<sha256>. */
     fun open(book: Book, key: String): ReviewSnapshotResourceHandle? = synchronized(lock) {
-        if (!keyPattern.matches(key)) return null
-        val dir = ReviewSnapshotStore.reviewsDir(book)
-        val file = blobFile(dir, key)
-        // 先判 blob 是否存在：清空评论快照会连 resources.json 一起删掉，
-        // 此时仍在途的图片请求必须当作「资源不存在」返回 null 去走网络，
-        // 不能因为索引缺失就在 requireCached 里抛异常
-        if (!file.isFile) return null
-        // 走缓存取索引并按 key 直达，避免每张图片都重解析 resources.json
-        val entry = requireCached(book).byKey[key]
-        if (entry != null) {
-            validateEntry(dir, entry)
-        }
-        ReviewSnapshotResourceHandle(entry?.mimeType ?: guessMime(file), FileInputStream(file), file)
+        // runCatching 兜底残余并发窗口：清空与写入的交错已被 lock 排除，
+        // 但 blob isFile 判断与 validateEntry 之间的文件消失（外部清理等）
+        // 仍可能触发 check 异常；图片请求线程不应因此崩溃，统一按
+        // 「资源不存在」返回 null 回落网络
+        runCatching {
+            if (!keyPattern.matches(key)) return@runCatching null
+            val dir = ReviewSnapshotStore.reviewsDir(book)
+            val file = blobFile(dir, key)
+            // 先判 blob 是否存在：清空评论快照会连 resources.json 一起删掉，
+            // 此时仍在途的图片请求必须当作「资源不存在」返回 null 去走网络，
+            // 不能因为索引缺失就在 requireCached 里抛异常
+            if (!file.isFile) return@runCatching null
+            // 走缓存取索引并按 key 直达，避免每张图片都重解析 resources.json
+            val entry = requireCached(book).byKey[key]
+            if (entry != null) {
+                validateEntry(dir, entry)
+            }
+            ReviewSnapshotResourceHandle(entry?.mimeType ?: guessMime(file), FileInputStream(file), file)
+        }.getOrNull()
     }
+
+    /**
+     * 清空一本书的评论资源（索引 + 全部 blob），返回删除的文件数。
+     * 与 [open]/[put]/[gc] 共用 [lock]：手动清空必须经此删除索引与 blob，
+     * 在锁外直接删文件会与并发抓取写入交错，留下「索引指向已删 blob」
+     * 或「索引删除后又被写回、指向已删 blob」的损坏中间态。
+     * 快照/章节状态文件无并发写方，由 [ReviewSnapshotStore.clearAll] 自行删除。
+     */
+    fun deleteAllResources(book: Book): Int = synchronized(lock) {
+        val dir = ReviewSnapshotStore.reviewsDir(book)
+        var removed = 0
+        if (databaseFile(dir).delete()) removed++
+        dir.listFiles()?.forEach { file ->
+            if (isResourceBlob(file) && file.delete()) removed++
+        }
+        removed
+    }
+
+    /**
+     * 在资源库锁内执行 [block]。
+     * 供直接写 `reviews/` 目录的场景（如缓存包还原评论目录）与 [open]/[put]
+     * 互斥：锁外覆盖索引/blob 会让并发图片请求读到半截文件、并发的索引
+     * 更新被旧文件盖掉。
+     */
+    fun <T> inLock(block: () -> T): T = synchronized(lock) { block() }
 
     fun copyAllTo(book: Book, targetDir: File) = synchronized(lock) {
         if (!ReviewSnapshotStore.hasPersistedReviewData(book)) return@synchronized

@@ -38,6 +38,7 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.help.illustration.imageSrcsFromJson
+import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.ParagraphBubbleRenderer
 import io.legado.app.model.ReadBook
@@ -206,6 +207,15 @@ class TextChapterLayout(
     private var pendingSingleImagePageBreak = false
     private var activeEpubBlockDecoration: ActiveEpubBlockDecoration? = null
     private val imageInfoCache = hashMapOf<String, ImageInfo>()
+
+    /** 段评气泡「已缓存」判定结果：同章同一按钮 src 只查一次文件系统 */
+    private val reviewSnapshotPresence = hashMapOf<String, Boolean>()
+
+    private fun isReviewSnapshotCached(src: String): Boolean {
+        return reviewSnapshotPresence.getOrPut(src) {
+            ReviewSnapshotStore.hasSnapshot(book, bookChapter.url, src)
+        }
+    }
     private var currentSourceIndex = -1
 
     private var isCompleted = false
@@ -1863,15 +1873,25 @@ class TextChapterLayout(
                         }
                         when (iStyle?.uppercase()) {
                             "TEXT" -> {
-                                if (!ParagraphBubbleRenderer.isBubbleSrc(imageInfo.renderSrc)) {
-                                    ImageProvider.cacheImage(book, imageInfo.renderSrc, ReadBook.bookSource)
+                                val renderSrc = imageInfo.renderSrc
+                                val derivedBubble = ParagraphBubbleRenderer.isBubbleSrc(renderSrc)
+                                if (!derivedBubble) {
+                                    ImageProvider.cacheImage(book, renderSrc, ReadBook.bookSource)
                                 }
+                                // 段评气泡的「已缓存」标记来源分两路，但都只在这里判定一次：
+                                // 派生气泡把角标画进 SVG，书源原生气泡由绘制层补点
+                                val nativeBubble = !derivedBubble &&
+                                    ReviewBubble.isParagraphBubble(iStyle, click)
+                                val cached = (derivedBubble || nativeBubble) &&
+                                    isReviewSnapshotCached(renderSrc)
                                 columns.add(
                                     ImageColumn(
                                         start = lineAbsStartX + charX,
                                         end = lineAbsStartX + charRight,
-                                        src = imageInfo.renderSrc,
-                                        click = click
+                                        src = renderSrc,
+                                        click = click,
+                                        reviewBubble = nativeBubble,
+                                        reviewCached = cached
                                     )
                                 )
                             }
@@ -2463,14 +2483,19 @@ class TextChapterLayout(
                         reviewButton = ReviewButton(src, click)
                     )
                 } else {
-                    if (!ParagraphBubbleRenderer.isBubbleSrc(src)) {
+                    val derivedBubble = ParagraphBubbleRenderer.isBubbleSrc(src)
+                    if (!derivedBubble) {
                         ImageProvider.cacheImage(book, src, ReadBook.bookSource)
                     }
+                    // 直接阅读路径没有 style 选项，只按 click 语义认定原生气泡
+                    val nativeBubble = !derivedBubble && ReviewBubble.isParagraphBubble(null, click)
                     ImageColumn(
                         start = absStartX + xStart,
                         end = absStartX + xEnd,
                         src = src,
-                        click = click
+                        click = click,
+                        reviewBubble = nativeBubble,
+                        reviewCached = (derivedBubble || nativeBubble) && isReviewSnapshotCached(src)
                     )
                 }
             }

@@ -45,6 +45,9 @@ class ReviewSnapshotStatusDialog :
     private var retryCompletionJob: Job? = null
     private var reviewItems: List<ReviewSnapshotChapterItem> = emptyList()
 
+    /** 最近一次统计到的快照目录占用，清空确认文案使用 */
+    private var latestTotalBytes = 0L
+
     override fun onStart() {
         super.onStart()
         setLayout(0.92f, 0.76f)
@@ -166,6 +169,7 @@ class ReviewSnapshotStatusDialog :
         val totalBytes = withContext(Dispatchers.IO) {
             ReviewSnapshotStore.totalBytes(book)
         }
+        latestTotalBytes = totalBytes
         binding.tvStats.text = getString(
             R.string.cache_manage_review_stats,
             chapterCount,
@@ -182,9 +186,24 @@ class ReviewSnapshotStatusDialog :
     }
 
     private fun confirmClearAll() {
-        alert(R.string.cache_manage_review_clear, R.string.cache_manage_review_clear_confirm) {
-            yesButton { clearAllSnapshots() }
-            noButton()
+        viewLifecycleOwner.lifecycleScope.launch {
+            // 首次统计未就绪（用户快速点击）时补查一次，避免确认框显示「占用 0B」；
+            // 补查是单层目录 size 汇总，开销可忽略
+            val totalBytes = if (latestTotalBytes > 0L) {
+                latestTotalBytes
+            } else {
+                withContext(Dispatchers.IO) { ReviewSnapshotStore.totalBytes(book) }
+            }
+            alert(
+                getString(R.string.cache_manage_review_clear),
+                getString(
+                    R.string.cache_manage_review_clear_confirm,
+                    ConvertUtils.formatFileSize(totalBytes),
+                ),
+            ) {
+                yesButton { clearAllSnapshots() }
+                noButton()
+            }
         }
     }
 

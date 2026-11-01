@@ -2,6 +2,8 @@ package io.legado.app.ui.widget.dialog
 
 import android.annotation.SuppressLint
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.DialogInterface
 import android.content.pm.ActivityInfo
@@ -13,6 +15,8 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.text.format.DateUtils
 import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
@@ -51,6 +55,8 @@ import io.legado.app.databinding.DialogWebViewBinding
 import io.legado.app.help.book.ParagraphRuleJsExtensions
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION
@@ -137,10 +143,12 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         const val PARAGRAPH_RULE_SOURCE_PREFIX = "paragraph_rule_"
         const val ARG_HTML_FILE = "htmlFile"
         const val ARG_FALLBACK_HTML_FILE = "fallbackHtmlFile"
+        const val ARG_FALLBACK_SAVED_AT = "fallbackSavedAt"
         const val ARG_IS_SNAPSHOT_HTML = "isSnapshotHtml"
         const val ARG_REVIEW_RESOURCE_BOOK = "reviewResourceBook"
         const val ARG_SNAPSHOT_CHAPTER_URL = "snapshotChapterUrl"
         const val ARG_SNAPSHOT_BUTTON_SRC = "snapshotButtonSrc"
+        const val ARG_SNAPSHOT_SAVED_AT = "snapshotSavedAt"
 
         /** 快照补充注入的延后时长：让首帧先绘制、用户先能滚动，再补 tab/楼中楼。 */
         const val SNAPSHOT_DEFERRED_INJECT_DELAY_MS = 120L
@@ -150,10 +158,25 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
         /**
          * 加载看门狗：无快照兜底时，网络挂起会让页面永远等不到首帧，
-         * 超过此时长直接渲染失败页（可重试）。取值与一般网络超时上限对齐，
-         * 慢但在动的加载宁可让它跑完，也不中途打断。
+         * 超过此时长直接渲染失败页（可重试）。这是**绝对上限**，
+         * 只兜「资源都下完了却迟迟不出首帧」这类极少数情况。
          */
         const val LOAD_WATCHDOG_TIMEOUT_MS = 45_000L
+
+        /**
+         * 停滞判定：主文档进度连续这么久没有前进，就当这次加载已经挂了。
+         *
+         * 之前只有 45 秒的绝对上限，网络半死（连接建立了但服务端不回字节）时
+         * 用户要对着骨架干等三刻钟才见到失败页。有了进度信号就能区分
+         * 「慢但在动」和「完全不动」：前者继续等，后者 12 秒就给重试入口。
+         */
+        const val LOAD_STALL_TIMEOUT_MS = 12_000L
+
+        /**
+         * 「快照页发评要先开离线评论模式」引导的延后时长：
+         * 让网络失败兜底时那条「已切换到缓存」先弹，避免两条 toast 叠在一起。
+         */
+        const val SNAPSHOT_HINT_DELAY_MS = 1_200L
     }
 
     /**
@@ -178,8 +201,22 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     /** 快照身份（进程重建用）：与 [reviewResourceBook] 一起定位本地快照文件 */
     private var snapshotChapterUrl: String? = null
     private var snapshotButtonSrc: String? = null
+
+    /** 快照抓取时间（savedAt）：徽章显示「快照 · N 前」用，0 = 未知只显示「快照」 */
+    private var snapshotSavedAt = 0L
+
+    /** 兜底快照的抓取时间：网络失败切快照时快照身份可能缺失，单独随 fallbackHtml 传入 */
+    private var fallbackSnapshotSavedAt = 0L
     private var fallbackApplied = false
     private var fallbackTimeoutRunnable: Runnable? = null
+
+    /**
+     * 快照 → 在线覆盖前的阅读位置。
+     *
+     * 覆盖动作是整页 loadDataWithBaseURL：不还原位置的话，用户正翻到一半的评论会被
+     * 瞬间弹回顶部，看起来就是「页面自己刷新了」。>=0 表示新页就绪后要回到该位置。
+     */
+    private var pendingRestoreScrollY = -1
 
     /** 兜底快照提示只弹一次：超时与 onReceivedError 可能先后触发同一件事 */
     private var fallbackNoticeShown = false
@@ -203,6 +240,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      */
     private var pendingMainFrameError: String? = null
 
+    /**
+     * 当前失败页展示的技术细节（与页面里 <pre> 的内容一致）。
+     * 「复制详情」按钮通过 JS 桥回到原生时从这里取文本——JS 侧不传参，
+     * 避免把异常字符串再从 WebView 里绕一圈回来。
+     */
+    private var errorPageDetail: String? = null
+
     /** 骨架屏兜底：迟迟无首帧时进入慢加载态（灰条 + 「仍在加载」小字）。 */
     private val loadingSlowHintRunnable = Runnable {
         currentBinding?.reviewLoadingSkeleton?.enterSlowMode(
@@ -210,20 +254,52 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         )
     }
 
+    /** 本次首屏加载的起始时刻（uptimeMillis），绝对上限按它算 */
+    private var loadStartedAt = 0L
+
+    /** 最近一次主文档进度前进的时刻，停滞判定按它算 */
+    private var lastProgressAt = 0L
+
+    /** 主文档进度（0–100），由 WebChromeClient 回传；100 表示资源已下完 */
+    private var loadProgress = 0
+
     /**
      * 加载看门狗：无快照兜底且首帧一直没来时，与其让用户对着空白/骨架
      * 无限等，不如给出失败页和重试入口。取消时机 = 任何一次页面就绪
      * （handlePageReady，预渲染接管路径也会走到）或内容已画出首帧。
+     *
+     * 每次触发先看是否「原地卡住」（进度 [LOAD_STALL_TIMEOUT_MS] 没动），
+     * 卡住就直接失败；进度还在推进则续期，直到绝对上限 [LOAD_WATCHDOG_TIMEOUT_MS]。
      */
-    private val loadWatchdogRunnable = Runnable {
-        val lease = requestLifecycle ?: return@Runnable
-        if (displayingSnapshotHtml || displayingErrorPage) return@Runnable
-        if (!ownsLease(lease)) return@Runnable
-        showInitialLoadError(
-            NoStackTraceException("review page not ready in ${LOAD_WATCHDOG_TIMEOUT_MS}ms"),
-            "about:blank",
-            lease
-        )
+    private val loadWatchdogRunnable = object : Runnable {
+        override fun run() {
+            val lease = requestLifecycle ?: return
+            if (displayingSnapshotHtml || displayingErrorPage) return
+            if (!ownsLease(lease)) return
+            val now = SystemClock.uptimeMillis()
+            val elapsed = now - loadStartedAt
+            // 进度到 100% 之后停住不再算「卡住」：主文档已经下完，剩下的首帧渲染
+            // 与 AJAX 评论没有可靠进度信号，宁可等绝对上限也不误杀慢页面
+            val stalled = loadProgress < 100 && now - lastProgressAt >= LOAD_STALL_TIMEOUT_MS
+            when {
+                stalled -> showInitialLoadError(
+                    NoStackTraceException(
+                        "review page stalled at ${loadProgress}% for ${now - lastProgressAt}ms"
+                    ),
+                    "about:blank",
+                    lease
+                )
+
+                elapsed >= LOAD_WATCHDOG_TIMEOUT_MS -> showInitialLoadError(
+                    NoStackTraceException("review page not ready in ${LOAD_WATCHDOG_TIMEOUT_MS}ms"),
+                    "about:blank",
+                    lease
+                )
+
+                // 还在动：按半个停滞窗口续期，兼顾判定及时性与主线程唤醒频率
+                else -> mHandler.postDelayed(this, LOAD_STALL_TIMEOUT_MS / 2)
+            }
+        }
     }
 
     /**
@@ -269,6 +345,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         onDismiss: (() -> Unit)? = null,
         networkRefresher: (suspend () -> Pair<String, String>?)? = null,
         fallbackHtml: String? = null,
+        fallbackSavedAt: Long = 0L,
         offlineOnly: Boolean = false,
         reviewResourceBook: Book? = null,
         outboxContext: ReviewOutboxContext? = null,
@@ -278,11 +355,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         htmlDirect: String? = null,
         snapshotChapterUrl: String? = null,
         snapshotButtonSrc: String? = null,
+        snapshotSavedAt: Long = 0L,
     ) : this() {
         this.webViewSession = webViewSession
         this.onDismissAction = onDismiss
         this.networkRefresher = networkRefresher
         this.fallbackHtml = fallbackHtml
+        this.fallbackSnapshotSavedAt = fallbackSavedAt
         // 调用方（快照点击链路，已在 IO 协程）可预先写盘传入引用，
         // 避免主线程构造对话框时同步写大 HTML；未传则按原逻辑在此写盘。
         this.htmlFileReference = htmlFileReference ?: html?.let(WebViewHtmlStore::write)
@@ -293,6 +372,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         this.htmlDirect = htmlDirect
         this.snapshotChapterUrl = snapshotChapterUrl
         this.snapshotButtonSrc = snapshotButtonSrc
+        this.snapshotSavedAt = snapshotSavedAt
         offlineMode = offlineOnly
         this.reviewResourceBook = reviewResourceBook
         this.outboxContext = outboxContext
@@ -305,6 +385,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             // Fragment arguments: Android serializes arguments into the state Bundle.
             putString(ARG_HTML_FILE, htmlFileReference)
             putString(ARG_FALLBACK_HTML_FILE, fallbackHtmlFileReference)
+            putLong(ARG_FALLBACK_SAVED_AT, fallbackSnapshotSavedAt)
             putString("preloadJs", preloadJs)
             putString("config", config)
             putBoolean("useCommentWebViewSession", webViewSession != null)
@@ -313,6 +394,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             // 快照身份：进程重建时按主键重读本地快照（替代把大 HTML 塞进 Bundle）
             putString(ARG_SNAPSHOT_CHAPTER_URL, snapshotChapterUrl)
             putString(ARG_SNAPSHOT_BUTTON_SRC, snapshotButtonSrc)
+            putLong(ARG_SNAPSHOT_SAVED_AT, snapshotSavedAt)
             outboxContext?.putTo(this)
             syntheticParaContent?.putTo(this)
         }
@@ -728,6 +810,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         displayingErrorPage = false
         // 重试前摘掉上一次失败页的桥：同一实例上不应残留只服务旧失败页的接口
         currentWebView.removeJavascriptInterface(REVIEW_ERROR_BRIDGE_NAME)
+        errorPageDetail = null
         page.scope.launch(Dispatchers.Main) {
             if (args == null) {
                 dismiss()
@@ -744,6 +827,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             // 快照身份从 arguments 恢复：进程重建后 htmlDirect 丢失，靠它重新读本地快照
             snapshotChapterUrl = args.getString(ARG_SNAPSHOT_CHAPTER_URL) ?: snapshotChapterUrl
             snapshotButtonSrc = args.getString(ARG_SNAPSHOT_BUTTON_SRC) ?: snapshotButtonSrc
+            snapshotSavedAt = args.getLong(ARG_SNAPSHOT_SAVED_AT, snapshotSavedAt)
             try {
                 args.getString("config")?.let { json ->
                     try {
@@ -788,7 +872,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             ReviewSnapshotStore.getByKey(
                                 identityBook, identityChapterUrl, identityButtonSrc
                             )
-                        }?.also { displayingSnapshotHtml = true }
+                        }?.also {
+                            // 重建后以快照自身为准登记 savedAt（Bundle 里的可能是 0）
+                            markDisplayingSnapshot(it.savedAt)
+                        }
                             ?.html?.takeIf { it.isNotBlank() }
                             ?: throw NoStackTraceException("review snapshot is missing after recreate")
                     } else {
@@ -798,8 +885,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 if (htmlArgument != null) {
                     // 身份只认构造时传入的来源标记，不再用 html 是否非空推断：
                     // showBrowser 活页 html 同样非空，但身份是在线，禁止离线接管。
-                    displayingSnapshotHtml =
-                        args.getBoolean(ARG_IS_SNAPSHOT_HTML, false) || displayingSnapshotHtml
+                    // 走统一入口登记：主快照路径同样触发离线评论模式的一次性引导
+                    if (args.getBoolean(ARG_IS_SNAPSHOT_HTML, false)) {
+                        markDisplayingSnapshot(snapshotSavedAt)
+                    }
                 }
                 val fallbackReference = args.getString(ARG_FALLBACK_HTML_FILE)
                 if (fallbackReference != null) {
@@ -809,6 +898,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             ?: throw NoStackTraceException("WebView fallback HTML file is missing: $fallbackReference")
                     }
                 }
+                fallbackSnapshotSavedAt = args.getLong(ARG_FALLBACK_SAVED_AT, fallbackSnapshotSavedAt)
                 val loadedSource = withContext(IO) {
                     if (sourceKey.startsWith(PARAGRAPH_RULE_SOURCE_PREFIX)) {
                         val ruleId = sourceKey.removePrefix(PARAGRAPH_RULE_SOURCE_PREFIX).toLongOrNull()
@@ -859,7 +949,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 // 已用快照兜底：进入离线模式，不再允许任何网络请求；
                                 // 内容即快照，身份同步置为快照（同一权责的另一面）。
                                 offlineMode = true
-                                displayingSnapshotHtml = true
+                                markDisplayingSnapshot(fallbackSnapshotSavedAt)
                                 // 内容来源已从在线变为缓存，告知用户（只提示一次）
                                 notifyFallbackShown()
                             } ?: throw error
@@ -916,15 +1006,33 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             withContext(Dispatchers.Main) {
                                 if (ownsLease(lease)) {
                                     // 在线覆盖页加载后不再是快照内容，撤回注入标记
+                                    val wasSnapshot = displayingSnapshotHtml
                                     displayingSnapshotHtml = false
                                     updateSourceBadge()
-                                    currentWebView.loadDataWithBaseURL(
-                                        refreshed.first.ifBlank { document.first },
-                                        refreshed.second,
-                                        "text/html",
-                                        "utf-8",
-                                        refreshed.first.ifBlank { document.first }
-                                    )
+                                    if (wasSnapshot && !displayingErrorPage) {
+                                        // 内容即将被替换成最新评论页：明示一次，
+                                        // 避免用户以为页面突然自己刷新了
+                                        activity?.toastOnUi(
+                                            getString(R.string.review_snapshot_updated_toast)
+                                        )
+                                    }
+                                    // 记住覆盖前的阅读位置：整页替换后回到原处，避免「正读着被弹回顶部」。
+                                    // 位置必须从页面里取（CSS px，与 window.scrollTo 同一坐标系）；
+                                    // View.scrollY 是设备像素，有 devicePixelRatio 时会偏一大截。
+                                    // 取回后才真正换页，保证位置取的是替换前那一页。
+                                    val reloadUrl = refreshed.first.ifBlank { document.first }
+                                    currentWebView.evaluateJavascript("window.scrollY") { value ->
+                                        if (!ownsLease(lease)) return@evaluateJavascript
+                                        pendingRestoreScrollY =
+                                            value?.trim()?.toFloatOrNull()?.toInt() ?: -1
+                                        currentWebView.loadDataWithBaseURL(
+                                            reloadUrl,
+                                            refreshed.second,
+                                            "text/html",
+                                            "utf-8",
+                                            reloadUrl
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -961,12 +1069,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         hideLoadingSkeleton()
         displayingErrorPage = true
         currentWebView.webViewClient = CustomWebViewClient(lease)
-        // 失败页的按钮通过 JS 桥回到原生：重试 / 关闭
+        // 失败页的按钮通过 JS 桥回到原生：重试 / 关闭 / 复制详情
         currentWebView.addJavascriptInterface(
             ReviewErrorBridge(this, lease),
             REVIEW_ERROR_BRIDGE_NAME
         )
         val content = reviewErrorPageContent(error)
+        errorPageDetail = content.detail
         currentWebView.loadDataWithBaseURL(
             baseUrl,
             reviewErrorPageHtml(content),
@@ -1024,6 +1133,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             closeLabel = getString(R.string.close),
             detailLabel = getString(R.string.review_error_detail),
             detail = error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName,
+            copyLabel = getString(R.string.review_error_copy_detail),
+            copiedLabel = getString(R.string.review_error_copied),
             night = AppConfig.isNightTheme
         )
     }
@@ -1228,6 +1339,30 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         hideLoadingSkeleton()
         // 页面就绪后同步快照标识（快照内容浮出徽章，在线内容不显示）
         updateSourceBadge()
+        // 快照 → 在线覆盖：回到覆盖前的阅读位置
+        restorePendingScroll(view)
+    }
+
+    /**
+     * 把「在线覆盖」前记住的滚动位置还原到新页。
+     *
+     * 为什么要还原两次：新页刚 onPageFinished 时评论区可能还没撑满（图片、异步楼中楼
+     * 仍在长高），此时 scrollTo 会被浏览器夹到当前内容高度，等布局长完再校正一次才准确。
+     * 位置按绝对像素还原而不是百分比：同一条评论在页里的位置基本固定，用户要的是
+     * 「刚才读到的那几条还在眼前」，不是「整页高度的同一比例」。
+     */
+    private fun restorePendingScroll(view: WebView) {
+        val savedY = pendingRestoreScrollY
+        if (savedY <= 0) {
+            pendingRestoreScrollY = -1
+            return
+        }
+        pendingRestoreScrollY = -1
+        val js = "window.scrollTo(0, $savedY);"
+        view.evaluateJavascript(js, null)
+        view.postDelayed({
+            if (view === currentWebView) view.evaluateJavascript(js, null)
+        }, 320L)
     }
 
     /**
@@ -1292,8 +1427,21 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun armLoadingTimers() {
         mHandler.removeCallbacks(loadingSlowHintRunnable)
         mHandler.removeCallbacks(loadWatchdogRunnable)
+        loadStartedAt = SystemClock.uptimeMillis()
+        lastProgressAt = loadStartedAt
+        loadProgress = 0
         mHandler.postDelayed(loadingSlowHintRunnable, LOADING_SLOW_HINT_DELAY_MS)
-        mHandler.postDelayed(loadWatchdogRunnable, LOAD_WATCHDOG_TIMEOUT_MS)
+        mHandler.postDelayed(loadWatchdogRunnable, LOAD_STALL_TIMEOUT_MS)
+    }
+
+    /**
+     * 主文档进度前进：刷新停滞计时，看门狗据此区分「慢但在动」与「挂住不动」。
+     * 进度回调可能在页面就绪之后才补发，这里不参与骨架显隐，只做计时。
+     */
+    private fun onLoadProgress(progress: Int) {
+        if (progress <= loadProgress) return
+        loadProgress = progress
+        lastProgressAt = SystemClock.uptimeMillis()
     }
 
     private fun cancelLoadingTimers() {
@@ -1355,6 +1503,36 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         )
     }
 
+    /** 快照内容上屏的统一入口：登记显示状态与抓取时间（徽章「N 前/已过期」的数据源） */
+    private fun markDisplayingSnapshot(savedAt: Long) {
+        displayingSnapshotHtml = true
+        if (savedAt > 0L) snapshotSavedAt = savedAt
+        maybeHintOfflineReviewMode()
+    }
+
+    /**
+     * 快照页是离线身份：没开「离线评论模式」时，页面里的发评/点赞没有网络可发，
+     * 用户敲完字点发送只会石沉大海。第一次遇到快照时提示一次（记在 LocalConfig），
+     * 之后不再打扰——这是引导，不是每次开窗都弹的告诫。
+     *
+     * 延后一会儿再弹：网络失败切快照的路径紧接着要弹「已切换到缓存评论」，
+     * 立即弹会叠成两条；[notifyFallbackShown] 会撤掉这条待弹提示。
+     */
+    private fun maybeHintOfflineReviewMode() {
+        if (AppConfig.offlineReviewMode) return
+        if (LocalConfig.reviewSnapshotOfflineHintShown) return
+        mHandler.removeCallbacks(snapshotHintRunnable)
+        mHandler.postDelayed(snapshotHintRunnable, SNAPSHOT_HINT_DELAY_MS)
+    }
+
+    private val snapshotHintRunnable = Runnable {
+        if (AppConfig.offlineReviewMode) return@Runnable
+        if (LocalConfig.reviewSnapshotOfflineHintShown) return@Runnable
+        if (!isAdded || activity == null) return@Runnable
+        LocalConfig.reviewSnapshotOfflineHintShown = true
+        activity?.toastOnUi(R.string.review_snapshot_offline_hint)
+    }
+
     private fun cancelFallbackTimeout() {
         fallbackTimeoutRunnable?.let { mHandler.removeCallbacks(it) }
         fallbackTimeoutRunnable = null
@@ -1369,7 +1547,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         if (!ownsLease(requestLifecycle ?: return)) return
         // 兑底快照属于离线内容：切换后禁止一切网络请求
         offlineMode = true
-        displayingSnapshotHtml = true
+        markDisplayingSnapshot(fallbackSnapshotSavedAt)
         // 内容来源从在线换成了缓存：得让用户知道「现在看到的是旧内容」，
         // 否则会把过期评论当成最新状态去点赞/回复
         notifyFallbackShown()
@@ -1397,7 +1575,26 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun updateSourceBadge() {
         val badge = currentBinding?.reviewSourceBadge ?: return
         if (displayingSnapshotHtml && !displayingErrorPage) {
-            badge.text = getString(R.string.review_snapshot_badge)
+            val base = if (snapshotSavedAt > 0L) {
+                val relative = DateUtils.getRelativeTimeSpanString(
+                    snapshotSavedAt,
+                    System.currentTimeMillis(),
+                    DateUtils.MINUTE_IN_MILLIS,
+                )
+                getString(R.string.review_snapshot_badge_with_age, relative)
+            } else {
+                getString(R.string.review_snapshot_badge)
+            }
+            // 超过保鲜期（TTL>0 且 savedAt 有效）才标「已过期」；
+            // savedAt=0 说明抓取时间未知，不武断标记
+            val stale = snapshotSavedAt > 0L && ReviewPreheatCoordinator.isStale(
+                snapshotSavedAt, System.currentTimeMillis(), AppConfig.reviewSnapshotTtlDays
+            )
+            badge.text = if (stale) {
+                base + getString(R.string.review_snapshot_badge_stale_suffix)
+            } else {
+                base
+            }
             badge.visible()
         } else {
             badge.gone()
@@ -1407,6 +1604,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun notifyFallbackShown() {
         if (fallbackNoticeShown) return
         fallbackNoticeShown = true
+        // 这条本身就是「内容是缓存」的说明，离线评论引导让位（下次直接开快照时再提示）
+        mHandler.removeCallbacks(snapshotHintRunnable)
         activity?.toastOnUi(getString(R.string.review_fallback_snapshot_toast))
     }
 
@@ -1538,7 +1737,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     }
 
     /**
-     * 失败页的两个按钮：重试 / 关闭。
+     * 失败页的三个按钮：重试 / 关闭 / 复制详情。
      *
      * 与 [JSInterface] 同一套约定：持有 WebView 回调线程 → 切主线程 → 校验 lease，
      * 只保留弱引用，避免失败页把对话框钉在 WebView 的 JS 桥里。
@@ -1571,6 +1770,33 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             fra.mHandler.post {
                 if (fra.isAdded) fra.dismissAllowingStateLoss()
             }
+        }
+
+        /**
+         * 复制失败页的技术细节。
+         *
+         * 在 JS 桥线程被调用，真正的剪贴板写入切到主线程；返回值只代表「已经受理」，
+         * 让按钮文案当场变成「已复制」——为了一次成功的写入把 JS 线程阻塞住换来的
+         * 精确性并不值得（剪贴板写入不会失败，除非系统剪贴板服务不可用）。
+         */
+        @JavascriptInterface
+        fun copy(): Boolean {
+            val fra = dialogRef.get() ?: return false
+            val detail = fra.errorPageDetail ?: return false
+            if (fra.activity == null || !fra.isAdded) return false
+            fra.mHandler.post {
+                val ctx = fra.activity ?: return@post
+                val manager = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    ?: return@post
+                manager.setPrimaryClip(
+                    ClipData.newPlainText(ctx.getString(R.string.review_error_detail), detail)
+                )
+                // Android 13+ 系统自带剪贴板浮层，再弹一个 toast 就是两条提示
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                    ctx.toastOnUi(R.string.review_error_copied)
+                }
+            }
+            return true
         }
     }
 
@@ -1703,6 +1929,15 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         /* 覆盖window.close() */
         override fun onCloseWindow(window: WebView?) {
             if (ownsLease(lease)) dismiss()
+        }
+
+        /**
+         * 主文档进度：只用来喂看门狗的停滞判定（见 [loadWatchdogRunnable]）。
+         * 骨架显隐仍由首帧可见/页面就绪决定，进度 100% 不等于内容已经画出来。
+         */
+        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+            if (!ownsLease(lease)) return
+            onLoadProgress(newProgress)
         }
 
         /* 监听网页日志 */

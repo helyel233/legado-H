@@ -12,6 +12,8 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.compress.SafeZipExtractor
 import io.legado.app.utils.compress.SafeZipLimits
@@ -121,7 +123,13 @@ object BookCacheZip {
                 )
 
                 val targetBookDir = File(tempCacheDir, folderName).createFolderIfNotExist()
-                if (!bookFolder.copyRecursively(targetBookDir, overwrite = true)) {
+                // 段评快照目录随书缓存一起导出：换设备/恢复缓存后段评与离线评论才还在。
+                // 关闭 exportReviews 时整目录不打包（见 copyBookCacheFolder）
+                if (!copyBookCacheFolder(
+                        bookFolder, targetBookDir,
+                        includeReviews = AppConfig.exportReviews
+                    )
+                ) {
                     AppLog.put("书籍缓存导出复制不完整：${book.name}")
                 }
                 exportBooks.add(book)
@@ -328,7 +336,66 @@ object BookCacheZip {
                     AppLog.put("书籍缓存恢复图片复制不完整：${cacheIndex.bookName}")
                 }
             }
+
+            // 评论快照目录：导出时随书缓存一起打包，导入必须一起还原。
+            // 漏掉这一步时，换设备/恢复缓存后段评、章评/书评补充、离线评论全部丢失
+            // （快照、章节状态与资源库索引同在这一个目录里，必须整体还原）。
+            // 仅当书身份完全一致才还原：快照文件内嵌 bookUrl 且读取时严格校验，
+            // 按书名匹配到另一本书时搬过去也只会被全部判为「不属于本书」。
+            val sourceReviewDir = File(sourceCacheDir, ReviewSnapshotStore.REVIEWS_DIR_NAME)
+            if (sourceReviewDir.isDirectory) {
+                if (matchedBook.bookUrl == cacheIndex.bookUrl) {
+                    runCatching {
+                        ReviewSnapshotStore.restoreFromDirectory(matchedBook, sourceReviewDir)
+                    }.onFailure { error ->
+                        AppLog.put(
+                            "书籍缓存恢复评论快照出错：${cacheIndex.bookName}\n${error.localizedMessage}",
+                            error
+                        )
+                    }
+                } else {
+                    AppLog.put("跳过评论快照恢复：书身份已变化（${cacheIndex.bookName}）")
+                }
+            }
         }
+    }
+
+    /**
+     * 复制单本书的缓存目录。
+     *
+     * 这里不用 `copyRecursively`：需要按「是否导出段评」跳过 `reviews/` 子目录，
+     * 而不是先把几十 MB 的评论图片复制过去再删掉。
+     *
+     * @return false 表示有文件/目录复制失败（调用方记日志，不中断整包导出）
+     */
+    private fun copyBookCacheFolder(
+        source: File,
+        target: File,
+        includeReviews: Boolean
+    ): Boolean {
+        var complete = true
+        source.listFiles()?.forEach { file ->
+            if (!includeReviews && file.isDirectory &&
+                file.name == ReviewSnapshotStore.REVIEWS_DIR_NAME
+            ) {
+                return@forEach
+            }
+            val targetFile = File(target, file.name)
+            if (file.isDirectory) {
+                if (!targetFile.exists() && !targetFile.mkdirs()) {
+                    complete = false
+                    return@forEach
+                }
+                if (!copyBookCacheFolder(file, targetFile, includeReviews)) complete = false
+            } else {
+                val copied = runCatching {
+                    file.copyTo(targetFile, overwrite = true)
+                    true
+                }.getOrDefault(false)
+                if (!copied) complete = false
+            }
+        }
+        return complete
     }
 
     /** 匹配书籍：bookUrl 精确 -> 书名+作者 -> 书名 */

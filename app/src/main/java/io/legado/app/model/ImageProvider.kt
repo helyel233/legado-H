@@ -294,10 +294,13 @@ object ImageProvider {
         cacheKeySuffix: String? = null
     ): Bitmap {
         if (ParagraphBubbleRenderer.isBubbleSrc(src)) {
-            val cacheKey = ParagraphBubbleRenderer.cacheKey(src, width, height)
+            // 「已缓存」角标会改变渲染结果，必须并入缓存键：
+            // 否则标记前后的两种气泡会互相命中同一份位图
+            val cached = cacheKeySuffix != null
+            val cacheKey = ParagraphBubbleRenderer.cacheKey(src, width, height, cached)
             getNotRecycled(cacheKey)?.let { return it }
             return kotlin.runCatching {
-                ParagraphBubbleRenderer.render(src, width, height)
+                ParagraphBubbleRenderer.render(src, width, height, cached)
                     ?: throw NoStackTraceException(appCtx.getString(R.string.error_decode_bitmap))
             }.onSuccess {
                 put(cacheKey, it)

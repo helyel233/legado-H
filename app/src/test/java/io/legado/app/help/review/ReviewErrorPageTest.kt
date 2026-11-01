@@ -98,6 +98,53 @@ class ReviewErrorPageTest {
     }
 
     @Test
+    fun stalledLoadIsTimeoutNotUnknown() {
+        // 停滞判定的真实措辞：12 秒进度不动就直接失败，用户该看到的是「网络不好」
+        assertEquals(
+            ReviewErrorKind.TIMEOUT,
+            classifyReviewError(
+                NoStackTraceException("review page stalled at 23% for 12100ms")
+            )
+        )
+    }
+
+    @Test
+    fun copyDetailButtonRendersWithDetail() {
+        val html = reviewErrorPageHtml(
+            ReviewErrorPageContent(
+                title = "t",
+                message = "m",
+                retryLabel = "重试",
+                closeLabel = "关闭",
+                detailLabel = "技术细节",
+                detail = "java.io.IOException: boom",
+                copyLabel = "复制详情",
+                copiedLabel = "已复制"
+            )
+        )
+        assertTrue(html.contains("$REVIEW_ERROR_BRIDGE_NAME.copy()"))
+        assertTrue(html.contains("复制详情"))
+        assertTrue(html.contains("data-done=\"已复制\""))
+    }
+
+    @Test
+    fun copyButtonIsAbsentWithoutDetail() {
+        val html = reviewErrorPageHtml(
+            ReviewErrorPageContent(
+                title = "t",
+                message = "m",
+                retryLabel = "重试",
+                closeLabel = "关闭",
+                detailLabel = "技术细节",
+                detail = "  ",
+                copyLabel = "复制详情"
+            )
+        )
+        // 没有详情就没有可复制的文本：按钮本身不该出现（脚本里的函数定义仍在）
+        assertFalse(html.contains("class=\"copy\""))
+    }
+
+    @Test
     fun pageContainsTitleMessageAndBothButtons() {
         val html = reviewErrorPageHtml(
             ReviewErrorPageContent(
