@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.23.2 · 2026/11/01**
+
+- 修复重建/切主题时偶崩：离屏书架 Fragment 的 View 已被 ViewPager2 销毁却仍被 MainActivity 反向调用 upSort() 抛 IllegalStateException；新增 BaseBookshelfFragment.isViewReady()(isAdded&&view!=null) 守卫、recreate() 仅 View 就绪才排序、BookshelfFragment1/2.upSort() 同步加守卫；MainActivity 新增 recreateRequested 防同实例重复重建(漏掉由1.5s安全网补发)
+
 **vH.1.23.1 · 2026/11/01**
 
 - 重做「我的」设置页交互与分区：主题模式改为行内分段控件(当前项高亮、一次点击直达，替代原弹窗二次选择)；Web 服务行交互契约可预测化(整行点击=切换开关恒定不变，运行中的"复制地址/浏览器打开"收进Switch左侧"⋯"入口)；设置分区按用户任务域重组(阅读+外观→阅读与界面；书签/阅读记录归入数据与工具)；设置内搜索命中片段染强调色高亮(含 Unicode 小写变长降级防崩)；debug 包进页面校验搜索深链断链当场拦下；搜索过滤 remember 化不再每次重组重跑全量；补无障碍语义与分区文案

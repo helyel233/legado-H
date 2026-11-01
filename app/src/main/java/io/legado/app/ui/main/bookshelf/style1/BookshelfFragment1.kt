@@ -224,6 +224,9 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     override fun upSort() {
+        // 与 BookshelfFragment2 同源：View 已销毁时 adapter 已经跟着 RecyclerView 走掉，
+        // 保持同一套「先问一句」的调用约定
+        if (!isViewReady()) return
         adapter.notifyDataSetChanged()
     }
 

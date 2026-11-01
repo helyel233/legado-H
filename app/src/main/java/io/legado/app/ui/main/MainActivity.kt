@@ -217,6 +217,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     /** 外观套件变更事件后紧跟 RECREATE：置位后跳过本帧的全量外观刷新，避免同帧双倍重建 */
     private var recreatePending = false
 
+    /**
+     * 已经请求过一次重建、本实例还没被替换掉。
+     *
+     * 短时间连投两次 RECREATE（切主题 + 改外观套件）会排两个 post，第二个往往正好落在
+     * 「Fragment 已 onDestroyView、Activity 还没 onDestroy」的窗口里，此时再走 recreate()
+     * 会在重建路径上碰到已销毁的 Fragment。同一个实例只允许请求一次，漏掉的由 1.5s 安全网补发。
+     */
+    private var recreateRequested = false
+
     /** 安全网：recreate() 万一未真正重建本实例（如 Activity 正在结束），1.5s 后必须解除抑制 */
     private val resetRecreatePendingRunnable = Runnable {
         if (recreatePending) {
@@ -224,9 +233,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             //分发同帧被框架合并/丢弃），补发一次并解除抑制，避免外观刷新被长期跳过。
             //仍是先解除抑制：即使这里不补发，也不能让外观刷新一直被跳过
             recreatePending = false
+            // 安全网意味着「上一次 recreate() 没把本实例换掉」，所以允许再请求一次
+            recreateRequested = false
             // 与上面 post 里的守卫保持一致：本实例可能已在 finishing（用户刚退出），
             // 对这样的 Activity 调 recreate() 会重新拉起一次，遮挡退出流程
             if (!isFinishing && !isDestroyed) {
+                recreateRequested = true
                 recreate()
             }
         }
@@ -2375,11 +2387,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     /**
      * 如果重启太快fragment不会重建,这里更新一下书架的排序
+     *
+     * 注意不能无条件调用：主题/外观变更可能发生在任意 Tab，书架在离屏页时 ViewPager2
+     * 已经销毁了它的 View，而 [fragmentMap] 仍持有旧实例；此时 upSort() 会走到
+     * initBooksData() 里的 binding / viewLifecycleOwner，直接抛
+     * "Can't access the Fragment View's LifecycleOwner ... when getView() is null"。
+     * 重建期间 Fragment 先于 Activity 销毁 View 的那个窗口同样会命中，所以这里必须问一句。
      */
     override fun recreate() {
-        (fragmentMap[getFragmentId(bookshelfPosition())] as? BaseBookshelfFragment)?.run {
-            upSort()
-        }
+        (fragmentMap[getFragmentId(bookshelfPosition())] as? BaseBookshelfFragment)
+            ?.takeIf { it.isViewReady() }
+            ?.upSort()
         super.recreate()
     }
 
@@ -2399,7 +2417,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             //recreate() 在该窗口内可能被 ActivityThread 合并丢弃，导致 View 版
             //页面（如经典发现页书源框）停留旧主题
             binding.root.post {
-                if (!isFinishing && !isDestroyed) {
+                if (!isFinishing && !isDestroyed && !recreateRequested) {
+                    recreateRequested = true
                     recreate()
                 }
             }

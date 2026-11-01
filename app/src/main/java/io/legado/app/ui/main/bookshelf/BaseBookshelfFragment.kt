@@ -241,6 +241,16 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
 
     abstract fun upSort()
 
+    /**
+     * View 是否还能用。
+     *
+     * [io.legado.app.ui.main.MainActivity.fragmentMap] 只是「位置 → Fragment」的弱映射，
+     * 不做清理；ViewPager2 销毁离屏页 View 之后实例仍留在里面。所以任何「从 Activity
+     * 或其他组件反向调书架方法」的路径，都必须先过这一句，否则碰 binding /
+     * viewLifecycleOwner 会抛 IllegalStateException。
+     */
+    internal fun isViewReady(): Boolean = isAdded && view != null
+
     override fun observeLiveBus() {
         viewModel.addBookProgressLiveData.observe(this) { count ->
             if (count < 0) {

@@ -403,6 +403,9 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
     }
 
     override fun upSort() {
+        // initBooksData 会写 binding.titleBar、起 viewLifecycleOwner 作用域的协程，
+        // View 已销毁时必须整段跳过（下次 onFragmentCreated 会重新初始化）
+        if (!isViewReady()) return
         initBooksData()
     }
 

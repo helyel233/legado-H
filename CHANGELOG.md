@@ -1,5 +1,14 @@
 # 更新日志
 
+## 1.23.2 版（2026-11-01）
+
+本版修复一处重建 / 切主题时偶发的崩溃：离屏书架 Fragment 的 View 已被 ViewPager2 销毁，却仍被 `MainActivity` 反向调用 `upSort()` 而抛 `IllegalStateException`。
+
+### 修复 / 优化
+
+- **重建 / 切主题时离屏书架崩溃**：`MainActivity.recreate()` 里反向调书架 `upSort()` 前先过 `BaseBookshelfFragment.isViewReady()`（`isAdded && view != null`）守卫——ViewPager2 销毁离屏页 View 后 `fragmentMap` 仍持有旧实例，原路径会撞 `binding` / `viewLifecycleOwner` 抛 `Can't access the Fragment View's LifecycleOwner ... when getView() is null`。`BookshelfFragment1.upSort()`（仅 `notifyDataSetChanged`）与 `BookshelfFragment2.upSort()`（`initBooksData` 写 `binding.titleBar`、起 viewLifecycleOwner 作用域协程）同步加 `isViewReady()` 守卫，View 已销毁整段跳过，下次 `onFragmentCreated` 重新初始化。
+- **同实例重复重建防护**：`MainActivity` 新增 `recreateRequested` 标志，同一实例只允许请求一次 `recreate()`，避免「切主题 + 改外观套件」短时间连投两次 RECREATE、第二个正好落在「Fragment 已 onDestroyView、Activity 还没 onDestroy」窗口内于重建路径上撞已销毁 Fragment；漏掉的重建由 1.5s 安全网补发（`recreatePending` 复位时一并放开 `recreateRequested`）。
+
 ## 1.23.1 版（2026-11-01）
 
 本版重做「我的」设置页的交互与分区：主题模式改为行内分段控件一次点击直达，Web 服务行把开关与「复制地址/浏览器打开」拆成恒定可预测的两套手势，设置分区按用户任务域重新归并，并给设置内搜索加上命中高亮。
