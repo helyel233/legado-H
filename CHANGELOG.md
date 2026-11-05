@@ -8,6 +8,7 @@
 
 - **硬件真高斯管线（API 31+）**：玻璃层录进独立 `RenderNode("ExploreGlassBackdrop")`，只对该节点设置 `RenderEffect.createBlurEffect(radiusX, radiusY, CLAMP)` 交给 GPU；不模糊整行 View，书源名文字、箭头、加载动画与 tint / shell / 描边都不受影响。半径沿用底栏 frosted 同款 `blurDp = 12 + glassLevel * 18` 换算为屏幕像素并限幅 `1..80px`；因用的就是 GPU 真高斯，不再乘软件管线专用的 1.4 等效系数。
 - **双份底图缓存 `GlassBackdrop(raw, blurred)`**：一次异步构建同时产出未模糊 `raw`（硬件采样源）与 `stackBlurSoftware` 预模糊 `blurred`（软件采样源兼即时降级源）。利用 `stackBlurSoftware` 返回全新 Bitmap、不改动入参的特性共存；缓存 key、在途去重、IO 线程构建与 `GlassPositionTracker` 位置缓存全部复用，两条管线共用同一 `shaderMatrix` 保证位置对齐。
+- **半径口径单测**：把 `blurDp = 12 + glassLevel * 18` 乘屏幕密度并限幅 `1..80px` 的换算抽成不依赖 Android 运行时的纯函数 `exploreHardwareBlurPx`，新增 4 条 JUnit 断言覆盖密度线性换算、不误乘软件管线 1.4 系数、上下限钳制、强度单调性。这类口径错误不会导致编译失败，只会让观感或低端 GPU 开销悄悄偏离，故用确定性断言锁住（复用项目既有 JUnit 设施，无新增依赖）。
 
 ### 修复 / 优化
 
@@ -15,7 +16,8 @@
 - **降级矩阵收紧**：level<=0 / 墨水屏 / 低内存 / 动图壁纸 / API 21–30 / RenderEffect 构造失败均走既有软件管线或纯 shell；非硬件加速 Canvas 只当帧降级（不置持久故障位，下一帧自动恢复真高斯），硬件 Canvas 上 `drawRenderNode` 抛异常才置位永久降级；`raw` 缺失直接让位软件管线避免双重模糊，`blurred` 缺失则只画 shell。`stackBlurSoftware` 构建异常时不再像 1.25.2 那样把 `blurred` 兜底成 `raw`（那会透出清晰壁纸），改为留 null 由 shell 遮盖，硬件管线仍可用 `raw` 正常出图。
 - **Canvas 状态安全**：硬件层的 `beginRecording/endRecording` 与 `save()/translate()/clipPath()/restoreToCount()` 一律用 `try/finally` 闭合，异常降级时同帧后续的 tint / shell / 描边不会错位绘制。
 - **`setColorFilter()` 补 `invalidateSelf()`**：滤镜变更立即触发重绘，硬件层 paint 同步生效。
-- **编译告警清理**：`draw()` 中恒真条件改为 `activeLayer` 单次判定；`getOpacity()` 的弃用告警为 1.25.2 基线既有，本版未改动。
+- **编译告警清理**：`draw()` 中恒真条件改为 `activeLayer` 单次判定；`getOpacity()` 的弃用告警为 1.25.2 基线既有（项目另有两处同款），本版未改动。
+- **恢复单测源码集编译**：`DnsBenchmarkLiveTest` 引用了不存在的 `result.name`（`DnsProbeResult` 只有 `provider / hostname / samples`），使 `:app:testAppDebugUnitTest` 整体编译失败、连带其它单测无法运行；改为 `result.provider?.id ?: "system"`（`null` 表示系统解析器）。此为既有基线问题，仅修一行。
 
 ## 1.25.2 版（2026-11-05）
 

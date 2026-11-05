@@ -61,6 +61,26 @@ private data class GlassBackdrop(
 private fun supportsHardwareBlur(): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+/** 底栏 frosted 同款模糊口径的 dp 基数与强度系数。 */
+private const val BASE_BLUR_DP = 12f
+private const val GLASS_LEVEL_BLUR_DP = 18f
+
+/** 硬件管线模糊半径（屏幕像素）的上下限。 */
+private const val HARDWARE_BLUR_MIN_PX = 1f
+private const val HARDWARE_BLUR_MAX_PX = 80f
+
+/**
+ * 硬件高斯半径的纯函数换算（不依赖 Android 运行时，可直接单测覆盖口径与限幅）：
+ * `blurDp = 12 + glassLevel * 18`（与底栏 frosted 同口径），乘屏幕密度得屏幕像素，
+ * 再限幅到 [1, 80] px。**不乘**软件管线的 1.4 等效系数——那个系数是把 GPU 高斯
+ * 折算成 stackBlur 半径用的，硬件管线用的就是 GPU 真高斯。
+ * 上限防止超大半径在低端 GPU 上开销陡增，下限避免 0 半径触发 API 异常。
+ */
+internal fun exploreHardwareBlurPx(glassLevel: Float, density: Float): Float {
+    val blurDp = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP
+    return (blurDp * density).coerceIn(HARDWARE_BLUR_MIN_PX, HARDWARE_BLUR_MAX_PX)
+}
+
 /**
  * 发现页书源名行的毛玻璃背景。
  *
@@ -111,8 +131,6 @@ object ExploreGlassBackdrop {
      *   [FrostedGlassDrawable] 的常量说明。
      */
     private const val GLASS_LEVEL_DIVISOR = 200f
-    private const val BASE_BLUR_DP = 12f
-    private const val GLASS_LEVEL_BLUR_DP = 18f
     private const val STACK_BLUR_DENSITY_FACTOR = 1.4f
 
     /**
@@ -122,23 +140,6 @@ object ExploreGlassBackdrop {
      * 屏幕等效模糊半径由 [backdrop] 的 radius 公式按 DOWNSCALE 反比例换算，故改此值不改变观感强度。
      */
     private const val DOWNSCALE = 3f
-
-    /**
-     * 硬件管线模糊半径（屏幕像素）的上下限。
-     * 底栏 frosted 同款口径 `blurRadius(dp) = 12 + glassLevel * 18`，换算为屏幕像素
-     * `blurDp * density`。这里**不乘** [STACK_BLUR_DENSITY_FACTOR]：那个 1.4 是把 GPU 高斯
-     * 折算成软件 stackBlur 等效半径的系数，硬件管线用的就是 GPU 真高斯，无需折算。
-     * 上限防止超大半径在低端 GPU 上开销陡增，下限避免 0 半径触发 API 异常。
-     */
-    private const val HARDWARE_BLUR_MIN_PX = 1f
-    private const val HARDWARE_BLUR_MAX_PX = 80f
-
-    /** 与底栏 frosted 同款的 GPU 高斯半径（屏幕像素）。 */
-    private fun hardwareBlurRadius(context: Context, glassLevel: Float): Float {
-        val blurDp = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP
-        return (blurDp * context.resources.displayMetrics.density)
-            .coerceIn(HARDWARE_BLUR_MIN_PX, HARDWARE_BLUR_MAX_PX)
-    }
 
     private data class BackdropCache(
         val key: String,
@@ -175,7 +176,9 @@ object ExploreGlassBackdrop {
             glassLevel = glassLevel,
             baseColor = ThemeStore.bottomBackground(context),
             useHardware = useHardware,
-            hardwareBlurPx = if (useHardware) hardwareBlurRadius(context, glassLevel) else 0f
+            hardwareBlurPx = if (useHardware) {
+                exploreHardwareBlurPx(glassLevel, context.resources.displayMetrics.density)
+            } else 0f
         ).also { drawable ->
             //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
             //完成后回填刷新，期间先用上一张缓存位图（若有）过渡

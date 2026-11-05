@@ -20,7 +20,8 @@ class DnsBenchmarkLiveTest {
             "network" to "Windows build machine; not Android device", "physicalDeviceVerified" to false,
             "host" to "example.com", "includeIpv6" to true, "dohCacheEnabled" to false,
             "fallbackEnabled" to false, "hostsApplied" to false,
-            "results" to results.map { result -> mapOf("name" to result.name, "provider" to result.provider,
+            // DnsProbeResult 没有 name 字段；provider 为 null 表示系统解析器，其余用 provider.id 标识
+            "results" to results.map { result -> mapOf("name" to (result.provider?.id ?: "system"), "provider" to result.provider,
                 "samples" to result.samples, "successCount" to result.successCount,
                 "firstMilliseconds" to result.firstMilliseconds, "medianMilliseconds" to result.medianMilliseconds) })
         File(requireNotNull(report)).writeText(GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(record))
