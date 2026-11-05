@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.25.1 · 2026/11/05**
+
+- 体验优化 P0/P1/P2 落地：全应用异常去技术化(UiErrorMapper 非技术文案+四态降级:无书源/全失效/网络/超时)、相对时间本地化(14中英模板/英文复数)、发现页经典主线程减负(重活在IO/在途去重/毛玻璃位置缓存/低内存降级)、现代套件超时兜底(withTimeoutOrNull包withPermit不饿死并发)、三形态交叉淡入(260ms)+进程内滚动快照恢复、设置搜索别名(searchKeys)互链、玻璃/背景衬底统一(imageBgAdaptiveScrim)、书架项复用统一衬底；修复错误分类顺序(FileNotFoundException先于IOException/确定性失败不重试)、经典发现空态语义(无匹配不再误报暂无书源)、滚动恢复加固(首帧(0,0)不覆盖快照)、玻璃监听防泄漏(GlassPositionTracker uninstall旧目标/仅清自带监听)、evalUiJs去重键含infoMap、设置搜索CI门禁(verify.yml)
+
 **vH.1.24.1 · 2026/11/05**
 
 - 设置搜索索引改为由 Compose 设置 spec 直接生成(不再解析遗留 pref_*.xml；新增项自动可搜、别名进搜索，并补齐朗读弹窗30+项/菜单编辑/高亮/段落/书架/评论/发现订阅/页面布局等此前搜不到的项)；新增独立设置页(书架设置合并显示13项+启动5项、音频、评论、漫画视频、页面布局)；删除15个遗留 XML 偏好文件；A 层死代码清理(删死键 cacheManage/updateSourceStrategy、5 个死分类字符串、editTemeAuto→editThemeAuto、封面硬编码 key→PreferKey 常量)；发现/订阅页模式上提到内容与规则；i18n 模块化拆分(40+ strings_* 文件 + 批处理工具)；一级行 RowSpec 收敛

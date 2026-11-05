@@ -5,7 +5,6 @@ import io.legado.app.exception.NoStackTraceException
 import splitties.init.appCtx
 import java.io.FileNotFoundException
 import java.io.IOException
-import java.net.SocketTimeoutException
 import kotlinx.coroutines.TimeoutCancellationException
 
 /**
@@ -64,19 +63,21 @@ object UiErrorMapper {
      * 把任意 [Throwable] 归类为 [UiErrorType]。
      *
      * 分类顺序有优先级：超时先于网络（SocketTimeoutException 同时是 IOException），
-     * 解析/书源/文件再按消息特征细分，最后兜底 UNKNOWN。
+     * 子类判定必须先于父类（FileNotFoundException 是 IOException 子类，反过来 FILE_IO
+     * 永远不可达），解析/书源/文件再按消息特征细分，最后兜底 UNKNOWN。
      */
     fun classify(t: Throwable): UiErrorType {
         val message = t.message.orEmpty()
         return when {
             t is TimeoutCancellationException -> UiErrorType.TIMEOUT
             isTimeoutMessage(t) -> UiErrorType.TIMEOUT
-            t is SocketTimeoutException -> UiErrorType.NETWORK
+            // FileNotFoundException 是 IOException 子类，必须排在 IOException 之前，
+            // 否则文件读取失败会被误报成「网络不可用」
+            t is FileNotFoundException -> UiErrorType.FILE_IO
             t is IOException -> UiErrorType.NETWORK
             t is NoStackTraceException && message.startsWith("不是书源") -> UiErrorType.SOURCE_INVALID
             t is NoStackTraceException && message.startsWith("不是订阅源") -> UiErrorType.SOURCE_INVALID
             message.contains("ERROR:") -> UiErrorType.SOURCE_INVALID
-            t is FileNotFoundException -> UiErrorType.FILE_IO
             isParseFailure(t) -> UiErrorType.PARSE_FORMAT
             isFileUnsupported(t) -> UiErrorType.FILE_UNSUPPORTED
             else -> UiErrorType.UNKNOWN
@@ -102,8 +103,17 @@ object UiErrorMapper {
     /** 分类并返回通用用户可见文案，任何路径都不含 [Throwable.localizedMessage]。 */
     fun messageFor(t: Throwable): UserFacingMessage = message(classify(t))
 
-    /** 该类型是否适合提供「重试」入口；NO_DATA 通常提供其它动作（如去书源管理），不可重试。 */
-    fun retryable(type: UiErrorType): Boolean = type != UiErrorType.NO_DATA
+    /**
+     * 该类型是否适合提供「重试」入口。
+     * NO_DATA 由状态机决定其它动作；FILE_UNSUPPORTED / SOURCE_INVALID 是确定性失败，
+     * 重试只会得到同样结果，不给重试入口。
+     */
+    fun retryable(type: UiErrorType): Boolean = when (type) {
+        UiErrorType.NO_DATA,
+        UiErrorType.FILE_UNSUPPORTED,
+        UiErrorType.SOURCE_INVALID -> false
+        else -> true
+    }
 
     /** 主动超时封装：`TimeoutCancellationException` 或常见超时类名/文案。 */
     private fun isTimeoutMessage(t: Throwable): Boolean {

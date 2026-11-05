@@ -3806,18 +3806,25 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     classicDiscoveryErrorState = null
                     binding.tvEmptyMsg.gone()
                 } else if (usingClassicDiscovery()) {
-                    val hasSources = searchKey.isNullOrBlank() && withContext(IO) {
-                        appDb.bookSourceDao.allCount() > 0
+                    if (searchKey.isNullOrBlank()) {
+                        val hasSources = withContext(IO) {
+                            appDb.bookSourceDao.allCount() > 0
+                        }
+                        classicDiscoveryErrorState = ClassicDiscoverErrorState(
+                            message = getString(
+                                if (hasSources) R.string.discovery_empty_all_failed
+                                else R.string.discovery_empty_no_sources
+                            ),
+                            showManageButton = true,
+                            retry = { upExploreData(searchKey) }
+                        )
+                        renderClassicDiscoverErrorState()
+                    } else {
+                        // 搜索/筛选无匹配：沿用旧行为隐藏空态。「没有匹配的源」
+                        // 不能误报成「暂无书源」引导用户去书源管理。
+                        classicDiscoveryErrorState = null
+                        binding.tvEmptyMsg.gone()
                     }
-                    classicDiscoveryErrorState = ClassicDiscoverErrorState(
-                        message = getString(
-                            if (hasSources) R.string.discovery_empty_all_failed
-                            else R.string.discovery_empty_no_sources
-                        ),
-                        showManageButton = true,
-                        retry = { upExploreData(searchKey) }
-                    )
-                    renderClassicDiscoverErrorState()
                 }
                 delay(DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS)
             }

@@ -537,7 +537,9 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     private suspend fun evalUiJs(jsStr: String, source: BookSource?, infoMap: InfoMap): String? {
         val source = source ?: return null
-        val cacheKey = "${source.bookSourceUrl}\u001F$jsStr"
+        // 去重键必须包含 infoMap：exploreUi 脚本读取 infoMap 渲染，同一 (url, js)
+        // 在选择变更后重绑时 infoMap 已变，若复用变更前的在途任务会拿回旧 UI
+        val cacheKey = "${source.bookSourceUrl}\u001F$jsStr\u001F${infoMap.hashCode()}"
         inFlightViewNames[cacheKey]?.let { return it.await() }
         val deferred = CompletableDeferred<String?>()
         val prev = inFlightViewNames.putIfAbsent(cacheKey, deferred)

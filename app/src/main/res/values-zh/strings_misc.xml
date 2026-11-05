@@ -230,19 +230,47 @@
     <string name="error_no_data">暂无数据</string>
     <string name="error_load_failed_retry">加载失败，点击重试</string>
 
-    <!-- 相对时间本地化（数值换算不变，仅文案外置） -->
-    <string name="time_ago_seconds">%1$d秒前</string>
-    <string name="time_ago_minutes">%1$d分钟前</string>
-    <string name="time_ago_hours">%1$d小时前</string>
-    <string name="time_ago_days">%1$d天前</string>
-    <string name="time_ago_weeks">%1$d周前</string>
-    <string name="time_ago_months">%1$d月前</string>
-    <string name="time_ago_years">%1$d年前</string>
-    <string name="time_later_seconds">%1$d秒后</string>
-    <string name="time_later_minutes">%1$d分钟后</string>
-    <string name="time_later_hours">%1$d小时后</string>
-    <string name="time_later_days">%1$d天后</string>
-    <string name="time_later_weeks">%1$d周后</string>
-    <string name="time_later_months">%1$d月后</string>
-    <string name="time_later_years">%1$d年后</string>
+    <!-- 相对时间本地化（数值换算不变，仅文案外置；中文无语法数，只需 other） -->
+    <plurals name="time_ago_seconds">
+        <item quantity="other">%1$d秒前</item>
+    </plurals>
+    <plurals name="time_ago_minutes">
+        <item quantity="other">%1$d分钟前</item>
+    </plurals>
+    <plurals name="time_ago_hours">
+        <item quantity="other">%1$d小时前</item>
+    </plurals>
+    <plurals name="time_ago_days">
+        <item quantity="other">%1$d天前</item>
+    </plurals>
+    <plurals name="time_ago_weeks">
+        <item quantity="other">%1$d周前</item>
+    </plurals>
+    <plurals name="time_ago_months">
+        <item quantity="other">%1$d月前</item>
+    </plurals>
+    <plurals name="time_ago_years">
+        <item quantity="other">%1$d年前</item>
+    </plurals>
+    <plurals name="time_later_seconds">
+        <item quantity="other">%1$d秒后</item>
+    </plurals>
+    <plurals name="time_later_minutes">
+        <item quantity="other">%1$d分钟后</item>
+    </plurals>
+    <plurals name="time_later_hours">
+        <item quantity="other">%1$d小时后</item>
+    </plurals>
+    <plurals name="time_later_days">
+        <item quantity="other">%1$d天后</item>
+    </plurals>
+    <plurals name="time_later_weeks">
+        <item quantity="other">%1$d周后</item>
+    </plurals>
+    <plurals name="time_later_months">
+        <item quantity="other">%1$d月后</item>
+    </plurals>
+    <plurals name="time_later_years">
+        <item quantity="other">%1$d年后</item>
+    </plurals>
 </resources>

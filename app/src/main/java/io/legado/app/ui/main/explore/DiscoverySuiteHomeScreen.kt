@@ -145,21 +145,32 @@ fun DiscoverySuiteHomeScreen(
             }
         }
     }
+    // 恢复目标只在首次组合捕获：上报效应首帧就会把 Fragment 快照覆盖成 (0,0)，
+    // 若以参数本身为 key，数据到达触发重组时恢复效应会被回写的 (0,0) 重启而失效。
+    val restoreTarget = remember { scrollPosition }
+    // 恢复消费完成前屏蔽上报回写：空列表首帧的 (0,0) 不能覆盖进程内快照。
+    var restoreConsumed by remember { mutableStateOf(false) }
     // 持续上报滚动位置（含滚回顶部后的 (0,0)），供 Fragment 侧保存进程内快照。
     LaunchedEffect(listState) {
         snapshotFlow {
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }.collect { (index, offset) ->
-            onScrollPositionChanged(SuiteScrollPosition(index, offset))
+            if (restoreConsumed) {
+                onScrollPositionChanged(SuiteScrollPosition(index, offset))
+            }
         }
     }
     // 独立恢复：等待列表项就绪后再 scrollToItem，避免空列表越界导致恢复丢失。
-    LaunchedEffect(scrollPosition) {
-        val target = scrollPosition ?: return@LaunchedEffect
-        if (target.firstVisibleItemIndex <= 0) return@LaunchedEffect
+    LaunchedEffect(restoreTarget) {
+        val target = restoreTarget
+        if (target == null || target.firstVisibleItemIndex <= 0) {
+            restoreConsumed = true
+            return@LaunchedEffect
+        }
         snapshotFlow { listState.layoutInfo.totalItemsCount }
             .first { it > target.firstVisibleItemIndex }
         listState.scrollToItem(target.firstVisibleItemIndex, target.firstVisibleItemScrollOffset)
+        restoreConsumed = true
     }
     var previewState by remember { mutableStateOf<SearchBookPreviewState?>(null) }
     val onBookPreview: (SearchBook, Rect?) -> Unit = { book, bounds ->

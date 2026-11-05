@@ -428,6 +428,7 @@ private class FrostedGlassDrawable(
 private object GlassPositionTracker {
 
     private const val TAG_KEY = 0x5F_4753_50
+    private const val TAG_KEY_SCROLLER = 0x5F_4753_51
 
     fun attach(host: View, drawable: FrostedGlassDrawable) {
         // 行复用会反复设置新背景，先把上一次挂接的 tracker 解绑，避免回调累积/泄漏
@@ -458,20 +459,37 @@ private object GlassPositionTracker {
         }
 
         override fun onViewAttachedToWindow(v: View) {
+            // attach 可能连续发生（复用/重挂）而中间没有走 detach，
+            // 先卸载旧滚动目标，避免 RecyclerView 滚动监听重复注册
+            scrollTarget?.let { uninstallScrollTarget(it) }
             scrollTarget = nearestScrollableAncestor(v)
             when (val target = scrollTarget) {
                 is RecyclerView -> target.addOnScrollListener(scrollListener)
-                is NestedScrollView -> target.setOnScrollChangeListener(scrollChangeListener)
+                is NestedScrollView -> {
+                    target.setOnScrollChangeListener(scrollChangeListener)
+                    // 打标记录「监听是我们装的」，detach 时只清自己的，
+                    // 不动别人（如 host 自身业务）设置的监听
+                    target.setTag(TAG_KEY_SCROLLER, scrollChangeListener)
+                }
             }
             updatePosition(v)
         }
 
         override fun onViewDetachedFromWindow(v: View) {
-            when (val target = scrollTarget) {
-                is RecyclerView -> target.removeOnScrollListener(scrollListener)
-                is NestedScrollView -> target.setOnScrollChangeListener(null as NestedScrollView.OnScrollChangeListener?)
-            }
+            scrollTarget?.let { uninstallScrollTarget(it) }
             scrollTarget = null
+        }
+
+        private fun uninstallScrollTarget(target: View) {
+            when (target) {
+                is RecyclerView -> target.removeOnScrollListener(scrollListener)
+                is NestedScrollView -> {
+                    if (target.getTag(TAG_KEY_SCROLLER) === scrollChangeListener) {
+                        target.setOnScrollChangeListener(null as NestedScrollView.OnScrollChangeListener?)
+                        target.setTag(TAG_KEY_SCROLLER, null)
+                    }
+                }
+            }
         }
 
         override fun onLayoutChange(
