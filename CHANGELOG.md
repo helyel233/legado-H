@@ -1,5 +1,22 @@
 # 更新日志
 
+## 1.25.3 版（2026-11-05）
+
+本版落地发现页毛玻璃的「治本」改动：API 31+ 改用系统 `RenderEffect` 硬件真高斯，同时把已验证的软件近似管线完整保留为降级基线。零新增依赖，API 21–30 与所有异常场景的既有行为不变。
+
+### 新增 / 重构
+
+- **硬件真高斯管线（API 31+）**：玻璃层录进独立 `RenderNode("ExploreGlassBackdrop")`，只对该节点设置 `RenderEffect.createBlurEffect(radiusX, radiusY, CLAMP)` 交给 GPU；不模糊整行 View，书源名文字、箭头、加载动画与 tint / shell / 描边都不受影响。半径沿用底栏 frosted 同款 `blurDp = 12 + glassLevel * 18` 换算为屏幕像素并限幅 `1..80px`；因用的就是 GPU 真高斯，不再乘软件管线专用的 1.4 等效系数。
+- **双份底图缓存 `GlassBackdrop(raw, blurred)`**：一次异步构建同时产出未模糊 `raw`（硬件采样源）与 `stackBlurSoftware` 预模糊 `blurred`（软件采样源兼即时降级源）。利用 `stackBlurSoftware` 返回全新 Bitmap、不改动入参的特性共存；缓存 key、在途去重、IO 线程构建与 `GlassPositionTracker` 位置缓存全部复用，两条管线共用同一 `shaderMatrix` 保证位置对齐。
+
+### 修复 / 优化
+
+- **降级零等待**：硬件失败当帧即可切到已缓存的 `blurred` 重画，不重新触发异步构建，不会闪一下纯实底或透出清晰壁纸。
+- **降级矩阵收紧**：level<=0 / 墨水屏 / 低内存 / 动图壁纸 / API 21–30 / RenderEffect 构造失败均走既有软件管线或纯 shell；非硬件加速 Canvas 只当帧降级（不置持久故障位，下一帧自动恢复真高斯），硬件 Canvas 上 `drawRenderNode` 抛异常才置位永久降级；`raw` 缺失直接让位软件管线避免双重模糊，`blurred` 缺失则只画 shell。`stackBlurSoftware` 构建异常时不再像 1.25.2 那样把 `blurred` 兜底成 `raw`（那会透出清晰壁纸），改为留 null 由 shell 遮盖，硬件管线仍可用 `raw` 正常出图。
+- **Canvas 状态安全**：硬件层的 `beginRecording/endRecording` 与 `save()/translate()/clipPath()/restoreToCount()` 一律用 `try/finally` 闭合，异常降级时同帧后续的 tint / shell / 描边不会错位绘制。
+- **`setColorFilter()` 补 `invalidateSelf()`**：滤镜变更立即触发重绘，硬件层 paint 同步生效。
+- **编译告警清理**：`draw()` 中恒真条件改为 `activeLayer` 单次判定；`getOpacity()` 的弃用告警为 1.25.2 基线既有，本版未改动。
+
 ## 1.25.2 版（2026-11-05）
 
 本版为发现页毛玻璃与动图壁纸的两处观感修复，无新增功能。

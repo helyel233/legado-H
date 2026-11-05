@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.25.3 · 2026/11/05**
+
+- 发现页毛玻璃「治本」：API 31+ 改用 RenderEffect 硬件真高斯(独立 RenderNode 只模糊玻璃层，不糊书源名文字/箭头；半径对齐底栏 frosted 12+level*18dp 并限幅 1..80px)，既有 stackBlur 软件管线完整保留为降级基线；新增双份底图缓存 GlassBackdrop(raw/blurred)，硬件失败当帧零等待降级(不闪实底、不透清晰壁纸)，level<=0/墨水屏/低内存/动图壁纸/API 21-30/非硬件 Canvas/RenderEffect 异常逐项兜底；硬件层录制与 Canvas save/restore 改 try/finally 闭合防同帧错位，setColorFilter 补 invalidateSelf；零新增依赖，API 21-30 行为不变
+
 **vH.1.25.2 · 2026/11/05**
 
 - 发现页毛玻璃降采样提精度(6→3)减摩尔纹/色块(观感强度不变，耗时略升但仅首次构建)；动图(gif/webp)壁纸玻璃脱节降级(取样首帧改走纯shell实底，与背景层动画脱钩)
