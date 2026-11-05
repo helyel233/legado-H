@@ -78,6 +78,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DecimalFormat
 import kotlin.math.ceil
+import splitties.init.appCtx
 
 class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewModel>(),
     ReadManga.Callback, ChangeBookSourceDialog.CallBack, MangaMenu.CallBack,
@@ -251,6 +252,18 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
             val item = mAdapter.getItem(binding.recyclerView.findCenterViewPosition())
             upInfoBar(item)
         }
+        // 全局设置里的「漫画与视频」页改了墨纸/灰度/隐藏标题后，正在阅读的这本
+        // 要按新值重刷。事件在阅读页不在前台时由 EventBus 延迟到 onResume 投递，
+        // 正好对应「去设置改完再切回来」的路径
+        observeEvent<String>(EventBus.UP_MANGA_DISPLAY) {
+            mAdapter.enableMangaEInk(AppConfig.enableMangaEInk, AppConfig.mangaEInkThreshold)
+            mAdapter.enableGray(AppConfig.enableMangaGray)
+            mMenu?.findItem(R.id.menu_epaper_manga)?.isChecked = AppConfig.enableMangaEInk
+            mMenu?.findItem(R.id.menu_gray_manga)?.isChecked = AppConfig.enableMangaGray
+            mMenu?.findItem(R.id.menu_epaper_manga_setting)?.isVisible = AppConfig.enableMangaEInk
+            mMenu?.findItem(R.id.menu_hide_manga_title)?.isChecked = AppConfig.hideMangaTitle
+            ReadManga.loadContent()
+        }
     }
 
     private fun initRecyclerView() {
@@ -343,7 +356,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
                 if (curFinish) {
                     if (!ReadManga.hasNextChapter) {
-                        loadMoreView.noMore("暂无章节了！")
+                        loadMoreView.noMore(appCtx.getString(R.string.ui_book_no_more_chapters))
                     } else if (nextFinish) {
                         loadMoreView.stopLoad()
                     } else {
@@ -512,7 +525,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
             binding.flLoading.isVisible = true
             viewModel.changeTo(book, toc)
         } else {
-            toastOnUi("所选择的源不是漫画源")
+            toastOnUi(appCtx.getString(R.string.ui_book_selected_source_not_manga_source))
         }
     }
 
@@ -797,19 +810,19 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
     private fun showMangaConfigMenu() {
         val items = listOf(
             getString(R.string.pre_download),
-            getString(R.string.disable_manga_scale).removePrefix("禁用").removePrefix("Disable "),
-            getString(R.string.disable_manga_click_scroll).removePrefix("禁用").removePrefix("Disable "),
-            getString(R.string.enable_auto_page_scroll).removePrefix("开启").removePrefix("Enable "),
-            getString(R.string.enable_auto_scroll).removePrefix("开启").removePrefix("Enable "),
-            getString(R.string.setting_manga_auto_page_speed).removePrefix("设置"),
+            getString(R.string.disable_manga_scale).removePrefix(appCtx.getString(R.string.disable)).removePrefix("Disable "),
+            getString(R.string.disable_manga_click_scroll).removePrefix(appCtx.getString(R.string.disable)).removePrefix("Disable "),
+            getString(R.string.enable_auto_page_scroll).removePrefix(appCtx.getString(R.string.ra_on)).removePrefix("Enable "),
+            getString(R.string.enable_auto_scroll).removePrefix(appCtx.getString(R.string.ra_on)).removePrefix("Enable "),
+            getString(R.string.setting_manga_auto_page_speed).removePrefix(appCtx.getString(R.string.setting)),
             getString(R.string.enable_manga_horizontal_scroll),
-            getString(R.string.disable_horizontal_page_snap).removePrefix("禁用").removePrefix("Disable "),
+            getString(R.string.disable_horizontal_page_snap).removePrefix(appCtx.getString(R.string.disable)).removePrefix("Disable "),
             getString(R.string.footer),
             getString(R.string.manga_color_filter),
             getString(R.string.title),
             getString(R.string.manga_epaper),
             getString(R.string.manga_epaper_stting),
-            getString(R.string.enable_manga_gray).removePrefix("开启").removePrefix("Enable ")
+            getString(R.string.enable_manga_gray).removePrefix(appCtx.getString(R.string.ra_on)).removePrefix("Enable ")
         )
         selector(R.string.manga_config, items) { _, index ->
             when (index) {

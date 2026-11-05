@@ -21,6 +21,8 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
     fullScreen = false,
@@ -111,7 +113,7 @@ class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
 
     private fun addRelation() {
         if (characters.size < 2) {
-            toastOnUi("至少需要两个角色")
+            toastOnUi(appCtx.getString(R.string.bchar_at_least_two_characters_required))
             return
         }
         editingRelation = RelationEditDraft(
@@ -128,7 +130,7 @@ class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
         val from = draft.fromCharacterId
         val to = draft.toCharacterId
         if (from <= 0L || to <= 0L || from == to) {
-            toastOnUi("请选择两个不同角色")
+            toastOnUi(appCtx.getString(R.string.bchar_select_two_different_characters))
             return
         }
         lifecycleScope.launch {
@@ -139,7 +141,7 @@ class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
                     bookUrl = characterBookKey,
                     fromCharacterId = from,
                     toCharacterId = to,
-                    relationName = draft.relationName.trim().ifBlank { "关系" },
+                    relationName = draft.relationName.trim().ifBlank { appCtx.getString(R.string.bchar_relation) },
                     relationType = draft.relationType.trim(),
                     description = draft.description.trim(),
                     strength = draft.strength.coerceIn(0, 100),
@@ -160,8 +162,8 @@ class BookCharacterRelationActivity : BaseActivity<ViewBinding>(
     }
 
     private fun confirmDeleteRelation(relation: BookCharacterRelation) {
-        alert("删除关系") {
-            setMessage("确定删除「${relation.displayName()}」？")
+        alert(appCtx.getString(R.string.bchar_delete_relation)) {
+            setMessage(appCtx.getString(R.string.bchar_delete, relation.displayName()))
             yesButton {
                 lifecycleScope.launch {
                     withContext(IO) {

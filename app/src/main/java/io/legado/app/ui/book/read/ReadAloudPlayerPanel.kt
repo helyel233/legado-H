@@ -174,6 +174,7 @@ import io.legado.app.utils.startActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import splitties.init.appCtx
 
 class ReadAloudPlayerPanel @JvmOverloads constructor(
     context: Context,
@@ -625,7 +626,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
         chapterModelCache = null
         roleDetailCollapsed = true
         roleDetailClosed = false
-        roleStatusText = "当前章节重新分配角色中"
+        roleStatusText = appCtx.getString(R.string.ra_panel_reassigning_roles_current_chapter)
         roleStatusRunning = true
         roleStatusError = false
         roleStatusUntil = Long.MAX_VALUE
@@ -643,9 +644,9 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
     ) {
         Coroutine.async(Coroutine.defaultScope) {
             val book = ReadBook.book
-                ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, "书籍不存在")
+                ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ra_panel_book_not_found))
             val chapter = ReadBook.curTextChapter
-                ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, "章节不存在")
+                ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ra_panel_chapter_not_found))
             val baseCues = chapter.buildReadAloudCues(context.getPrefBoolean(PreferKey.readAloudByPage))
             AiReadAloudRoleService.updateCachedSegmentAssignment(
                 book = book,
@@ -762,7 +763,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
         val chapterCount = ReadBook.chapterSize.coerceAtLeast(chapterIndex + 1)
         val title = runCatching {
             ReadBook.book?.let { appDb.bookChapterDao.getChapter(it.bookUrl, chapterIndex)?.title }
-        }.getOrNull().orEmpty().ifBlank { "第 ${chapterIndex + 1} 章" }
+        }.getOrNull().orEmpty().ifBlank { appCtx.getString(R.string.ra_panel_chapter, chapterIndex + 1) }
         uiState = uiState.copy(
             chapterTitle = title,
             chapterIndexText = "${chapterIndex + 1}/$chapterCount",
@@ -771,7 +772,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             chapterPreview = buildChapterPreview(bookUrl, chapterIndex, chapterCount),
             progress = 0f,
             progressText = "0/0",
-            paragraphText = "章节加载中",
+            paragraphText = appCtx.getString(R.string.ra_panel_loading_chapter),
             paragraphIndex = 0,
             paragraphCount = 0,
             nearbyParagraphs = emptyList(),
@@ -784,7 +785,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             focusText = FocusTextUi(
                 key = "$bookUrl:$chapterIndex:loading",
                 sequence = chapterIndex * 100_000,
-                text = "章节加载中"
+                text = appCtx.getString(R.string.ra_panel_loading_chapter)
             ),
             roleBlockingCurrentContent = false,
             roleBlockingText = ""
@@ -792,20 +793,20 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
     }
 
     private fun buildRoleStatusText(state: AiReadAloudRoleState): String {
-        val prefix = if (state.stage == AiReadAloudRoleState.STAGE_NEXT) "下一章节" else "当前章节"
+        val prefix = if (state.stage == AiReadAloudRoleState.STAGE_NEXT) appCtx.getString(R.string.ra_panel_next_chapter) else appCtx.getString(R.string.ra_panel_current_chapter)
         val detail = when {
             state.error.isNotBlank() && state.status == AiReadAloudRoleState.STATUS_FAILED -> state.error
-            state.createdCharacterCount > 0 -> "新增 ${state.createdCharacterCount} 个角色"
-            state.segmentCount > 0 -> "${state.segmentCount} 个片段"
+            state.createdCharacterCount > 0 -> appCtx.getString(R.string.ra_panel_new_characters_added, state.createdCharacterCount)
+            state.segmentCount > 0 -> appCtx.getString(R.string.ra_panel_segments, state.segmentCount)
             else -> ""
         }
         val message = state.message.ifBlank {
             when (state.status) {
-                AiReadAloudRoleState.STATUS_RUNNING -> "${prefix}分配角色中"
-                AiReadAloudRoleState.STATUS_SUCCESS -> "${prefix}角色分配完成"
-                AiReadAloudRoleState.STATUS_FALLBACK -> "已使用默认分角色"
-                AiReadAloudRoleState.STATUS_FAILED -> "${prefix}角色分配失败"
-                else -> "${prefix}角色已分配"
+                AiReadAloudRoleState.STATUS_RUNNING -> appCtx.getString(R.string.ra_panel_assigning_roles, prefix)
+                AiReadAloudRoleState.STATUS_SUCCESS -> appCtx.getString(R.string.ra_panel_role_assignment_completed, prefix)
+                AiReadAloudRoleState.STATUS_FALLBACK -> appCtx.getString(R.string.ra_panel_using_default_role_assignment)
+                AiReadAloudRoleState.STATUS_FAILED -> appCtx.getString(R.string.ra_panel_role_assignment_failed, prefix)
+                else -> appCtx.getString(R.string.ra_panel_roles_assigned, prefix)
             }
         }
         return listOf(message, detail).filter { it.isNotBlank() }.joinToString(" · ")
@@ -1194,7 +1195,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             sourceOrigin = coverDisplay.sourceOrigin,
             coverForcePath = coverDisplay.forcePath,
             coverAllowNameOverlay = coverDisplay.allowNameOverlay,
-            chapterTitle = chapter.chapter.title.ifBlank { "当前章节" },
+            chapterTitle = chapter.chapter.title.ifBlank { appCtx.getString(R.string.ra_panel_current_chapter) },
             chapterIndexText = "${chapterSequence + 1}/${chapter.chaptersSize.coerceAtLeast(chapterSequence + 1)}",
             chapterSequence = chapterSequence,
             chapterKey = chapterKey,
@@ -1288,7 +1289,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
         val focusText = FocusTextUi(
             key = "$paragraphKey:${sentence.first}:${sentence.second.hashCode()}",
             sequence = paragraphSequence * 1_000 + sentence.first.coerceAtLeast(0),
-            text = sentence.second.ifBlank { paragraphText.ifBlank { "暂无当前段落" } }
+            text = sentence.second.ifBlank { paragraphText.ifBlank { appCtx.getString(R.string.ra_panel_no_current_paragraph) } }
         )
         val nearby = emptyList<ParagraphUi>()
         val textCues = model?.textCues.orEmpty()
@@ -1386,8 +1387,8 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             roleBlockingCurrentContent = roleBlockingCurrentContent,
             roleBlockingText = currentRoleState?.message
                 ?.ifBlank { roleStatusText }
-                ?.ifBlank { "当前章节角色分配中" }
-                ?: "当前章节角色分配中",
+                ?.ifBlank { appCtx.getString(R.string.ra_panel_assigning_roles_current_chapter) }
+                ?: appCtx.getString(R.string.ra_panel_assigning_roles_current_chapter),
             roleState = roleState.takeIf { multiRoleEnabled },
             multiRoleEnabled = multiRoleEnabled,
             speakerLoudnessEnabled = AppConfig.readAloudSpeakerLoudnessEnabled,
@@ -1497,9 +1498,9 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             appDb.bookChapterDao.getChapterList(bookUrl, start, end).map { chapter ->
                 ChapterPreviewUi(
                     index = chapter.index,
-                    title = chapter.title.ifBlank { "未命名章节" },
+                    title = chapter.title.ifBlank { appCtx.getString(R.string.ra_panel_untitled_chapter) },
                     indexText = if (chapter.isVolume) {
-                        "卷"
+                        appCtx.getString(R.string.ra_panel_volume)
                     } else {
                         "${chapter.index + 1}/$chapterCount"
                     },
@@ -1666,7 +1667,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             .filter { it.isNotBlank() }
             .joinToString(" · ")
             .take(80)
-            .ifBlank { "暂无角色摘要" }
+            .ifBlank { appCtx.getString(R.string.ra_panel_no_character_summary) }
     }
 
     private fun String.focusSentenceAt(offset: Int): Pair<Int, String> {
@@ -1704,7 +1705,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
 
     private fun String.cleanReadAloudText(): String {
         return ReadAloudTextCleaner.cleanInlineText(this)
-            .ifBlank { "暂无当前段落" }
+            .ifBlank { appCtx.getString(R.string.ra_panel_no_current_paragraph) }
     }
 }
 
@@ -2534,7 +2535,7 @@ private fun MinimalHeader(
         ) {
             HeaderIconButton(
                 icon = R.drawable.ic_expand_more,
-                contentDescription = "收起",
+                contentDescription = appCtx.getString(R.string.collapse),
                 colors = colors,
                 onClick = onClose
             )
@@ -2549,7 +2550,7 @@ private fun MinimalHeader(
         ) {
             HeaderIconButton(
                 icon = R.drawable.ic_settings,
-                contentDescription = "设置",
+                contentDescription = appCtx.getString(R.string.setting),
                 colors = colors,
                 onClick = onOpenSettings
             )
@@ -2572,7 +2573,7 @@ private fun SceneFullscreenTopBar(
     ) {
         HeaderIconButton(
             icon = R.drawable.ic_expand_more,
-            contentDescription = "退出全屏",
+            contentDescription = appCtx.getString(R.string.ra_panel_exit_full_screen),
             colors = colors,
             onClick = onExit
         )
@@ -2583,7 +2584,7 @@ private fun SceneFullscreenTopBar(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = title.ifBlank { "当前章节" },
+                text = title.ifBlank { appCtx.getString(R.string.ra_panel_current_chapter) },
                 color = colors.primaryText.copy(alpha = 0.92f),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -2700,7 +2701,7 @@ private fun RoleAssignmentProgressDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.padding(start = 10.dp).weight(1f)) {
                             Text(
-                                text = "多角色分配明细",
+                                text = appCtx.getString(R.string.ra_panel_multi_role_assignment_details),
                                 color = colors.primaryText,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -2718,9 +2719,9 @@ private fun RoleAssignmentProgressDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RoleDialogAction("重新分配", colors, onRetry)
-                            RoleDialogAction("隐藏", colors, onHide)
-                            if (!state.roleStatusRunning) RoleDialogAction("关闭", colors, onDismiss)
+                            RoleDialogAction(appCtx.getString(R.string.ra_panel_reassign), colors, onRetry)
+                            RoleDialogAction(appCtx.getString(R.string.title_hide), colors, onHide)
+                            if (!state.roleStatusRunning) RoleDialogAction(appCtx.getString(R.string.jf_convert_o), colors, onDismiss)
                         }
                     }
                     RoleAssignmentSummary(state, roleState, colors)
@@ -2768,7 +2769,7 @@ private fun AudioAssignmentSummary(
     if (!audioInfo.enabled) return
     Column(modifier = Modifier.padding(top = 10.dp)) {
         Text(
-            text = "智能音频",
+            text = appCtx.getString(R.string.ra_panel_smart_audio),
             color = colors.subtleText,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
@@ -2780,38 +2781,38 @@ private fun AudioAssignmentSummary(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             RoleSummaryChip(
-                if (audioInfo.cacheKey.isBlank()) "未分析" else audioStatusLabel(audioInfo.status),
+                if (audioInfo.cacheKey.isBlank()) appCtx.getString(R.string.ra_panel_not_analyzed) else audioStatusLabel(audioInfo.status),
                 colors
             )
-            RoleSummaryChip("配乐 ${audioInfo.bgmCount}", colors)
-            RoleSummaryChip("音效 ${audioInfo.soundEffectCount}", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_score, audioInfo.bgmCount), colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_sound_effects, audioInfo.soundEffectCount), colors)
             if (audioInfo.elapsedMillis > 0L) {
-                RoleSummaryChip("耗时 ${formatRoleElapsed(audioInfo.elapsedMillis)}", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_elapsed, formatRoleElapsed(audioInfo.elapsedMillis)), colors)
             }
             if (audioInfo.requestCount > 0) {
-                RoleSummaryChip("${audioInfo.requestCount} 次请求", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_requests, audioInfo.requestCount), colors)
             }
             if (audioInfo.totalTokens > 0) {
                 RoleSummaryChip("Token ${audioInfo.totalTokens}", colors)
             }
             if (audioInfo.inputTokens > 0) {
                 val uncached = (audioInfo.inputTokens - audioInfo.cachedInputTokens).coerceAtLeast(0)
-                RoleSummaryChip("输入 ${audioInfo.inputTokens}", colors)
-                if (uncached > 0) RoleSummaryChip("未命中 $uncached", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_input, audioInfo.inputTokens), colors)
+                if (uncached > 0) RoleSummaryChip(appCtx.getString(R.string.ra_panel_misses, uncached), colors)
             }
             if (audioInfo.cachedInputTokens > 0) {
-                RoleSummaryChip("缓存命中 ${audioInfo.cachedInputTokens}", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_cache_hits, audioInfo.cachedInputTokens), colors)
             }
             if (audioInfo.outputTokens > 0) {
-                RoleSummaryChip("输出 ${audioInfo.outputTokens}", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_output, audioInfo.outputTokens), colors)
             }
         }
         val names = buildList {
             if (audioInfo.bgmNames.isNotEmpty()) {
-                add("配乐：" + audioInfo.bgmNames.joinToString("、"))
+                add(appCtx.getString(R.string.ra_panel_score_2) + audioInfo.bgmNames.joinToString("、"))
             }
             if (audioInfo.soundEffectNames.isNotEmpty()) {
-                add("音效：" + audioInfo.soundEffectNames.joinToString("、"))
+                add(appCtx.getString(R.string.ra_panel_sound_effects_2) + audioInfo.soundEffectNames.joinToString("、"))
             }
         }.joinToString("  ")
         if (names.isNotBlank()) {
@@ -2841,10 +2842,10 @@ private fun AudioAssignmentSummary(
 
 private fun audioStatusLabel(status: String): String {
     return when (status) {
-        "running" -> "分析中"
-        "success" -> "已完成"
-        "failed" -> "失败"
-        else -> "已缓存"
+        "running" -> appCtx.getString(R.string.ra_panel_analyzing)
+        "success" -> appCtx.getString(R.string.package_sync_task_status_completed)
+        "failed" -> appCtx.getString(R.string.dns_result_failed)
+        else -> appCtx.getString(R.string.cache_manage_cached)
     }
 }
 
@@ -2870,47 +2871,47 @@ private fun RoleAssignmentSummary(
     ) {
         RoleSummaryChip(roleStatusLabel(roleState), colors)
         RoleSummaryChip(roleSourceLabel(roleState.previewSource), colors)
-        RoleSummaryChip("${preview.size} 片段", colors)
+        RoleSummaryChip(appCtx.getString(R.string.ra_panel_segments_2, preview.size), colors)
         if (roleState.elapsedMillis > 0L) {
-            RoleSummaryChip("耗时 ${formatRoleElapsed(roleState.elapsedMillis)}", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_elapsed_2, formatRoleElapsed(roleState.elapsedMillis)), colors)
         }
         if (roleState.requestCount > 0) {
-            RoleSummaryChip("${roleState.requestCount} 次请求", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_requests_2, roleState.requestCount), colors)
         }
         if (roleState.totalTokens > 0) {
             RoleSummaryChip("Token ${roleState.totalTokens}", colors)
         } else if (roleState.requestCount > 0 && !roleState.running) {
-            RoleSummaryChip("Token 未返回", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_token_usage_not_returned), colors)
         }
         if (roleState.inputTokens > 0) {
             val uncached = (roleState.inputTokens - roleState.cachedInputTokens).coerceAtLeast(0)
-            RoleSummaryChip("输入 ${roleState.inputTokens}", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_input_2, roleState.inputTokens), colors)
             if (uncached > 0) {
-                RoleSummaryChip("未命中 $uncached", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_misses, uncached), colors)
             }
         }
         if (roleState.outputTokens > 0) {
-            RoleSummaryChip("输出 ${roleState.outputTokens}", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_output_2, roleState.outputTokens), colors)
         }
         if (roleState.cachedInputTokens > 0) {
-            RoleSummaryChip("缓存命中 ${roleState.cachedInputTokens}", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_cache_hits_2, roleState.cachedInputTokens), colors)
         }
         if (roleState.createdCharacterCount > 0) {
-            RoleSummaryChip("新增 ${roleState.createdCharacterCount} 角色", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_characters_added, roleState.createdCharacterCount), colors)
         }
         if (playerState.speakerLoudnessEnabled) {
-            RoleSummaryChip("响度 ${playerState.speakerLoudnessGainPercent}%", colors)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_loudness, playerState.speakerLoudnessGainPercent), colors)
             if (playerState.speakerLoudnessLearnedCount > 0) {
-                RoleSummaryChip("已学习 ${playerState.speakerLoudnessLearnedCount} 发言人", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_speakers_learned, playerState.speakerLoudnessLearnedCount), colors)
             } else if (!playerState.speakerLoudnessLearned) {
-                RoleSummaryChip("响度学习中", colors)
+                RoleSummaryChip(appCtx.getString(R.string.ra_panel_learning_loudness), colors)
             }
         }
         if (unmatchedCount > 0) {
-            RoleSummaryChip("$unmatchedCount 未匹配", colors, danger = true)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_unmatched, unmatchedCount), colors, danger = true)
         }
         if (unboundVoiceCount > 0) {
-            RoleSummaryChip("$unboundVoiceCount 未绑定发言人", colors, danger = true)
+            RoleSummaryChip(appCtx.getString(R.string.ra_panel_speakers_unbound, unboundVoiceCount), colors, danger = true)
         }
     }
     Text(
@@ -2989,9 +2990,9 @@ private fun RolePreviewList(
                 }
                 Text(
                     text = when {
-                        state.roleStatusRunning -> "等待 AI 返回具体片段分配"
-                        roleState.error.isNotBlank() -> "没有可展示的分配片段"
-                        else -> "暂无分配明细"
+                        state.roleStatusRunning -> appCtx.getString(R.string.ra_panel_waiting_ai_segment_assignments)
+                        roleState.error.isNotBlank() -> appCtx.getString(R.string.ra_panel_no_assignable_segments_show)
+                        else -> appCtx.getString(R.string.ra_panel_no_assignment_details)
                     },
                     color = colors.secondaryText,
                     fontSize = 13.sp,
@@ -3041,14 +3042,14 @@ private fun RolePreviewParagraphGroup(
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "段落 ${paragraphIndex + 1}",
+                    text = appCtx.getString(R.string.ra_panel_paragraph, paragraphIndex + 1),
                     color = if (current) colors.accent else colors.subtleText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
                 if (current) {
-                    Text("当前朗读", color = colors.accent, fontSize = 11.sp)
+                    Text(appCtx.getString(R.string.ra_panel_now_reading), color = colors.accent, fontSize = 11.sp)
                 }
             }
             segments.forEach { segment ->
@@ -3098,7 +3099,7 @@ private fun RolePreviewSegmentRow(
                 )
             }
             Text(
-                text = segment.text.ifBlank { "空片段" },
+                text = segment.text.ifBlank { appCtx.getString(R.string.ra_panel_empty_segment) },
                 color = colors.primaryText,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
@@ -3168,19 +3169,19 @@ private fun RoleSegmentEditDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "修改片段分配",
+                            text = appCtx.getString(R.string.ra_panel_edit_segment_assignment),
                             color = colors.primaryText,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "段落 ${segment.paragraphIndex + 1}",
+                            text = appCtx.getString(R.string.ra_panel_paragraph_2, segment.paragraphIndex + 1),
                             color = colors.subtleText,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                     }
-                    RoleDialogAction("取消", colors, onDismiss)
+                    RoleDialogAction(appCtx.getString(R.string.dialog_cancel), colors, onDismiss)
                 }
                 Text(
                     text = segment.text,
@@ -3212,7 +3213,7 @@ private fun RoleSegmentEditDialog(
                             value = query,
                             onValueChange = { query = it },
                             singleLine = true,
-                            label = { Text("搜索角色") },
+                            label = { Text(appCtx.getString(R.string.ra_panel_search_characters)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                         LazyColumn(
@@ -3224,7 +3225,7 @@ private fun RoleSegmentEditDialog(
                             if (filteredCharacters.isEmpty()) {
                                 item {
                                     Text(
-                                        text = "没有可选角色",
+                                        text = appCtx.getString(R.string.ra_panel_no_characters_available),
                                         color = colors.secondaryText,
                                         fontSize = 13.sp,
                                         modifier = Modifier.padding(vertical = 12.dp)
@@ -3261,7 +3262,7 @@ private fun RoleSegmentEditDialog(
                         border = BorderStroke(1.dp, if (canSave) colors.accent.copy(alpha = 0.35f) else colors.panelBorder)
                     ) {
                         Text(
-                            text = "保存",
+                            text = appCtx.getString(R.string.action_save),
                             color = if (canSave) colors.accent else colors.subtleText,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -3308,7 +3309,7 @@ private fun RoleCharacterChoiceRow(
     val voice = route.speakerName
         .ifBlank { route.toneID }
         .ifBlank { route.groupName }
-        .ifBlank { if (route.isConfigured) "已绑定发言人" else "未绑定发言人" }
+        .ifBlank { if (route.isConfigured) appCtx.getString(R.string.ra_panel_speaker_bound) else appCtx.getString(R.string.ra_panel_speaker_not_bound) }
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -3345,7 +3346,7 @@ private fun RoleCharacterChoiceRow(
                 }
             }
             if (selected) {
-                Text("已选", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(appCtx.getString(R.string.ra_panel_selected), color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -3380,45 +3381,45 @@ private fun RoleTypeChip(
 
 private fun roleTypeLabel(roleType: String): String {
     return when (roleType) {
-        "narrator" -> "旁白"
-        "character" -> "角色"
-        "thought" -> "心理"
-        else -> "其他"
+        "narrator" -> appCtx.getString(R.string.ra_panel_narrator)
+        "character" -> appCtx.getString(R.string.ra_panel_character)
+        "thought" -> appCtx.getString(R.string.ra_panel_thought)
+        else -> appCtx.getString(R.string.discover_group_other)
     }
 }
 
 private fun roleStatusLabel(state: AiReadAloudRoleState): String {
     return when (state.status) {
-        AiReadAloudRoleState.STATUS_RUNNING -> "分配中"
-        AiReadAloudRoleState.STATUS_SUCCESS -> "已完成"
+        AiReadAloudRoleState.STATUS_RUNNING -> appCtx.getString(R.string.ra_panel_assigning)
+        AiReadAloudRoleState.STATUS_SUCCESS -> appCtx.getString(R.string.package_sync_task_status_completed)
         AiReadAloudRoleState.STATUS_FALLBACK -> "Fallback"
-        AiReadAloudRoleState.STATUS_FAILED -> "失败"
-        AiReadAloudRoleState.STATUS_SKIPPED -> "已缓存"
-        else -> "待处理"
+        AiReadAloudRoleState.STATUS_FAILED -> appCtx.getString(R.string.dns_result_failed)
+        AiReadAloudRoleState.STATUS_SKIPPED -> appCtx.getString(R.string.cache_manage_cached)
+        else -> appCtx.getString(R.string.ra_panel_pending)
     }
 }
 
 private fun roleSourceLabel(source: String): String {
     return when (source) {
-        AiReadAloudRoleState.SOURCE_AI -> "AI 原始结果"
-        AiReadAloudRoleState.SOURCE_RULE -> "本地预处理"
-        AiReadAloudRoleState.SOURCE_AI_CONFIRM -> "AI 确认"
-        AiReadAloudRoleState.SOURCE_RESOLVED -> "已匹配角色"
-        AiReadAloudRoleState.SOURCE_CACHE -> "缓存"
-        AiReadAloudRoleState.SOURCE_FALLBACK -> "默认切分"
-        else -> "等待结果"
+        AiReadAloudRoleState.SOURCE_AI -> appCtx.getString(R.string.ra_panel_ai_raw_result)
+        AiReadAloudRoleState.SOURCE_RULE -> appCtx.getString(R.string.ra_panel_local_preprocessing)
+        AiReadAloudRoleState.SOURCE_AI_CONFIRM -> appCtx.getString(R.string.ra_panel_ai_confirmed)
+        AiReadAloudRoleState.SOURCE_RESOLVED -> appCtx.getString(R.string.ra_panel_matched_character)
+        AiReadAloudRoleState.SOURCE_CACHE -> appCtx.getString(R.string.cache_manage_cache_selected)
+        AiReadAloudRoleState.SOURCE_FALLBACK -> appCtx.getString(R.string.ra_panel_default_split)
+        else -> appCtx.getString(R.string.ra_panel_waiting_result)
     }
 }
 
 private fun roleSpeakerLine(segment: AiReadAloudRolePreviewSegment): String {
     val roleName = when {
-        segment.roleType == "narrator" -> "旁白"
-        segment.characterName.isBlank() -> "未识别角色"
+        segment.roleType == "narrator" -> appCtx.getString(R.string.ra_panel_narrator)
+        segment.characterName.isBlank() -> appCtx.getString(R.string.ra_panel_unrecognized_character)
         segment.matchedCharacter -> segment.characterName
-        else -> "${segment.characterName}（未匹配）"
+        else -> appCtx.getString(R.string.ra_panel_unmatched_2, segment.characterName)
     }
     val voice = roleSegmentVoiceLabel(segment).takeIf { it.isNotBlank() }
-        ?: if (roleSegmentNeedsVoice(segment) && segment.matchedCharacter) "未绑定发言人" else null
+        ?: if (roleSegmentNeedsVoice(segment) && segment.matchedCharacter) appCtx.getString(R.string.ra_panel_speaker_not_bound) else null
     val emotion = segment.emotionName.takeIf { it.isNotBlank() }
     return buildList {
         add(roleName)
@@ -3437,7 +3438,7 @@ private fun roleSegmentVoiceLabel(segment: AiReadAloudRolePreviewSegment): Strin
         .ifBlank { segment.groupName }
         .ifBlank {
             when (segment.engineType) {
-                SpeechRoute.ENGINE_SYSTEM -> "系统语音"
+                SpeechRoute.ENGINE_SYSTEM -> appCtx.getString(R.string.ra_panel_system_voice)
                 SpeechRoute.ENGINE_HTTP -> "HTTP TTS"
                 else -> ""
             }
@@ -3478,9 +3479,9 @@ private fun ModeSwitch(
     val actionShape = LocalContext.current.composeActionShape()
     val modes = remember(multiRoleEnabled) {
         buildList {
-            add(ReadAloudPlayerPanel.DisplayMode.Immersive to "沉浸")
-            if (multiRoleEnabled) add(ReadAloudPlayerPanel.DisplayMode.Scene to "情景")
-            add(ReadAloudPlayerPanel.DisplayMode.Text to "原文")
+            add(ReadAloudPlayerPanel.DisplayMode.Immersive to appCtx.getString(R.string.book_info_style_immersive))
+            if (multiRoleEnabled) add(ReadAloudPlayerPanel.DisplayMode.Scene to appCtx.getString(R.string.ra_panel_scene))
+            add(ReadAloudPlayerPanel.DisplayMode.Text to appCtx.getString(R.string.ra_panel_original_text))
         }
     }
     Row(
@@ -3539,7 +3540,7 @@ private fun ModeChip(
             )
             if (fullscreenHint) {
                 Text(
-                    text = "全屏",
+                    text = appCtx.getString(R.string.full_screen),
                     color = colors.accentText.copy(alpha = 0.78f),
                     fontSize = 8.sp,
                     maxLines = 1,
@@ -3705,14 +3706,14 @@ private fun RoleAssigningBody(
                 trackColor = Color.Transparent
             )
             Text(
-                text = state.roleBlockingText.ifBlank { "当前章节角色分配中" },
+                text = state.roleBlockingText.ifBlank { appCtx.getString(R.string.ra_panel_assigning_roles_current_chapter) },
                 color = colors.primaryText,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "分配完成后再显示本章内容",
+                text = appCtx.getString(R.string.ra_panel_show_chapter_content_after_assignment),
                 color = colors.secondaryText,
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center
@@ -4272,7 +4273,7 @@ private fun BookIdentity(
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start
     ) {
         Text(
-            text = state.bookName.ifBlank { "当前书籍" },
+            text = state.bookName.ifBlank { appCtx.getString(R.string.paragraph_rule_current_book) },
             color = colors.primaryText,
             fontSize = if (compact) 15.sp else 17.sp,
             fontWeight = FontWeight.SemiBold,
@@ -4282,7 +4283,7 @@ private fun BookIdentity(
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = state.chapterTitle.ifBlank { "当前章节" },
+            text = state.chapterTitle.ifBlank { appCtx.getString(R.string.ra_panel_current_chapter) },
             color = colors.secondaryText,
             fontSize = if (compact) 11.sp else 12.sp,
             maxLines = 1,
@@ -4308,7 +4309,7 @@ private fun FocusSentenceBody(
         ?: ReadAloudPlayerPanel.FocusTextUi(
             key = state.paragraphKey,
             sequence = state.paragraphSequence,
-            text = state.paragraphText.ifBlank { "暂无当前段落" }
+            text = state.paragraphText.ifBlank { appCtx.getString(R.string.ra_panel_no_current_paragraph) }
         )
     AnimatedContent(
         targetState = focus,
@@ -4360,7 +4361,7 @@ private fun LyricCueBody(
         listOf(
             ReadAloudPlayerPanel.TextCueUi(
                 index = state.paragraphIndex.coerceAtLeast(1),
-                text = state.paragraphText.ifBlank { "暂无当前段落" },
+                text = state.paragraphText.ifBlank { appCtx.getString(R.string.ra_panel_no_current_paragraph) },
                 current = true,
                 key = state.paragraphKey.ifBlank { state.paragraphIndex.toString() },
                 sequence = state.paragraphSequence,
@@ -4584,7 +4585,7 @@ private fun MinimalProgress(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = state.chapterIndexText.ifBlank { "章节" },
+                text = state.chapterIndexText.ifBlank { appCtx.getString(R.string.manga_check_chapter) },
                 color = colors.subtleText,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -4630,7 +4631,7 @@ private fun PlayerControlDock(
         ) {
             RoundTransportButton(
                 icon = R.drawable.ic_skip_previous,
-                contentDescription = "上一章",
+                contentDescription = appCtx.getString(R.string.previous_chapter),
                 colors = colors,
                 size = 50.dp,
                 iconSize = 25.dp,
@@ -4663,7 +4664,7 @@ private fun PlayerControlDock(
             }
             RoundTransportButton(
                 icon = R.drawable.ic_skip_next,
-                contentDescription = "下一章",
+                contentDescription = appCtx.getString(R.string.next_chapter),
                 colors = colors,
                 size = 50.dp,
                 iconSize = 25.dp,
@@ -5107,7 +5108,7 @@ private fun EngineSheet(
     }
     pickerGroupKey?.let { key ->
         SpeechVoiceRoutePickerDialog(
-            title = "选择发言人",
+            title = appCtx.getString(R.string.ra_panel_select_speaker),
             groups = state.ttsEngines.map { it.group },
             currentRoute = state.speechRoute,
             initialGroupKey = key,

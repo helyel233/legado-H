@@ -109,7 +109,7 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
             }
             result.onSuccess { appCtx.sendToClip(it) }
                 .onFailure {
-                    toastOnUi("复制失败：${it.localizedMessage ?: "规则格式不正确"}")
+                    toastOnUi(appCtx.getString(R.string.i18n_final_copy_failed, it.localizedMessage ?: appCtx.getString(R.string.i18n_final_rule_invalid)))
                 }
         }
     }
@@ -118,14 +118,14 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
         lifecycleScope.launch {
             val clipText = requireContext().getClipText()
             if (clipText.isNullOrBlank()) {
-                toastOnUi("剪贴板为空或格式不对")
+                toastOnUi(appCtx.getString(R.string.ai_ui_clipboard_empty_or_has_invalid))
                 return@launch
             }
             val result = withContext(IO) { DirectLinkUpload.importRule(clipText) }
             result.onSuccess {
                 dismissAllowingStateLoss()
             }.onFailure {
-                toastOnUi("格式不对：${it.localizedMessage ?: "规则校验失败"}")
+                toastOnUi(appCtx.getString(R.string.i18n_final_import_format_invalid, it.localizedMessage ?: appCtx.getString(R.string.i18n_final_rule_validation_failed)))
             }
         }
     }
@@ -136,7 +136,7 @@ class ComposeDirectLinkUploadDialog : ComposeDialogFragment() {
             result.onSuccess {
                 dismissAllowingStateLoss()
             }.onFailure {
-                toastOnUi("保存失败：${it.localizedMessage ?: "规则校验失败"}")
+                toastOnUi(appCtx.getString(R.string.i18n_final_save_failed, it.localizedMessage ?: appCtx.getString(R.string.i18n_final_rule_validation_failed)))
             }
         }
     }
@@ -250,21 +250,21 @@ private fun DirectLinkUploadContent(
                 DirectLinkTextField(
                     value = uploadUrl,
                     onValueChange = { uploadUrl = it },
-                    label = "上传Url",
+                    label = appCtx.getString(R.string.ai_ui_upload_url),
                     style = style
                 )
                 // Download URL rule
                 DirectLinkTextField(
                     value = downloadUrlRule,
                     onValueChange = { downloadUrlRule = it },
-                    label = "下载Url规则",
+                    label = appCtx.getString(R.string.ai_ui_download_url_rule),
                     style = style
                 )
                 // Summary
                 DirectLinkTextField(
                     value = summary,
                     onValueChange = { summary = it },
-                    label = "注释",
+                    label = appCtx.getString(R.string.ai_ui_comment),
                     style = style
                 )
                 // Compress checkbox
@@ -282,7 +282,7 @@ private fun DirectLinkUploadContent(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "压缩",
+                        text = appCtx.getString(R.string.ai_ui_compress),
                         color = style.primaryText,
                         fontSize = 14.sp,
                         fontFamily = style.bodyFontFamily
@@ -292,7 +292,7 @@ private fun DirectLinkUploadContent(
         },
         actions = {
             LegadoMiuixActionButton(
-                text = "测试",
+                text = appCtx.getString(R.string.regex_test_run),
                 palette = palette,
                 onClick = onTest,
                 cornerRadius = style.actionRadius

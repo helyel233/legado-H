@@ -5,6 +5,8 @@ import android.speech.tts.TextToSpeech
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.utils.GSON
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class SpeechVoiceOption(
     val key: String,
@@ -63,7 +65,7 @@ object SpeechVoiceCatalogRepository {
             val emotions = SpeechVoiceCatalogParser.flattenEmotions(httpTts.emotionsJson)
             val speakerGroups = SpeechVoiceCatalogParser.parseSpeakerGroups(httpTts.speakersJson)
             val speakerWarning = if (httpTts.speakersJson.isNotBlank() && speakerGroups.isEmpty()) {
-                "发言人 JSON 无效"
+                appCtx.getString(R.string.misc_invalid_speaker_json)
             } else {
                 ""
             }
@@ -97,10 +99,10 @@ object SpeechVoiceCatalogRepository {
             }
             val subtitle = buildList {
                 val explicitCount = options.count { it.explicitSpeaker }
-                if (explicitCount > 0) add("${explicitCount} 个发言人")
-                if (emotions.isNotEmpty()) add("${emotions.size} 个情绪")
+                if (explicitCount > 0) add(appCtx.getString(R.string.i18n_final_speaker_count, explicitCount))
+                if (emotions.isNotEmpty()) add(appCtx.getString(R.string.i18n_final_emotion_count, emotions.size))
                 if (speakerWarning.isNotBlank()) add(speakerWarning)
-            }.joinToString(" · ").ifBlank { "普通 HTTP TTS" }
+            }.joinToString(" · ").ifBlank { appCtx.getString(R.string.misc_standard_http_tts) }
             SpeechVoiceEngineGroup(
                 key = "http:${httpTts.id}",
                 title = httpTts.name.ifBlank { "HTTP TTS" },
@@ -140,7 +142,7 @@ object SpeechVoiceCatalogRepository {
                 SpeechVoiceEngineGroup(
                     key = "system:$value",
                     title = title,
-                    subtitle = if (value.isBlank()) "系统默认" else "系统 TTS",
+                    subtitle = if (value.isBlank()) appCtx.getString(R.string.ra_cfg_system_default) else appCtx.getString(R.string.system_tts),
                     engineType = SpeechRoute.ENGINE_SYSTEM,
                     engineValue = engineValue,
                     options = listOf(option)
@@ -162,8 +164,8 @@ object SpeechVoiceCatalogRepository {
         if (httpDefaults.isNotEmpty()) return httpDefaults
         val systemDefault = SpeechRoute(
             engineType = SpeechRoute.ENGINE_SYSTEM,
-            engineValue = GSON.toJson(SelectItem("系统默认", "")),
-            speakerName = "系统默认",
+            engineValue = GSON.toJson(SelectItem(appCtx.getString(R.string.ra_cfg_system_default), "")),
+            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
             source = SpeechRoute.SOURCE_AUTO
         )
         return listOf(systemDefault).filterNot(SpeechVoiceGroupRepository::isBlockedRoute)

@@ -52,6 +52,7 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.system.measureTimeMillis
 import splitties.init.appCtx
+import io.legado.app.R
 
 class EpubFile(var book: Book) {
 
@@ -700,7 +701,7 @@ class EpubFile(var book: Book) {
                 .ifBlank { target.attr("aria-label") }
                 .ifBlank { target.attr("epub:type") }
                 .ifBlank { target.attr("role") }
-                .ifBlank { "注解" },
+                .ifBlank { appCtx.getString(R.string.epub_annotation_title) },
             html = html.takeIf { it.isNotBlank() } ?: text
         ).takeIf { text.isNotBlank() || it.html.isNotBlank() }
         footnoteCache[cacheKey] = footnote
@@ -1588,8 +1589,8 @@ class EpubFile(var book: Book) {
                 resolveEpubResourceHref(res.href, it)
             }.orEmpty()
             val label = when (media.normalName()) {
-                "audio" -> "EPUB音频"
-                else -> "EPUB视频"
+                "audio" -> appCtx.getString(R.string.misc_epub_audio)
+                else -> appCtx.getString(R.string.misc_epub_video)
             }
             val title = media.attr("title")
                 .ifBlank { media.attr("alt") }
@@ -2038,7 +2039,7 @@ class EpubFile(var book: Book) {
     private fun upBookInfo() {
         if (epubBook == null) {
             eFile = null
-            book.intro = "书籍导入异常"
+            book.intro = appCtx.getString(R.string.misc_book_import_failed)
         } else {
             upBookCover()
             val metadata = epubBook!!.metadata
@@ -2107,7 +2108,7 @@ class EpubFile(var book: Book) {
                         chapter.bookUrl = book.bookUrl
                         chapter.url = resource.href
                         if (i == 0 && title.isEmpty()) {
-                            chapter.title = "封面"
+                            chapter.title = appCtx.getString(R.string.img_cover)
                         } else {
                             chapter.title = title.cleanEpubChapterTitle(resource, i)
                         }
@@ -2316,15 +2317,15 @@ class EpubFile(var book: Book) {
             lower.matches(Regex("qynmn\\d+"))
         if (!generic) return raw
         return when {
-            hrefName.contains("gallery", ignoreCase = true) -> "人物画廊"
-            hrefName.contains("cover", ignoreCase = true) -> "封面"
-            hrefName.contains("intro", ignoreCase = true) -> "简介"
-            hrefName.contains("copyright", ignoreCase = true) -> "版权信息"
-            hrefName.matches(Regex("qynmn\\d+", RegexOption.IGNORE_CASE)) -> "人物图鉴 ${index + 1}"
-            hrefName.matches(Regex("section\\d+", RegexOption.IGNORE_CASE)) -> "插图页 ${index + 1}"
-            hrefName.matches(Regex("chapter\\d*", RegexOption.IGNORE_CASE)) -> "章节 ${index + 1}"
+            hrefName.contains("gallery", ignoreCase = true) -> appCtx.getString(R.string.misc_character_gallery)
+            hrefName.contains("cover", ignoreCase = true) -> appCtx.getString(R.string.img_cover)
+            hrefName.contains("intro", ignoreCase = true) -> appCtx.getString(R.string.book_info_tab_intro)
+            hrefName.contains("copyright", ignoreCase = true) -> appCtx.getString(R.string.misc_copyright)
+            hrefName.matches(Regex("qynmn\\d+", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_character_guide, index + 1)
+            hrefName.matches(Regex("section\\d+", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_illustrations, index + 1)
+            hrefName.matches(Regex("chapter\\d*", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_chapter, index + 1)
             hrefName.isNotBlank() && !hrefName.isLikelyEpubFileTitle(hrefName) -> hrefName
-            else -> "卷首 ${index + 1}"
+            else -> appCtx.getString(R.string.misc_front_matter_2, index + 1)
         }
     }
 
@@ -2342,14 +2343,14 @@ class EpubFile(var book: Book) {
 
     private fun fallbackEpubSpineTitle(hrefName: String, index: Int): String {
         return when {
-            hrefName.contains("gallery", ignoreCase = true) -> "人物画廊"
-            hrefName.contains("cover", ignoreCase = true) -> "封面"
-            hrefName.contains("intro", ignoreCase = true) -> "简介"
-            hrefName.contains("copyright", ignoreCase = true) -> "版权信息"
-            hrefName.matches(Regex("qynmn\\d+", RegexOption.IGNORE_CASE)) -> "人物图鉴 ${index + 1}"
-            hrefName.matches(Regex("section\\d+", RegexOption.IGNORE_CASE)) -> "插图页 ${index + 1}"
-            hrefName.matches(Regex("chapter\\d*", RegexOption.IGNORE_CASE)) -> "章节 ${index + 1}"
-            else -> "EPUB 页面 ${index + 1}"
+            hrefName.contains("gallery", ignoreCase = true) -> appCtx.getString(R.string.misc_character_gallery)
+            hrefName.contains("cover", ignoreCase = true) -> appCtx.getString(R.string.img_cover)
+            hrefName.contains("intro", ignoreCase = true) -> appCtx.getString(R.string.book_info_tab_intro)
+            hrefName.contains("copyright", ignoreCase = true) -> appCtx.getString(R.string.misc_copyright)
+            hrefName.matches(Regex("qynmn\\d+", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_character_guide, index + 1)
+            hrefName.matches(Regex("section\\d+", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_illustrations, index + 1)
+            hrefName.matches(Regex("chapter\\d*", RegexOption.IGNORE_CASE)) -> appCtx.getString(R.string.misc_chapter, index + 1)
+            else -> appCtx.getString(R.string.misc_epub_page, index + 1)
         }
     }
 
@@ -2372,11 +2373,11 @@ class EpubFile(var book: Book) {
             .map { it.text().cleanEpubInfoText() }
             .filter { it.isNotBlank() }
             .distinct()
-        val author = lines.mapNotNull { line -> line.substringAfterLabel("作者") }.firstOrNull().orEmpty()
+        val author = lines.mapNotNull { line -> line.substringAfterLabel(appCtx.getString(R.string.author)) }.firstOrNull().orEmpty()
         val introLines = arrayListOf<String>()
         var inIntro = false
         lines.forEach { line ->
-            val intro = line.substringAfterLabel("简介")
+            val intro = line.substringAfterLabel(appCtx.getString(R.string.book_info_tab_intro))
             when {
                 intro != null -> {
                     inIntro = true
@@ -2413,10 +2414,10 @@ class EpubFile(var book: Book) {
     }
 
     private fun String.isEpubInfoMetaLine(): Boolean {
-        return substringAfterLabel("作者") != null ||
+        return substringAfterLabel(appCtx.getString(R.string.author)) != null ||
             substringAfterLabel("首发") != null ||
             substringAfterLabel("完本") != null ||
-            equals("简介", ignoreCase = true) ||
+            equals(appCtx.getString(R.string.book_info_tab_intro), ignoreCase = true) ||
             equals("简介：", ignoreCase = true)
     }
 

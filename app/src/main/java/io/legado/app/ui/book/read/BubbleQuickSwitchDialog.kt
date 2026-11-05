@@ -58,6 +58,7 @@ import io.legado.app.utils.SvgUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
+import splitties.init.appCtx
 
 class BubbleQuickSwitchDialog : ComposeDialogFragment() {
 
@@ -95,7 +96,7 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                     }
                 }
                 AppDialogFrame(
-                    title = "选择段评气泡",
+                    title = appCtx.getString(R.string.ui_book_select_paragraph_comment_bubble),
                     scrollContent = false,
                     content = {
                         LazyColumn(
@@ -106,8 +107,8 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                         ) {
                             item(key = "forceSoftwareBubble") {
                                 AppManagementListRow(
-                                    title = "强制使用软件气泡",
-                                    subtitle = "识别正文图片形式的段评入口",
+                                    title = appCtx.getString(R.string.bubble_force_software),
+                                    subtitle = appCtx.getString(R.string.ui_book_detect_paragraph_comment_entries_embedded),
                                     palette = palette,
                                     switchChecked = forceSoftwareBubble,
                                     onSwitchChange = { checked ->
@@ -153,7 +154,7 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                             Text(
-                                                text = if (active) "已应用" else bubbleSourceText(entry.source),
+                                                text = if (active) appCtx.getString(R.string.theme_applied_state) else bubbleSourceText(entry.source),
                                                 color = palette.settings.secondaryText,
                                                 fontSize = 12.sp,
                                                 maxLines = 1,
@@ -169,7 +170,7 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                     actions = {
                         val dialogPalette = rememberAppManagementPalette().miuix
                         LegadoMiuixActionButton(
-                            text = "气泡管理",
+                            text = appCtx.getString(R.string.bubble_manage),
                             palette = dialogPalette,
                             onClick = {
                                 dismissAllowingStateLoss()
@@ -217,7 +218,7 @@ private fun BubblePreview(bitmap: Bitmap?) {
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Text(text = "气泡", color = palette.settings.secondaryText, fontSize = 12.sp)
+            Text(text = appCtx.getString(R.string.package_sync_task_type_bubble), color = palette.settings.secondaryText, fontSize = 12.sp)
         }
     }
 }
@@ -251,9 +252,9 @@ private fun bubblePreviewBitmap(density: Float, entry: BubblePackageManager.Entr
 
 private fun bubbleSourceText(source: BubblePackageManager.Source): String {
     return when (source) {
-        BubblePackageManager.Source.BUILTIN -> "内置"
-        BubblePackageManager.Source.LOCAL -> "本地"
-        BubblePackageManager.Source.REMOTE -> "云端"
-        BubblePackageManager.Source.BOTH -> "本地 + 云端"
+        BubblePackageManager.Source.BUILTIN -> appCtx.getString(R.string.epub_loading_builtin)
+        BubblePackageManager.Source.LOCAL -> appCtx.getString(R.string.local)
+        BubblePackageManager.Source.REMOTE -> appCtx.getString(R.string.theme_source_remote)
+        BubblePackageManager.Source.BOTH -> appCtx.getString(R.string.bubble_source_both)
     }
 }

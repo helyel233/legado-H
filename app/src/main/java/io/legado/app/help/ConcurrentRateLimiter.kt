@@ -5,6 +5,8 @@ import io.legado.app.exception.ConcurrentException
 import io.legado.app.model.analyzeRule.AnalyzeUrl.ConcurrentRecord
 import kotlinx.coroutines.delay
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
+import splitties.init.appCtx
 
 class ConcurrentRateLimiter(source: BaseSource?) {
 
@@ -90,7 +92,7 @@ class ConcurrentRateLimiter(source: BaseSource?) {
         }
         if (waitTime > 0) {
             throw ConcurrentException(
-                "根据并发率还需等待${waitTime}毫秒才可以访问",
+                appCtx.getString(R.string.misc_rate_limit_wait_ms_before, waitTime),
                 waitTime = waitTime
             )
         }

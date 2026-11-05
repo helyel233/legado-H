@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import io.legado.app.R
 import io.legado.app.ui.main.ai.AiChatMessage
 import org.json.JSONObject
+import splitties.init.appCtx
 
 @Immutable
 sealed class AiChatUiItem {
@@ -396,9 +397,9 @@ private fun parseToolDisplayPayload(
                 type = AiToolPreviewType.BookResults,
                 title = context.getString(R.string.ai_tool_book_source_search),
                 summary = if (books.isNotEmpty()) {
-                    "找到 ${books.size} 条结果"
+                    appCtx.getString(R.string.ai_ui_found_results, books.size)
                 } else {
-                    root?.optString("keyword")?.takeIf { it.isNotBlank() }?.let { "搜索：$it" }
+                    root?.optString("keyword")?.takeIf { it.isNotBlank() }?.let { appCtx.getString(R.string.ai_ui_search, it) }
                         ?: summarizeProcessDetail(raw, context.getString(R.string.ai_tool_status_calling))
                 },
                 raw = raw,
@@ -424,9 +425,9 @@ private fun parseToolDisplayPayload(
                 type = AiToolPreviewType.WebResults,
                 title = context.getString(R.string.ai_tool_web_search),
                 summary = if (webResults.isNotEmpty()) {
-                    "找到 ${webResults.size} 条网页"
+                    appCtx.getString(R.string.ai_ui_found_web_pages, webResults.size)
                 } else {
-                    root?.optString("query")?.takeIf { it.isNotBlank() }?.let { "搜索：$it" }
+                    root?.optString("query")?.takeIf { it.isNotBlank() }?.let { appCtx.getString(R.string.ai_ui_search, it) }
                         ?: summarizeProcessDetail(raw, context.getString(R.string.ai_tool_status_calling))
                 },
                 raw = raw,
@@ -448,8 +449,8 @@ private fun parseToolDisplayPayload(
             val image = parseImageResult(raw)
             AiToolDisplayPayload(
                 type = AiToolPreviewType.ImageResult,
-                title = "角色头像",
-                summary = image?.prompt?.takeIf { it.isNotBlank() } ?: "已更新角色头像",
+                title = appCtx.getString(R.string.bchar_character_avatar),
+                summary = image?.prompt?.takeIf { it.isNotBlank() } ?: appCtx.getString(R.string.ai_ui_character_avatar_updated),
                 raw = raw,
                 images = listOfNotNull(image)
             )
@@ -459,15 +460,15 @@ private fun parseToolDisplayPayload(
             if (images.isNotEmpty()) {
                 AiToolDisplayPayload(
                     type = AiToolPreviewType.ImageResult,
-                    title = "角色头像",
-                    summary = "找到 ${images.size} 张角色头像",
+                    title = appCtx.getString(R.string.bchar_character_avatar),
+                    summary = appCtx.getString(R.string.ai_ui_found_character_avatars, images.size),
                     raw = raw,
                     images = images
                 )
             } else {
                 AiToolDisplayPayload(
                     type = AiToolPreviewType.Generic,
-                    title = "角色资料",
+                    title = appCtx.getString(R.string.bchar_character_profile),
                     summary = summarizeProcessDetail(raw, context.getString(R.string.ai_tool_status_done)),
                     raw = raw
                 )
@@ -487,7 +488,7 @@ private fun JSONObject.toSearchBookUi(): AiSearchBookUi? {
     val origin = optString("origin")
     if (bookUrl.isBlank() || origin.isBlank()) return null
     return AiSearchBookUi(
-        name = optString("name").ifBlank { "未命名" },
+        name = optString("name").ifBlank { appCtx.getString(R.string.ai_ui_untitled) },
         author = optString("author"),
         originName = optString("originName"),
         kind = optString("kind"),
@@ -557,8 +558,8 @@ private fun summarizeProcessDetail(raw: String, fallback: String): String {
 
 private fun normalizeStepLabel(label: String): String {
     return label
-        .replace("，点按展开", "")
-        .replace("，点击展开", "")
+        .replace(appCtx.getString(R.string.ai_ui_tap_expand), "")
+        .replace(appCtx.getString(R.string.ai_ui_tap_expand_2), "")
         .replace(", tap to expand", "", ignoreCase = true)
         .replace(" tap to expand", "", ignoreCase = true)
         .trim()

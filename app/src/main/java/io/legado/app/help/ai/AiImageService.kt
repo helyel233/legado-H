@@ -25,6 +25,8 @@ import org.mozilla.javascript.NativeObject
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiImageService {
 
@@ -315,8 +317,8 @@ object AiImageService {
     ) {
         val elapsed = System.currentTimeMillis() - startedAt
         val message = buildString {
-            append("AI 生图请求")
-            append(if (success) "成功" else "失败")
+            append(appCtx.getString(R.string.misc_ai_image_request))
+            append(if (success) appCtx.getString(R.string.success) else appCtx.getString(R.string.dns_result_failed))
             append("\nurl=").append(url)
             append("\nprovider=").append(provider.displayName())
             append("\nmodel=").append(model)

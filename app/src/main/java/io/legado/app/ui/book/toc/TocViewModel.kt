@@ -19,6 +19,7 @@ import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.openOutputStream
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.writeText
+import splitties.init.appCtx
 
 class TocViewModel(application: Application) : BaseViewModel(application) {
     var bookUrl: String = ""
@@ -83,7 +84,7 @@ class TocViewModel(application: Application) : BaseViewModel(application) {
         }.onError {
             AppLog.put("导出失败\n${it.localizedMessage}", it, true)
         }.onSuccess {
-            context.toastOnUi("导出成功")
+            context.toastOnUi(appCtx.getString(R.string.export_success))
         }
     }
 
@@ -100,14 +101,14 @@ class TocViewModel(application: Application) : BaseViewModel(application) {
                 outputStream.write("## ${book.name} ${book.author}\n\n".toByteArray())
                 appDb.bookmarkDao.getByBook(book.name, book.author).forEach {
                     outputStream.write("#### ${it.chapterName}\n\n".toByteArray())
-                    outputStream.write("###### 原文\n ${it.bookText}\n\n".toByteArray())
-                    outputStream.write("###### 摘要\n ${it.content}\n\n".toByteArray())
+                    outputStream.write(appCtx.getString(R.string.misc_original_n_n_n, it.bookText).toByteArray())
+                    outputStream.write(appCtx.getString(R.string.misc_summary_n_n_n, it.content).toByteArray())
                 }
             }
         }.onError {
             AppLog.put("导出失败\n${it.localizedMessage}", it, true)
         }.onSuccess {
-            context.toastOnUi("导出成功")
+            context.toastOnUi(appCtx.getString(R.string.export_success))
         }
     }
 

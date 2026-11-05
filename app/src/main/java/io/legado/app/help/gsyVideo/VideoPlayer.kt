@@ -31,6 +31,7 @@ import master.flame.danmaku.danmaku.parser.BaseDanmakuParser
 import master.flame.danmaku.ui.widget.DanmakuView
 import java.io.File
 import java.io.FileInputStream
+import splitties.init.appCtx
 
 class VideoPlayer: StandardGSYVideoPlayer {
     constructor(context: Context?, fullFlag: Boolean?) : super(context, fullFlag) //必须的,全屏时依靠这个构建知道获取全屏布局
@@ -110,7 +111,7 @@ class VideoPlayer: StandardGSYVideoPlayer {
                         if (mCurrentState == CURRENT_STATE_PLAYING) {
                             val speed = VideoPlay.longPressSpeed / 10.0f
                             setVideoSpeed(speed)
-                            showOverlayTip("${speed}倍速播放中")
+                            showOverlayTip(appCtx.getString(R.string.misc_playing_at_x_speed, speed))
                             isLongPressSpeed = true
                         }
                         super.onLongPress(e)
@@ -372,10 +373,10 @@ class VideoPlayer: StandardGSYVideoPlayer {
         post {
             if (VideoPlay.danmakuShow) {
                 if (!mDanmakuView!!.isShown) mDanmakuView!!.show()
-                mToggleDanmaku?.text = "关弹幕"
+                mToggleDanmaku?.text = appCtx.getString(R.string.misc_hide_danmaku)
             } else {
                 if (mDanmakuView!!.isShown) mDanmakuView!!.hide()
-                mToggleDanmaku?.text = "开弹幕"
+                mToggleDanmaku?.text = appCtx.getString(R.string.misc_show_danmaku)
             }
         }
     }
@@ -442,9 +443,9 @@ class VideoPlayer: StandardGSYVideoPlayer {
                 setSpeed(playSpeed, true)
                 if (playSpeed != 1.0f) {
                     playbackSpeed?.text = "${playSpeed}X"
-                    showOverlayTip("${playSpeed}倍播放中", 2000)
+                    showOverlayTip(appCtx.getString(R.string.misc_playing_at_x_speed_2, playSpeed), 2000)
                 } else {
-                    playbackSpeed?.text = "倍速"
+                    playbackSpeed?.text = appCtx.getString(R.string.ui_main_speed)
                 }
             }
 

@@ -69,6 +69,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import io.legado.app.model.VideoPlay.VIDEO_PREF_NAME
+import io.legado.app.R
 
 /**
  * 备份
@@ -470,7 +471,7 @@ object Backup {
             }
             if (backupSuccess) {
                 LocalConfig.lastBackup = System.currentTimeMillis()
-                LogUtils.d(TAG, "备份完成")
+                LogUtils.d(TAG, appCtx.getString(R.string.backup_stage_finished))
             }
         } finally {
             // 无论成功失败都清理：上传失败时若跳过清理，含明文数据的临时 zip

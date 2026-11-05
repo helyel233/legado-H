@@ -8,6 +8,8 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.replace
 import io.legado.app.utils.stackTraceStr
+import io.legado.app.R
+import splitties.init.appCtx
 
 object ReplaceRuleController {
 
@@ -22,10 +24,10 @@ object ReplaceRuleController {
 
     fun saveRule(postData: String?): ReturnData {
         val returnData = ReturnData()
-        postData ?: return returnData.setErrorMsg("数据不能为空")
+        postData ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_data_cannot_be_empty))
         val rule = GSON.fromJsonObject<ReplaceRule>(postData).getOrNull()
         if (rule == null) {
-            returnData.setErrorMsg("格式不对")
+            returnData.setErrorMsg(appCtx.getString(R.string.wrong_format))
         } else {
             if (rule.order == Int.MIN_VALUE) {
                 rule.order = appDb.replaceRuleDao.maxOrder + 1
@@ -38,10 +40,10 @@ object ReplaceRuleController {
 
     fun delete(postData: String?): ReturnData {
         val returnData = ReturnData()
-        postData ?: return returnData.setErrorMsg("数据不能为空")
+        postData ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_data_cannot_be_empty))
         val rule = GSON.fromJsonObject<ReplaceRule>(postData).getOrNull()
         if (rule == null) {
-            returnData.setErrorMsg("格式不对")
+            returnData.setErrorMsg(appCtx.getString(R.string.wrong_format))
         } else {
             appDb.runInTransaction {
                 SourceRecycleBinHelp.recycleReplaceRules(listOf(rule))
@@ -60,10 +62,10 @@ object ReplaceRuleController {
      */
     fun testRule(postData: String?): ReturnData {
         val returnData = ReturnData()
-        postData ?: return returnData.setErrorMsg("数据不能为空")
+        postData ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_data_cannot_be_empty))
         val map = GSON.fromJsonObject<Map<String, *>>(postData).getOrNull()
         if (map == null) {
-            returnData.setErrorMsg("格式不对")
+            returnData.setErrorMsg(appCtx.getString(R.string.wrong_format))
         } else {
             val rule = map["rule"]?.let {
                 if (it is String) {
@@ -73,14 +75,14 @@ object ReplaceRuleController {
                 }
             }
             if (rule == null) {
-                returnData.setErrorMsg("格式不对")
+                returnData.setErrorMsg(appCtx.getString(R.string.wrong_format))
                 return returnData
             }
             if (rule.pattern.isEmpty()) {
-                returnData.setErrorMsg("替换规则不能为空")
+                returnData.setErrorMsg(appCtx.getString(R.string.svc_replace_rule_cannot_be_empty))
             }
             val text = map["text"]?.toString() ?: run {
-                returnData.setErrorMsg("text不能为空")
+                returnData.setErrorMsg(appCtx.getString(R.string.svc_text_cannot_be_empty))
                 return returnData
             }
             val content = try {
@@ -95,7 +97,7 @@ object ReplaceRuleController {
                     text.replace(rule.pattern, rule.replacement)
                 }
             } catch (e: Exception) {
-                returnData.setErrorMsg("替换规则测试失败: ${e.message}")
+                returnData.setErrorMsg(appCtx.getString(R.string.svc_replace_rule_test_failed, e.message))
                 return returnData
             }
             returnData.setData(content)

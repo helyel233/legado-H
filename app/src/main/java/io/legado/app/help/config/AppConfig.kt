@@ -50,6 +50,7 @@ import io.legado.app.ui.book.read.ReadAiBookHistory
 import splitties.init.appCtx
 import java.net.InetAddress
 import java.net.URI
+import io.legado.app.R
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
@@ -99,7 +100,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var customHosts = appCtx.getPrefString(PreferKey.customHosts)
     var editTheme = appCtx.getPrefInt(PreferKey.editTheme, 0)
     var editThemeDark = appCtx.getPrefInt(PreferKey.editThemeDark, 0)
-    var editTemeAuto = appCtx.getPrefBoolean(PreferKey.editTemeAuto)
+    var editThemeAuto = appCtx.getPrefBoolean(PreferKey.editThemeAuto)
     var isEInkMode = appCtx.getPrefString(PreferKey.themeMode) == "3"
     var clickActionTL = appCtx.getPrefInt(PreferKey.clickActionTL, 2)
     var clickActionTC = appCtx.getPrefInt(PreferKey.clickActionTC, 2)
@@ -206,7 +207,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
             PreferKey.editThemeDark -> editThemeDark = appCtx.getPrefInt(PreferKey.editThemeDark, 0)
 
-            PreferKey.editTemeAuto -> editTemeAuto = appCtx.getPrefBoolean(PreferKey.editTemeAuto)
+            PreferKey.editThemeAuto -> editThemeAuto = appCtx.getPrefBoolean(PreferKey.editThemeAuto)
 
             PreferKey.antiAlias -> useAntiAlias = appCtx.getPrefBoolean(PreferKey.antiAlias)
 
@@ -1709,7 +1710,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?.let { config ->
                 config.copy(
                     type = AiChatCompanionConfig.TYPE_DEFAULT,
-                    name = config.name.ifBlank { "默认助手" },
+                    name = config.name.ifBlank { appCtx.getString(R.string.svc_default_assistant) },
                     prompt = config.prompt.ifBlank { DEFAULT_AI_SYSTEM_PROMPT },
                     enabled = true,
                     order = 0
@@ -1731,7 +1732,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         return AiChatCompanionConfig(
             id = AiChatCompanionConfig.DEFAULT_COMPANION_ID,
             type = AiChatCompanionConfig.TYPE_DEFAULT,
-            name = "默认助手",
+            name = appCtx.getString(R.string.svc_default_assistant),
             prompt = prompt,
             order = 0,
             enabled = true
@@ -2050,7 +2051,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             listOf(
                 AiSkillConfig(
                     name = "Legado Skill",
-                    description = "从旧版单文本 Skill 配置迁移",
+                    description = appCtx.getString(R.string.svc_migrated_from_legacy_single_text),
                     content = prompt
                 )
             )
@@ -2217,12 +2218,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     // 添加本地选择的目录
     var importBookPath: String?
-        get() = appCtx.getPrefString("importBookPath")
+        get() = appCtx.getPrefString(PreferKey.importBookPath)
         set(value) {
             if (value == null) {
-                appCtx.removePref("importBookPath")
+                appCtx.removePref(PreferKey.importBookPath)
             } else {
-                appCtx.putPrefString("importBookPath", value)
+                appCtx.putPrefString(PreferKey.importBookPath, value)
             }
         }
 
@@ -2641,7 +2642,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val syncBookProgressPlus get() = appCtx.getPrefBoolean(PreferKey.syncBookProgressPlus, false)
 
-    val mediaButtonOnExit get() = appCtx.getPrefBoolean("mediaButtonOnExit", true)
+    val mediaButtonOnExit get() = appCtx.getPrefBoolean(PreferKey.mediaButtonOnExit, true)
 
     val readAloudByMediaButton
         get() = appCtx.getPrefBoolean(PreferKey.readAloudByMediaButton, false)
@@ -2791,15 +2792,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.paddingDisplayCutouts, false)
 
     var searchScope: String
-        get() = appCtx.getPrefString("searchScope") ?: ""
+        get() = appCtx.getPrefString(PreferKey.searchScope) ?: ""
         set(value) {
-            appCtx.putPrefString("searchScope", value)
+            appCtx.putPrefString(PreferKey.searchScope, value)
         }
 
     var searchGroup: String
-        get() = appCtx.getPrefString("searchGroup") ?: ""
+        get() = appCtx.getPrefString(PreferKey.searchGroup) ?: ""
         set(value) {
-            appCtx.putPrefString("searchGroup", value)
+            appCtx.putPrefString(PreferKey.searchGroup, value)
         }
 
     var pageTouchSlop: Int
@@ -2896,7 +2897,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             * clickActionBL * clickActionBC * clickActionBR != 0
         ) {
             appCtx.putPrefInt(PreferKey.clickActionMC, 0)
-            appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
+            appCtx.toastOnUi(appCtx.getString(R.string.svc_no_menu_area_configured_middle))
         }
     }
 
@@ -3028,7 +3029,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.welcomeShowIconDark, value)
         }
 
-    val autoUpdateVariant get() = appCtx.getPrefBoolean("autoUpdateVariant", true)
+    val autoUpdateVariant get() = appCtx.getPrefBoolean(PreferKey.autoUpdateVariant, true)
 
     /** 规则回收站开关（移植自 Legado_Max，默认开启，页内可关闭） */
     var sourceRecycleBinEnabled: Boolean

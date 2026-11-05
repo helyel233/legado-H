@@ -305,7 +305,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
 
     private fun ask(question: String) {
         val readContext = readContext ?: return
-        AiContentConsent.withConsent(this.context, "阅读页问 AI") {
+        AiContentConsent.withConsent(this.context, appCtx.getString(R.string.ai_ui_ask_ai_reading_page)) {
             doAsk(readContext, question)
         }
     }
@@ -335,7 +335,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             scope = AiAgentSession.SCOPE_READ_AI,
             type = AiAgentJob.TYPE_READ_AI,
             currentGoal = question,
-            currentTask = "阅读页问 AI",
+            currentTask = appCtx.getString(R.string.ai_ui_ask_ai_reading_page),
             inputJson = JSONObject()
                 .put("bookName", context.bookName)
                 .put("author", context.author)
@@ -819,14 +819,14 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             return
         }
         context.selector(
-            "当前窗口能力",
+            appCtx.getString(R.string.ai_ui_current_window_capabilities),
             listOf(
-                "新建对话",
-                "历史记录",
-                "Skill：${activeWindowSkills().size} 个",
-                "MCP：${windowMcpServerIds.size} 个",
-                "世界书：${activeReadAiWorldBookCount()} 个",
-                "清空 Skill/MCP"
+                appCtx.getString(R.string.ai_ui_new_chat),
+                appCtx.getString(R.string.history),
+                appCtx.getString(R.string.ai_ui_skills_2, activeWindowSkills().size),
+                appCtx.getString(R.string.ai_ui_mcp_2, windowMcpServerIds.size),
+                appCtx.getString(R.string.ai_ui_world_books_2, activeReadAiWorldBookCount()),
+                appCtx.getString(R.string.ai_ui_clear_skill_mcp)
             )
         ) { _, _, index ->
             when (index) {
@@ -862,7 +862,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     private fun showReadAiWorldBookDialog() {
         val worldBooks = AppConfig.aiWorldBookList
         if (worldBooks.isEmpty()) {
-            context.selector("世界书", listOf("打开世界书管理")) { _, _, _ ->
+            context.selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, _ ->
                 openWorldBookManage()
             }
             return
@@ -902,7 +902,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                     }
                 }
             }
-            neutralButton("管理") { openWorldBookManage() }
+            neutralButton(appCtx.getString(R.string.share_note_manage)) { openWorldBookManage() }
             cancelButton()
         }
     }
@@ -926,7 +926,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                     AppConfig.aiSkillList.any { it.id == id && it.enabled }
                 }
             }
-            neutralButton("清空") {
+            neutralButton(appCtx.getString(R.string.cache_manage_review_clear)) {
                 windowSkillIds = emptySet()
             }
             cancelButton()
@@ -952,7 +952,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                     AppConfig.aiMcpServerList.any { it.id == id && it.enabled }
                 }
             }
-            neutralButton("清空") {
+            neutralButton(appCtx.getString(R.string.cache_manage_review_clear)) {
                 windowMcpServerIds = emptySet()
             }
             cancelButton()
@@ -1401,8 +1401,8 @@ private fun ReadAiPanelContent(
                                 add(ReadAiMenuAction(stringResource(R.string.ai_chat_history), onToggleHistory))
                                 add(ReadAiMenuAction("Skill", onOpenSkills))
                                 add(ReadAiMenuAction("MCP", onOpenMcp))
-                                add(ReadAiMenuAction("世界书", onOpenWorldBooks))
-                                add(ReadAiMenuAction("窗口能力", onOpenAbilities))
+                                add(ReadAiMenuAction(appCtx.getString(R.string.ai_tool_world_book), onOpenWorldBooks))
+                                add(ReadAiMenuAction(appCtx.getString(R.string.ai_ui_window_capabilities), onOpenAbilities))
                                 add(ReadAiMenuAction(stringResource(R.string.ai_current_model), onSelectModel))
                             },
                             onDismiss = { menuExpanded = false }
@@ -1706,10 +1706,10 @@ private fun ReadAiMessage.toProcessStep(): AiProcessStepUi {
             type = AiProcessStepType.Tool,
             title = statusName?.takeIf { it.isNotBlank() }
                 ?: statusLabel?.takeIf { it.isNotBlank() }
-                ?: "工具调用",
+                ?: appCtx.getString(R.string.ai_ui_tool_call),
             subtitle = summarizeReadAiProcessDetail(
                 detail,
-                statusLabel?.takeIf { it.isNotBlank() } ?: if (pending) "调用中" else "已完成"
+                statusLabel?.takeIf { it.isNotBlank() } ?: if (pending) appCtx.getString(R.string.ai_tool_status_calling) else appCtx.getString(R.string.package_sync_task_status_completed)
             ),
             detail = detail,
             pending = pending,

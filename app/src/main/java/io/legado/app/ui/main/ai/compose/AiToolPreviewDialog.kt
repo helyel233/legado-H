@@ -45,6 +45,8 @@ import io.legado.app.ui.main.ai.AiImagePreviewDialog
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Composable
 fun AiToolPreviewDialog(
@@ -83,7 +85,7 @@ fun AiToolPreviewDialog(
                         }
                     }
                     Text(
-                        text = "关闭",
+                        text = appCtx.getString(R.string.jf_convert_o),
                         color = style.colors.accent,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -99,7 +101,7 @@ fun AiToolPreviewDialog(
                     AiToolPreviewType.Generic -> GenericToolPreview(payload.raw, style)
                 }
                 Text(
-                    text = "复制原始数据",
+                    text = appCtx.getString(R.string.ai_ui_copy_raw_data),
                     color = style.colors.accent,
                     fontSize = 13.sp,
                     modifier = Modifier
@@ -108,7 +110,7 @@ fun AiToolPreviewDialog(
                         .clickable {
                             val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             manager.setPrimaryClip(ClipData.newPlainText(payload.title, payload.raw))
-                            context.toastOnUi("已复制")
+                            context.toastOnUi(appCtx.getString(R.string.review_error_copied))
                         }
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 )
@@ -124,7 +126,7 @@ private fun BookResultPreview(
     onDismiss: () -> Unit
 ) {
     if (books.isEmpty()) {
-        EmptyPreviewText("暂无书籍结果", style)
+        EmptyPreviewText(appCtx.getString(R.string.ai_ui_no_book_results), style)
         return
     }
     val context = LocalContext.current
@@ -190,7 +192,7 @@ private fun BookResultPreview(
 @Composable
 private fun WebResultPreview(results: List<AiWebResultUi>, style: AiComposeStyle) {
     if (results.isEmpty()) {
-        EmptyPreviewText("暂无搜索结果", style)
+        EmptyPreviewText(appCtx.getString(R.string.ai_ui_no_search_results), style)
         return
     }
     val context = LocalContext.current
@@ -255,7 +257,7 @@ private fun ImageResultPreview(
     onDismiss: () -> Unit
 ) {
     if (images.isEmpty()) {
-        EmptyPreviewText("暂无图片结果", style)
+        EmptyPreviewText(appCtx.getString(R.string.ai_ui_no_image_results), style)
         return
     }
     val context = LocalContext.current
@@ -293,7 +295,7 @@ private fun ImageResultPreview(
                         onRelease = { it.releaseComposeImage() }
                     )
                     Text(
-                        text = image.prompt.ifBlank { "图片已生成" },
+                        text = image.prompt.ifBlank { appCtx.getString(R.string.ai_ui_image_generated) },
                         color = style.colors.secondaryText,
                         fontSize = 12.5.sp,
                         maxLines = 2,
@@ -315,7 +317,7 @@ private fun GenericToolPreview(raw: String, style: AiComposeStyle) {
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = raw.ifBlank { "无结果" },
+            text = raw.ifBlank { appCtx.getString(R.string.ai_ui_no_results) },
             color = style.colors.secondaryText,
             fontSize = 12.5.sp,
             lineHeight = 18.sp

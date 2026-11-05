@@ -92,11 +92,11 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
      * 或单个旧版 json 文件（myBookShelf.json 等）。
      */
     private val restoreOldParam: HandleFileContract.HandleFileParam.() -> Unit = {
-        title = getString(R.string.menu_import_old_version)
+        title = str(R.string.menu_import_old_version)
         mode = HandleFileContract.DIR
         allowExtensions = arrayOf("zip", "json")
         otherActions = arrayListOf(
-            SelectItem(getString(R.string.select_zip_backup), HandleFileContract.FILE)
+            SelectItem(str(R.string.select_zip_backup), HandleFileContract.FILE)
         )
     }
 
@@ -151,8 +151,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                 appCtx.toastOnUi(summary)
             }.onError {
                 _waitDialog?.dismiss()
-                AppLog.put("导入旧版数据出错\n${it.localizedMessage}", it)
-                appCtx.toastOnUi("导入旧版数据失败\n${it.localizedMessage}")
+                AppLog.put(appCtx.getString(R.string.backup_legacy_import_fail, it.localizedMessage), it)
+                appCtx.toastOnUi(appCtx.getString(R.string.backup_legacy_import_fail, it.localizedMessage))
             }
             obtainWaitDialog().setOnCancelListener {
                 task.cancel()
@@ -177,7 +177,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.backup_restore, menu)
-        menu.applyTint(requireContext())
+        menu.applyTint(ctx)
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -193,7 +193,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     override fun buildPageSpec(): SettingPageSpec {
-        val type = CloudStorageType.from(getPrefString(PreferKey.cloudStorageType))
+        val type = CloudStorageType.from(ctx.getPrefString(PreferKey.cloudStorageType))
         val webDavVisible = type == CloudStorageType.WEBDAV
         val s3Visible = type == CloudStorageType.S3
         val syncBookProgress = booleanSetting(PreferKey.syncBookProgress, true)
@@ -201,81 +201,83 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             titleRes = titleRes,
             sections = listOf(
                 SettingSectionSpec(
-                    title = getString(R.string.web_dav_set),
+                    title = str(R.string.web_dav_set),
                     items = listOf(
                         choice(
                             key = PreferKey.cloudStorageType,
-                            title = getString(R.string.cloud_storage),
+                            title = str(R.string.cloud_storage),
                             entriesRes = R.array.cloud_storage_types,
                             valuesRes = R.array.cloud_storage_type_values,
                             defaultValue = CloudStorageType.WEBDAV.name
                         ),
                         SettingActionSpec(
                             key = KEY_WEB_DAV_ACCOUNT_MANAGE,
-                            title = getString(R.string.webdav_account_manage),
+                            title = str(R.string.webdav_account_manage),
                             summary = webDavAccountSummary(),
                             visible = webDavVisible,
                             onClick = ::showWebDavAccountDialog
                         ),
                         SettingActionSpec(
                             key = PreferKey.webDavDir,
-                            title = getString(R.string.sub_dir),
+                            title = str(R.string.sub_dir),
                             summary = AppConfig.webDavDir ?: "legado",
                             visible = webDavVisible,
                             onClick = {
                                 showTextSettingDialog(
                                     key = PreferKey.webDavDir,
-                                    title = getString(R.string.sub_dir),
+                                    title = str(R.string.sub_dir),
                                     initialValue = AppConfig.webDavDir ?: "legado"
                                 )
                             }
                         ),
                         SettingActionSpec(
                             key = PreferKey.webDavDeviceName,
-                            title = getString(R.string.webdav_device_name),
-                            summary = getPrefString(PreferKey.webDavDeviceName),
+                            title = str(R.string.webdav_device_name),
+                            summary = ctx.getPrefString(PreferKey.webDavDeviceName),
                             visible = webDavVisible,
                             onClick = {
                                 showTextSettingDialog(
                                     key = PreferKey.webDavDeviceName,
-                                    title = getString(R.string.webdav_device_name),
+                                    title = str(R.string.webdav_device_name),
                                     initialValue = AppConfig.webDavDeviceName ?: ""
                                 )
                             }
                         ),
                         switch(
                             key = PreferKey.webDavDeleteOldBackup,
-                            title = getString(R.string.webdav_delete_old_backup_t),
-                            summary = getString(R.string.webdav_delete_old_backup_s),
+                            title = str(R.string.webdav_delete_old_backup_t),
+                            summary = str(R.string.webdav_delete_old_backup_s),
                             defaultValue = false
                         ),
                         switch(
                             key = PreferKey.webDavBackupCover,
-                            title = getString(R.string.webdav_backup_cover_t),
-                            summary = getString(R.string.webdav_backup_cover_s),
+                            title = str(R.string.webdav_backup_cover_t),
+                            summary = str(R.string.webdav_backup_cover_s),
                             defaultValue = false
                         ),
                         SettingActionSpec(
                             key = KEY_S3_CONTAINER_MANAGE,
-                            title = getString(R.string.s3_container_manage),
-                            summary = getString(R.string.s3_container_manage_summary),
+                            navigates = true,
+                            title = str(R.string.s3_container_manage),
+                            summary = str(R.string.s3_container_manage_summary),
                             visible = s3Visible,
                             onClick = {
-                                requireContext().startActivity<S3ContainerManageActivity>()
+                                ctx.startActivity<S3ContainerManageActivity>()
                             }
                         ),
                         SettingActionSpec(
                             key = KEY_LIBRARY_CONTAINER_MANAGE,
-                            title = "书库容器",
-                            summary = "管理用于同步阅读章节缓存的独立 S3 容器",
+                            navigates = true,
+                            title = str(R.string.backup_library_container_title),
+                            summary = str(R.string.backup_library_container_summary),
                             onClick = {
-                                requireContext().startActivity<LibraryContainerManageActivity>()
+                                ctx.startActivity<LibraryContainerManageActivity>()
                             }
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.autoSwitchS3Container,
-                            title = getString(R.string.s3_auto_switch_container),
-                            summary = getString(R.string.s3_auto_switch_container_summary),
+                            title = str(R.string.s3_auto_switch_container),
+                            summary = str(R.string.s3_auto_switch_container_summary),
                             checked = booleanSetting(PreferKey.autoSwitchS3Container, true),
                             visible = s3Visible,
                             onCheckedChange = {
@@ -284,8 +286,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.syncThemePackages,
-                            title = getString(R.string.sync_theme_packages),
-                            summary = getString(R.string.sync_theme_packages_summary),
+                            title = str(R.string.sync_theme_packages),
+                            summary = str(R.string.sync_theme_packages_summary),
                             checked = booleanSetting(PreferKey.syncThemePackages, false),
                             onCheckedChange = { checked ->
                                 if (checked && !hasCloudStorageAccount()) {
@@ -297,14 +299,14 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         switch(
                             key = PreferKey.syncBookProgress,
-                            title = getString(R.string.sync_book_progress_t),
-                            summary = getString(R.string.sync_book_progress_s),
+                            title = str(R.string.sync_book_progress_t),
+                            summary = str(R.string.sync_book_progress_s),
                             defaultValue = true
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.syncBookProgressPlus,
-                            title = getString(R.string.sync_book_progress_plus_t),
-                            summary = getString(R.string.sync_book_progress_plus_s),
+                            title = str(R.string.sync_book_progress_plus_t),
+                            summary = str(R.string.sync_book_progress_plus_s),
                             checked = booleanSetting(PreferKey.syncBookProgressPlus, false),
                             enabled = syncBookProgress,
                             onCheckedChange = {
@@ -314,73 +316,73 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.backup_restore),
+                    title = str(R.string.backup_restore),
                     items = listOf(
                         SettingActionSpec(
                             key = PreferKey.backupPath,
-                            title = getString(R.string.backup_path),
-                            summary = AppConfig.backupPath ?: getString(R.string.select_backup_path),
+                            title = str(R.string.backup_path),
+                            summary = AppConfig.backupPath ?: str(R.string.select_backup_path),
                             onClick = { selectBackupPath.launch() }
                         ),
                         SettingActionSpec(
                             key = KEY_WEB_DAV_BACKUP,
-                            title = getString(R.string.backup),
-                            summary = getString(R.string.backup_summary),
+                            title = str(R.string.backup),
+                            summary = str(R.string.backup_summary),
                             onClick = { backup() }
                         ),
                         SettingActionSpec(
                             key = KEY_WEB_DAV_RESTORE,
-                            title = getString(R.string.restore),
-                            summary = getString(R.string.restore_summary),
+                            title = str(R.string.restore),
+                            summary = str(R.string.restore_summary),
                             onClick = { restore() },
                             onLongClick = { restoreFromLocal() }
                         ),
                         SettingActionSpec(
                             key = PreferKey.restoreIgnore,
-                            title = getString(R.string.restore_ignore),
-                            summary = getString(R.string.restore_ignore_summary),
+                            title = str(R.string.restore_ignore),
+                            summary = str(R.string.restore_ignore_summary),
                             onClick = ::backupIgnore
                         ),
                         SettingActionSpec(
                             key = KEY_IMPORT_OLD,
-                            title = getString(R.string.menu_import_old_version),
-                            summary = getString(R.string.import_old_summary),
+                            title = str(R.string.menu_import_old_version),
+                            summary = str(R.string.import_old_summary),
                             onClick = { restoreOld.launch(restoreOldParam) }
                         ),
                         switch(
                             key = PreferKey.backupBookFiles,
-                            title = getString(R.string.backup_book_files_t),
-                            summary = getString(R.string.backup_book_files_s),
+                            title = str(R.string.backup_book_files_t),
+                            summary = str(R.string.backup_book_files_s),
                             defaultValue = false
                         ),
                         switch(
                             key = PreferKey.backupAssetsSeparately,
-                            title = getString(R.string.backup_assets_separately_t),
-                            summary = getString(R.string.backup_assets_separately_s),
+                            title = str(R.string.backup_assets_separately_t),
+                            summary = str(R.string.backup_assets_separately_s),
                             defaultValue = false
                         ),
                         switch(
                             key = PreferKey.onlyLatestBackup,
-                            title = getString(R.string.only_latest_backup_t),
-                            summary = getString(R.string.only_latest_backup_s),
+                            title = str(R.string.only_latest_backup_t),
+                            summary = str(R.string.only_latest_backup_s),
                             defaultValue = true
                         ),
                         switch(
                             key = PreferKey.autoCheckNewBackup,
-                            title = getString(R.string.auto_check_new_backup_t),
-                            summary = getString(R.string.auto_check_new_backup_s),
+                            title = str(R.string.auto_check_new_backup_t),
+                            summary = str(R.string.auto_check_new_backup_s),
                             defaultValue = true
                         ),
                         switch(
                             key = PreferKey.autoBackupOnShelfChange,
-                            title = getString(R.string.auto_backup_on_shelf_change_t),
-                            summary = getString(R.string.auto_backup_on_shelf_change_s),
+                            title = str(R.string.auto_backup_on_shelf_change_t),
+                            summary = str(R.string.auto_backup_on_shelf_change_s),
                             defaultValue = false
                         ),
                         switch(
                             key = PreferKey.overwriteShelfOnRestore,
-                            title = getString(R.string.restore_overwrite_shelf_t),
-                            summary = getString(R.string.restore_overwrite_shelf_s),
+                            title = str(R.string.restore_overwrite_shelf_t),
+                            summary = str(R.string.restore_overwrite_shelf_s),
                             defaultValue = false
                         )
                     )
@@ -469,8 +471,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         entriesRes: Int,
         valuesRes: Int
     ): List<SettingChoiceOption> {
-        val entries = resources.getStringArray(entriesRes)
-        val values = resources.getStringArray(valuesRes)
+        val entries = ctx.resources.getStringArray(entriesRes)
+        val values = ctx.resources.getStringArray(valuesRes)
         return values.mapIndexed { index, value ->
             SettingChoiceOption(
                 value = value,
@@ -507,14 +509,14 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun hasCloudStorageAccount(): Boolean {
-        return when (CloudStorageType.from(getPrefString(PreferKey.cloudStorageType))) {
+        return when (CloudStorageType.from(ctx.getPrefString(PreferKey.cloudStorageType))) {
             CloudStorageType.WEBDAV -> hasWebDavAccount()
             CloudStorageType.S3 -> hasS3Account()
         }
     }
 
     private fun hasWebDavAccount(): Boolean {
-        return !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
+        return !ctx.getPrefString(PreferKey.webDavAccount).isNullOrBlank()
                 && !SecurePrefs.read(PreferKey.webDavPassword).isNullOrBlank()
     }
 
@@ -526,14 +528,14 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun webDavAccountSummary(): String {
-        val url = getPrefString(PreferKey.webDavUrl).orEmpty()
-        val account = getPrefString(PreferKey.webDavAccount).orEmpty()
+        val url = ctx.getPrefString(PreferKey.webDavUrl).orEmpty()
+        val account = ctx.getPrefString(PreferKey.webDavAccount).orEmpty()
         val password = SecurePrefs.read(PreferKey.webDavPassword).orEmpty()
         return when {
             url.isBlank() && account.isBlank() && password.isBlank() ->
-                getString(R.string.webdav_account_manage_summary)
+                str(R.string.webdav_account_manage_summary)
             account.isBlank() ->
-                url.ifBlank { getString(R.string.webdav_account_manage_summary) }
+                url.ifBlank { str(R.string.webdav_account_manage_summary) }
             url.isBlank() ->
                 account
             else ->
@@ -549,10 +551,10 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             .filter { BackupConfig.ignoreConfig[BackupConfig.ignoreKeys[it]] ?: false }
             .toSet()
         showComposeMultiChoiceDialog(
-            title = getString(R.string.restore_ignore),
+            title = str(R.string.restore_ignore),
             labels = BackupConfig.ignoreTitle.toList(),
             checkedIndices = checkedIndices,
-            negativeText = getString(android.R.string.ok),
+            negativeText = str(android.R.string.ok),
             onItemCheckedChange = { which, isChecked ->
                 BackupConfig.ignoreKeys.getOrNull(which)?.let { key ->
                     BackupConfig.ignoreConfig[key] = isChecked
@@ -564,15 +566,15 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun showWebDavAccountDialog() {
         showComposeTextFormDialog(
-            title = getString(R.string.webdav_account_manage),
+            title = str(R.string.webdav_account_manage),
             labels = listOf(
-                getString(R.string.web_dav_url),
-                getString(R.string.web_dav_account),
-                getString(R.string.web_dav_pw)
+                str(R.string.web_dav_url),
+                str(R.string.web_dav_account),
+                str(R.string.web_dav_pw)
             ),
             initialValues = listOf(
-                getPrefString(PreferKey.webDavUrl).orEmpty(),
-                getPrefString(PreferKey.webDavAccount).orEmpty(),
+                ctx.getPrefString(PreferKey.webDavUrl).orEmpty(),
+                ctx.getPrefString(PreferKey.webDavAccount).orEmpty(),
                 SecurePrefs.read(PreferKey.webDavPassword).orEmpty()
             ),
             passwordFields = setOf(2),
@@ -630,7 +632,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         activeBackupPath = backupPath
         BackupProgressHolder.update(BackupProgress(BackupStage.PREPARING))
         showBackupProgressDialog()
-        val appContext = requireContext().applicationContext
+        val appContext = ctx.applicationContext
         // 使用全局协程：点「后台继续」或离开页面不会中断备份
         Coroutine.async(Coroutine.defaultScope) {
             Backup.backupLocked(appContext, backupPath, uploadCloud, uploadWebDavFallback) { progress ->
@@ -646,7 +648,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             if (e is S3CapacityFullException && isAdded && showS3FullFallbackAfterFailure(backupPath)) {
                 return@onError
             }
-            AppLog.put("备份出错\n${e.localizedMessage}", e)
+            AppLog.put(appCtx.getString(R.string.backup_fail, e.localizedMessage), e)
             appCtx.toastOnUi(
                 appCtx.getString(
                     R.string.backup_fail,
@@ -676,7 +678,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     // Dialog 一经创建便绑定创建时的 Activity：宿主 Activity 重建后旧实例
     // 持有失效 window token，show 会抛 BadTokenException，须以当前 Activity 重建
     private fun obtainWaitDialog(): WaitDialog {
-        val context = requireContext()
+        val context = ctx
         var dialog = _waitDialog
         if (dialog == null || dialog.context !== context) {
             dialog = WaitDialog(context).also { _waitDialog = it }
@@ -685,7 +687,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun obtainBackupProgressDialog(): BackupProgressDialog {
-        val context = requireContext()
+        val context = ctx
         var dialog = _backupProgressDialog
         if (dialog == null || dialog.context !== context) {
             dialog = BackupProgressDialog(context).also { _backupProgressDialog = it }
@@ -694,7 +696,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun shouldShowS3FullWebDavFallback(): Boolean {
-        if (CloudStorageType.from(getPrefString(PreferKey.cloudStorageType)) != CloudStorageType.S3) {
+        if (CloudStorageType.from(ctx.getPrefString(PreferKey.cloudStorageType)) != CloudStorageType.S3) {
             return false
         }
         if (appCtx.defaultSharedPreferences.getBoolean(PreferKey.s3FullWebDavFallbackNeverRemind, false)) {
@@ -714,7 +716,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun showS3FullWebDavFallbackDialog(backupPath: String) {
         pendingS3FullBackupPath = backupPath
-        val hasWebDav = !getPrefString(PreferKey.webDavAccount).isNullOrBlank()
+        val hasWebDav = !ctx.getPrefString(PreferKey.webDavAccount).isNullOrBlank()
                 && !SecurePrefs.read(PreferKey.webDavPassword).isNullOrBlank()
         val messageRes = if (hasWebDav) {
             R.string.s3_full_webdav_fallback_message
@@ -729,11 +731,11 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }
         if (hasWebDav) {
             showComposeConfirmDialog(
-                title = getString(R.string.s3_full_webdav_fallback_title),
-                message = getString(messageRes),
-                positiveText = getString(R.string.s3_full_webdav_fallback_upload),
-                negativeText = getString(R.string.s3_full_webdav_fallback_ignore),
-                neutralText = getString(R.string.s3_full_webdav_fallback_never),
+                title = str(R.string.s3_full_webdav_fallback_title),
+                message = str(messageRes),
+                positiveText = str(R.string.s3_full_webdav_fallback_upload),
+                negativeText = str(R.string.s3_full_webdav_fallback_ignore),
+                neutralText = str(R.string.s3_full_webdav_fallback_never),
                 onPositive = {
                     retryActiveBackup(uploadCloud = true, uploadWebDavFallback = true)
                 },
@@ -744,10 +746,10 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             )
         } else {
             showComposeConfirmDialog(
-                title = getString(R.string.s3_full_webdav_fallback_title),
-                message = getString(messageRes),
-                positiveText = getString(R.string.s3_full_webdav_fallback_ignore),
-                neutralText = getString(R.string.s3_full_webdav_fallback_never),
+                title = str(R.string.s3_full_webdav_fallback_title),
+                message = str(messageRes),
+                positiveText = str(R.string.s3_full_webdav_fallback_ignore),
+                neutralText = str(R.string.s3_full_webdav_fallback_never),
                 showNegative = false,
                 onPositive = {
                     retryActiveBackup(uploadCloud = false, uploadWebDavFallback = false)
@@ -789,14 +791,14 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         obtainWaitDialog().show()
         Coroutine.async(Coroutine.defaultScope) {
             restoreJob = coroutineContext[Job]
-            showRestoreDialog(requireContext())
+            showRestoreDialog(ctx)
         }.onError {
-            AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
+            AppLog.put(appCtx.getString(R.string.backup_restore_fail, it.localizedMessage), it)
             if (context == null) {
                 return@onError
             }
             showComposeConfirmDialog(
-                title = getString(R.string.restore),
+                title = str(R.string.restore),
                 message = "Cloud storage error\n${it.localizedMessage}\nRestore from local backup?",
                 onPositive = {
                     restoreFromLocal()
@@ -813,7 +815,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             AppCloudStorage.getBackupNames()
         }
         if (AppCloudStorage.isJianGuoYun && names.size > 700) {
-            context.toastOnUi("由于坚果云限制列出文件数量，部分备份可能未显示，请及时清理旧备份")
+            context.toastOnUi(str(R.string.backup_nutstore_limit))
         }
         if (names.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
@@ -835,7 +837,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private suspend fun ensureCloudStorageForRestore() {
-        val currentType = CloudStorageType.from(getPrefString(PreferKey.cloudStorageType))
+        val currentType = CloudStorageType.from(ctx.getPrefString(PreferKey.cloudStorageType))
         if (currentType == CloudStorageType.S3 && hasS3Account()) {
             AppCloudStorage.upConfig()
             return
@@ -869,8 +871,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             } else {
                 view?.post {
                     showComposeConfirmDialog(
-                        title = getString(R.string.restore),
-                        message = "检测到资源文件包\n${assetsNames.joinToString("\n")}\n是否一并恢复字体、背景图等资源？",
+                        title = str(R.string.restore),
+                        message = str(R.string.backup_assets_restore_message, assetsNames.joinToString("\n")),
                         onPositive = { startCloudRestore(name, assetsNames) },
                         onNegative = { startCloudRestore(name, emptyList()) }
                     )
@@ -885,8 +887,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         val task = Coroutine.async(Coroutine.defaultScope) {
             AppCloudStorage.restore(name, assetsFileNames)
         }.onError {
-            AppLog.put("云端恢复出错\n${it.localizedMessage}", it)
-            appCtx.toastOnUi("云端恢复出错\n${it.localizedMessage}")
+            AppLog.put(appCtx.getString(R.string.backup_cloud_restore_fail, it.localizedMessage), it)
+            appCtx.toastOnUi(appCtx.getString(R.string.backup_cloud_restore_fail, it.localizedMessage))
         }.onFinally {
             _waitDialog?.dismiss()
         }
@@ -897,7 +899,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun restoreFromLocal() {
         restoreDoc.launch {
-            title = getString(R.string.select_restore_file)
+            title = str(R.string.select_restore_file)
             mode = HandleFileContract.FILE
             allowExtensions = arrayOf("zip")
         }
@@ -933,8 +935,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }
         view?.post {
             showComposeConfirmDialog(
-                title = getString(R.string.restore),
-                message = "备份路径下检测到资源文件包\n${assetsUris.joinToString("\n") { it.second }}\n是否一并恢复字体、背景图等资源？",
+                title = str(R.string.restore),
+                message = str(R.string.backup_assets_restore_path_message, assetsUris.joinToString("\n") { it.second }),
                 onPositive = { startLocalRestore(uri, assetsUris.map { it.first }) },
                 onNegative = { startLocalRestore(uri, emptyList()) }
             )

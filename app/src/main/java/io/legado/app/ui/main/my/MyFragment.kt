@@ -1,7 +1,6 @@
 package io.legado.app.ui.main.my
 
 import android.content.SharedPreferences
-import android.content.res.XmlResourceParser
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -17,13 +16,11 @@ import io.legado.app.base.BaseFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
-import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.AutoTask
-import io.legado.app.service.WebService
 import io.legado.app.ui.about.AboutActivity
 import io.legado.app.ui.about.ReadRecordActivity
 import io.legado.app.ui.book.bookmark.AllBookmarkActivity
@@ -34,6 +31,7 @@ import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.AppearanceKitActivity
 import io.legado.app.ui.config.RelaySettingsActivity
+import io.legado.app.ui.config.SettingsSearchIndex
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
@@ -41,21 +39,16 @@ import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
-import io.legado.app.ui.widget.compose.ComposeActionListDialog
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.observeEventSticky
-import io.legado.app.utils.openUrl
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefString
-import io.legado.app.utils.sendToClip
-import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.LogUtils
-import org.xmlpull.v1.XmlPullParser
 
 class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     MainFragmentInterface,
@@ -75,11 +68,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     }
     private val searchQueryState = mutableStateOf("")
     private val themeModeState = mutableStateOf("0")
-    private val webServiceState = mutableStateOf(
-        MyWebServiceUiState(checked = false, summary = "")
-    )
     private val autoTaskServiceState = mutableStateOf(
-        MyWebServiceUiState(checked = false, summary = "")
+        MyServiceToggleUiState(checked = false, summary = "")
     )
     private val sections by lazy(LazyThreadSafetyMode.NONE) { buildSections() }
     private val themeOptions by lazy(LazyThreadSafetyMode.NONE) { buildThemeOptions() }
@@ -87,7 +77,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
-        verifySubSearchOwners()
         initSearchView()
         applySearchBarStyle()
         installComposeContent()
@@ -95,9 +84,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     }
 
     override fun observeLiveBus() {
-        observeEventSticky<String>(EventBus.WEB_SERVICE) {
-            updateWebServiceState()
-        }
         observeEventSticky<String>(EventBus.AUTO_TASK_SERVICE) {
             updateAutoTaskServiceState()
         }
@@ -126,15 +112,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
-            PreferKey.webService -> {
-                if (requireContext().getPrefBoolean(PreferKey.webService)) {
-                    startWebService()
-                } else {
-                    WebService.stop(requireContext())
-                    updateWebServiceState()
-                }
-            }
-
             PreferKey.themeMode -> {
                 themeModeState.value = requireContext().getPrefString(PreferKey.themeMode, "0") ?: "0"
             }
@@ -156,16 +133,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             setContent {
                 MySettingsScreen(
                     sections = sections,
-                    subSearchItems = subSearchItems,
+                    subSearchItemsProvider = { subSearchItems },
                     searchQuery = searchQueryState.value,
                     themeOptions = themeOptions,
                     themeModeValue = themeModeState.value,
-                    webServiceState = webServiceState.value,
                     autoTaskServiceState = autoTaskServiceState.value,
                     onThemeModeSelect = ::setThemeMode,
-                    onWebServiceCheckedChange = ::setWebServiceEnabled,
-                    onWebServiceClick = ::handleWebServiceClick,
-                    onWebServiceMoreClick = ::showWebServiceActions,
                     onAutoTaskServiceCheckedChange = ::setAutoTaskServiceEnabled,
                     onAutoTaskServiceClick = ::handleAutoTaskServiceClick,
                     onRowClick = ::handleRowClick
@@ -204,24 +177,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     private fun updateSettingsState() {
         themeModeState.value = requireContext().getPrefString(PreferKey.themeMode, "0") ?: "0"
-        updateWebServiceState()
         updateAutoTaskServiceState()
-    }
-
-    private fun updateWebServiceState() {
-        webServiceState.value = MyWebServiceUiState(
-            checked = WebService.isRun,
-            summary = if (WebService.isRun) {
-                WebService.hostAddress
-            } else {
-                getString(R.string.web_service_desc)
-            }
-        )
     }
 
     private fun updateAutoTaskServiceState() {
         val enabled = requireContext().getPrefBoolean(PreferKey.autoTaskService)
-        autoTaskServiceState.value = MyWebServiceUiState(
+        autoTaskServiceState.value = MyServiceToggleUiState(
             checked = enabled,
             summary = getString(R.string.auto_task_service_desc)
         )
@@ -237,40 +198,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         }
     }
 
-    private fun setWebServiceEnabled(enabled: Boolean) {
-        requireContext().putPrefBoolean(PreferKey.webService, enabled)
-        if (enabled) {
-            startWebService()
-        } else {
-            WebService.stop(requireContext())
-            updateWebServiceState()
-        }
-    }
-
-    /**
-     * Android 17 起访问局域网需要先授权，未授权时 Web 服务只能被本机访问，
-     * 因此开启前先申请，授权成功再启动。
-     */
-    private fun startWebService() {
-        LocalNetworkAccess.request(
-            requireContext(),
-            onGranted = {
-                WebService.start(requireContext())
-                updateWebServiceState()
-            },
-            // 拒绝授权时服务没起来，也要刷新一次，避免开关显示成已开启却没运行
-            onDenied = { updateWebServiceState() }
-        )
-    }
-
-    /**
-     * 交互契约：开关行整行点击 = 切换，行为恒定可预测；
-     * 服务运行中的「复制地址/浏览器打开」收进 Switch 左侧的「⋯」入口。
-     */
-    private fun handleWebServiceClick() {
-        setWebServiceEnabled(!WebService.isRun)
-    }
-
     private fun setAutoTaskServiceEnabled(enabled: Boolean) {
         requireContext().putPrefBoolean(PreferKey.autoTaskService, enabled)
         if (enabled) {
@@ -283,27 +210,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     private fun handleAutoTaskServiceClick() {
         setAutoTaskServiceEnabled(!requireContext().getPrefBoolean(PreferKey.autoTaskService))
-    }
-
-    private fun showWebServiceActions() {
-        val url = WebService.hostAddress.takeIf { WebService.isRun } ?: return
-        showDialogFragment(
-            ComposeActionListDialog.create(
-                title = getString(R.string.web_service),
-                labels = listOf(
-                    getString(R.string.copy_text),
-                    getString(R.string.open_in_browser)
-                ),
-                descriptions = listOf(url, url),
-                negativeText = getString(R.string.cancel),
-                onSelected = { index ->
-                    when (index) {
-                        0 -> requireContext().sendToClip(url)
-                        1 -> requireContext().openUrl(url)
-                    }
-                }
-            )
-        )
     }
 
     private fun handleRowClick(key: String, searchTarget: MySettingsSubSearchItem?) {
@@ -329,7 +235,13 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ConfigTag.STORAGE_CONFIG,
             ConfigTag.ADVANCED_CONFIG,
             ConfigTag.COVER_CONFIG,
-            ConfigTag.WELCOME_CONFIG -> startActivity<ConfigActivity> {
+            ConfigTag.WELCOME_CONFIG,
+            ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
+            ConfigTag.COMMENT_CONFIG,
+            ConfigTag.BOOKSHELF_CONFIG,
+            ConfigTag.AUDIO_CONFIG,
+            ConfigTag.MANGA_VIDEO_CONFIG,
+            ConfigTag.PAGE_LAYOUT_CONFIG -> startActivity<ConfigActivity> {
                 putExtra("configTag", key)
             }
 
@@ -355,6 +267,9 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             "readRecord" -> startActivity<ReadRecordActivity>()
             "about" -> startActivity<AboutActivity>()
             "exit" -> activity?.finish()
+            // 新增一级行时忘了在这里接跳转，点下去毫无反应且不报错。
+            // debug 包直接把漏接的 key 抛出来；release 保持静默，不给用户白屏崩溃
+            else -> if (BuildConfig.DEBUG) error("一级行未接跳转: $key")
         }
     }
 
@@ -374,8 +289,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
      * 也让原来的「阅读」区不至于只剩 3 行却独占一个分区标题。
      *
      * 关键约定 1：**行的 key 就是搜索深链的 ownerKey**，改 key 会连带断开
-     * [buildSubSearchItems] 里子项到一级行的挂载，两者必须同时改
-     * （[verifySubSearchOwners] 会在 debug 包里把断链当场拦下来）。
+     * [io.legado.app.ui.config.SettingsSearchIndex] 里子项到一级行的挂载，
+     * 两者必须同时改（[verifySubSearchOwners] 会在 debug 包里把断链当场拦下来）。
      * 关键约定 2：一级行尽量用 [ConfigTag] 常量做 key，跳转、搜索、层级三者自动对齐。
      * 行在哪个分区不影响深链，跨区搬行是安全操作。
      */
@@ -391,6 +306,22 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     actionRow(
                         "rssSourceManage", R.string.rss_source_manage,
                         R.string.rss_source_manage_summary, R.drawable.ic_bottom_rss_feed_e
+                    ),
+                    // 发现/订阅页的形态（入口显隐、页面模式、合并发现）改的是「内容怎么呈现」，
+                    // 与书源/订阅源同属内容域；原先藏在「界面设置 › 模板」里，用户找不到。
+                    // 三处「页面布局」已另立 PAGE_LAYOUT_CONFIG 一级行，不再混在本页
+                    actionRow(
+                        ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
+                        R.string.discovery_subscription_settings_title,
+                        R.string.discovery_subscription_settings_summary,
+                        R.drawable.ic_bottom_explore_e
+                    ),
+                    // 发现/订阅/首页三处布局原先散落在各 Tab 菜单且不可搜，统一归到这一页
+                    actionRow(
+                        ConfigTag.PAGE_LAYOUT_CONFIG,
+                        R.string.page_layout_settings_title,
+                        R.string.page_layout_settings_summary,
+                        R.drawable.ic_image
                     ),
                     actionRow(
                         "replaceManage", R.string.replace_purify,
@@ -417,6 +348,21 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     actionRow(
                         ConfigTag.READING_CONFIG, R.string.reading_setting,
                         R.string.reading_setting_s, R.drawable.ic_book_has
+                    ),
+                    // 书架行为（加书提示/自动刷新/默认主页…）从阅读设置拆出，独立成页
+                    actionRow(
+                        ConfigTag.BOOKSHELF_CONFIG, R.string.bookshelf_setting,
+                        R.string.bookshelf_setting_summary, R.drawable.ic_bottom_books_e
+                    ),
+                    // 听书与漫画/视频原先只有「打开一本书→阅读页菜单」一条路可达，
+                    // 提到一级行后，改朗读或漫画显示不必先找一本书
+                    actionRow(
+                        ConfigTag.AUDIO_CONFIG, R.string.audio_config_title,
+                        R.string.audio_config_summary, R.drawable.ic_volume_up
+                    ),
+                    actionRow(
+                        ConfigTag.MANGA_VIDEO_CONFIG, R.string.manga_video_section,
+                        R.string.manga_video_config_summary, R.drawable.ic_image
                     ),
                     MySettingsRowModel(
                         key = PreferKey.themeMode,
@@ -477,13 +423,9 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         "web_dav_setting", R.string.backup_restore,
                         R.string.web_dav_set_import_old, R.drawable.ic_cfg_backup
                     ),
-                    MySettingsRowModel(
-                        key = PreferKey.webService,
-                        title = getString(R.string.web_service),
-                        summary = getString(R.string.web_service_desc),
-                        kind = MySettingsRowKind.WebService,
-                        iconRes = R.drawable.ic_cfg_web
-                    ),
+                    // Web 服务（启停 + 地址 + 复制/浏览器打开）已整体并入「网络设置」，
+                    // 那里本来就有端口、口令、唤醒锁，启停和它的配置参数现在在同一屏。
+                    // 这里不再保留整行开关：两个入口都能启停同一个服务，状态一乱就很难解释。
                     actionRow(
                         "publicWebRelay",
                         R.string.public_web_relay,
@@ -525,26 +467,17 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         ConfigTag.ADVANCED_CONFIG, R.string.advanced_setting,
                         R.string.advanced_setting_s, R.drawable.ic_settings
                     ),
+                    // 评论抓取/下载原先塞在高级设置里默认折叠，拆成独立页后可直接进入
+                    actionRow(
+                        ConfigTag.COMMENT_CONFIG, R.string.review_config_title,
+                        R.string.review_config_summary, R.drawable.ic_bubble_chart
+                    ),
                     actionRow("about", R.string.about, null, R.drawable.ic_cfg_about),
                     // 退出不是「进入下一层」，所以标红 + 不带箭头：避免和跳转项混淆
                     actionRow("exit", R.string.exit, null, R.drawable.ic_exit, danger = true)
                 )
             )
         )
-    }
-
-    /**
-     * 搜索深链靠「子项 ownerKey == 一级行 key」这条隐式约定维系，搬行、改名的时候
-     * 很容易一边改一边忘。debug 包在进页面时校验一次：断链会当场崩溃并打印缺口的
-     * key，而不是等到用户搜不到东西才发现。release 包不做校验，避免线上无谓崩溃。
-     */
-    private fun verifySubSearchOwners() {
-        if (!BuildConfig.DEBUG) return
-        val rowKeys = sections.flatMap { it.rows }.mapTo(HashSet()) { it.key }
-        val orphanOwners = subSearchItems.map { it.ownerKey }.filterNot { it in rowKeys }.distinct()
-        check(orphanOwners.isEmpty()) {
-            "搜索子项挂载到不存在的一级行: $orphanOwners"
-        }
     }
 
     private fun actionRow(
@@ -577,85 +510,41 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     }
 
     /**
-     * 二级设置项（Kotlin spec 里的每一项）挂到一级行的 [MySettingsSubSearchItem.ownerKey] 上，
+     * 二级设置项挂到一级行的 [MySettingsSubSearchItem.ownerKey] 上，
      * 这样搜索命中深层设置时能直接从一级行跳进去并定位。
      *
-     * ownerKey 必须等于 [buildSections] 里某一行的 key：封面与欢迎页已各自成为一级行，
-     * 就各自挂自己的 key，不再全挂在 "theme_setting" 下（否则搜一个问题会出现三行同结果）。
+     * 索引内容直接来自各设置页的 spec（[SettingsSearchIndex]），不再解析影子 XML：
+     * 设置项从「页面里能看到」到「搜得到」之间不再有需要人工同步的第二份数据。
+     *
+     * 索引是懒构建的（[subSearchItems]），首次在搜索框输入才会算，不占「我的」页首帧。
      */
     private fun buildSubSearchItems(): List<MySettingsSubSearchItem> {
-        return listOf(
-            Triple(ConfigTag.READING_CONFIG, R.xml.pref_config_reading, ConfigTag.READING_CONFIG),
-            Triple("theme_setting", R.xml.pref_config_theme, ConfigTag.THEME_CONFIG),
-            Triple(ConfigTag.COVER_CONFIG, R.xml.pref_config_cover, ConfigTag.COVER_CONFIG),
-            Triple(ConfigTag.WELCOME_CONFIG, R.xml.pref_config_welcome, ConfigTag.WELCOME_CONFIG),
-            Triple("web_dav_setting", R.xml.pref_config_backup, ConfigTag.BACKUP_CONFIG),
-            Triple("ai_setting", R.xml.pref_config_ai, ConfigTag.AI_CONFIG),
-            Triple(ConfigTag.NETWORK_CONFIG, R.xml.pref_config_network, ConfigTag.NETWORK_CONFIG),
-            // DNS 是「网络设置」的下一层，所以它的子项挂在「网络设置」这一行下面
-            Triple(ConfigTag.NETWORK_CONFIG, R.xml.pref_config_network_dns, ConfigTag.NETWORK_DNS_CONFIG),
-            Triple(ConfigTag.STORAGE_CONFIG, R.xml.pref_config_storage, ConfigTag.STORAGE_CONFIG),
-            Triple(ConfigTag.ADVANCED_CONFIG, R.xml.pref_config_advanced, ConfigTag.ADVANCED_CONFIG),
-            Triple(
-                "theme_setting",
-                R.xml.pref_config_discovery_subscription,
-                ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG
+        val items = SettingsSearchIndex.build(requireContext()).map { entry ->
+            MySettingsSubSearchItem(
+                ownerKey = entry.ownerKey,
+                title = entry.title,
+                summary = entry.summary,
+                key = entry.key,
+                ownerConfigTag = entry.ownerConfigTag,
+                aliases = entry.aliases
             )
-        ).flatMap { (ownerKey, xmlRes, ownerConfigTag) ->
-            buildPreferenceXmlSearchItems(ownerKey, xmlRes, ownerConfigTag)
         }
-    }
-
-    private fun buildPreferenceXmlSearchItems(
-        ownerKey: String,
-        xmlRes: Int,
-        ownerConfigTag: String
-    ): List<MySettingsSubSearchItem> {
-        val items = ArrayList<MySettingsSubSearchItem>()
-        val parser: XmlResourceParser = resources.getXml(xmlRes)
-        try {
-            var eventType = parser.eventType
-            while (eventType != XmlPullParser.END_DOCUMENT) {
-                if (eventType == XmlPullParser.START_TAG) {
-                    // 分组头（PreferenceCategory）也可能带 key+title，但它们不是设置项，
-                    // 收进来会出现一条"点过去永远定位不到"的死搜索结果
-                    if (parser.name?.endsWith("PreferenceCategory") == true) {
-                        eventType = parser.next()
-                        continue
-                    }
-                    val title = collectPreferenceAttr(parser, "title").orEmpty()
-                    val key = collectPreferenceAttr(parser, "key").orEmpty()
-                    if (title.isNotBlank() && key.isNotBlank()) {
-                        items.add(
-                            MySettingsSubSearchItem(
-                                ownerKey = ownerKey,
-                                title = title,
-                                summary = collectPreferenceAttr(parser, "summary").orEmpty(),
-                                key = key.removePrefix("search_jump_"),
-                                ownerConfigTag = ownerConfigTag
-                            )
-                        )
-                    }
-                }
-                eventType = parser.next()
-            }
-        } finally {
-            parser.close()
-        }
+        verifySubSearchOwners(items)
         return items
     }
 
-    private fun collectPreferenceAttr(parser: XmlResourceParser, attrName: String): String? {
-        val namespace = "http://schemas.android.com/apk/res/android"
-        val attrValue = parser.getAttributeValue(namespace, attrName)?.trim().orEmpty()
-        if (attrValue.isBlank()) return null
-        val attrRes = parser.getAttributeResourceValue(namespace, attrName, 0)
-        return if (attrRes != 0) {
-            runCatching {
-                getString(attrRes)
-            }.getOrNull()?.trim().orEmpty().takeIf { it.isNotBlank() }
-        } else {
-            attrValue.removePrefix("@").takeIf { it.isNotBlank() }
+    /**
+     * 搜索深链靠「子项 ownerKey == 一级行 key」这条隐式约定维系，搬行、改名的时候
+     * 很容易一边改一边忘。debug 包在首次构建索引时校验一次：断链会当场崩溃并打印
+     * 缺口的 key，而不是等到用户搜不到东西才发现。release 包不校验。
+     */
+    private fun verifySubSearchOwners(items: List<MySettingsSubSearchItem>) {
+        if (!BuildConfig.DEBUG) return
+        val rowKeys = sections.flatMap { it.rows }.mapTo(HashSet()) { it.key }
+        val orphanOwners = items.map { it.ownerKey }.filterNot { it in rowKeys }.distinct()
+        check(orphanOwners.isEmpty()) {
+            "搜索子项挂载到不存在的一级行: $orphanOwners —— " +
+                "改 buildSections 的行 key 时要同步 SettingsSearchIndex 的 ownerKey"
         }
     }
 }

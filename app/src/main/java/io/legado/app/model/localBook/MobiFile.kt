@@ -21,6 +21,8 @@ import org.jsoup.Jsoup
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import io.legado.app.R
+import splitties.init.appCtx
 
 class MobiFile(var book: Book) {
 
@@ -108,7 +110,7 @@ class MobiFile(var book: Book) {
                 val chapter = BookChapter()
                 val content = kF6Book.getSectionText(section)
                 val soup = Jsoup.parse(content)
-                val title = soup.getElementsByTag("title").first()?.text() ?: "卷首"
+                val title = soup.getElementsByTag("title").first()?.text() ?: appCtx.getString(R.string.misc_front_matter)
                 chapter.bookUrl = book.bookUrl
                 chapter.title = title
                 chapter.url = "0:" + section.href
@@ -149,7 +151,7 @@ class MobiFile(var book: Book) {
                 val chapter = BookChapter()
                 val content = kf8Book.getSectionText(section)
                 val soup = Jsoup.parse(content)
-                val title = soup.getElementsByTag("title").first()?.text() ?: "卷首"
+                val title = soup.getElementsByTag("title").first()?.text() ?: appCtx.getString(R.string.misc_front_matter)
                 chapter.bookUrl = book.bookUrl
                 chapter.title = title
                 chapter.url = "0:" + section.href
@@ -307,7 +309,7 @@ class MobiFile(var book: Book) {
     private fun upBookInfo() {
         if (mobiBook == null) {
             mFile = null
-            book.intro = "书籍导入异常"
+            book.intro = appCtx.getString(R.string.misc_book_import_failed)
         } else {
             upBookCover()
             val metadata = mobiBook!!.metadata

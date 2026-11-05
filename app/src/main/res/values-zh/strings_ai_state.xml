@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_state_analyzing_segment">分析第 %1$s/%2$s 段</string>
+    <string name="ai_state_ai_task_progress">AI任务处理中</string>
+    <string name="ai_state_ask_ai_reading_page">阅读页问AI</string>
+    <string name="ai_state_assigning_roles">角色分配中</string>
+    <string name="ai_state_processing_smart_audio">智能音频处理中</string>
+    <string name="ai_state_sending_book_content_disabled_ai">已在 AI 设置中禁止发送书籍正文，无法使用%1$s</string>
+    <string name="ai_state_needs_send_book_content_allow">「%1$s」需要发送书籍正文，请在 AI 设置中授权后使用</string>
+    <string name="ai_state_cancelled_you_can_change_permission">已取消，可在 AI 设置中修改授权</string>
+    <string name="ai_state_ai_conversation">AI 对话</string>
+    <string name="ai_state_user_preferences">用户偏好</string>
+    <string name="ai_state_chapter_content_empty">章节内容为空</string>
+    <string name="ai_state_no_multi_role_model_configured">多角色模型未配置</string>
+    <string name="ai_state_this_chapter_has_no_editable">当前章节没有可修改的分配缓存</string>
+    <string name="ai_state_matching_segment_not_found">没有找到对应片段</string>
+    <string name="ai_state_segment_assignments_updated">已更新片段分配</string>
+    <string name="ai_state_multi_role_assignment_failed">多角色分配失败</string>
+    <string name="ai_state_multi_role_disabled">多角色未开启</string>
+    <string name="ai_state_no_multi_role_model_configured_2">未配置多角色模型</string>
+    <string name="ai_state_multi_role_model_provider_unavailable">多角色模型供应商不可用</string>
+    <string name="ai_state_book_empty">书籍为空</string>
+    <string name="ai_state_chapter_empty">章节为空</string>
+    <string name="ai_state_no_readable_paragraphs_this_chapter">当前章节无可朗读段落</string>
+    <string name="ai_state_roles_already_assigned_this_chapter">当前章节角色已分配</string>
+    <string name="ai_state_assigning_roles_2">分配角色中</string>
+    <string name="ai_state_ai_role_assignment_failed_repeatedly">AI分角色连续失败，请重新分配当前章节</string>
+    <string name="ai_state_ai_role_assignment_failed_repeatedly_2">AI分角色连续失败</string>
+    <string name="ai_state_preprocessed_segments_locally">本地预处理 %1$s 个片段</string>
+    <string name="ai_state_assigned_segments_confirmed">已确认 %1$s 个分配片段</string>
+    <string name="ai_state_ai_returned_no_valid_role">AI未返回有效分角色片段，已使用默认分角色</string>
+    <string name="ai_state_ai_did_not_confirm_every">AI未完整确认不确定角色片段，请重新分配当前章节</string>
+    <string name="ai_state_ai_returned_no_valid_role_2">AI未返回有效分角色片段，请重新分配当前章节</string>
+    <string name="ai_state_role_assignment_complete">角色分配完成</string>
+    <string name="ai_state_ai_role_assignment_failed_please">AI分角色失败，请重新分配当前章节</string>
+    <string name="ai_state_timed_out_waiting_multi_role">等待多角色分配超时</string>
+    <string name="ai_state_role_assignment_failed">角色分配失败</string>
+    <string name="ai_state_segments_confirmed">已确认 %1$s 个片段</string>
+    <string name="ai_state_requests">请求 %1$s 次</string>
+    <string name="ai_state_ai_configuration_or_this_input">当前 AI 静态配置或本轮输入超过上下文限制，已自动压缩但仍无法放入，请减少系统提示词、Skill、工具或本次输入。</string>
+    <string name="ai_state_ai_request_timed_out_switching">AI 请求超时，正在切换备用模型</string>
+    <string name="ai_state_ai_request_failed_retrying">AI 请求失败，正在重试 %1$s/%2$s</string>
+</resources>

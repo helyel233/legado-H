@@ -81,7 +81,7 @@ class DownloadService : BaseService() {
                 if (uri != null) {
                     openFileUri(uri.uri, IntentType.from(uri.fileName))
                 } else {
-                    toastOnUi("未完成,下载的文件夹Download")
+                    toastOnUi(appCtx.getString(R.string.misc_incomplete_downloaded_download_folder))
                 }
             }
 
@@ -118,7 +118,7 @@ class DownloadService : BaseService() {
             return
         }
         if (downloads.values.any { it.url == url }) {
-            toastOnUi("已在下载列表")
+            toastOnUi(appCtx.getString(R.string.misc_already_download_list))
             return
         }
         val id = idGenerator.incrementAndGet()
@@ -154,7 +154,7 @@ class DownloadService : BaseService() {
                         }
                         upDownloadNotification(
                             info,
-                            "${getString(R.string.download_error)}，${RETRY_DELAY_SECONDS * attempt}s后重试($attempt/$MAX_RETRY)",
+                            getString(R.string.i18n_final_download_retry, getString(R.string.download_error), RETRY_DELAY_SECONDS * attempt, attempt, MAX_RETRY),
                             0,
                             0
                         )

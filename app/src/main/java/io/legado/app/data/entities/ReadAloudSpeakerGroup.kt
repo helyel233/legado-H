@@ -4,6 +4,8 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Entity(
     tableName = "read_aloud_speaker_groups",
@@ -26,5 +28,5 @@ data class ReadAloudSpeakerGroup(
     @ColumnInfo(defaultValue = "0")
     val updatedAt: Long = System.currentTimeMillis()
 ) {
-    fun displayName(): String = name.ifBlank { "未命名分组" }
+    fun displayName(): String = name.ifBlank { appCtx.getString(R.string.misc_untitled_group) }
 }

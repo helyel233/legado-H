@@ -3,6 +3,8 @@ package io.legado.app.help.book.highlight
 import android.net.Uri
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.openInputStream
+import io.legado.app.R
+import splitties.init.appCtx
 
 object HighlightImport {
     fun isHighlightFile(file: FileDoc): Boolean = file.name.endsWith(".red", true) && runCatching {
@@ -19,8 +21,8 @@ object HighlightImport {
         val messages: MutableList<String> = arrayListOf()
     ) {
         fun summary(): String = buildString {
-            append("导入 ").append(added).append(" 条，重复 ").append(duplicates).append(" 条")
-            if (skippedFiles > 0) append("，未导入文件 ").append(skippedFiles).append(" 个")
+            append(appCtx.getString(R.string.i18n_final_import_summary, added, duplicates))
+            if (skippedFiles > 0) append(appCtx.getString(R.string.i18n_final_import_skipped_files, skippedFiles))
             if (messages.isNotEmpty()) append("\n\n").append(messages.distinct().joinToString("\n"))
         }
     }
@@ -41,11 +43,11 @@ object HighlightImport {
                 if (result.warnings.isNotEmpty()) {
                     // Keep the full per-rule notice on each management row.
                     report.messages.add(file.name + "：" +
-                        result.warnings.size + " 条规则有兼容提示，可在管理页查看")
+                        result.warnings.size + appCtx.getString(R.string.misc_rules_have_compatibility_notes_see))
                 }
             }.onFailure {
                 report.skippedFiles++
-                report.messages.add(file.name + "：" + (it.message ?: "无法读取"))
+                report.messages.add(file.name + "：" + (it.message ?: appCtx.getString(R.string.misc_cannot_read)))
             }
         }
         return report

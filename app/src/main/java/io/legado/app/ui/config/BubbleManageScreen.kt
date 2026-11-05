@@ -38,10 +38,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.legado.app.R
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.composeActionRadius
@@ -103,8 +105,8 @@ internal fun BubbleManageScreen(
         }
 
         AppManagementListRow(
-            title = "强制使用软件气泡",
-            subtitle = "识别正文图片形式的段评入口，并使用当前气泡样式渲染",
+            title = stringResource(R.string.bubble_force_software),
+            subtitle = stringResource(R.string.bubble_force_software_summary),
             palette = palette,
             switchChecked = forceSoftwareBubble,
             onSwitchChange = onForceSoftwareBubbleChange,
@@ -137,7 +139,7 @@ internal fun BubbleManageScreen(
 
         // Add button
         LegadoMiuixActionButton(
-            text = "添加",
+            text = stringResource(R.string.add),
             palette = palette.miuix,
             onClick = onAddClick,
             modifier = Modifier
@@ -244,7 +246,7 @@ private fun BubbleItemRow(
                 // Action buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionTextButton(
-                        text = if (active) "已应用" else "应用",
+                        text = stringResource(if (active) R.string.bubble_applied else R.string.bubble_apply),
                         palette = palette.miuix,
                         accent = true,
                         onClick = onApply
@@ -253,7 +255,7 @@ private fun BubbleItemRow(
                         entry.source == BubblePackageManager.Source.BOTH
                     if (canEdit) {
                         ActionTextButton(
-                            text = "编辑",
+                            text = stringResource(R.string.edit),
                             palette = palette.miuix,
                             onClick = onEdit
                         )
@@ -261,7 +263,7 @@ private fun BubbleItemRow(
                     AppManagementMoreActionButton(
                         actionsProvider = { moreActions },
                         palette = palette,
-                        contentDescription = "更多"
+                        contentDescription = stringResource(R.string.more)
                     )
                 }
             }
@@ -303,22 +305,24 @@ private fun ActionTextButton(
     }
 }
 
+@Composable
 private fun buildItemInfo(
     entry: BubblePackageManager.Entry,
     active: Boolean
 ): String = buildString {
-    if (active) append("已应用 · ")
+    if (active) append(stringResource(R.string.bubble_applied) + " · ")
     append(sourceLabel(entry.source))
     append(" · ")
     val time = maxOf(entry.config.updatedAt, entry.remoteUpdatedAt)
-    append(if (time > 0L) dateFormat.format(Date(time)) else "内置")
+    append(if (time > 0L) dateFormat.format(Date(time)) else stringResource(R.string.bubble_source_builtin))
 }
 
+@Composable
 private fun sourceLabel(source: BubblePackageManager.Source): String {
     return when (source) {
-        BubblePackageManager.Source.BUILTIN -> "内置"
-        BubblePackageManager.Source.LOCAL -> "本地"
-        BubblePackageManager.Source.REMOTE -> "云端"
-        BubblePackageManager.Source.BOTH -> "本地 + 云端"
+        BubblePackageManager.Source.BUILTIN -> stringResource(R.string.bubble_source_builtin)
+        BubblePackageManager.Source.LOCAL -> stringResource(R.string.bubble_source_local)
+        BubblePackageManager.Source.REMOTE -> stringResource(R.string.bubble_source_remote)
+        BubblePackageManager.Source.BOTH -> stringResource(R.string.bubble_source_both)
     }
 }

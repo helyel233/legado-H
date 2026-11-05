@@ -545,7 +545,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 httpTts = httpTtsForRoute(ReadAloud.httpTTS, route)
             )
             if (result.success) {
-                SpeechVoiceGroupRepository.markInvalidRoute(request.route, reason = "合成失败")
+                SpeechVoiceGroupRepository.markInvalidRoute(request.route, reason = appCtx.getString(R.string.misc_synthesis_failed))
                 AppLog.putDebug("多角色 TTS 路由失败，已临时改用：${route.speakerName.ifBlank { route.engineType }}")
                 return result
             }
@@ -709,7 +709,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 }
             }
             result.getOrNull()?.let { stream ->
-                SpeechVoiceGroupRepository.markInvalidRoute(route, reason = "合成失败")
+                SpeechVoiceGroupRepository.markInvalidRoute(route, reason = appCtx.getString(R.string.misc_synthesis_failed))
                 AppLog.putDebug("多角色 TTS 路由失败，已临时改用：${fallbackRoute.speakerName.ifBlank { fallbackRoute.engineType }}")
                 return stream
             }
@@ -799,7 +799,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     } else if (ct?.isNotBlank() == true) {
                         if (!contentType.matches(ct.toRegex())) {
                             throw NoStackTraceException(
-                                "TTS服务器返回错误：" + response.peekBody(8_192).string()
+                                appCtx.getString(R.string.misc_tts_server_returned_error) + response.peekBody(8_192).string()
                             )
                         }
                     }
@@ -918,7 +918,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         return SpeechRoute(
             engineType = SpeechRoute.ENGINE_SYSTEM,
             engineValue = ReadAloud.ttsEngine.orEmpty(),
-            speakerName = "系统默认",
+            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
             source = SpeechRoute.SOURCE_AUTO
         )
     }
@@ -1158,7 +1158,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             }
 
             Player.STATE_BUFFERING -> {
-                postExoPlaybackPhase("音频加载中")
+                postExoPlaybackPhase(appCtx.getString(R.string.misc_loading_audio))
             }
 
             Player.STATE_READY -> {
@@ -1211,12 +1211,12 @@ class HttpReadAloudService : BaseReadAloudService(),
         deleteCurrentSpeakFile()
         playErrorNo++
         if (playErrorNo >= 5) {
-            toastOnUi("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})")
+            toastOnUi(appCtx.getString(R.string.misc_read_aloud_failed_5_times, error.localizedMessage))
             AppLog.put("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})", error)
             postReadAloudPlaybackPhase(ReadAloudPlaybackState.PHASE_ERROR, message = error.localizedMessage ?: "")
             pauseReadAloud()
         } else {
-            postReadAloudPlaybackPhase(ReadAloudPlaybackState.PHASE_BUFFERING, message = "重试当前音频")
+            postReadAloudPlaybackPhase(ReadAloudPlaybackState.PHASE_BUFFERING, message = appCtx.getString(R.string.misc_retrying_current_audio))
             retryCurrentCue()
         }
     }

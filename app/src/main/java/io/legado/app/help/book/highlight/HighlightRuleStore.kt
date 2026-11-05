@@ -6,6 +6,8 @@ import io.legado.app.help.reader.ReaderAssetReferences
 import io.legado.app.help.reader.ReaderAssetStore
 import java.io.File
 import java.io.FileOutputStream
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Small atomic JSON index plus deduplicated assets; independent of Room's CursorWindow limit. */
 class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAssetStore? = null) {
@@ -24,7 +26,7 @@ class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAs
         val file = index.takeIf { it.isFile } ?: backup.takeIf { it.isFile }
         val rules = if (file == null) emptyList() else file.inputStream().use { input ->
             val json = HighlightPackageParser.readLimited(input, 8 * 1024 * 1024).toString(Charsets.UTF_8)
-            val data = requireNotNull(gson.fromJson(json, Index::class.java)) { "高亮规则索引为空" }
+            val data = requireNotNull(gson.fromJson(json, Index::class.java)) { appCtx.getString(R.string.misc_highlight_rule_index_empty) }
             require(data.version == 1) { "高亮规则索引格式不支持" }
             validate(data.rules).sortedBy { it.sortOrder }
         }
@@ -60,7 +62,7 @@ class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAs
         }
         // Reject invalid metadata before importing any accompanying files.
         encodedIndex(current)
-        if (pack.resources.isNotEmpty()) requireNotNull(sharedAssets) { "无法保存此规则附带的阅读素材" }.importAll(pack.resources)
+        if (pack.resources.isNotEmpty()) requireNotNull(sharedAssets) { appCtx.getString(R.string.misc_cannot_save_reading_assets_attached) }.importAll(pack.resources)
         var assetsChanged = false
         pack.rules.mapNotNull { it.asset }.distinct().forEach { id ->
             pack.assets[id]?.let { if (saveAsset(id, it)) assetsChanged = true }
@@ -174,7 +176,7 @@ class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAs
 
     /** Gson can set Kotlin non-null fields to null; check before caching or replacing an index. */
     private fun validate(value: List<HighlightRule?>?): List<HighlightRule> {
-        val rules = requireNotNull(value) { "高亮规则列表不能为空" }
+        val rules = requireNotNull(value) { appCtx.getString(R.string.misc_highlight_rule_list_cannot_be) }
         require(rules.size <= HighlightPackageParser.MAX_RULES) { "高亮规则数量超过上限" }
         val ids = hashSetOf<String>()
         fun text(value: String?, limit: Int): String {
@@ -182,7 +184,7 @@ class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAs
             return value
         }
         return rules.map { entry ->
-            val rule = requireNotNull(entry) { "高亮规则条目不能为空" }
+            val rule = requireNotNull(entry) { appCtx.getString(R.string.misc_highlight_rule_entry_cannot_be) }
             val id = text(rule.id, 512)
             require(id.isNotBlank() && ids.add(id)) { "高亮规则标识为空或重复" }
             text(rule.name, 512)
@@ -195,7 +197,7 @@ class HighlightRuleStore(val directory: File, private val sharedAssets: ReaderAs
             text(rule.importWarning, 32768)
             require(rule.asset == null || ReaderAssetReferences.validId(rule.asset)) { "高亮背景图片标识无效" }
             require(rule.imageWidth in 0..16384 && rule.imageHeight in 0..16384 &&
-                rule.imageWidth.toLong() * rule.imageHeight <= 32_000_000) { "高亮背景图片尺寸无效" }
+                rule.imageWidth.toLong() * rule.imageHeight <= 32_000_000) { appCtx.getString(R.string.misc_invalid_highlight_background_image_dimensions) }
             rule
         }
     }

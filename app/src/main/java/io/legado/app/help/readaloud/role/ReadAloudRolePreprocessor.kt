@@ -1,4 +1,6 @@
 package io.legado.app.help.readaloud.role
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class ReadAloudRoleRange(
     val paragraphIndex: Int,
@@ -175,7 +177,7 @@ object ReadAloudRolePreprocessor {
         units += unit(
             kind = "narrator",
             roleType = "narrator",
-            characterName = "旁白",
+            characterName = appCtx.getString(R.string.ra_panel_narrator),
             ranges = listOf(ReadAloudRoleRange(paragraphIndex, start, end)),
             text = raw,
             confidence = 0.82,
@@ -215,7 +217,7 @@ object ReadAloudRolePreprocessor {
             return unit(
                 kind = kind,
                 roleType = "narrator",
-                characterName = "旁白",
+                characterName = appCtx.getString(R.string.ra_panel_narrator),
                 ranges = ranges,
                 text = text,
                 confidence = 0.72,

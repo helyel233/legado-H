@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 文本成书：将分享的长文本写入本地书籍目录并入库。
@@ -22,7 +24,7 @@ object TextBookImporter {
                 val safeName = bookName.trim()
                     .replace(Regex("[\\\\/:*?\"<>|\\n\\r\\t]"), "")
                     .take(50)
-                    .ifBlank { "分享文本" }
+                    .ifBlank { appCtx.getString(R.string.misc_shared_text) }
                 val timeTag = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                 val fileName = "${safeName}_$timeTag.txt"
                 val uri = LocalBook.saveBookFile(text.byteInputStream(), fileName)

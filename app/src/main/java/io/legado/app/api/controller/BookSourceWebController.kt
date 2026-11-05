@@ -11,11 +11,13 @@ import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.runBlocking
+import io.legado.app.R
+import splitties.init.appCtx
 
 object BookSourceWebController {
 
     fun getLoginData(parameters: Map<String, List<String>>): ReturnData {
-        val source = getSource(parameters) ?: return ReturnData().setErrorMsg("未找到书源")
+        val source = getSource(parameters) ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_book_source_not_found))
         return ReturnData().setData(
             linkedMapOf(
                 "url" to source.getKey(),
@@ -32,11 +34,11 @@ object BookSourceWebController {
 
     fun saveLoginData(postData: String?): ReturnData {
         val returnData = ReturnData()
-        postData ?: return returnData.setErrorMsg("数据不能为空")
+        postData ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_data_cannot_be_empty))
         val body = GSON.fromJsonObject<Map<String, Any?>>(postData).getOrNull()
-            ?: return returnData.setErrorMsg("数据格式错误")
+            ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_invalid_data_format))
         val source = getSource(body["type"]?.toString(), body["url"]?.toString())
-            ?: return returnData.setErrorMsg("未找到书源")
+            ?: return returnData.setErrorMsg(appCtx.getString(R.string.svc_book_source_not_found))
         val loginInfo = body["loginInfo"]
         if (loginInfo != null) {
             source.putLoginInfo(GSON.toJson(loginInfo))
@@ -60,17 +62,17 @@ object BookSourceWebController {
     }
 
     fun getDiscoverKinds(parameters: Map<String, List<String>>): ReturnData {
-        val source = getBookSource(parameters) ?: return ReturnData().setErrorMsg("未找到书源")
+        val source = getBookSource(parameters) ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_book_source_not_found))
         val kinds = runBlocking { source.exploreKinds() }
         return ReturnData().setData(kinds)
     }
 
     fun getDiscoverBooks(parameters: Map<String, List<String>>): ReturnData {
-        val source = getBookSource(parameters) ?: return ReturnData().setErrorMsg("未找到书源")
+        val source = getBookSource(parameters) ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_book_source_not_found))
         val exploreUrl = parameters["exploreUrl"]?.firstOrNull()
             ?.takeIf { it.isNotBlank() }
             ?: source.exploreUrl
-            ?: return ReturnData().setErrorMsg("发现地址不能为空")
+            ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_discover_url_cannot_be_empty))
         val page = parameters["page"]?.firstOrNull()?.toIntOrNull() ?: 1
         val books = runBlocking {
             WebBook.exploreBookAwait(source, exploreUrl, page)

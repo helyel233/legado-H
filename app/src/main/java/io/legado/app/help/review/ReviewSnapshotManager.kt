@@ -35,6 +35,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import io.legado.app.R
 
 /**
  * 评论快照抓取调度器（登记端）。
@@ -763,7 +764,7 @@ object ReviewSnapshotManager {
         sb.append("   成功快照 ").append(successfulSnapshots.get()).append("/")
             .append(snapshotButtons.size).append('\n')
         sb.append("   失败 ").append(failedButtons).append("/").append(processButtons.size).append('\n')
-        sb.append("   本章是否计入“评论已缓存”：").append(if (chapterHasSnapshot) "是" else "否")
+        sb.append("   本章是否计入“评论已缓存”：").append(if (chapterHasSnapshot) appCtx.getString(R.string.yes) else appCtx.getString(R.string.no))
     }
 
     /** 单按钮处理结果：日志按原序号归位，成功/失败供整章统计 */
@@ -1102,8 +1103,8 @@ object ReviewSnapshotManager {
         }
         sb.append("3. 按钮").append(buttonIndex + 1).append("：\n")
         sb.append("   src=").append(button.src).append('\n')
-        sb.append("   click=").append(if (button.click.isNullOrBlank()) "无" else "有")
-            .append("  js=").append(if (button.js.isNullOrBlank()) "无" else "有").append('\n')
+        sb.append("   click=").append(if (button.click.isNullOrBlank()) appCtx.getString(R.string.cover_collection_none) else "有")
+            .append("  js=").append(if (button.js.isNullOrBlank()) appCtx.getString(R.string.cover_collection_none) else "有").append('\n')
         if (hasCompleteSnapshot && !incremental) {
             sb.append("   已有有效快照，跳过\n")
             return ButtonOutcome(buttonIndex, button.src, sb.toString())
@@ -1191,7 +1192,7 @@ object ReviewSnapshotManager {
                 e is kotlinx.coroutines.TimeoutCancellationException -> "评论抓取超时"
                 e is kotlinx.coroutines.CancellationException -> "任务被取消"
                 e.localizedMessage?.contains("序列化为空") == true -> "页面 HTML 为空"
-                else -> (e.localizedMessage ?: "未知错误")
+                else -> (e.localizedMessage ?: appCtx.getString(R.string.unknown_error))
             }
             sb.append("4. 打开评论页/抓取快照：失败（").append(reason).append("）\n")
             sb.append("   ").append(e.stackTraceToString()).append('\n')

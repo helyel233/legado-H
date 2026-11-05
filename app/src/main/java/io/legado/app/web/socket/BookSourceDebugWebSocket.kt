@@ -47,7 +47,7 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
         launch(IO) {
             kotlin.runCatching {
                 if (!message.textPayload.isJson()) {
-                    send("数据必须为Json格式")
+                    send(appCtx.getString(R.string.svc_data_must_be_json_format))
                     close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
                     return@launch
                 }
@@ -66,7 +66,7 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
                         Debug.startDebug(this, it, key)
                     }
                 } else {
-                    send("数据必须为Json格式")
+                    send(appCtx.getString(R.string.svc_data_must_be_json_format))
                     close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
                     return@launch
                 }

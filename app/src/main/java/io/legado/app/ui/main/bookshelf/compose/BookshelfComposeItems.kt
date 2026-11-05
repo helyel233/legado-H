@@ -54,6 +54,7 @@ import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
 
 sealed interface BookshelfItemUi {
     val key: String
@@ -335,7 +336,7 @@ private fun BookshelfCover(
 @Composable
 private fun BookshelfLocalFileChangedBadge(modifier: Modifier = Modifier) {
     Text(
-        text = "已更新",
+        text = appCtx.getString(R.string.ui_main_updated),
         modifier = modifier
             .padding(5.dp)
             .clip(CircleShape)

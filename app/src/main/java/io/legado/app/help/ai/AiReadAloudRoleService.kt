@@ -35,6 +35,8 @@ import kotlinx.coroutines.sync.withPermit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiReadAloudRoleService {
 
@@ -229,15 +231,15 @@ object AiReadAloudRoleService {
         assignment: ManualSegmentAssignment
     ): ManualSegmentAssignmentResult {
         val currentBook = book
-            ?: return ManualSegmentAssignmentResult(false, "书籍不存在")
+            ?: return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ra_panel_book_not_found))
         val currentChapter = textChapter
-            ?: return ManualSegmentAssignmentResult(false, "章节不存在")
+            ?: return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ra_panel_chapter_not_found))
         val cleanParagraphs = paragraphs.map { it.trimEnd() }.filter { it.isNotBlank() }
         if (cleanParagraphs.isEmpty()) {
-            return ManualSegmentAssignmentResult(false, "章节内容为空")
+            return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ai_state_chapter_content_empty))
         }
         val roleKey = buildRoleCacheKey(currentBook, currentChapter, cleanParagraphs)
-            ?: return ManualSegmentAssignmentResult(false, "多角色模型未配置")
+            ?: return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ai_state_no_multi_role_model_configured))
         val characterBookKey = roleKey.bookKey
         val cache = appDb.aiReadAloudRoleCacheDao.get(roleKey.cacheKey)
             ?.takeIf { it.segmentsJson.isNotBlank() }
@@ -246,7 +248,7 @@ object AiReadAloudRoleService {
                 characterBookKey,
                 currentChapter.chapter.index
             )
-            ?: return ManualSegmentAssignmentResult(false, "当前章节没有可修改的分配缓存")
+            ?: return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ai_state_this_chapter_has_no_editable))
         val segments = segmentsFromJson(cache.segmentsJson).toMutableList()
         val targetIndex = segments.indexOfFirst {
             it.paragraphIndex == assignment.paragraphIndex &&
@@ -254,7 +256,7 @@ object AiReadAloudRoleService {
                     it.end == assignment.end
         }
         if (targetIndex < 0) {
-            return ManualSegmentAssignmentResult(false, "没有找到对应片段")
+            return ManualSegmentAssignmentResult(false, appCtx.getString(R.string.ai_state_matching_segment_not_found))
         }
         val safeRoleType = assignment.roleType
             .takeIf { it in setOf("narrator", "character", "thought", "other") }
@@ -300,7 +302,7 @@ object AiReadAloudRoleService {
         )
         return ManualSegmentAssignmentResult(
             success = true,
-            message = "已更新片段分配",
+            message = appCtx.getString(R.string.ai_state_segment_assignments_updated),
             previewSegments = buildPreviewSegments(
                 characterBookKey,
                 segments,
@@ -380,7 +382,7 @@ object AiReadAloudRoleService {
         paragraphs: List<String>,
         stage: String = AiReadAloudRoleState.STAGE_CURRENT
     ): EnsureResult {
-        var lastResult = EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = "多角色分配失败")
+        var lastResult = EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = appCtx.getString(R.string.ai_state_multi_role_assignment_failed))
         repeat(PLAYBACK_ASSIGNMENT_ATTEMPTS) {
             val result = ensureCache(book, textChapter, paragraphs, stage)
             lastResult = result
@@ -415,24 +417,24 @@ object AiReadAloudRoleService {
         stage: String = AiReadAloudRoleState.STAGE_CURRENT
     ): EnsureResult {
         if (!AppConfig.aiReadAloudRoleEnabled) {
-            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "多角色未开启")
+            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_multi_role_disabled))
         }
         val modelConfig = AppConfig.aiReadAloudRoleModelConfig
-            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "未配置多角色模型")
+            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_no_multi_role_model_configured_2))
         if (AppConfig.aiProviderForModel(modelConfig)?.baseUrl.isNullOrBlank()) {
-            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "多角色模型供应商不可用")
+            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_multi_role_model_provider_unavailable))
         }
         val currentBook = book
-            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "书籍为空")
+            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_book_empty))
         val currentChapter = textChapter
-            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "章节为空")
+            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_chapter_empty))
         BookCharacterIdentityMigrator.migrate(currentBook)
         val cleanParagraphs = paragraphs.map { it.trimEnd() }.filter { it.isNotBlank() }
         if (cleanParagraphs.isEmpty()) {
-            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "当前章节无可朗读段落")
+            return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_no_readable_paragraphs_this_chapter))
         }
         val roleKey = buildRoleCacheKey(currentBook, currentChapter, cleanParagraphs)
-            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = "未配置多角色模型")
+            ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = appCtx.getString(R.string.ai_state_no_multi_role_model_configured_2))
         val mode = roleKey.mode
         val prompt = roleKey.prompt
         val contentHash = roleKey.contentHash
@@ -515,7 +517,7 @@ object AiReadAloudRoleService {
             val count = cachedSegments.size
             postPreview(
                 AiReadAloudRoleState.STATUS_SKIPPED,
-                "当前章节角色已分配",
+                appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                 AiReadAloudRoleState.SOURCE_CACHE,
                 preview,
                 createdCharacterCount = repair.createdIds.size
@@ -523,7 +525,7 @@ object AiReadAloudRoleService {
             return EnsureResult(
                 AiReadAloudRoleState.STATUS_SKIPPED,
                 count,
-                message = "当前章节角色已分配",
+                message = appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                 cacheKey = cacheKey
             )
         }
@@ -564,7 +566,7 @@ object AiReadAloudRoleService {
                 )
                 postPreview(
                     AiReadAloudRoleState.STATUS_SKIPPED,
-                    "当前章节角色已分配",
+                    appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                     AiReadAloudRoleState.SOURCE_CACHE,
                     preview,
                     createdCharacterCount = repair.createdIds.size
@@ -572,14 +574,14 @@ object AiReadAloudRoleService {
                 return EnsureResult(
                     AiReadAloudRoleState.STATUS_SKIPPED,
                     cachedSegments.size,
-                    message = "当前章节角色已分配",
+                    message = appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                     cacheKey = cacheKey
                 )
             }
         if (oldCache?.status == AiReadAloudRoleCache.STATUS_RUNNING) {
             if (isRunningCacheActive(cacheKey, oldCache.updatedAt)) {
-                postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_RUNNING, stageMessage(stage, "分配角色中"), cleanParagraphs.size)
-                return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = "分配角色中", cacheKey = cacheKey)
+                postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_RUNNING, stageMessage(stage, appCtx.getString(R.string.ai_state_assigning_roles_2)), cleanParagraphs.size)
+                return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = appCtx.getString(R.string.ai_state_assigning_roles_2), cacheKey = cacheKey)
             }
             if (oldCache.segmentsJson.isNotBlank()) {
                 val repair = repairCachedCharactersIfNeeded(
@@ -610,7 +612,7 @@ object AiReadAloudRoleService {
                 )
                 postPreview(
                     AiReadAloudRoleState.STATUS_SKIPPED,
-                    "当前章节角色已分配",
+                    appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                     AiReadAloudRoleState.SOURCE_CACHE,
                     preview,
                     createdCharacterCount = repair.createdIds.size
@@ -618,7 +620,7 @@ object AiReadAloudRoleService {
                 return EnsureResult(
                     AiReadAloudRoleState.STATUS_SKIPPED,
                     cachedSegments.size,
-                    message = "当前章节角色已分配",
+                    message = appCtx.getString(R.string.ai_state_roles_already_assigned_this_chapter),
                     cacheKey = cacheKey
                 )
             }
@@ -635,39 +637,39 @@ object AiReadAloudRoleService {
             val count = fallbackSegments.size
             postPreview(
                 AiReadAloudRoleState.STATUS_FAILED,
-                oldCache.lastError.ifBlank { "AI分角色连续失败，请重新分配当前章节" },
+                oldCache.lastError.ifBlank { appCtx.getString(R.string.ai_state_ai_role_assignment_failed_repeatedly) },
                 AiReadAloudRoleState.SOURCE_FALLBACK,
                 preview,
-                error = oldCache.lastError.ifBlank { "AI分角色连续失败" }
+                error = oldCache.lastError.ifBlank { appCtx.getString(R.string.ai_state_ai_role_assignment_failed_repeatedly_2) }
             )
             return EnsureResult(
                 AiReadAloudRoleState.STATUS_FAILED,
-                error = oldCache.lastError.ifBlank { "AI分角色连续失败" },
+                error = oldCache.lastError.ifBlank { appCtx.getString(R.string.ai_state_ai_role_assignment_failed_repeatedly_2) },
                 cacheKey = cacheKey
             )
         }
         if ((oldCache?.retryCount ?: 0) >= 3) {
-            val error = oldCache?.lastError?.ifBlank { "AI分角色连续失败" } ?: "AI分角色连续失败"
+            val error = oldCache?.lastError?.ifBlank { appCtx.getString(R.string.ai_state_ai_role_assignment_failed_repeatedly_2) } ?: appCtx.getString(R.string.ai_state_ai_role_assignment_failed_repeatedly_2)
             postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_FAILED, error, cleanParagraphs.size, error = error)
             return EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = error, cacheKey = cacheKey)
         }
         if (!runningCacheKeys.add(cacheKey)) {
-            return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = "分配角色中", cacheKey = cacheKey)
+            return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = appCtx.getString(R.string.ai_state_assigning_roles_2), cacheKey = cacheKey)
         }
         val now = System.currentTimeMillis()
         keepAliveId = AiTaskKeepAlive.retain(
-            title = stageMessage(stage, "分配角色中"),
+            title = stageMessage(stage, appCtx.getString(R.string.ai_state_assigning_roles_2)),
             content = "${currentBook.name} · ${currentChapter.chapter.title}",
             kind = AiTaskKeepAlive.KIND_ROLE_ASSIGN
         )
-        postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_RUNNING, stageMessage(stage, "分配角色中"), cleanParagraphs.size)
+        postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_RUNNING, stageMessage(stage, appCtx.getString(R.string.ai_state_assigning_roles_2)), cleanParagraphs.size)
         updateRoleKeepAlive(
             taskId = keepAliveId,
             book = currentBook,
             chapter = currentChapter,
             stage = stage,
             status = AiReadAloudRoleState.STATUS_RUNNING,
-            message = stageMessage(stage, "分配角色中"),
+            message = stageMessage(stage, appCtx.getString(R.string.ai_state_assigning_roles_2)),
             paragraphCount = cleanParagraphs.size,
             segmentCount = 0,
             usageSnapshot = usageTracker.snapshot(),
@@ -707,7 +709,7 @@ object AiReadAloudRoleService {
                 onPreview = { preview, candidateCount, source ->
                     postPreview(
                         AiReadAloudRoleState.STATUS_RUNNING,
-                        if (source == AiReadAloudRoleState.SOURCE_RULE) "本地预处理 ${preview.size} 个片段" else "已确认 ${preview.size} 个分配片段",
+                        if (source == AiReadAloudRoleState.SOURCE_RULE) appCtx.getString(R.string.ai_state_preprocessed_segments_locally, preview.size) else appCtx.getString(R.string.ai_state_assigned_segments_confirmed, preview.size),
                         source,
                         preview,
                         newCharacterCandidateCount = candidateCount
@@ -724,9 +726,9 @@ object AiReadAloudRoleService {
                     appDb.bookCharacterDao.characters(characterBookKey)
                 )
                 val error = if (aiSegments.isEmpty()) {
-                    "AI未返回有效分角色片段，已使用默认分角色"
+                    appCtx.getString(R.string.ai_state_ai_returned_no_valid_role)
                 } else {
-                    "AI未完整确认不确定角色片段，请重新分配当前章节"
+                    appCtx.getString(R.string.ai_state_ai_did_not_confirm_every)
                 }
                 appDb.aiReadAloudRoleCacheDao.upsert(
                     AiReadAloudRoleCache(
@@ -750,7 +752,7 @@ object AiReadAloudRoleService {
                 )
                 postPreview(
                     AiReadAloudRoleState.STATUS_FAILED,
-                    if (aiSegments.isEmpty()) "AI未返回有效分角色片段，请重新分配当前章节" else "AI未完整确认不确定角色片段，请重新分配当前章节",
+                    if (aiSegments.isEmpty()) appCtx.getString(R.string.ai_state_ai_returned_no_valid_role_2) else appCtx.getString(R.string.ai_state_ai_did_not_confirm_every),
                     AiReadAloudRoleState.SOURCE_FALLBACK,
                     buildPreviewSegments(
                         characterBookKey,
@@ -796,7 +798,7 @@ object AiReadAloudRoleService {
             )
             postPreview(
                 AiReadAloudRoleState.STATUS_SUCCESS,
-                stageMessage(stage, "角色分配完成"),
+                stageMessage(stage, appCtx.getString(R.string.ai_state_role_assignment_complete)),
                 AiReadAloudRoleState.SOURCE_RESOLVED,
                 buildPreviewSegments(
                     characterBookKey,
@@ -811,7 +813,7 @@ object AiReadAloudRoleService {
                 status = AiReadAloudRoleState.STATUS_SUCCESS,
                 segmentCount = resolved.first.size,
                 createdCharacterCount = resolved.second.size,
-                message = "角色分配完成",
+                message = appCtx.getString(R.string.ai_state_role_assignment_complete),
                 cacheKey = cacheKey
             )
         } catch (throwable: Throwable) {
@@ -843,7 +845,7 @@ object AiReadAloudRoleService {
             )
             postPreview(
                 AiReadAloudRoleState.STATUS_FAILED,
-                "AI分角色失败，请重新分配当前章节",
+                appCtx.getString(R.string.ai_state_ai_role_assignment_failed_please),
                 AiReadAloudRoleState.SOURCE_FALLBACK,
                 buildPreviewSegments(
                     characterBookKey,
@@ -882,7 +884,7 @@ object AiReadAloudRoleService {
                         chapter = textChapter,
                         stage = stage,
                         status = AiReadAloudRoleState.STATUS_SUCCESS,
-                        message = stageMessage(stage, "角色分配完成"),
+                        message = stageMessage(stage, appCtx.getString(R.string.ai_state_role_assignment_complete)),
                         paragraphCount = cleanParagraphs.size,
                         segmentCount = segments.size,
                         previewSource = AiReadAloudRoleState.SOURCE_CACHE,
@@ -896,21 +898,21 @@ object AiReadAloudRoleService {
                     return EnsureResult(
                         status = AiReadAloudRoleState.STATUS_SUCCESS,
                         segmentCount = segments.size,
-                        message = "角色分配完成",
+                        message = appCtx.getString(R.string.ai_state_role_assignment_complete),
                         cacheKey = cacheKey
                     )
                 }
                 cache?.status == AiReadAloudRoleCache.STATUS_FAILED -> {
                     return EnsureResult(
                         status = AiReadAloudRoleState.STATUS_FAILED,
-                        error = cache.lastError.ifBlank { "多角色分配失败" },
+                        error = cache.lastError.ifBlank { appCtx.getString(R.string.ai_state_multi_role_assignment_failed) },
                         cacheKey = cacheKey
                     )
                 }
             }
             delay(RUNNING_WAIT_STEP_MILLIS)
         }
-        return EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = "等待多角色分配超时", cacheKey = cacheKey)
+        return EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = appCtx.getString(R.string.ai_state_timed_out_waiting_multi_role), cacheKey = cacheKey)
     }
 
     fun routeForCue(
@@ -1100,7 +1102,7 @@ object AiReadAloudRoleService {
             start = start,
             end = end,
             roleType = "narrator",
-            characterName = "旁白",
+            characterName = appCtx.getString(R.string.ra_panel_narrator),
             confidence = 0.5
         )
     }
@@ -1156,7 +1158,7 @@ object AiReadAloudRoleService {
     }
 
     private fun stageMessage(stage: String, action: String): String {
-        val prefix = if (stage == AiReadAloudRoleState.STAGE_NEXT) "下一章节" else "当前章节"
+        val prefix = if (stage == AiReadAloudRoleState.STAGE_NEXT) appCtx.getString(R.string.ra_panel_next_chapter) else appCtx.getString(R.string.ra_panel_current_chapter)
         return "$prefix$action"
     }
 
@@ -1174,9 +1176,9 @@ object AiReadAloudRoleService {
     ) {
         if (taskId.isNullOrBlank()) return
         val title = when (status) {
-            AiReadAloudRoleState.STATUS_SUCCESS -> stageMessage(stage, "角色分配完成")
-            AiReadAloudRoleState.STATUS_FAILED -> stageMessage(stage, "角色分配失败")
-            else -> stageMessage(stage, "分配角色中")
+            AiReadAloudRoleState.STATUS_SUCCESS -> stageMessage(stage, appCtx.getString(R.string.ai_state_role_assignment_complete))
+            AiReadAloudRoleState.STATUS_FAILED -> stageMessage(stage, appCtx.getString(R.string.ai_state_role_assignment_failed))
+            else -> stageMessage(stage, appCtx.getString(R.string.ai_state_assigning_roles_2))
         }
         AiTaskKeepAlive.update(
             taskId = taskId,
@@ -1200,9 +1202,9 @@ object AiReadAloudRoleService {
     ): String {
         return buildList {
             add(message)
-            if (segmentCount > 0) add("已确认 $segmentCount 个片段")
+            if (segmentCount > 0) add(appCtx.getString(R.string.ai_state_segments_confirmed, segmentCount))
             if (paragraphCount > 0) add("$paragraphCount 段")
-            if (usageSnapshot.requestCount > 0) add("请求 ${usageSnapshot.requestCount} 次")
+            if (usageSnapshot.requestCount > 0) add(appCtx.getString(R.string.ai_state_requests, usageSnapshot.requestCount))
             if (usageSnapshot.elapsedMillis > 0) add("${(usageSnapshot.elapsedMillis / 1000L).coerceAtLeast(1L)}s")
         }.joinToString(" · ")
     }
@@ -1294,7 +1296,7 @@ object AiReadAloudRoleService {
                     roleType = segment.roleType,
                     characterName = character?.name
                         ?: segment.characterName.ifBlank {
-                            if (segment.roleType == "narrator") "旁白" else ""
+                            if (segment.roleType == "narrator") appCtx.getString(R.string.ra_panel_narrator) else ""
                         },
                     characterId = character?.id ?: segment.characterId,
                     matchedCharacter = character != null,
@@ -1739,7 +1741,7 @@ object AiReadAloudRoleService {
         val characterName = when {
             status.startsWith("unknown") -> ""
             rawName in setOf("unknown", "未知", "不确定", "未识别", "旁白") && roleType != "narrator" -> ""
-            roleType == "narrator" -> "旁白"
+            roleType == "narrator" -> appCtx.getString(R.string.ra_panel_narrator)
             else -> rawName
         }
         return resolution.copy(
@@ -1814,7 +1816,7 @@ object AiReadAloudRoleService {
                     .joinToString("/")
                 "${it.id}|${it.name}|${detail.ifBlank { "-" }}"
             }
-            .ifBlank { "无" }
+            .ifBlank { appCtx.getString(R.string.cover_collection_none) }
         val targetParagraphSet = batch.units
             .flatMap { unit -> unit.ranges.map { it.paragraphIndex } }
             .toSet()
@@ -1840,7 +1842,7 @@ object AiReadAloudRoleService {
         }
         val unitSummary = relatedUnits.joinToString("\n") { unit ->
             "${unit.id}|${unit.roleType}|${unitParagraphLabel(unit)}|${unit.reason}|前=${unit.cueBefore.compactForPrompt(50)}|后=${unit.cueAfter.compactForPrompt(50)}|${unit.text.compactForPrompt(220)}"
-        }.ifBlank { "无" }
+        }.ifBlank { appCtx.getString(R.string.cover_collection_none) }
         val targetUnits = batch.units.joinToString("\n") { unit ->
             "${unit.id}|${unit.roleType}|${unitParagraphLabel(unit)}|${unit.text.compactForPrompt(360)}"
         }
@@ -1849,7 +1851,7 @@ object AiReadAloudRoleService {
             .joinToString("\n") { resolution ->
                 "${resolution.unitId}=>${resolution.roleType}/${resolution.characterName.ifBlank { "unknown" }}/${resolution.status}/${"%.2f".format(resolution.confidence)}"
             }
-            .ifBlank { "无" }
+            .ifBlank { appCtx.getString(R.string.cover_collection_none) }
         val retryInstruction = when (attempt) {
             0 -> "首轮：覆盖全部 targetUnitIds。证据不足返回 status=unknown，characterName 空。"
             else -> "补救：只处理未解决 unit；仍无明确证据就 unknown，不猜。"
@@ -1862,10 +1864,10 @@ object AiReadAloudRoleService {
             $characters
 
             分角色附加提示：
-            ${prompt.ifBlank { "无" }}
+            ${prompt.ifBlank { appCtx.getString(R.string.cover_collection_none) }}
 
             自动建卡提示：
-            ${autoCreatePrompt.ifBlank { "无" }}
+            ${autoCreatePrompt.ifBlank { appCtx.getString(R.string.cover_collection_none) }}
 
             书：${book.name} / ${book.author}
             章：${textChapter.chapter.title}
@@ -2072,7 +2074,7 @@ object AiReadAloudRoleService {
         }.joinToString("\n")
         val localSummary = units.joinToString("\n") { unit ->
             "- ${unit.id} | ${unit.kind}/${unit.roleType} | ${unitParagraphLabel(unit)} | speakerHint=${unit.speakerHint.ifBlank { "无" }} | confidence=${"%.2f".format(unit.confidence)} | text=${unit.text.compactForPrompt(220)}"
-        }.ifBlank { "无" }
+        }.ifBlank { appCtx.getString(R.string.cover_collection_none) }
         val uncertainSummary = uncertainUnits.joinToString("\n") { unit ->
             "- ${unit.id} | reason=${unit.reason} | ${unitParagraphLabel(unit)} | text=${unit.text.compactForPrompt(360)}"
         }
@@ -2101,7 +2103,7 @@ object AiReadAloudRoleService {
             $characters
 
             用户附加提示：
-            ${prompt.ifBlank { "无" }}
+            ${prompt.ifBlank { appCtx.getString(R.string.cover_collection_none) }}
 
             本地预处理结果：
             $localSummary
@@ -2190,7 +2192,7 @@ object AiReadAloudRoleService {
             val resolution = byId[unit.id] ?: return@map unit
             val roleType = resolution.roleType.ifBlank { unit.roleType }
             val characterName = when {
-                roleType == "narrator" -> "旁白"
+                roleType == "narrator" -> appCtx.getString(R.string.ra_panel_narrator)
                 resolution.characterName.isNotBlank() -> resolution.characterName
                 roleType == "character" || roleType == "thought" -> ""
                 else -> unit.characterName
@@ -2279,7 +2281,7 @@ object AiReadAloudRoleService {
             $characters
 
             用户附加提示：
-            ${prompt.ifBlank { "无" }}
+            ${prompt.ifBlank { appCtx.getString(R.string.cover_collection_none) }}
 
             段落：
             $indexed

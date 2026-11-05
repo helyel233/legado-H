@@ -52,6 +52,13 @@ object EventBus {
     const val AI_CONFIG_CHANGED = "aiConfigChanged"
     const val EXPORT_BOOK = "exportBook"
     const val UP_MANGA_CONFIG = "upMangaConfig"
+
+    /**
+     * 漫画显示方式（墨纸 / 灰度 / 隐藏标题 / 控制栏）在别处被改动。
+     * 与 [UP_MANGA_CONFIG] 分开：那个事件带页脚配置对象，这个只表示「显示参数变了」，
+     * 阅读页收到后按 AppConfig 当前值重刷，不再解析 payload。
+     */
+    const val UP_MANGA_DISPLAY = "upMangaDisplay"
     const val PLAY_MODE_CHANGED = "playModeChanged"
     const val REFRESH_BOOK_INFO = "refreshBookInfo"
     const val REFRESH_BOOK_CONTENT = "refreshBookContent"
@@ -61,4 +68,11 @@ object EventBus {
     const val AUTO_TASK_SERVICE = "autoTaskService"
     const val REVIEW_CACHE_SAVED = "reviewCacheSaved"
     const val LOCAL_NETWORK_PERMISSION_REQUIRED = "localNetworkPermissionRequired"
+
+    /**
+     * 页面布局（发现页布局 / 订阅列数 / 首页布局）在「页面布局」设置页被改动。
+     * payload 是发生变化的 PreferKey；订阅页与首页收到后按 AppConfig 当前值重排，
+     * 避免「设置页改了、切回 Tab 仍是旧布局」。
+     */
+    const val UP_PAGE_LAYOUT = "upPageLayout"
 }

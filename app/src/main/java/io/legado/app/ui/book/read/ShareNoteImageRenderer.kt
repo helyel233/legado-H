@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import kotlin.math.ceil
 import kotlin.math.sqrt
+import splitties.init.appCtx
 
 object ShareNoteImageRenderer {
 
@@ -464,7 +465,7 @@ object ShareNoteImageRenderer {
         return Payload(
             generatedAt = "2026-06-20 15:30:00",
             profile = Profile(
-                name = "读者",
+                name = appCtx.getString(R.string.ui_book_reader),
                 bio = "一段认真读过的文字"
             ),
             book = Book(

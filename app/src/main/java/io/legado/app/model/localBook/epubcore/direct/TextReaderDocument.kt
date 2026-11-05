@@ -6,6 +6,8 @@ import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 import org.jsoup.select.NodeTraversor
 import org.jsoup.select.NodeVisitor
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Canonical ordinary-book text shared by the visible document and read aloud. */
 object TextReaderDocument {
@@ -96,7 +98,7 @@ object TextReaderDocument {
                     .attr("data-legado-image-id", image.id)
                 if (deferred) {
                     element.attr("data-legado-image-resource", url).attr("data-legado-image-state", "pending")
-                        .attr("aria-label", "图片加载中")
+                        .attr("aria-label", appCtx.getString(R.string.misc_loading_image))
                 }
                 if (image.inline) element.addClass("legado-text-inline-image")
                 if (prepared?.isBubble == true) element.addClass("legado-text-bubble")
@@ -146,7 +148,7 @@ object TextReaderDocument {
             }
             if (body.childrenSize() == 0) body.appendElement("p")
                 .attr("data-reader-block", "empty").attr("data-reader-kind", "placeholder")
-                .text("本章暂无正文")
+                .text(appCtx.getString(R.string.misc_this_chapter_has_no_content))
             return document.outerHtml()
         }
     }

@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import splitties.init.appCtx
 
 class SearchScopeDialog : ComposeDialogFragment() {
 
@@ -182,7 +183,7 @@ private fun SearchScopeContent(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     ModeChip(
-                        label = "书源",
+                        label = appCtx.getString(R.string.book_source),
                         selected = mode == SearchScopeDialog.ScopeMode.SOURCE,
                         onClick = { onModeChange(SearchScopeDialog.ScopeMode.SOURCE) },
                         style = style

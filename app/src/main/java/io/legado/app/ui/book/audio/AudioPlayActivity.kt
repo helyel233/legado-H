@@ -64,6 +64,7 @@ import io.legado.app.ui.book.audio.SliderPopup.Companion.SPEED
 import io.legado.app.ui.book.audio.SliderPopup.Companion.TIMER
 import io.legado.app.model.SourceCallBack
 import io.legado.app.utils.gone
+import splitties.init.appCtx
 
 /**
  * 音频播放
@@ -300,9 +301,9 @@ class AudioPlayActivity :
     private fun getPlayModeTitle(mode: AudioPlay.PlayMode): String {
         return when (mode) {
             AudioPlay.PlayMode.LIST_END_STOP -> getString(R.string.play_mode)
-            AudioPlay.PlayMode.SINGLE_LOOP -> getString(R.string.play_mode) + "：单章循环"
-            AudioPlay.PlayMode.RANDOM -> getString(R.string.play_mode) + "：随机播放"
-            AudioPlay.PlayMode.LIST_LOOP -> getString(R.string.play_mode) + "：列表循环"
+            AudioPlay.PlayMode.SINGLE_LOOP -> getString(R.string.play_mode) + appCtx.getString(R.string.ui_book_repeat_one)
+            AudioPlay.PlayMode.RANDOM -> getString(R.string.play_mode) + appCtx.getString(R.string.ui_book_shuffle)
+            AudioPlay.PlayMode.LIST_LOOP -> getString(R.string.play_mode) + appCtx.getString(R.string.ui_book_repeat_all)
         }
     }
 

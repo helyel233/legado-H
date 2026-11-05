@@ -153,7 +153,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
             return true
         } catch (e: Throwable) {
             currentCoroutineContext().ensureActive()
-            ReadManga.mCallback?.loadFail("详情页出错: ${e.localizedMessage}")
+            ReadManga.mCallback?.loadFail(appCtx.getString(R.string.ui_book_detail_page_error, e.localizedMessage))
             return false
         }
     }
@@ -201,7 +201,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
                 // 换源完成
             }.catch {
                 AppLog.put("自动换源失败\n${it.localizedMessage}", it)
-                context.toastOnUi("自动换源失败\n${it.localizedMessage}")
+                context.toastOnUi(appCtx.getString(R.string.ui_book_auto_source_switch_failed_n, it.localizedMessage))
             }.collect()
         }
     }
@@ -231,7 +231,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
             } else if (progress.durChapterIndex < book.simulatedTotalChapterNum()) {
                 ReadManga.setProgress(progress)
                 AppLog.put("自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}")
-                context.toastOnUi("已同步最新漫画阅读进度")
+                context.toastOnUi(appCtx.getString(R.string.ui_book_manga_reading_progress_synced))
             }
         }
     }

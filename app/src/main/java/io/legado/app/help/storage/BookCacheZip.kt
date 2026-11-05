@@ -349,7 +349,7 @@ object BookCacheZip {
                         ReviewSnapshotStore.restoreFromDirectory(matchedBook, sourceReviewDir)
                     }.onFailure { error ->
                         AppLog.put(
-                            "书籍缓存恢复评论快照出错：${cacheIndex.bookName}\n${error.localizedMessage}",
+                            appCtx.getString(R.string.misc_failed_restore_review_snapshot_from, cacheIndex.bookName, error.localizedMessage),
                             error
                         )
                     }

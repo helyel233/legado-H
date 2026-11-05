@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.toString
+import splitties.init.appCtx
 
 class TxtTocRuleEditDialog() : BaseDialogFragment(R.layout.dialog_toc_regex_edit, true),
     Toolbar.OnMenuItemClickListener {
@@ -80,7 +81,7 @@ class TxtTocRuleEditDialog() : BaseDialogFragment(R.layout.dialog_toc_regex_edit
 
     private fun checkValid(tocRule: TxtTocRule): Boolean {
         if (tocRule.name.isEmpty()) {
-            toastOnUi("名称不能为空")
+            toastOnUi(appCtx.getString(R.string.auto_task_name_required))
             return false
         }
 

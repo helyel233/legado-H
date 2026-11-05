@@ -292,6 +292,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.io.File
 import java.util.regex.Matcher
+import splitties.init.appCtx
 
 /**
  * 阅读界面
@@ -848,7 +849,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             autoPageStop()
             return
         }
-        if (getPrefBoolean("disableReturnKey") && !menuLayoutIsVisible) return
+        if (getPrefBoolean(PreferKey.disableReturnKey) && !menuLayoutIsVisible) return
         finish()
     }
 
@@ -1328,7 +1329,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                         && !BookHelp.getChapterCacheFileNames(it, textChapter.chapter, "nr")
                             .any(contentProcessor.removeSameTitleCache::contains)
                     ) {
-                        toastOnUi("未找到可移除的重复标题")
+                        toastOnUi(appCtx.getString(R.string.ui_book_no_duplicate_titles_remove))
                     }
                 }
                 viewModel.reverseRemoveSameTitle()
@@ -2114,7 +2115,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         return ShareNoteImageRenderer.Payload(
             generatedAt = DateFormat.getDateTimeInstance().format(now),
             profile = ShareNoteImageRenderer.Profile(
-                name = goalConfig.userName.orEmpty().ifBlank { "读者" },
+                name = goalConfig.userName.orEmpty().ifBlank { appCtx.getString(R.string.ui_book_reader) },
                 avatar = goalConfig.avatar
             ),
             book = ShareNoteImageRenderer.Book(
@@ -2127,7 +2128,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 tags = tags,
                 wordCountText = book?.wordCount.orEmpty(),
                 readTimeText = readTimeText,
-                readStatusText = readTimeText.takeIf { it.isNotBlank() }?.let { "阅读 $it" }.orEmpty(),
+                readStatusText = readTimeText.takeIf { it.isNotBlank() }?.let { appCtx.getString(R.string.ui_book_reading, it) }.orEmpty(),
                 readProgressText = progressText,
                 readProgressPercent = parseShareNoteProgressPercent(progressText),
                 lastReadTime = book?.durChapterTime?.takeIf { it > 0L }?.let {
@@ -2260,7 +2261,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         return customTag?.trim()?.takeIf { it.isNotBlank() }
             ?: kind?.trim()?.takeIf { it.isNotBlank() }
             ?: when {
-                isAudio -> "音频"
+                isAudio -> appCtx.getString(R.string.audio)
                 isEpub -> "EPUB"
                 isMobi -> "MOBI"
                 isLocalTxt -> "TXT"
@@ -2275,7 +2276,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     ) {
         val payload = buildShareNotePayload(text)
         lifecycleScope.launch {
-            toastOnUi("正在生成分享图片")
+            toastOnUi(appCtx.getString(R.string.ui_book_generating_share_image))
             kotlin.runCatching {
                 ShareNoteImageRenderer.renderShareImage(this@ReadBookActivity, entry, payload)
             }.onSuccess { file ->
@@ -3001,7 +3002,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             resolvedChapterIndex
         } ?: run {
             binding.epubReadView.cancelPendingBoundaryTurn()
-            if (!book.isEpub && targetChapterIndex != null) toastOnUi("章节目录已更新，请重新选择章节")
+            if (!book.isEpub && targetChapterIndex != null) toastOnUi(appCtx.getString(R.string.ui_book_chapter_list_was_updated_please))
             onFinish?.invoke()
             return
         }
@@ -3276,7 +3277,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun previewReaderTemplate(template: EpubReaderTemplate) {
         val session = epubDirectSession?.takeUnless { it.isClosed } ?: run {
-            toastOnUi("请先加载正文，再预览页面模板")
+            toastOnUi(appCtx.getString(R.string.ui_book_load_content_before_previewing_page))
             return
         }
         val book = ReadBook.book?.takeIf { !it.isEpub } ?: return
@@ -4786,7 +4787,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun openBookCharacters() {
         val book = ReadBook.book ?: run {
-            toastOnUi("当前书籍不存在")
+            toastOnUi(appCtx.getString(R.string.bchar_current_book_not_found))
             return
         }
         startActivity<BookCharacterManageActivity> {
@@ -4834,14 +4835,14 @@ class ReadBookActivity : BaseReadBookActivity(),
             val currentChapter = withContext(IO) {
                 appDb.bookChapterDao.getChapter(book.bookUrl, chapterIndex)
             } ?: run {
-                toastOnUi("未找到当前章节")
+                toastOnUi(appCtx.getString(R.string.ui_book_current_chapter_not_found))
                 return@launch
             }
             val versions = withContext(IO) {
                 session.listChapterVersions(currentChapter)
             }
             if (versions.isEmpty()) {
-                toastOnUi("云端没有匹配当前章节的缓存")
+                toastOnUi(appCtx.getString(R.string.ui_book_no_cloud_cache_matches_current))
                 return@launch
             }
             showLibraryCloudChapterDialog(book, session, currentChapter, versions)
@@ -4992,12 +4993,12 @@ class ReadBookActivity : BaseReadBookActivity(),
                 )
             }
             AlertDialog.Builder(this@ReadBookActivity)
-                .setTitle("书库调试")
+                .setTitle(appCtx.getString(R.string.ui_book_library_debug))
                 .setView(debugScrollView)
-                .setNegativeButton("复制") { _, _ ->
+                .setNegativeButton(appCtx.getString(R.string.ra_cfg_copy)) { _, _ ->
                     val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("书库调试", message))
-                    toastOnUi("已复制")
+                    clipboard.setPrimaryClip(ClipData.newPlainText(appCtx.getString(R.string.ui_book_library_debug), message))
+                    toastOnUi(appCtx.getString(R.string.review_error_copied))
                 }
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
@@ -5042,7 +5043,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         item: LibraryCloudChapterVersion
     ) {
         lifecycleScope.launch {
-            ReadBook.upMsg("读取云端章节")
+            ReadBook.upMsg(appCtx.getString(R.string.ui_book_read_cloud_chapter))
             val result = withContext(IO) {
                 runCatching {
                     val content = session.downloadChapter(item)
@@ -5063,7 +5064,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     viewModel.openChapter(chapter.index)
                 }
             }.onFailure {
-                toastOnUi("读取云端章节失败\n${it.localizedMessage}")
+                toastOnUi(appCtx.getString(R.string.ui_book_failed_read_cloud_chapter_n, it.localizedMessage))
             }
         }
     }
@@ -5079,7 +5080,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
         }
         val summaryView = TextView(this).apply {
-            text = "当前章节：${currentChapter.title}"
+            text = appCtx.getString(R.string.ui_book_current_chapter, currentChapter.title)
             textSize = 13f
             setTextColor(secondaryTextColor)
             setPadding(0, 0, 0, 8.dpToPx())
@@ -5121,7 +5122,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         content.addView(summaryView)
         content.addView(scrollView)
         dialog = AndroidAlertBuilder(this).apply {
-            setTitle("选择书库章节")
+            setTitle(appCtx.getString(R.string.ui_book_select_library_chapter))
             setCustomView(content)
             negativeButton(android.R.string.cancel)
         }.show()
@@ -5166,11 +5167,11 @@ class ReadBookActivity : BaseReadBookActivity(),
             addView(LinearLayout(this@ReadBookActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(libraryCloudActionText("读取", accentColor) {
+                addView(libraryCloudActionText(appCtx.getString(R.string.ui_book_read), accentColor) {
                     dismissParent()
                     downloadLibraryCloudChapter(book, session, currentChapter, item)
                 })
-                addView(libraryCloudActionText("删除", 0xFFD32F2F.toInt()) {
+                addView(libraryCloudActionText(appCtx.getString(R.string.delete), 0xFFD32F2F.toInt()) {
                     confirmDeleteLibraryCloudChapter(book, session, currentChapter, item, dismissParent)
                 })
             })
@@ -5208,21 +5209,27 @@ class ReadBookActivity : BaseReadBookActivity(),
         dismissParent: () -> Unit
     ) {
         val input = EditText(this).apply {
-            hint = "请输入 删除"
+            hint = appCtx.getString(R.string.lib_cloud_delete_hint, appCtx.getString(R.string.delete))
             setSingleLine(true)
             typeface = uiTypeface()
             setPadding(20.dpToPx(), 8.dpToPx(), 20.dpToPx(), 8.dpToPx())
         }
         val confirmDialog = AndroidAlertBuilder(this).apply {
-            setTitle("删除云端章节")
-            setMessage("将删除云端章节：${item.payload.title.ifBlank { currentChapter.title }}\n请输入“删除”确认。")
+            setTitle(appCtx.getString(R.string.ui_book_delete_cloud_chapter))
+            setMessage(
+                appCtx.getString(
+                    R.string.lib_cloud_delete_message,
+                    item.payload.title.ifBlank { currentChapter.title },
+                    appCtx.getString(R.string.delete)
+                )
+            )
             setCustomView(input)
             negativeButton(android.R.string.cancel)
-            positiveButton("删除")
+            positiveButton(appCtx.getString(R.string.delete))
         }.show()
         confirmDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            if (input.text?.toString()?.trim() != "删除") {
-                toastOnUi("请输入 删除 后再确认")
+            if (input.text?.toString()?.trim() != appCtx.getString(R.string.delete)) {
+                toastOnUi(appCtx.getString(R.string.lib_cloud_delete_retry, appCtx.getString(R.string.delete)))
                 return@setOnClickListener
             }
             confirmDialog.dismiss()
@@ -5238,7 +5245,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         item: LibraryCloudChapterVersion
     ) {
         lifecycleScope.launch {
-            ReadBook.upMsg("删除云端章节")
+            ReadBook.upMsg(appCtx.getString(R.string.ui_book_delete_cloud_chapter))
             val result = withContext(IO) {
                 runCatching {
                     if (!session.deleteChapter(item)) {
@@ -5254,10 +5261,10 @@ class ReadBookActivity : BaseReadBookActivity(),
                 libraryCloudSession = refreshedSession
                 libraryCloudState = refreshedSession.state
                 binding.readMenu.updateCloudLibraryState(refreshedSession.state)
-                toastOnUi("已删除云端章节")
+                toastOnUi(appCtx.getString(R.string.ui_book_cloud_chapter_deleted))
                 showLibraryCloudChapters(refresh = false)
             } else {
-                toastOnUi("删除云端章节失败\n${result.exceptionOrNull()?.localizedMessage.orEmpty()}")
+                toastOnUi(appCtx.getString(R.string.ui_book_failed_delete_cloud_chapter_n, result.exceptionOrNull()?.localizedMessage.orEmpty()))
             }
         }
     }
@@ -5270,7 +5277,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private fun libraryCloudSourceLabel(item: LibraryCloudChapterVersion): String {
         return item.payload.sourceName
             .ifBlank { item.payload.sourceUrl }
-            .ifBlank { "旧缓存/未知来源" }
+            .ifBlank { appCtx.getString(R.string.ui_book_old_cache_unknown_source) }
     }
 
     private fun libraryCloudChapterTitle(item: LibraryCloudChapterVersion): String {
@@ -5288,10 +5295,10 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     private fun libraryCloudStateMessage(session: LibraryCloudSession): String {
         return when (session.state) {
-            LibraryCloudState.DISABLED -> "未配置书库容器"
-            LibraryCloudState.READY -> "云端书库可用"
-            LibraryCloudState.ERROR -> session.errorMessage?.let { "云端书库读取失败\n$it" }
-                ?: "云端书库读取失败"
+            LibraryCloudState.DISABLED -> appCtx.getString(R.string.ui_book_no_library_container_configured)
+            LibraryCloudState.READY -> appCtx.getString(R.string.ui_book_cloud_library_available)
+            LibraryCloudState.ERROR -> session.errorMessage?.let { appCtx.getString(R.string.ui_book_failed_read_cloud_library_n, it) }
+                ?: appCtx.getString(R.string.ui_book_failed_read_cloud_library)
         }
     }
 
@@ -6560,7 +6567,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 && !BookHelp.getChapterCacheFileNames(it, textChapter.chapter, "nr")
                     .any(contentProcessor.removeSameTitleCache::contains)
             ) {
-                toastOnUi("未找到可移除的重复标题")
+                toastOnUi(appCtx.getString(R.string.ui_book_no_duplicate_titles_remove))
             }
         }
         viewModel.reverseRemoveSameTitle()

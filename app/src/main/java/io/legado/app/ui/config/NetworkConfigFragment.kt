@@ -1,7 +1,10 @@
 package io.legado.app.ui.config
 
+import android.os.Bundle
+import android.view.View
 import io.legado.app.BuildConfig
 import io.legado.app.R
+import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.config.AppConfig
@@ -11,11 +14,16 @@ import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
+import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.widget.compose.showComposeTextFormDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
+import io.legado.app.utils.observeEvent
+import io.legado.app.utils.openUrl
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
+import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
@@ -38,8 +46,8 @@ class NetworkConfigFragment : ComposeSettingFragment() {
                     items = listOf(
                         SettingActionSpec(
                             key = "networkDns",
-                            title = getString(R.string.network_dns_title),
-                            summary = getString(R.string.network_dns_summary),
+                            title = str(R.string.network_dns_title),
+                            summary = str(R.string.network_dns_summary),
                             navigates = true,
                             onClick = {
                                 startActivity<ConfigActivity> {
@@ -50,12 +58,42 @@ class NetworkConfigFragment : ComposeSettingFragment() {
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.network_web_service_section),
+                    title = str(R.string.network_web_service_section),
                     items = listOf(
+                        // 开关放在这里读的是运行时状态，不是偏好值：服务可能因端口被占用
+                        // 或本地网络权限被拒而没起来，此时偏好里写着 true 但服务确实没跑
+                        SettingSwitchSpec(
+                            key = PreferKey.webService,
+                            title = str(R.string.web_service),
+                            summary = if (WebService.isRun) {
+                                WebService.hostAddress
+                            } else {
+                                str(R.string.web_service_desc)
+                            },
+                            checked = WebService.isRun,
+                            searchKeys = listOf("web服务", "网页服务", "局域网", "web service"),
+                            onCheckedChange = ::setWebServiceEnabled
+                        ),
+                        SettingActionSpec(
+                            key = "webServiceCopyAddress",
+                            title = str(R.string.copy_text),
+                            summary = WebService.hostAddress,
+                            visible = WebService.isRun,
+                            searchKeys = listOf("复制地址", "web服务地址"),
+                            onClick = { ctx.sendToClip(WebService.hostAddress) }
+                        ),
+                        SettingActionSpec(
+                            key = "webServiceOpenBrowser",
+                            title = str(R.string.open_in_browser),
+                            summary = WebService.hostAddress,
+                            visible = WebService.isRun,
+                            searchKeys = listOf("浏览器打开", "web服务地址"),
+                            onClick = { ctx.openUrl(WebService.hostAddress) }
+                        ),
                         numberAction(
                             key = PreferKey.webPort,
-                            title = getString(R.string.web_port_title),
-                            summary = getString(R.string.web_port_summary, AppConfig.webPort.toString()),
+                            title = str(R.string.web_port_title),
+                            summary = str(R.string.web_port_summary, AppConfig.webPort.toString()),
                             min = 1024,
                             max = 60000,
                             value = AppConfig.webPort,
@@ -63,19 +101,19 @@ class NetworkConfigFragment : ComposeSettingFragment() {
                         ),
                         SettingActionSpec(
                             key = PreferKey.webServiceToken,
-                            title = getString(R.string.web_service_token_title),
+                            title = str(R.string.web_service_token_title),
                             summary = if (AppConfig.webServiceToken.isBlank()) {
-                                getString(R.string.web_service_token_summary_off)
+                                str(R.string.web_service_token_summary_off)
                             } else {
-                                getString(R.string.web_service_token_summary_on)
+                                str(R.string.web_service_token_summary_on)
                             },
                             onClick = {
                                 showComposeTextFormDialog(
-                                    title = getString(R.string.web_service_token_title),
-                                    labels = listOf(getString(R.string.web_service_token_hint)),
+                                    title = str(R.string.web_service_token_title),
+                                    labels = listOf(str(R.string.web_service_token_hint)),
                                     initialValues = listOf(AppConfig.webServiceToken),
-                                    positiveText = getString(android.R.string.ok),
-                                    negativeText = getString(R.string.cancel),
+                                    positiveText = str(android.R.string.ok),
+                                    negativeText = str(R.string.cancel),
                                     onPositive = { values ->
                                         val token = values.getOrNull(0)?.trim() ?: ""
                                         // 口令会拼进 URL query 和 Cookie，字符集必须受限：
@@ -91,8 +129,8 @@ class NetworkConfigFragment : ComposeSettingFragment() {
                                             // 校验对新请求即时生效，无需重启；
                                             // 但通知/复制地址里的 ?token= 是启动时生成的，
                                             // 重启一次让地址带上新口令，否则用户复制的地址打不开
-                                            WebService.stop(requireContext())
-                                            WebService.start(requireContext())
+                                            WebService.stop(ctx)
+                                            WebService.start(ctx)
                                         }
                                     }
                                 )
@@ -100,45 +138,53 @@ class NetworkConfigFragment : ComposeSettingFragment() {
                         ),
                         switch(
                             key = PreferKey.webServiceWakeLock,
-                            title = getString(R.string.web_service_wake_lock),
-                            summary = getString(R.string.web_service_wake_lock_summary),
+                            title = str(R.string.web_service_wake_lock),
+                            summary = str(R.string.web_service_wake_lock_summary),
                             defaultValue = false
                         )
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.network_connection_section),
+                    title = str(R.string.network_connection_section),
                     items = listOf(
                         SettingActionSpec(
                             key = PreferKey.userAgent,
-                            title = getString(R.string.user_agent),
+                            title = str(R.string.user_agent),
                             summary = userAgentValue(),
                             onClick = ::showUserAgentDialog
                         ),
                         numberAction(
                             key = PreferKey.threadCount,
-                            title = getString(R.string.threads_num_title),
-                            summary = getString(R.string.threads_num, AppConfig.threadCount.toString()),
+                            title = str(R.string.threads_num_title),
+                            summary = str(R.string.threads_num, AppConfig.threadCount.toString()),
                             min = 1,
                             max = 999,
                             value = AppConfig.threadCount,
                             onSelected = { AppConfig.threadCount = it }
+                        ),
+                        // 从 DNS 三级页移来：Cronet 是全局网络栈选择，不是 DoH 的子项，
+                        // 和 User-Agent / 线程数同属「连接与请求」
+                        switch(
+                            key = PreferKey.cronet,
+                            title = str(R.string.pref_cronet),
+                            summary = str(R.string.pref_cronet_summary),
+                            defaultValue = false
                         )
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.network_source_upload_section),
+                    title = str(R.string.network_source_upload_section),
                     items = listOf(
                         SettingActionSpec(
                             key = PreferKey.checkSource,
-                            title = getString(R.string.check_source_config),
+                            title = str(R.string.check_source_config),
                             summary = CheckSource.summary,
                             onClick = { showDialogFragment<CheckSourceConfig>() }
                         ),
                         SettingActionSpec(
                             key = PreferKey.uploadRule,
-                            title = getString(R.string.direct_link_upload_rule),
-                            summary = getString(R.string.direct_link_upload_rule_summary),
+                            title = str(R.string.direct_link_upload_rule),
+                            summary = str(R.string.direct_link_upload_rule_summary),
                             onClick = { showDialogFragment<ComposeDirectLinkUploadDialog>() }
                         )
                     )
@@ -148,32 +194,64 @@ class NetworkConfigFragment : ComposeSettingFragment() {
     }
 
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        // 启停是异步的：start() 只发出启动请求，isRun 要等 Service.onCreate 才置真。
+        // 光靠点击回调重画会让开关先闪回未开启，这里听服务自己发出的状态事件补一次。
+        observeEvent<String>(EventBus.WEB_SERVICE) { refreshSettings() }
+    }
+
     override fun onSettingPreferenceChanged(key: String) {
         when (key) {
             PreferKey.threadCount -> postEvent(PreferKey.threadCount, "")
 
             PreferKey.webPort -> {
                 if (WebService.isRun) {
-                    WebService.stop(requireContext())
+                    WebService.stop(ctx)
                     LocalNetworkAccess.request(
-                        requireContext(),
-                        onGranted = { WebService.start(requireContext()) }
+                        ctx,
+                        onGranted = { WebService.start(ctx) }
                     )
                 }
             }
         }
     }
 
+    /**
+     * 启停 Web 服务。这是设置体系里唯一的启停入口——原先「我的」页那一行已并入本页，
+     * 避免两个地方都能启停同一个服务（下拉快捷开关属于系统入口，不在设置树里）。
+     *
+     * 启动前先申请本地网络权限：Android 17 起没有它时服务只监听本机，
+     * 其它设备连不上，用户会以为服务坏了。
+     */
+    private fun setWebServiceEnabled(enabled: Boolean) {
+        ctx.putPrefBoolean(PreferKey.webService, enabled)
+        if (enabled) {
+            LocalNetworkAccess.request(
+                ctx,
+                onGranted = {
+                    WebService.start(ctx)
+                    refreshSettings()
+                },
+                // 拒绝授权时服务没有起来，立刻重画，别让开关停在「已开启」
+                onDenied = { refreshSettings() }
+            )
+        } else {
+            WebService.stop(ctx)
+            refreshSettings()
+        }
+    }
+
     private fun showUserAgentDialog() {
         showComposeTextInputDialog(
-            title = getString(R.string.user_agent),
-            hint = getString(R.string.user_agent),
+            title = str(R.string.user_agent),
+            hint = str(R.string.user_agent),
             initialValue = userAgentValue(),
             onPositive = { userAgent ->
                 if (userAgent.isNullOrBlank()) {
                     removePref(PreferKey.userAgent)
                 } else {
-                    putPrefString(PreferKey.userAgent, userAgent)
+                    ctx.putPrefString(PreferKey.userAgent, userAgent)
                 }
             }
         )

@@ -75,6 +75,7 @@ import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.image.CoverImageView
 import kotlin.math.roundToInt
+import splitties.init.appCtx
 
 private const val BOOK_COVER_ASPECT_RATIO = 0.75f
 private val DiscoverySuiteEmphasizedEasing = CubicBezierEasing(0.20f, 0.00f, 0.00f, 1.00f)
@@ -318,7 +319,7 @@ private fun DiscoverySuiteSearchBar(
                             add(
                                 AppManagementMenuAction(
                                     text = if (suite.id == selectedSuiteId) {
-                                        "当前 ${suite.displayName}"
+                                        appCtx.getString(R.string.ui_main_current, suite.displayName)
                                     } else {
                                         suite.displayName
                                     },

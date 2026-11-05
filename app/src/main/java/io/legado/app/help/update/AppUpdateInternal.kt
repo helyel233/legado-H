@@ -8,6 +8,8 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AppUpdateInternal {
 
@@ -46,7 +48,7 @@ object AppUpdateInternal {
         val downloadUrl = resolveUrl(baseUrl, metadata.downloadUrl, "download")
         val updateInfo = AppUpdate.UpdateInfo(
             tagName = tagName,
-            updateLog = metadata.updateLog?.takeIf { it.isNotBlank() } ?: "内测版更新",
+            updateLog = metadata.updateLog?.takeIf { it.isNotBlank() } ?: appCtx.getString(R.string.ui_main_beta_updates),
             downloadUrl = downloadUrl,
             fileName = fileName,
             versionCode = metadata.versionCode ?: AppUpdate.versionCodeFromFileName(fileName),

@@ -1,23 +1,55 @@
 package io.legado.app.help.http.dns
 
+import androidx.annotation.StringRes
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import io.legado.app.R
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.IDN
 import java.net.InetAddress
 import java.util.Locale
 
-enum class DnsScope(val key: String, val title: String) {
-    READING("reading", "书源、搜索与正文"),
-    IMAGE("image", "封面、漫画与正文图片"),
-    AI("ai", "AI、MCP 与 AI 工具"),
-    MEDIA("media", "HTTP 朗读与音视频"),
-    WEBSOCKET("websocket", "脚本 WebSocket"),
-    SYNC("sync", "WebDAV 与云同步"),
-    IMPORT("import", "在线导入"),
-    RELAY("relay", "远程分享与中继"),
-    OTHER("other", "其它应用请求")
+/**
+ * 校验失败的原因。
+ *
+ * 数据层不持有任何用户可见文案：这里只给原因，文案由设置页从 `dns_validation_*`
+ * 取。否则同一句中文会同时出现在数据层（异常 message）和字符串资源里，
+ * 英文环境下从异常冒出来的那一份永远是中文。
+ */
+enum class DnsConfigError {
+    INVALID_DOMAIN,
+    INVALID_ENDPOINT,
+    DNS_QUERY_PARAMETER,
+    TOO_MANY_BOOTSTRAP,
+    INVALID_BOOTSTRAP,
+    TOO_MANY_RULES,
+    DUPLICATE_RULES,
+    TOO_LARGE,
+    UNSUPPORTED_VERSION,
+    IP_NOT_ALLOWED,
+    HOSTS_TOO_LARGE,
+    HOSTS_NEED_STRING,
+    HOSTS_BAD_MAPPING,
+    HOSTS_DUPLICATE,
+    HOSTS_INVALID
+}
+
+class DnsConfigException(val error: DnsConfigError) : IllegalArgumentException(error.name)
+
+/**
+ * 分流范围。[titleRes] 而不是标题字符串，同 [DnsConfigError]：这一层不知道界面用哪种语言。
+ */
+enum class DnsScope(val key: String, @param:StringRes val titleRes: Int) {
+    READING("reading", R.string.dns_scope_reading),
+    IMAGE("image", R.string.dns_scope_image),
+    AI("ai", R.string.dns_scope_ai),
+    MEDIA("media", R.string.dns_scope_media),
+    WEBSOCKET("websocket", R.string.dns_scope_websocket),
+    SYNC("sync", R.string.dns_scope_sync),
+    IMPORT("import", R.string.dns_scope_import),
+    RELAY("relay", R.string.dns_scope_relay),
+    OTHER("other", R.string.dns_scope_other)
 }
 
 data class DnsDomainRule(val pattern: String, val doh: Boolean) {
@@ -28,18 +60,25 @@ data class DnsDomainRule(val pattern: String, val doh: Boolean) {
     fun normalized(): DnsDomainRule {
         val wildcard = pattern.trim().startsWith("*.")
         val value = DnsNames.host(pattern.trim().removePrefix("*."))
-        require(value != null && DnsNames.literal(value) == null) { "请输入域名，例如 example.com 或 *.example.com" }
+        if (value == null || DnsNames.literal(value) != null) {
+            throw DnsConfigException(DnsConfigError.INVALID_DOMAIN)
+        }
         return copy(pattern = if (wildcard) "*.$value" else value)
     }
 }
 
-data class DohProvider(val id: String, val name: String, val url: String, val bootstrap: List<String>) {
+data class DohProvider(
+    val id: String,
+    @param:StringRes val nameRes: Int,
+    val url: String,
+    val bootstrap: List<String>
+) {
     companion object {
         val presets = listOf(
-            DohProvider("alidns", "阿里 DNS", "https://dns.alidns.com/dns-query", listOf("223.5.5.5", "223.6.6.6")),
-            DohProvider("dnspod", "腾讯 DNSPod", "https://doh.pub/dns-query", listOf("1.12.12.12", "120.53.53.53")),
-            DohProvider("cloudflare", "Cloudflare", "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
-            DohProvider("google", "Google", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4"))
+            DohProvider("alidns", R.string.dns_provider_alidns, "https://dns.alidns.com/dns-query", listOf("223.5.5.5", "223.6.6.6")),
+            DohProvider("dnspod", R.string.dns_provider_dnspod, "https://doh.pub/dns-query", listOf("1.12.12.12", "120.53.53.53")),
+            DohProvider("cloudflare", R.string.dns_provider_cloudflare, "https://cloudflare-dns.com/dns-query", listOf("1.1.1.1", "1.0.0.1")),
+            DohProvider("google", R.string.dns_provider_google, "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4"))
         )
     }
 }
@@ -71,19 +110,29 @@ data class NetworkDnsConfig(
 
     fun validated(): NetworkDnsConfig {
         val url = endpoint.trim().toHttpUrlOrNull()
-        require(url != null && url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment == null) {
-            "DoH 地址必须是 HTTPS 地址，不能包含用户名、密码或片段"
+        if (url == null || !url.isHttps || url.username.isNotEmpty() ||
+            url.password.isNotEmpty() || url.fragment != null
+        ) {
+            throw DnsConfigException(DnsConfigError.INVALID_ENDPOINT)
         }
-        require("dns" !in url.queryParameterNames) { "DoH 地址不能预填 dns 查询参数" }
-        require(bootstrap.size <= 8) { "启动 IP 最多 8 个" }
+        if ("dns" in url.queryParameterNames) {
+            throw DnsConfigException(DnsConfigError.DNS_QUERY_PARAMETER)
+        }
+        if (bootstrap.size > MAX_BOOTSTRAP) {
+            throw DnsConfigException(DnsConfigError.TOO_MANY_BOOTSTRAP)
+        }
         val ips = bootstrap.map { value ->
             val address = DnsNames.literal(value.trim())
-            require(address != null) { "启动地址只接受 IPv4 或 IPv6，不接受域名" }
-            address.hostAddress ?: error("无效启动 IP")
+                ?: throw DnsConfigException(DnsConfigError.INVALID_BOOTSTRAP)
+            address.hostAddress ?: throw DnsConfigException(DnsConfigError.INVALID_BOOTSTRAP)
         }.distinct()
-        require(rules.size <= 128) { "域名规则最多 128 条" }
+        if (rules.size > MAX_RULES) {
+            throw DnsConfigException(DnsConfigError.TOO_MANY_RULES)
+        }
         val normalizedRules = rules.map { it.normalized() }
-        require(normalizedRules.distinctBy { it.pattern }.size == normalizedRules.size) { "域名规则重复" }
+        if (normalizedRules.distinctBy { it.pattern }.size != normalizedRules.size) {
+            throw DnsConfigException(DnsConfigError.DUPLICATE_RULES)
+        }
         return copy(endpoint = url.toString(), bootstrap = ips, rules = normalizedRules)
     }
 
@@ -102,11 +151,19 @@ data class NetworkDnsConfig(
     }.toString()
 
     companion object {
+        private const val MAX_BOOTSTRAP = 8
+        private const val MAX_RULES = 128
+        private const val MAX_ENCODED_LENGTH = 64 * 1024
+
         fun decode(raw: String?): NetworkDnsConfig {
             if (raw.isNullOrBlank()) return NetworkDnsConfig()
-            require(raw.length <= 64 * 1024) { "DNS 配置过大" }
+            if (raw.length > MAX_ENCODED_LENGTH) {
+                throw DnsConfigException(DnsConfigError.TOO_LARGE)
+            }
             val json = JsonParser.parseString(raw).asJsonObject
-            require(json.get("version")?.asInt == 1) { "不支持的 DNS 配置版本" }
+            if (json.get("version")?.asInt != 1) {
+                throw DnsConfigException(DnsConfigError.UNSUPPORTED_VERSION)
+            }
             val defaults = NetworkDnsConfig()
             return NetworkDnsConfig(
                 enabled = json.get("enabled")?.asBoolean ?: false,

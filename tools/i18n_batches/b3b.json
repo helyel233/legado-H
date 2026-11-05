@@ -1,0 +1,82 @@
+{
+  "prefix": "bchar_label",
+  "resource": "strings_book_character_labels.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/book/character/compose/BookCharacterComposeScreens.kt"
+  ],
+  "entries": [
+    {
+      "zh": "主角",
+      "en": "Protagonist",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:364: \"主角\",",
+        "BookCharacterComposeScreens.kt:1051: BookCharacter.ROLE_MAIN to \"主角\""
+      ],
+      "key": "bchar_label_protagonist"
+    },
+    {
+      "zh": "重要角色",
+      "en": "Important character",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:369: \"重要角色\",",
+        "BookCharacterComposeScreens.kt:1050: BookCharacter.ROLE_IMPORTANT to \"重要角色\","
+      ],
+      "key": "bchar_label_important_character"
+    },
+    {
+      "zh": "普通角色",
+      "en": "Minor character",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:374: \"普通角色\",",
+        "BookCharacterComposeScreens.kt:1049: BookCharacter.ROLE_NORMAL to \"普通角色\","
+      ],
+      "key": "bchar_label_minor_character"
+    },
+    {
+      "zh": "未知",
+      "en": "Unknown",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:540: .filter { it.isNotBlank() && it != \"未知\" }",
+        "BookCharacterComposeScreens.kt:1002: BookCharacter.GENDER_UNKNOWN to \"未知\","
+      ],
+      "key": "unknown"
+    },
+    {
+      "zh": "男",
+      "en": "Male",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1003: BookCharacter.GENDER_MALE to \"男\","
+      ],
+      "key": "bchar_label_male"
+    },
+    {
+      "zh": "女",
+      "en": "Female",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1004: BookCharacter.GENDER_FEMALE to \"女\""
+      ],
+      "key": "bchar_label_female"
+    },
+    {
+      "zh": "属性：${relation.relationType.ifBlank { ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1871: Text(\"属性：${relation.relationType.ifBlank { \"未填写\" }}\")"
+      ]
+    }
+  ]
+}

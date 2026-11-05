@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
 
 /**
  * What the content loader needs from the reader.
@@ -185,7 +186,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             val book = host.book
             if (book == null) {
                 logContentLoadSkip("book_null", index)
-                host.showCurrentChapterLoadError(index, "书籍数据为空")
+                host.showCurrentChapterLoadError(index, appCtx.getString(R.string.misc_book_data_empty))
                 return@async
             }
             host.refreshParagraphRuleLayoutKey()
@@ -193,7 +194,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index)
             if (chapter == null) {
                 logContentLoadSkip("chapter_null", index, book)
-                host.showCurrentChapterLoadError(index, "未找到当前章节，可能目录未加载成功")
+                host.showCurrentChapterLoadError(index, appCtx.getString(R.string.misc_current_chapter_not_found_table))
                 return@async
             }
             val generation = host.chapterLoads.begin(index, requestedLayoutKey)
@@ -331,11 +332,11 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             )
         } else {
             logContentLoadSkip("book_source_null", chapter.index, book)
-            val msg = if (book.isLocal) "无内容" else "没有书源"
+            val msg = if (book.isLocal) appCtx.getString(R.string.misc_no_content) else appCtx.getString(R.string.misc_no_book_source)
             contentLoadFinish(
                 book,
                 chapter,
-                "加载正文失败\n$msg",
+                appCtx.getString(R.string.misc_failed_load_content_n_2, msg),
                 upContent = upContent,
                 resetPageOffset = resetPageOffset,
                 requestGeneration = requestGeneration,
@@ -355,8 +356,8 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             return CacheBook.getOrCreate(bookSource, book).downloadAwait(chapter)
         } else {
             logContentLoadSkip("book_source_null_await", chapter.index, book)
-            val msg = if (book.isLocal) "无内容" else "没有书源"
-            return "加载正文失败\n$msg"
+            val msg = if (book.isLocal) appCtx.getString(R.string.misc_no_content) else appCtx.getString(R.string.misc_no_book_source)
+            return appCtx.getString(R.string.misc_failed_load_content_n_2, msg)
         }
     }
 

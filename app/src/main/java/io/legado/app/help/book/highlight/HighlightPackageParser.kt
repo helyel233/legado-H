@@ -18,6 +18,8 @@ import java.security.MessageDigest
 import java.util.Base64
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** RED01 contains gzip JSON; RED10 describes its payload encoding in a JSON header. */
 object HighlightPackageParser {
@@ -27,8 +29,8 @@ object HighlightPackageParser {
     const val MAX_RULES = 2048
 
     class EncryptedPackageException : IllegalArgumentException(
-        "此 .red 文件标明使用 Reeden 的 AES-256-GCM 加密封装，当前尚不支持读取。" +
-            "这不代表你或规则作者设置了密码。"
+        appCtx.getString(R.string.misc_this_red_file_uses_reeden) +
+            appCtx.getString(R.string.misc_this_does_not_mean_you)
     )
 
     fun readLimited(input: InputStream, limit: Int): ByteArray {
@@ -65,11 +67,11 @@ object HighlightPackageParser {
                 16 -> {
                     val (metadata, payloadOffset) = containerHeader(bytes)
                     require(metadata.string("resourceType") == "highlightRule") {
-                        "不是高亮规则文件（替换规则、主题和书籍请从对应入口导入）"
+                        appCtx.getString(R.string.misc_not_highlight_rule_file_import)
                     }
                     if (metadata.string("algorithm").equals("aes-256-gcm-manifest", true)) {
                         require(metadata.integer("manifestLength", -1) in 16..(bytes.size - payloadOffset)) {
-                            "RED 文件内容不完整或长度无效"
+                            appCtx.getString(R.string.misc_red_file_content_incomplete_or)
                         }
                         val nonce = runCatching { Base64.getDecoder().decode(metadata.string("manifestNonce")) }.getOrNull()
                         require(nonce?.size == 12) { "RED 文件的加密参数不完整或无效" }
@@ -135,13 +137,13 @@ object HighlightPackageParser {
                     require(decoded.size <= MAX_IMAGE_BYTES && imageMime(decoded) != null) { "不支持的背景图片" }
                     decoded
                 }.getOrElse {
-                    warning = "背景图片未导入：" + (it.message ?: "格式错误")
+                    warning = appCtx.getString(R.string.misc_background_image_not_imported) + (it.message ?: appCtx.getString(R.string.misc_invalid_format))
                     null
                 } else null
                 val asset = image?.let(::sha256)
                 if (image != null && asset != null && !assets.containsKey(asset)) {
                     require(assets.values.sumOf { it.size.toLong() } + image.size <= 32L * 1024 * 1024) {
-                        "背景图片总量过大"
+                        appCtx.getString(R.string.misc_background_images_exceed_total_size)
                     }
                     assets[asset] = image
                 }
@@ -169,15 +171,15 @@ object HighlightPackageParser {
                 )
                 val issues = listOfNotNull(
                     warning.takeIf { it.isNotBlank() },
-                    HighlightMatcher.validationError(rule)?.let { "表达式不可用：" + it },
-                    if (css.contains("reeden-font:", true)) "未附带 Reeden 字体，使用当前阅读字体" else null,
-                    if (!rule.global && bookUrl == null) "仅限单书，需在管理页绑定书籍" else null
+                    HighlightMatcher.validationError(rule)?.let { appCtx.getString(R.string.misc_invalid_expression) + it },
+                    if (css.contains("reeden-font:", true)) appCtx.getString(R.string.ui_book_no_reeden_font_attached_using) else null,
+                    if (!rule.global && bookUrl == null) appCtx.getString(R.string.misc_single_book_only_bind_book) else null
                 )
                 rule.copy(importWarning = issues.joinToString("；")).also {
                     if (issues.isNotEmpty()) warnings.add(it.displayName() + "：" + it.importWarning)
                 }
             }.getOrElse {
-                warnings.add("第 " + (index + 1) + " 条未导入：" + (it.message ?: "格式错误"))
+                warnings.add(appCtx.getString(R.string.i18n_final_item_not_imported, index + 1, it.message ?: appCtx.getString(R.string.misc_invalid_format)))
                 null
             }
         }.sortedBy { it.sortOrder }
@@ -203,7 +205,7 @@ object HighlightPackageParser {
                 .name("data").beginArray()
             rules.forEach { rule ->
                 require(rule.keyword.length <= 16384 && rule.styleCssText.length <= 32768) {
-                    "${rule.displayName()}：表达式或样式过长，请修改后再导出"
+                    appCtx.getString(R.string.misc_expression_or_style_too_long, rule.displayName())
                 }
                 val obj = gson.toJsonTree(rule).asJsonObject
                 listOf("id", "bookUrl", "sourceBookId", "asset", "imageWidth", "imageHeight", "importWarning")
@@ -211,10 +213,10 @@ object HighlightPackageParser {
                 rule.sourceBookId?.let { obj.addProperty("bookId", it) }
                 rule.asset?.let { id ->
                     val bytes = requireNotNull(asset(id)) {
-                        "${rule.displayName()}：背景图片缺失，请重新导入原规则后再导出"
+                        appCtx.getString(R.string.misc_background_image_missing_re_import, rule.displayName())
                     }
                     require(bytes.size <= MAX_IMAGE_BYTES && imageMime(bytes) != null && sha256(bytes) == id) {
-                        "${rule.displayName()}：背景图片损坏或过大，请重新导入原规则后再导出"
+                        appCtx.getString(R.string.misc_background_image_corrupt_or_too, rule.displayName())
                     }
                     imageDimensions(bytes)
                     if (seenAssets.add(id)) assetBytes += bytes.size
@@ -270,7 +272,7 @@ object HighlightPackageParser {
         val width = ByteBuffer.wrap(bytes, 16, 4).int
         val height = ByteBuffer.wrap(bytes, 20, 4).int
         require(width in 1..16384 && height in 1..16384 && width.toLong() * height <= 32_000_000) {
-            "背景图片尺寸过大"
+            appCtx.getString(R.string.misc_background_image_dimensions_too_large)
         }
         return width to height
     }

@@ -24,6 +24,7 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import splitties.views.onClick
 import splitties.views.onLongClick
+import splitties.init.appCtx
 
 
 class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, RssSourceDebugModel>() {
@@ -93,7 +94,7 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
             override fun onQueryTextSubmit(query: String?): Boolean {
                 searchView.clearFocus()
                 openOrCloseHelp(false)
-                startSearch(query ?: "我的")
+                startSearch(query ?: appCtx.getString(R.string.my))
                 return true
             }
 
@@ -134,7 +135,7 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
             sortKinds?.firstOrNull()?.let {
                 binding.textFl.text = "${it.first}::${it.second}"
                 if (it.first.startsWith("ERROR:")) {
-                    adapter.addItem("获取发现出错\n${it.second}")
+                    adapter.addItem(appCtx.getString(R.string.ui_main_failed_load_discover_n, it.second))
                     openOrCloseHelp(false)
                     searchView.clearFocus()
                     return@launch
@@ -143,7 +144,7 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
             @Suppress("USELESS_ELVIS")
             sortKinds?.map { it.first ?: "" }?.let { sortKindTitles ->
                 binding.textFl.onLongClick {
-                    selector("选择分类", sortKindTitles) { _, index ->
+                    selector(appCtx.getString(R.string.homepage_kind_select_title), sortKindTitles) { _, index ->
                         val sort = sortKinds[index]
                         binding.textFl.text = "${sort.first}::${sort.second}"
                         searchView.setQuery(binding.textFl.text, true)
@@ -168,7 +169,7 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
         viewModel.startDebug(key, {
             binding.rotateLoading.visible()
         }, {
-            toastOnUi("未获取到书源")
+            toastOnUi(appCtx.getString(R.string.ui_main_no_source_obtained))
         })
     }
 }

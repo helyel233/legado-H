@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_state_analyzing_segment">Analyzing segment %1$s/%2$s</string>
+    <string name="ai_state_ai_task_progress">AI task in progress</string>
+    <string name="ai_state_ask_ai_reading_page">Ask AI on reading page</string>
+    <string name="ai_state_assigning_roles">Assigning roles</string>
+    <string name="ai_state_processing_smart_audio">Processing smart audio</string>
+    <string name="ai_state_sending_book_content_disabled_ai">Sending book content is disabled in AI settings; %1$s is unavailable</string>
+    <string name="ai_state_needs_send_book_content_allow">%1$s needs to send book content. Allow it in AI settings first.</string>
+    <string name="ai_state_cancelled_you_can_change_permission">Cancelled. You can change the permission in AI settings.</string>
+    <string name="ai_state_ai_conversation">AI conversation</string>
+    <string name="ai_state_user_preferences">User preferences</string>
+    <string name="ai_state_chapter_content_empty">Chapter content is empty</string>
+    <string name="ai_state_no_multi_role_model_configured">No multi-role model configured</string>
+    <string name="ai_state_this_chapter_has_no_editable">This chapter has no editable assignment cache</string>
+    <string name="ai_state_matching_segment_not_found">Matching segment not found</string>
+    <string name="ai_state_segment_assignments_updated">Segment assignments updated</string>
+    <string name="ai_state_multi_role_assignment_failed">Multi-role assignment failed</string>
+    <string name="ai_state_multi_role_disabled">Multi-role is disabled</string>
+    <string name="ai_state_no_multi_role_model_configured_2">No multi-role model configured</string>
+    <string name="ai_state_multi_role_model_provider_unavailable">The multi-role model provider is unavailable</string>
+    <string name="ai_state_book_empty">Book is empty</string>
+    <string name="ai_state_chapter_empty">Chapter is empty</string>
+    <string name="ai_state_no_readable_paragraphs_this_chapter">No readable paragraphs in this chapter</string>
+    <string name="ai_state_roles_already_assigned_this_chapter">Roles already assigned for this chapter</string>
+    <string name="ai_state_assigning_roles_2">Assigning roles</string>
+    <string name="ai_state_ai_role_assignment_failed_repeatedly">AI role assignment failed repeatedly; please reassign this chapter</string>
+    <string name="ai_state_ai_role_assignment_failed_repeatedly_2">AI role assignment failed repeatedly</string>
+    <string name="ai_state_preprocessed_segments_locally">Preprocessed %1$s segments locally</string>
+    <string name="ai_state_assigned_segments_confirmed">%1$s assigned segments confirmed</string>
+    <string name="ai_state_ai_returned_no_valid_role">AI returned no valid role segments; default assignment used</string>
+    <string name="ai_state_ai_did_not_confirm_every">AI did not confirm every uncertain role segment; please reassign this chapter</string>
+    <string name="ai_state_ai_returned_no_valid_role_2">AI returned no valid role segments; please reassign this chapter</string>
+    <string name="ai_state_role_assignment_complete">Role assignment complete</string>
+    <string name="ai_state_ai_role_assignment_failed_please">AI role assignment failed; please reassign this chapter</string>
+    <string name="ai_state_timed_out_waiting_multi_role">Timed out waiting for multi-role assignment</string>
+    <string name="ai_state_role_assignment_failed">Role assignment failed</string>
+    <string name="ai_state_segments_confirmed">%1$s segments confirmed</string>
+    <string name="ai_state_requests">%1$s requests</string>
+    <string name="ai_state_ai_configuration_or_this_input">The AI configuration or this input exceeds the context limit even after compression. Reduce the system prompt, Skills, tools or the input.</string>
+    <string name="ai_state_ai_request_timed_out_switching">AI request timed out; switching to a fallback model</string>
+    <string name="ai_state_ai_request_failed_retrying">AI request failed; retrying %1$s/%2$s</string>
+</resources>

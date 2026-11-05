@@ -58,6 +58,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.views.bottomPadding
 import kotlin.text.isNotEmpty
+import splitties.init.appCtx
 
 class RssSourceEditActivity :
     VMBaseActivity<ActivityRssSourceEditBinding, RssSourceEditViewModel>(),
@@ -393,7 +394,7 @@ class RssSourceEditActivity :
                 EditEntity(
                     "shouldOverrideUrlLoading",
                     rs.shouldOverrideUrlLoading,
-                    "url跳转拦截(js, 返回true拦截,js变量url,可以通过js打开url,比如调用阅读搜索,添加书架等,简化规则写法,不用webView js注入)"
+                    appCtx.getString(R.string.ui_main_url_redirect_interception_js_return)
                 )
             )
         }
@@ -485,7 +486,7 @@ class RssSourceEditActivity :
         viewModel.save(getRssSource()) { source ->
             lifecycleScope.launch {
                 val comment =
-                    source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")
+                    source.getDisplayVariableComment(appCtx.getString(R.string.ui_main_source_variables_can_be_read))
                 val variable = withContext(Dispatchers.IO) { source.getVariable() }
                 showDialogFragment(
                     VariableDialog(
@@ -505,11 +506,11 @@ class RssSourceEditActivity :
 
     override fun helpActions(): List<SelectItem<String>> {
         return arrayListOf(
-            SelectItem("插入URL参数", "urlOption"),
-            SelectItem("订阅源教程", "ruleHelp"),
-            SelectItem("js教程", "jsHelp"),
-            SelectItem("正则教程", "regexHelp"),
-            SelectItem("选择文件", "selectFile"),
+            SelectItem(appCtx.getString(R.string.ui_main_insert_url_parameter), "urlOption"),
+            SelectItem(appCtx.getString(R.string.ui_main_subscription_source_guide), "ruleHelp"),
+            SelectItem(appCtx.getString(R.string.ui_main_js_guide), "jsHelp"),
+            SelectItem(appCtx.getString(R.string.ui_main_regex_guide), "regexHelp"),
+            SelectItem(appCtx.getString(R.string.select_file), "selectFile"),
         )
     }
 

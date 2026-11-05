@@ -27,6 +27,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
+import io.legado.app.R
 
 class ContentProcessor private constructor(
     private val bookName: String,
@@ -195,7 +196,7 @@ class ContentProcessor private constructor(
             }
         }
         AppLog.put("普通正文替换净化: 规则 ${rule.name} 替换出错，保留替换前内容", error)
-        appCtx.toastOnUi("替换净化: 规则 ${rule.name} 替换出错")
+        appCtx.toastOnUi(appCtx.getString(R.string.i18n_final_replace_purify_error, rule.name))
     }
 
     fun getContent(
@@ -262,7 +263,7 @@ class ContentProcessor private constructor(
                         2 -> mContent = ChineseUtils.s2t(mContent)
                     }
                 } catch (_: Exception) {
-                    appCtx.toastOnUi("简繁转换出错")
+                    appCtx.toastOnUi(appCtx.getString(R.string.i18n_final_cn_convert_error))
                 }
             }
             val useHtmlMap = mutableMapOf<String, String>()
@@ -307,7 +308,7 @@ class ContentProcessor private constructor(
                     } catch (_: CancellationException) {
                     } catch (e: Exception) {
                         AppLog.put("替换净化: 规则 ${item.name}替换出错.\n${mContent}", e)
-                        appCtx.toastOnUi("替换净化: 规则 ${item.name}替换出错")
+                        appCtx.toastOnUi(appCtx.getString(R.string.i18n_final_replace_purify_error, item.name))
                     }
                 }
                 mContent = protectedContent.restore(mContent)

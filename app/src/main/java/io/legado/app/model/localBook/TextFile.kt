@@ -24,6 +24,8 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import kotlin.math.min
+import io.legado.app.R
+import splitties.init.appCtx
 
 class TextFile(private var book: Book) {
 
@@ -345,7 +347,7 @@ class TextFile(private var book: Book) {
                         if (toc.isEmpty()) { //如果当前没有章节，那么就是序章
                             //加入简介
                             if (chapterContent.isNotBlank()) {
-                                val title = replacement("前言", jsStr, toc)
+                                val title = replacement(appCtx.getString(R.string.misc_preface), jsStr, toc)
                                 if (title.isNotEmpty()) {
                                     //如果js把"前言"处理成空了，那么就不要前言,并且前言内容会全部放到简介里面去
                                     val qyChapter = BookChapter()
@@ -557,7 +559,7 @@ class TextFile(private var book: Book) {
                         bookWordCount += content.length
                         lastChapterWordCount = content.length
                         val chapter = BookChapter()
-                        chapter.title = "第${blockPos}章($chapterPos)"
+                        chapter.title = appCtx.getString(R.string.misc_chapter_2, blockPos, chapterPos)
                         chapter.start = toc.lastOrNull()?.end ?: curOffset
                         chapter.end = chapter.start!! + end - chapterOffset
                         chapter.wordCount = StringUtils.wordCountFormat(content.length)
@@ -588,7 +590,7 @@ class TextFile(private var book: Book) {
             bookWordCount += content.length
             if (bufferStart > 100 || toc.isEmpty()) {
                 val chapter = BookChapter()
-                chapter.title = "第${blockPos}章(${chapterPos})"
+                chapter.title = appCtx.getString(R.string.misc_chapter_3, blockPos, chapterPos)
                 chapter.start = toc.lastOrNull()?.end ?: curOffset
                 chapter.end = chapter.start!! + bufferStart
                 chapter.wordCount = StringUtils.wordCountFormat(content.length)

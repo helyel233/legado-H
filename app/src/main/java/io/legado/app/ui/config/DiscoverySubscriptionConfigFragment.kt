@@ -5,12 +5,10 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.config.compose.ComposeSettingFragment
-import io.legado.app.ui.config.compose.SettingActionSpec
 import io.legado.app.ui.config.compose.SettingChoiceOption
 import io.legado.app.ui.config.compose.SettingChoiceSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
-import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.postEvent
 
 class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
@@ -24,11 +22,11 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
             titleRes = titleRes,
             sections = listOf(
                 SettingSectionSpec(
-                    title = getString(R.string.discovery_settings_title),
+                    title = str(R.string.discovery_settings_title),
                     items = listOf(
                         SettingChoiceSpec(
                             key = KEY_DISCOVERY_MODE,
-                            title = getString(R.string.modern_discovery_page),
+                            title = str(R.string.modern_discovery_page),
                             options = pageModeOptions(
                                 entriesRes = R.array.discovery_page_mode_entries,
                                 valuesRes = R.array.discovery_page_mode_values
@@ -47,22 +45,15 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
                                 PreferKey.modernDiscoveryPage,
                                 KEY_SEARCH_JUMP_DISCOVERY_MODE
                             )
-                        ),
-                        SettingActionSpec(
-                            key = PreferKey.discoveryPageLayout,
-                            title = getString(R.string.discovery_page_layout),
-                            summary = discoveryLayoutSummary(),
-                            visible = discoveryMode == AppConfig.DISCOVERY_PAGE_MODE_MODERN,
-                            onClick = ::showDiscoveryLayoutDialog
                         )
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.subscription_settings_title),
+                    title = str(R.string.subscription_settings_title),
                     items = listOf(
                         SettingChoiceSpec(
                             key = KEY_RSS_MODE,
-                            title = getString(R.string.modern_rss_page),
+                            title = str(R.string.modern_rss_page),
                             options = pageModeOptions(
                                 entriesRes = R.array.rss_page_mode_entries,
                                 valuesRes = R.array.page_mode_values
@@ -115,37 +106,7 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
         when (key) {
             PreferKey.discoveryPageMode,
             PreferKey.modernDiscoveryPage,
-            PreferKey.modernRssPage,
-            PreferKey.discoveryPageLayout -> postEvent(EventBus.NOTIFY_MAIN, false)
-        }
-    }
-
-    private fun showDiscoveryLayoutDialog() {
-        showComposeChoiceListDialog(
-            title = getString(R.string.discovery_page_layout),
-            labels = DISCOVERY_LAYOUT_VALUES.map(::discoveryLayoutLabel),
-            selectedIndex = DISCOVERY_LAYOUT_VALUES.indexOf(AppConfig.discoveryPageLayout),
-            negativeText = getString(R.string.cancel),
-            onSelected = { index ->
-                val value = DISCOVERY_LAYOUT_VALUES.getOrNull(index) ?: return@showComposeChoiceListDialog
-                AppConfig.discoveryPageLayout = value
-                refreshSettings()
-            }
-        )
-    }
-
-    private fun discoveryLayoutSummary(): String {
-        return getString(
-            R.string.discovery_page_layout_summary,
-            discoveryLayoutLabel(AppConfig.discoveryPageLayout)
-        )
-    }
-
-    private fun discoveryLayoutLabel(value: Int): String {
-        return when (value) {
-            2 -> getString(R.string.discovery_page_layout_waterfall)
-            3 -> getString(R.string.discovery_page_layout_grid)
-            else -> getString(R.string.discovery_page_layout_list)
+            PreferKey.modernRssPage -> postEvent(EventBus.NOTIFY_MAIN, false)
         }
     }
 
@@ -153,8 +114,8 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
         entriesRes: Int,
         valuesRes: Int
     ): List<SettingChoiceOption> {
-        val entries = resources.getStringArray(entriesRes)
-        val values = resources.getStringArray(valuesRes)
+        val entries = ctx.resources.getStringArray(entriesRes)
+        val values = ctx.resources.getStringArray(valuesRes)
         return values.mapIndexed { index, value ->
             SettingChoiceOption(
                 value = value,
@@ -183,6 +144,5 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
         private const val KEY_SEARCH_JUMP_MODERN_RSS_PAGE = "search_jump_modernRssPage"
         private const val KEY_SEARCH_JUMP_DISCOVERY_MODE = "search_jump_modernDiscoveryMode"
         private const val KEY_SEARCH_JUMP_RSS_MODE = "search_jump_modernRssMode"
-        private val DISCOVERY_LAYOUT_VALUES = listOf(1, 2, 3)
     }
 }

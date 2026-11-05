@@ -136,6 +136,7 @@ import io.legado.app.help.webView.WebViewHtmlStore
 import io.legado.app.utils.configureOfflineResourceLoading
 import io.legado.app.utils.gone
 import kotlinx.coroutines.withTimeout
+import splitties.init.appCtx
 
 class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view), WebJsExtensions.Callback {
 
@@ -1648,9 +1649,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }.onError {
             if (!ownsPage(lease, page)) return@onError
             ACache.get().remove(imagePathKey)
-            context.toastOnUi("保存图片失败:${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_main_failed_save_image, it.localizedMessage))
         }.onSuccess {
-            if (ownsPage(lease, page)) context.toastOnUi("保存成功")
+            if (ownsPage(lease, page)) context.toastOnUi(appCtx.getString(R.string.ra_cfg_saved))
         }
     }
 

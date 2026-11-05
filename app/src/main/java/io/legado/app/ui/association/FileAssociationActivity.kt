@@ -139,7 +139,7 @@ class FileAssociationActivity :
                     .onGranted {
                         viewModel.dispatchIntent(data)
                     }.onDenied {
-                        toastOnUi("请求存储权限失败。")
+                        toastOnUi(appCtx.getString(R.string.ui_main_failed_request_storage_permission))
                         handler.postDelayed(2000) {
                             finish()
                         }
@@ -224,7 +224,7 @@ class FileAssociationActivity :
                             DocumentFile.fromTreeUri(this@FileAssociationActivity, treeUri)
                         if (!treeDoc!!.checkWrite()) {
                             throw InvalidBooksDirException(
-                                "请重新设置书籍保存位置\nPermission Denial"
+                                appCtx.getString(R.string.ui_main_please_set_book_storage_location)
                             )
                         }
                         readUri(uri) { fileDoc, inputStream ->
@@ -234,7 +234,7 @@ class FileAssociationActivity :
                                 if (doc == null) {
                                     doc = treeDoc.createFile(FileUtils.getMimeType(name), name)
                                         ?: throw InvalidBooksDirException(
-                                            "请重新设置书籍保存位置\nPermission Denial"
+                                            appCtx.getString(R.string.ui_main_please_set_book_storage_location)
                                         )
                                 }
                                 contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
@@ -248,7 +248,7 @@ class FileAssociationActivity :
                         val treeFile = File(treeUri.path ?: treeUri.toString())
                         if (!treeFile.checkWrite()) {
                             throw InvalidBooksDirException(
-                                "请重新设置书籍保存位置\nPermission Denial"
+                                appCtx.getString(R.string.ui_main_please_set_book_storage_location)
                             )
                         }
                         readUri(uri) { fileDoc, inputStream ->

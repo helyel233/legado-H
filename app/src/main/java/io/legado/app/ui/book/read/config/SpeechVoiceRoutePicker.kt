@@ -46,6 +46,8 @@ import io.legado.app.lib.theme.composePanelRadius
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Composable
 fun SpeechVoiceRoutePickerDialog(
@@ -90,7 +92,7 @@ fun SpeechVoiceRoutePickerDialog(
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = onDismiss) {
-                            Text("关闭", color = colors.subText)
+                            Text(appCtx.getString(R.string.jf_convert_o), color = colors.subText)
                         }
                     }
                 }
@@ -121,7 +123,7 @@ fun SpeechVoiceRoutePickerDialog(
 fun speechRouteSummary(
     route: SpeechRoute,
     groups: List<SpeechVoiceEngineGroup>,
-    defaultText: String = "使用默认朗读引擎"
+    defaultText: String = appCtx.getString(R.string.ra_cfg_use_default_read_aloud_engine)
 ): String {
     if (!route.isConfigured) return defaultText
     val group = groups.firstOrNull {
@@ -135,8 +137,8 @@ fun speechRouteSummary(
     val parts = buildList {
         add(engineName ?: when (route.engineType) {
             SpeechRoute.ENGINE_HTTP -> "HTTP TTS"
-            SpeechRoute.ENGINE_SYSTEM -> "系统 TTS"
-            else -> "默认朗读"
+            SpeechRoute.ENGINE_SYSTEM -> appCtx.getString(R.string.system_tts)
+            else -> appCtx.getString(R.string.ra_cfg_default_read_aloud)
         })
         route.speakerName.takeIf { it.isNotBlank() }?.let(::add)
         route.emotionName.takeIf { it.isNotBlank() }?.let(::add)
@@ -169,7 +171,7 @@ private fun EnginePickerList(
                 .heightIn(min = 160.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("暂无朗读引擎", color = colors.subText, fontSize = 14.sp)
+            Text(appCtx.getString(R.string.ra_cfg_no_read_aloud_engines), color = colors.subText, fontSize = 14.sp)
         }
         return
     }
@@ -187,7 +189,7 @@ private fun EnginePickerList(
                 subtitle = group.subtitle,
                 selected = selected,
                 colors = colors,
-                trailing = "发言人",
+                trailing = appCtx.getString(R.string.ra_cfg_speaker),
                 onClick = { onGroupClick(group) }
             )
         }
@@ -230,7 +232,7 @@ private fun SpeakerPickerList(
                 .padding(bottom = 10.dp),
             singleLine = true,
             placeholder = {
-                Text("搜索发言人 / toneID / 情绪", color = colors.subText, fontSize = 13.sp)
+                Text(appCtx.getString(R.string.ra_cfg_search_speaker_toneid_emotion), color = colors.subText, fontSize = 13.sp)
             }
         )
         if (group.warning.isNotBlank()) {
@@ -250,7 +252,7 @@ private fun SpeakerPickerList(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 EmotionChip(
-                    text = "无情绪",
+                    text = appCtx.getString(R.string.ra_cfg_no_emotion),
                     selected = selectedEmotion == null,
                     colors = colors,
                     onClick = { onEmotionChange(null) }
@@ -280,7 +282,7 @@ private fun SpeakerPickerList(
                         .ifBlank { group.title },
                     selected = routeMatchesOption(currentRoute, option),
                     colors = colors,
-                    trailing = if (option.explicitSpeaker) "选择" else "默认",
+                    trailing = if (option.explicitSpeaker) appCtx.getString(R.string.ra_cfg_select) else appCtx.getString(R.string.text_default),
                     onClick = { onRouteSelected(option.toRoute(selectedEmotion)) }
                 )
             }
@@ -296,7 +298,7 @@ private fun SpeakerPickerList(
                 border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.28f))
             ) {
                 Text(
-                    text = "登录 / 刷新授权",
+                    text = appCtx.getString(R.string.ra_cfg_login_refresh_authorization),
                     color = colors.accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -355,7 +357,7 @@ private fun PickerRow(
                 }
             }
             Text(
-                text = if (selected) "当前" else trailing,
+                text = if (selected) appCtx.getString(R.string.default_version) else trailing,
                 color = if (selected) colors.accent else colors.subText,
                 fontSize = 12.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal

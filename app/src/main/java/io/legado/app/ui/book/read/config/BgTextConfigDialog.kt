@@ -252,7 +252,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = ReadBookConfig.durConfig.name.ifBlank { "文字" },
+                    text = ReadBookConfig.durConfig.name.ifBlank { appCtx.getString(R.string.text) },
                     color = style.secondaryText,
                     fontSize = 13.sp,
                     maxLines = 1,
@@ -329,9 +329,9 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             }
             ReaderSegmentedOptions(
                 options = listOf(
-                    ReaderOption("0", "关闭"),
-                    ReaderOption("1", "实线"),
-                    ReaderOption("2", "虚线")
+                    ReaderOption("0", appCtx.getString(R.string.jf_convert_o)),
+                    ReaderOption("1", appCtx.getString(R.string.ra_cfg_solid_line)),
+                    ReaderOption("2", appCtx.getString(R.string.ra_cfg_dashed_line))
                 ),
                 selectedValue = underlineMode.toString(),
                 style = style,
@@ -727,7 +727,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
     private fun restorePreset() {
         val defaultConfigs = DefaultData.readConfigs
         val layoutNames = defaultConfigs.map { it.name }
-        showComposeChoiceListDialog("选择预设布局", layoutNames) { i ->
+        showComposeChoiceListDialog(appCtx.getString(R.string.ra_cfg_choose_preset_layout), layoutNames) { i ->
             if (i >= 0) {
                 ReadBookConfig.durConfig = defaultConfigs[i].copy()
                 refreshTick++
@@ -800,7 +800,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             postReadConfigChanged(1, 2, 5)
             dismissAllowingStateLoss()
         } else {
-            toastOnUi("数量已是最少, 不能删除.")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_minimum_count_reached_cannot_delete))
         }
     }
 
@@ -855,11 +855,11 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                 }
             }
         }.onSuccess {
-            toastOnUi("导出成功, 文件名为 $exportFileName")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_export_succeeded, exportFileName))
         }.onError {
             it.printOnDebug()
             AppLog.put("导出失败:${it.localizedMessage}", it)
-            longToast("导出失败:${it.localizedMessage}")
+            longToast(appCtx.getString(R.string.ra_cfg_export_failed, it.localizedMessage))
         }
     }
 
@@ -878,7 +878,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
 
     private fun importNetConfigAlert() {
         showComposeTextInputDialog(
-            title = "输入地址",
+            title = appCtx.getString(R.string.advanced_title_input_url),
             onPositive = { url ->
                 if (url.isNotBlank()) {
                     importNetConfig(url)
@@ -904,7 +904,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             importConfig(uri.readBytes(requireContext()))
         }.onError {
             it.printOnDebug()
-            longToast("导入失败:${it.localizedMessage}")
+            longToast(appCtx.getString(R.string.ra_cfg_import_failed_2, it.localizedMessage))
         }
     }
 
@@ -915,10 +915,10 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
             ReadBookConfig.durConfig = it
             refreshTick++
             postReadConfigChanged(1, 2, 5)
-            toastOnUi("导入成功")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_import_succeeded))
         }.onError {
             it.printOnDebug()
-            longToast("导入失败:${it.localizedMessage}")
+            longToast(appCtx.getString(R.string.ra_cfg_import_failed_2, it.localizedMessage))
         }
     }
 
@@ -926,7 +926,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         if (uri.scheme?.lowercase() in listOf("http", "https")) {
             lifecycleScope.launch {
                 kotlin.runCatching {
-                    appCtx.toastOnUi("下载图片中...")
+                    appCtx.toastOnUi(appCtx.getString(R.string.welcome_toast_downloading))
                     val analyzeUrl = AnalyzeUrl(uri.toString(), dnsScope = DnsScope.IMAGE)
                     val url = analyzeUrl.urlNoQuery
                     var file = requireContext().externalFiles
@@ -957,7 +957,7 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
                     postReadConfigChanged(1)
                     refreshTick++
                 }.onSuccess {
-                    appCtx.toastOnUi("设定成功")
+                    appCtx.toastOnUi(appCtx.getString(R.string.welcome_toast_applied))
                 }.onFailure {
                     appCtx.toastOnUi(it.localizedMessage)
                 }

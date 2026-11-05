@@ -56,6 +56,7 @@ import splitties.systemservices.uiModeManager
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.system.exitProcess
+import splitties.init.appCtx
 
 inline fun <reified A : Activity> Context.startActivity(configIntent: Intent.() -> Unit = {}) {
     val intent = Intent(this, A::class.java)
@@ -400,7 +401,7 @@ private const val MAX_CLIP_TEXT_LENGTH = 64 * 1024
 
 fun Context.sendToClip(text: String) {
     val safeText = if (text.length > MAX_CLIP_TEXT_LENGTH) {
-        text.substring(0, MAX_CLIP_TEXT_LENGTH) + "\n…(内容过长，已截断)"
+        text.substring(0, MAX_CLIP_TEXT_LENGTH) + appCtx.getString(R.string.misc_n_content_truncated)
     } else {
         text
     }
@@ -410,7 +411,7 @@ fun Context.sendToClip(text: String) {
         longToastOnUi(R.string.copy_complete)
     }.onFailure {
         LogUtils.e("sendToClip", it.stackTraceToString())
-        longToastOnUi("复制失败：${it.message}")
+        longToastOnUi(appCtx.getString(R.string.misc_copy_failed, it.message))
     }
 }
 

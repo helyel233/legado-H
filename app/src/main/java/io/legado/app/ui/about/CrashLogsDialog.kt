@@ -61,6 +61,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileFilter
+import splitties.init.appCtx
 
 class CrashLogsDialog : ComposeDialogFragment() {
 
@@ -195,7 +196,7 @@ private fun CrashLogsContent(
                 // 崩溃日志以前只能"看"，拿不走。反馈问题时要的是能直接粘出去的文本，
                 // 所以这里给一个一键复制（环境信息 + 上次崩溃全文 + logcat 尾部）。
                 LegadoMiuixActionButton(
-                    text = "复制诊断信息",
+                    text = appCtx.getString(R.string.ui_main_copy_diagnostic_info),
                     palette = palette,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {

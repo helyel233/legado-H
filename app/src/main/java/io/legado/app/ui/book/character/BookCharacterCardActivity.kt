@@ -20,6 +20,8 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 class BookCharacterCardActivity : BaseActivity<ViewBinding>(
     fullScreen = false,
@@ -62,7 +64,7 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
 
     private fun load() {
         if (characterId <= 0L) {
-            toastOnUi("角色不存在")
+            toastOnUi(appCtx.getString(R.string.bchar_character_not_found))
             finish()
             return
         }
@@ -75,7 +77,7 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
             }
             val item = data.first
             if (item == null) {
-                toastOnUi("角色不存在")
+                toastOnUi(appCtx.getString(R.string.bchar_character_not_found))
                 finish()
                 return@launch
             }
@@ -96,7 +98,7 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
             }
             ReadAloudConfigChangeNotifier.notifySpeech()
             character = updated
-            toastOnUi("已更新角色配音")
+            toastOnUi(appCtx.getString(R.string.bchar_character_voice_updated))
         }
     }
 

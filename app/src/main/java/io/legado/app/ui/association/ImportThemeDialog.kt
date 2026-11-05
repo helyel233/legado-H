@@ -48,6 +48,7 @@ import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.ui.widget.dialog.WaitDialog
+import splitties.init.appCtx
 
 /**
  * 导入主题弹出窗口
@@ -192,9 +193,9 @@ class ImportThemeDialog() : ComposeDialogFragment() {
                                 val isChecked = selectStatus.getOrNull(index) ?: false
                                 val localSource = checkSources.getOrNull(index)
                                 val stateText = when {
-                                    localSource == null -> "新增"
-                                    localSource != item -> "更新"
-                                    else -> "已有"
+                                    localSource == null -> appCtx.getString(R.string.auto_task_import_new)
+                                    localSource != item -> appCtx.getString(R.string.auto_task_import_update)
+                                    else -> appCtx.getString(R.string.ui_main_added)
                                 }
                                 ImportSourceItemRow(
                                     name = item.themeName ?: "",

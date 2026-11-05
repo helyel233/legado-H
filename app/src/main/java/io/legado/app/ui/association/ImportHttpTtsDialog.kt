@@ -51,6 +51,7 @@ import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.showDialogFragment
+import splitties.init.appCtx
 
 /**
  * 导入HttpTTS弹出窗口
@@ -194,9 +195,9 @@ class ImportHttpTtsDialog() : ComposeDialogFragment(),
                                 val isChecked = selectStatus.getOrNull(index) ?: false
                                 val localSource = checkSources.getOrNull(index)
                                 val stateText = when {
-                                    localSource == null -> "新增"
-                                    item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
-                                    else -> "已有"
+                                    localSource == null -> appCtx.getString(R.string.auto_task_import_new)
+                                    item.lastUpdateTime > localSource.lastUpdateTime -> appCtx.getString(R.string.auto_task_import_update)
+                                    else -> appCtx.getString(R.string.ui_main_added)
                                 }
                                 ImportSourceItemRow(
                                     name = item.name ?: "",

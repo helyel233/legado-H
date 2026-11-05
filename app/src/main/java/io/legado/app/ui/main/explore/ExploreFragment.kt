@@ -153,6 +153,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+import splitties.init.appCtx
 
 /**
  * 发现页面
@@ -742,7 +743,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         val key = suiteSnapshotCacheKey(suiteId, signature)
         val raw = readBoundedDiscoveryCache(
             key = key,
-            cacheName = "套件发现缓存"
+            cacheName = appCtx.getString(R.string.ui_main_suite_discovery_cache)
         ) ?: return null
         val snapshot = GSON.fromJsonObject<DiscoverySuitePageSnapshot>(raw)
             .getOrNull()
@@ -772,7 +773,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 writeBoundedDiscoveryCache(
                     key = suiteSnapshotCacheKey(compactSnapshot.suiteId, compactSnapshot.signature),
                     value = value,
-                    cacheName = "套件发现缓存"
+                    cacheName = appCtx.getString(R.string.ui_main_suite_discovery_cache)
                 )
             }.onFailure {
                 AppLog.put("套件发现缓存写入失败", it)
@@ -1502,8 +1503,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             ),
             Triple(
                 DiscoverySuiteWidgetType.RankButtons.value,
-                "排行榜按钮",
-                "排行榜按钮"
+                appCtx.getString(R.string.ui_main_ranking_buttons),
+                appCtx.getString(R.string.ui_main_ranking_buttons)
             ),
             Triple(
                 DiscoverySuiteWidgetType.RankedList.value,
@@ -1616,7 +1617,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                             DiscoverySuiteWidgetType.RankedList.value
                         ) && cleanTargets.size !in 3..9
                     ) {
-                        requireContext().toastOnUi("排行榜控件需要选择 3-9 个 Tag")
+                        requireContext().toastOnUi(appCtx.getString(R.string.ui_main_ranking_widget_requires_3_9))
                         return@showComposeMultiChoiceDialog
                     }
                     val widget = baseWidget.copy(
@@ -1868,7 +1869,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         val key = modernDiscoverCacheKey(sourceUrl, tagUrl)
         val raw = readBoundedDiscoveryCache(
             key = key,
-            cacheName = "发现页面缓存"
+            cacheName = appCtx.getString(R.string.ui_main_discover_page_cache)
         ) ?: return null
         val cache = GSON.fromJsonObject<ModernDiscoverResultCache>(raw)
             .getOrNull()
@@ -1914,7 +1915,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 writeBoundedDiscoveryCache(
                     key = key,
                     value = value,
-                    cacheName = "发现页面缓存"
+                    cacheName = appCtx.getString(R.string.ui_main_discover_page_cache)
                 )
             }.onFailure {
                 AppLog.put("发现页面缓存写入失败", it)
@@ -2746,10 +2747,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun discoverDialogLabel(item: DiscoverTagItem): CharSequence {
         val prefix = when (item.role) {
             DiscoverTagItem.Role.UrlTag -> ""
-            DiscoverTagItem.Role.GlobalSelect -> "选择 "
-            DiscoverTagItem.Role.Toggle -> "开关 "
+            DiscoverTagItem.Role.GlobalSelect -> appCtx.getString(R.string.misc_select)
+            DiscoverTagItem.Role.Toggle -> appCtx.getString(R.string.misc_toggle)
             DiscoverTagItem.Role.ActionButton,
-            DiscoverTagItem.Role.ScriptUrl -> "操作 "
+            DiscoverTagItem.Role.ScriptUrl -> appCtx.getString(R.string.misc_action)
         }
         val group = item.group?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
         val value = if (item.role == DiscoverTagItem.Role.GlobalSelect) {

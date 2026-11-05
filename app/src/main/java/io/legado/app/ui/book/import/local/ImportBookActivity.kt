@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import splitties.init.appCtx
 
 /**
  * 导入本地书籍界面
@@ -125,8 +126,8 @@ class ImportBookActivity : BaseImportBookActivity<ImportBookViewModel>(),
         val selected = HashSet(adapter.selected)
         importProgressDialog?.dismiss()
         importProgressDialog = progressDialog(
-            title = "导入书籍",
-            message = "准备导入...",
+            title = appCtx.getString(R.string.ui_book_import_books),
+            message = appCtx.getString(R.string.ui_book_preparing_import),
         ) {
             max = selected.size.coerceAtLeast(1)
             progress = 0
@@ -317,7 +318,7 @@ class ImportBookActivity : BaseImportBookActivity<ImportBookViewModel>(),
 
     private fun alertImportFileName() {
         alert(R.string.import_file_name) {
-            setMessage("""使用js处理文件名变量src，将书名作者分别赋值到变量name author""")
+            setMessage(appCtx.getString(R.string.ui_book_use_js_filename_variable_src))
             val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                 editView.hint = "js"
                 editView.setText(AppConfig.bookImportFileName)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
+import splitties.init.appCtx
 
 /**
  * 书籍正文外发授权闸门。
@@ -45,13 +46,13 @@ object AiContentConsent {
         when {
             isAllowed() -> onAllowed()
             isDenied() -> {
-                context.toastOnUi("已在 AI 设置中禁止发送书籍正文，无法使用${feature}")
+                context.toastOnUi(appCtx.getString(R.string.ai_state_sending_book_content_disabled_ai, feature))
                 onDenied?.invoke()
             }
             else -> {
                 val activity = context.findActivity()
                 if (activity == null) {
-                    context.toastOnUi("「${feature}」需要发送书籍正文，请在 AI 设置中授权后使用")
+                    context.toastOnUi(appCtx.getString(R.string.ai_state_needs_send_book_content_allow, feature))
                     onDenied?.invoke()
                     return
                 }
@@ -66,7 +67,7 @@ object AiContentConsent {
                         onAllowed()
                     }
                     .setNegativeButton(R.string.ai_content_consent_deny_once) { _, _ ->
-                        context.toastOnUi("已取消，可在 AI 设置中修改授权")
+                        context.toastOnUi(appCtx.getString(R.string.ai_state_cancelled_you_can_change_permission))
                         onDenied?.invoke()
                     }
                     .show()
@@ -81,11 +82,11 @@ object AiContentConsent {
     suspend fun awaitConsent(context: Context, feature: String): Boolean {
         if (isAllowed()) return true
         if (isDenied()) {
-            context.toastOnUi("已在 AI 设置中禁止发送书籍正文，无法使用${feature}")
+            context.toastOnUi(appCtx.getString(R.string.ai_state_sending_book_content_disabled_ai, feature))
             return false
         }
         val activity = context.findActivity() ?: run {
-            context.toastOnUi("「${feature}」需要发送书籍正文，请在 AI 设置中授权后使用")
+            context.toastOnUi(appCtx.getString(R.string.ai_state_needs_send_book_content_allow, feature))
             return false
         }
         return withContext(Dispatchers.Main.immediate) {
@@ -108,7 +109,7 @@ object AiContentConsent {
                         resume(true)
                     }
                     .setNegativeButton(R.string.ai_content_consent_deny_once) { _, _ ->
-                        activity.toastOnUi("已取消，可在 AI 设置中修改授权")
+                        activity.toastOnUi(appCtx.getString(R.string.ai_state_cancelled_you_can_change_permission))
                         resume(false)
                     }
                     .setOnCancelListener { resume(false) }

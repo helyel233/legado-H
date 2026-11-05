@@ -52,6 +52,7 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 
 class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     ItemTouchCallback.Callback {
@@ -589,10 +590,10 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             ReadMenuButtonConfig.Builtin.READ_STYLE -> getString(R.string.interface_setting)
             ReadMenuButtonConfig.Builtin.SETTING -> getString(R.string.setting)
             ReadMenuButtonConfig.Builtin.READ_ASSISTANT -> getString(R.string.ai_assistant)
-            ReadMenuButtonConfig.Builtin.AI_SUMMARY -> "AI总结"
+            ReadMenuButtonConfig.Builtin.AI_SUMMARY -> appCtx.getString(R.string.ui_book_ai_summary)
             ReadMenuButtonConfig.Builtin.PARAGRAPH_RULES -> getString(R.string.paragraph_rule)
-            ReadMenuButtonConfig.Builtin.BUBBLE -> "气泡"
-            ReadMenuButtonConfig.Builtin.CHARACTERS -> "角色"
+            ReadMenuButtonConfig.Builtin.BUBBLE -> appCtx.getString(R.string.package_sync_task_type_bubble)
+            ReadMenuButtonConfig.Builtin.CHARACTERS -> appCtx.getString(R.string.ra_panel_character)
             else -> ref.id
         }
     }

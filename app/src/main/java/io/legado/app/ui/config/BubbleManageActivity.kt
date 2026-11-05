@@ -74,7 +74,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private var loadJob: Job? = null
     private val previewCache = BubblePreviewCache()
     private val handledWebDavTasks = mutableSetOf<String>()
-    private val importFromNet by lazy { "网络导入" }
+    private val importFromNet by lazy { getString(R.string.bubble_net_import) }
     private val importPackage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.path == "/$importFromNet") {
@@ -90,7 +90,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             if (value.startsWith("http://", true) || value.startsWith("https://", true)) {
                 showDialogFragment(
                     ComposeConfirmDialog.create(
-                        title = "上传成功",
+                        title = getString(R.string.bubble_upload_success),
                         message = value,
                         positiveText = getString(R.string.copy_text),
                         negativeText = getString(R.string.cancel),
@@ -274,7 +274,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         showDialogFragment(
             ComposeActionListDialog.create(
                 title = getString(R.string.add),
-                labels = listOf("手动创建", "导入 zip"),
+                labels = listOf(getString(R.string.bubble_manual_create), getString(R.string.bubble_import_zip)),
                 negativeText = getString(R.string.cancel),
                 onSelected = { index ->
                     when (index) {
@@ -309,7 +309,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
         return actions.map { action ->
             AppManagementMenuAction(
-                text = action.title,
+                text = getString(action.titleRes),
                 danger = action == Action.DELETE_LOCAL ||
                     action == Action.DELETE_REMOTE ||
                     action == Action.DELETE_BOTH
@@ -351,7 +351,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         ) return
         editingEntry = entry
         editingConfig = (entry?.config ?: BubblePackageManager.builtinConfig().copy(
-            name = "自定义段评气泡",
+            name = getString(R.string.bubble_custom_name),
             dirName = "",
             updatedAt = System.currentTimeMillis()
         )).copy(dirName = entry?.dirName.orEmpty())
@@ -406,7 +406,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         val config = editingConfig ?: return
         showDialogFragment(
             ComposeNumberPickerDialog.create(
-                title = "大小倍率",
+                title = getString(R.string.bubble_size_scale),
                 value = (config.sizeScale.coerceIn(
                     BubblePackageManager.MIN_SIZE_SCALE,
                     BubblePackageManager.MAX_SIZE_SCALE
@@ -436,7 +436,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         val svg = editingConfig?.svgTemplate.orEmpty()
         svgEditLauncher.launch(Intent(this, CodeEditActivity::class.java).apply {
             putExtra("text", svg)
-            putExtra("title", "SVG 模板")
+            putExtra("title", getString(R.string.bubble_svg_template))
             putExtra("cursorPosition", svgCursorPosition.coerceIn(0, svg.length))
         })
     }
@@ -448,7 +448,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             key = "bubble_upload:${entry.dirName}",
             name = entry.config.name,
             type = WebDavTaskType.BUBBLE_PACKAGE_UPLOAD,
-            runningMessage = "正在上传气泡"
+            runningMessage = getString(R.string.bubble_uploading)
         ) {
             BubblePackageManager.upload(entry, cloudContainerId, CLOUD_SCOPE)
         }
@@ -510,7 +510,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private fun importNetZipAlert() {
         showDialogFragment(
             ComposeTextInputDialog.create(
-                title = "网络导入",
+                title = getString(R.string.bubble_net_import),
                 hint = "https://...",
                 initialValue = "",
                 positiveText = getString(R.string.ok),
@@ -657,17 +657,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         showDialogFragment(
             ComposeConfirmDialog.create(
                 title = getString(R.string.help),
-                message = """
-                    段评气泡用于把规则里的 dp 图片转成原生 SVG 气泡。
-
-                    接入格式：
-                    <img src="dp:12,{&quot;pclick&quot;:&quot;...&quot;,&quot;status&quot;:&quot;normal&quot;}">
-
-                    dp: 后面的数字会替换 SVG 模板里的 ${"$"}{num}。
-                    status 可选：normal 使用常规色，emphasis 使用强调色；不写 status 时默认 normal。
-                    SVG 模板支持 ${"$"}{color} 和 ${"$"}{num} 两个占位。
-                    内置气泡只读；需要自定义时请通过添加或导入创建新气泡。
-                """.trimIndent(),
+                message = getString(R.string.bubble_help),
                 positiveText = getString(R.string.ok),
                 negativeText = getString(R.string.cancel),
                 showNegative = false,
@@ -677,17 +667,17 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         )
     }
 
-    private enum class Action(val title: String) {
-        APPLY("应用"),
-        EDIT("编辑"),
-        EXPORT("导出 zip"),
-        SHARE_ZIP_FILE("文件分享"),
-        SHARE_DIRECT_LINK("直链分享"),
-        UPLOAD("上传"),
-        DOWNLOAD("下载"),
-        DELETE_LOCAL("删除本地"),
-        DELETE_REMOTE("删除云端"),
-        DELETE_BOTH("同时删除")
+    private enum class Action(val titleRes: Int) {
+        APPLY(R.string.bubble_apply),
+        EDIT(R.string.edit),
+        EXPORT(R.string.bubble_export_zip),
+        SHARE_ZIP_FILE(R.string.bubble_share_file),
+        SHARE_DIRECT_LINK(R.string.bubble_share_direct_link),
+        UPLOAD(R.string.bubble_upload_action),
+        DOWNLOAD(R.string.bubble_download),
+        DELETE_LOCAL(R.string.bubble_delete_local),
+        DELETE_REMOTE(R.string.bubble_delete_remote),
+        DELETE_BOTH(R.string.bubble_delete_both)
     }
 
     private companion object {

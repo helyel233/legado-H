@@ -43,7 +43,7 @@ object ReaderDataRepair {
     private val booleanKeys = setOf(
         PreferKey.shareLayout,
         PreferKey.epubShareLayout,
-        "epubLayout." + PreferKey.textFullJustify,
+        PreferKey.epubLayoutPrefix + PreferKey.textFullJustify,
         PreferKey.hideStatusBar,
         PreferKey.hideNavigationBar,
         PreferKey.readBodyToLh,

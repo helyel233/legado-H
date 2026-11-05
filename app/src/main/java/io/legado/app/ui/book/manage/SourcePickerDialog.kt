@@ -58,6 +58,7 @@ import io.legado.app.ui.widget.number.NumberPickerDialog
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
+import splitties.init.appCtx
 
 /**
  * 书源选择
@@ -132,7 +133,7 @@ private fun SourcePickerContent(
     val style = rememberAppDialogStyle()
     val palette = style.toMiuixPalette()
     AppDialogFrame(
-        title = "选择书源",
+        title = appCtx.getString(R.string.cache_manage_select_source),
         scrollContent = false,
         content = {
             Column(modifier = Modifier.fillMaxWidth()) {

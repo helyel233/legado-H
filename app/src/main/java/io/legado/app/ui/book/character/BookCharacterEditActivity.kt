@@ -66,6 +66,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileOutputStream
+import splitties.init.appCtx
 
 class BookCharacterEditActivity : BaseActivity<ViewBinding>(
     fullScreen = false,
@@ -97,7 +98,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         composeView.setContent {
             CharacterEditScreen(
-                title = if (characterId > 0L) "编辑角色" else "添加角色",
+                title = if (characterId > 0L) appCtx.getString(R.string.bchar_edit_character) else appCtx.getString(R.string.bchar_add_character),
                 draft = draft,
                 speechEngines = speechEngines,
                 onDraftChange = { draft = it },
@@ -139,11 +140,11 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
     private fun save() {
         val name = draft.name.trim()
         if (characterBookKey.isBlank()) {
-            toastOnUi("当前书籍不存在")
+            toastOnUi(appCtx.getString(R.string.bchar_current_book_not_found))
             return
         }
         if (name.isBlank()) {
-            toastOnUi("角色名称不能为空")
+            toastOnUi(appCtx.getString(R.string.bchar_character_name_cannot_be_empty))
             return
         }
         lifecycleScope.launch {
@@ -186,7 +187,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
                 true
             }
             if (!result) {
-                toastOnUi("已存在同名角色")
+                toastOnUi(appCtx.getString(R.string.bchar_character_this_name_already_exists))
                 return@launch
             }
             ReadAloudConfigChangeNotifier.notifySpeech()
@@ -197,10 +198,10 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
 
     private fun showOnlineAvatarDialog() {
         val dialogBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-            editView.hint = "输入在线图片链接"
+            editView.hint = appCtx.getString(R.string.bchar_enter_online_image_url)
             editView.setText(draft.avatar.takeIf { it.startsWith("http", ignoreCase = true) }.orEmpty())
         }
-        alert("在线头像") {
+        alert(appCtx.getString(R.string.bchar_online_avatar)) {
             customView { dialogBinding.root }
             okButton {
                 val value = dialogBinding.editView.text?.toString()?.trim().orEmpty()
@@ -225,7 +226,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
 
     private fun showGalleryAvatarPicker(groups: List<AiImageGroup>, images: List<AiGeneratedImage>) {
         if (images.isEmpty()) {
-            toastOnUi("AI 图库暂无图片")
+            toastOnUi(appCtx.getString(R.string.bchar_no_images_ai_gallery))
             return
         }
         var currentGroupId: String? = null
@@ -309,7 +310,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
                     marginEnd = 8.dpToPx()
                 })
             }
-            addChip("全部", null)
+            addChip(appCtx.getString(R.string.all), null)
             groups.forEach { addChip(it.name, it.id) }
         }
 
@@ -319,7 +320,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
             applyFilter()
         }
         applyFilter()
-        dialog = alert("选择 AI 图库头像") {
+        dialog = alert(appCtx.getString(R.string.bchar_choose_ai_gallery_avatar)) {
             customView { root }
             cancelButton()
         }
@@ -331,21 +332,21 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
                 AiImageGalleryManager.setFavorite(image.id, true, null)
             }
             draft = draft.copy(avatar = AiImageGalleryManager.imageUri(image.id))
-            toastOnUi("已设置角色头像")
+            toastOnUi(appCtx.getString(R.string.bchar_character_avatar_set))
         }
     }
 
     private fun showRegenerateAvatarDialog() {
         if (AppConfig.aiEnabledImageProviders.isEmpty()) {
-            toastOnUi("未配置生图供应商")
+            toastOnUi(appCtx.getString(R.string.bchar_no_image_provider_configured))
             return
         }
         val dialogBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-            editView.hint = "输入角色头像提示词"
+            editView.hint = appCtx.getString(R.string.bchar_enter_avatar_prompt)
             editView.minLines = 5
             editView.setText(buildAvatarPrompt())
         }
-        alert("生成角色头像") {
+        alert(appCtx.getString(R.string.bchar_generate_character_avatar)) {
             customView { dialogBinding.root }
             okButton {
                 val prompt = dialogBinding.editView.text?.toString()?.trim().orEmpty()
@@ -357,19 +358,19 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
 
     private fun buildAvatarPrompt(): String {
         return buildList {
-            add("为小说角色生成一张角色头像，头像构图，清晰，适合角色资料卡。")
-            add("角色名：${draft.name.ifBlank { "未命名角色" }}")
-            draft.identity.takeIf { it.isNotBlank() }?.let { add("身份：$it") }
-            draft.skills.takeIf { it.isNotBlank() }?.let { add("技能：$it") }
-            draft.attributes.takeIf { it.isNotBlank() }?.let { add("属性：$it") }
-            draft.appearance.takeIf { it.isNotBlank() }?.let { add("形象：$it") }
-            draft.personality.takeIf { it.isNotBlank() }?.let { add("性格：$it") }
-            draft.biography.takeIf { it.isNotBlank() }?.let { add("生平：$it") }
+            add(appCtx.getString(R.string.bchar_generate_clear_well_framed_character))
+            add(appCtx.getString(R.string.i18n_final_character_name, draft.name.ifBlank { appCtx.getString(R.string.i18n_final_unnamed_character) }))
+            draft.identity.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_identity_2, it)) }
+            draft.skills.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_skills_2, it)) }
+            draft.attributes.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_attributes_2, it)) }
+            draft.appearance.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_appearance_2, it)) }
+            draft.personality.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_personality_2, it)) }
+            draft.biography.takeIf { it.isNotBlank() }?.let { add(appCtx.getString(R.string.bchar_biography_2, it)) }
         }.joinToString("\n")
     }
 
     private fun generateAvatar(prompt: String) {
-        waitDialog.setText("正在生成角色头像...")
+        waitDialog.setText(appCtx.getString(R.string.bchar_generating_character_avatar))
         waitDialog.show()
         lifecycleScope.launch {
             val result = withContext(IO) {
@@ -393,9 +394,9 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
             waitDialog.dismiss()
             result.onSuccess { image ->
                 draft = draft.copy(avatar = AiImageGalleryManager.imageUri(image.id))
-                toastOnUi("已生成并收藏角色头像")
+                toastOnUi(appCtx.getString(R.string.bchar_character_avatar_generated_saved))
             }.onFailure {
-                toastOnUi("生成角色头像失败：${it.localizedMessage ?: it.javaClass.simpleName}")
+                toastOnUi(appCtx.getString(R.string.bchar_failed_generate_character_avatar, it.localizedMessage ?: it.javaClass.simpleName))
             }
         }
     }
@@ -424,7 +425,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
                     draft = draft.copy(avatar = file.absolutePath)
                 }
             }.onFailure {
-                toastOnUi(it.localizedMessage ?: "头像导入失败")
+                toastOnUi(it.localizedMessage ?: appCtx.getString(R.string.bchar_failed_import_avatar))
             }
         }
     }

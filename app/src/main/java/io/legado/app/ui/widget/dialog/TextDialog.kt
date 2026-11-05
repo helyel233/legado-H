@@ -57,6 +57,7 @@ import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.image.glide.GlideImagesPlugin
 import kotlinx.coroutines.delay
+import splitties.init.appCtx
 
 
 class TextDialog() : ComposeDialogFragment() {
@@ -237,7 +238,7 @@ private fun TextDialogContent(
 
         else -> {
             val displayText = if (content.length >= 32 * 1024) {
-                content.take(32 * 1024) + "\n\n数据太大，无法全部显示…"
+                content.take(32 * 1024) + appCtx.getString(R.string.ui_main_n_ndata_too_large_display)
             } else {
                 content
             }

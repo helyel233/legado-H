@@ -22,6 +22,7 @@ import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 
 class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBinding>() {
 
@@ -224,7 +225,7 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
     }
 
     private fun summary(value: String): String {
-        return value.trim().lineSequence().firstOrNull()?.take(36)?.ifBlank { null } ?: "未设置"
+        return value.trim().lineSequence().firstOrNull()?.take(36)?.ifBlank { null } ?: appCtx.getString(R.string.ai_ui_not_set)
     }
 
     private enum class Field {

@@ -86,7 +86,7 @@ class SharedReceiverActivity : AppCompatActivity() {
     private fun showImportAsBookDialog(text: String) {
         val firstLine = text.lines().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         val defaultName = firstLine.takeIf { it.isNotBlank() && it.length <= 30 }
-            ?: "分享文本_${SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())}"
+            ?: appCtx.getString(R.string.i18n_final_shared_text_name, SimpleDateFormat("yyyyMMdd", Locale.US).format(Date()))
         showComposeConfirmDialog(
             title = getString(R.string.text_to_book),
             message = getString(R.string.text_to_book_message, text.length, defaultName),

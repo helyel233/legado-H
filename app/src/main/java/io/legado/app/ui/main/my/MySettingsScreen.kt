@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -58,7 +56,6 @@ import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 internal enum class MySettingsRowKind {
     Action,
     ThemeMode,
-    WebService,
     AutoTaskService
 }
 
@@ -73,9 +70,16 @@ internal data class MySettingsSubSearchItem(
     val title: String,
     val summary: String,
     val key: String,
-    val ownerConfigTag: String
+    val ownerConfigTag: String,
+    /**
+     * 设置项自己声明的别名（[io.legado.app.ui.config.compose.SettingItemSpec.searchKeys]）。
+     * 用户记得住「沉浸式状态栏」，但可能搜「状态栏」；别名让这些口语词也能命中，
+     * 而标题本身不必为了可搜性被塞满关键词。
+     */
+    val aliases: List<String> = emptyList()
 ) {
-    val searchText: String = listOf(title, summary, key).joinToString(" ").lowercase()
+    val searchText: String =
+        (listOf(title, summary, key) + aliases).joinToString(" ").lowercase()
 }
 
 internal data class MySettingsRowModel(
@@ -97,7 +101,7 @@ internal data class MySettingsSectionModel(
     val rows: List<MySettingsRowModel>
 )
 
-internal data class MyWebServiceUiState(
+internal data class MyServiceToggleUiState(
     val checked: Boolean,
     val summary: String
 )
@@ -118,36 +122,38 @@ private val SettingsHorizontalPadding = 12.dp
 @Composable
 internal fun MySettingsScreen(
     sections: List<MySettingsSectionModel>,
-    subSearchItems: List<MySettingsSubSearchItem>,
+    /**
+     * 深层设置项索引。用 lambda 而不是 List：索引要把 11 个设置页的 spec 各构建一次，
+     * 首次打开「我的」页时并不需要它，等用户真的开始搜索再算。
+     */
+    subSearchItemsProvider: () -> List<MySettingsSubSearchItem>,
     searchQuery: String,
     themeOptions: List<MySettingsThemeOption>,
     themeModeValue: String,
-    webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState,
+    autoTaskServiceState: MyServiceToggleUiState,
     onThemeModeSelect: (String) -> Unit,
-    onWebServiceCheckedChange: (Boolean) -> Unit,
-    onWebServiceClick: () -> Unit,
-    onWebServiceMoreClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
 ) {
     val colors = rememberAppSettingPalette()
     val panelRadiusPx = colors.panelRadiusPx
+    val query = remember(searchQuery) { searchQuery.trim() }
+    val subSearchItems = remember(query) {
+        if (query.isEmpty()) emptyList() else subSearchItemsProvider()
+    }
     // 过滤结果只依赖这几个输入；不 remember 的话每次重组（开关状态、主题切换）都要
     // 重跑一遍全量过滤，列表越全越浪费
     val visibleSections = remember(
         sections,
         subSearchItems,
-        searchQuery,
-        webServiceState,
+        query,
         autoTaskServiceState
     ) {
         buildVisibleSections(
             sections = sections,
             subSearchItems = subSearchItems,
             searchQuery = searchQuery,
-            webServiceState = webServiceState,
             autoTaskServiceState = autoTaskServiceState,
         )
     }
@@ -176,12 +182,8 @@ internal fun MySettingsScreen(
                         searchQuery = searchQuery,
                         themeOptions = themeOptions,
                         themeModeValue = themeModeValue,
-                        webServiceState = webServiceState,
                         autoTaskServiceState = autoTaskServiceState,
                         onThemeModeSelect = onThemeModeSelect,
-                        onWebServiceCheckedChange = onWebServiceCheckedChange,
-                        onWebServiceClick = onWebServiceClick,
-                        onWebServiceMoreClick = onWebServiceMoreClick,
                         onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
                         onAutoTaskServiceClick = onAutoTaskServiceClick,
                         onRowClick = onRowClick
@@ -208,12 +210,8 @@ private fun SettingsSectionCard(
     searchQuery: String,
     themeOptions: List<MySettingsThemeOption>,
     themeModeValue: String,
-    webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState,
+    autoTaskServiceState: MyServiceToggleUiState,
     onThemeModeSelect: (String) -> Unit,
-    onWebServiceCheckedChange: (Boolean) -> Unit,
-    onWebServiceClick: () -> Unit,
-    onWebServiceMoreClick: () -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
@@ -248,21 +246,6 @@ private fun SettingsSectionCard(
                     options = themeOptions,
                     selectedValue = themeModeValue,
                     onSelect = onThemeModeSelect
-                )
-
-                MySettingsRowKind.WebService -> ServiceSwitchRow(
-                    item = item,
-                    state = webServiceState,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    searchQuery = searchQuery,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    moreVisible = webServiceState.checked,
-                    onMoreClick = onWebServiceMoreClick,
-                    onCheckedChange = onWebServiceCheckedChange,
-                    onClick = onWebServiceClick
                 )
 
                 MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
@@ -505,15 +488,13 @@ private fun ThemeSegmentedControl(
 @Composable
 private fun ServiceSwitchRow(
     item: VisibleRow,
-    state: MyWebServiceUiState,
+    state: MyServiceToggleUiState,
     colors: AppSettingPalette,
     panelRadiusPx: Float,
     searchQuery: String,
     isFirst: Boolean,
     isLast: Boolean,
     showDivider: Boolean,
-    moreVisible: Boolean = false,
-    onMoreClick: (() -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
@@ -558,24 +539,6 @@ private fun ServiceSwitchRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-        if (moreVisible && onMoreClick != null) {
-            // 服务运行中才露出「复制地址/浏览器打开」入口；独立于整行开关手势
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button, onClick = onMoreClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_more),
-                    contentDescription = stringResource(R.string.more),
-                    tint = colors.secondaryText,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
         }
         Spacer(modifier = Modifier.width(8.dp))
         LegadoMiuixSwitch(
@@ -636,22 +599,18 @@ private fun buildVisibleSections(
     sections: List<MySettingsSectionModel>,
     subSearchItems: List<MySettingsSubSearchItem>,
     searchQuery: String,
-    webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState
+    autoTaskServiceState: MyServiceToggleUiState
 ): List<VisibleSection> {
     val query = searchQuery.trim().lowercase()
     return sections.mapNotNull { section ->
         val rows = section.rows.flatMap { row ->
-            val summary = row.effectiveSummary(
-                webServiceState = webServiceState,
-                autoTaskServiceState = autoTaskServiceState
-            )
+            val summary = row.effectiveSummary(autoTaskServiceState = autoTaskServiceState)
             val matchedSubItems = if (query.isBlank()) {
                 emptyList()
             } else {
                 subSearchItems.filter { item ->
                     item.ownerKey == row.key && item.searchText.contains(query)
-                }
+                }.sortedBy { it.matchRank(query) }
             }
             val selfMatched = query.isBlank()
                 || row.title.lowercase().contains(query)
@@ -684,14 +643,26 @@ private fun buildVisibleSections(
     }
 }
 
+/**
+ * 命中质量：标题开头命中 > 标题包含 > 仅摘要或别名命中。
+ * 搜「主题」时「主题包管理」应该排在某个摘要里提到主题的开关前面；
+ * sortedBy 是稳定排序，同档次保持页面顺序，不会每次输入都跳动。
+ */
+private fun MySettingsSubSearchItem.matchRank(query: String): Int {
+    val lowerTitle = title.lowercase()
+    return when {
+        lowerTitle.startsWith(query) -> 0
+        lowerTitle.contains(query) -> 1
+        else -> 2
+    }
+}
+
 private fun MySettingsRowModel.effectiveSummary(
-    webServiceState: MyWebServiceUiState,
-    autoTaskServiceState: MyWebServiceUiState
+    autoTaskServiceState: MyServiceToggleUiState
 ): String {
     return when (kind) {
         // 主题模式的当前值由分段控件自己展示，摘要保持静态描述
         MySettingsRowKind.ThemeMode -> summary.orEmpty()
-        MySettingsRowKind.WebService -> webServiceState.summary
         MySettingsRowKind.AutoTaskService -> autoTaskServiceState.summary
         MySettingsRowKind.Action -> summary.orEmpty()
     }

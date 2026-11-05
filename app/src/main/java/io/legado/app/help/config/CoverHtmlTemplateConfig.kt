@@ -1,6 +1,7 @@
 package io.legado.app.help.config
 
 import androidx.annotation.Keep
+import io.legado.app.R
 import io.legado.app.help.DefaultData
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -38,7 +39,7 @@ object CoverHtmlTemplateConfig {
         return listOf(
             Template(
                 id = "default",
-                name = "默认模板",
+                name = appCtx.getString(R.string.builtin_cover_template_default),
                 htmlCode = DefaultData.coverHtmlTemplate,
                 isSelected = true
             )

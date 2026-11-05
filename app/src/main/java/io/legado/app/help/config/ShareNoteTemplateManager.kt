@@ -1,6 +1,7 @@
 package io.legado.app.help.config
 
 import androidx.annotation.Keep
+import io.legado.app.R
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.externalFiles
@@ -31,7 +32,7 @@ object ShareNoteTemplateManager {
 
     data class StylePalette(
         val id: String,
-        val name: String,
+        val nameRes: Int,
         val background: String,
         val surface: String,
         val text: String,
@@ -48,7 +49,7 @@ object ShareNoteTemplateManager {
     val stylePalettes: List<StylePalette> = listOf(
         StylePalette(
             id = "classic",
-            name = "经典",
+            nameRes = R.string.share_note_palette_classic,
             background = "#FFF7D8",
             surface = "#FFF7D8",
             text = "#3E3427",
@@ -58,7 +59,7 @@ object ShareNoteTemplateManager {
         ),
         StylePalette(
             id = "mint",
-            name = "青绿",
+            nameRes = R.string.share_note_palette_mint,
             background = "#DFF4E8",
             surface = "#F5FFF9",
             text = "#223B31",
@@ -68,7 +69,7 @@ object ShareNoteTemplateManager {
         ),
         StylePalette(
             id = "rose",
-            name = "淡粉",
+            nameRes = R.string.share_note_palette_rose,
             background = "#F8DDDF",
             surface = "#FFF3F4",
             text = "#453033",
@@ -78,7 +79,7 @@ object ShareNoteTemplateManager {
         ),
         StylePalette(
             id = "coffee",
-            name = "咖啡",
+            nameRes = R.string.share_note_palette_coffee,
             background = "#3A2617",
             surface = "#442C19",
             text = "#F3E2C8",
@@ -88,7 +89,7 @@ object ShareNoteTemplateManager {
         ),
         StylePalette(
             id = "navy",
-            name = "深蓝",
+            nameRes = R.string.share_note_palette_navy,
             background = "#172234",
             surface = "#1D2A40",
             text = "#EAF0F7",
@@ -98,7 +99,7 @@ object ShareNoteTemplateManager {
         ),
         StylePalette(
             id = "paper",
-            name = "纸白",
+            nameRes = R.string.share_note_palette_paper,
             background = "#F8F6EF",
             surface = "#FFFDF7",
             text = "#2F2F2B",
@@ -119,7 +120,7 @@ object ShareNoteTemplateManager {
 
     @Keep
     data class Meta(
-        val name: String = "摘录分享模板",
+        val name: String = "",
         val type: String = "note",
         val canvas: String = CANVAS_LONG,
         val width: Int = 375,
@@ -130,7 +131,9 @@ object ShareNoteTemplateManager {
         val updatedAt: Long = 0L
     ) {
         fun canvasLabel(): String {
-            return if (canvas == CANVAS_WIDE) "宽图" else "长图"
+            return appCtx.getString(
+                if (canvas == CANVAS_WIDE) R.string.share_note_canvas_wide else R.string.share_note_canvas_long
+            )
         }
 
         fun sizeLabel(): String {
@@ -194,12 +197,14 @@ object ShareNoteTemplateManager {
     }
 
     fun fontLabel(fontFamily: String): String {
-        return when (fontFamily) {
-            FONT_SERIF -> "衬线字体"
-            FONT_ROUND -> "圆体"
-            FONT_MONO -> "等宽字体"
-            else -> "系统字体"
-        }
+        return appCtx.getString(
+            when (fontFamily) {
+                FONT_SERIF -> R.string.share_note_font_serif
+                FONT_ROUND -> R.string.share_note_font_round
+                FONT_MONO -> R.string.share_note_font_mono
+                else -> R.string.share_note_font_system
+            }
+        )
     }
 
     suspend fun loadEntries(): List<Entry> = withContext(IO) {
@@ -239,7 +244,7 @@ object ShareNoteTemplateManager {
 
     fun addOrUpdate(html: String, oldEntry: Entry? = null): Entry {
         val meta = parseMeta(html)
-        require(meta.type.equals("note", ignoreCase = true)) { "只支持摘录分享模板" }
+        require(meta.type.equals("note", ignoreCase = true)) { appCtx.getString(R.string.share_note_error_type) }
         val editableOld = oldEntry?.takeIf {
             it.source == Source.LOCAL && it.dirName.isNotBlank() && it.dirName != BUILTIN_DIR_NAME
         }
@@ -267,7 +272,7 @@ object ShareNoteTemplateManager {
         val copied = nameMetaRegex.find(html)?.let { matchResult ->
             html.replaceRange(
                 matchResult.range,
-                "${matchResult.groupValues[1]}${meta.name} 副本${matchResult.groupValues[3]}"
+                "${matchResult.groupValues[1]}${appCtx.getString(R.string.share_note_copy_suffix, meta.name)}${matchResult.groupValues[3]}"
             )
         } ?: html
         return addOrUpdate(copied)
@@ -298,10 +303,10 @@ object ShareNoteTemplateManager {
             ZipUtils.unZipToPath(zipFile, unzipDir)
             val templateFile = unzipDir.walkTopDown().firstOrNull {
                 it.isFile && it.name.equals(TEMPLATE_FILE_NAME, ignoreCase = true)
-            } ?: throw IllegalArgumentException("模板包内没有 template.html")
+            } ?: throw IllegalArgumentException(appCtx.getString(R.string.share_note_error_no_template))
             val html = templateFile.readText()
             val meta = parseMeta(html)
-            require(meta.type.equals("note", ignoreCase = true)) { "只支持摘录分享模板" }
+            require(meta.type.equals("note", ignoreCase = true)) { appCtx.getString(R.string.share_note_error_type) }
             val dirName = uniqueDirName(
                 meta.name.normalizeFileName().ifBlank { "share_note_${System.currentTimeMillis()}" }
             )
@@ -361,7 +366,7 @@ object ShareNoteTemplateManager {
         val canvas = meta("reeden-template-canvas").lowercase().ifBlank { CANVAS_LONG }
             .let { if (it == CANVAS_WIDE) CANVAS_WIDE else CANVAS_LONG }
         return Meta(
-            name = meta("reeden-template-name").ifBlank { "摘录分享模板" },
+            name = meta("reeden-template-name").ifBlank { appCtx.getString(R.string.share_note_default_name) },
             type = meta("reeden-template-type").ifBlank { "note" },
             canvas = canvas,
             width = meta("reeden-template-width").toIntOrNull()?.coerceIn(240, 1440) ?: 375,
@@ -376,7 +381,7 @@ object ShareNoteTemplateManager {
         val zipFile = tempDir.getFile(fileName)
         if (zipFile.exists()) zipFile.delete()
         if (!ZipUtils.zipFile(dir, zipFile) || !zipFile.exists() || zipFile.length() <= 0L) {
-            throw IllegalStateException("模板导出失败")
+            throw IllegalStateException(appCtx.getString(R.string.share_note_error_export_failed))
         }
         return zipFile
     }

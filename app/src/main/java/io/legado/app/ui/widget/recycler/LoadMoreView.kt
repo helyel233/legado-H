@@ -12,6 +12,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.invisible
 import io.legado.app.utils.visible
+import splitties.init.appCtx
 
 @Suppress("unused")
 class LoadMoreView(context: Context, attrs: AttributeSet? = null) : FrameLayout(context, attrs) {
@@ -77,7 +78,7 @@ class LoadMoreView(context: Context, attrs: AttributeSet? = null) : FrameLayout(
         hasMore = false
         errorMsg = msg ?: ""
         binding.tvText.text =
-            text.ifEmpty { context.getString(R.string.error_load_msg, "点击查看详情") }
+            text.ifEmpty { context.getString(R.string.error_load_msg, appCtx.getString(R.string.ui_main_tap_view_details)) }
         binding.tvText.visible()
     }
 

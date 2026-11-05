@@ -37,6 +37,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.net.URL
+import io.legado.app.R
+import splitties.init.appCtx
 
 
 @Suppress("unused")
@@ -105,14 +107,14 @@ open class RssJsExtensions(
             when (name) {
                 "login" -> {
                     if (activity is SourceLoginActivity) {
-                        activity.toastOnUi("已在登录界面")
+                        activity.toastOnUi(appCtx.getString(R.string.ui_main_already_login_screen))
                         return@launch
                     }
                     val toSource = origin?.let { o ->
                         appDb.bookSourceDao.getBookSource(o)
                     } ?: source
                     if (toSource.loginUrl.isNullOrBlank()) {
-                        activity.toastOnUi("源未配置登录")
+                        activity.toastOnUi(appCtx.getString(R.string.ui_main_source_has_no_login_configured))
                         return@launch
                     }
                     when (toSource) {

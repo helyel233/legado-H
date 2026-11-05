@@ -20,6 +20,7 @@ import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import splitties.init.appCtx
 
 
 class RssSourceEditViewModel(application: Application) : BaseViewModel(application) {
@@ -98,7 +99,7 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
                 rssSource = null
                 onSuccess(it)
             } else {
-                context.toastOnUi("格式不对")
+                context.toastOnUi(appCtx.getString(R.string.wrong_format))
             }
         }
     }

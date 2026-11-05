@@ -12,6 +12,8 @@ import io.legado.app.utils.MD5Utils
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiChapterSummaryService {
 
@@ -60,7 +62,7 @@ object AiChapterSummaryService {
         } else {
             val chunks = splitContent(content)
             val chunkSummaries = chunks.mapIndexed { index, chunk ->
-                onStatus(status("summary", "分析第 ${index + 1}/${chunks.size} 段"))
+                onStatus(status("summary", appCtx.getString(R.string.ai_state_analyzing_segment, index + 1, chunks.size)))
                 summarizeChunk(input, chunk, index + 1, chunks.size, onPartial = {}, onStatus = onStatus)
             }
             combineSummaries(input, chunkSummaries, onPartial, onStatus)
@@ -162,7 +164,7 @@ object AiChapterSummaryService {
             .joinToString("\n") { character ->
                 "- ${character.name}: ${listOf(character.identity, character.skills, character.attributes, character.biography).filter { it.isNotBlank() }.joinToString("；").take(500)}"
             }
-            .ifBlank { "暂无角色卡" }
+            .ifBlank { appCtx.getString(R.string.misc_no_character_cards) }
         return """
             你是阅读页的 AI 章节总结助手，同时负责维护本书角色卡。
 
@@ -172,7 +174,7 @@ object AiChapterSummaryService {
             3. 如果正文明确说明已有角色的新技能、新属性、身份变化或生平变化，请调用 upsert_book_character 更新对应字段。
             4. 不要删除角色，不要根据猜测覆盖旧信息；不确定的信息写入总结即可，不写入角色卡。
             5. 如果角色没有配音且用户配置了发言人目录，可以读取配音目录并为角色分配发言人。
-            6. 最终回答只输出当前${if (chunkCount > 1) "分段" else "章节"}摘要，不要解释工具调用。
+            6. 最终回答只输出当前${if (chunkCount > 1) "分段" else appCtx.getString(R.string.manga_check_chapter)}摘要，不要解释工具调用。
 
             书籍：
             - bookUrl: ${input.bookUrl}

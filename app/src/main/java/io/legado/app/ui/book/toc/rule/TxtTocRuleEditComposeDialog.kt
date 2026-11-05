@@ -43,6 +43,7 @@ import io.legado.app.utils.sendToClip
 import io.legado.app.utils.toastOnUi
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import splitties.init.appCtx
 
 class TxtTocRuleEditComposeDialog : ComposeDialogFragment() {
 
@@ -134,7 +135,7 @@ class TxtTocRuleEditComposeDialog : ComposeDialogFragment() {
 
     private fun checkValid(tocRule: TxtTocRule): Boolean {
         if (tocRule.name.isEmpty()) {
-            context?.toastOnUi("名称不能为空")
+            context?.toastOnUi(appCtx.getString(R.string.auto_task_name_required))
             return false
         }
         try {

@@ -113,6 +113,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.abs
+import splitties.init.appCtx
 
 @Stable
 data class AiChatScreenActions(
@@ -741,13 +742,13 @@ private fun AiChatTopBar(
                         add(AiTopMenuAction(stringResource(R.string.ai_new_chat)) { actions.onNewChat() })
                         add(AiTopMenuAction(stringResource(R.string.ai_chat_history)) { actions.onOpenHistory() })
                         actions.onOpenWindowAbilities?.let { openAbilities ->
-                            add(AiTopMenuAction("窗口能力", openAbilities))
+                            add(AiTopMenuAction(appCtx.getString(R.string.ai_ui_window_capabilities), openAbilities))
                         }
                         actions.onOpenWorldBooks?.let { openWorldBooks ->
-                            add(AiTopMenuAction("浏览世界书", openWorldBooks))
+                            add(AiTopMenuAction(appCtx.getString(R.string.ai_ui_browse_world_books), openWorldBooks))
                         }
                         actions.onToggleAutoSpeak?.let { toggleAutoSpeak ->
-                            add(AiTopMenuAction("自动播放语音：${if (autoSpeakEnabled) "开" else "关"}", toggleAutoSpeak))
+                            add(AiTopMenuAction(appCtx.getString(R.string.i18n_final_auto_speak, appCtx.getString(if (autoSpeakEnabled) R.string.i18n_final_on else R.string.i18n_final_off)), toggleAutoSpeak))
                         }
                         add(AiTopMenuAction(stringResource(R.string.ai_setting)) { actions.onOpenSettings() })
                         actions.onOpenImageGallery?.let { openGallery ->
@@ -899,13 +900,13 @@ private fun AiCompanionDrawer(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "AI 酒馆",
+                            text = appCtx.getString(R.string.ai_ui_ai_tavern),
                             color = style.colors.primaryText,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "角色与会话",
+                            text = appCtx.getString(R.string.ai_ui_characters_sessions),
                             color = style.colors.secondaryText,
                             fontSize = 12.sp
                         )
@@ -935,7 +936,7 @@ private fun AiCompanionDrawer(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item {
-                        DrawerSectionTitle("助手", style)
+                        DrawerSectionTitle(appCtx.getString(R.string.side_nav_assistant), style)
                     }
                     items(
                         items = companions,
@@ -1034,7 +1035,7 @@ private fun AiCompanionSessionPanel(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "会话",
+                    text = appCtx.getString(R.string.ai_ui_sessions),
                     color = style.colors.secondaryText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1046,7 +1047,7 @@ private fun AiCompanionSessionPanel(
                     color = style.colors.accent.copy(alpha = 0.10f)
                 ) {
                     Text(
-                        text = "新建",
+                        text = appCtx.getString(R.string.create),
                         color = style.colors.accent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1056,7 +1057,7 @@ private fun AiCompanionSessionPanel(
             }
             if (sessions.isEmpty()) {
                 Text(
-                    text = "还没有历史会话",
+                    text = appCtx.getString(R.string.ai_ui_no_past_sessions),
                     color = style.colors.secondaryText,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(vertical = 5.dp)
@@ -1073,7 +1074,7 @@ private fun AiCompanionSessionPanel(
                 }
                 if (sessions.size > 8) {
                     Text(
-                        text = "还有 ${sessions.size - 8} 个会话",
+                        text = appCtx.getString(R.string.ai_ui_more_sessions, sessions.size - 8),
                         color = style.colors.secondaryText,
                         fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -1146,9 +1147,9 @@ private fun AiCompanionDrawerItem(
             )
             Text(
                 text = when {
-                    isDefault -> "默认系统提示词"
-                    companion.bookKey.isNotBlank() -> "角色 · ${displayBookKeyLabel(companion.bookKey)}"
-                    else -> "角色"
+                    isDefault -> appCtx.getString(R.string.ai_ui_default_system_prompt)
+                    companion.bookKey.isNotBlank() -> appCtx.getString(R.string.ai_ui_character, displayBookKeyLabel(companion.bookKey))
+                    else -> appCtx.getString(R.string.ra_panel_character)
                 },
                 color = style.colors.secondaryText,
                 fontSize = 11.sp,
@@ -1197,7 +1198,7 @@ private fun AiSessionDrawerItem(
                 .padding(start = 10.dp)
         ) {
             Text(
-                text = session.title.ifBlank { "未命名会话" },
+                text = session.title.ifBlank { appCtx.getString(R.string.ai_ui_untitled_session) },
                 color = style.colors.primaryText,
                 fontSize = 14.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -1205,7 +1206,7 @@ private fun AiSessionDrawerItem(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "${timeFormat.format(java.util.Date(session.updatedAt))} · ${session.messages.size} 条消息",
+                text = appCtx.getString(R.string.ai_ui_messages, timeFormat.format(java.util.Date(session.updatedAt)), session.messages.size),
                 color = style.colors.secondaryText,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -1721,14 +1722,14 @@ private fun AiSearchBookInlinePart(
     onToolPreview: (AiToolDisplayPayload) -> Unit
 ) {
     AiInfoPill(
-        text = "书籍结果 ${part.books.size} 条",
+        text = appCtx.getString(R.string.ai_ui_book_results, part.books.size),
         style = style,
         onClick = {
             onToolPreview(
                 AiToolDisplayPayload(
                     type = AiToolPreviewType.BookResults,
-                    title = "书籍结果",
-                    summary = "共 ${part.books.size} 条",
+                    title = appCtx.getString(R.string.ai_ui_book_results_2),
+                    summary = appCtx.getString(R.string.ai_ui_total, part.books.size),
                     raw = "",
                     books = part.books
                 )
@@ -1744,14 +1745,14 @@ private fun AiImageInlinePart(
     onToolPreview: (AiToolDisplayPayload) -> Unit
 ) {
     AiInfoPill(
-        text = "图片结果 ${part.images.size} 张",
+        text = appCtx.getString(R.string.ai_ui_image_results, part.images.size),
         style = style,
         onClick = {
             onToolPreview(
                 AiToolDisplayPayload(
                     type = AiToolPreviewType.ImageResult,
-                    title = "图片结果",
-                    summary = "共 ${part.images.size} 张",
+                    title = appCtx.getString(R.string.ai_ui_image_results_2),
+                    summary = appCtx.getString(R.string.ai_ui_total_2, part.images.size),
                     raw = "",
                     images = part.images
                 )
@@ -1931,24 +1932,24 @@ private data class AiChatPreset(
 
 private val aiChatPresets = listOf(
     AiChatPreset(
-        "总结",
-        "请先查询我的书架找到最近在读的书，然后总结这本书目前已读内容的主要情节和要点。"
+        appCtx.getString(R.string.ai_ui_summary),
+        appCtx.getString(R.string.ai_ui_find_book_i_am_currently)
     ),
     AiChatPreset(
-        "问书",
-        "我想查证《书名》里的一个细节：\n\n请先搜索相关章节正文，引用原文并给出解读。"
+        appCtx.getString(R.string.ai_ui_ask_about_book),
+        appCtx.getString(R.string.ui_main_i_want_verify_detail_book)
     ),
     AiChatPreset(
-        "续写",
-        "请先读取《书名》最近已读章节的正文，然后基于当前情节续写约 300 字的后续发展。"
+        appCtx.getString(R.string.ai_ui_continue_writing),
+        appCtx.getString(R.string.ai_ui_read_most_recently_read_chapter)
     ),
     AiChatPreset(
-        "配图",
-        "请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\n\n"
+        appCtx.getString(R.string.ai_ui_illustration),
+        appCtx.getString(R.string.ui_main_generate_illustration_key_scene_at)
     ),
     AiChatPreset(
-        "角色卡",
-        "请为《书名》中的主角创建角色卡，包含：外貌、性格、背景故事、说话风格与配音建议。"
+        appCtx.getString(R.string.ai_ui_character_card),
+        appCtx.getString(R.string.ai_ui_create_character_card_protagonist_book)
     )
 )
 

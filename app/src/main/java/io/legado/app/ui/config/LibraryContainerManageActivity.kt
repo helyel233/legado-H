@@ -111,7 +111,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, MENU_IMPORT, 0, R.string.import_str).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_EXPORT_ALL, 1, "导出全部").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu.add(0, MENU_EXPORT_ALL, 1, getString(R.string.library_container_export_all)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return super.onCompatCreateOptionsMenu(menu)
     }
 
@@ -159,7 +159,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
             AppManagementMenuAction(getString(R.string.import_str)) {
                 showImportActions()
             },
-            AppManagementMenuAction("导出全部") {
+            AppManagementMenuAction(getString(R.string.library_container_export_all)) {
                 exportContainers(LibraryContainerManager.containers(), "library-containers.json")
             }
         )
@@ -204,8 +204,8 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
 
     private fun showDecryptImportDialog(text: String) {
         showComposeTextInputDialog(
-            title = "导入加密书库容器",
-            hint = "请输入解密密钥",
+            title = getString(R.string.library_container_import_encrypted),
+            hint = getString(R.string.library_container_decrypt_hint),
             minLines = 2,
             positiveText = getString(android.R.string.ok),
             negativeText = getString(R.string.cancel),
@@ -225,7 +225,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
     private fun showImportResult(count: Int) {
         if (count > 0) {
             reload()
-            toastOnUi("已导入 $count 个书库容器")
+            toastOnUi(getString(R.string.library_container_imported_count, count))
         } else {
             toastOnUi(R.string.wrong_format)
         }
@@ -279,10 +279,10 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
     private fun exportContainers(items: List<LibraryContainerConfig>, fileName: String) {
         val exportableItems = items.filterNot { it.lockedImported }
         if (exportableItems.size < items.size) {
-            toastOnUi("已跳过加密导入的书库容器")
+            toastOnUi(R.string.library_container_skip_encrypted)
         }
         if (exportableItems.isEmpty()) {
-            toastOnUi("没有可导出的书库容器")
+            toastOnUi(R.string.library_container_none_exportable)
             return
         }
         val selectedId = LibraryContainerManager.selectedId()
@@ -295,7 +295,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         pendingExportDecryptKey = encrypted.decryptKey
         exportJson.launch {
             mode = HandleFileContract.EXPORT
-            title = "导出书库容器"
+            title = getString(R.string.library_container_export_title)
             fileData = HandleFileContract.FileData(
                 fileName,
                 GSON.toJson(encrypted.payload).toByteArray(),
@@ -312,15 +312,15 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
                 append(value)
                 append("\n\n")
             }
-            append("解密密钥：\n")
+            append(getString(R.string.library_container_decrypt_key))
             append(keyText)
         }
         showComposeConfirmDialog(
             title = if (isUrl) getString(R.string.upload_url) else getString(R.string.export_success),
             message = message,
-            positiveText = "复制密钥",
+            positiveText = getString(R.string.library_container_copy_key),
             negativeText = getString(R.string.cancel),
-            neutralText = if (isUrl) "复制URL" else null,
+            neutralText = if (isUrl) getString(R.string.library_container_copy_url) else null,
             onPositive = {
                 sendToClip(keyText)
                 toastOnUi(R.string.copy_complete)
@@ -339,9 +339,9 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         editingSourceUrls = item?.sourceUrls.orEmpty().toMutableSet()
 
         val title = when {
-            item == null -> "添加书库容器"
-            locked -> "编辑同步书源"
-            else -> "编辑书库容器"
+            item == null -> getString(R.string.library_container_add)
+            locked -> getString(R.string.library_container_edit_sync_sources)
+            else -> getString(R.string.library_container_edit)
         }
 
         if (locked) {
@@ -364,9 +364,9 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
             getString(R.string.s3_prefix) as CharSequence,
             getString(R.string.s3_region) as CharSequence,
             getString(R.string.s3_session_token) as CharSequence,
-            "书库加密密码" as CharSequence,
-            "最少自动上传字数" as CharSequence,
-            "每日自动上传章节上限" as CharSequence
+            getString(R.string.library_container_encrypt_password) as CharSequence,
+            getString(R.string.library_container_min_upload_chars) as CharSequence,
+            getString(R.string.library_container_daily_upload_limit) as CharSequence
         )
         val initialValues = listOf(
             container?.name.orEmpty(),
@@ -422,7 +422,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
                 index.takeIf { editingSourceUrls.contains(source.bookSourceUrl) }
             }.toSet()
             showComposeMultiChoiceDialog(
-                title = "指定书源",
+                title = getString(R.string.library_container_specify_sources),
                 labels = labels,
                 checkedIndices = checkedIndices,
                 positiveText = getString(android.R.string.ok),
@@ -436,7 +436,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
                         item.copy(sourceUrls = selected, lockedImported = true)
                     )
                     reload()
-                    toastOnUi("已保存指定书源")
+                    toastOnUi(R.string.library_container_saved_sources)
                 }
             )
         }
@@ -517,7 +517,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         }
         return actions.map { action ->
             AppManagementMenuAction(
-                text = action.title,
+                text = getString(action.titleRes),
                 danger = action == Action.DELETE
             ) {
                 when (action) {
@@ -552,8 +552,8 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
 
     private fun confirmDelete(item: LibraryContainerConfig) {
         showComposeConfirmDialog(
-            title = "删除书库容器",
-            message = "确认删除 ${LibraryContainerManager.displayLabel(item)}？",
+            title = getString(R.string.library_container_delete_title),
+            message = getString(R.string.library_container_delete_message, LibraryContainerManager.displayLabel(item)),
             positiveText = getString(R.string.delete),
             negativeText = getString(R.string.cancel),
             dangerPositive = true,
@@ -598,15 +598,15 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
         }
     }
 
-    private enum class Action(val title: String) {
-        EDIT("编辑"),
-        EXPORT("导出"),
-        TEST("测试连接"),
-        REFRESH("刷新容量"),
-        SET_DEFAULT("设为默认"),
-        ENABLE("启用"),
-        DISABLE("禁用"),
-        DELETE("删除")
+    private enum class Action(val titleRes: Int) {
+        EDIT(R.string.edit),
+        EXPORT(R.string.export),
+        TEST(R.string.library_container_test),
+        REFRESH(R.string.library_container_refresh),
+        SET_DEFAULT(R.string.library_container_set_default),
+        ENABLE(R.string.library_container_enable),
+        DISABLE(R.string.library_container_disable),
+        DELETE(R.string.delete)
     }
 
     internal companion object {

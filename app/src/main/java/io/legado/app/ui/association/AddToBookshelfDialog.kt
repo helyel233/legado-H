@@ -26,6 +26,7 @@ import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 
 /**
  * 添加书籍链接到书架，需要对应网站书源
@@ -63,7 +64,7 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         val bookUrl = arguments?.getString("bookUrl")
         if (bookUrl.isNullOrBlank()) {
-            toastOnUi("url不能为空")
+            toastOnUi(appCtx.getString(R.string.ui_main_url_cannot_be_empty))
             dismiss()
             return
         }

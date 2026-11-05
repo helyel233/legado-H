@@ -18,6 +18,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import splitties.init.appCtx
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import io.legado.app.R
 
 private val handler by lazy { buildMainHandler() }
 
@@ -71,7 +72,7 @@ fun CharSequence.replace(
                     job.onJoin {}
                     onTimeout(timeout) {
                         val timeoutMsg =
-                            "替换超时,3秒后还未结束将重启应用\n规则名称:$name\n替换规则:$regex\n替换内容:$charSequence"
+                            appCtx.getString(R.string.misc_replacement_timed_out_app_will, name, regex, charSequence)
                         val exception = RegexTimeoutException(timeoutMsg)
                         block.cancel(exception)
                         appCtx.longToastOnUi(timeoutMsg)

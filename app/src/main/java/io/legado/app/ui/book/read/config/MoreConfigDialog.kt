@@ -279,7 +279,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                             PreferKey.doublePageHorizontal, PreferKey.useZhLayout, PreferKey.textBottomJustify,
                             PreferKey.adaptSpecialStyle, PreferKey.optimizeRender
                         ) }.filterNot { ReadBook.usesPageTemplate() && it.key in setOf(
-                            PreferKey.textFullJustify, "epubLayout." + PreferKey.textFullJustify,
+                            PreferKey.textFullJustify, PreferKey.epubLayoutPrefix + PreferKey.textFullJustify,
                             PreferKey.showReadTitleAddition, PreferKey.paddingDisplayCutouts
                         ) }
                     )
@@ -307,7 +307,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 }
 
                 PreferKey.textFullJustify,
-                "epubLayout.textFullJustify",
+                PreferKey.epubLayoutPrefix + PreferKey.textFullJustify,
                 PreferKey.textBottomJustify,
                 PreferKey.useZhLayout,
                 PreferKey.adaptSpecialStyle-> {
@@ -463,7 +463,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         companion object {
             private const val KEY_CLICK_REGIONAL_CONFIG = "clickRegionalConfig"
             private const val KEY_CUSTOM_PAGE_KEY = "customPageKey"
-            private const val KEY_DISABLE_RETURN_KEY = "disableReturnKey"
+            private const val KEY_DISABLE_RETURN_KEY = PreferKey.disableReturnKey
         }
     }
 }

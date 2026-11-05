@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
@@ -54,6 +55,7 @@ import io.legado.app.utils.applyTint
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.gone
+import io.legado.app.utils.observeEvent
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.share
@@ -252,6 +254,15 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         }
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
             currentRssScrollTarget()?.canScrollVertically(-1) == true
+        }
+    }
+
+    override fun observeLiveBus() {
+        super.observeLiveBus()
+        // 「页面布局」设置页改了订阅列数后，这里按新值重排，避免切回来仍是旧列数
+        observeEvent<String>(EventBus.UP_PAGE_LAYOUT) {
+            if (!isAdded || view == null) return@observeEvent
+            applyRssSourceLayout()
         }
     }
 

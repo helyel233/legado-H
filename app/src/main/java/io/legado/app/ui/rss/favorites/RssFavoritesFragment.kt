@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import splitties.init.appCtx
 
 class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fragment_rss_articles),
     RssFavoritesAdapter.CallBack {
@@ -64,7 +65,7 @@ class RssFavoritesFragment() : VMBaseFragment<RssFavoritesViewModel>(R.layout.fr
         // 必须用 viewLifecycleOwner：Fragment 宿主在 ViewPager 里视图会销毁重建，
         // 用 lifecycleScope 会在视图销毁后继续 collect 并对已 detach 的 RecyclerView setItems
         viewLifecycleOwner.lifecycleScope.launch {
-            val group = arguments?.getString("group") ?: "默认分组"
+            val group = arguments?.getString("group") ?: appCtx.getString(R.string.ra_cfg_default_group)
             appDb.rssStarDao.flowByGroup(group).catch {
                 AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).collect {

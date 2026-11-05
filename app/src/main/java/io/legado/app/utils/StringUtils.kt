@@ -15,6 +15,8 @@ import java.util.regex.Pattern
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.math.abs
+import io.legado.app.R
+import splitties.init.appCtx
 
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
@@ -70,8 +72,8 @@ object StringUtils {
             if (oldHour == 0) {
                 //比日期:昨天今天和明天
                 return when {
-                    difDate == 0L -> "今天"
-                    difDate < DAY_OF_YESTERDAY -> "昨天"
+                    difDate == 0L -> appCtx.getString(R.string.read_record_today_word)
+                    difDate < DAY_OF_YESTERDAY -> appCtx.getString(R.string.read_record_yesterday_word)
                     else -> {
                         @SuppressLint("SimpleDateFormat")
                         val convertFormat = SimpleDateFormat("yyyy-MM-dd")
@@ -84,7 +86,7 @@ object StringUtils {
                 difSec < TIME_UNIT -> difSec.toString() + "秒前"
                 difMin < TIME_UNIT -> difMin.toString() + "分钟前"
                 difHour < HOUR_OF_DAY -> difHour.toString() + "小时前"
-                difDate < DAY_OF_YESTERDAY -> "昨天"
+                difDate < DAY_OF_YESTERDAY -> appCtx.getString(R.string.read_record_yesterday_word)
                 else -> {
                     @SuppressLint("SimpleDateFormat")
                     val convertFormat = SimpleDateFormat("yyyy-MM-dd")

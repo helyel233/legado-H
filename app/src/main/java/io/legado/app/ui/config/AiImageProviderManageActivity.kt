@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import splitties.init.appCtx
 
 class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>() {
 
@@ -108,7 +109,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
         val labels = listOf(
             getString(R.string.ai_image_provider_openai),
             getString(R.string.ai_image_provider_js),
-            "导入 JS 生图规则"
+            appCtx.getString(R.string.ai_ui_import_js_image_rule)
         )
         showComposeActionListDialog(
             title = getString(R.string.add),
@@ -124,8 +125,8 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, MENU_IMPORT_RULE, 0, "导入规则").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, MENU_EXPORT_RULES, 1, "导出规则").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu.add(0, MENU_IMPORT_RULE, 0, appCtx.getString(R.string.ai_ui_import_rule)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu.add(0, MENU_EXPORT_RULES, 1, appCtx.getString(R.string.ai_ui_export_rule)).setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return super.onCompatCreateOptionsMenu(menu)
     }
 
@@ -153,14 +154,14 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
         return buildList {
             if (!isCurrent) {
                 add(
-                    AppManagementMenuAction("设为当前生图模型") {
+                    AppManagementMenuAction(appCtx.getString(R.string.ai_ui_set_as_current_image_model)) {
                         if (!provider.enabled) {
-                            toastOnUi("请先启用该生图模型")
+                            toastOnUi(appCtx.getString(R.string.ai_ui_enable_this_image_model_first))
                         } else {
                             AppConfig.aiCurrentImageProviderId = provider.id
                             notifyAiConfigChanged()
                             reload()
-                            toastOnUi("已设为当前生图模型")
+                            toastOnUi(appCtx.getString(R.string.ai_ui_set_as_current_image_model_2))
                         }
                     }
                 )
@@ -186,9 +187,9 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
                 }
             )
             if (isJsRule) {
-                add(AppManagementMenuAction("导出规则") { exportRule(provider) })
+                add(AppManagementMenuAction(appCtx.getString(R.string.ai_ui_export_rule)) { exportRule(provider) })
                 add(
-                    AppManagementMenuAction("复制规则") {
+                    AppManagementMenuAction(appCtx.getString(R.string.ai_ui_copy_rule)) {
                         sendToClip(serializeRule(provider))
                         toastOnUi(R.string.copy_complete)
                     }
@@ -364,7 +365,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
         val importedRules = validRules.mapIndexed { index, rule ->
             rule.copy(
                 id = UUID.randomUUID().toString(),
-                name = rule.name.trim().ifBlank { "生图规则" },
+                name = rule.name.trim().ifBlank { appCtx.getString(R.string.ai_ui_image_rule) },
                 type = AiImageProviderConfig.TYPE_JS,
                 baseUrl = "",
                 apiKey = "",
@@ -380,7 +381,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
         }
         notifyAiConfigChanged()
         reload()
-        toastOnUi("已导入 ${validRules.size} 个生图规则")
+        toastOnUi(appCtx.getString(R.string.ai_ui_image_rules_imported, validRules.size))
     }
 
     private fun exportRule(provider: AiImageProviderConfig) {

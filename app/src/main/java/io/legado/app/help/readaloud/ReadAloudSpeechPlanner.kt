@@ -7,6 +7,8 @@ import io.legado.app.help.readaloud.speech.SpeechRoute
 import io.legado.app.help.readaloud.speech.SpeechRouteSanitizer
 import io.legado.app.ui.book.read.page.entities.ReadAloudCue
 import io.legado.app.ui.book.read.page.entities.TextChapter
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class ReadAloudSpeechPlan(
     val cues: List<ReadAloudCue>,
@@ -78,7 +80,7 @@ object ReadAloudSpeechPlanner {
                     route = null,
                     roleType = "narrator",
                     characterId = 0L,
-                    characterName = "旁白",
+                    characterName = appCtx.getString(R.string.ra_panel_narrator),
                     avatar = "",
                     emotionName = "",
                     roleLevel = BookCharacter.ROLE_NORMAL,
@@ -122,11 +124,11 @@ object ReadAloudSpeechPlanner {
                 val pageStartPos = (chapterPosition - chapter.getReadLength(pageIndex)).coerceAtLeast(0)
                 val character = resolveCharacter(segment, byId, byName)
                 val displayName = when {
-                    segment.roleType == "narrator" -> "旁白"
+                    segment.roleType == "narrator" -> appCtx.getString(R.string.ra_panel_narrator)
                     character != null -> character.displayName()
                     segment.characterName.isNotBlank() -> segment.characterName
-                    segment.roleType == "thought" -> "心理"
-                    else -> "角色"
+                    segment.roleType == "thought" -> appCtx.getString(R.string.ra_panel_thought)
+                    else -> appCtx.getString(R.string.ra_panel_character)
                 }
                 val characterId = character?.id ?: segment.characterId
                 val route = routeForSegment(character, segment)
@@ -163,7 +165,7 @@ object ReadAloudSpeechPlanner {
                     route = null,
                     roleType = "narrator",
                     characterId = 0L,
-                    characterName = "旁白",
+                    characterName = appCtx.getString(R.string.ra_panel_narrator),
                     avatar = "",
                     emotionName = "",
                     roleLevel = BookCharacter.ROLE_NORMAL,
@@ -334,7 +336,7 @@ object ReadAloudSpeechPlanner {
             start = start,
             end = end,
             roleType = "narrator",
-            characterName = "旁白",
+            characterName = appCtx.getString(R.string.ra_panel_narrator),
             confidence = 0.5
         )
     }

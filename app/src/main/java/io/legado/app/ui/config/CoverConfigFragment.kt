@@ -43,27 +43,27 @@ class CoverConfigFragment : ComposeSettingFragment() {
                 SettingSectionSpec(
                     items = listOf(
                         SettingSwitchSpec(
-                            key = "loadCoverOnlyWifi",
-                            title = getString(R.string.only_wifi),
-                            summary = getString(R.string.only_wifi_summary),
-                            checked = booleanSetting("loadCoverOnlyWifi", false),
+                            key = PreferKey.loadCoverOnlyWifi,
+                            title = str(R.string.only_wifi),
+                            summary = str(R.string.only_wifi_summary),
+                            checked = booleanSetting(PreferKey.loadCoverOnlyWifi, false),
                             onCheckedChange = {
-                                updateBooleanSetting("loadCoverOnlyWifi", it)
+                                updateBooleanSetting(PreferKey.loadCoverOnlyWifi, it)
                             }
                         ),
                         SettingSwitchSpec(
-                            key = "loadCoverHighQuality",
-                            title = getString(R.string.load_cover_high_quality),
-                            summary = getString(R.string.load_cover_high_quality_summary),
-                            checked = booleanSetting("loadCoverHighQuality", false),
+                            key = PreferKey.loadCoverHighQuality,
+                            title = str(R.string.load_cover_high_quality),
+                            summary = str(R.string.load_cover_high_quality_summary),
+                            checked = booleanSetting(PreferKey.loadCoverHighQuality, false),
                             onCheckedChange = {
-                                updateBooleanSetting("loadCoverHighQuality", it)
+                                updateBooleanSetting(PreferKey.loadCoverHighQuality, it)
                             }
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.bookCoverShadow,
-                            title = getString(R.string.book_cover_shadow),
-                            summary = getString(R.string.book_cover_shadow_summary),
+                            title = str(R.string.book_cover_shadow),
+                            summary = str(R.string.book_cover_shadow_summary),
                             checked = booleanSetting(PreferKey.bookCoverShadow, true),
                             searchKeys = listOf("coverShadow", "cover_shadow", "shadow"),
                             onCheckedChange = {
@@ -72,25 +72,25 @@ class CoverConfigFragment : ComposeSettingFragment() {
                         ),
                         SettingActionSpec(
                             key = KEY_COVER_RULE,
-                            title = getString(R.string.cover_rule),
-                            summary = getString(R.string.cover_rule_summary),
+                            title = str(R.string.cover_rule),
+                            summary = str(R.string.cover_rule_summary),
                             onClick = {
                                 showDialogFragment(CoverRuleConfigDialog())
                             }
                         ),
                         SettingSwitchSpec(
-                            key = "useDefaultCover",
-                            title = getString(R.string.use_default_cover),
-                            summary = getString(R.string.use_default_cover_s),
-                            checked = booleanSetting("useDefaultCover", false),
+                            key = PreferKey.useDefaultCover,
+                            title = str(R.string.use_default_cover),
+                            summary = str(R.string.use_default_cover_s),
+                            checked = booleanSetting(PreferKey.useDefaultCover, false),
                             onCheckedChange = {
-                                updateBooleanSetting("useDefaultCover", it)
+                                updateBooleanSetting(PreferKey.useDefaultCover, it)
                             }
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.coverHtmlEnable,
-                            title = getString(R.string.cover_html_enable),
-                            summary = getString(R.string.cover_html_enable_summary),
+                            title = str(R.string.cover_html_enable),
+                            summary = str(R.string.cover_html_enable_summary),
                             checked = booleanSetting(PreferKey.coverHtmlEnable, false),
                             searchKeys = listOf("coverHtml", "cover_html", "html"),
                             onCheckedChange = {
@@ -101,15 +101,17 @@ class CoverConfigFragment : ComposeSettingFragment() {
                         ),
                         SettingActionSpec(
                             key = KEY_COVER_HTML_CODE,
-                            title = getString(R.string.cover_html_code),
-                            summary = getString(R.string.cover_html_code_summary),
+                            navigates = true,
+                            title = str(R.string.cover_html_code),
+                            summary = str(R.string.cover_html_code_summary),
                             onClick = {
-                                CoverHtmlActivity.start(requireContext())
+                                CoverHtmlActivity.start(ctx)
                             }
                         ),
                         SettingActionSpec(
                             key = KEY_COVER_COLLECTION_MANAGE,
-                            title = getString(R.string.cover_collection_manage),
+                            navigates = true,
+                            title = str(R.string.cover_collection_manage),
                             onClick = {
                                 startActivity<CoverCollectionManageActivity>()
                             }
@@ -157,17 +159,17 @@ class CoverConfigFragment : ComposeSettingFragment() {
         val showName = booleanSetting(showNameKey, true)
         val mode = stringSetting(modeKey, CoverCollectionManager.MODE_RANDOM)
         return SettingSectionSpec(
-            title = getString(if (isNight) R.string.night else R.string.day),
+            title = str(if (isNight) R.string.night else R.string.day),
             items = listOf(
                 SettingActionSpec(
                     key = collectionKey,
-                    title = getString(R.string.cover_collection_select),
+                    title = str(R.string.cover_collection_select),
                     summary = coverCollectionSummary(isNight, stringSetting(collectionKey, "")),
                     onClick = { selectCoverCollection(isNight) }
                 ),
                 SettingChoiceSpec(
                     key = modeKey,
-                    title = getString(R.string.cover_collection_mode),
+                    title = str(R.string.cover_collection_mode),
                     options = coverModeOptions(),
                     selectedValue = mode,
                     summary = coverModeLabel(mode),
@@ -177,8 +179,8 @@ class CoverConfigFragment : ComposeSettingFragment() {
                 ),
                 SettingSwitchSpec(
                     key = showNameKey,
-                    title = getString(R.string.cover_show_name),
-                    summary = getString(R.string.cover_show_name_summary),
+                    title = str(R.string.cover_show_name),
+                    summary = str(R.string.cover_show_name_summary),
                     checked = showName,
                     onCheckedChange = {
                         updateBooleanSetting(showNameKey, it)
@@ -186,8 +188,8 @@ class CoverConfigFragment : ComposeSettingFragment() {
                 ),
                 SettingSwitchSpec(
                     key = showAuthorKey,
-                    title = getString(R.string.cover_show_author),
-                    summary = getString(R.string.cover_show_author_summary),
+                    title = str(R.string.cover_show_author),
+                    summary = str(R.string.cover_show_author_summary),
                     checked = booleanSetting(showAuthorKey, true),
                     enabled = showName,
                     onCheckedChange = {
@@ -199,8 +201,8 @@ class CoverConfigFragment : ComposeSettingFragment() {
     }
 
     private fun coverModeOptions(): List<SettingChoiceOption> {
-        val entries = resources.getStringArray(R.array.cover_collection_mode_entries)
-        val values = resources.getStringArray(R.array.cover_collection_mode_values)
+        val entries = ctx.resources.getStringArray(R.array.cover_collection_mode_entries)
+        val values = ctx.resources.getStringArray(R.array.cover_collection_mode_values)
         return values.mapIndexed { index, value ->
             SettingChoiceOption(
                 value = value,
@@ -222,20 +224,20 @@ class CoverConfigFragment : ComposeSettingFragment() {
         selectedId: String?
     ): String {
         return CoverCollectionManager.cachedName(isNight, selectedId)
-            ?: getString(R.string.cover_collection_none)
+            ?: str(R.string.cover_collection_none)
     }
 
     private fun selectCoverCollection(isNight: Boolean) {
         lifecycleScope.launch {
             val collections = CoverCollectionManager.load(isNight)
-            val labels = listOf(getString(R.string.cover_collection_none)) +
+            val labels = listOf(str(R.string.cover_collection_none)) +
                 collections.map { "${it.name} (${it.images.size})" }
             val selectedId = stringSetting(
                 if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay,
                 ""
             )
             showComposeChoiceListDialog(
-                title = getString(R.string.cover_collection_select),
+                title = str(R.string.cover_collection_select),
                 labels = labels,
                 selectedIndex = if (selectedId.isBlank()) {
                     0

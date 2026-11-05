@@ -13,6 +13,7 @@ import splitties.init.appCtx
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.R
 
 data class AiDailyUsage(
     val day: String,
@@ -83,7 +84,7 @@ object AiUsageTracker {
         val usage = todayUsage()
         if (usage.totalTokens < budget) return
         throw AiChatException(
-            message = "今日 AI 用量已达到每日预算上限，请调整预算或明日再试。",
+            message = appCtx.getString(R.string.misc_today_s_ai_usage_has),
             debugLog = "dailyBudgetExceeded budget=$budget used=${usage.totalTokens}"
         )
     }

@@ -1,0 +1,1277 @@
+{
+  "prefix": "ai_state",
+  "resource": "strings_ai_state.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/help/ai/AiChapterSummaryService.kt",
+    "app/src/main/java/io/legado/app/help/ai/AiTaskKeepAlive.kt",
+    "app/src/main/java/io/legado/app/help/ai/AiContentConsent.kt",
+    "app/src/main/java/io/legado/app/help/ai/AiMemoryStore.kt",
+    "app/src/main/java/io/legado/app/help/ai/AiReadAloudRoleService.kt",
+    "app/src/main/java/io/legado/app/help/ai/AiChatService.kt"
+  ],
+  "entries": [
+    {
+      "zh": "当前章节正文为空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChapterSummaryService.kt:59: require(content.isNotBlank()) { \"当前章节正文为空\" }"
+      ]
+    },
+    {
+      "zh": "分析第 ${index + 1}/${chunks.size} 段",
+      "en": "Analyzing segment %1$s/%2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChapterSummaryService.kt:65: onStatus(status(\"summary\", \"分析第 ${index + 1}/${chunks.size} 段\"))"
+      ],
+      "key": "ai_state_analyzing_segment"
+    },
+    {
+      "zh": "## 分段 ${index + 1}\\n$summary",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChapterSummaryService.kt:140: ${chunkSummaries.mapIndexed { index, summary -> \"## 分段 ${index + 1}\\n$summary\" }.joinToString(\"\\n\\n\")}"
+      ]
+    },
+    {
+      "zh": "暂无角色卡",
+      "en": "",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "AiChapterSummaryService.kt:167: .ifBlank { \"暂无角色卡\" }",
+        "AiReadAloudRoleService.kt:2069: .ifBlank { \"暂无角色卡\" }",
+        "AiReadAloudRoleService.kt:2248: .ifBlank { \"暂无角色卡\" }"
+      ]
+    },
+    {
+      "zh": "分段",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChapterSummaryService.kt:177: 6. 最终回答只输出当前${if (chunkCount > 1) \"分段\" else appCtx.getString(R.string.manga_check_chapter)}摘要，不要解释工具调用。"
+      ]
+    },
+    {
+      "zh": "AI任务处理中",
+      "en": "AI task in progress",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiTaskKeepAlive.kt:45: get() = latestTask()?.title ?: \"AI任务处理中\"",
+        "AiTaskKeepAlive.kt:79: title = title.ifBlank { \"AI任务处理中\" },"
+      ],
+      "key": "ai_state_ai_task_progress"
+    },
+    {
+      "zh": "阅读页问AI",
+      "en": "Ask AI on reading page",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiTaskKeepAlive.kt:124: AiAgentJob.TYPE_READ_AI -> \"阅读页问AI\""
+      ],
+      "key": "ai_state_ask_ai_reading_page"
+    },
+    {
+      "zh": "角色分配中",
+      "en": "Assigning roles",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiTaskKeepAlive.kt:125: AiAgentJob.TYPE_ROLE_ASSIGN -> \"角色分配中\""
+      ],
+      "key": "ai_state_assigning_roles"
+    },
+    {
+      "zh": "智能音频处理中",
+      "en": "Processing smart audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiTaskKeepAlive.kt:126: AiAgentJob.TYPE_AUDIO_ASSIGN -> \"智能音频处理中\""
+      ],
+      "key": "ai_state_processing_smart_audio"
+    },
+    {
+      "zh": "AI回复生成中",
+      "en": "Generating AI reply",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiTaskKeepAlive.kt:127: else -> \"AI回复生成中\""
+      ],
+      "key": "ui_main_generating_ai_reply_2"
+    },
+    {
+      "zh": "已在 AI 设置中禁止发送书籍正文，无法使用${feature}",
+      "en": "Sending book content is disabled in AI settings; %1$s is unavailable",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiContentConsent.kt:48: context.toastOnUi(\"已在 AI 设置中禁止发送书籍正文，无法使用${feature}\")",
+        "AiContentConsent.kt:84: context.toastOnUi(\"已在 AI 设置中禁止发送书籍正文，无法使用${feature}\")"
+      ],
+      "key": "ai_state_sending_book_content_disabled_ai"
+    },
+    {
+      "zh": "「${feature}」需要发送书籍正文，请在 AI 设置中授权后使用",
+      "en": "%1$s needs to send book content. Allow it in AI settings first.",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiContentConsent.kt:54: context.toastOnUi(\"「${feature}」需要发送书籍正文，请在 AI 设置中授权后使用\")",
+        "AiContentConsent.kt:88: context.toastOnUi(\"「${feature}」需要发送书籍正文，请在 AI 设置中授权后使用\")"
+      ],
+      "key": "ai_state_needs_send_book_content_allow"
+    },
+    {
+      "zh": "已取消，可在 AI 设置中修改授权",
+      "en": "Cancelled. You can change the permission in AI settings.",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiContentConsent.kt:69: context.toastOnUi(\"已取消，可在 AI 设置中修改授权\")",
+        "AiContentConsent.kt:111: activity.toastOnUi(\"已取消，可在 AI 设置中修改授权\")"
+      ],
+      "key": "ai_state_cancelled_you_can_change_permission"
+    },
+    {
+      "zh": "AI 对话",
+      "en": "AI conversation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:260: title = context.title.ifBlank { \"AI 对话\" },"
+      ],
+      "key": "ai_state_ai_conversation"
+    },
+    {
+      "zh": "我希望",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "我喜欢",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "我不希望",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "我不喜欢",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "以后",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "记住",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:273: val hit = listOf(\"我希望\", \"我喜欢\", \"我不希望\", \"我不喜欢\", \"以后\", \"记住\")"
+      ]
+    },
+    {
+      "zh": "用户偏好",
+      "en": "User preferences",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMemoryStore.kt:280: subject = \"用户偏好\","
+      ],
+      "key": "ai_state_user_preferences"
+    },
+    {
+      "zh": "([\\\\p{IsHan}A-Za-z0-9_·]{1,24})\\\\s*(?:说道|说|道|问道|问|答道|答|笑道|冷声道|沉声道|低声道|怒道|喝道|喊道|叫道|开口道|喃喃道)\\\\s*[，,、：:]?\\\\s*$",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:57: \"([\\\\p{IsHan}A-Za-z0-9_·]{1,24})\\\\s*(?:说道|说|道|问道|问|答道|答|笑道|冷声道|沉声道|低声道|怒道|喝道|喊道|叫道|开口道|喃喃道)\\\\s*[，,、：:]?\\\\s*$\""
+      ]
+    },
+    {
+      "zh": "(?:说道|问道|答道|笑道|冷声道|沉声道|低声道|怒道|喝道|喊道|叫道|开口道|喃喃道|警告|提醒|告诉|炫耀|得意|有些|突然|已经|正在)",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:60: \"(?:说道|问道|答道|笑道|冷声道|沉声道|低声道|怒道|喝道|喊道|叫道|开口道|喃喃道|警告|提醒|告诉|炫耀|得意|有些|突然|已经|正在)\""
+      ]
+    },
+    {
+      "zh": "章节内容为空",
+      "en": "Chapter content is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:239: return ManualSegmentAssignmentResult(false, \"章节内容为空\")"
+      ],
+      "key": "ai_state_chapter_content_empty"
+    },
+    {
+      "zh": "多角色模型未配置",
+      "en": "No multi-role model configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:242: ?: return ManualSegmentAssignmentResult(false, \"多角色模型未配置\")"
+      ],
+      "key": "ai_state_no_multi_role_model_configured"
+    },
+    {
+      "zh": "当前章节没有可修改的分配缓存",
+      "en": "This chapter has no editable assignment cache",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:251: ?: return ManualSegmentAssignmentResult(false, \"当前章节没有可修改的分配缓存\")"
+      ],
+      "key": "ai_state_this_chapter_has_no_editable"
+    },
+    {
+      "zh": "没有找到对应片段",
+      "en": "Matching segment not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:259: return ManualSegmentAssignmentResult(false, \"没有找到对应片段\")"
+      ],
+      "key": "ai_state_matching_segment_not_found"
+    },
+    {
+      "zh": "已更新片段分配",
+      "en": "Segment assignments updated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:305: message = \"已更新片段分配\","
+      ],
+      "key": "ai_state_segment_assignments_updated"
+    },
+    {
+      "zh": "多角色分配失败",
+      "en": "Multi-role assignment failed",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:385: var lastResult = EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = \"多角色分配失败\")",
+        "AiReadAloudRoleService.kt:908: error = cache.lastError.ifBlank { \"多角色分配失败\" },"
+      ],
+      "key": "ai_state_multi_role_assignment_failed",
+      "force": true
+    },
+    {
+      "zh": "多角色未开启",
+      "en": "Multi-role is disabled",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:420: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"多角色未开启\")"
+      ],
+      "key": "ai_state_multi_role_disabled"
+    },
+    {
+      "zh": "未配置多角色模型",
+      "en": "No multi-role model configured",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:423: ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"未配置多角色模型\")",
+        "AiReadAloudRoleService.kt:437: ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"未配置多角色模型\")"
+      ],
+      "key": "ai_state_no_multi_role_model_configured_2"
+    },
+    {
+      "zh": "多角色模型供应商不可用",
+      "en": "The multi-role model provider is unavailable",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:425: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"多角色模型供应商不可用\")"
+      ],
+      "key": "ai_state_multi_role_model_provider_unavailable"
+    },
+    {
+      "zh": "书籍为空",
+      "en": "Book is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:428: ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"书籍为空\")"
+      ],
+      "key": "ai_state_book_empty"
+    },
+    {
+      "zh": "章节为空",
+      "en": "Chapter is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:430: ?: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"章节为空\")"
+      ],
+      "key": "ai_state_chapter_empty"
+    },
+    {
+      "zh": "当前章节无可朗读段落",
+      "en": "No readable paragraphs in this chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:434: return EnsureResult(AiReadAloudRoleState.STATUS_SKIPPED, message = \"当前章节无可朗读段落\")"
+      ],
+      "key": "ai_state_no_readable_paragraphs_this_chapter"
+    },
+    {
+      "zh": "当前章节角色已分配",
+      "en": "Roles already assigned for this chapter",
+      "count": 6,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:520: \"当前章节角色已分配\",",
+        "AiReadAloudRoleService.kt:528: message = \"当前章节角色已分配\",",
+        "AiReadAloudRoleService.kt:569: \"当前章节角色已分配\","
+      ],
+      "key": "ai_state_roles_already_assigned_this_chapter"
+    },
+    {
+      "zh": "分配角色中",
+      "en": "Assigning roles",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:583: postState(currentBook, currentChapter, stage, AiReadAloudRoleState.STATUS_RUNNING, stageMessage(stage, \"分配角色中\"), cleanPa",
+        "AiReadAloudRoleService.kt:584: return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = \"分配角色中\", cacheKey = cacheKey)",
+        "AiReadAloudRoleService.kt:657: return EnsureResult(AiReadAloudRoleState.STATUS_RUNNING, message = \"分配角色中\", cacheKey = cacheKey)"
+      ],
+      "key": "ai_state_assigning_roles_2"
+    },
+    {
+      "zh": "上次多角色分配中断，重新分配当前章节",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:627: AppLog.putDebug(\"上次多角色分配中断，重新分配当前章节\")"
+      ]
+    },
+    {
+      "zh": "AI分角色连续失败，请重新分配当前章节",
+      "en": "AI role assignment failed repeatedly; please reassign this chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:640: oldCache.lastError.ifBlank { \"AI分角色连续失败，请重新分配当前章节\" },"
+      ],
+      "key": "ai_state_ai_role_assignment_failed_repeatedly"
+    },
+    {
+      "zh": "AI分角色连续失败",
+      "en": "AI role assignment failed repeatedly",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "AiReadAloudRoleService.kt:643: error = oldCache.lastError.ifBlank { \"AI分角色连续失败\" }",
+        "AiReadAloudRoleService.kt:647: error = oldCache.lastError.ifBlank { \"AI分角色连续失败\" },",
+        "AiReadAloudRoleService.kt:652: val error = oldCache?.lastError?.ifBlank { \"AI分角色连续失败\" } ?: \"AI分角色连续失败\""
+      ],
+      "key": "ai_state_ai_role_assignment_failed_repeatedly_2",
+      "force": true
+    },
+    {
+      "zh": "本地预处理 ${preview.size} 个片段",
+      "en": "Preprocessed %1$s segments locally",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:712: if (source == AiReadAloudRoleState.SOURCE_RULE) \"本地预处理 ${preview.size} 个片段\" else \"已确认 ${preview.size} 个分配片段\","
+      ],
+      "key": "ai_state_preprocessed_segments_locally"
+    },
+    {
+      "zh": "已确认 ${preview.size} 个分配片段",
+      "en": "%1$s assigned segments confirmed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:712: if (source == AiReadAloudRoleState.SOURCE_RULE) \"本地预处理 ${preview.size} 个片段\" else \"已确认 ${preview.size} 个分配片段\","
+      ],
+      "key": "ai_state_assigned_segments_confirmed"
+    },
+    {
+      "zh": "AI未返回有效分角色片段，已使用默认分角色",
+      "en": "AI returned no valid role segments; default assignment used",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:729: \"AI未返回有效分角色片段，已使用默认分角色\""
+      ],
+      "key": "ai_state_ai_returned_no_valid_role"
+    },
+    {
+      "zh": "AI未完整确认不确定角色片段，请重新分配当前章节",
+      "en": "AI did not confirm every uncertain role segment; please reassign this chapter",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:731: \"AI未完整确认不确定角色片段，请重新分配当前章节\"",
+        "AiReadAloudRoleService.kt:755: if (aiSegments.isEmpty()) \"AI未返回有效分角色片段，请重新分配当前章节\" else \"AI未完整确认不确定角色片段，请重新分配当前章节\","
+      ],
+      "key": "ai_state_ai_did_not_confirm_every"
+    },
+    {
+      "zh": "AI未返回有效分角色片段，请重新分配当前章节",
+      "en": "AI returned no valid role segments; please reassign this chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:755: if (aiSegments.isEmpty()) \"AI未返回有效分角色片段，请重新分配当前章节\" else \"AI未完整确认不确定角色片段，请重新分配当前章节\","
+      ],
+      "key": "ai_state_ai_returned_no_valid_role_2"
+    },
+    {
+      "zh": "角色分配完成",
+      "en": "Role assignment complete",
+      "count": 5,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:801: stageMessage(stage, \"角色分配完成\"),",
+        "AiReadAloudRoleService.kt:816: message = \"角色分配完成\",",
+        "AiReadAloudRoleService.kt:887: message = stageMessage(stage, \"角色分配完成\"),"
+      ],
+      "key": "ai_state_role_assignment_complete"
+    },
+    {
+      "zh": "AI分角色失败，请重新分配当前章节",
+      "en": "AI role assignment failed; please reassign this chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:848: \"AI分角色失败，请重新分配当前章节\","
+      ],
+      "key": "ai_state_ai_role_assignment_failed_please"
+    },
+    {
+      "zh": "AI分角色标注失败\\n$error",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:858: AppLog.put(\"AI分角色标注失败\\n$error\", throwable)"
+      ]
+    },
+    {
+      "zh": "等待多角色分配超时",
+      "en": "Timed out waiting for multi-role assignment",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:915: return EnsureResult(AiReadAloudRoleState.STATUS_FAILED, error = \"等待多角色分配超时\", cacheKey = cacheKey)"
+      ],
+      "key": "ai_state_timed_out_waiting_multi_role",
+      "force": true
+    },
+    {
+      "zh": "旁白",
+      "en": "",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:1743: rawName in setOf(\"unknown\", \"未知\", \"不确定\", \"未识别\", \"旁白\") && roleType != \"narrator\" -> \"\"",
+        "AiReadAloudRoleService.kt:2833: } else if (!isCreatableCharacterName(segment.characterName) && segment.characterName != \"旁白\") {"
+      ]
+    },
+    {
+      "zh": "作者",
+      "en": "",
+      "count": 3,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiChatService.kt:1528: \"作者\","
+      ]
+    },
+    {
+      "zh": "读者",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "我",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "你",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "他",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "她",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "它",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "我们",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "你们",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "他们",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "她们",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "众人",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "有人",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AiReadAloudRoleService.kt:1115: return name !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")",
+        "AiReadAloudRoleService.kt:2865: return value !in setOf(\"旁白\", \"作者\", \"读者\", \"我\", \"你\", \"他\", \"她\", \"它\", \"我们\", \"你们\", \"他们\", \"她们\", \"众人\", \"有人\")"
+      ]
+    },
+    {
+      "zh": "角色分配失败",
+      "en": "Role assignment failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1180: AiReadAloudRoleState.STATUS_FAILED -> stageMessage(stage, \"角色分配失败\")"
+      ],
+      "key": "ai_state_role_assignment_failed"
+    },
+    {
+      "zh": "已确认 $segmentCount 个片段",
+      "en": "%1$s segments confirmed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1205: if (segmentCount > 0) add(\"已确认 $segmentCount 个片段\")"
+      ],
+      "key": "ai_state_segments_confirmed"
+    },
+    {
+      "zh": "$paragraphCount 段",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1206: if (paragraphCount > 0) add(\"$paragraphCount 段\")"
+      ]
+    },
+    {
+      "zh": "请求 ${usageSnapshot.requestCount} 次",
+      "en": "%1$s requests",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1207: if (usageSnapshot.requestCount > 0) add(\"请求 ${usageSnapshot.requestCount} 次\")"
+      ],
+      "key": "ai_state_requests"
+    },
+    {
+      "zh": "多角色分配批次失败，将只重试该批次：batch=${batch.index}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:1467: AppLog.putDebug(\"多角色分配批次失败，将只重试该批次：batch=${batch.index}\", it)"
+      ]
+    },
+    {
+      "zh": "全文批处理",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1577: batchName = if (fullChapterMode) \"全文批处理\" else \"并发查找批次 ${batch.index + 1}\",",
+        "AiReadAloudRoleService.kt:1590: batchName = if (fullChapterMode) \"全文批处理\" else \"并发查找批次 ${batch.index + 1}\","
+      ]
+    },
+    {
+      "zh": "并发查找批次 ${batch.index + 1}",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1577: batchName = if (fullChapterMode) \"全文批处理\" else \"并发查找批次 ${batch.index + 1}\",",
+        "AiReadAloudRoleService.kt:1590: batchName = if (fullChapterMode) \"全文批处理\" else \"并发查找批次 ${batch.index + 1}\","
+      ]
+    },
+    {
+      "zh": "未知",
+      "en": "",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "AiReadAloudRoleService.kt:1743: rawName in setOf(\"unknown\", \"未知\", \"不确定\", \"未识别\", \"旁白\") && roleType != \"narrator\" -> \"\"",
+        "AiReadAloudRoleService.kt:1815: .filter { value -> value.isNotBlank() && value != \"未知\" }",
+        "AiReadAloudRoleService.kt:2816: character.genderLabel().takeIf { it != \"未知\" }?.let { add(\"性别：$it\") }"
+      ]
+    },
+    {
+      "zh": "不确定",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:1743: rawName in setOf(\"unknown\", \"未知\", \"不确定\", \"未识别\", \"旁白\") && roleType != \"narrator\" -> \"\""
+      ]
+    },
+    {
+      "zh": "未识别",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:1743: rawName in setOf(\"unknown\", \"未知\", \"不确定\", \"未识别\", \"旁白\") && roleType != \"narrator\" -> \"\""
+      ]
+    },
+    {
+      "zh": "多角色工具未同步返回 newCharacters，已本地兜底候选：${names.joinToString(",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1778: \"多角色工具未同步返回 newCharacters，已本地兜底候选：${names.joinToString(\"、\")}\""
+      ]
+    },
+    {
+      "zh": "${unit.id}|${unit.roleType}|${unitParagraphLabel(unit)}|${unit.reason}|前=${unit.cueBefore.compactForPrompt(50)}|后=${unit.cueAfter.compactForPrompt(50)}|${unit.text.compactForPrompt(220)}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1844: \"${unit.id}|${unit.roleType}|${unitParagraphLabel(unit)}|${unit.reason}|前=${unit.cueBefore.compactForPrompt(50)}|后=${uni"
+      ]
+    },
+    {
+      "zh": "首轮：覆盖全部 targetUnitIds。证据不足返回 status=unknown，characterName 空。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1856: 0 -> \"首轮：覆盖全部 targetUnitIds。证据不足返回 status=unknown，characterName 空。\""
+      ]
+    },
+    {
+      "zh": "补救：只处理未解决 unit；仍无明确证据就 unknown，不猜。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1857: else -> \"补救：只处理未解决 unit；仍无明确证据就 unknown，不猜。\""
+      ]
+    },
+    {
+      "zh": "整章原文（用于上下文缓存和归因，不可改写）",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1875: ${if (fullChapterMode) \"整章原文（用于上下文缓存和归因，不可改写）\" else \"局部上下文（只发送当前请求附近段落，[TARGET] 是目标 unit 所在段落）\"}："
+      ]
+    },
+    {
+      "zh": "局部上下文（只发送当前请求附近段落，[TARGET] 是目标 unit 所在段落）",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1875: ${if (fullChapterMode) \"整章原文（用于上下文缓存和归因，不可改写）\" else \"局部上下文（只发送当前请求附近段落，[TARGET] 是目标 unit 所在段落）\"}："
+      ]
+    },
+    {
+      "zh": "分线程上下文模式，当前任务只记录目标段落 ${targetIndices.first() + 1}-${targetIndices.last() + 1}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:1916: contextTitle = \"分线程上下文模式，当前任务只记录目标段落 ${targetIndices.first() + 1}-${targetIndices.last() + 1}\","
+      ]
+    },
+    {
+      "zh": "$mark 段落${absolute + 1}: $text",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2073: \"$mark 段落${absolute + 1}: $text\"",
+        "AiReadAloudRoleService.kt:2252: \"$mark 段落${absolute + 1}: $text\""
+      ]
+    },
+    {
+      "zh": "自动生成角色头像失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudRoleService.kt:2805: AppLog.put(\"自动生成角色头像失败\\n${it.localizedMessage}\", it, false)"
+      ]
+    },
+    {
+      "zh": "小说角色头像，单人头像，清晰，适合角色卡，不要文字。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2813: add(\"小说角色头像，单人头像，清晰，适合角色卡，不要文字。\")"
+      ]
+    },
+    {
+      "zh": "优先表现可见形象、服饰、气质和年龄感；不要把角色名或证据文字画进图片。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2814: add(\"优先表现可见形象、服饰、气质和年龄感；不要把角色名或证据文字画进图片。\")"
+      ]
+    },
+    {
+      "zh": "角色名：${character.displayName()}",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2815: add(\"角色名：${character.displayName()}\")",
+        "AiChatService.kt:1432: \"角色名：${character.displayName()}\","
+      ]
+    },
+    {
+      "zh": "性别：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2816: character.genderLabel().takeIf { it != \"未知\" }?.let { add(\"性别：$it\") }"
+      ]
+    },
+    {
+      "zh": "年纪：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2817: BookCharacterProfileMeta.ageOf(character).takeIf { it.isNotBlank() }?.let { add(\"年纪：$it\") }"
+      ]
+    },
+    {
+      "zh": "身份：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2818: character.identity.takeIf { it.isNotBlank() }?.let { add(\"身份：$it\") }"
+      ]
+    },
+    {
+      "zh": "形象：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2819: character.appearance.takeIf { it.isNotBlank() }?.let { add(\"形象：$it\") }"
+      ]
+    },
+    {
+      "zh": "性格：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2820: character.personality.takeIf { it.isNotBlank() }?.let { add(\"性格：$it\") }"
+      ]
+    },
+    {
+      "zh": "章节证据：$it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2821: character.biography.takeIf { it.isNotBlank() }?.let { add(\"章节证据：$it\") }"
+      ]
+    },
+    {
+      "zh": "批量确认朗读unit的角色、说话人和情绪。如果 units 里填写了不在已知角色卡列表中的 characterName，必须在 newCharacters 中同步返回该角色。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2896: \"批量确认朗读unit的角色、说话人和情绪。如果 units 里填写了不在已知角色卡列表中的 characterName，必须在 newCharacters 中同步返回该角色。\""
+      ]
+    },
+    {
+      "zh": "life stage such as 少年/青年/中年/老年, blank if unknown",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2929: put(\"ageStage\", stringProp(\"life stage such as 少年/青年/中年/老年, blank if unknown\"))"
+      ]
+    },
+    {
+      "zh": "记录朗读分角色片段标注。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2952: put(\"description\", \"记录朗读分角色片段标注。\")"
+      ]
+    },
+    {
+      "zh": "Optional emotion tag, e.g. [高兴].",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2968: put(\"emotionTag\", stringProp(\"Optional emotion tag, e.g. [高兴].\"))"
+      ]
+    },
+    {
+      "zh": "Life stage such as 少年/青年/中年/老年, blank if unknown.",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudRoleService.kt:2983: put(\"ageStage\", stringProp(\"Life stage such as 少年/青年/中年/老年, blank if unknown.\"))"
+      ]
+    },
+    {
+      "zh": "当前 AI 静态配置或本轮输入超过上下文限制，已自动压缩但仍无法放入，请减少系统提示词、Skill、工具或本次输入。",
+      "en": "The AI configuration or this input exceeds the context limit even after compression. Reduce the system prompt, Skills, tools or the input.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:408: message = \"当前 AI 静态配置或本轮输入超过上下文限制，已自动压缩但仍无法放入，请减少系统提示词、Skill、工具或本次输入。\","
+      ],
+      "key": "ai_state_ai_configuration_or_this_input"
+    },
+    {
+      "zh": "AI 请求超时，正在切换备用模型",
+      "en": "AI request timed out; switching to a fallback model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:553: onThinking(\"AI 请求超时，正在切换备用模型\")"
+      ],
+      "key": "ai_state_ai_request_timed_out_switching"
+    },
+    {
+      "zh": "AI 请求失败，正在重试 $attempt/$NETWORK_ABORT_RETRY_COUNT",
+      "en": "AI request failed; retrying %1$s/%2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:603: onThinking(\"AI 请求失败，正在重试 $attempt/$NETWORK_ABORT_RETRY_COUNT\")"
+      ],
+      "key": "ai_state_ai_request_failed_retrying"
+    },
+    {
+      "zh": "本轮用户请求涉及本地书架、书籍详情、阅读记录、分组、标签或书源搜索。回复正文前必须先调用合适的本地工具；不要只说明将要查询。需要选择书源时先调用 list_book_sources。search_book_source 的结果会由客户端自动渲染成可点击卡片，回复里不要生成链接、不要输出内部 URL、不要手写 Markdown 打开链接，只需要用自然语言简短说明搜索结果。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1283: \"本轮用户请求涉及本地书架、书籍详情、阅读记录、分组、标签或书源搜索。回复正文前必须先调用合适的本地工具；不要只说明将要查询。需要选择书源时先调用 list_book_sources。search_book_source 的结果会由客户端自"
+      ]
+    },
+    {
+      "zh": "来源作品：$sourceLabel",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1431: \"来源作品：$sourceLabel\".takeIf { sourceLabel.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "角色定位：${character.roleLabel()}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1433: \"角色定位：${character.roleLabel()}\","
+      ]
+    },
+    {
+      "zh": "性别：${character.genderLabel()}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1434: \"性别：${character.genderLabel()}\".takeIf { character.genderLabel() != \"未知\" },"
+      ]
+    },
+    {
+      "zh": "年纪：$age",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1435: \"年纪：$age\".takeIf { age.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "身份：${character.identity}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1436: \"身份：${character.identity}\".takeIf { character.identity.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "外貌：${character.appearance}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1437: \"外貌：${character.appearance}\".takeIf { character.appearance.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "性格：${character.personality}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1438: \"性格：${character.personality}\".takeIf { character.personality.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "能力/技能：${character.skills}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1439: \"能力/技能：${character.skills}\".takeIf { character.skills.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "经历/背景：${character.biography}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1440: \"经历/背景：${character.biography}\".takeIf { character.biography.isNotBlank() },"
+      ]
+    },
+    {
+      "zh": "属性：$attributes",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1441: \"属性：$attributes\".takeIf { attributes.isNotBlank() }"
+      ]
+    },
+    {
+      "zh": "你正在扮演小说角色「",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1444: append(\"你正在扮演小说角色「\")"
+      ]
+    },
+    {
+      "zh": "」与用户对话。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1446: append(\"」与用户对话。\")"
+      ]
+    },
+    {
+      "zh": "角色卡是本次对话的唯一人格来源；保持角色身份、语气、经历、认知边界和关系视角。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1447: append(\"角色卡是本次对话的唯一人格来源；保持角色身份、语气、经历、认知边界和关系视角。\")"
+      ]
+    },
+    {
+      "zh": "不要自称 AI，不要跳出角色解释系统规则。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1448: append(\"不要自称 AI，不要跳出角色解释系统规则。\")"
+      ]
+    },
+    {
+      "zh": "如果用户询问角色卡没有覆盖的细节，可以按角色性格自然回避、反问或给出不确定表达，不要编造与角色设定冲突的内容。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1449: append(\"如果用户询问角色卡没有覆盖的细节，可以按角色性格自然回避、反问或给出不确定表达，不要编造与角色设定冲突的内容。\")"
+      ]
+    },
+    {
+      "zh": "\\n\\n角色卡：\\n",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1450: append(\"\\n\\n角色卡：\\n\")"
+      ]
+    },
+    {
+      "zh": "未知作者",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1459: listOf(book.name, book.author.ifBlank { \"未知作者\" })"
+      ]
+    },
+    {
+      "zh": "未绑定作品",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1469: if (!value.startsWith(\"work:\")) return value.ifBlank { \"未绑定作品\" }",
+        "AiChatService.kt:1475: else -> \"未绑定作品\""
+      ]
+    },
+    {
+      "zh": "书架",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1525: \"书架\","
+      ]
+    },
+    {
+      "zh": "书籍",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1526: \"书籍\","
+      ]
+    },
+    {
+      "zh": "书名",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1527: \"书名\","
+      ]
+    },
+    {
+      "zh": "阅读记录",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1529: \"阅读记录\","
+      ]
+    },
+    {
+      "zh": "最近读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1530: \"最近读\","
+      ]
+    },
+    {
+      "zh": "在读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1531: \"在读\","
+      ]
+    },
+    {
+      "zh": "简介",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1532: \"简介\","
+      ]
+    },
+    {
+      "zh": "书源",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1533: \"书源\","
+      ]
+    },
+    {
+      "zh": "分组",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1534: \"分组\","
+      ]
+    },
+    {
+      "zh": "标签",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1535: \"标签\","
+      ]
+    },
+    {
+      "zh": "分类",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1536: \"分类\","
+      ]
+    },
+    {
+      "zh": "整理",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1537: \"整理\","
+      ]
+    },
+    {
+      "zh": "批量",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatService.kt:1538: \"批量\""
+      ]
+    }
+  ]
+}

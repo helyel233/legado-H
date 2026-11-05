@@ -256,7 +256,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             if (count < 0) {
                 waitDialog.dismiss()
             } else {
-                waitDialog.setText("添加中... ($count)")
+                waitDialog.setText(appCtx.getString(R.string.ui_main_adding, count))
             }
         }
     }
@@ -270,7 +270,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 positiveText = getString(android.R.string.ok),
                 negativeText = getString(android.R.string.cancel),
                 onPositive = {
-                    waitDialog.setText("添加中...")
+                    waitDialog.setText(appCtx.getString(R.string.ui_main_adding_2))
                     waitDialog.show()
                     viewModel.addBookByUrl(it)
                 }

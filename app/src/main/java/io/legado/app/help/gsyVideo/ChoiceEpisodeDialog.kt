@@ -13,6 +13,7 @@ import android.widget.ArrayAdapter
 import android.widget.ListView
 import io.legado.app.R
 import io.legado.app.data.entities.BookChapter
+import splitties.init.appCtx
 
 class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
     mContext, R.style.dialog_style
@@ -49,7 +50,7 @@ class ChoiceEpisodeDialog(private val mContext: Context) : Dialog(
         this.data = data
         val inflater = LayoutInflater.from(mContext)
         val view: View = inflater.inflate(R.layout.switch_episode_video_dialog, null)
-        view.findViewById<TextView>(R.id.listCount).text = "选集（${data.size}）"
+        view.findViewById<TextView>(R.id.listCount).text = appCtx.getString(R.string.misc_episodes, data.size)
         listView = view.findViewById(R.id.switch_dialog_list)
         setContentView(view)
         adapter = SwitchVideoAdapter(mContext, data) { item -> item.title }

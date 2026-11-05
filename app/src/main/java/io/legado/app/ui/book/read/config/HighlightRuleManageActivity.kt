@@ -258,7 +258,7 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
             val bytes = withContext(Dispatchers.IO) { HighlightRules.store.export(rules) }
             exportFile.launch {
                 mode = HandleFileContract.EXPORT
-                fileData = HandleFileContract.FileData("高亮规则.red", bytes, "application/octet-stream")
+                fileData = HandleFileContract.FileData(getString(R.string.i18n_final_highlight_rules_file), bytes, "application/octet-stream")
             }
         }
     }

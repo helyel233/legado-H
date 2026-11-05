@@ -79,6 +79,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import splitties.init.appCtx
 
 class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     fullScreen = false,
@@ -191,19 +192,19 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             AiAgentMode.PLAN
         )
         val labels = listOf(
-            "普通模式：正常对话和工具调用",
-            "Goal 模式：持续执行直到目标达成",
-            "Plan 模式：只读分析，只写计划不执行"
+            appCtx.getString(R.string.ai_ui_normal_mode_regular_chat_tool),
+            appCtx.getString(R.string.ai_ui_goal_mode_keep_working_until),
+            appCtx.getString(R.string.ai_ui_plan_mode_read_only_analysis)
         )
-        selector("Agent 模式", labels) { _, _, index ->
+        selector(appCtx.getString(R.string.ai_ui_agent_mode), labels) { _, _, index ->
             val mode = modes.getOrNull(index) ?: return@selector
             viewModel.setAgentMode(mode)
             refreshToken.intValue += 1
             toastOnUi(
                 when (mode) {
-                    AiAgentMode.NORMAL -> "已切换普通模式"
-                    AiAgentMode.GOAL -> "已切换 Goal 模式"
-                    AiAgentMode.PLAN -> "已切换 Plan 模式"
+                    AiAgentMode.NORMAL -> appCtx.getString(R.string.ai_ui_switched_normal_mode)
+                    AiAgentMode.GOAL -> appCtx.getString(R.string.ai_ui_switched_goal_mode)
+                    AiAgentMode.PLAN -> appCtx.getString(R.string.ai_ui_switched_plan_mode)
                 }
             )
         }
@@ -226,7 +227,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             failureMessage = { getString(R.string.ai_request_failed, it) }
         )
         if (!started) {
-            toastOnUi("无法重试此条消息")
+            toastOnUi(appCtx.getString(R.string.ai_ui_cannot_retry_this_message))
         }
         refreshToken.intValue += 1
     }
@@ -244,7 +245,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
         }
         alert(
             title = getString(R.string.delete),
-            message = "删除此条及其之后的所有内容？"
+            message = appCtx.getString(R.string.ai_ui_delete_this_message_everything_after)
         ) {
             okButton {
                 if (viewModel.deleteFromMessage(messageId)) {
@@ -384,7 +385,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     .sortedBy { it.label }
             }
             if (groups.isEmpty()) {
-                toastOnUi("没有可添加的角色卡")
+                toastOnUi(appCtx.getString(R.string.ai_ui_no_character_cards_available_add))
                 return@launch
             }
             characterPickerGroups = groups
@@ -423,11 +424,11 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
         }
         val isDefault = companion.id == AiChatCompanionConfig.DEFAULT_COMPANION_ID
         val items = if (isDefault) {
-            listOf("新建对话", "编辑默认助手人格", "世界书")
+            listOf(appCtx.getString(R.string.ai_ui_new_chat), appCtx.getString(R.string.ai_ui_edit_default_assistant_persona), appCtx.getString(R.string.ai_tool_world_book))
         } else {
-            listOf("编辑角色卡", "新建对话", "世界书", "移除角色助手")
+            listOf(appCtx.getString(R.string.ai_ui_edit_character_card), appCtx.getString(R.string.ai_ui_new_chat), appCtx.getString(R.string.ai_tool_world_book), appCtx.getString(R.string.ai_ui_remove_character_assistant))
         }
-        selector(companion.name.ifBlank { "助手" }, items) { _, _, index ->
+        selector(companion.name.ifBlank { appCtx.getString(R.string.side_nav_assistant) }, items) { _, _, index ->
             if (isDefault) {
                 when (index) {
                     0 -> startNewChatForCompanion(companion.id)
@@ -457,7 +458,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private fun openCharacterEditor(companion: AiChatCompanionConfig) {
         val characterId = companion.characterId.toLongOrNull()
         if (characterId == null || characterId <= 0L) {
-            toastOnUi("角色卡不存在")
+            toastOnUi(appCtx.getString(R.string.ai_ui_character_card_not_found))
             return
         }
         lifecycleScope.launch {
@@ -485,12 +486,12 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             editView.setText(companion.prompt)
         }
-        alert(title = "${companion.name} · 人格") {
+        alert(title = appCtx.getString(R.string.ai_ui_persona, companion.name)) {
             customView { binding.root }
             okButton {
                 val prompt = binding.editView.text?.toString().orEmpty().trim()
                 if (prompt.isBlank()) {
-                    toastOnUi("提示词不能为空")
+                    toastOnUi(appCtx.getString(R.string.ai_ui_prompt_cannot_be_empty))
                 } else {
                     AppConfig.upsertAiChatCompanion(companion.copy(prompt = prompt))
                     refreshToken.intValue += 1
@@ -502,12 +503,12 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
 
     private fun confirmDeleteCompanion(companion: AiChatCompanionConfig) {
         if (companion.id == AiChatCompanionConfig.DEFAULT_COMPANION_ID) {
-            toastOnUi("默认助手不能删除")
+            toastOnUi(appCtx.getString(R.string.ai_ui_default_assistant_cannot_be_deleted))
             return
         }
         alert(
-            title = "删除角色助手",
-            message = "确定删除「${companion.name}」？它的聊天历史也会删除。"
+            title = appCtx.getString(R.string.ai_ui_delete_character_assistant),
+            message = appCtx.getString(R.string.ai_ui_delete_its_chat_history_will, companion.name)
         ) {
             okButton {
                 AppConfig.removeAiChatCompanion(companion.id)
@@ -521,30 +522,30 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private fun showCompanionWorldBookDialog(companion: AiChatCompanionConfig = viewModel.currentCompanion()) {
         val worldBooks = AppConfig.aiWorldBookList
         if (worldBooks.isEmpty()) {
-            selector("世界书", listOf("打开世界书管理")) { _, _, _ ->
+            selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, _ ->
                 openWorldBookManage()
             }
             return
         }
         val visibleWorldBooks = worldBooks.filter { it.enabled && !it.isGlobalWorldBookEnabled() }
         if (visibleWorldBooks.isEmpty()) {
-            selector("世界书", listOf("没有可单独绑定到角色的世界书", "打开世界书管理")) { _, _, which ->
+            selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_no_world_book_can_be), appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, which ->
                 if (which == 1) openWorldBookManage()
             }
             return
         }
         val visibleIds = visibleWorldBooks.map { it.id }.toSet()
         val selected = companion.worldBookIds.filterTo(mutableSetOf()) { it in visibleIds }
-        alert(title = "${companion.name} · 世界书") {
+        alert(title = appCtx.getString(R.string.ai_ui_world_book, companion.name)) {
             multiChoiceItems(
                 items = visibleWorldBooks.map { book ->
                     buildString {
                         append(book.name)
                         if (book.bindings.any { it.enabled && it.targetType == AiWorldBookBinding.TARGET_GLOBAL }) {
-                            append("（全局）")
+                            append(appCtx.getString(R.string.ai_ui_global))
                         }
                         if (!book.enabled) {
-                            append("（资料库停用）")
+                            append(appCtx.getString(R.string.ai_ui_library_disabled))
                         }
                     }
                 }.toTypedArray(),
@@ -560,7 +561,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                 )
                 refreshToken.intValue += 1
             }
-            neutralButton("管理") { openWorldBookManage() }
+            neutralButton(appCtx.getString(R.string.share_note_manage)) { openWorldBookManage() }
             cancelButton()
         }
     }
@@ -571,12 +572,12 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             return
         }
         selector(
-            "当前窗口能力",
+            appCtx.getString(R.string.ai_ui_current_window_capabilities),
             listOf(
-                "Skill：${viewModel.activeWindowSkillIds().size} 个",
-                "MCP：${viewModel.activeWindowMcpServerIds().size} 个",
-                "世界书：${activeCompanionWorldBookCount()} 个",
-                "清空 Skill/MCP"
+                appCtx.getString(R.string.ai_ui_skills, viewModel.activeWindowSkillIds().size),
+                appCtx.getString(R.string.ai_ui_mcp, viewModel.activeWindowMcpServerIds().size),
+                appCtx.getString(R.string.ai_ui_world_books, activeCompanionWorldBookCount()),
+                appCtx.getString(R.string.ai_ui_clear_skill_mcp)
             )
         ) { _, _, index ->
             when (index) {
@@ -608,11 +609,11 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private fun showWindowSkillDialog() {
         val skills = AppConfig.aiSkillList.filter { it.enabled }
         if (skills.isEmpty()) {
-            toastOnUi("没有可用 Skill")
+            toastOnUi(appCtx.getString(R.string.ai_ui_no_skills_available))
             return
         }
         val selected = viewModel.activeWindowSkillIds().toMutableSet()
-        alert(title = "当前窗口 Skill") {
+        alert(title = appCtx.getString(R.string.ai_ui_current_window_skills)) {
             multiChoiceItems(
                 items = skills.map { skill -> skill.name.ifBlank { "Skill" } }.toTypedArray(),
                 checkedItems = BooleanArray(skills.size) { index -> skills[index].id in selected }
@@ -623,7 +624,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                 viewModel.setActiveWindowSkillIds(selected)
                 refreshToken.intValue += 1
             }
-            neutralButton("清空") {
+            neutralButton(appCtx.getString(R.string.cache_manage_review_clear)) {
                 viewModel.setActiveWindowSkillIds(emptySet())
                 refreshToken.intValue += 1
             }
@@ -634,11 +635,11 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private fun showWindowMcpDialog() {
         val servers = AppConfig.aiMcpServerList.filter { it.enabled }
         if (servers.isEmpty()) {
-            toastOnUi("没有已启用 MCP")
+            toastOnUi(appCtx.getString(R.string.ai_ui_no_mcp_servers_enabled))
             return
         }
         val selected = viewModel.activeWindowMcpServerIds().toMutableSet()
-        alert(title = "当前窗口 MCP") {
+        alert(title = appCtx.getString(R.string.ai_ui_current_window_mcp)) {
             multiChoiceItems(
                 items = servers.map { server -> server.name.ifBlank { "MCP" } }.toTypedArray(),
                 checkedItems = BooleanArray(servers.size) { index -> servers[index].id in selected }
@@ -649,7 +650,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                 viewModel.setActiveWindowMcpServerIds(selected)
                 refreshToken.intValue += 1
             }
-            neutralButton("清空") {
+            neutralButton(appCtx.getString(R.string.cache_manage_review_clear)) {
                 viewModel.setActiveWindowMcpServerIds(emptySet())
                 refreshToken.intValue += 1
             }
@@ -788,7 +789,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "添加角色助手",
+                                text = appCtx.getString(R.string.ai_ui_add_character_assistant),
                                 color = style.colors.primaryText,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
@@ -797,7 +798,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                             )
                             Text(
                                 text = selectedGroup?.let { "从《${it.bookName.ifBlank { it.label }}》选择角色" }
-                                    ?: "先选择书籍，再选择要添加到侧边栏的角色",
+                                    ?: appCtx.getString(R.string.ai_ui_pick_book_first_then_choose),
                                 color = style.colors.secondaryText,
                                 fontSize = 12.sp,
                                 maxLines = 1,
@@ -806,7 +807,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                             )
                         }
                         Text(
-                            text = "关闭",
+                            text = appCtx.getString(R.string.jf_convert_o),
                             color = style.colors.accent,
                             fontSize = 14.sp,
                             modifier = Modifier
@@ -827,14 +828,14 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     val current = selectedGroup
                     if (current == null) {
                         Text(
-                            text = "选择书籍",
+                            text = appCtx.getString(R.string.ai_ui_select_book),
                             color = style.colors.secondaryText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         if (filteredGroups.isEmpty()) {
-                            CharacterPickerEmptyV2("没有匹配的角色书籍")
+                            CharacterPickerEmptyV2(appCtx.getString(R.string.ai_ui_no_matching_books_characters))
                         } else {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(3),
@@ -883,7 +884,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                             characterMatchesRole(character, selectedRole)
                         }
                         Text(
-                            text = "选择角色",
+                            text = appCtx.getString(R.string.ai_ui_select_character),
                             color = style.colors.secondaryText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -907,7 +908,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                             }
                             if (filteredCharacters.isEmpty()) {
                                 item {
-                                    CharacterPickerEmptyV2("这一组还没有角色")
+                                    CharacterPickerEmptyV2(appCtx.getString(R.string.ai_ui_no_characters_this_group_yet))
                                 }
                             }
                         }
@@ -938,7 +939,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             ) {
                 if (value.isBlank()) {
                     Text(
-                        text = "搜索书名、作者或角色",
+                        text = appCtx.getString(R.string.ai_ui_search_book_author_or_character),
                         color = style.colors.secondaryText.copy(alpha = 0.72f),
                         fontSize = 14.sp
                     )
@@ -1010,7 +1011,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     modifier = Modifier.padding(top = 7.dp)
                 )
                 Text(
-                    text = "${group.characters.size} 个角色",
+                    text = appCtx.getString(R.string.ai_ui_characters, group.characters.size),
                     color = style.colors.secondaryText,
                     fontSize = 11.sp,
                     maxLines = 1,
@@ -1073,7 +1074,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     )
                 }
                 Text(
-                    text = "换书",
+                    text = appCtx.getString(R.string.ai_ui_change_book),
                     color = style.colors.accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1153,7 +1154,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                         text = listOf(character.roleLabel(), character.genderLabel(), BookCharacterProfileMeta.ageOf(character))
                             .filter { it.isNotBlank() && it != "未知" }
                             .joinToString(" · ")
-                            .ifBlank { "角色卡" },
+                            .ifBlank { appCtx.getString(R.string.ai_ui_character_card) },
                         color = style.colors.secondaryText,
                         fontSize = 12.sp,
                         maxLines = 1,
@@ -1173,7 +1174,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     }
                 }
                 Text(
-                    text = if (added) "打开" else "添加",
+                    text = if (added) appCtx.getString(R.string.open) else appCtx.getString(R.string.add),
                     color = if (added) style.colors.secondaryText else style.colors.accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -1196,17 +1197,17 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
         return listOf(
             CharacterRoleFilter(
                 roleLevel = BookCharacter.ROLE_MAIN,
-                label = "主角",
+                label = appCtx.getString(R.string.bchar_label_protagonist),
                 count = group.characters.count { it.roleLevel == BookCharacter.ROLE_MAIN }
             ),
             CharacterRoleFilter(
                 roleLevel = BookCharacter.ROLE_IMPORTANT,
-                label = "重要",
+                label = appCtx.getString(R.string.ai_ui_important),
                 count = group.characters.count { it.roleLevel == BookCharacter.ROLE_IMPORTANT }
             ),
             CharacterRoleFilter(
                 roleLevel = BookCharacter.ROLE_NORMAL,
-                label = "普通",
+                label = appCtx.getString(R.string.ai_ui_normal),
                 count = group.characters.count { characterMatchesRole(it, BookCharacter.ROLE_NORMAL) }
             )
         )

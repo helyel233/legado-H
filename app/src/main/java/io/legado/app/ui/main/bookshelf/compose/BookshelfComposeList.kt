@@ -54,6 +54,7 @@ import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.BookIntroUtils
+import splitties.init.appCtx
 
 object BookshelfListItemStyle {
     const val Classic = 0
@@ -456,7 +457,7 @@ private fun BookshelfBookMeta(
     if (item.localFileChanged) {
         //本地 txt 文件在磁盘上被改动过，打开时会自动重新分割目录
         Text(
-            text = "本地文件已更新",
+            text = appCtx.getString(R.string.ui_main_local_file_updated),
             color = palette.accent,
             fontSize = 12.sp,
             fontFamily = palette.bodyFontFamily,

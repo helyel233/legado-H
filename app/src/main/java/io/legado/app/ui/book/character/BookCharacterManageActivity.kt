@@ -23,6 +23,8 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 class BookCharacterManageActivity : BaseActivity<ViewBinding>(
     fullScreen = false,
@@ -83,7 +85,7 @@ class BookCharacterManageActivity : BaseActivity<ViewBinding>(
 
     private fun openCard(id: Long) {
         if (bookUrl.isBlank() || id <= 0L) {
-            toastOnUi("当前角色不存在")
+            toastOnUi(appCtx.getString(R.string.bchar_current_character_not_found))
             return
         }
         startActivity<BookCharacterCardActivity> {
@@ -95,7 +97,7 @@ class BookCharacterManageActivity : BaseActivity<ViewBinding>(
 
     private fun openEdit(id: Long = 0L) {
         if (bookUrl.isBlank()) {
-            toastOnUi("当前书籍不存在")
+            toastOnUi(appCtx.getString(R.string.bchar_current_book_not_found))
             return
         }
         startActivity<BookCharacterEditActivity> {
@@ -107,7 +109,7 @@ class BookCharacterManageActivity : BaseActivity<ViewBinding>(
 
     private fun openRelations() {
         if (characters.size < 2) {
-            toastOnUi("至少需要两个角色才能编辑关系网")
+            toastOnUi(appCtx.getString(R.string.bchar_at_least_two_characters_needed))
             return
         }
         startActivity<BookCharacterRelationActivity> {
@@ -117,8 +119,8 @@ class BookCharacterManageActivity : BaseActivity<ViewBinding>(
     }
 
     private fun delete(character: BookCharacter) {
-        alert("删除角色") {
-            setMessage("确定删除「${character.displayName()}」？相关关系也会删除。")
+        alert(appCtx.getString(R.string.bchar_delete_character)) {
+            setMessage(appCtx.getString(R.string.bchar_delete_related_relations_will_also, character.displayName()))
             yesButton {
                 lifecycleScope.launch {
                     withContext(IO) {

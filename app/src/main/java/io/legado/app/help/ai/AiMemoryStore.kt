@@ -10,6 +10,7 @@ import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.putPrefInt
 import splitties.init.appCtx
 import org.json.JSONObject
+import io.legado.app.R
 
 data class AiMemoryContext(
     val scope: String = AiMemoryItem.SCOPE_GLOBAL,
@@ -257,7 +258,7 @@ object AiMemoryExtractor {
                     } else {
                         AiMemoryFragment.SOURCE_CHAT
                     },
-                    title = context.title.ifBlank { "AI 对话" },
+                    title = context.title.ifBlank { appCtx.getString(R.string.ai_state_ai_conversation) },
                     content = fragmentContent,
                     importance = 40,
                     createdAt = now,
@@ -277,7 +278,7 @@ object AiMemoryExtractor {
             scope = AiMemoryItem.SCOPE_GLOBAL,
             sessionId = context.sessionId,
             type = AiMemoryItem.TYPE_USER_PREFERENCE,
-            subject = "用户偏好",
+            subject = appCtx.getString(R.string.ai_state_user_preferences),
             predicate = hit,
             objectValue = normalized.take(240),
             content = normalized.take(500),

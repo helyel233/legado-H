@@ -26,6 +26,8 @@ import io.legado.app.utils.isMainThread
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.intellij.lang.annotations.Language
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 可在js里调用,source.xxx()
@@ -116,7 +118,7 @@ interface BaseSource : JsExtensions {
                 GSONStrict.fromJsonObject<Map<String, String>>(json).getOrNull()?.let { map ->
                     putAll(map)
                 } ?: GSON.fromJsonObject<Map<String, String>>(json).getOrNull()?.let { map ->
-                    log("请求头规则 JSON 格式不规范，请改为规范格式")
+                    log(appCtx.getString(R.string.misc_header_rule_json_invalid_please))
                     putAll(map)
                 }
             } catch (e: CancellationException) {

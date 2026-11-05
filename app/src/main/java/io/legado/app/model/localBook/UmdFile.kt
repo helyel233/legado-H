@@ -9,6 +9,8 @@ import me.ag2s.umdlib.domain.UmdBook
 import me.ag2s.umdlib.umd.UmdReader
 import java.io.File
 import java.io.InputStream
+import io.legado.app.R
+import splitties.init.appCtx
 
 class UmdFile(var book: Book) {
     companion object : BaseLocalBookParse {
@@ -88,7 +90,7 @@ class UmdFile(var book: Book) {
     private fun upBookInfo() {
         if (umdBook == null) {
             uFile = null
-            book.intro = "书籍导入异常"
+            book.intro = appCtx.getString(R.string.misc_book_import_failed)
         } else {
             upBookCover()
             val hd = umdBook!!.header

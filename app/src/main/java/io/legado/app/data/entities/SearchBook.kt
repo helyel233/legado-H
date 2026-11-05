@@ -14,6 +14,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
+import splitties.init.appCtx
 
 @Parcelize
 @Entity(
@@ -92,7 +93,7 @@ data class SearchBook(
                 return it
             }
         }
-        return "无最新章节"
+        return appCtx.getString(R.string.misc_no_latest_chapter)
     }
 
     fun trimIntro(context: Context): String {

@@ -316,7 +316,7 @@ internal object AiAgentRuntime {
         var lastValidation = AiToolValidationResult(
             ok = false,
             category = "not_executed",
-            message = "工具未执行",
+            message = appCtx.getString(R.string.misc_tool_not_executed),
             retryable = true
         )
         var finalAttempt = 0

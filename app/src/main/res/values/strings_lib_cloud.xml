@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lib_cloud_delete_hint">Type %1$s to confirm</string>
+    <string name="lib_cloud_delete_retry">Type %1$s first, then confirm</string>
+    <string name="lib_cloud_delete_message">Delete cloud chapter: %1$s\nType “%2$s” to confirm.</string>
+</resources>

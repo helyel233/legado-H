@@ -50,6 +50,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
+import splitties.init.appCtx
 
 
 class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_change_source),
@@ -94,8 +95,8 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         if (searchGroup.isNotEmpty()) {
             val owner = viewLifecycleOwnerLiveData.value ?: return@callback
             owner.lifecycleScope.launch {
-                context?.alert("搜索结果为空") {
-                    setMessage("${searchGroup}分组搜索结果为空,是否切换到全部分组")
+                context?.alert(appCtx.getString(R.string.ui_book_no_search_results)) {
+                    setMessage(appCtx.getString(R.string.ui_book_no_results_group_switch_all_2, searchGroup))
                     noButton()
                     yesButton {
                         AppConfig.searchGroup = ""

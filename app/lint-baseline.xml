@@ -8714,56 +8714,6 @@
     </issue>
     <issue
         id="UnusedResources"
-        message="The resource `R.xml.pref_config_aloud` appears to be unused"
-        errorLine1="&lt;androidx.preference.PreferenceScreen xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/xml/pref_config_aloud.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.xml.pref_config_discovery` appears to be unused"
-        errorLine1="&lt;androidx.preference.PreferenceScreen xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/xml/pref_config_discovery.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.xml.pref_config_read` appears to be unused"
-        errorLine1="&lt;androidx.preference.PreferenceScreen xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/xml/pref_config_read.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.xml.pref_config_subscription` appears to be unused"
-        errorLine1="&lt;androidx.preference.PreferenceScreen xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/xml/pref_config_subscription.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
-        message="The resource `R.xml.pref_main` appears to be unused"
-        errorLine1="&lt;androidx.preference.PreferenceScreen xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
-        errorLine2="^">
-        <location
-            file="src/main/res/xml/pref_main.xml"
-            line="2"
-            column="1"/>
-    </issue>
-    <issue
-        id="UnusedResources"
         message="The resource `R.drawable.recyclerview_divider_horizontal` appears to be unused"
         errorLine1="&lt;inset xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
         errorLine2="^">

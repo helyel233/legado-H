@@ -18,6 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
+import splitties.init.appCtx
 
 object Debug {
     var callback: Callback? = null
@@ -222,7 +224,7 @@ object Debug {
                 }
                 log(debugSource, "⇒开始搜索关键字:$key")
                 log(debugSource, "︾开始解析搜索页")
-                sortDebug(scope, rssSource, "搜索", searchUrl, key)
+                sortDebug(scope, rssSource, appCtx.getString(R.string.action_search), searchUrl, key)
             }
         }
     }
@@ -305,7 +307,7 @@ object Debug {
                 book.origin = bookSource.bookSourceUrl
                 log(debugSource, "⇒开始访正文页:$url")
                 val chapter = BookChapter()
-                chapter.title = "调试"
+                chapter.title = appCtx.getString(R.string.debug)
                 chapter.url = url
                 contentDebug(scope, bookSource, book, chapter, null)
             }

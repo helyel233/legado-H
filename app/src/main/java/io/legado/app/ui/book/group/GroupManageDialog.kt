@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers.IO
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import splitties.init.appCtx
 
 class GroupManageDialog : ComposeDialogFragment() {
 
@@ -88,7 +89,7 @@ class GroupManageDialog : ComposeDialogFragment() {
                             if (appDb.bookGroupDao.canAddGroup) {
                                 showDialogFragment(GroupEditDialog())
                             } else {
-                                requireContext().toastOnUi("分组已达上限(64个)")
+                                requireContext().toastOnUi(appCtx.getString(R.string.ui_book_group_limit_reached_64))
                             }
                         },
                         onEditGroup = { group ->

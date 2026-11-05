@@ -6,6 +6,8 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.parcelize.Parcelize
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Parcelize
 @Entity(
@@ -59,15 +61,15 @@ data class BookCharacter(
     fun displayName(): String = name.ifBlank { "未命名角色" }
 
     fun genderLabel(): String = when (normalizeGender(gender)) {
-        GENDER_MALE -> "男"
-        GENDER_FEMALE -> "女"
-        else -> "未知"
+        GENDER_MALE -> appCtx.getString(R.string.bchar_label_male)
+        GENDER_FEMALE -> appCtx.getString(R.string.bchar_label_female)
+        else -> appCtx.getString(R.string.unknown)
     }
 
     fun roleLabel(): String = when (roleLevel) {
-        ROLE_MAIN -> "主角"
-        ROLE_IMPORTANT -> "重要角色"
-        else -> "普通角色"
+        ROLE_MAIN -> appCtx.getString(R.string.bchar_label_protagonist)
+        ROLE_IMPORTANT -> appCtx.getString(R.string.bchar_label_important_character)
+        else -> appCtx.getString(R.string.bchar_label_minor_character)
     }
 
     companion object {
@@ -81,8 +83,8 @@ data class BookCharacter(
 
         fun normalizeGender(value: String?): String {
             return when (value?.trim()?.lowercase()) {
-                GENDER_MALE, "m", "man", "male", "男", "男性", "男声" -> GENDER_MALE
-                GENDER_FEMALE, "f", "woman", "female", "女", "女性", "女声" -> GENDER_FEMALE
+                GENDER_MALE, "m", "man", "male", appCtx.getString(R.string.bchar_label_male), "男性", "男声" -> GENDER_MALE
+                GENDER_FEMALE, "f", "woman", "female", appCtx.getString(R.string.bchar_label_female), "女性", "女声" -> GENDER_FEMALE
                 else -> GENDER_UNKNOWN
             }
         }

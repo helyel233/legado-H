@@ -20,6 +20,7 @@ import io.legado.app.utils.toastOnUi
 import org.eclipse.tm4e.core.registry.IThemeSource
 import org.jsoup.Jsoup
 import splitties.init.appCtx
+import io.legado.app.R
 
 class CodeEditViewModel(application: Application) : BaseViewModel(application) {
     private val themeFileNames = arrayOf(
@@ -108,7 +109,7 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
         execute {
             val text = editor.text.toString()
             if (languageName.contains("markdown")) {
-                context.toastOnUi("markdown不需要格式化")
+                context.toastOnUi(appCtx.getString(R.string.i18n_final_markdown_no_format))
                 return@execute text
             }
             val isHtml = languageName.contains("html")

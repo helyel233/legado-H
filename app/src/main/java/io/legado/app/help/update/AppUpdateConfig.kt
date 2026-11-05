@@ -12,6 +12,7 @@ import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
 import splitties.init.appCtx
+import io.legado.app.R
 
 object AppUpdateConfig {
 
@@ -96,13 +97,13 @@ object AppUpdateConfig {
     }
 
     fun strategyLabel(context: Context): String {
-        return "只使用 GitHub"
+        return appCtx.getString(R.string.misc_github_only)
     }
 
     fun summary(context: Context): String {
         val proxy = selectedGithubProxyTemplate
             ?.takeIf { it.isNotBlank() }
-            ?.let { "，GitHub 代理已启用" }
+            ?.let { appCtx.getString(R.string.misc_github_proxy_enabled) }
             .orEmpty()
         return strategyLabel(context) + proxy
     }

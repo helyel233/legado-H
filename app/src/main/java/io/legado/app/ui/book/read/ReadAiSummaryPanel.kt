@@ -74,6 +74,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.min
+import splitties.init.appCtx
 
 class ReadAiSummaryPanel @JvmOverloads constructor(
     context: Context,
@@ -129,7 +130,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
         uiState = SummaryUiState(
             title = "${book.name.ifBlank { "当前书籍" }} - ${chapter.title.ifBlank { "当前章节" }}",
             modelLabel = currentModelLabel(),
-            summary = "正在读取缓存...",
+            summary = appCtx.getString(R.string.ai_ui_reading_cache),
             requesting = false
         )
         animate().cancel()
@@ -164,11 +165,11 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
     private fun loadSummary(forceRefresh: Boolean) {
         val currentInput = input ?: return
         if (job?.isActive == true) {
-            context.toastOnUi("请等待当前总结完成")
+            context.toastOnUi(appCtx.getString(R.string.ai_ui_wait_current_summary_finish))
             return
         }
         val keepAliveId = AiTaskKeepAlive.retain(
-            title = "AI章节总结",
+            title = appCtx.getString(R.string.ai_ui_ai_chapter_summary),
             content = currentInput.chapter.title,
             kind = AiTaskKeepAlive.KIND_SUMMARY
         )
@@ -178,8 +179,8 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                     uiState = uiState.copy(
                         requesting = true,
                         cached = false,
-                        statusLines = if (forceRefresh) listOf("正在重新总结") else listOf("正在检查缓存"),
-                        summary = if (forceRefresh) "正在请求 AI 总结..." else uiState.summary
+                        statusLines = if (forceRefresh) listOf(appCtx.getString(R.string.ai_ui_regenerating_summary)) else listOf(appCtx.getString(R.string.ai_ui_checking_cache)),
+                        summary = if (forceRefresh) appCtx.getString(R.string.ai_ui_requesting_ai_summary) else uiState.summary
                     )
                 }
                 val result = runCatching {
@@ -188,7 +189,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                             return@runCatching cached to true
                         }
                     }
-                    if (!AiContentConsent.awaitConsent(context, "AI 章节总结")) {
+                    if (!AiContentConsent.awaitConsent(context, appCtx.getString(R.string.ai_ui_ai_chapter_summary_2))) {
                         throw CancellationException(CONSENT_DENIED_MESSAGE)
                     }
                     withContext(IO) {
@@ -218,10 +219,10 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                             if (throwable.message == CONSENT_DENIED_MESSAGE) {
                                 CONSENT_DENIED_MESSAGE
                             } else {
-                                "已停止总结"
+                                appCtx.getString(R.string.ai_ui_summary_stopped)
                             }
                         } else {
-                            "总结失败：${throwable.localizedMessage ?: throwable.message ?: throwable.javaClass.simpleName}"
+                            appCtx.getString(R.string.ai_ui_summary_failed, throwable.localizedMessage ?: throwable.message ?: throwable.javaClass.simpleName)
                         }
                         uiState = uiState.copy(
                             summary = text,
@@ -244,7 +245,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
         val label = status.optString("label").ifBlank {
             when (status.optString("kind")) {
                 "tool" -> status.optString("name")
-                "thinking" -> "思考中"
+                "thinking" -> appCtx.getString(R.string.ai_ui_thinking)
                 else -> ""
             }
         }
@@ -259,13 +260,13 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
             requesting = false,
             cached = fromCache,
             modelLabel = currentModelLabel(),
-            statusLines = if (fromCache) listOf("已读取缓存") else listOf("总结完成")
+            statusLines = if (fromCache) listOf(appCtx.getString(R.string.ai_ui_cache_loaded)) else listOf(appCtx.getString(R.string.ai_ui_summary_complete))
         )
     }
 
     private fun selectModel() {
         if (job?.isActive == true) {
-            context.toastOnUi("请等待当前总结完成")
+            context.toastOnUi(appCtx.getString(R.string.ai_ui_wait_current_summary_finish))
             return
         }
         val models = AppConfig.aiModelConfigList
@@ -413,7 +414,7 @@ private fun ReadAiSummaryContent(
                     color = style.colors.accent.copy(alpha = if (state.requesting) 0.06f else 0.10f)
                 ) {
                     Text(
-                        text = state.modelLabel.ifBlank { "选择模型" },
+                        text = state.modelLabel.ifBlank { appCtx.getString(R.string.ai_ui_select_model) },
                         color = if (state.requesting) style.colors.secondaryText else style.colors.accent,
                         fontSize = 12.sp,
                         maxLines = 1,
@@ -429,11 +430,11 @@ private fun ReadAiSummaryContent(
                         .height(44.dp)
                         .pointerInteropFilter(onTouchEvent = onTopDrag)
                 )
-                SummaryIconButton(R.drawable.ic_refresh_black_24dp, "重新总结", style, onRefresh)
+                SummaryIconButton(R.drawable.ic_refresh_black_24dp, appCtx.getString(R.string.ai_ui_regenerate_summary), style, onRefresh)
                 if (state.requesting) {
-                    SummaryIconButton(R.drawable.ic_stop_black_24dp, "停止", style, onStop)
+                    SummaryIconButton(R.drawable.ic_stop_black_24dp, appCtx.getString(R.string.stop), style, onStop)
                 }
-                SummaryIconButton(R.drawable.ic_close_x, "关闭", style, onClose)
+                SummaryIconButton(R.drawable.ic_close_x, appCtx.getString(R.string.jf_convert_o), style, onClose)
             }
             Text(
                 text = state.title,
@@ -496,7 +497,7 @@ private fun SummaryBody(
                         color = style.colors.accent
                     )
                     Text(
-                        text = "正在总结",
+                        text = appCtx.getString(R.string.ai_ui_summarizing),
                         color = style.colors.secondaryText,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(start = 8.dp)
@@ -549,7 +550,7 @@ private fun SummaryMarkdown(
                 context = context
             )
             if (textView.tag != key) {
-                markwon.setMarkdown(textView, content.ifBlank { "暂无总结" })
+                markwon.setMarkdown(textView, content.ifBlank { appCtx.getString(R.string.ai_ui_no_summary_yet) })
                 textView.tag = key
             }
         }

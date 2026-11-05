@@ -22,9 +22,9 @@ class ChangeThemeDialog() : BaseDialogFragment(R.layout.dialog_edit_change_theme
     private val binding by viewBinding(DialogEditChangeThemeBinding::bind)
     private var callBack: CallBack? = null
     private var isClick = false
-    private var editTemeAuto = AppConfig.editTemeAuto
+    private var editThemeAuto = AppConfig.editThemeAuto
     private val isDark
-        get() = editTemeAuto && ThemeConfig.isDarkTheme()
+        get() = editThemeAuto && ThemeConfig.isDarkTheme()
     private var themeIndex = -1
 
     override fun onAttach(context: Context) {
@@ -56,7 +56,7 @@ class ChangeThemeDialog() : BaseDialogFragment(R.layout.dialog_edit_change_theme
             } else {
                 chThemeR.checkByIndex(themeIndex / 2)
             }
-            switchSystemAuto.isChecked = editTemeAuto
+            switchSystemAuto.isChecked = editThemeAuto
             callBack?.upTheme(themeIndex)
         }
     }
@@ -92,8 +92,8 @@ class ChangeThemeDialog() : BaseDialogFragment(R.layout.dialog_edit_change_theme
                 }
             }
             switchSystemAuto.setOnCheckedChangeListener { _, isChecked ->
-                putPrefBoolean(PreferKey.editTemeAuto, isChecked)
-                editTemeAuto = isChecked
+                putPrefBoolean(PreferKey.editThemeAuto, isChecked)
+                editThemeAuto = isChecked
                 initData()
             }
         }

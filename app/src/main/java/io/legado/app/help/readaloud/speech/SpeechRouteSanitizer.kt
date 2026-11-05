@@ -4,6 +4,8 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadBook
+import io.legado.app.R
+import splitties.init.appCtx
 
 object SpeechRouteSanitizer {
 
@@ -42,7 +44,7 @@ object SpeechRouteSanitizer {
             .forEach { character ->
                 SpeechVoiceGroupRepository.markInvalidRoute(
                     SpeechRoute.fromJson(character.speechRouteJson),
-                    reason = "HTTP TTS 已删除"
+                    reason = appCtx.getString(R.string.misc_http_tts_deleted)
                 )
                 appDb.bookCharacterDao.updateCharacter(
                     character.copy(
@@ -58,7 +60,7 @@ object SpeechRouteSanitizer {
             .forEach { book ->
                 SpeechVoiceGroupRepository.markInvalidRoute(
                     SpeechRoute.fromTtsEngineValue(book.getTtsEngine()),
-                    reason = "HTTP TTS 已删除"
+                    reason = appCtx.getString(R.string.misc_http_tts_deleted)
                 )
                 book.setTtsEngine(null)
                 appDb.bookDao.update(book)
@@ -69,7 +71,7 @@ object SpeechRouteSanitizer {
         if (globalCleared) {
             SpeechVoiceGroupRepository.markInvalidRoute(
                 SpeechRoute.fromTtsEngineValue(AppConfig.ttsEngine),
-                reason = "HTTP TTS 已删除"
+                reason = appCtx.getString(R.string.misc_http_tts_deleted)
             )
             AppConfig.ttsEngine = null
         }
@@ -81,7 +83,7 @@ object SpeechRouteSanitizer {
                     it.engineValue == deletedId &&
                     groupsById[it.groupId]?.let(SpeechVoiceGroupRepository::isInvalidGroup) != true
             }
-        SpeechVoiceGroupRepository.markInvalidItems(speakerItems, reason = "HTTP TTS 已删除")
+        SpeechVoiceGroupRepository.markInvalidItems(speakerItems, reason = appCtx.getString(R.string.misc_http_tts_deleted))
 
         return CleanupResult(
             characterCount = characterCount,
@@ -102,7 +104,7 @@ object SpeechRouteSanitizer {
             .forEach { character ->
                 SpeechVoiceGroupRepository.markInvalidRoute(
                     SpeechRoute.fromJson(character.speechRouteJson),
-                    reason = "发言人已失效"
+                    reason = appCtx.getString(R.string.misc_speaker_no_longer_available)
                 )
                 appDb.bookCharacterDao.updateCharacter(
                     character.copy(
@@ -119,7 +121,7 @@ object SpeechRouteSanitizer {
             .forEach { book ->
                 SpeechVoiceGroupRepository.markInvalidRoute(
                     SpeechRoute.fromTtsEngineValue(book.getTtsEngine()),
-                    reason = "发言人已失效"
+                    reason = appCtx.getString(R.string.misc_speaker_no_longer_available)
                 )
                 book.setTtsEngine(null)
                 appDb.bookDao.update(book)
@@ -132,7 +134,7 @@ object SpeechRouteSanitizer {
         if (globalCleared) {
             SpeechVoiceGroupRepository.markInvalidRoute(
                 SpeechRoute.fromTtsEngineValue(AppConfig.ttsEngine),
-                reason = "发言人已失效"
+                reason = appCtx.getString(R.string.misc_speaker_no_longer_available)
             )
             AppConfig.ttsEngine = null
         }
@@ -145,7 +147,7 @@ object SpeechRouteSanitizer {
                 groupsById[item.groupId]?.let(SpeechVoiceGroupRepository::isInvalidGroup) != true &&
                     !SpeechVoiceGroupRepository.isValidItem(item, httpTtsList)
             }
-        SpeechVoiceGroupRepository.markInvalidItems(invalidSpeakerItems, reason = "发言人已失效")
+        SpeechVoiceGroupRepository.markInvalidItems(invalidSpeakerItems, reason = appCtx.getString(R.string.misc_speaker_no_longer_available))
 
         return CleanupResult(
             characterCount = characterCount,

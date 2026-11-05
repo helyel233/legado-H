@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bchar_label_protagonist">Protagonist</string>
+    <string name="bchar_label_important_character">Important character</string>
+    <string name="bchar_label_minor_character">Minor character</string>
+    <string name="bchar_label_male">Male</string>
+    <string name="bchar_label_female">Female</string>
+</resources>

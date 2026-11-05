@@ -1013,7 +1013,7 @@ object ReadBook : CoroutineScope by MainScope() {
             // 断网时给出可判断的原因，别让用户以为是书源坏了
             appCtx.getString(R.string.no_network_content) + "\n" + message
         } else {
-            "加载正文失败\n$message"
+            appCtx.getString(R.string.misc_failed_load_content_n, message)
         }
         if (throwable != null) {
             AppLog.put(msg, throwable)

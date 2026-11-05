@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.currentCoroutineContext
 import splitties.init.appCtx
 import java.util.Date
+import io.legado.app.R
 
 
 class ReadRssViewModel(application: Application) : BaseViewModel(application) {
@@ -144,7 +145,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
                 // 用户看到一屏转义堆栈；改为回退网页态 + 提示，与 noImageContent 回退一致
                 this@ReadRssViewModel.rssArticle = null
                 loadUrl(rssArticle.link, rssArticle.origin)
-                context.toastOnUi("正文加载失败，已回退网页")
+                context.toastOnUi(appCtx.getString(R.string.ui_main_failed_load_content_fell_back))
             }
     }
 
@@ -167,7 +168,7 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
             return finish.invoke()
         }
         val rssSource = rssSource ?: let {
-            appCtx.toastOnUi("订阅源不存在")
+            appCtx.toastOnUi(appCtx.getString(R.string.ui_main_subscription_source_not_found))
             return finish.invoke()
         }
         val ruleContent = rssSource.ruleContent
@@ -263,9 +264,9 @@ class ReadRssViewModel(application: Application) : BaseViewModel(application) {
             uri.writeBytes(context, fileName, byteArray)
         }.onError {
             ACache.get().remove(imagePathKey)
-            context.toastOnUi("保存图片失败:${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_main_failed_save_image, it.localizedMessage))
         }.onSuccess {
-            context.toastOnUi("保存成功")
+            context.toastOnUi(appCtx.getString(R.string.ra_cfg_saved))
         }
     }
 

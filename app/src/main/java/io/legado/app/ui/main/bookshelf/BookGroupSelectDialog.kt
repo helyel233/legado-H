@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 
 /**
  * 选择分组并把书籍加入该分组（自 legadoC 移植，剥离书架快捷方式相关逻辑）
@@ -85,7 +86,7 @@ class BookGroupSelectDialog() : BaseBottomSheetDialogFragment(R.layout.dialog_bo
         lifecycleScope.launch(Dispatchers.IO) {
             if (!appDb.bookGroupDao.canAddGroup) {
                 withContext(Dispatchers.Main) {
-                    toastOnUi("分组已达上限")
+                    toastOnUi(appCtx.getString(R.string.ui_main_group_limit_reached))
                 }
                 return@launch
             }

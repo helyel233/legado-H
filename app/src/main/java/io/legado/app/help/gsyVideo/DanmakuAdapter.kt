@@ -22,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import io.legado.app.R
+import splitties.init.appCtx
 
 class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer.Proxy() {
     private var mDrawable: Drawable? = null
@@ -103,7 +105,7 @@ class DanmakuAdapter(private val mDanmakuView: IDanmakuView?) : BaseCacheStuffer
         val spannableStringBuilder = SpannableStringBuilder(text)
         val span = ImageSpan(drawable) //ImageSpan.ALIGN_BOTTOM);
         spannableStringBuilder.setSpan(span, 0, text.length, Spannable.SPAN_INCLUSIVE_EXCLUSIVE)
-        spannableStringBuilder.append("图文混排")
+        spannableStringBuilder.append(appCtx.getString(R.string.misc_mixed_text_images))
         spannableStringBuilder.setSpan(
             BackgroundColorSpan("#8A2233B1".toColorInt()),
             0,

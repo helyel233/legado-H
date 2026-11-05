@@ -27,6 +27,8 @@ import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * Load state for import dialogs.
@@ -105,7 +107,7 @@ fun ImportSourceItemRow(
         if (onCodeView != null) {
             Spacer(modifier = Modifier.width(8.dp))
             LegadoMiuixActionButton(
-                text = "查看",
+                text = appCtx.getString(R.string.see),
                 palette = palette,
                 onClick = onCodeView,
                 cornerRadius = style.actionRadius,

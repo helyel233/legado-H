@@ -1,0 +1,2937 @@
+{
+  "prefix": "ui_book",
+  "resource": "strings_ui_book.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/book/toc/TocViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/TocComposeScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/TocActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/rule/TxtTocRuleEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/rule/TxtTocRuleActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/rule/TxtTocRuleDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/toc/rule/TxtTocRuleEditComposeDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/bookmark/AllBookmarkViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/bookmark/AllBookmarkActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheChapterAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/ReviewSnapshotStatusDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheChapterDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheManageViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheBookCard.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheManageScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/BookCacheExportViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/CacheManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/BookCacheExportActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/BookCacheExportScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/cache/AudioTaskProjection.kt",
+    "app/src/main/java/io/legado/app/ui/book/group/GroupManageDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/group/GroupEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/compose/BookCharacterComposeScreens.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/edit/SourceApiUsageDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/edit/BookSourceEditViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/edit/BookSourceEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/manage/BookSourceScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/manage/BookSourceSort.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/manage/BookSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/manage/BookSourceActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/debug/BookSourceDebugModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/source/debug/BookSourceDebugActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ShareNotePreviewOverlay.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/SelectionWebSearchDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadBookViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAiSummaryPanel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadMenuComposeComponents.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadMenu.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/SearchMenu.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ContentEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/BubbleQuickSwitchDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/BaseReadBookActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAloudPlayerPanel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ShareNoteImageRenderer.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ContentSelectConfig.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/MangaMenu.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/EffectiveReplacesDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/TextActionMenu.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAloudSystemFloatingWindow.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAiFloatingPanel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/ContentTextView.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/PageView.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/AutoPager.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/LottieTitleJsonStyler.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/ReadView.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/SelectionMagnifierView.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/AdvancedTitleScrollGeometry.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/AdvancedTitlePageKeys.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/LottieImageAssetDecoder.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/AdvancedTitleLottieController.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/SkeletonLayout.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/TextChapterLayout.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/LayoutProgressListener.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/TextPageFactory.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/ChapterProvider.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/provider/ZhLayout.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/delegate/SimulationPageDelegate.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/delegate/PageDelegate.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/delegate/ScrollPageDelegate.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/delegate/HorizontalPageDelegate.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/TextLine.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/TextChapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/TextPos.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/TextPage.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/TextParagraph.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/ReviewButton.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/ReadProgressCalculator.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/ParagraphSegment.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/ReviewColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/ButtonColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/HiddenReviewColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/TextColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/TextHtmlColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/ImageColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/TextBaseColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/page/entities/column/BaseColumn.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HttpTtsEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadMenuButtonManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadStyleDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeakEngineDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ParagraphRuleManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadAloudConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HighlightRuleManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HttpTtsEditViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/BgTextConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/IllustrationEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/TipConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReaderAssetManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/AiReadAloudUsageRecordActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeakerGroupManageDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadAloudBgmManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReaderTemplateDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadAloudDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HighlightRuleEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/epub/EpubDirectWebLayer.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/epub/EpubReadView.kt",
+    "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowCache.kt",
+    "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowComposeScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/explore/ExploreShowWaterfallAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchScopeDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchScope.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchResultScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/search/SearchInputHelpScreen.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/BookInfoActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/BookInfoComposeActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/BookInfoViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/BookInfoUseWebHost.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/BookInfoDeleteDelegate.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/compose/BookInfoComposeRoute.kt",
+    "app/src/main/java/io/legado/app/ui/book/info/edit/BookInfoEditViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/ReadMangaViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/ReadMangaActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/config/MangaFooterConfig.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/recyclerview/MangaAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/recyclerview/MangaVH.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/entities/MangaPage.kt",
+    "app/src/main/java/io/legado/app/ui/book/manga/entities/EpaperTransformation.kt",
+    "app/src/main/java/io/legado/app/ui/book/audio/AudioPlayActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/audio/SliderPopup.kt",
+    "app/src/main/java/io/legado/app/ui/book/audio/AudioPlayViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/manage/BookshelfManageViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/manage/BookAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/manage/BookshelfManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/manage/SourcePickerDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/searchContent/SearchResult.kt",
+    "app/src/main/java/io/legado/app/ui/book/searchContent/SearchContentViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/searchContent/SearchContentActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/changecover/ChangeCoverViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/changecover/ChangeCoverDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/BaseImportBookActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/local/ImportBookActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/local/ImportBookAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/local/ImportBookViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/remote/ServerConfigViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/remote/RemoteBookAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/remote/RemoteBookViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/remote/RemoteBookActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/import/remote/ServersDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeChapterSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeBookSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeChapterTocAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeBookSourceAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeBookSourceDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/changesource/ChangeChapterSourceDialog.kt"
+  ],
+  "entries": [
+    {
+      "zh": "导出失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "TocViewModel.kt:85: AppLog.put(\"导出失败\\n${it.localizedMessage}\", it, true)",
+        "TocViewModel.kt:109: AppLog.put(\"导出失败\\n${it.localizedMessage}\", it, true)",
+        "AllBookmarkViewModel.kt:35: AppLog.put(\"导出失败\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "###### 原文\\n ${it.bookText}\\n\\n",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "TocViewModel.kt:104: outputStream.write(\"###### 原文\\n ${it.bookText}\\n\\n\".toByteArray())",
+        "AllBookmarkViewModel.kt:58: outputStream.write(\"###### 原文\\n ${it.bookText}\\n\\n\".toByteArray())"
+      ]
+    },
+    {
+      "zh": "###### 摘要\\n ${it.content}\\n\\n",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "TocViewModel.kt:105: outputStream.write(\"###### 摘要\\n ${it.content}\\n\\n\".toByteArray())",
+        "AllBookmarkViewModel.kt:59: outputStream.write(\"###### 摘要\\n ${it.content}\\n\\n\".toByteArray())"
+      ]
+    },
+    {
+      "zh": "正则语法错误或不支持(txt)：${ex.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "TxtTocRuleEditDialog.kt:91: AppLog.put(\"正则语法错误或不支持(txt)：${ex.localizedMessage}\", ex, true)",
+        "TxtTocRuleEditComposeDialog.kt:144: AppLog.put(\"正则语法错误或不支持(txt)：${ex.localizedMessage}\", ex, true)"
+      ]
+    },
+    {
+      "zh": "剪贴板为空",
+      "en": "Clipboard is empty",
+      "count": 3,
+      "risk": 2,
+      "samples": [
+        "TxtTocRuleEditDialog.kt:164: throw NoStackTraceException(\"剪贴板为空\")",
+        "BookSourceEditViewModel.kt:97: throw NoStackTraceException(\"剪贴板为空\")",
+        "HttpTtsEditViewModel.kt:68: context.toastOnUi(\"剪贴板为空\")"
+      ],
+      "key": "ui_book_clipboard_empty"
+    },
+    {
+      "zh": "格式不对",
+      "en": "",
+      "count": 3,
+      "risk": 3,
+      "samples": [
+        "TxtTocRuleEditDialog.kt:167: ?: throw NoStackTraceException(\"格式不对\")",
+        "BookSourceEditViewModel.kt:147: else -> throw NoStackTraceException(\"格式不对\")",
+        "HttpTtsEditViewModel.kt:85: throw NoStackTraceException(\"格式不对\")"
+      ]
+    },
+    {
+      "zh": "TXT目录规则界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TxtTocRuleActivity.kt:169: AppLog.put(\"TXT目录规则界面获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "TXT目录规则对话框获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TxtTocRuleDialog.kt:119: AppLog.put(\"TXT目录规则对话框获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "所有书签界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AllBookmarkActivity.kt:49: AppLog.put(\"所有书签界面获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "缓存管理界面获取书籍列表失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheActivity.kt:268: AppLog.put(\"缓存管理界面获取书籍列表失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "缓存管理界面获取分组数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheActivity.kt:280: AppLog.put(\"缓存管理界面获取分组数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "提交缓存任务失败：${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheActivity.kt:340: AppLog.put(\"提交缓存任务失败：${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "未找到书籍，position is $position",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheActivity.kt:420: AppLog.put(\"未找到书籍，position is $position\")"
+      ]
+    },
+    {
+      "zh": "请输入正确的范围",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheActivity.kt:490: etInputScope.error = appCtx.getString(R.string.error_scope_input)//\"请输入正确的范围\""
+      ]
+    },
+    {
+      "zh": "评论快照重试失败: ${book.bookUrl}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReviewSnapshotStatusDialog.kt:92: AppLog.put(\"评论快照重试失败: ${book.bookUrl}\", error)"
+      ]
+    },
+    {
+      "zh": "书籍缓存导出失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCacheExportViewModel.kt:127: AppLog.put(\"书籍缓存导出失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导出失败：${it.localizedMessage}",
+      "en": "Export failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCacheExportViewModel.kt:128: appCtx.toastOnUi(\"导出失败：${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_export_failed"
+    },
+    {
+      "zh": "书籍缓存导入失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCacheExportViewModel.kt:144: AppLog.put(\"书籍缓存导入失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导入失败：${it.localizedMessage}",
+      "en": "Import failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCacheExportViewModel.kt:145: appCtx.toastOnUi(\"导入失败：${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_import_failed"
+    },
+    {
+      "zh": "分组已达上限(64个)",
+      "en": "Group limit reached (64)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "GroupManageDialog.kt:91: requireContext().toastOnUi(\"分组已达上限(64个)\")"
+      ],
+      "key": "ui_book_group_limit_reached_64"
+    },
+    {
+      "zh": "角色名：${draft.name.ifBlank { ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:362: add(\"角色名：${draft.name.ifBlank { \"未命名角色\" }}\")"
+      ]
+    },
+    {
+      "zh": "未知",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:540: .filter { it.isNotBlank() && it != \"未知\" }"
+      ]
+    },
+    {
+      "zh": "未知评论数据协议：$protocol",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookSourceEditActivity.kt:470: require(protocol.isEmpty() || protocol == \"idea_comment\") { \"未知评论数据协议：$protocol\" }"
+      ]
+    },
+    {
+      "zh": "插入URL参数",
+      "en": "Insert URL parameter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:717: SelectItem(\"插入URL参数\", \"urlOption\"),"
+      ],
+      "key": "ui_main_insert_url_parameter"
+    },
+    {
+      "zh": "书源教程",
+      "en": "Book source guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:718: SelectItem(\"书源教程\", \"ruleHelp\"),"
+      ],
+      "key": "ui_book_book_source_guide"
+    },
+    {
+      "zh": "js教程",
+      "en": "JS guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:719: SelectItem(\"js教程\", \"jsHelp\"),"
+      ],
+      "key": "ui_main_js_guide"
+    },
+    {
+      "zh": "正则教程",
+      "en": "Regex guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:720: SelectItem(\"正则教程\", \"regexHelp\"),"
+      ],
+      "key": "ui_main_regex_guide"
+    },
+    {
+      "zh": "插入分组",
+      "en": "Insert group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:727: SelectItem(\"插入分组\", \"addGroup\")"
+      ],
+      "key": "ui_book_insert_group"
+    },
+    {
+      "zh": "源变量可在js中通过source.getVariable()获取",
+      "en": "Source variables can be read in JS via source.getVariable()",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceEditActivity.kt:804: source.getDisplayVariableComment(\"源变量可在js中通过source.getVariable()获取\")"
+      ],
+      "key": "ui_main_source_variables_can_be_read"
+    },
+    {
+      "zh": "成功|失败",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookSourceScreen.kt:256: private val FINAL_DEBUG_MESSAGE_REGEX = Regex(\"成功|失败\")",
+        "BookSourceActivity.kt:133: private val finalMessageRegex = Regex(\"成功|失败\")"
+      ]
+    },
+    {
+      "zh": "书源界面更新书源出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookSourceActivity.kt:696: AppLog.put(\"书源界面更新书源出错\", it)"
+      ]
+    },
+    {
+      "zh": "失效",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BookSourceActivity.kt:990: if (group.contains(\"失效\") && searchQueryState.value.isEmpty()) {",
+        "BookSourceActivity.kt:991: updateSearchQuery(\"失效\")"
+      ]
+    },
+    {
+      "zh": "发现有失效书源，已为您自动筛选！",
+      "en": "Broken sources were found and filtered out for you.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceActivity.kt:992: toastOnUi(\"发现有失效书源，已为您自动筛选！\")"
+      ],
+      "key": "ui_book_broken_sources_were_found_filtered"
+    },
+    {
+      "zh": "校验失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookSourceActivity.kt:1147: Debug.updateFinalMessage(source.bookSourceUrl, \"校验失败\")"
+      ]
+    },
+    {
+      "zh": "获取发现出错\\n${it.url}",
+      "en": "Failed to load Discover\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceDebugActivity.kt:136: adapter.addItem(\"获取发现出错\\n${it.url}\")"
+      ],
+      "key": "ui_book_failed_load_discover_n"
+    },
+    {
+      "zh": "选择发现",
+      "en": "Select Discover",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceDebugActivity.kt:145: selector(\"选择发现\", exploreKindTitles) { _, index ->"
+      ],
+      "key": "ui_book_select_discover"
+    },
+    {
+      "zh": "未获取到书源",
+      "en": "No source obtained",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceDebugActivity.kt:184: toastOnUi(\"未获取到书源\")"
+      ],
+      "key": "ui_main_no_source_obtained"
+    },
+    {
+      "zh": "未找到书籍\\nbookUrl:$bookUrl",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookViewModel.kt:127: AppLog.put(\"未找到书籍\\nbookUrl:$bookUrl\")"
+      ]
+    },
+    {
+      "zh": "初始化数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:139: val msg = \"初始化数据失败\\n${it.localizedMessage}\"",
+        "ReadMangaViewModel.kt:70: val msg = \"初始化数据失败\\n${it.localizedMessage}\""
+      ]
+    },
+    {
+      "zh": "打开本地书籍出错: ${e.localizedMessage}",
+      "en": "Failed to open local book: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookViewModel.kt:245: ReadBook.upMsg(\"打开本地书籍出错: ${e.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_open_local_book"
+    },
+    {
+      "zh": "详情页出错: ${e.localizedMessage}",
+      "en": "Detail page error: %1$s",
+      "count": 3,
+      "risk": 1,
+      "samples": [
+        "ReadBookViewModel.kt:263: ReadBook.upMsg(\"详情页出错: ${e.localizedMessage}\")",
+        "ReadMangaViewModel.kt:156: ReadManga.mCallback?.loadFail(\"详情页出错: ${e.localizedMessage}\")",
+        "AudioPlayViewModel.kt:71: AppLog.put(\"详情页出错: ${e.localizedMessage}\", e, true)"
+      ],
+      "key": "ui_book_detail_page_error"
+    },
+    {
+      "zh": "正在解析目录 $percent%",
+      "en": "Parsing contents %1$s%%",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookViewModel.kt:291: ReadBook.upMsg(\"正在解析目录 $percent%\")"
+      ],
+      "key": "ui_book_parsing_contents"
+    },
+    {
+      "zh": "检测到文件编码可能不正确，如乱码可在阅读菜单中切换编码",
+      "en": "The file encoding may be wrong. If you see garbled text, switch encoding from the reading menu.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookViewModel.kt:295: context.toastOnUi(\"检测到文件编码可能不正确，如乱码可在阅读菜单中切换编码\")"
+      ],
+      "key": "ui_book_file_encoding_may_be_wrong"
+    },
+    {
+      "zh": "目录加载失败，已从缓存恢复 ${recovered.size} 章",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookViewModel.kt:447: AppLog.put(\"目录加载失败，已从缓存恢复 ${recovered.size} 章\")"
+      ]
+    },
+    {
+      "zh": "拉取阅读进度失败《${book.name}》\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:462: AppLog.put(\"拉取阅读进度失败《${book.name}》\\n${it.localizedMessage}\", it)",
+        "ReadMangaViewModel.kt:220: AppLog.put(\"拉取阅读进度失败《${book.name}》\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:475: AppLog.put(\"自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}\")",
+        "ReadMangaViewModel.kt:233: AppLog.put(\"自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}\")"
+      ]
+    },
+    {
+      "zh": "已同步最新阅读进度",
+      "en": "Reading progress synced",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookViewModel.kt:476: context.toastOnUi(\"已同步最新阅读进度\")"
+      ],
+      "key": "ui_book_reading_progress_synced"
+    },
+    {
+      "zh": "换源失败\\n$it",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:499: AppLog.put(\"换源失败\\n$it\", it, true)",
+        "ReadMangaViewModel.kt:258: AppLog.put(\"换源失败\\n$it\", it, true)"
+      ]
+    },
+    {
+      "zh": "没有合适书源",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:543: throw NoStackTraceException(\"没有合适书源\")",
+        "ReadMangaViewModel.kt:199: throw NoStackTraceException(\"没有合适书源\")"
+      ]
+    },
+    {
+      "zh": "自动换源失败\\n${it.localizedMessage}",
+      "en": "Auto source switch failed\\n%1$s",
+      "count": 5,
+      "risk": 2,
+      "samples": [
+        "ReadBookViewModel.kt:547: AppLog.put(\"自动换源失败\\n${it.localizedMessage}\", it)",
+        "ReadBookViewModel.kt:548: context.toastOnUi(\"自动换源失败\\n${it.localizedMessage}\")",
+        "ReadMangaViewModel.kt:203: AppLog.put(\"自动换源失败\\n${it.localizedMessage}\", it)"
+      ],
+      "key": "ui_book_auto_source_switch_failed_n"
+    },
+    {
+      "zh": "跳过删除正式书架书: ${book.name}, bookUrl=${book.bookUrl}, ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookViewModel.kt:573: \"跳过删除正式书架书: ${book.name}, bookUrl=${book.bookUrl}, \" +"
+      ]
+    },
+    {
+      "zh": "删除临时书失败: bookUrl=${book?.bookUrl}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookViewModel.kt:579: AppLog.put(\"删除临时书失败: bookUrl=${book?.bookUrl}\", it)"
+      ]
+    },
+    {
+      "zh": "保存图片出错\\n${it.localizedMessage}",
+      "en": "Failed to save image\\n%1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "ReadBookViewModel.kt:780: AppLog.put(\"保存图片出错\\n${it.localizedMessage}\", it)",
+        "ReadBookViewModel.kt:781: context.toastOnUi(\"保存图片出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_save_image_n"
+    },
+    {
+      "zh": "已取消，未发送正文",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:375: private const val CONSENT_DENIED_MESSAGE = \"已取消，未发送正文\""
+      ]
+    },
+    {
+      "zh": "更多选项（${state.offlineReviewPending} 条离线评论待发送）",
+      "en": "More options (%1$s offline comments pending)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:283: \"更多选项（${state.offlineReviewPending} 条离线评论待发送）\""
+      ],
+      "key": "ui_book_more_options_offline_comments_pending"
+    },
+    {
+      "zh": "更多选项",
+      "en": "More options",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:285: \"更多选项\""
+      ],
+      "key": "ui_book_more_options"
+    },
+    {
+      "zh": "自动亮度",
+      "en": "Auto brightness",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:575: contentDescription = \"自动亮度\","
+      ],
+      "key": "ui_book_auto_brightness"
+    },
+    {
+      "zh": "自动",
+      "en": "Auto",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:804: ReadMenuButtonConfig.Builtin.AUTO_PAGE -> \"自动\""
+      ],
+      "key": "ui_book_auto"
+    },
+    {
+      "zh": "段落",
+      "en": "Paragraph",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:813: ReadMenuButtonConfig.Builtin.PARAGRAPH_RULES -> \"段落\""
+      ],
+      "key": "ui_book_paragraph"
+    },
+    {
+      "zh": "高亮规则",
+      "en": "Highlight rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuComposeComponents.kt:931: actions.add(ModernActionPopup.Action(title = \"高亮规则\", invoke = onHighlightRuleClick))"
+      ],
+      "key": "ui_book_highlight_rules"
+    },
+    {
+      "zh": "章节跳转确认",
+      "en": "Confirm chapter jump",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenu.kt:655: context.alert(\"章节跳转确认\", \"确定要跳转章节吗？\") {"
+      ],
+      "key": "ui_book_confirm_chapter_jump"
+    },
+    {
+      "zh": "确定要跳转章节吗？",
+      "en": "Jump to this chapter?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenu.kt:655: context.alert(\"章节跳转确认\", \"确定要跳转章节吗？\") {"
+      ],
+      "key": "ui_book_jump_this_chapter"
+    },
+    {
+      "zh": "${context.getString(R.string.search_content_size)}: ${searchResultList.size} / 当前章节: ${it.title}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SearchMenu.kt:156: \"\"\"${context.getString(R.string.search_content_size)}: ${searchResultList.size} / 当前章节: ${it.title}\"\"\""
+      ]
+    },
+    {
+      "zh": "选择段评气泡",
+      "en": "Select paragraph-comment bubble",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BubbleQuickSwitchDialog.kt:99: title = \"选择段评气泡\","
+      ],
+      "key": "ui_book_select_paragraph_comment_bubble"
+    },
+    {
+      "zh": "识别正文图片形式的段评入口",
+      "en": "Detect paragraph-comment entries embedded as images",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BubbleQuickSwitchDialog.kt:111: subtitle = \"识别正文图片形式的段评入口\","
+      ],
+      "key": "ui_book_detect_paragraph_comment_entries_embedded"
+    },
+    {
+      "zh": "找不到文件",
+      "en": "File not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BaseReadBookActivity.kt:84: } ?: ReadBook.upMsg(\"找不到文件\")"
+      ],
+      "key": "ui_book_file_not_found"
+    },
+    {
+      "zh": "没有权限访问",
+      "en": "No access permission",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BaseReadBookActivity.kt:86: } ?: ReadBook.upMsg(\"没有权限访问\")"
+      ],
+      "key": "ui_book_no_access_permission"
+    },
+    {
+      "zh": "选择书籍所在文件夹",
+      "en": "Select the folder containing the book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BaseReadBookActivity.kt:109: title = \"选择书籍所在文件夹\""
+      ],
+      "key": "ui_book_select_folder_containing_book"
+    },
+    {
+      "zh": "读者",
+      "en": "Reader",
+      "count": 3,
+      "risk": 1,
+      "samples": [
+        "ShareNoteImageRenderer.kt:81: val name: String = \"读者\",",
+        "ShareNoteImageRenderer.kt:467: name = \"读者\",",
+        "ReadBookActivity.kt:2118: name = goalConfig.userName.orEmpty().ifBlank { \"读者\" },"
+      ],
+      "key": "ui_book_reader"
+    },
+    {
+      "zh": "一段认真读过的文字",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "ShareNoteImageRenderer.kt:82: val bio: String = \"一段认真读过的文字\",",
+        "ShareNoteImageRenderer.kt:468: bio = \"一段认真读过的文字\""
+      ]
+    },
+    {
+      "zh": "清平乐",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:471: title = \"清平乐\","
+      ]
+    },
+    {
+      "zh": "佚名",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:472: author = \"佚名\","
+      ]
+    },
+    {
+      "zh": "一本留给夜晚慢慢翻阅的书。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:473: description = \"一本留给夜晚慢慢翻阅的书。\","
+      ]
+    },
+    {
+      "zh": "古典文学",
+      "en": "",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:474: type = \"古典文学\",",
+        "ShareNoteImageRenderer.kt:475: kind = \"古典文学\",",
+        "ShareNoteImageRenderer.kt:476: tags = \"古典文学\","
+      ]
+    },
+    {
+      "zh": "13 万字",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:477: wordCountText = \"13 万字\","
+      ]
+    },
+    {
+      "zh": "2小时18分钟",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:478: readTimeText = \"2小时18分钟\","
+      ]
+    },
+    {
+      "zh": "在读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:479: readStatusText = \"在读\","
+      ]
+    },
+    {
+      "zh": "第一章",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:486: sectionName = \"第一章\","
+      ]
+    },
+    {
+      "zh": "一段文字被认真读过以后，便不只是书中的句子，也会成为某一日的风声与光。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:487: description = \"一段文字被认真读过以后，便不只是书中的句子，也会成为某一日的风声与光。\","
+      ]
+    },
+    {
+      "zh": "这里记录当时的想法。卡片会随着文字内容自然变高，邮票齿孔不会被截图裁掉。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ShareNoteImageRenderer.kt:488: comment = \"这里记录当时的想法。卡片会随着文字内容自然变高，邮票齿孔不会被截图裁掉。\""
+      ]
+    },
+    {
+      "zh": "百度百科",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ContentSelectConfig.kt:133: \"百度百科\","
+      ]
+    },
+    {
+      "zh": "无法写入导出文件: $uri",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:415: } ?: error(\"无法写入导出文件: $uri\")"
+      ]
+    },
+    {
+      "zh": "${ReviewOutboxStore.LogTag} 导出离线评论 $total 条 → $uri",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:420: \"${ReviewOutboxStore.LogTag} 导出离线评论 $total 条 → $uri\""
+      ]
+    },
+    {
+      "zh": "未找到可移除的重复标题",
+      "en": "No duplicate titles to remove",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:1332: toastOnUi(\"未找到可移除的重复标题\")",
+        "ReadBookActivity.kt:6570: toastOnUi(\"未找到可移除的重复标题\")"
+      ],
+      "key": "ui_book_no_duplicate_titles_remove"
+    },
+    {
+      "zh": "离线评论_",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:1443: val fileName = \"离线评论_\" +"
+      ]
+    },
+    {
+      "zh": "摘录分享模板加载失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:2087: AppLog.put(\"摘录分享模板加载失败\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "阅读 $it",
+      "en": "Reading %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:2131: readStatusText = readTimeText.takeIf { it.isNotBlank() }?.let { \"阅读 $it\" }.orEmpty(),"
+      ],
+      "key": "ui_book_reading"
+    },
+    {
+      "zh": "正在生成分享图片",
+      "en": "Generating share image",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:2279: toastOnUi(\"正在生成分享图片\")"
+      ],
+      "key": "ui_book_generating_share_image"
+    },
+    {
+      "zh": "摘录分享图片生成失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:2289: AppLog.put(\"摘录分享图片生成失败\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:2704: \"${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}\""
+      ]
+    },
+    {
+      "zh": "章节目录已更新，请重新选择章节",
+      "en": "The chapter list was updated; please select a chapter again",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:3005: if (!book.isEpub && targetChapterIndex != null) toastOnUi(\"章节目录已更新，请重新选择章节\")"
+      ],
+      "key": "ui_book_chapter_list_was_updated_please"
+    },
+    {
+      "zh": "读取页面模板失败，使用内置花间书页",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:3273: AppLog.putDebug(\"读取页面模板失败，使用内置花间书页\", it)"
+      ]
+    },
+    {
+      "zh": "请先加载正文，再预览页面模板",
+      "en": "Load the content before previewing the page template",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:3280: toastOnUi(\"请先加载正文，再预览页面模板\")"
+      ],
+      "key": "ui_book_load_content_before_previewing_page"
+    },
+    {
+      "zh": "阅读菜单自定义按键执行失败: ${button.displayName()}\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:4748: AppLog.put(\"阅读菜单自定义按键执行失败: ${button.displayName()}\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "未找到当前章节",
+      "en": "Current chapter not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:4838: toastOnUi(\"未找到当前章节\")"
+      ],
+      "key": "ui_book_current_chapter_not_found"
+    },
+    {
+      "zh": "云端没有匹配当前章节的缓存",
+      "en": "No cloud cache matches the current chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:4845: toastOnUi(\"云端没有匹配当前章节的缓存\")"
+      ],
+      "key": "ui_book_no_cloud_cache_matches_current"
+    },
+    {
+      "zh": "书库调试",
+      "en": "Library debug",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:4996: .setTitle(\"书库调试\")",
+        "ReadBookActivity.kt:5000: clipboard.setPrimaryClip(ClipData.newPlainText(\"书库调试\", message))"
+      ],
+      "key": "ui_book_library_debug"
+    },
+    {
+      "zh": "读取云端章节",
+      "en": "Read cloud chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5046: ReadBook.upMsg(\"读取云端章节\")"
+      ],
+      "key": "ui_book_read_cloud_chapter"
+    },
+    {
+      "zh": "云端章节内容不存在",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:5050: ?: throw NoStackTraceException(\"云端章节内容不存在\")"
+      ]
+    },
+    {
+      "zh": "读取云端章节失败\\n${it.localizedMessage}",
+      "en": "Failed to read cloud chapter\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5067: toastOnUi(\"读取云端章节失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_read_cloud_chapter_n"
+    },
+    {
+      "zh": "当前章节：${currentChapter.title}",
+      "en": "Current chapter: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5083: text = \"当前章节：${currentChapter.title}\""
+      ],
+      "key": "ui_book_current_chapter"
+    },
+    {
+      "zh": "选择书库章节",
+      "en": "Select library chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5125: setTitle(\"选择书库章节\")"
+      ],
+      "key": "ui_book_select_library_chapter"
+    },
+    {
+      "zh": "读取",
+      "en": "Read",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5170: addView(libraryCloudActionText(\"读取\", accentColor) {"
+      ],
+      "key": "ui_book_read"
+    },
+    {
+      "zh": "删除云端章节",
+      "en": "Delete cloud chapter",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5218: setTitle(\"删除云端章节\")",
+        "ReadBookActivity.kt:5248: ReadBook.upMsg(\"删除云端章节\")"
+      ],
+      "key": "ui_book_delete_cloud_chapter"
+    },
+    {
+      "zh": "云端章节不存在或删除失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:5252: throw NoStackTraceException(\"云端章节不存在或删除失败\")"
+      ]
+    },
+    {
+      "zh": "已删除云端章节",
+      "en": "Cloud chapter deleted",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5264: toastOnUi(\"已删除云端章节\")"
+      ],
+      "key": "ui_book_cloud_chapter_deleted"
+    },
+    {
+      "zh": "删除云端章节失败\\n${result.exceptionOrNull()?.localizedMessage.orEmpty()}",
+      "en": "Failed to delete cloud chapter\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5267: toastOnUi(\"删除云端章节失败\\n${result.exceptionOrNull()?.localizedMessage.orEmpty()}\")"
+      ],
+      "key": "ui_book_failed_delete_cloud_chapter_n"
+    },
+    {
+      "zh": "旧缓存/未知来源",
+      "en": "Old cache / unknown source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5280: .ifBlank { \"旧缓存/未知来源\" }"
+      ],
+      "key": "ui_book_old_cache_unknown_source"
+    },
+    {
+      "zh": "未配置书库容器",
+      "en": "No library container configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5298: LibraryCloudState.DISABLED -> \"未配置书库容器\""
+      ],
+      "key": "ui_book_no_library_container_configured"
+    },
+    {
+      "zh": "云端书库可用",
+      "en": "Cloud library available",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5299: LibraryCloudState.READY -> \"云端书库可用\""
+      ],
+      "key": "ui_book_cloud_library_available"
+    },
+    {
+      "zh": "云端书库读取失败\\n$it",
+      "en": "Failed to read cloud library\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5300: LibraryCloudState.ERROR -> session.errorMessage?.let { \"云端书库读取失败\\n$it\" }"
+      ],
+      "key": "ui_book_failed_read_cloud_library_n"
+    },
+    {
+      "zh": "云端书库读取失败",
+      "en": "Failed to read cloud library",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookActivity.kt:5301: ?: \"云端书库读取失败\""
+      ],
+      "key": "ui_book_failed_read_cloud_library"
+    },
+    {
+      "zh": "执行购买操作出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:5481: AppLog.put(\"执行购买操作出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "执行正文图片 click 出错\\n${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:5533: AppLog.put(\"执行正文图片 click 出错\\n${error.localizedMessage}\", error, true)"
+      ]
+    },
+    {
+      "zh": "执行图片链接click键值出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadBookActivity.kt:5734: AppLog.put(\"执行图片链接click键值出错\\n${it.localizedMessage}\", it, true)",
+        "ReadBookActivity.kt:5795: AppLog.put(\"执行图片链接click键值出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "执行图片链接js键值出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookActivity.kt:5758: AppLog.put(\"执行图片链接js键值出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "繁简转换",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EffectiveReplacesDialog.kt:36: private val chineseConvert by lazy { ReplaceRule(0, \"繁简转换\") }"
+      ]
+    },
+    {
+      "zh": "文字操作失败，请缩小选区后重试",
+      "en": "Text action failed; narrow the selection and try again",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextActionMenu.kt:144: context.toastOnUi(\"文字操作失败，请缩小选区后重试\")"
+      ],
+      "key": "ui_book_text_action_failed_narrow_selection"
+    },
+    {
+      "zh": "visibleRect 为空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ContentTextView.kt:257: check(!visibleRect.isEmpty) { \"visibleRect 为空\" }"
+      ]
+    },
+    {
+      "zh": "零评论泡无法建立零宽段评入口: span=$start..$end, src=$src",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:156: AppLog.put(\"零评论泡无法建立零宽段评入口: span=$start..$end, src=$src\")"
+      ]
+    },
+    {
+      "zh": "调用布局进度监听回调出错\\n${e.localizedMessage}",
+      "en": "",
+      "count": 3,
+      "risk": 3,
+      "samples": [
+        "TextChapterLayout.kt:287: AppLog.put(\"调用布局进度监听回调出错\\n${e.localizedMessage}\", e)",
+        "TextChapterLayout.kt:297: AppLog.put(\"调用布局进度监听回调出错\\n${e.localizedMessage}\", e)",
+        "TextChapterLayout.kt:313: AppLog.put(\"调用布局进度监听回调出错\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "旧 EPUB 缓存仍是 usehtml，请重新打开或刷新章节缓存",
+      "en": "The old EPUB cache still uses usehtml. Reopen the book or refresh the chapter cache.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextChapterLayout.kt:456: setTypeEpubDiagnosticPage(\"旧 EPUB 缓存仍是 usehtml，请重新打开或刷新章节缓存\", text.take(180))"
+      ],
+      "key": "ui_book_old_epub_cache_still_uses"
+    },
+    {
+      "zh": "EPUB Native Layout abort: 当前书籍不是 EPUB, book=${book.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:968: AppLog.put(\"EPUB Native Layout abort: 当前书籍不是 EPUB, book=${book.name}\")"
+      ]
+    },
+    {
+      "zh": "未找到 epub-native[data-href]",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:973: val reason = \"未找到 epub-native[data-href]\""
+      ]
+    },
+    {
+      "zh": "data-href 为空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:989: val reason = \"data-href 为空\""
+      ]
+    },
+    {
+      "zh": "EPUB Native Layout skip: getNativeLayout 返回 null, ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextChapterLayout.kt:1005: \"EPUB Native Layout skip: getNativeLayout 返回 null, \" +"
+      ]
+    },
+    {
+      "zh": "EPUB Native Layout skip: layout 页数为 0, ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextChapterLayout.kt:1013: \"EPUB Native Layout skip: layout 页数为 0, \" +"
+      ]
+    },
+    {
+      "zh": "getNativeLayout 全部返回空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:1026: val reason = \"getNativeLayout 全部返回空\""
+      ]
+    },
+    {
+      "zh": "EPUB 原生排版失败",
+      "en": "EPUB native layout failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextChapterLayout.kt:1042: append(\"EPUB 原生排版失败\")"
+      ],
+      "key": "ui_book_epub_native_layout_failed"
+    },
+    {
+      "zh": "正文图片 js 参数解析失败: $src\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapterLayout.kt:2662: AppLog.put(\"正文图片 js 参数解析失败: $src\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "袮",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChapterProvider.kt:44: const val srcReplaceStr = \"袮\" //▩▣ //这是不应该存在的汉字,会替换为祢，这个字符用来标记"
+      ]
+    },
+    {
+      "zh": "边距设置过大，请重新设置",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChapterProvider.kt:578: AppLog.put(\"边距设置过大，请重新设置\", toast = true)"
+      ]
+    },
+    {
+      "zh": "我",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ZhLayout.kt:39: ?: getDesiredWidth(\"我\", textPaint).also {"
+      ]
+    },
+    {
+      "zh": "一二 三",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextLine.kt:322: val text = \"一二 三\""
+      ]
+    },
+    {
+      "zh": "[袮꧁]",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextChapter.kt:254: .replace(Regex(\"[袮꧁]\"), \" \")"
+      ]
+    },
+    {
+      "zh": "已经排版过了",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TextChapter.kt:333: throw IllegalStateException(\"已经排版过了\")"
+      ]
+    },
+    {
+      "zh": "发言人可填 [{\\\"speakerName\\\":\\\"晓晓\\\",\\\"toneID\\\":\\\"xxx\\\"}]，也可用 [{\\\"groupName\\\":\\\"女声\\\",\\\"items\\\":[...]}] 分组；情绪字段使用 emotionName / emotionTag。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:382: text = \"发言人可填 [{\\\"speakerName\\\":\\\"晓晓\\\",\\\"toneID\\\":\\\"xxx\\\"}]，也可用 [{\\\"groupName\\\":\\\"女声\\\",\\\"items\\\":[...]}] 分组；情绪字段使用 emoti"
+      ]
+    },
+    {
+      "zh": "AI总结",
+      "en": "AI summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMenuButtonManageActivity.kt:593: ReadMenuButtonConfig.Builtin.AI_SUMMARY -> \"AI总结\""
+      ],
+      "key": "ui_book_ai_summary"
+    },
+    {
+      "zh": "朗读引擎界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SpeakEngineDialog.kt:166: .catch { AppLog.put(\"朗读引擎界面获取数据失败\\n${it.localizedMessage}\", it) }"
+      ]
+    },
+    {
+      "zh": "高亮规则.red",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleManageActivity.kt:261: fileData = HandleFileContract.FileData(\"高亮规则.red\", bytes, \"application/octet-stream\")"
+      ]
+    },
+    {
+      "zh": "网络导入",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BgTextConfigDialog.kt:130: private val importFormNet = \"网络导入\""
+      ]
+    },
+    {
+      "zh": "导出失败:${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BgTextConfigDialog.kt:861: AppLog.put(\"导出失败:${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "读取媒体文件失败",
+      "en": "Failed to read media file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "IllustrationEditDialog.kt:108: appCtx.toastOnUi(\"读取媒体文件失败\")"
+      ],
+      "key": "ui_book_failed_read_media_file"
+    },
+    {
+      "zh": "仅支持图片、视频、音频文件",
+      "en": "Only image, video and audio files are supported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "IllustrationEditDialog.kt:120: appCtx.toastOnUi(\"仅支持图片、视频、音频文件\")"
+      ],
+      "key": "ui_book_only_image_video_audio_files"
+    },
+    {
+      "zh": "已导入：${asset.name}",
+      "en": "Imported: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:186: if (pickKind.isNotBlank()) select(asset) else toastOnUi(\"已导入：${asset.name}\")"
+      ],
+      "key": "ui_book_imported"
+    },
+    {
+      "zh": "请先打开一个来源文件夹",
+      "en": "Open a source folder first",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:191: if (navigation.isEmpty()) { toastOnUi(\"请先打开一个来源文件夹\"); return }"
+      ],
+      "key": "ui_book_open_source_folder_first"
+    },
+    {
+      "zh": "一次最多导入 100 个素材，请搜索后分批导入",
+      "en": "Import at most 100 assets at a time. Search and import in batches.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:194: if (files.size > 100) { toastOnUi(\"一次最多导入 100 个素材，请搜索后分批导入\"); return }"
+      ],
+      "key": "ui_book_import_at_most_100_assets"
+    },
+    {
+      "zh": "\\n\\n${files.size} 个文件",
+      "en": "\\n\\n%1$s files",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:196: getString(R.string.reader_assets_import_folder_hint) + \"\\n\\n${files.size} 个文件\", onPositive = { work {"
+      ],
+      "key": "ui_book_n_n_files"
+    },
+    {
+      "zh": "已导入或合并 $count 个素材",
+      "en": "%1$s assets imported or merged",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:204: \"已导入或合并 $count 个素材\" + if (failures.isEmpty()) \"\" else \"\\n\\n\" + failures.take(10).joinToString(\"\\n\"),"
+      ],
+      "key": "ui_book_assets_imported_or_merged"
+    },
+    {
+      "zh": "请选择${if (pickKind == ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:231: if (pickKind != \"any\" && asset.kind != pickKind) { toastOnUi(\"请选择${if (pickKind == \"font\") \"字体\" else \"图片\"}素材\"); return }"
+      ]
+    },
+    {
+      "zh": "}素材",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:231: if (pickKind != \"any\" && asset.kind != pickKind) { toastOnUi(\"请选择${if (pickKind == \"font\") \"字体\" else \"图片\"}素材\"); return }"
+      ]
+    },
+    {
+      "zh": "打开文件夹",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReaderAssetManageActivity.kt:279: showComposeChoiceListDialog(folder.name, listOf(\"打开文件夹\", getString(R.string.reader_assets_remove_folder))) {"
+      ]
+    },
+    {
+      "zh": "${it.name} · ${entries.size} 项",
+      "en": "%1$s · %2$s items",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:352: tvSummary.text = if (busy || loading) getString(R.string.reader_assets_busy) else navigation.lastOrNull()?.let { \"${it.n"
+      ],
+      "key": "ui_book_items"
+    },
+    {
+      "zh": "${entries.size} 项 · 素材库 ${Formatter.formatFileSize(this@ReaderAssetManageActivity, library.assets.sumOf { it.size })}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:353: ?: \"${entries.size} 项 · 素材库 ${Formatter.formatFileSize(this@ReaderAssetManageActivity, library.assets.sumOf { it.size })"
+      ]
+    },
+    {
+      "zh": "本地来源 · 点击浏览",
+      "en": "Local source · Tap to browse",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:409: entry.isFolder -> if (entry.folder != null) \"本地来源 · 点击浏览\" else appCtx.getString(R.string.sub_dir)"
+      ],
+      "key": "ui_book_local_source_tap_browse"
+    },
+    {
+      "zh": "待导入 · ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderAssetManageActivity.kt:410: else -> \"待导入 · \" + Formatter.formatFileSize(this@ReaderAssetManageActivity, entry.local?.size ?: 0)"
+      ]
+    },
+    {
+      "zh": "$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput · 总 $total · 已选 ${selectedIds.size}",
+      "en": "%1$s · %2$s · %3$s records · In %4$s · Cached %5$s · Out %6$s · Total %7$s · %8$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:117: binding.tvSummary.text = \"$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput"
+      ],
+      "key": "ui_book_records_cached_out_total_selected"
+    },
+    {
+      "zh": "总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:303: add(\"总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}\")"
+      ]
+    },
+    {
+      "zh": "${items.size} 个发言人 · ${if (group.enabled) ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:560: \"${items.size} 个发言人 · ${if (group.enabled) \"已启用\" else \"已停用\"}\""
+      ]
+    },
+    {
+      "zh": "默认分组",
+      "en": "",
+      "count": 7,
+      "risk": 7,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:1098: .sortedWith(compareBy<SpeakerSourceGroupUi> { it.title == \"默认分组\" }.thenBy { it.title })",
+        "ReadAloudBgmManageActivity.kt:621: ?.takeUnless { it == \"默认分组\" }",
+        "ReadAloudBgmManageActivity.kt:775: groups.firstOrNull { (it.id == 0L || it.name == \"默认分组\") && it.assetType == normalized }?.let { return it.id }"
+      ]
+    },
+    {
+      "zh": "${label}包_${System.currentTimeMillis()}.zip",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:326: \"${label}包_${System.currentTimeMillis()}.zip\","
+      ]
+    },
+    {
+      "zh": "${tracks.size} 个${currentAssetLabel} · ${groups.size.coerceAtLeast(1)} 个分组 · 已选 ${selectedIds.size}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:356: \"${tracks.size} 个${currentAssetLabel} · ${groups.size.coerceAtLeast(1)} 个分组 · 已选 ${selectedIds.size}\""
+      ]
+    },
+    {
+      "zh": "暂无可导出的${assetLabel(normalizedType)}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:589: if (exportTracks.isEmpty()) error(\"暂无可导出的${assetLabel(normalizedType)}\")"
+      ]
+    },
+    {
+      "zh": "素材已丢失，请重新导入",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReaderTemplateDialog.kt:88: if (id.isNotEmpty()) require(ReaderAssets.store.find(id)?.kind == kind && ReaderAssets.store.file(id) != null) { \"素材已丢失，"
+      ]
+    },
+    {
+      "zh": "\\n可在编辑页直接选择字体和背景，或从素材库复制图片地址、字体 CSS 放入页面代码。",
+      "en": "\\nChoose fonts and backgrounds in the editor, or copy image URLs and font CSS from the asset library into the page code.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReaderTemplateDialog.kt:499: \"\\n可在编辑页直接选择字体和背景，或从素材库复制图片地址、字体 CSS 放入页面代码。\","
+      ],
+      "key": "ui_book_nchoose_fonts_backgrounds_editor_or"
+    },
+    {
+      "zh": "文字上色",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ]
+    },
+    {
+      "zh": "背景上色",
+      "en": "Background color",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ],
+      "key": "ui_book_background_color"
+    },
+    {
+      "zh": "下划线",
+      "en": "Underline",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ],
+      "key": "ui_book_underline"
+    },
+    {
+      "zh": "双下划线",
+      "en": "Double underline",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ],
+      "key": "ui_book_double_underline"
+    },
+    {
+      "zh": "波浪线",
+      "en": "Wavy line",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ],
+      "key": "ui_book_wavy_line"
+    },
+    {
+      "zh": "删除线",
+      "en": "Strikethrough",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:67: private val typeLabels = listOf(\"文字上色\", \"背景上色\", \"下划线\", \"双下划线\", \"波浪线\", \"删除线\")"
+      ],
+      "key": "ui_book_strikethrough"
+    },
+    {
+      "zh": "阅读强调色",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ]
+    },
+    {
+      "zh": "红色",
+      "en": "Red",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_red"
+    },
+    {
+      "zh": "橙色",
+      "en": "Orange",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_orange"
+    },
+    {
+      "zh": "黄色",
+      "en": "Yellow",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_yellow"
+    },
+    {
+      "zh": "绿色",
+      "en": "Green",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_green"
+    },
+    {
+      "zh": "青色",
+      "en": "Cyan",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_cyan"
+    },
+    {
+      "zh": "蓝色",
+      "en": "Blue",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_blue"
+    },
+    {
+      "zh": "紫色",
+      "en": "Purple",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_purple"
+    },
+    {
+      "zh": "粉色",
+      "en": "Pink",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_pink"
+    },
+    {
+      "zh": "棕色",
+      "en": "Brown",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_brown"
+    },
+    {
+      "zh": "灰色",
+      "en": "Gray",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:69: private val colorLabels = listOf(\"阅读强调色\", \"红色\", \"橙色\", \"黄色\", \"绿色\", \"青色\", \"蓝色\", \"紫色\", \"粉色\", \"棕色\", \"灰色\")"
+      ],
+      "key": "ui_book_gray"
+    },
+    {
+      "zh": "此高亮规则已被删除，请返回管理页刷新",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "HighlightRuleEditActivity.kt:127: ?: error(\"此高亮规则已被删除，请返回管理页刷新\")"
+      ]
+    },
+    {
+      "zh": "自定义 CSS 字体",
+      "en": "Custom CSS font",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:184: Regex(\"(?i)font-family\\\\s*:\").containsMatchIn(css) && !css.contains(\"reeden-font:\", true) -> \"自定义 CSS 字体\""
+      ],
+      "key": "ui_book_custom_css_font"
+    },
+    {
+      "zh": "原规则背景",
+      "en": "Original rule background",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:189: names.second ?: if (imageId == null) getString(R.string.reader_assets_no_image) else \"原规则背景\")"
+      ],
+      "key": "ui_book_original_rule_background"
+    },
+    {
+      "zh": "背景图片未导入",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "HighlightRuleEditActivity.kt:253: val warnings = value.importWarning.split(\"；\").filter { it.startsWith(\"背景图片未导入\") } +"
+      ]
+    },
+    {
+      "zh": "表达式不可用：",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:254: listOfNotNull(invalid?.let { \"表达式不可用：\" + it },"
+      ]
+    },
+    {
+      "zh": "未附带 Reeden 字体，使用当前阅读字体",
+      "en": "No Reeden font attached; using the current reading font",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HighlightRuleEditActivity.kt:255: if (value.styleCssText.contains(\"reeden-font:\", true)) \"未附带 Reeden 字体，使用当前阅读字体\" else null)"
+      ],
+      "key": "ui_book_no_reeden_font_attached_using"
+    },
+    {
+      "zh": "页面提交超时，请检查模板的布局或脚本",
+      "en": "Page commit timed out; check the template layout or script",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:743: onTemplateFailure(view, expectedToken, \"页面提交超时，请检查模板的布局或脚本\")"
+      ],
+      "key": "ui_book_page_commit_timed_out_check"
+    },
+    {
+      "zh": "页面绘制暂未完成，请再试一次",
+      "en": "Page rendering is not finished yet; please try again",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:4384: listener?.onError(\"页面绘制暂未完成，请再试一次\", null)"
+      ],
+      "key": "ui_book_page_rendering_not_finished_yet"
+    },
+    {
+      "zh": "模板脚本长时间无响应，已停止本次渲染",
+      "en": "The template script did not respond in time; rendering was stopped",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:7456: onTemplateFailure(this@ReaderWebView, token, \"模板脚本长时间无响应，已停止本次渲染\")"
+      ],
+      "key": "ui_book_template_script_did_not_respond"
+    },
+    {
+      "zh": "模板排版未能在限定时间内完成",
+      "en": "Template layout did not finish within the time limit",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:7530: onTemplateFailure(this@ReaderWebView, expectedToken, \"模板排版未能在限定时间内完成\")"
+      ],
+      "key": "ui_book_template_layout_did_not_finish"
+    },
+    {
+      "zh": "模板渲染进程已退出",
+      "en": "The template rendering process exited",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:7759: onTemplateFailure(this@ReaderWebView, token, \"模板渲染进程已退出\")"
+      ],
+      "key": "ui_book_template_rendering_process_exited"
+    },
+    {
+      "zh": "阅读模板：$message",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubDirectWebLayer.kt:8466: failPendingLoad(view, token, \"阅读模板：$message\", EpubTemplateException(template.contentHash(), message))"
+      ]
+    },
+    {
+      "zh": "发现列表界面获取书籍数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreShowViewModel.kt:52: AppLog.put(\"发现列表界面获取书籍数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "加载书架数据失败",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ExploreShowViewModel.kt:59: AppLog.put(\"加载书架数据失败\", it)",
+        "SearchViewModel.kt:84: AppLog.put(\"加载书架数据失败\", it)"
+      ]
+    },
+    {
+      "zh": "已在书架",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreShowWaterfallAdapter.kt:109: private const val IN_BOOKSHELF_LABEL = \"已在书架\""
+      ]
+    },
+    {
+      "zh": "搜索范围-多分组/书源界面更新出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SearchScopeDialog.kt:104: AppLog.put(\"搜索范围-多分组/书源界面更新出错\", it)"
+      ]
+    },
+    {
+      "zh": "搜索界面获取书籍列表失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SearchViewModel.kt:77: AppLog.put(\"搜索界面获取书籍列表失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "搜索界面获取搜索历史数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SearchActivity.kt:555: AppLog.put(\"搜索界面获取搜索历史数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "搜索结果为空",
+      "en": "No search results",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "SearchActivity.kt:595: alert(\"搜索结果为空\") {",
+        "ChangeBookSourceDialog.kt:90: context?.alert(\"搜索结果为空\") {",
+        "ChangeChapterSourceDialog.kt:97: context?.alert(\"搜索结果为空\") {"
+      ],
+      "key": "ui_book_no_search_results"
+    },
+    {
+      "zh": "${displayScope}分组搜索结果为空，是否关闭精准搜索？",
+      "en": "No results in the %1$s group. Disable precise search?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SearchActivity.kt:599: setMessage(\"${displayScope}分组搜索结果为空，是否关闭精准搜索？\")"
+      ],
+      "key": "ui_book_no_results_group_disable_precise"
+    },
+    {
+      "zh": "${displayScope}分组搜索结果为空，是否切换到全部分组？",
+      "en": "No results in the %1$s group. Switch to all groups?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SearchActivity.kt:606: setMessage(\"${displayScope}分组搜索结果为空，是否切换到全部分组？\")"
+      ],
+      "key": "ui_book_no_results_group_switch_all"
+    },
+    {
+      "zh": "共 ${preview.count} 张相关图片，点击查看完整图库",
+      "en": "%1$s related images; tap to open the full gallery",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:455: \"共 ${preview.count} 张相关图片，点击查看完整图库\""
+      ],
+      "key": "ui_book_related_images_tap_open_full"
+    },
+    {
+      "zh": "从云端备份包上传、下载、用缓存入架",
+      "en": "Upload and download cloud backup packages, or add books from cache",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1789: BookCloudEntryMode.CACHE_PACKAGE -> \"从云端备份包上传、下载、用缓存入架\"",
+        "BookInfoComposeRoute.kt:1321: summary = \"从云端备份包上传、下载、用缓存入架\","
+      ],
+      "key": "ui_book_upload_download_cloud_backup_packages"
+    },
+    {
+      "zh": "阅读页显示云按钮，按当前章节切换书库正文",
+      "en": "Show the cloud button on the reading page to switch library content by chapter",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1790: BookCloudEntryMode.LIBRARY_CHAPTER -> \"阅读页显示云按钮，按当前章节切换书库正文\"",
+        "BookInfoComposeRoute.kt:1330: summary = \"阅读页显示云按钮，按当前章节切换书库正文\","
+      ],
+      "key": "ui_book_show_cloud_button_reading_page"
+    },
+    {
+      "zh": "正在读取《${targetBook.name}》的云端备份...",
+      "en": "Reading the cloud backup of 《%1$s》...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1874: summaryView.text = \"正在读取《${targetBook.name}》的云端备份...\""
+      ],
+      "key": "ui_book_reading_cloud_backup"
+    },
+    {
+      "zh": "未找到《${targetBook.name}》的本地或云端备份",
+      "en": "No local or cloud backup found for 《%1$s》",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1899: summaryView.text = \"未找到《${targetBook.name}》的本地或云端备份\""
+      ],
+      "key": "ui_book_no_local_or_cloud_backup"
+    },
+    {
+      "zh": "共 ${items.size} 个来源，本地 $localCount 个，云端 $remoteCount 个",
+      "en": "%1$s sources: %2$s local, %3$s cloud",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1904: summaryView.text = \"共 ${items.size} 个来源，本地 $localCount 个，云端 $remoteCount 个\""
+      ],
+      "key": "ui_book_sources_local_cloud"
+    },
+    {
+      "zh": "本地 ${item.localCachedCount}/${item.totalChapterCount} · 云端 ${item.remoteCachedCount}/${item.totalChapterCount}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1936: text = \"本地 ${item.localCachedCount}/${item.totalChapterCount} · 云端 ${item.remoteCachedCount}/${item.totalChapterCount}\""
+      ]
+    },
+    {
+      "zh": "正在上传云端备份...",
+      "en": "Uploading cloud backup...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1948: message = \"正在上传云端备份...\","
+      ],
+      "key": "ui_book_uploading_cloud_backup"
+    },
+    {
+      "zh": "云端备份已上传",
+      "en": "Cloud backup uploaded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1951: toastOnUi(\"云端备份已上传\")"
+      ],
+      "key": "ui_book_cloud_backup_uploaded"
+    },
+    {
+      "zh": "正在下载云端备份...",
+      "en": "Downloading cloud backup...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1959: message = \"正在下载云端备份...\","
+      ],
+      "key": "ui_book_downloading_cloud_backup"
+    },
+    {
+      "zh": "正在应用本地缓存...",
+      "en": "Applying local cache...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoActivity.kt:1973: message = \"正在应用本地缓存...\","
+      ],
+      "key": "ui_book_applying_local_cache"
+    },
+    {
+      "zh": "已切换编码：$charset",
+      "en": "Encoding switched to %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeActivity.kt:518: toastOnUi(\"已切换编码：$charset\")"
+      ],
+      "key": "ui_book_encoding_switched"
+    },
+    {
+      "zh": "未找到书籍",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookInfoViewModel.kt:127: throw NoStackTraceException(\"未找到书籍\")"
+      ]
+    },
+    {
+      "zh": "webDav没有配置",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "BookInfoViewModel.kt:227: ?: throw NoStackTraceException(\"webDav没有配置\")",
+        "RemoteBookViewModel.kt:108: ?: throw NoStackTraceException(\"webDav没有配置\")"
+      ]
+    },
+    {
+      "zh": "下载远程书籍<${book.name}>失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookInfoViewModel.kt:250: AppLog.put(\"下载远程书籍<${book.name}>失败\", it)"
+      ]
+    },
+    {
+      "zh": "获取书籍信息失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookInfoViewModel.kt:316: AppLog.put(\"获取书籍信息失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "${book.name} 作者：${book.author}",
+      "en": "%1$s · Author: %2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoViewModel.kt:416: else \"${book.name} 作者：${book.author}\""
+      ],
+      "key": "ui_book_author"
+    },
+    {
+      "zh": "已下载",
+      "en": "Downloaded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoViewModel.kt:434: book.latestChapterTitle = \"已下载\""
+      ],
+      "key": "ui_book_downloaded"
+    },
+    {
+      "zh": "清理缓存出错\\n${it.localizedMessage}",
+      "en": "Failed to clear cache\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoViewModel.kt:727: context.toastOnUi(\"清理缓存出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_clear_cache_n"
+    },
+    {
+      "zh": "书源详情",
+      "en": "Source details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:962: BookInfoPreviewTitle(\"书源详情\", style)"
+      ],
+      "key": "ui_book_source_details"
+    },
+    {
+      "zh": "目录预览",
+      "en": "Contents preview",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:973: BookInfoPreviewTitle(\"目录预览\", style)"
+      ],
+      "key": "ui_book_contents_preview"
+    },
+    {
+      "zh": "图库预览",
+      "en": "Gallery preview",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:1019: BookInfoPreviewTitle(\"图库预览\", style)"
+      ],
+      "key": "ui_book_gallery_preview"
+    },
+    {
+      "zh": "共 ${state.aiImageCount} 张",
+      "en": "%1$s images",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:1028: text = \"共 ${state.aiImageCount} 张\","
+      ],
+      "key": "ui_book_images"
+    },
+    {
+      "zh": "切换编码",
+      "en": "Switch encoding",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:1212: \"切换编码\"",
+        "BookInfoComposeRoute.kt:1358: text = \"切换编码\","
+      ],
+      "key": "ui_book_switch_encoding"
+    },
+    {
+      "zh": "切换编码（${state.charset}）",
+      "en": "Switch encoding (%1$s)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:1214: \"切换编码（${state.charset}）\""
+      ],
+      "key": "ui_book_switch_encoding_2"
+    },
+    {
+      "zh": "自动探测可能误判（GBK/UTF-8 混排等），乱码时逐个尝试",
+      "en": "Auto-detection can be wrong (e.g. mixed GBK/UTF-8). Try each encoding if text is garbled.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookInfoComposeRoute.kt:1364: text = \"自动探测可能误判（GBK/UTF-8 混排等），乱码时逐个尝试\","
+      ],
+      "key": "ui_book_auto_detection_can_be_wrong"
+    },
+    {
+      "zh": "书籍信息保存失败，存在相同书名作者书籍\\n$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookInfoEditViewModel.kt:38: AppLog.put(\"书籍信息保存失败，存在相同书名作者书籍\\n$it\", it, true)"
+      ]
+    },
+    {
+      "zh": "书籍信息保存失败\\n$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookInfoEditViewModel.kt:40: AppLog.put(\"书籍信息保存失败\\n$it\", it, true)"
+      ]
+    },
+    {
+      "zh": "未找到漫画书籍\\nbookUrl:$bookUrl",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadMangaViewModel.kt:64: AppLog.put(\"未找到漫画书籍\\nbookUrl:$bookUrl\")"
+      ]
+    },
+    {
+      "zh": "已同步最新漫画阅读进度",
+      "en": "Manga reading progress synced",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMangaViewModel.kt:234: context.toastOnUi(\"已同步最新漫画阅读进度\")"
+      ],
+      "key": "ui_book_manga_reading_progress_synced"
+    },
+    {
+      "zh": "删除临时漫画失败: bookUrl=$bookUrl",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadMangaViewModel.kt:288: AppLog.put(\"删除临时漫画失败: bookUrl=$bookUrl\", it)"
+      ]
+    },
+    {
+      "zh": "暂无章节了！",
+      "en": "No more chapters!",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMangaActivity.kt:359: loadMoreView.noMore(\"暂无章节了！\")"
+      ],
+      "key": "ui_book_no_more_chapters"
+    },
+    {
+      "zh": "加载失败，点击重试",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadMangaActivity.kt:470: loadMoreView.error(null, \"加载失败，点击重试\")"
+      ]
+    },
+    {
+      "zh": "所选择的源不是漫画源",
+      "en": "The selected source is not a manga source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadMangaActivity.kt:528: toastOnUi(\"所选择的源不是漫画源\")"
+      ],
+      "key": "ui_book_selected_source_not_manga_source"
+    },
+    {
+      "zh": "：单章循环",
+      "en": ": Repeat one",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioPlayActivity.kt:303: AudioPlay.PlayMode.SINGLE_LOOP -> getString(R.string.play_mode) + \"：单章循环\""
+      ],
+      "key": "ui_book_repeat_one"
+    },
+    {
+      "zh": "：随机播放",
+      "en": ": Shuffle",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioPlayActivity.kt:304: AudioPlay.PlayMode.RANDOM -> getString(R.string.play_mode) + \"：随机播放\""
+      ],
+      "key": "ui_book_shuffle"
+    },
+    {
+      "zh": "：列表循环",
+      "en": ": Repeat all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioPlayActivity.kt:305: AudioPlay.PlayMode.LIST_LOOP -> getString(R.string.play_mode) + \"：列表循环\""
+      ],
+      "key": "ui_book_repeat_all"
+    },
+    {
+      "zh": "删除临时音频书失败: bookUrl=$bookUrl",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioPlayViewModel.kt:133: AppLog.put(\"删除临时音频书失败: bookUrl=$bookUrl\", it)"
+      ]
+    },
+    {
+      "zh": "搜索书籍出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfManageViewModel.kt:145: AppLog.put(\"搜索书籍出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "获取书籍详情出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfManageViewModel.kt:152: AppLog.put(\"获取书籍详情出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "获取目录出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfManageViewModel.kt:157: AppLog.put(\"获取目录出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "书架管理界面获取分组数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfManageActivity.kt:210: AppLog.put(\"书架管理界面获取分组数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书架管理界面获取书籍列表失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfManageActivity.kt:247: AppLog.put(\"书架管理界面获取书籍列表失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书源选择界面获取书源数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SourcePickerDialog.kt:89: AppLog.put(\"书源选择界面获取书源数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "全文搜索出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SearchContentActivity.kt:232: AppLog.put(\"全文搜索出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "封面规则搜索出错\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeCoverViewModel.kt:144: AppLog.put(\"封面规则搜索出错\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "封面换源搜索出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeCoverViewModel.kt:167: AppLog.put(\"封面换源搜索出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导入书籍",
+      "en": "Import books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:128: title = \"导入书籍\","
+      ],
+      "key": "ui_book_import_books"
+    },
+    {
+      "zh": "准备导入...",
+      "en": "Preparing import...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:129: message = \"准备导入...\","
+      ],
+      "key": "ui_book_preparing_import"
+    },
+    {
+      "zh": "扫描中：已扫${progress.scannedDirs}个文件夹，发现${progress.foundBooks}本，待扫${progress.pendingDirs}个",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:180: binding.tvPath.text = \"扫描中：已扫${progress.scannedDirs}个文件夹，发现${progress.foundBooks}本，待扫${progress.pendingDirs}个\""
+      ]
+    },
+    {
+      "zh": "导入中：${progress.processed}/${progress.total}，成功${progress.imported}，失败${progress.failed}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:192: \"导入中：${progress.processed}/${progress.total}，成功${progress.imported}，失败${progress.failed}\""
+      ]
+    },
+    {
+      "zh": "${message}\\n成功${progress.imported}本，失败${progress.failed}本",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:198: setMessage(\"${message}\\n成功${progress.imported}本，失败${progress.failed}本\")"
+      ]
+    },
+    {
+      "zh": "使用js处理文件名变量src，将书名作者分别赋值到变量name author",
+      "en": "Use JS on the filename variable src to assign the title and author to the variables name and author",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookActivity.kt:320: setMessage(\"\"\"使用js处理文件名变量src，将书名作者分别赋值到变量name author\"\"\")"
+      ],
+      "key": "ui_book_use_js_filename_variable_src"
+    },
+    {
+      "zh": "添加书架失败，请尝试重新选择文件夹",
+      "en": "Failed to add to bookshelf; try selecting the folder again",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:120: context.toastOnUi(\"添加书架失败，请尝试重新选择文件夹\")",
+        "ImportBookViewModel.kt:205: context.toastOnUi(\"添加书架失败，请尝试重新选择文件夹\")"
+      ],
+      "key": "ui_book_failed_add_bookshelf_try_selecting"
+    },
+    {
+      "zh": "添加书架失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ImportBookViewModel.kt:121: AppLog.put(\"添加书架失败\\n${it.localizedMessage}\", it)",
+        "ImportBookViewModel.kt:206: AppLog.put(\"添加书架失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "添加书架成功",
+      "en": "Added to bookshelf",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:123: context.toastOnUi(\"添加书架成功\")",
+        "ImportBookViewModel.kt:208: context.toastOnUi(\"添加书架成功\")"
+      ],
+      "key": "ui_book_added_bookshelf"
+    },
+    {
+      "zh": "读取文件信息 ${item.name}",
+      "en": "Reading file info %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:155: emitItemStage(\"读取文件信息 ${item.name}\")"
+      ],
+      "key": "ui_book_reading_file_info"
+    },
+    {
+      "zh": "目录解析",
+      "en": "Parsing contents",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:167: \"toc\" -> \"目录解析\""
+      ],
+      "key": "ui_book_parsing_contents_2"
+    },
+    {
+      "zh": "索引构建",
+      "en": "Building index",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:168: \"index\" -> \"索引构建\""
+      ],
+      "key": "ui_book_building_index"
+    },
+    {
+      "zh": "排版缓存",
+      "en": "Layout cache",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:169: \"layout\" -> \"排版缓存\""
+      ],
+      "key": "ui_book_layout_cache"
+    },
+    {
+      "zh": "正文解码",
+      "en": "Decoding content",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:170: else -> \"正文解码\""
+      ],
+      "key": "ui_book_decoding_content"
+    },
+    {
+      "zh": "导入失败: ${item.name}\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportBookViewModel.kt:188: AppLog.put(\"导入失败: ${item.name}\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导入 ${item.name}",
+      "en": "Importing %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:196: message = \"导入 ${item.name}\""
+      ],
+      "key": "ui_book_importing"
+    },
+    {
+      "zh": "获取文件列表出错\\n${it.localizedMessage}",
+      "en": "Failed to get file list\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:232: context.toastOnUi(\"获取文件列表出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_get_file_list_n"
+    },
+    {
+      "zh": "扫描文件夹出错\\n${it.localizedMessage}",
+      "en": "Failed to scan folder\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookViewModel.kt:273: context.toastOnUi(\"扫描文件夹出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_scan_folder_n"
+    },
+    {
+      "zh": "保存出错\\n${it.localizedMessage}",
+      "en": "Failed to save\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ServerConfigViewModel.kt:37: context.toastOnUi(\"保存出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_save_n"
+    },
+    {
+      "zh": "初始化webDav出错:${it.localizedMessage}",
+      "en": "WebDAV initialization failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RemoteBookViewModel.kt:110: context.toastOnUi(\"初始化webDav出错:${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_webdav_initialization_failed"
+    },
+    {
+      "zh": "没有配置webDav",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "RemoteBookViewModel.kt:119: ?: throw NoStackTraceException(\"没有配置webDav\")",
+        "RemoteBookViewModel.kt:137: ?: throw NoStackTraceException(\"没有配置webDav\")"
+      ]
+    },
+    {
+      "zh": "获取webDav书籍出错\\n${it.localizedMessage}",
+      "en": "Failed to get WebDAV books\\n%1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "RemoteBookViewModel.kt:125: AppLog.put(\"获取webDav书籍出错\\n${it.localizedMessage}\", it)",
+        "RemoteBookViewModel.kt:126: context.toastOnUi(\"获取webDav书籍出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_failed_get_webdav_books_n"
+    },
+    {
+      "zh": "导入出错\\n${it.localizedMessage}",
+      "en": "Import failed\\n%1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "RemoteBookViewModel.kt:149: AppLog.put(\"导入出错\\n${it.localizedMessage}\", it)",
+        "RemoteBookViewModel.kt:150: context.toastOnUi(\"导入出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_book_import_failed_n"
+    },
+    {
+      "zh": "是否重新加入书架？",
+      "en": "Add to bookshelf again?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RemoteBookActivity.kt:248: alert(getString(R.string.sure), \"是否重新加入书架？\") {"
+      ],
+      "key": "ui_book_add_bookshelf_again"
+    },
+    {
+      "zh": "服务器配置界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ServersDialog.kt:90: AppLog.put(\"服务器配置界面获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书源不存在",
+      "en": "",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "ChangeChapterSourceViewModel.kt:37: ?: throw NoStackTraceException(\"书源不存在\")",
+        "ChangeBookSourceViewModel.kt:475: ?: throw NoStackTraceException(\"书源不存在\")",
+        "ChangeBookSourceViewModel.kt:491: ?: throw NoStackTraceException(\"书源不存在\")"
+      ]
+    },
+    {
+      "zh": "获取正文出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeChapterSourceViewModel.kt:42: error.invoke(it.localizedMessage ?: \"获取正文出错\")"
+      ]
+    },
+    {
+      "zh": "换源排序出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:143: AppLog.put(\"换源排序出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "换源搜索出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:256: AppLog.put(\"换源搜索出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "[${chapterIndex + 1}] ${title}\\n字数：${len}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:342: len to \"[${chapterIndex + 1}] ${title}\\n字数：${len}\""
+      ]
+    },
+    {
+      "zh": "[${chapterIndex + 1}] ${title}\\n获取字数失败：${t.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:345: -1 to \"[${chapterIndex + 1}] ${title}\\n获取字数失败：${t.localizedMessage}\""
+      ]
+    },
+    {
+      "zh": "换源刷新列表出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:409: AppLog.put(\"换源刷新列表出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "没有有效源",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeBookSourceViewModel.kt:564: throw NoStackTraceException(\"没有有效源\")"
+      ]
+    },
+    {
+      "zh": "${searchGroup}分组搜索结果为空,是否切换到全部分组",
+      "en": "No results in the %1$s group; switch to all groups?",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ChangeBookSourceDialog.kt:91: setMessage(\"${searchGroup}分组搜索结果为空,是否切换到全部分组\")",
+        "ChangeChapterSourceDialog.kt:98: setMessage(\"${searchGroup}分组搜索结果为空,是否切换到全部分组\")"
+      ],
+      "key": "ui_book_no_results_group_switch_all_2"
+    },
+    {
+      "zh": "换源获取目录出错\\n$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeBookSourceDialog.kt:451: AppLog.put(\"换源获取目录出错\\n$it\", it, true)"
+      ]
+    },
+    {
+      "zh": "单章换源获取目录出错\\n$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ChangeChapterSourceDialog.kt:352: AppLog.put(\"单章换源获取目录出错\\n$it\", it, true)"
+      ]
+    }
+  ]
+}

@@ -53,7 +53,7 @@ class BookSearchWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
         launch(IO) {
             kotlin.runCatching {
                 if (!message.textPayload.isJson()) {
-                    send("数据必须为Json格式")
+                    send(appCtx.getString(R.string.svc_data_must_be_json_format))
                     close(normalClosure, SEARCH_FINISH, false)
                     return@launch
                 }

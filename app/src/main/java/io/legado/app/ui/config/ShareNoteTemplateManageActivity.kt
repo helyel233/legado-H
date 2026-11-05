@@ -93,7 +93,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = "摘录分享模板"
+        binding.titleBar.title = getString(R.string.share_note_template_manage)
         initComposeContent()
         loadTemplates()
     }
@@ -215,20 +215,24 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
     private fun showAddActions() {
         showDialogFragment(
             ComposeActionListDialog.create(
-                title = "添加模板",
-                labels = listOf("复制内置模板新建", "导入 HTML", "导入 ZIP"),
+                title = getString(R.string.share_note_add),
+                labels = listOf(
+                    getString(R.string.share_note_copy_builtin),
+                    getString(R.string.share_note_import_html),
+                    getString(R.string.share_note_import_zip)
+                ),
                 negativeText = getString(R.string.cancel)
             ) { index ->
                 when (index) {
                     0 -> copyTemplate(ShareNoteTemplateManager.builtinEntry(), editAfterCopy = true)
                     1 -> importTemplate.launch {
                         mode = HandleFileContract.FILE
-                        title = "导入 HTML"
+                        title = getString(R.string.share_note_import_html)
                         allowExtensions = arrayOf("html", "htm")
                     }
                     2 -> importTemplate.launch {
                         mode = HandleFileContract.FILE
-                        title = "导入 ZIP"
+                        title = getString(R.string.share_note_import_zip)
                         allowExtensions = arrayOf("zip")
                     }
                 }
@@ -238,12 +242,12 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
 
     private fun templateActions(entry: ShareNoteTemplateManager.Entry): List<AppManagementMenuAction> {
         return buildList {
-            add(AppManagementMenuAction("预览头部") { openPreview(entry) })
-            add(AppManagementMenuAction("复制新建") { copyTemplate(entry, editAfterCopy = true) })
-            add(AppManagementMenuAction("导出 HTML") { exportHtml(entry) })
-            add(AppManagementMenuAction("导出 ZIP") { exportZip(entry) })
+            add(AppManagementMenuAction(getString(R.string.share_note_preview_header)) { openPreview(entry) })
+            add(AppManagementMenuAction(getString(R.string.share_note_copy_new)) { copyTemplate(entry, editAfterCopy = true) })
+            add(AppManagementMenuAction(getString(R.string.share_note_export_html)) { exportHtml(entry) })
+            add(AppManagementMenuAction(getString(R.string.share_note_export_zip)) { exportZip(entry) })
             if (entry.source == ShareNoteTemplateManager.Source.LOCAL) {
-                add(AppManagementMenuAction("删除", danger = true) { confirmDelete(entry) })
+                add(AppManagementMenuAction(getString(R.string.delete), danger = true) { confirmDelete(entry) })
             }
         }
     }
@@ -325,7 +329,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
                     )
                 }
             }.onFailure {
-                toastOnUi(it.localizedMessage ?: "导出失败")
+                toastOnUi(it.localizedMessage ?: getString(R.string.share_note_error_export_failed))
             }
         }
     }

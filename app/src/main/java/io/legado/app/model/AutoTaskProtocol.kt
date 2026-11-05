@@ -31,6 +31,7 @@ import org.mozilla.javascript.Wrapper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import splitties.init.appCtx
 
 /** Built-in actions returned by an AutoTask script. */
 object AutoTaskProtocol {
@@ -82,16 +83,16 @@ object AutoTaskProtocol {
         context: Context
     ): String {
         val bookUrl = action.string("bookUrl").orEmpty()
-        if (bookUrl.isBlank()) return "refreshToc 缺少 bookUrl"
+        if (bookUrl.isBlank()) return appCtx.getString(R.string.i18n_final_refresh_toc_missing_book_url)
         val book = appDb.bookDao.getBook(bookUrl)
-            ?: return "refreshToc 未找到书籍"
+            ?: return appCtx.getString(R.string.i18n_final_refresh_toc_book_not_found)
 
         return AutoTaskBookOperationGate.withBook(bookUrl) {
             currentCoroutineContext().ensureActive()
             val before = appDb.bookChapterDao.getChapterList(bookUrl)
             val refresh = BookController.refreshToc(mapOf("url" to listOf(bookUrl)))
             if (!refresh.isSuccess) {
-                return@withBook "《${book.name}》刷新失败: ${refresh.errorMsg}"
+                return@withBook appCtx.getString(R.string.misc_refresh_failed, book.name, refresh.errorMsg)
             }
             currentCoroutineContext().ensureActive()
             val after = appDb.bookChapterDao.getChapterList(bookUrl)
@@ -190,7 +191,7 @@ object AutoTaskProtocol {
                 .setPriority(priority)
                 .build()
         )
-        return "通知: $title"
+        return appCtx.getString(R.string.i18n_final_notify_result, title)
     }
 
     private fun notifyBookUpdate(
@@ -246,13 +247,13 @@ object AutoTaskProtocol {
         val name = book.name.ifBlank { book.bookUrl }
         val parts = ArrayList<String>(4)
         parts += "《$name》"
-        parts += if (diff.newCount > 0) "+${diff.newCount}" else "无更新"
-        if (diff.inserted.isNotEmpty()) parts += "插入${diff.inserted.size}"
-        if (diff.removed.isNotEmpty()) parts += "删除${diff.removed.size}"
-        if (diff.moved.isNotEmpty() && diff.added.isEmpty()) parts += "重排"
-        if (diff.hasDuplicateChapters) parts += "重复身份${diff.duplicateKeys.size}"
-        if (notified) parts += "已通知"
-        if (queued > 0) parts += "已排队缓存$queued"
+        parts += if (diff.newCount > 0) "+${diff.newCount}" else appCtx.getString(R.string.misc_no_updates)
+        if (diff.inserted.isNotEmpty()) parts += appCtx.getString(R.string.i18n_final_inserted, diff.inserted.size)
+        if (diff.removed.isNotEmpty()) parts += appCtx.getString(R.string.i18n_final_removed, diff.removed.size)
+        if (diff.moved.isNotEmpty() && diff.added.isEmpty()) parts += appCtx.getString(R.string.i18n_final_reordered)
+        if (diff.hasDuplicateChapters) parts += appCtx.getString(R.string.i18n_final_duplicate_ids, diff.duplicateKeys.size)
+        if (notified) parts += appCtx.getString(R.string.misc_notified)
+        if (queued > 0) parts += appCtx.getString(R.string.i18n_final_queued_cache, queued)
         return parts.joinToString(" ")
     }
 

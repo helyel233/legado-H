@@ -55,6 +55,7 @@ import java.util.zip.ZipFile
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import io.legado.app.R
 
 @Suppress("unused", "ConstPropertyName")
 object BookHelp {
@@ -130,7 +131,7 @@ object BookHelp {
         return ordered.map { (index, file) ->
             BookChapter(
                 url = "$CACHE_CHAPTER_PREFIX${book.bookUrl}/${file.name}",
-                title = readCachedChapterTitle(file) ?: "第${index + 1}章",
+                title = readCachedChapterTitle(file) ?: appCtx.getString(R.string.misc_chapter_5, index + 1),
                 baseUrl = book.tocUrl.ifEmpty { book.bookUrl },
                 bookUrl = book.bookUrl,
                 index = index

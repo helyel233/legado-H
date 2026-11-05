@@ -22,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import splitties.init.appCtx
 import java.util.UUID
+import io.legado.app.R
 
 /** Supplies ordinary chapters to Direct without opening an archive or inventing a TOC. */
 object TextReaderSessionProvider {
@@ -35,14 +36,14 @@ object TextReaderSessionProvider {
         val host = "text-" + MD5Utils.md5Encode16(book.bookUrl) + "-" + UUID.randomUUID().toString().take(8) + ".epub.local"
         val owner = SupervisorJob()
         val registry = TextReaderImageRegistry()
-        fun checkedChapter(index: Int) = checkNotNull(chapterIndex.chapter(index)) { "章节已更新，请刷新目录" }.also {
+        fun checkedChapter(index: Int) = checkNotNull(chapterIndex.chapter(index)) { appCtx.getString(R.string.misc_chapters_updated_please_refresh_table) }.also {
             check(isCurrent()) { "正文已更新，请重试" }
             check(chapterIndex.matches(index, appDb.bookChapterDao.getChapter(book.bookUrl, index))) {
-                "章节目录已更新，请重试"
+                appCtx.getString(R.string.misc_chapter_list_updated_please_try)
             }
         }
         val images = TextReaderImageResources(owner, isCurrent, load = { path ->
-            val request = checkNotNull(registry.lookup(path)) { "图片所属章节已释放" }
+            val request = checkNotNull(registry.lookup(path)) { appCtx.getString(R.string.misc_chapter_owning_this_image_has) }
             val chapter = checkedChapter(request.chapterIndex)
             check(chapter.url == request.chapterUrl) { "图片所属章节已更新" }
             TextReaderImageLoader.load(book, source, chapter, request.image, request.managedBubble)

@@ -1,4 +1,6 @@
 package io.legado.app.help.reader
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Bounded binary inspection, also used when resources arrive in a package. */
 object ReaderAssetFormat {
@@ -19,7 +21,7 @@ object ReaderAssetFormat {
         }
         if (byte(0) == 137 && tag(1, 3) == "PNG") {
             require(bytes.size >= 45 && bytes.take(8) == listOf(137, 80, 78, 71, 13, 10, 26, 10).map(Int::toByte) &&
-                u32(8) == 13L && tag(12) == "IHDR") { "PNG 图片头无效" }
+                u32(8) == 13L && tag(12) == "IHDR") { appCtx.getString(R.string.misc_invalid_png_header) }
             var at = 8
             var data = false
             var end = false
@@ -69,7 +71,7 @@ object ReaderAssetFormat {
                 }
                 if (marker == 217) {
                     require(completedScan) { "JPEG 图片缺少图像数据" }
-                    return requireNotNull(format) { "JPEG 图片尺寸缺失" }
+                    return requireNotNull(format) { appCtx.getString(R.string.misc_jpeg_image_size_missing) }
                 }
                 require(marker != 216) { "JPEG 图片结构无效" }
                 require(at + 2 <= bytes.size) { "JPEG 图片内容不完整" }
@@ -129,7 +131,7 @@ object ReaderAssetFormat {
             "wOFF", "wOF2" -> {
                 val header = if (signature == "wOFF") 44 else 48
                 require(bytes.size >= header && u32(8) == bytes.size.toLong() && u16(12) in 1..4096 &&
-                    u16(14) == 0 && u32(16) in 12..MAX_FILE_BYTES) { "网页字体文件头无效或内容不完整" }
+                    u16(14) == 0 && u32(16) in 12..MAX_FILE_BYTES) { appCtx.getString(R.string.misc_web_font_header_invalid_or) }
                 if (signature == "wOFF") {
                     val count = u16(12)
                     require(44L + count * 20 <= bytes.size) { "网页字体表目录无效" }

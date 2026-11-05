@@ -1,0 +1,1068 @@
+{
+  "prefix": "bchar",
+  "resource": "strings_book_character.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/book/character/compose/BookCharacterComposeScreens.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterCardActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterRelationActivity.kt"
+  ],
+  "entries": [
+    {
+      "zh": "点击查看角色卡片",
+      "en": "Tap to view the character card",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:230: .ifBlank { \"点击查看角色卡片\" }"
+      ]
+    },
+    {
+      "zh": "返回",
+      "en": "Back",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:254: Text(\"返回\", color = style.colors.text)"
+      ]
+    },
+    {
+      "zh": "角色资料",
+      "en": "Character profile",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:303: title = \"角色资料\","
+      ]
+    },
+    {
+      "zh": "关系网",
+      "en": "Relationship graph",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:307: TextButton(onClick = onOpenRelations) { Text(\"关系网\", color = style.colors.accent) }"
+      ]
+    },
+    {
+      "zh": "还没有角色，先添加主角或重要角色。",
+      "en": "No characters yet. Add a protagonist or an important character first.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:323: item { EmptyCharacterCard(\"还没有角色，先添加主角或重要角色。\") }"
+      ]
+    },
+    {
+      "zh": "这个分类还没有角色。",
+      "en": "No characters in this category yet.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:328: item { EmptyCharacterCard(\"这个分类还没有角色。\") }"
+      ]
+    },
+    {
+      "zh": "主角",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:363: \"主角\",",
+        "BookCharacterComposeScreens.kt:1050: BookCharacter.ROLE_MAIN to \"主角\""
+      ]
+    },
+    {
+      "zh": "重要角色",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:368: \"重要角色\",",
+        "BookCharacterComposeScreens.kt:1049: BookCharacter.ROLE_IMPORTANT to \"重要角色\","
+      ]
+    },
+    {
+      "zh": "普通角色",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:373: \"普通角色\",",
+        "BookCharacterComposeScreens.kt:1048: BookCharacter.ROLE_NORMAL to \"普通角色\","
+      ]
+    },
+    {
+      "zh": "$count 个",
+      "en": "%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:453: Text(\"$count 个\", color = style.colors.subText, fontSize = 12.sp)"
+      ]
+    },
+    {
+      "zh": "本书角色库",
+      "en": "Characters in this book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:472: Text(\"本书角色库\", color = style.colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "角色卡会只绑定当前书籍",
+      "en": "Character cards are bound to the current book only",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:474: text = if (count == 0) \"角色卡会只绑定当前书籍\" else \"已记录 $count 个角色\","
+      ]
+    },
+    {
+      "zh": "已记录 $count 个角色",
+      "en": "%1$s characters recorded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:474: text = if (count == 0) \"角色卡会只绑定当前书籍\" else \"已记录 $count 个角色\","
+      ]
+    },
+    {
+      "zh": "添加",
+      "en": "Add",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:484: Text(\"添加\")"
+      ]
+    },
+    {
+      "zh": "未知",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "BookCharacterComposeScreens.kt:539: .filter { it.isNotBlank() && it != \"未知\" }",
+        "BookCharacterComposeScreens.kt:1001: BookCharacter.GENDER_UNKNOWN to \"未知\","
+      ]
+    },
+    {
+      "zh": "更多",
+      "en": "More",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:554: Text(\"更多\", color = style.colors.subText)"
+      ]
+    },
+    {
+      "zh": "编辑角色",
+      "en": "Edit character",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:589: MoreActionRow(\"编辑角色\", \"修改头像、身份、技能和生平\", onEdit)",
+        "BookCharacterEditActivity.kt:100: title = if (characterId > 0L) \"编辑角色\" else \"添加角色\","
+      ]
+    },
+    {
+      "zh": "修改头像、身份、技能和生平",
+      "en": "Change the avatar, identity, skills and biography",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:589: MoreActionRow(\"编辑角色\", \"修改头像、身份、技能和生平\", onEdit)"
+      ]
+    },
+    {
+      "zh": "删除角色",
+      "en": "Delete character",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:590: MoreActionRow(\"删除角色\", \"同时删除与此角色相关的关系\", onDelete, danger = true)",
+        "BookCharacterManageActivity.kt:120: alert(\"删除角色\") {"
+      ]
+    },
+    {
+      "zh": "同时删除与此角色相关的关系",
+      "en": "Also delete relations linked to this character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:590: MoreActionRow(\"删除角色\", \"同时删除与此角色相关的关系\", onDelete, danger = true)"
+      ]
+    },
+    {
+      "zh": "关闭",
+      "en": "Close",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:593: confirmButton = { TextButton(onClick = onDismiss) { Text(\"关闭\", color = style.colors.accent) } }",
+        "BookCharacterComposeScreens.kt:1879: dismissButton = { TextButton(onClick = onDismiss) { Text(\"关闭\") } }",
+        "BookCharacterComposeScreens.kt:2134: confirmButton = { TextButton(onClick = onDismiss) { Text(\"关闭\", color = style.colors.accent) } }"
+      ]
+    },
+    {
+      "zh": "角色卡片",
+      "en": "Character card",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:629: title = \"角色卡片\","
+      ]
+    },
+    {
+      "zh": "编辑",
+      "en": "Edit",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:634: Text(\"编辑\", color = if (character == null) style.colors.subText else style.colors.accent)",
+        "BookCharacterComposeScreens.kt:1841: TextButton(onClick = { onEdit(relation) }) { Text(\"编辑\", color = style.colors.accent) }",
+        "BookCharacterComposeScreens.kt:1878: confirmButton = { TextButton(onClick = onEdit) { Text(\"编辑\") } },"
+      ]
+    },
+    {
+      "zh": "角色不存在",
+      "en": "Character not found",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:639: EmptyCharacterCard(\"角色不存在\")",
+        "BookCharacterCardActivity.kt:65: toastOnUi(\"角色不存在\")",
+        "BookCharacterCardActivity.kt:78: toastOnUi(\"角色不存在\")"
+      ]
+    },
+    {
+      "zh": "身份",
+      "en": "Identity",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:650: item { CharacterSection(\"身份\", character.identity) }"
+      ]
+    },
+    {
+      "zh": "技能",
+      "en": "Skills",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:651: item { CharacterSection(\"技能\", character.skills, minHeight = 112.dp) }",
+        "BookCharacterComposeScreens.kt:721: \"技能\" to character.skills,"
+      ]
+    },
+    {
+      "zh": "属性",
+      "en": "Attributes",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:652: item { CharacterSection(\"属性\", character.attributes, minHeight = 112.dp) }",
+        "BookCharacterComposeScreens.kt:722: \"属性\" to BookCharacterProfileMeta.attributesWithoutAge(character.attributes)"
+      ]
+    },
+    {
+      "zh": "形象描述",
+      "en": "Appearance",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:653: item { CharacterSection(\"形象描述\", character.appearance) }"
+      ]
+    },
+    {
+      "zh": "性格描述",
+      "en": "Personality",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:654: item { CharacterSection(\"性格描述\", character.personality) }"
+      ]
+    },
+    {
+      "zh": "角色生平",
+      "en": "Biography",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:655: item { CharacterSection(\"角色生平\", character.biography) }",
+        "BookCharacterComposeScreens.kt:924: item { CharacterTextField(\"角色生平\", draft.biography, { onDraftChange(draft.copy(biography = it)) }, minLines = 5) }"
+      ]
+    },
+    {
+      "zh": "角色配音",
+      "en": "Character voice",
+      "count": 4,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:786: Text(\"角色配音\", color = style.colors.subText, fontSize = 12.sp)",
+        "BookCharacterComposeScreens.kt:801: title = \"角色配音\",",
+        "BookCharacterComposeScreens.kt:948: Text(\"角色配音\", color = style.colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "使用默认朗读引擎",
+      "en": "Use default read-aloud engine",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:788: text = speechRouteSummary(route, groups, defaultText = \"使用默认朗读引擎\"),"
+      ]
+    },
+    {
+      "zh": "切换",
+      "en": "Switch",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:796: SmallAction(\"切换\", { pickerVisible = true })"
+      ]
+    },
+    {
+      "zh": "未填写",
+      "en": "Not set",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:850: text = value.ifBlank { \"未填写\" },"
+      ]
+    },
+    {
+      "zh": "保存",
+      "en": "Save",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:879: TextButton(onClick = onSave) { Text(\"保存\", color = style.colors.accent) }",
+        "BookCharacterComposeScreens.kt:1970: text = \"保存\","
+      ]
+    },
+    {
+      "zh": "角色头像",
+      "en": "Character avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:898: Text(\"角色头像\", color = style.colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "本地",
+      "en": "Local",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:905: SmallAction(\"本地\", onPickLocalAvatar)"
+      ]
+    },
+    {
+      "zh": "在线",
+      "en": "Online",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:906: SmallAction(\"在线\", onPickOnlineAvatar)"
+      ]
+    },
+    {
+      "zh": "图库",
+      "en": "Gallery",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:907: SmallAction(\"图库\", onPickGalleryAvatar)"
+      ]
+    },
+    {
+      "zh": "生成",
+      "en": "Generate",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:908: SmallAction(\"生成\", onRegenerateAvatar)"
+      ]
+    },
+    {
+      "zh": "清除",
+      "en": "Clear",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:909: SmallAction(\"清除\", onClearAvatar, danger = true)"
+      ]
+    },
+    {
+      "zh": "角色名称",
+      "en": "Character name",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:915: item { CharacterTextField(\"角色名称\", draft.name, { onDraftChange(draft.copy(name = it)) }, singleLine = true) }"
+      ]
+    },
+    {
+      "zh": "角色年纪",
+      "en": "Character age",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:918: item { CharacterTextField(\"角色年纪\", draft.age, { onDraftChange(draft.copy(age = it)) }, singleLine = true) }"
+      ]
+    },
+    {
+      "zh": "角色身份",
+      "en": "Character identity",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:919: item { CharacterTextField(\"角色身份\", draft.identity, { onDraftChange(draft.copy(identity = it)) }, singleLine = true) }"
+      ]
+    },
+    {
+      "zh": "角色技能",
+      "en": "Character skills",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:920: item { CharacterTextField(\"角色技能\", draft.skills, { onDraftChange(draft.copy(skills = it)) }) }"
+      ]
+    },
+    {
+      "zh": "角色属性",
+      "en": "Character attributes",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:921: item { CharacterTextField(\"角色属性\", draft.attributes, { onDraftChange(draft.copy(attributes = it)) }) }"
+      ]
+    },
+    {
+      "zh": "角色形象描述",
+      "en": "Character appearance",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:922: item { CharacterTextField(\"角色形象描述\", draft.appearance, { onDraftChange(draft.copy(appearance = it)) }) }"
+      ]
+    },
+    {
+      "zh": "角色性格描述",
+      "en": "Character personality",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:923: item { CharacterTextField(\"角色性格描述\", draft.personality, { onDraftChange(draft.copy(personality = it)) }) }"
+      ]
+    },
+    {
+      "zh": "使用书籍或全局默认朗读引擎",
+      "en": "Use the book or global default read-aloud engine",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:950: text = speechRouteSummary(route, groups, defaultText = \"使用书籍或全局默认朗读引擎\"),"
+      ]
+    },
+    {
+      "zh": "暂无可用朗读引擎。",
+      "en": "No read-aloud engines available.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:957: text = \"暂无可用朗读引擎。\","
+      ]
+    },
+    {
+      "zh": "选择发言人",
+      "en": "Select speaker",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:970: SmallAction(\"选择发言人\", { pickerVisible = true })"
+      ]
+    },
+    {
+      "zh": "使用默认",
+      "en": "Use default",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:971: SmallAction(\"使用默认\", { onChange(\"\") })"
+      ]
+    },
+    {
+      "zh": "角色性别",
+      "en": "Character gender",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:995: Text(\"角色性别\", color = style.colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "男",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1002: BookCharacter.GENDER_MALE to \"男\","
+      ]
+    },
+    {
+      "zh": "女",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1003: BookCharacter.GENDER_FEMALE to \"女\""
+      ]
+    },
+    {
+      "zh": "角色类型",
+      "en": "Character type",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1042: Text(\"角色类型\", color = style.colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "角色关系网",
+      "en": "Character relationships",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1146: title = \"角色关系网\","
+      ]
+    },
+    {
+      "zh": "主角视角 · ${graphCharacters.size} 个角色 · ${relations.size} 条关系",
+      "en": "Protagonist view · %1$s characters · %2$s relations",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1147: subtitle = \"主角视角 · ${graphCharacters.size} 个角色 · ${relations.size} 条关系\","
+      ]
+    },
+    {
+      "zh": "添加关系",
+      "en": "Add relation",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1150: TextButton(onClick = onAddRelation) { Text(\"添加关系\", color = style.colors.accent) }",
+        "BookCharacterComposeScreens.kt:1930: if (draft.id > 0) \"编辑关系\" else \"添加关系\","
+      ]
+    },
+    {
+      "zh": "暂无关系，点击右上角添加角色关系。",
+      "en": "No relations yet. Tap the top-right button to add one.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1159: EmptyCharacterCard(\"暂无关系，点击右上角添加角色关系。\")"
+      ]
+    },
+    {
+      "zh": "关系列表",
+      "en": "Relations",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1805: Text(\"关系列表\", color = style.colors.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))"
+      ]
+    },
+    {
+      "zh": "${relations.size} 条",
+      "en": "%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1806: Text(\"${relations.size} 条\", color = style.colors.subText, fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))"
+      ]
+    },
+    {
+      "zh": "收起",
+      "en": "Collapse",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1807: Text(if (expanded) \"收起\" else \"展开\", color = style.colors.accent, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "展开",
+      "en": "Expand",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1807: Text(if (expanded) \"收起\" else \"展开\", color = style.colors.accent, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "暂无关系，点击右上角添加",
+      "en": "No relations yet. Tap the top-right button to add one.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1815: } ?: \"暂无关系，点击右上角添加\""
+      ]
+    },
+    {
+      "zh": "删除",
+      "en": "Delete",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1842: TextButton(onClick = { onDelete(relation) }) { Text(\"删除\", color = style.colors.danger) }"
+      ]
+    },
+    {
+      "zh": "属性：${relation.relationType.ifBlank { ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1870: Text(\"属性：${relation.relationType.ifBlank { \"未填写\" }}\")"
+      ]
+    },
+    {
+      "zh": "强度：${relation.strength}",
+      "en": "Strength: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1871: Text(\"强度：${relation.strength}\")"
+      ]
+    },
+    {
+      "zh": "编辑关系",
+      "en": "Edit relation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1930: if (draft.id > 0) \"编辑关系\" else \"添加关系\","
+      ]
+    },
+    {
+      "zh": "角色 A",
+      "en": "Character A",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1937: CharacterSelectField(\"角色 A\", characters.firstOrNull { it.id == editing.fromCharacterId }) {"
+      ]
+    },
+    {
+      "zh": "角色 B",
+      "en": "Character B",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1942: CharacterSelectField(\"角色 B\", characters.firstOrNull { it.id == editing.toCharacterId }) {"
+      ]
+    },
+    {
+      "zh": "关系名称",
+      "en": "Relation name",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1946: item { CharacterTextField(\"关系名称\", editing.relationName, { editing = editing.copy(relationName = it) }, singleLine = true"
+      ]
+    },
+    {
+      "zh": "关系属性",
+      "en": "Relation attribute",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1947: item { CharacterTextField(\"关系属性\", editing.relationType, { editing = editing.copy(relationType = it) }, singleLine = true"
+      ]
+    },
+    {
+      "zh": "关系强度 ${editing.strength}",
+      "en": "Relation strength %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1950: Text(\"关系强度 ${editing.strength}\", color = style.colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "关系说明",
+      "en": "Relation note",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1959: item { CharacterTextField(\"关系说明\", editing.description, { editing = editing.copy(description = it) }, minLines = 3) }"
+      ]
+    },
+    {
+      "zh": "取消",
+      "en": "Cancel",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1963: text = \"取消\","
+      ]
+    },
+    {
+      "zh": "选择角色 A",
+      "en": "Select character A",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1984: title = if (target == RelationSelectTarget.FROM) \"选择角色 A\" else \"选择角色 B\","
+      ]
+    },
+    {
+      "zh": "选择角色 B",
+      "en": "Select character B",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:1984: title = if (target == RelationSelectTarget.FROM) \"选择角色 A\" else \"选择角色 B\","
+      ]
+    },
+    {
+      "zh": "请选择角色",
+      "en": "Select a character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:2048: text = selected?.displayName() ?: \"请选择角色\","
+      ]
+    },
+    {
+      "zh": "更换",
+      "en": "Change",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:2059: Text(\"更换\", color = style.colors.accent, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "已选",
+      "en": "Selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterComposeScreens.kt:2127: Text(\"已选\", color = style.colors.accent, fontSize = 12.sp)"
+      ]
+    },
+    {
+      "zh": "添加角色",
+      "en": "Add character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:100: title = if (characterId > 0L) \"编辑角色\" else \"添加角色\","
+      ]
+    },
+    {
+      "zh": "当前书籍不存在",
+      "en": "Current book not found",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:142: toastOnUi(\"当前书籍不存在\")",
+        "BookCharacterManageActivity.kt:98: toastOnUi(\"当前书籍不存在\")"
+      ]
+    },
+    {
+      "zh": "角色名称不能为空",
+      "en": "Character name cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:146: toastOnUi(\"角色名称不能为空\")"
+      ]
+    },
+    {
+      "zh": "已存在同名角色",
+      "en": "A character with this name already exists",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:189: toastOnUi(\"已存在同名角色\")"
+      ]
+    },
+    {
+      "zh": "输入在线图片链接",
+      "en": "Enter an online image URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:200: editView.hint = \"输入在线图片链接\""
+      ]
+    },
+    {
+      "zh": "在线头像",
+      "en": "Online avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:203: alert(\"在线头像\") {"
+      ]
+    },
+    {
+      "zh": "AI 图库暂无图片",
+      "en": "No images in the AI gallery",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:228: toastOnUi(\"AI 图库暂无图片\")"
+      ]
+    },
+    {
+      "zh": "全部",
+      "en": "All",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:312: addChip(\"全部\", null)"
+      ]
+    },
+    {
+      "zh": "选择 AI 图库头像",
+      "en": "Choose an AI gallery avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:322: dialog = alert(\"选择 AI 图库头像\") {"
+      ]
+    },
+    {
+      "zh": "已设置角色头像",
+      "en": "Character avatar set",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:334: toastOnUi(\"已设置角色头像\")"
+      ]
+    },
+    {
+      "zh": "未配置生图供应商",
+      "en": "No image provider configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:340: toastOnUi(\"未配置生图供应商\")"
+      ]
+    },
+    {
+      "zh": "输入角色头像提示词",
+      "en": "Enter an avatar prompt",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:344: editView.hint = \"输入角色头像提示词\""
+      ]
+    },
+    {
+      "zh": "生成角色头像",
+      "en": "Generate character avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:348: alert(\"生成角色头像\") {"
+      ]
+    },
+    {
+      "zh": "为小说角色生成一张角色头像，头像构图，清晰，适合角色资料卡。",
+      "en": "Generate a clear, well-framed character portrait for a novel character profile card.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:360: add(\"为小说角色生成一张角色头像，头像构图，清晰，适合角色资料卡。\")"
+      ]
+    },
+    {
+      "zh": "角色名：${draft.name.ifBlank { ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:361: add(\"角色名：${draft.name.ifBlank { \"未命名角色\" }}\")"
+      ]
+    },
+    {
+      "zh": "身份：$it",
+      "en": "Identity: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:362: draft.identity.takeIf { it.isNotBlank() }?.let { add(\"身份：$it\") }"
+      ]
+    },
+    {
+      "zh": "技能：$it",
+      "en": "Skills: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:363: draft.skills.takeIf { it.isNotBlank() }?.let { add(\"技能：$it\") }"
+      ]
+    },
+    {
+      "zh": "属性：$it",
+      "en": "Attributes: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:364: draft.attributes.takeIf { it.isNotBlank() }?.let { add(\"属性：$it\") }"
+      ]
+    },
+    {
+      "zh": "形象：$it",
+      "en": "Appearance: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:365: draft.appearance.takeIf { it.isNotBlank() }?.let { add(\"形象：$it\") }"
+      ]
+    },
+    {
+      "zh": "性格：$it",
+      "en": "Personality: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:366: draft.personality.takeIf { it.isNotBlank() }?.let { add(\"性格：$it\") }"
+      ]
+    },
+    {
+      "zh": "生平：$it",
+      "en": "Biography: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:367: draft.biography.takeIf { it.isNotBlank() }?.let { add(\"生平：$it\") }"
+      ]
+    },
+    {
+      "zh": "正在生成角色头像...",
+      "en": "Generating character avatar...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:372: waitDialog.setText(\"正在生成角色头像...\")"
+      ]
+    },
+    {
+      "zh": "已生成并收藏角色头像",
+      "en": "Character avatar generated and saved",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:396: toastOnUi(\"已生成并收藏角色头像\")"
+      ]
+    },
+    {
+      "zh": "生成角色头像失败：${it.localizedMessage ?: it.javaClass.simpleName}",
+      "en": "Failed to generate character avatar: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:398: toastOnUi(\"生成角色头像失败：${it.localizedMessage ?: it.javaClass.simpleName}\")"
+      ]
+    },
+    {
+      "zh": "头像导入失败",
+      "en": "Failed to import avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterEditActivity.kt:427: toastOnUi(it.localizedMessage ?: \"头像导入失败\")"
+      ]
+    },
+    {
+      "zh": "当前角色不存在",
+      "en": "Current character not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterManageActivity.kt:86: toastOnUi(\"当前角色不存在\")"
+      ]
+    },
+    {
+      "zh": "至少需要两个角色才能编辑关系网",
+      "en": "At least two characters are needed to edit the relationship graph",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterManageActivity.kt:110: toastOnUi(\"至少需要两个角色才能编辑关系网\")"
+      ]
+    },
+    {
+      "zh": "确定删除「${character.displayName()}」？相关关系也会删除。",
+      "en": "Delete \"%1$s\"? Related relations will also be deleted.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterManageActivity.kt:121: setMessage(\"确定删除「${character.displayName()}」？相关关系也会删除。\")"
+      ]
+    },
+    {
+      "zh": "已更新角色配音",
+      "en": "Character voice updated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterCardActivity.kt:99: toastOnUi(\"已更新角色配音\")"
+      ]
+    },
+    {
+      "zh": "至少需要两个角色",
+      "en": "At least two characters are required",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterRelationActivity.kt:114: toastOnUi(\"至少需要两个角色\")"
+      ]
+    },
+    {
+      "zh": "请选择两个不同角色",
+      "en": "Select two different characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterRelationActivity.kt:131: toastOnUi(\"请选择两个不同角色\")"
+      ]
+    },
+    {
+      "zh": "关系",
+      "en": "Relation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterRelationActivity.kt:142: relationName = draft.relationName.trim().ifBlank { \"关系\" },"
+      ]
+    },
+    {
+      "zh": "删除关系",
+      "en": "Delete relation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterRelationActivity.kt:163: alert(\"删除关系\") {"
+      ]
+    },
+    {
+      "zh": "确定删除「${relation.displayName()}」？",
+      "en": "Delete \"%1$s\"?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCharacterRelationActivity.kt:164: setMessage(\"确定删除「${relation.displayName()}」？\")"
+      ]
+    }
+  ]
+}

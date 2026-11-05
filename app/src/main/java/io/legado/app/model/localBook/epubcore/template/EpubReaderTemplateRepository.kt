@@ -3,6 +3,8 @@ package io.legado.app.model.localBook.epubcore.template
 import io.legado.app.help.config.AtomicTextFileStore
 import java.io.File
 import java.util.UUID
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** File-backed, JVM-testable storage. A corrupt document never becomes an empty template library. */
 internal class EpubReaderTemplateRepository(
@@ -31,10 +33,10 @@ internal class EpubReaderTemplateRepository(
         available.firstOrNull { it.id == preferredId }?.let { return it }
         available.firstOrNull { it.id == defaultId }?.let { return it }
         available.firstOrNull()?.let { return it }
-        val fallback = requireNotNull(builtIns.firstOrNull { it.id == defaultId }) { "缺少默认页面模板" }
+        val fallback = requireNotNull(builtIns.firstOrNull { it.id == defaultId }) { appCtx.getString(R.string.misc_default_page_template_missing) }
         val stored = readStored()
         writeStored(stored.copy(hiddenBuiltInIds = stored.hiddenBuiltInIds - defaultId))
-        return requireNotNull(resolve(defaultId)) { "无法恢复默认页面模板：" + fallback.name }
+        return requireNotNull(resolve(defaultId)) { appCtx.getString(R.string.misc_cannot_restore_default_page_template) + fallback.name }
     }
 
     @Synchronized
@@ -139,7 +141,7 @@ internal class EpubReaderTemplateRepository(
         referencedIds.filter { it.isNotEmpty() }.distinct().forEach { id ->
             if (id !in stored) {
                 stored[id] = requireNotNull(builtIns.firstOrNull { it.id == id }) {
-                    "模板不存在，无法完整备份：" + id
+                    appCtx.getString(R.string.misc_template_missing_cannot_create_full) + id
                 }
             }
         }
@@ -172,5 +174,5 @@ internal class EpubReaderTemplateRepository(
 
 internal fun copyReaderTemplate(template: EpubReaderTemplate): EpubReaderTemplate = template.copy(
     id = "user." + UUID.randomUUID().toString(),
-    name = template.name + "（副本）"
+    name = template.name + appCtx.getString(R.string.misc_copy)
 )

@@ -91,6 +91,7 @@ import io.legado.app.utils.openUrl
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.startActivity
+import splitties.init.appCtx
 
 class ReadMenu @JvmOverloads constructor(
     context: Context,
@@ -112,7 +113,7 @@ class ReadMenu @JvmOverloads constructor(
     }
 
     fun upBrightnessState() {
-        brightnessAuto = context.getPrefBoolean("brightnessAuto", true) || !showBrightnessView
+        brightnessAuto = context.getPrefBoolean(PreferKey.brightnessAuto, true) || !showBrightnessView
         setScreenBrightness(AppConfig.readBrightness.toFloat())
     }
 
@@ -652,7 +653,7 @@ class ReadMenu @JvmOverloads constructor(
                                 if (confirmSkipToChapter) {
                                     callBack.skipToChapter(progress)
                                 } else {
-                                    context.alert("章节跳转确认", "确定要跳转章节吗？") {
+                                    context.alert(appCtx.getString(R.string.ui_book_confirm_chapter_jump), appCtx.getString(R.string.ui_book_jump_this_chapter)) {
                                         yesButton {
                                             confirmSkipToChapter = true
                                             callBack.skipToChapter(progress)
@@ -674,7 +675,7 @@ class ReadMenu @JvmOverloads constructor(
                         showBrightnessView = true,
                         style = style,
                         onAutoClick = {
-                            context.putPrefBoolean("brightnessAuto", !brightnessAuto)
+                            context.putPrefBoolean(PreferKey.brightnessAuto, !brightnessAuto)
                             upBrightnessState()
                         },
                         onBrightnessChange = { setScreenBrightness(it.toFloat()) },

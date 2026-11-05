@@ -37,6 +37,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfListPalette
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.BookIntroUtils
+import splitties.init.appCtx
 
 private val NormalSearchBookListItemHeight = 136.dp
 
@@ -149,7 +150,7 @@ private fun SearchBookListText(
             ) {
                 if (inBookshelf) {
                     SearchBookKindChip(
-                        text = "已在书架",
+                        text = appCtx.getString(R.string.ui_main_already_bookshelf),
                         rounded = rounded,
                         palette = palette
                     )

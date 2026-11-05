@@ -101,6 +101,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import splitties.init.appCtx
 
 class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
@@ -479,7 +480,7 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
         val cleanType = DiscoverySuiteWidgetType.sanitize(type)
         val defaultTitle = when (cleanType) {
             DiscoverySuiteWidgetType.TagBar.value -> getString(R.string.discovery_suite_default_tag_bar_title)
-            DiscoverySuiteWidgetType.RankButtons.value -> "排行榜按钮"
+            DiscoverySuiteWidgetType.RankButtons.value -> appCtx.getString(R.string.ui_main_ranking_buttons)
             DiscoverySuiteWidgetType.RankedList.value -> getString(R.string.discovery_suite_widget_type_ranked_list)
             DiscoverySuiteWidgetType.WaterfallBooks.value -> getString(R.string.discovery_suite_widget_type_waterfall_books)
             DiscoverySuiteWidgetType.HorizontalBooks.value -> getString(R.string.discovery_suite_widget_type_horizontal_books)
@@ -496,7 +497,7 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
                 DiscoverySuiteWidgetType.RankedList.value
             ) && cleanTargets.size !in 3..9
         ) {
-            toastOnUi("排行榜控件需要选择 3-9 个 Tag")
+            toastOnUi(appCtx.getString(R.string.ui_main_ranking_widget_requires_3_9))
             return
         }
         val submittedTitle = title.trim()
@@ -671,9 +672,9 @@ private fun DiscoverySuiteListScreen(
         item {
             Text(
                 text = if (loadingOptions) {
-                    "Tag 加载中..."
+                    appCtx.getString(R.string.ui_main_loading_tags)
                 } else {
-                    "${sourceCount} 个书源 / ${tagOptionCount} 个 Tag"
+                    appCtx.getString(R.string.ui_main_sources_tags, sourceCount, tagOptionCount)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -688,9 +689,9 @@ private fun DiscoverySuiteListScreen(
             AppManagementListRow(
                 title = suite.displayName,
                 subtitle = if (isCurrent) {
-                    "当前套件 · ${suite.widgets.size} 个控件"
+                    appCtx.getString(R.string.ui_main_current_suite_widgets, suite.widgets.size)
                 } else {
-                    "${suite.widgets.size} 个控件"
+                    appCtx.getString(R.string.ui_main_widgets, suite.widgets.size)
                 },
                 selected = isCurrent,
                 selectionVisible = false,
@@ -699,11 +700,11 @@ private fun DiscoverySuiteListScreen(
                 moreActions = buildList {
                     add(AppManagementMenuAction(text = stringResource(R.string.edit), onClick = { onOpenSuite(suite) }))
                     if (!isCurrent) {
-                        add(AppManagementMenuAction(text = "设为当前", onClick = { onSetCurrentSuite(suite) }))
+                        add(AppManagementMenuAction(text = appCtx.getString(R.string.ui_main_set_as_current), onClick = { onSetCurrentSuite(suite) }))
                     }
-                    add(AppManagementMenuAction(text = "重命名", onClick = { onRenameSuite(suite) }))
-                    add(AppManagementMenuAction(text = "别名", onClick = { onAliasSuite(suite) }))
-                    add(AppManagementMenuAction(text = "删除", danger = true, onClick = { onDeleteSuite(suite) }))
+                    add(AppManagementMenuAction(text = appCtx.getString(R.string.rename), onClick = { onRenameSuite(suite) }))
+                    add(AppManagementMenuAction(text = appCtx.getString(R.string.ui_main_alias), onClick = { onAliasSuite(suite) }))
+                    add(AppManagementMenuAction(text = appCtx.getString(R.string.delete), danger = true, onClick = { onDeleteSuite(suite) }))
                 },
                 onClick = { onOpenSuite(suite) }
             )
@@ -757,9 +758,9 @@ private fun DiscoverySuiteDetailScreen(
     ) {
         Text(
             text = if (loadingOptions) {
-                "Tag 加载中..."
+                appCtx.getString(R.string.ui_main_loading_tags)
             } else {
-                "${sourceCount} 个书源 / ${tagOptionCount} 个 Tag"
+                appCtx.getString(R.string.ui_main_sources_tags, sourceCount, tagOptionCount)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -770,7 +771,7 @@ private fun DiscoverySuiteDetailScreen(
         )
         if (suite == null) {
             Text(
-                text = "套件不存在",
+                text = appCtx.getString(R.string.ui_main_suite_not_found),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp, vertical = 48.dp),
@@ -786,7 +787,7 @@ private fun DiscoverySuiteDetailScreen(
             )
             if (orderedWidgets.isEmpty()) {
                 Text(
-                    text = "还没有控件",
+                    text = appCtx.getString(R.string.ui_main_no_widgets_yet),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 24.dp),
@@ -864,14 +865,14 @@ private fun SuiteOpacityMultiplierRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "透明度倍率",
+                text = appCtx.getString(R.string.ui_main_opacity_multiplier),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 fontFamily = palette.bodyFontFamily,
                 color = palette.primaryText
             )
             Text(
-                text = "当前 ${"%.2f".format(value)}x，仅增强套件页面板不透明度",
+                text = stringResource(R.string.i18n_final_opacity_hint, "%.2f".format(value)),
                 fontSize = 12.sp,
                 fontFamily = palette.bodyFontFamily,
                 color = palette.secondaryText,
@@ -908,12 +909,12 @@ private fun DiscoverySuiteWidgetEditorScreen(
         mutableStateOf(
             widget?.title.orEmpty().ifBlank {
                 when (initialType) {
-                    DiscoverySuiteWidgetType.TagBar.value -> "Tag 导航"
-                    DiscoverySuiteWidgetType.RankButtons.value -> "排行榜按钮"
-                    DiscoverySuiteWidgetType.RankedList.value -> "排行榜列表"
-                    DiscoverySuiteWidgetType.WaterfallBooks.value -> "瀑布流"
-                    DiscoverySuiteWidgetType.HorizontalBooks.value -> "横排滑动"
-                    else -> "随机推荐"
+                    DiscoverySuiteWidgetType.TagBar.value -> appCtx.getString(R.string.ui_main_tag_navigation)
+                    DiscoverySuiteWidgetType.RankButtons.value -> appCtx.getString(R.string.ui_main_ranking_buttons)
+                    DiscoverySuiteWidgetType.RankedList.value -> appCtx.getString(R.string.discovery_suite_widget_type_ranked_list)
+                    DiscoverySuiteWidgetType.WaterfallBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_waterfall_books)
+                    DiscoverySuiteWidgetType.HorizontalBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_horizontal_books)
+                    else -> appCtx.getString(R.string.discovery_suite_widget_type_random_books)
                 }
             }
         )
@@ -996,9 +997,9 @@ private fun DiscoverySuiteWidgetEditorScreen(
                 ) {
                     Text(
                         text = if (widget == null) {
-                            "添加控件"
+                            appCtx.getString(R.string.discovery_suite_add_widget)
                         } else {
-                            "编辑控件"
+                            appCtx.getString(R.string.ui_main_edit_widget)
                         },
                         fontSize = 22.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1008,7 +1009,7 @@ private fun DiscoverySuiteWidgetEditorScreen(
                     SuiteEditorTextField(
                         value = title,
                         onValueChange = { title = it.take(40) },
-                        label = "控件标题",
+                        label = appCtx.getString(R.string.discovery_suite_widget_title),
                         renderConfig = renderConfig
                     )
                     Row(
@@ -1018,21 +1019,21 @@ private fun DiscoverySuiteWidgetEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         WidgetTypeChip(
-                            text = "随机推荐",
+                            text = appCtx.getString(R.string.discovery_suite_widget_type_random_books),
                             selected = type == DiscoverySuiteWidgetType.RandomBooks.value,
                             renderConfig = renderConfig
                         ) {
                             type = DiscoverySuiteWidgetType.RandomBooks.value
                         }
                         WidgetTypeChip(
-                            text = "Tag 按键栏",
+                            text = appCtx.getString(R.string.discovery_suite_widget_type_tag_bar),
                             selected = type == DiscoverySuiteWidgetType.TagBar.value,
                             renderConfig = renderConfig
                         ) {
                             type = DiscoverySuiteWidgetType.TagBar.value
                         }
                         WidgetTypeChip(
-                            text = "排行榜按钮",
+                            text = appCtx.getString(R.string.ui_main_ranking_buttons),
                             selected = type == DiscoverySuiteWidgetType.RankButtons.value,
                             renderConfig = renderConfig
                         ) {
@@ -1040,7 +1041,7 @@ private fun DiscoverySuiteWidgetEditorScreen(
                             selectedKeys = selectedKeys.take(9).toSet()
                         }
                         WidgetTypeChip(
-                            text = "排行榜列表",
+                            text = appCtx.getString(R.string.discovery_suite_widget_type_ranked_list),
                             selected = type == DiscoverySuiteWidgetType.RankedList.value,
                             renderConfig = renderConfig
                         ) {
@@ -1048,14 +1049,14 @@ private fun DiscoverySuiteWidgetEditorScreen(
                             selectedKeys = selectedKeys.take(9).toSet()
                         }
                         WidgetTypeChip(
-                            text = "瀑布流",
+                            text = appCtx.getString(R.string.discovery_suite_widget_type_waterfall_books),
                             selected = type == DiscoverySuiteWidgetType.WaterfallBooks.value,
                             renderConfig = renderConfig
                         ) {
                             type = DiscoverySuiteWidgetType.WaterfallBooks.value
                         }
                         WidgetTypeChip(
-                            text = "横排滑动",
+                            text = appCtx.getString(R.string.discovery_suite_widget_type_horizontal_books),
                             selected = type == DiscoverySuiteWidgetType.HorizontalBooks.value,
                             renderConfig = renderConfig
                         ) {
@@ -1065,15 +1066,15 @@ private fun DiscoverySuiteWidgetEditorScreen(
                     }
                     Text(
                         text = when {
-                            loadingOptions -> "书源加载中..."
-                            sourceOptions.isEmpty() -> "没有可用书源"
-                            selectedSourceIsLoading -> "正在加载当前书源 Tag；已选 ${selectedKeys.size} 个"
-                            selectedSourceLoaded && selectedSource?.tags.isNullOrEmpty() -> "当前书源没有可用 Tag；已选 ${selectedKeys.size} 个"
-                            type == DiscoverySuiteWidgetType.HorizontalBooks.value -> "横排滑动控件只能选择 1 个 Tag；已选 ${selectedKeys.size} 个"
-                            type == DiscoverySuiteWidgetType.RankButtons.value -> "排行榜按钮需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个"
-                            type == DiscoverySuiteWidgetType.RankedList.value -> "排行榜列表需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个"
-                            type == DiscoverySuiteWidgetType.WaterfallBooks.value -> "瀑布流控件会固定在所有控件底部；已选 ${selectedKeys.size} 个 Tag"
-                            else -> "先选书源，再选择该书源下的 Tag；已选 ${selectedKeys.size} 个"
+                            loadingOptions -> appCtx.getString(R.string.ui_main_loading_sources)
+                            sourceOptions.isEmpty() -> appCtx.getString(R.string.ui_main_no_sources_available)
+                            selectedSourceIsLoading -> appCtx.getString(R.string.ui_main_loading_tags_current_source_selected, selectedKeys.size)
+                            selectedSourceLoaded && selectedSource?.tags.isNullOrEmpty() -> appCtx.getString(R.string.ui_main_no_tags_available_current_source, selectedKeys.size)
+                            type == DiscoverySuiteWidgetType.HorizontalBooks.value -> appCtx.getString(R.string.ui_main_horizontal_scroller_allows_only_1, selectedKeys.size)
+                            type == DiscoverySuiteWidgetType.RankButtons.value -> appCtx.getString(R.string.ui_main_ranking_buttons_require_3_9, selectedKeys.size)
+                            type == DiscoverySuiteWidgetType.RankedList.value -> appCtx.getString(R.string.ui_main_ranking_list_requires_3_9, selectedKeys.size)
+                            type == DiscoverySuiteWidgetType.WaterfallBooks.value -> appCtx.getString(R.string.ui_main_waterfall_widget_pinned_bottom_tags, selectedKeys.size)
+                            else -> appCtx.getString(R.string.ui_main_select_source_first_then_choose, selectedKeys.size)
                         },
                         fontSize = 14.sp,
                         fontFamily = palette.bodyFontFamily,
@@ -1083,7 +1084,7 @@ private fun DiscoverySuiteWidgetEditorScreen(
                         SuiteEditorTextField(
                             value = sourceQuery,
                             onValueChange = { sourceQuery = it.take(40) },
-                            label = "搜索书源",
+                            label = appCtx.getString(R.string.search_book_source),
                             renderConfig = renderConfig
                         )
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1107,17 +1108,17 @@ private fun DiscoverySuiteWidgetEditorScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "已选 ${selectedKeys.size} 个",
+                                    text = appCtx.getString(R.string.ui_main_selected, selectedKeys.size),
                                     fontSize = 13.sp,
                                     fontFamily = palette.bodyFontFamily,
                                     color = palette.secondaryText
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    CompactAction(text = "清空当前源", renderConfig = renderConfig) {
+                                    CompactAction(text = appCtx.getString(R.string.ui_main_clear_current_source), renderConfig = renderConfig) {
                                         val currentKeys = selectedSource?.tags.orEmpty().map { it.key }.toSet()
                                         selectedKeys = selectedKeys - currentKeys
                                     }
-                                    CompactAction(text = "清空全部", renderConfig = renderConfig, danger = true) {
+                                    CompactAction(text = appCtx.getString(R.string.ra_cfg_clear_all), renderConfig = renderConfig, danger = true) {
                                         selectedKeys = emptySet()
                                     }
                                 }
@@ -1127,21 +1128,21 @@ private fun DiscoverySuiteWidgetEditorScreen(
                             when {
                                 source.sourceUrl in loadingSourceUrls -> {
                                     SourceTagsStatePanel(
-                                        text = "${source.sourceName} Tag 加载中...",
+                                        text = appCtx.getString(R.string.ui_main_loading_tags_2, source.sourceName),
                                         renderConfig = renderConfig
                                     )
                                 }
                                 source.sourceUrl !in loadedSourceUrls -> {
                                     SourceTagsStatePanel(
-                                        text = "${source.sourceName} 尚未加载 Tag",
+                                        text = appCtx.getString(R.string.ui_main_has_not_loaded_tags_yet, source.sourceName),
                                         renderConfig = renderConfig,
-                                        actionText = "加载",
+                                        actionText = appCtx.getString(R.string.ui_main_load),
                                         onAction = { onLoadSourceTags(source.sourceUrl) }
                                     )
                                 }
                                 source.tags.isEmpty() -> {
                                     SourceTagsStatePanel(
-                                        text = "${source.sourceName} 没有可用 Tag",
+                                        text = appCtx.getString(R.string.ui_main_has_no_available_tags, source.sourceName),
                                         renderConfig = renderConfig
                                     )
                                 }
@@ -1252,9 +1253,9 @@ private fun SourceOptionChip(
             )
             Text(
                 text = when {
-                    loading -> "加载中"
-                    loaded -> "${source.tags.size} 个 Tag"
-                    else -> "未加载"
+                    loading -> appCtx.getString(R.string.homepage_loading)
+                    loaded -> appCtx.getString(R.string.ui_main_tags, source.tags.size)
+                    else -> appCtx.getString(R.string.ui_main_not_loaded)
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1289,7 +1290,7 @@ private fun ClassicDiscoverPreview(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "${source.sourceName} · 经典发现预览 · ${source.tags.size} 个可选 Tag",
+            text = appCtx.getString(R.string.ui_main_classic_discover_preview_available_tags, source.sourceName, source.tags.size),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontSize = 13.sp,
@@ -1571,7 +1572,7 @@ private fun EmptyManageState(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "还没有套件",
+            text = appCtx.getString(R.string.ui_main_no_suites_yet),
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = palette.titleFontFamily,
@@ -1609,12 +1610,12 @@ private fun WidgetManageRow(
             Text(
                 text = widget.title.ifBlank {
                     when (widget.type) {
-                        DiscoverySuiteWidgetType.TagBar.value -> "Tag 导航"
-                        DiscoverySuiteWidgetType.RankButtons.value -> "排行榜按钮"
-                        DiscoverySuiteWidgetType.RankedList.value -> "排行榜列表"
-                        DiscoverySuiteWidgetType.WaterfallBooks.value -> "瀑布流"
-                        DiscoverySuiteWidgetType.HorizontalBooks.value -> "横排滑动"
-                        else -> "随机推荐"
+                        DiscoverySuiteWidgetType.TagBar.value -> appCtx.getString(R.string.ui_main_tag_navigation)
+                        DiscoverySuiteWidgetType.RankButtons.value -> appCtx.getString(R.string.ui_main_ranking_buttons)
+                        DiscoverySuiteWidgetType.RankedList.value -> appCtx.getString(R.string.discovery_suite_widget_type_ranked_list)
+                        DiscoverySuiteWidgetType.WaterfallBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_waterfall_books)
+                        DiscoverySuiteWidgetType.HorizontalBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_horizontal_books)
+                        else -> appCtx.getString(R.string.discovery_suite_widget_type_random_books)
                     }
                 },
                 maxLines = 1,
@@ -1625,15 +1626,15 @@ private fun WidgetManageRow(
                 color = palette.primaryText
             )
             Text(
-                text = "${widget.typeLabel()} · ${widget.targets.size} 个 Tag",
+                text = appCtx.getString(R.string.ui_main_tags_2, widget.typeLabel(), widget.targets.size),
                 fontSize = 13.sp,
                 fontFamily = palette.bodyFontFamily,
                 color = palette.secondaryText
             )
         }
-        CompactAction(text = "编辑", renderConfig = renderConfig, onClick = onEdit)
+        CompactAction(text = appCtx.getString(R.string.edit), renderConfig = renderConfig, onClick = onEdit)
         Spacer(modifier = Modifier.width(8.dp))
-        CompactAction(text = "删除", renderConfig = renderConfig, danger = true, onClick = onDelete)
+        CompactAction(text = appCtx.getString(R.string.delete), renderConfig = renderConfig, danger = true, onClick = onDelete)
     }
 }
 
@@ -1767,13 +1768,13 @@ private fun EditorBottomBar(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         PrimaryTextButton(
-            text = "取消",
+            text = appCtx.getString(R.string.dialog_cancel),
             renderConfig = renderConfig,
             modifier = Modifier.weight(1f),
             onClick = onCancel
         )
         PrimaryTextButton(
-            text = "保存",
+            text = appCtx.getString(R.string.action_save),
             renderConfig = renderConfig,
             modifier = Modifier.weight(1f),
             onClick = onSave
@@ -1868,12 +1869,12 @@ private fun SuiteThemeChipSurface(
 
 private fun DiscoverySuiteWidget.typeLabel(): String {
     return when (type) {
-        DiscoverySuiteWidgetType.TagBar.value -> "Tag 按键栏"
-        DiscoverySuiteWidgetType.RankButtons.value -> "排行榜按钮"
-        DiscoverySuiteWidgetType.RankedList.value -> "排行榜列表"
-        DiscoverySuiteWidgetType.WaterfallBooks.value -> "瀑布流"
-        DiscoverySuiteWidgetType.HorizontalBooks.value -> "横排滑动"
-        else -> "随机推荐"
+        DiscoverySuiteWidgetType.TagBar.value -> appCtx.getString(R.string.discovery_suite_widget_type_tag_bar)
+        DiscoverySuiteWidgetType.RankButtons.value -> appCtx.getString(R.string.ui_main_ranking_buttons)
+        DiscoverySuiteWidgetType.RankedList.value -> appCtx.getString(R.string.discovery_suite_widget_type_ranked_list)
+        DiscoverySuiteWidgetType.WaterfallBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_waterfall_books)
+        DiscoverySuiteWidgetType.HorizontalBooks.value -> appCtx.getString(R.string.discovery_suite_widget_type_horizontal_books)
+        else -> appCtx.getString(R.string.discovery_suite_widget_type_random_books)
     }
 }
 
@@ -1902,7 +1903,7 @@ private fun ExploreKind.suiteDiscoverTagText(): String {
 
 private fun ExploreKind.suiteDiscoverGroupTitle(): String {
     val raw = suiteDiscoverTagText().trim()
-    if (raw.isBlank()) return "分类"
+    if (raw.isBlank()) return appCtx.getString(R.string.ui_main_category)
     val normalized = raw
         .replace(Regex("[\\p{So}\\p{Sk}\\uFE0F]+"), " ")
         .replace(Regex("[\\uFF1A:|/\\\\]+"), " ")

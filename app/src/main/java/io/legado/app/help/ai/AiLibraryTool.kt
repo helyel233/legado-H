@@ -12,6 +12,8 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiLibraryTool {
 
@@ -410,10 +412,10 @@ object AiLibraryTool {
 
     private fun sourceTypeName(type: Int): String {
         return when (type) {
-            BookSourceType.audio -> "音频"
+            BookSourceType.audio -> appCtx.getString(R.string.audio)
             BookSourceType.image -> "图片/漫画"
             BookSourceType.file -> "文件"
-            BookSourceType.video -> "视频"
+            BookSourceType.video -> appCtx.getString(R.string.video)
             else -> "文本"
         }
     }
@@ -436,8 +438,8 @@ object AiLibraryTool {
         val hours = minutes % (60 * 24) / 60
         val leftMinutes = minutes % 60
         return buildString {
-            if (days > 0) append(days).append("天")
-            if (hours > 0) append(hours).append("小时")
+            if (days > 0) append(days).append(appCtx.getString(R.string.time_day))
+            if (hours > 0) append(hours).append(appCtx.getString(R.string.time_hour))
             append(leftMinutes).append("分钟")
         }
     }

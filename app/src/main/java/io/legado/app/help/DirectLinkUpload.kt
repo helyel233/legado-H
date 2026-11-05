@@ -17,6 +17,7 @@ import io.legado.app.utils.externalCache
 import kotlinx.coroutines.currentCoroutineContext
 import splitties.init.appCtx
 import java.io.File
+import io.legado.app.R
 
 @Suppress("MemberVisibilityCanBePrivate")
 object DirectLinkUpload {
@@ -184,7 +185,7 @@ object DirectLinkUpload {
             val canonicalJson = DirectLinkUploadRuleCodec.encode(rule).getOrThrow()
             snapshot.parentFile?.let { parent ->
                 check(parent.exists() || parent.mkdirs()) {
-                    "无法创建直链上传规则快照目录: ${parent.absolutePath}"
+                    appCtx.getString(R.string.misc_cannot_create_direct_link_upload, parent.absolutePath)
                 }
             }
             snapshot.writeText(canonicalJson, Charsets.UTF_8)
@@ -201,10 +202,10 @@ object DirectLinkUpload {
                     deleteConfigStorageUnlocked(target)
                     return@synchronized
                 }
-                val source = requireNotNull(snapshot) { "直链上传规则快照缺失" }
+                val source = requireNotNull(snapshot) { appCtx.getString(R.string.misc_direct_link_upload_rule_snapshot) }
                 require(source.isFile) { "直链上传规则快照不存在" }
                 require(source.length() <= MAX_RULE_JSON_BYTES.toLong()) {
-                    "直链上传规则快照超过大小限制"
+                    appCtx.getString(R.string.misc_direct_link_upload_rule_snapshot_2)
                 }
                 val json = source.readText(Charsets.UTF_8)
                 val canonicalJson = DirectLinkUploadRuleCodec.decode(json)

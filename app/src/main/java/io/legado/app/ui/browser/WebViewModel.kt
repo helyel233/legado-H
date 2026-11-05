@@ -26,6 +26,8 @@ import org.apache.commons.text.StringEscapeUtils
 import java.util.Date
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION2
+import io.legado.app.R
+import splitties.init.appCtx
 
 class WebViewModel(application: Application) : BaseViewModel(application) {
     var reviewResourceBook: io.legado.app.data.entities.Book? = null
@@ -98,9 +100,9 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
             } ?: throw Throwable("NULL")
         }.onError {
             ACache.get().remove(imagePathKey)
-            context.toastOnUi("保存图片失败:${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.i18n_final_save_image_failed, it.localizedMessage))
         }.onSuccess {
-            context.toastOnUi("保存成功")
+            context.toastOnUi(appCtx.getString(R.string.ra_cfg_saved))
         }
     }
 

@@ -26,6 +26,8 @@ import org.json.JSONObject
 import kotlinx.coroutines.delay
 import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class AiUsageStats(
     val inputTokens: Int = 0,
@@ -403,7 +405,7 @@ object AiChatService {
         )
         if (totalTokensWithDynamicContext > preparedContext.limitTokens) {
             throw AiChatException(
-                message = "当前 AI 静态配置或本轮输入超过上下文限制，已自动压缩但仍无法放入，请减少系统提示词、Skill、工具或本次输入。",
+                message = appCtx.getString(R.string.ai_state_ai_configuration_or_this_input),
                 debugLog = requestLog.append("estimatedTotalTokens=$totalTokensWithDynamicContext\n")
                     .append("dynamicContextTokens=$dynamicContextTokens\n")
                     .append("limitTokens=${preparedContext.limitTokens}\n")
@@ -548,7 +550,7 @@ object AiChatService {
                 .append(" fallbackModel=").append(fallback.model)
                 .append(" reason=").append(throwable.message ?: throwable.javaClass.simpleName)
                 .append('\n')
-            onThinking("AI 请求超时，正在切换备用模型")
+            onThinking(appCtx.getString(R.string.ai_state_ai_request_timed_out_switching))
             return requestCompletionStreamWithRetry(
                 chatUrl = fallback.chatUrl,
                 apiMode = fallback.apiMode,
@@ -598,7 +600,7 @@ object AiChatService {
                         .append(" delay=").append(delayMillis)
                         .append(" reason=").append(lastError?.message ?: lastError?.javaClass?.simpleName)
                         .append('\n')
-                    onThinking("AI 请求失败，正在重试 $attempt/$NETWORK_ABORT_RETRY_COUNT")
+                    onThinking(appCtx.getString(R.string.ai_state_ai_request_failed_retrying, attempt, NETWORK_ABORT_RETRY_COUNT))
                     delay(delayMillis)
                 }
                 return requestCompletionStream(

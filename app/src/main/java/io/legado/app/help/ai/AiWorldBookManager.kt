@@ -7,6 +7,8 @@ import io.legado.app.ui.main.ai.AiWorldBookConfig
 import io.legado.app.ui.main.ai.AiWorldBookEntry
 import org.json.JSONArray
 import org.json.JSONObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class AiWorldBookHit(
     val worldBook: AiWorldBookConfig,
@@ -380,7 +382,7 @@ object AiWorldBookManager {
             val copyOnConflict = arguments?.optBoolean("copyOnConflict", true) != false
             val existingIds = AppConfig.aiWorldBookList.map { it.id }.toSet()
             val saving = if (copyOnConflict && imported.id in existingIds) {
-                imported.copy(id = AiWorldBookConfig(name = imported.name).id, name = "${imported.name} 副本")
+                imported.copy(id = AiWorldBookConfig(name = imported.name).id, name = appCtx.getString(R.string.misc_copy_2, imported.name))
             } else {
                 imported
             }

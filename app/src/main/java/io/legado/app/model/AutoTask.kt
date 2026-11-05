@@ -16,6 +16,7 @@ import splitties.init.appCtx
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.R
 
 /** Transactional persistence facade. Execution and Android scheduling are separate layers. */
 object AutoTask {
@@ -351,7 +352,7 @@ object AutoTask {
         detail?.takeIf { it.isNotBlank() }?.let {
             append('\n').append("返回: ").append(it)
         }
-    }.ifBlank { "执行完成" }.take(MAX_LOG_LENGTH)
+    }.ifBlank { appCtx.getString(R.string.auto_task_debug_finished) }.take(MAX_LOG_LENGTH)
 
     fun buildErrorLog(msg: String, error: Throwable?, runAt: Long): String = buildString {
         append("[FAIL] ").append(formatLogTime(runAt)).append('\n')

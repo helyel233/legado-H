@@ -29,6 +29,7 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
 import splitties.views.onClick
 import splitties.views.onLongClick
+import splitties.init.appCtx
 
 class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookSourceDebugModel>() {
 
@@ -77,7 +78,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             override fun onQueryTextSubmit(query: String?): Boolean {
                 searchView.clearFocus()
                 openOrCloseHelp(false)
-                startSearch(query ?: "我的")
+                startSearch(query ?: appCtx.getString(R.string.my))
                 return true
             }
 
@@ -132,7 +133,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             exploreKinds?.firstOrNull()?.let {
                 binding.textFx.text = "${it.title}::${it.url}"
                 if (it.title.startsWith("ERROR:")) {
-                    adapter.addItem("获取发现出错\n${it.url}")
+                    adapter.addItem(appCtx.getString(R.string.ui_book_failed_load_discover_n, it.url))
                     openOrCloseHelp(false)
                     searchView.clearFocus()
                     return@launch
@@ -141,7 +142,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             @Suppress("USELESS_ELVIS")
             exploreKinds?.map { it.title ?: "" }?.let { exploreKindTitles ->
                 binding.textFx.onLongClick {
-                    selector("选择发现", exploreKindTitles) { _, index ->
+                    selector(appCtx.getString(R.string.ui_book_select_discover), exploreKindTitles) { _, index ->
                         val explore = exploreKinds[index]
                         binding.textFx.text = "${explore.title}::${explore.url}"
                         searchView.setQuery(binding.textFx.text, true)
@@ -180,7 +181,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
         viewModel.startDebug(key, {
             binding.rotateLoading.visible()
         }, {
-            toastOnUi("未获取到书源")
+            toastOnUi(appCtx.getString(R.string.ui_main_no_source_obtained))
         })
     }
 

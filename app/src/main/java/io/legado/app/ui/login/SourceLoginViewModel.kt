@@ -21,6 +21,8 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.toastOnUi
 import java.util.Locale
+import io.legado.app.R
+import splitties.init.appCtx
 
 class SourceLoginViewModel(application: Application) : BaseViewModel(application) {
 
@@ -150,7 +152,7 @@ class SourceLoginViewModel(application: Application) : BaseViewModel(application
             if (it != null) {
                 success.invoke(it)
             } else {
-                context.toastOnUi(if (requestedAutoTask) "未找到定时任务" else "未找到书源")
+                context.toastOnUi(if (requestedAutoTask) appCtx.getString(R.string.misc_scheduled_task_not_found) else appCtx.getString(R.string.svc_book_source_not_found))
             }
         }.onError {
             error.invoke()
@@ -158,7 +160,7 @@ class SourceLoginViewModel(application: Application) : BaseViewModel(application
             val key = intent.readStringExtra("key").orEmpty()
             val taskId = intent.readStringExtra(AutoTask.EXTRA_TASK_ID, "taskId").orEmpty()
             AppLog.put(
-                "登录 UI 初始化失败\n$type=$type key=$key taskId=$taskId\n$it",
+                appCtx.getString(R.string.misc_failed_initialize_login_ui_n, type, type, key, taskId, it),
                 it,
                 true
             )

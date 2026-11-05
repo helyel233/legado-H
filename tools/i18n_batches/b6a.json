@@ -1,0 +1,2931 @@
+{
+  "prefix": "ui_main",
+  "resource": "strings_ui_main.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/main/MainViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/MainActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageBooksAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageRankingTabAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageModuleManageSheet.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageBookBadge.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageContract.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageModuleEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageKindSelectSheet.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/homepage/HomepageGridRankingPagerAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/rss/RssFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/rss/RssAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookCollectionActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookshelfViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookshelfConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BaseBookshelfFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookCollectionSelectDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookshelfTagManageScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookCollectionCover.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/BookGroupSelectDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/style2/BookshelfFragment2.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/compose/BookListCardComponents.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/compose/BookshelfComposeCover.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/compose/BookshelfComposeItems.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/compose/BookshelfComposeList.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/style1/BookshelfFragment1.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/style1/books/BooksFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/smartgroup/RuleEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/bookshelf/smartgroup/SmartGroupRuleActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/ExploreFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/ExploreModernListScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/ExploreGlassBackdrop.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/DiscoverySuiteHomeScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/DiscoverySuiteConfig.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/ExploreAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/DiscoverySuiteManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/AiChatViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/AiChatSpeechPlayer.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/AiChatActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiProcessChain.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiWorldBookManageScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiMarkdownComponents.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiChatScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/my/MySettingsScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/my/MyFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/readrecord/YearlyReportViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/readrecord/YearlyReportActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/readrecord/ReadRecordFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/librarysearch/LibrarySearchViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/main/librarysearch/LibrarySearchActivity.kt",
+    "app/src/main/java/io/legado/app/ui/about/UpdateAcceleratorDialog.kt",
+    "app/src/main/java/io/legado/app/ui/about/ReadRecordComponentConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/about/DebugLogDialog.kt",
+    "app/src/main/java/io/legado/app/ui/about/AboutFragment.kt",
+    "app/src/main/java/io/legado/app/ui/about/CrashLogsDialog.kt",
+    "app/src/main/java/io/legado/app/ui/about/UpdateDialog.kt",
+    "app/src/main/java/io/legado/app/ui/rss/favorites/RssFavoritesFragment.kt",
+    "app/src/main/java/io/legado/app/ui/rss/favorites/RssFavoritesActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/edit/RssSourceEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/edit/RssSourceEditViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/manage/RssSourceActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/manage/RssSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/manage/RssSourceScreen.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/debug/RssSourceDebugModel.kt",
+    "app/src/main/java/io/legado/app/ui/rss/source/debug/RssSourceDebugActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/read/ReadRss.kt",
+    "app/src/main/java/io/legado/app/ui/rss/read/ReadRssActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/read/ReadRssViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/rss/read/RssJsExtensions.kt",
+    "app/src/main/java/io/legado/app/ui/rss/subscription/RuleSubActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/ReadRecordDialog.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/RssArticlesAdapter1.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/RssArticlesViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/RssArticlesFragment.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/RssSearchActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/RssSortActivity.kt",
+    "app/src/main/java/io/legado/app/ui/rss/article/BaseRssArticlesAdapter.kt",
+    "app/src/main/java/io/legado/app/ui/association/VerificationCodeDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportHttpTtsDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/OpenUrlConfirmDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportThemeDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportBookSourceDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/AddToBookshelfDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/OnLineImportViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportReplaceRuleViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportDialogComponents.kt",
+    "app/src/main/java/io/legado/app/ui/association/VerificationCodeActivity.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportDictRuleDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportRssSourceDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportBookSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/association/FileAssociationViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportRssSourceViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportReplaceRuleDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/OnLineImportActivity.kt",
+    "app/src/main/java/io/legado/app/ui/association/ImportTxtTocRuleDialog.kt",
+    "app/src/main/java/io/legado/app/ui/association/FileAssociationActivity.kt",
+    "app/src/main/java/io/legado/app/ui/widget/SelectActionBar.kt",
+    "app/src/main/java/io/legado/app/ui/widget/SourceSelectDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/MainTopBarView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/ReaderInfoBarView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/ReviewLoadingSkeletonView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/SearchView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/BatteryView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/ShadowLayout.kt",
+    "app/src/main/java/io/legado/app/ui/widget/ModernActionPopup.kt",
+    "app/src/main/java/io/legado/app/ui/widget/TitleBar.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/ComposeFastScroller.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/SearchBookListItem.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/AppSettingComponents.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/LegadoComposeTheme.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/BookCoverImage.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/ListStatePlaceholder.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/ComposeImageRelease.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/AppComposeDialogs.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/BackgroundReadability.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/Haptics.kt",
+    "app/src/main/java/io/legado/app/ui/widget/compose/ComposeThemeImageLayer.kt",
+    "app/src/main/java/io/legado/app/ui/widget/image/ArcView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/image/PhotoView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/image/CoverImageView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/image/FilletImageView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/image/photo/Info.kt",
+    "app/src/main/java/io/legado/app/ui/widget/number/NumberPickerDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/BottomWebViewDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/WaitDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/TextDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/CommentWebViewSession.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/BackupProgressDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/dialog/PhotoDialog.kt",
+    "app/src/main/java/io/legado/app/ui/widget/recycler/LoadMoreView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/recycler/ViewPager2Container.kt",
+    "app/src/main/java/io/legado/app/ui/widget/recycler/ItemTouchCallback.kt",
+    "app/src/main/java/io/legado/app/ui/widget/text/BevelLabelView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/text/ScrollTextView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/text/ScrollMultiAutoCompleteTextView.kt",
+    "app/src/main/java/io/legado/app/ui/widget/keyboard/KeyboardAssistsConfig.kt",
+    "app/src/main/java/io/legado/app/ui/widget/keyboard/KeyboardToolPop.kt",
+    "app/src/main/java/io/legado/app/ui/config/SettingsSearchIndex.kt",
+    "app/src/main/java/io/legado/app/ui/config/BackupConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/ConfigActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiImageProviderManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/ThemeConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/ConfigTag.kt",
+    "app/src/main/java/io/legado/app/ui/config/ComposeDirectLinkUploadDialog.kt",
+    "app/src/main/java/io/legado/app/ui/config/ThemeManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/BookshelfSettingsFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/AdvancedConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/MangaVideoConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiWorldBookManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/ReadingConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/EpubLoadingTemplateManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/StorageConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/BookInfoManageScreen.kt",
+    "app/src/main/java/io/legado/app/ui/config/NetworkConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/AudioConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/LibraryContainerManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/NetworkDnsConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/BookInfoManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/CommentConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/compose/ComposeSettingFragment.kt",
+    "app/src/main/java/io/legado/app/ui/config/compose/SettingSpecs.kt",
+    "app/src/main/java/io/legado/app/ui/config/compose/SettingSpecScreen.kt",
+    "app/src/main/java/io/legado/app/ui/config/coverhtml/CoverHtmlActivity.kt"
+  ],
+  "entries": [
+    {
+      "zh": "更新目录出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MainViewModel.kt:179: AppLog.put(\"更新目录出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "${book.name} 更新目录失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MainViewModel.kt:221: AppLog.put(\"${book.name} 更新目录失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "可复制诊断信息反馈问题，或查看完整崩溃日志。",
+      "en": "Copy the diagnostic info to report an issue, or view the full crash log.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MainActivity.kt:2306: append(\"可复制诊断信息反馈问题，或查看完整崩溃日志。\")"
+      ],
+      "key": "ui_main_copy_diagnostic_info_report_issue"
+    },
+    {
+      "zh": "复制诊断信息",
+      "en": "Copy diagnostic info",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "MainActivity.kt:2309: neutralButton(\"复制诊断信息\") { copyDiagnosticReport() }",
+        "CrashLogsDialog.kt:198: text = \"复制诊断信息\","
+      ],
+      "key": "ui_main_copy_diagnostic_info"
+    },
+    {
+      "zh": "检测到资源文件包，是否一并恢复字体、背景图等资源？",
+      "en": "A resource package was detected. Restore fonts, background images and other assets as well?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MainActivity.kt:2350: message = \"检测到资源文件包，是否一并恢复字体、背景图等资源？\","
+      ],
+      "key": "ui_main_resource_package_was_detected_restore"
+    },
+    {
+      "zh": "全部恢复",
+      "en": "Restore all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MainActivity.kt:2351: positiveText = \"全部恢复\","
+      ],
+      "key": "ui_main_restore_all"
+    },
+    {
+      "zh": "仅主包",
+      "en": "Main package only",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MainActivity.kt:2352: negativeText = \"仅主包\","
+      ],
+      "key": "ui_main_main_package_only"
+    },
+    {
+      "zh": "加载更多失败: ${e.message}",
+      "en": "Failed to load more: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HomepageViewModel.kt:641: _effects.tryEmit(HomepageEffect.ShowSnackbar(\"加载更多失败: ${e.message}\"))"
+      ],
+      "key": "ui_main_failed_load_more"
+    },
+    {
+      "zh": "每个集只能有一个无限流模块",
+      "en": "Each collection can contain only one infinite-flow module",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HomepageViewModel.kt:1063: _effects.tryEmit(HomepageEffect.ShowSnackbar(\"每个集只能有一个无限流模块\"))"
+      ],
+      "key": "ui_main_each_collection_can_contain_only"
+    },
+    {
+      "zh": "订阅页面获取分组数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RssFragment.kt:452: AppLog.put(\"订阅页面获取分组数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "订阅页面更新数据出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "RssFragment.kt:478: AppLog.put(\"订阅页面更新数据出错\\n${it.localizedMessage}\", it)",
+        "RssFragment.kt:507: AppLog.put(\"订阅页面更新数据出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "订阅页面加载分类失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RssFragment.kt:590: AppLog.put(\"订阅页面加载分类失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "合集详情更新出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCollectionActivity.kt:133: AppLog.put(\"合集详情更新出错\", it)"
+      ]
+    },
+    {
+      "zh": "添加网址失败",
+      "en": "Failed to add URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfViewModel.kt:117: context.toastOnUi(\"添加网址失败\")"
+      ],
+      "key": "ui_main_failed_add_url"
+    },
+    {
+      "zh": "添加网址出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfViewModel.kt:120: AppLog.put(\"添加网址出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "书籍不能为空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookshelfViewModel.kt:147: } ?: throw NoStackTraceException(\"书籍不能为空\")"
+      ]
+    },
+    {
+      "zh": "导出书籍出错\\n${it.localizedMessage}",
+      "en": "Failed to export books\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfViewModel.kt:151: context.toastOnUi(\"导出书籍出错\\n${it.localizedMessage}\")"
+      ],
+      "key": "ui_main_failed_export_books_n"
+    },
+    {
+      "zh": "格式不对",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "BookshelfViewModel.kt:172: throw NoStackTraceException(\"格式不对\")",
+        "ImportReplaceRuleViewModel.kt:112: else -> throw NoStackTraceException(\"格式不对\")"
+      ]
+    },
+    {
+      "zh": "未读",
+      "en": "Unread",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfConfigDialog.kt:381: summaryLabel = \"未读\","
+      ],
+      "key": "ui_main_unread"
+    },
+    {
+      "zh": "快滑",
+      "en": "Fast scroll",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfConfigDialog.kt:402: summaryLabel = \"快滑\","
+      ],
+      "key": "ui_main_fast_scroll"
+    },
+    {
+      "zh": "未启用",
+      "en": "Not enabled",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookshelfConfigDialog.kt:847: text = \"未启用\",",
+        "AboutFragment.kt:183: \"未启用\""
+      ],
+      "key": "ui_main_not_enabled"
+    },
+    {
+      "zh": "添加中... ($count)",
+      "en": "Adding... (%1$s)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BaseBookshelfFragment.kt:259: waitDialog.setText(\"添加中... ($count)\")"
+      ],
+      "key": "ui_main_adding"
+    },
+    {
+      "zh": "添加中...",
+      "en": "Adding...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BaseBookshelfFragment.kt:273: waitDialog.setText(\"添加中...\")"
+      ],
+      "key": "ui_main_adding_2"
+    },
+    {
+      "zh": "分组已达上限",
+      "en": "Group limit reached",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookGroupSelectDialog.kt:88: toastOnUi(\"分组已达上限\")"
+      ],
+      "key": "ui_main_group_limit_reached"
+    },
+    {
+      "zh": "涔︽灦鏇存柊鍑洪敊",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "BookshelfFragment2.kt:469: AppLog.put(\"涔︽灦鏇存柊鍑洪敊\", it)",
+        "BooksFragment.kt:633: AppLog.put(\"涔︽灦鏇存柊鍑洪敊\", it)"
+      ]
+    },
+    {
+      "zh": "书架更新出错",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "BookshelfFragment2.kt:518: AppLog.put(\"书架更新出错\", it)",
+        "BooksFragment.kt:691: AppLog.put(\"书架更新出错\", it)"
+      ]
+    },
+    {
+      "zh": "已更新",
+      "en": "Updated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfComposeItems.kt:338: text = \"已更新\","
+      ],
+      "key": "ui_main_updated"
+    },
+    {
+      "zh": "本地文件已更新",
+      "en": "Local file updated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookshelfComposeList.kt:459: text = \"本地文件已更新\","
+      ],
+      "key": "ui_main_local_file_updated"
+    },
+    {
+      "zh": "套件发现排行榜控件加载失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:628: AppLog.put(\"套件发现排行榜控件加载失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现控件加载失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:648: AppLog.put(\"套件发现控件加载失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现缓存",
+      "en": "Suite discovery cache",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:745: cacheName = \"套件发现缓存\"",
+        "ExploreFragment.kt:775: cacheName = \"套件发现缓存\""
+      ],
+      "key": "ui_main_suite_discovery_cache"
+    },
+    {
+      "zh": "套件发现缓存内容无效，已清理并重新加载",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:754: AppLog.put(\"套件发现缓存内容无效，已清理并重新加载\")"
+      ]
+    },
+    {
+      "zh": "套件发现缓存超过安全大小，跳过内存和磁盘快照",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:767: AppLog.put(\"套件发现缓存超过安全大小，跳过内存和磁盘快照\")"
+      ]
+    },
+    {
+      "zh": "套件发现缓存写入失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:778: AppLog.put(\"套件发现缓存写入失败\", it)"
+      ]
+    },
+    {
+      "zh": "濂椾欢鍙戠幇鍔犺浇鍒嗙被澶辫触",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:951: AppLog.put(\"濂椾欢鍙戠幇鍔犺浇鍒嗙被澶辫触\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现控件预加载失败",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ExploreFragment.kt:979: AppLog.put(\"套件发现控件预加载失败\", e)",
+        "ExploreFragment.kt:1101: AppLog.put(\"套件发现控件预加载失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现排行榜控件刷新失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1019: AppLog.put(\"套件发现排行榜控件刷新失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现控件刷新失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1057: AppLog.put(\"套件发现控件刷新失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现横排控件加载下一页失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1134: AppLog.put(\"套件发现横排控件加载下一页失败\", e)"
+      ]
+    },
+    {
+      "zh": "套件发现排行榜控件加载下一页失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1184: AppLog.put(\"套件发现排行榜控件加载下一页失败\", e)"
+      ]
+    },
+    {
+      "zh": "排行榜按钮",
+      "en": "Ranking buttons",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:1505: \"排行榜按钮\",",
+        "ExploreFragment.kt:1506: \"排行榜按钮\"",
+        "DiscoverySuiteManageActivity.kt:483: DiscoverySuiteWidgetType.RankButtons.value -> \"排行榜按钮\""
+      ],
+      "key": "ui_main_ranking_buttons"
+    },
+    {
+      "zh": "排行榜控件需要选择 3-9 个 Tag",
+      "en": "The ranking widget requires 3-9 tags",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:1619: requireContext().toastOnUi(\"排行榜控件需要选择 3-9 个 Tag\")",
+        "DiscoverySuiteManageActivity.kt:500: toastOnUi(\"排行榜控件需要选择 3-9 个 Tag\")"
+      ],
+      "key": "ui_main_ranking_widget_requires_3_9"
+    },
+    {
+      "zh": "发现页面缓存",
+      "en": "Discover page cache",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:1871: cacheName = \"发现页面缓存\"",
+        "ExploreFragment.kt:1917: cacheName = \"发现页面缓存\""
+      ],
+      "key": "ui_main_discover_page_cache"
+    },
+    {
+      "zh": "发现页面缓存内容无效，已清理并重新加载",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1883: AppLog.put(\"发现页面缓存内容无效，已清理并重新加载\")"
+      ]
+    },
+    {
+      "zh": "发现页面缓存超过安全大小，跳过磁盘缓存",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1911: AppLog.put(\"发现页面缓存超过安全大小，跳过磁盘缓存\")"
+      ]
+    },
+    {
+      "zh": "发现页面缓存写入失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1920: AppLog.put(\"发现页面缓存写入失败\", it)"
+      ]
+    },
+    {
+      "zh": "$cacheName 已超过安全大小并清理：${result.byteCount} 字节",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1942: AppLog.put(\"$cacheName 已超过安全大小并清理：${result.byteCount} 字节\")"
+      ]
+    },
+    {
+      "zh": "$cacheName 内容为空，已清理并重新加载",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1947: AppLog.put(\"$cacheName 内容为空，已清理并重新加载\")"
+      ]
+    },
+    {
+      "zh": "$cacheName 行过大，已清理并重新加载",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1958: AppLog.put(\"$cacheName 行过大，已清理并重新加载\", e)"
+      ]
+    },
+    {
+      "zh": "$cacheName 超过安全大小，跳过磁盘缓存",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:1965: AppLog.put(\"$cacheName 超过安全大小，跳过磁盘缓存\")"
+      ]
+    },
+    {
+      "zh": "完整发现刷新失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:2279: AppLog.put(\"完整发现刷新失败\", it)"
+      ]
+    },
+    {
+      "zh": "选择 ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:2749: DiscoverTagItem.Role.GlobalSelect -> \"选择 \""
+      ]
+    },
+    {
+      "zh": "开关 ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:2750: DiscoverTagItem.Role.Toggle -> \"开关 \""
+      ]
+    },
+    {
+      "zh": "操作 ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ExploreFragment.kt:2752: DiscoverTagItem.Role.ScriptUrl -> \"操作 \""
+      ]
+    },
+    {
+      "zh": "刷新发现分类失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:2854: AppLog.put(\"刷新发现分类失败\", it)"
+      ]
+    },
+    {
+      "zh": "搜索",
+      "en": "",
+      "count": 3,
+      "risk": 3,
+      "samples": [
+        "ExploreFragment.kt:3005: compact.contains(\"搜索\") ||",
+        "ExploreFragment.kt:3006: viewName.contains(\"搜索\") ||",
+        "RssSortActivity.kt:415: val name = \"搜索\""
+      ]
+    },
+    {
+      "zh": "分类",
+      "en": "Category",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3034: return hasDecoration || compact.endsWith(\"分类\") || compact.endsWith(\"排行\") || compact.endsWith(\"排行榜\")",
+        "DiscoverySuiteManageActivity.kt:1906: if (raw.isBlank()) return \"分类\""
+      ],
+      "key": "ui_main_category"
+    },
+    {
+      "zh": "排行",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3034: return hasDecoration || compact.endsWith(\"分类\") || compact.endsWith(\"排行\") || compact.endsWith(\"排行榜\")"
+      ]
+    },
+    {
+      "zh": "排行榜",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3034: return hasDecoration || compact.endsWith(\"分类\") || compact.endsWith(\"排行\") || compact.endsWith(\"排行榜\")"
+      ]
+    },
+    {
+      "zh": "发现标签按钮执行失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3424: AppLog.put(\"发现标签按钮执行失败\", it)"
+      ]
+    },
+    {
+      "zh": "发现页面搜索缓存写入失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3563: AppLog.put(\"发现页面搜索缓存写入失败\", it)"
+      ]
+    },
+    {
+      "zh": "发现页面加载失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3574: AppLog.put(\"发现页面加载失败\", e)"
+      ]
+    },
+    {
+      "zh": "发现页面更新数据出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ExploreFragment.kt:3645: AppLog.put(\"发现页面更新数据出错\", it)"
+      ]
+    },
+    {
+      "zh": "当前 ${suite.displayName}",
+      "en": "Current: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteHomeScreen.kt:321: \"当前 ${suite.displayName}\""
+      ],
+      "key": "ui_main_current"
+    },
+    {
+      "zh": "Tag 加载中...",
+      "en": "Loading tags...",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:675: \"Tag 加载中...\"",
+        "DiscoverySuiteManageActivity.kt:761: \"Tag 加载中...\""
+      ],
+      "key": "ui_main_loading_tags"
+    },
+    {
+      "zh": "${sourceCount} 个书源 / ${tagOptionCount} 个 Tag",
+      "en": "%1$s sources / %2$s tags",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:677: \"${sourceCount} 个书源 / ${tagOptionCount} 个 Tag\"",
+        "DiscoverySuiteManageActivity.kt:763: \"${sourceCount} 个书源 / ${tagOptionCount} 个 Tag\""
+      ],
+      "key": "ui_main_sources_tags"
+    },
+    {
+      "zh": "当前套件 · ${suite.widgets.size} 个控件",
+      "en": "Current suite · %1$s widgets",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:692: \"当前套件 · ${suite.widgets.size} 个控件\""
+      ],
+      "key": "ui_main_current_suite_widgets"
+    },
+    {
+      "zh": "${suite.widgets.size} 个控件",
+      "en": "%1$s widgets",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:694: \"${suite.widgets.size} 个控件\""
+      ],
+      "key": "ui_main_widgets"
+    },
+    {
+      "zh": "设为当前",
+      "en": "Set as current",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:703: add(AppManagementMenuAction(text = \"设为当前\", onClick = { onSetCurrentSuite(suite) }))"
+      ],
+      "key": "ui_main_set_as_current"
+    },
+    {
+      "zh": "别名",
+      "en": "Alias",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:706: add(AppManagementMenuAction(text = \"别名\", onClick = { onAliasSuite(suite) }))"
+      ],
+      "key": "ui_main_alias"
+    },
+    {
+      "zh": "套件不存在",
+      "en": "Suite not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:774: text = \"套件不存在\","
+      ],
+      "key": "ui_main_suite_not_found"
+    },
+    {
+      "zh": "还没有控件",
+      "en": "No widgets yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:790: text = \"还没有控件\","
+      ],
+      "key": "ui_main_no_widgets_yet"
+    },
+    {
+      "zh": "透明度倍率",
+      "en": "Opacity multiplier",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:868: text = \"透明度倍率\","
+      ],
+      "key": "ui_main_opacity_multiplier"
+    },
+    {
+      "zh": "当前 ${",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:875: text = \"当前 ${\"%.2f\".format(value)}x，仅增强套件页面板不透明度\","
+      ]
+    },
+    {
+      "zh": ".format(value)}x，仅增强套件页面板不透明度",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:875: text = \"当前 ${\"%.2f\".format(value)}x，仅增强套件页面板不透明度\","
+      ]
+    },
+    {
+      "zh": "Tag 导航",
+      "en": "Tag navigation",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:912: DiscoverySuiteWidgetType.TagBar.value -> \"Tag 导航\"",
+        "DiscoverySuiteManageActivity.kt:1613: DiscoverySuiteWidgetType.TagBar.value -> \"Tag 导航\""
+      ],
+      "key": "ui_main_tag_navigation"
+    },
+    {
+      "zh": "编辑控件",
+      "en": "Edit widget",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1002: \"编辑控件\""
+      ],
+      "key": "ui_main_edit_widget"
+    },
+    {
+      "zh": "书源加载中...",
+      "en": "Loading sources...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1069: loadingOptions -> \"书源加载中...\""
+      ],
+      "key": "ui_main_loading_sources"
+    },
+    {
+      "zh": "没有可用书源",
+      "en": "No sources available",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1070: sourceOptions.isEmpty() -> \"没有可用书源\""
+      ],
+      "key": "ui_main_no_sources_available"
+    },
+    {
+      "zh": "正在加载当前书源 Tag；已选 ${selectedKeys.size} 个",
+      "en": "Loading tags for the current source; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1071: selectedSourceIsLoading -> \"正在加载当前书源 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_loading_tags_current_source_selected"
+    },
+    {
+      "zh": "当前书源没有可用 Tag；已选 ${selectedKeys.size} 个",
+      "en": "No tags available for the current source; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1072: selectedSourceLoaded && selectedSource?.tags.isNullOrEmpty() -> \"当前书源没有可用 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_no_tags_available_current_source"
+    },
+    {
+      "zh": "横排滑动控件只能选择 1 个 Tag；已选 ${selectedKeys.size} 个",
+      "en": "The horizontal scroller allows only 1 tag; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1073: type == DiscoverySuiteWidgetType.HorizontalBooks.value -> \"横排滑动控件只能选择 1 个 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_horizontal_scroller_allows_only_1"
+    },
+    {
+      "zh": "排行榜按钮需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个",
+      "en": "Ranking buttons require 3-9 tags; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1074: type == DiscoverySuiteWidgetType.RankButtons.value -> \"排行榜按钮需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_ranking_buttons_require_3_9"
+    },
+    {
+      "zh": "排行榜列表需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个",
+      "en": "The ranking list requires 3-9 tags; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1075: type == DiscoverySuiteWidgetType.RankedList.value -> \"排行榜列表需要选择 3-9 个 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_ranking_list_requires_3_9"
+    },
+    {
+      "zh": "瀑布流控件会固定在所有控件底部；已选 ${selectedKeys.size} 个 Tag",
+      "en": "The waterfall widget is pinned to the bottom; %1$s tags selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1076: type == DiscoverySuiteWidgetType.WaterfallBooks.value -> \"瀑布流控件会固定在所有控件底部；已选 ${selectedKeys.size} 个 Tag\""
+      ],
+      "key": "ui_main_waterfall_widget_pinned_bottom_tags"
+    },
+    {
+      "zh": "先选书源，再选择该书源下的 Tag；已选 ${selectedKeys.size} 个",
+      "en": "Select a source first, then choose its tags; %1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1077: else -> \"先选书源，再选择该书源下的 Tag；已选 ${selectedKeys.size} 个\""
+      ],
+      "key": "ui_main_select_source_first_then_choose"
+    },
+    {
+      "zh": "已选 ${selectedKeys.size} 个",
+      "en": "%1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1111: text = \"已选 ${selectedKeys.size} 个\","
+      ],
+      "key": "ui_main_selected"
+    },
+    {
+      "zh": "清空当前源",
+      "en": "Clear current source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1117: CompactAction(text = \"清空当前源\", renderConfig = renderConfig) {"
+      ],
+      "key": "ui_main_clear_current_source"
+    },
+    {
+      "zh": "${source.sourceName} Tag 加载中...",
+      "en": "%1$s: loading tags...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1131: text = \"${source.sourceName} Tag 加载中...\","
+      ],
+      "key": "ui_main_loading_tags_2"
+    },
+    {
+      "zh": "${source.sourceName} 尚未加载 Tag",
+      "en": "%1$s has not loaded tags yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1137: text = \"${source.sourceName} 尚未加载 Tag\","
+      ],
+      "key": "ui_main_has_not_loaded_tags_yet"
+    },
+    {
+      "zh": "加载",
+      "en": "Load",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1139: actionText = \"加载\","
+      ],
+      "key": "ui_main_load"
+    },
+    {
+      "zh": "${source.sourceName} 没有可用 Tag",
+      "en": "%1$s has no available tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1145: text = \"${source.sourceName} 没有可用 Tag\","
+      ],
+      "key": "ui_main_has_no_available_tags"
+    },
+    {
+      "zh": "${source.tags.size} 个 Tag",
+      "en": "%1$s tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1257: loaded -> \"${source.tags.size} 个 Tag\""
+      ],
+      "key": "ui_main_tags"
+    },
+    {
+      "zh": "未加载",
+      "en": "Not loaded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1258: else -> \"未加载\""
+      ],
+      "key": "ui_main_not_loaded"
+    },
+    {
+      "zh": "${source.sourceName} · 经典发现预览 · ${source.tags.size} 个可选 Tag",
+      "en": "%1$s · Classic Discover preview · %2$s available tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1293: text = \"${source.sourceName} · 经典发现预览 · ${source.tags.size} 个可选 Tag\","
+      ],
+      "key": "ui_main_classic_discover_preview_available_tags"
+    },
+    {
+      "zh": "还没有套件",
+      "en": "No suites yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1575: text = \"还没有套件\","
+      ],
+      "key": "ui_main_no_suites_yet"
+    },
+    {
+      "zh": "${widget.typeLabel()} · ${widget.targets.size} 个 Tag",
+      "en": "%1$s · %2$s tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DiscoverySuiteManageActivity.kt:1629: text = \"${widget.typeLabel()} · ${widget.targets.size} 个 Tag\","
+      ],
+      "key": "ui_main_tags_2"
+    },
+    {
+      "zh": "AI 回复生成",
+      "en": "Generating AI reply",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatViewModel.kt:165: currentTask = \"AI 回复生成\","
+      ],
+      "key": "ui_main_generating_ai_reply"
+    },
+    {
+      "zh": "AI回复生成中",
+      "en": "Generating AI reply",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatViewModel.kt:175: title = \"AI回复生成中\","
+      ],
+      "key": "ui_main_generating_ai_reply_2"
+    },
+    {
+      "zh": "AI 请求失败\\n${chatError.debugLog}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatViewModel.kt:261: AppLog.put(\"AI 请求失败\\n${chatError.debugLog}\", chatError)"
+      ]
+    },
+    {
+      "zh": "AI 聊天合成失败",
+      "en": "AI chat synthesis failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatSpeechPlayer.kt:239: SpeechVoiceGroupRepository.markInvalidRoute(route, reason = \"AI 聊天合成失败\")"
+      ],
+      "key": "ui_main_ai_chat_synthesis_failed"
+    },
+    {
+      "zh": "AI 聊天 TTS 合成失败\\n${throwable.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatSpeechPlayer.kt:240: AppLog.put(\"AI 聊天 TTS 合成失败\\n${throwable.localizedMessage}\", throwable)"
+      ]
+    },
+    {
+      "zh": "TTS服务器返回错误：",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatSpeechPlayer.kt:290: throw NoStackTraceException(\"TTS服务器返回错误：\" + response.peekBody(8_192).string())"
+      ]
+    },
+    {
+      "zh": "AI 聊天 TTS JS 错误\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatSpeechPlayer.kt:299: AppLog.put(\"AI 聊天 TTS JS 错误\\n${e.localizedMessage}\", e, true)"
+      ]
+    },
+    {
+      "zh": "从《${it.bookName.ifBlank { it.label }}》选择角色",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:800: text = selectedGroup?.let { \"从《${it.bookName.ifBlank { it.label }}》选择角色\" }"
+      ]
+    },
+    {
+      "zh": " }} · ${group.characters.size} 个角色",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1068: text = \"${group.author.ifBlank { \"未知作者\" }} · ${group.characters.size} 个角色\","
+      ]
+    },
+    {
+      "zh": "未知",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatActivity.kt:1155: .filter { it.isNotBlank() && it != \"未知\" }"
+      ]
+    },
+    {
+      "zh": "$count 步",
+      "en": "%1$s steps",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiProcessChain.kt:171: text = \"$count 步\","
+      ],
+      "key": "ui_main_steps"
+    },
+    {
+      "zh": "${books.count { it.isGloballyEnabled() }} 个全局启用 · ${books.sumOf { it.entries.size }} 条条目",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:371: subtitle = \"${books.count { it.isGloballyEnabled() }} 个全局启用 · ${books.sumOf { it.entries.size }} 条条目\","
+      ]
+    },
+    {
+      "zh": "复制代码",
+      "en": "Copy code",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiMarkdownComponents.kt:289: label = \"复制代码\""
+      ],
+      "key": "ui_main_copy_code"
+    },
+    {
+      "zh": "自动播放语音：${if (autoSpeakEnabled) ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:751: add(AiTopMenuAction(\"自动播放语音：${if (autoSpeakEnabled) \"开\" else \"关\"}\", toggleAutoSpeak))"
+      ]
+    },
+    {
+      "zh": "我想查证《书名》里的一个细节：\\n\\n请先搜索相关章节正文，引用原文并给出解读。",
+      "en": "I want to verify a detail in 《Book Title》:\\n\\nPlease search the relevant chapter text first, quote the original and explain it.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1940: \"我想查证《书名》里的一个细节：\\n\\n请先搜索相关章节正文，引用原文并给出解读。\""
+      ],
+      "key": "ui_main_i_want_verify_detail_book"
+    },
+    {
+      "zh": "请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\\n\\n",
+      "en": "Generate an illustration for a key scene at my current reading position in 《Book Title》. Art style:\\n\\n",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1948: \"请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\\n\\n\""
+      ],
+      "key": "ui_main_generate_illustration_key_scene_at"
+    },
+    {
+      "zh": "一级行未接跳转: $key",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MyFragment.kt:271: else -> if (BuildConfig.DEBUG) error(\"一级行未接跳转: $key\")"
+      ]
+    },
+    {
+      "zh": "搜索子项挂载到不存在的一级行: $orphanOwners —— ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MyFragment.kt:537: \"搜索子项挂载到不存在的一级行: $orphanOwners —— \" +"
+      ]
+    },
+    {
+      "zh": "改 buildSections 的行 key 时要同步 SettingsSearchIndex 的 ownerKey",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MyFragment.kt:538: \"改 buildSections 的行 key 时要同步 SettingsSearchIndex 的 ownerKey\""
+      ]
+    },
+    {
+      "zh": "年度报告数据加载失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "YearlyReportViewModel.kt:69: AppLog.put(\"年度报告数据加载失败\", it)"
+      ]
+    },
+    {
+      "zh": "年度报告分享失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "YearlyReportViewModel.kt:87: AppLog.put(\"年度报告分享失败\", it)"
+      ]
+    },
+    {
+      "zh": " 路 ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadRecordFragment.kt:784: return parts.joinToString(\" 路 \")"
+      ]
+    },
+    {
+      "zh": "全库搜索失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "LibrarySearchViewModel.kt:103: AppLog.put(\"全库搜索失败\", it)"
+      ]
+    },
+    {
+      "zh": "全库搜索重建索引失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "LibrarySearchViewModel.kt:141: AppLog.put(\"全库搜索重建索引失败\", e)"
+      ]
+    },
+    {
+      "zh": "GitHub 加速代理",
+      "en": "GitHub acceleration proxy",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "UpdateAcceleratorDialog.kt:131: text = \"GitHub 加速代理\","
+      ],
+      "key": "ui_main_github_acceleration_proxy"
+    },
+    {
+      "zh": "代理模板支持 \\${url} 占位符。未填写占位符时，会自动把原始 GitHub 地址拼到代理地址后面。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "UpdateAcceleratorDialog.kt:138: text = \"代理模板支持 \\${url} 占位符。未填写占位符时，会自动把原始 GitHub 地址拼到代理地址后面。\","
+      ]
+    },
+    {
+      "zh": "不使用代理",
+      "en": "No proxy",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "UpdateAcceleratorDialog.kt:154: text = \"不使用代理\","
+      ],
+      "key": "ui_main_no_proxy"
+    },
+    {
+      "zh": "添加代理",
+      "en": "Add proxy",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "UpdateAcceleratorDialog.kt:188: text = \"添加代理\",",
+        "UpdateAcceleratorDialog.kt:262: title = if (oldValue == null) \"添加代理\" else \"编辑代理\","
+      ],
+      "key": "ui_main_add_proxy"
+    },
+    {
+      "zh": "编辑代理",
+      "en": "Edit proxy",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "UpdateAcceleratorDialog.kt:262: title = if (oldValue == null) \"添加代理\" else \"编辑代理\","
+      ],
+      "key": "ui_main_edit_proxy"
+    },
+    {
+      "zh": "\\n书源: $it",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "DebugLogDialog.kt:94: event.sourceName?.let { append(\"\\n书源: $it\") }"
+      ]
+    },
+    {
+      "zh": "内测版",
+      "en": "Beta",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:80: title = \"内测版\","
+      ],
+      "key": "ui_main_beta"
+    },
+    {
+      "zh": "已启用 · $url",
+      "en": "Enabled · %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:181: \"已启用 · $url\""
+      ],
+      "key": "ui_main_enabled"
+    },
+    {
+      "zh": "内测版更新",
+      "en": "Beta updates",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:189: title = \"内测版更新\","
+      ],
+      "key": "ui_main_beta_updates"
+    },
+    {
+      "zh": "下载密钥",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AboutFragment.kt:190: labels = listOf(\"下载密钥\", \"下载地址\"),"
+      ]
+    },
+    {
+      "zh": "下载地址",
+      "en": "Download URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:190: labels = listOf(\"下载密钥\", \"下载地址\"),"
+      ],
+      "key": "ui_main_download_url"
+    },
+    {
+      "zh": "启用内测版更新",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AboutFragment.kt:196: checkboxLabels = listOf(\"启用内测版更新\"),"
+      ]
+    },
+    {
+      "zh": "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
+      "en": "When enabled, update checks compare the stable and beta builds. If the stable build is newer it is offered; otherwise the beta build is offered when no newer stable build exists.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:198: message = \"启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。\","
+      ],
+      "key": "ui_main_when_enabled_update_checks_compare"
+    },
+    {
+      "zh": "未设置备份目录",
+      "en": "Backup directory not set",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:262: appCtx.toastOnUi(\"未设置备份目录\")",
+        "AboutFragment.kt:281: appCtx.toastOnUi(\"未设置备份目录\")"
+      ],
+      "key": "ui_main_backup_directory_not_set"
+    },
+    {
+      "zh": "未开启日志记录，请去其他设置里打开记录日志",
+      "en": "Logging is disabled. Enable it under Other settings.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:266: appCtx.toastOnUi(\"未开启日志记录，请去其他设置里打开记录日志\")"
+      ],
+      "key": "ui_main_logging_disabled_enable_it_under"
+    },
+    {
+      "zh": "已保存至备份目录",
+      "en": "Saved to backup directory",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:272: appCtx.toastOnUi(\"已保存至备份目录\")",
+        "AboutFragment.kt:295: appCtx.toastOnUi(\"已保存至备份目录\")"
+      ],
+      "key": "ui_main_saved_backup_directory"
+    },
+    {
+      "zh": "保存日志出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AboutFragment.kt:274: AppLog.put(\"保存日志出错\\n${it.localizedMessage}\", it, true)"
+      ]
+    },
+    {
+      "zh": "未开启堆转储记录，请去其他设置里打开记录堆转储",
+      "en": "Heap dump recording is disabled. Enable it under Other settings.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:285: appCtx.toastOnUi(\"未开启堆转储记录，请去其他设置里打开记录堆转储\")"
+      ],
+      "key": "ui_main_heap_dump_recording_disabled_enable"
+    },
+    {
+      "zh": "开始创建堆转储",
+      "en": "Creating heap dump",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:288: appCtx.toastOnUi(\"开始创建堆转储\")"
+      ],
+      "key": "ui_main_creating_heap_dump"
+    },
+    {
+      "zh": "未找到堆转储文件",
+      "en": "No heap dump file found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AboutFragment.kt:293: appCtx.toastOnUi(\"未找到堆转储文件\")"
+      ],
+      "key": "ui_main_no_heap_dump_file_found"
+    },
+    {
+      "zh": "保存堆转储失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AboutFragment.kt:298: AppLog.put(\"保存堆转储失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "没有数据",
+      "en": "No data",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "UpdateDialog.kt:89: toastOnUi(\"没有数据\")"
+      ],
+      "key": "ui_main_no_data"
+    },
+    {
+      "zh": "订阅文章界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "RssFavoritesFragment.kt:70: AppLog.put(\"订阅文章界面获取数据失败\\n${it.localizedMessage}\", it)",
+        "RssArticlesFragment.kt:222: AppLog.put(\"订阅文章界面获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "订阅分组数据获取失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RssFavoritesActivity.kt:118: AppLog.put(\"订阅分组数据获取失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "url跳转拦截(js, 返回true拦截,js变量url,可以通过js打开url,比如调用阅读搜索,添加书架等,简化规则写法,不用webView js注入)",
+      "en": "URL redirect interception (JS; return true to intercept. The url variable can open a URL, e.g. trigger a book search or add to bookshelf, simplifying rules without WebView JS injection)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:397: \"url跳转拦截(js, 返回true拦截,js变量url,可以通过js打开url,比如调用阅读搜索,添加书架等,简化规则写法,不用webView js注入)\""
+      ],
+      "key": "ui_main_url_redirect_interception_js_return"
+    },
+    {
+      "zh": "源变量可在js中通过source.getVariable()获取",
+      "en": "Source variables can be read in JS via source.getVariable()",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:489: source.getDisplayVariableComment(\"源变量可在js中通过source.getVariable()获取\")",
+        "RssSortActivity.kt:491: source.getDisplayVariableComment(\"源变量可在js中通过source.getVariable()获取\")"
+      ],
+      "key": "ui_main_source_variables_can_be_read"
+    },
+    {
+      "zh": "插入URL参数",
+      "en": "Insert URL parameter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:509: SelectItem(\"插入URL参数\", \"urlOption\"),"
+      ],
+      "key": "ui_main_insert_url_parameter"
+    },
+    {
+      "zh": "订阅源教程",
+      "en": "Subscription source guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:510: SelectItem(\"订阅源教程\", \"ruleHelp\"),"
+      ],
+      "key": "ui_main_subscription_source_guide"
+    },
+    {
+      "zh": "js教程",
+      "en": "JS guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:511: SelectItem(\"js教程\", \"jsHelp\"),"
+      ],
+      "key": "ui_main_js_guide"
+    },
+    {
+      "zh": "正则教程",
+      "en": "Regex guide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceEditActivity.kt:512: SelectItem(\"正则教程\", \"regexHelp\"),"
+      ],
+      "key": "ui_main_regex_guide"
+    },
+    {
+      "zh": "校验成功|校验失败",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "RssSourceActivity.kt:91: private val finalMessageRegex = Regex(\"校验成功|校验失败\")",
+        "RssSourceScreen.kt:203: private val FINAL_DEBUG_MESSAGE_REGEX = Regex(\"校验成功|校验失败\")"
+      ]
+    },
+    {
+      "zh": "校验失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RssSourceActivity.kt:521: Debug.updateFinalMessage(source.sourceUrl, \"校验失败\")"
+      ]
+    },
+    {
+      "zh": "订阅源管理界面更新数据出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RssSourceActivity.kt:671: AppLog.put(\"订阅源管理界面更新数据出错\", it)"
+      ]
+    },
+    {
+      "zh": "订阅源不存在",
+      "en": "Subscription source not found",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "RssSourceDebugModel.kt:35: Debug.startDebug(this, rssSource ?: throw NoStackTraceException(\"订阅源不存在\"), key)",
+        "ReadRssViewModel.kt:171: appCtx.toastOnUi(\"订阅源不存在\")"
+      ],
+      "key": "ui_main_subscription_source_not_found"
+    },
+    {
+      "zh": "获取发现出错\\n${it.second}",
+      "en": "Failed to load Discover\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceDebugActivity.kt:138: adapter.addItem(\"获取发现出错\\n${it.second}\")"
+      ],
+      "key": "ui_main_failed_load_discover_n"
+    },
+    {
+      "zh": "未获取到书源",
+      "en": "No source obtained",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceDebugActivity.kt:172: toastOnUi(\"未获取到书源\")"
+      ],
+      "key": "ui_main_no_source_obtained"
+    },
+    {
+      "zh": "正文为空",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRss.kt:88: throw ContentEmptyException(\"正文为空\")"
+      ]
+    },
+    {
+      "zh": "加载为链接的正文失败",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "ReadRss.kt:95: AppLog.put(\"加载为链接的正文失败\", it, true)",
+        "ReadRss.kt:118: AppLog.put(\"加载为链接的正文失败\", it, true)"
+      ]
+    },
+    {
+      "zh": "黑名单规则正则语法错误 源名称:${source.sourceName} 正则:$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRssActivity.kt:748: AppLog.put(\"黑名单规则正则语法错误 源名称:${source.sourceName} 正则:$it\", e)"
+      ]
+    },
+    {
+      "zh": "白名单规则正则语法错误 源名称:${source.sourceName} 正则:$it",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRssActivity.kt:760: val msg = \"白名单规则正则语法错误 源名称:${source.sourceName} 正则:$it\""
+      ]
+    },
+    {
+      "zh": "${source.getTag()}: url跳转拦截js出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRssActivity.kt:855: AppLog.put(\"${source.getTag()}: url跳转拦截js出错\", it)"
+      ]
+    },
+    {
+      "zh": "${source.getTag()}: url跳转拦截js执行耗时过长",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRssActivity.kt:858: AppLog.put(\"${source.getTag()}: url跳转拦截js执行耗时过长\")"
+      ]
+    },
+    {
+      "zh": "正文加载失败，已回退网页",
+      "en": "Failed to load content; fell back to the web page",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadRssViewModel.kt:148: context.toastOnUi(\"正文加载失败，已回退网页\")"
+      ],
+      "key": "ui_main_failed_load_content_fell_back"
+    },
+    {
+      "zh": "保存图片失败:${it.localizedMessage}",
+      "en": "Failed to save image: %1$s",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadRssViewModel.kt:267: context.toastOnUi(\"保存图片失败:${it.localizedMessage}\")",
+        "BottomWebViewDialog.kt:1652: context.toastOnUi(\"保存图片失败:${it.localizedMessage}\")"
+      ],
+      "key": "ui_main_failed_save_image"
+    },
+    {
+      "zh": "图片数据格式错误",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadRssViewModel.kt:282: throw NoStackTraceException(\"图片数据格式错误\")"
+      ]
+    },
+    {
+      "zh": "已在登录界面",
+      "en": "Already on the login screen",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssJsExtensions.kt:108: activity.toastOnUi(\"已在登录界面\")"
+      ],
+      "key": "ui_main_already_login_screen"
+    },
+    {
+      "zh": "源未配置登录",
+      "en": "Source has no login configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssJsExtensions.kt:115: activity.toastOnUi(\"源未配置登录\")"
+      ],
+      "key": "ui_main_source_has_no_login_configured"
+    },
+    {
+      "zh": "规则订阅界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RuleSubActivity.kt:121: AppLog.put(\"规则订阅界面获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "rss获取内容失败",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "RssArticlesViewModel.kt:68: AppLog.put(\"rss获取内容失败\", it)",
+        "RssArticlesViewModel.kt:96: AppLog.put(\"rss获取内容失败\", it)"
+      ]
+    },
+    {
+      "zh": "源不存在",
+      "en": "Source not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSortActivity.kt:487: toastOnUi(\"源不存在\")"
+      ],
+      "key": "ui_main_source_not_found"
+    },
+    {
+      "zh": "已有",
+      "en": "Added",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "ImportHttpTtsDialog.kt:200: else -> \"已有\"",
+        "ImportThemeDialog.kt:198: else -> \"已有\"",
+        "ImportBookSourceDialog.kt:405: else -> \"已有\""
+      ],
+      "key": "ui_main_added"
+    },
+    {
+      "zh": "正在请求跳转链接/应用，是否跳转？",
+      "en": "A redirect link or app was requested. Open it?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "OpenUrlConfirmDialog.kt:72: binding.message.text = \"正在请求跳转链接/应用，是否跳转？\""
+      ],
+      "key": "ui_main_redirect_link_or_app_was"
+    },
+    {
+      "zh": "打开链接失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "OpenUrlConfirmDialog.kt:102: AppLog.put(\"打开链接失败\", e, true)"
+      ]
+    },
+    {
+      "zh": "重新检查书源冲突失败：$conflictRefreshError",
+      "en": "Failed to recheck source conflicts: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookSourceDialog.kt:323: text = \"重新检查书源冲突失败：$conflictRefreshError\","
+      ],
+      "key": "ui_main_failed_recheck_source_conflicts"
+    },
+    {
+      "zh": "导入失败：$detail",
+      "en": "Import failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportBookSourceDialog.kt:466: importErrorMsg = \"导入失败：$detail\""
+      ],
+      "key": "ui_main_import_failed"
+    },
+    {
+      "zh": "url不能为空",
+      "en": "URL cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AddToBookshelfDialog.kt:66: toastOnUi(\"url不能为空\")"
+      ],
+      "key": "ui_main_url_cannot_be_empty"
+    },
+    {
+      "zh": "${it.name} 已在书架",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AddToBookshelfDialog.kt:71: AppLog.put(\"${it.name} 已在书架\", null, true)"
+      ]
+    },
+    {
+      "zh": "书籍地址格式不对",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AddToBookshelfDialog.kt:110: ?: throw NoStackTraceException(\"书籍地址格式不对\")"
+      ]
+    },
+    {
+      "zh": "未找到匹配书源",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AddToBookshelfDialog.kt:141: throw NoStackTraceException(\"未找到匹配书源\")"
+      ]
+    },
+    {
+      "zh": "添加书籍 $bookUrl 出错",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AddToBookshelfDialog.kt:143: AppLog.put(\"添加书籍 $bookUrl 出错\", it)"
+      ]
+    },
+    {
+      "zh": "导入排版成功",
+      "en": "Layout imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "OnLineImportViewModel.kt:69: finally.invoke(context.getString(R.string.success), \"导入排版成功\")"
+      ],
+      "key": "ui_main_layout_imported"
+    },
+    {
+      "zh": "不是书源",
+      "en": "",
+      "count": 4,
+      "risk": 4,
+      "samples": [
+        "ImportBookSourceViewModel.kt:249: throw NoStackTraceException(\"不是书源\")",
+        "ImportBookSourceViewModel.kt:260: throw NoStackTraceException(\"不是书源\")",
+        "ImportBookSourceViewModel.kt:275: throw NoStackTraceException(\"不是书源\")"
+      ]
+    },
+    {
+      "zh": "无法打开文件\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "FileAssociationViewModel.kt:60: val msg = \"无法打开文件\\n${it.localizedMessage}\""
+      ]
+    },
+    {
+      "zh": "尝试导入为JSON文件失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "FileAssociationViewModel.kt:78: AppLog.put(\"尝试导入为JSON文件失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导入订阅源失败: $url",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportRssSourceViewModel.kt:138: .onFailure { AppLog.put(\"导入订阅源失败: $url\", it) }"
+      ]
+    },
+    {
+      "zh": "不是订阅源",
+      "en": "",
+      "count": 3,
+      "risk": 3,
+      "samples": [
+        "ImportRssSourceViewModel.kt:145: throw NoStackTraceException(\"不是订阅源\")",
+        "ImportRssSourceViewModel.kt:156: throw NoStackTraceException(\"不是订阅源\")",
+        "ImportRssSourceViewModel.kt:191: throw NoStackTraceException(\"不是订阅源\")"
+      ]
+    },
+    {
+      "zh": "请求存储权限失败。",
+      "en": "Failed to request storage permission.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "FileAssociationActivity.kt:142: toastOnUi(\"请求存储权限失败。\")"
+      ],
+      "key": "ui_main_failed_request_storage_permission"
+    },
+    {
+      "zh": "导入气泡失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "FileAssociationActivity.kt:177: val msg = \"导入气泡失败\\n${it.localizedMessage}\""
+      ]
+    },
+    {
+      "zh": "请重新设置书籍保存位置\\nPermission Denial",
+      "en": "Please set the book storage location again\\nPermission Denial",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "FileAssociationActivity.kt:227: \"请重新设置书籍保存位置\\nPermission Denial\"",
+        "FileAssociationActivity.kt:237: \"请重新设置书籍保存位置\\nPermission Denial\"",
+        "FileAssociationActivity.kt:251: \"请重新设置书籍保存位置\\nPermission Denial\""
+      ],
+      "key": "ui_main_please_set_book_storage_location"
+    },
+    {
+      "zh": "导入书籍失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "FileAssociationActivity.kt:275: val msg = \"导入书籍失败\\n${it.localizedMessage}\""
+      ]
+    },
+    {
+      "zh": "已在书架",
+      "en": "Already on bookshelf",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SearchBookListItem.kt:152: text = \"已在书架\","
+      ],
+      "key": "ui_main_already_bookshelf"
+    },
+    {
+      "zh": "显示对话框失败 tag:$tag",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BottomWebViewDialog.kt:489: AppLog.put(\"显示对话框失败 tag:$tag\", it)"
+      ]
+    },
+    {
+      "zh": "段评首屏加载失败：${content.title} / ${error.javaClass.simpleName}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BottomWebViewDialog.kt:1091: AppLog.put(\"段评首屏加载失败：${content.title} / ${error.javaClass.simpleName}\")"
+      ]
+    },
+    {
+      "zh": "${ReviewOutboxStore.LogTag} 接管脚本已注入 ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:1322: \"${ReviewOutboxStore.LogTag} 接管脚本已注入 \" +"
+      ]
+    },
+    {
+      "zh": "} 书=${context.bookName} 章=${context.chapterTitle}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:1323: \"url=${url ?: \"\"} 书=${context.bookName} 章=${context.chapterTitle}\""
+      ]
+    },
+    {
+      "zh": "[评论快照] 章评/书评补充注入：${result ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:1406: \"[评论快照] 章评/书评补充注入：${result ?: \"null\"} \" +"
+      ]
+    },
+    {
+      "zh": "书=${context.bookName} 章=${context.chapterTitle}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:1407: \"书=${context.bookName} 章=${context.chapterTitle}\""
+      ]
+    },
+    {
+      "zh": "评论快照资源引用缺少书籍上下文: $url",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:2124: \"评论快照资源引用缺少书籍上下文: $url\""
+      ]
+    },
+    {
+      "zh": "评论快照资源不存在: $url",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BottomWebViewDialog.kt:2127: \"评论快照资源不存在: $url\""
+      ]
+    },
+    {
+      "zh": "\\n\\n数据太大，无法全部显示…",
+      "en": "\\n\\nData too large to display in full…",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TextDialog.kt:240: content.take(32 * 1024) + \"\\n\\n数据太大，无法全部显示…\""
+      ],
+      "key": "ui_main_n_ndata_too_large_display"
+    },
+    {
+      "zh": "点击查看详情",
+      "en": "Tap to view details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "LoadMoreView.kt:80: text.ifEmpty { context.getString(R.string.error_load_msg, \"点击查看详情\") }"
+      ],
+      "key": "ui_main_tap_view_details"
+    },
+    {
+      "zh": "辅助按键配置获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "KeyboardAssistsConfig.kt:101: AppLog.put(\"辅助按键配置获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "辅助按键",
+      "en": "Auxiliary keys",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "KeyboardAssistsConfig.kt:117: setTitle(\"辅助按键\")"
+      ],
+      "key": "ui_main_auxiliary_keys"
+    },
+    {
+      "zh": "键盘帮助浮窗获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "KeyboardToolPop.kt:154: AppLog.put(\"键盘帮助浮窗获取数据失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "构建 ${page.configTag} 的搜索索引失败: $e",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SettingsSearchIndex.kt:93: LogUtils.e(\"SettingsSearchIndex\", \"构建 ${page.configTag} 的搜索索引失败: $e\")"
+      ]
+    },
+    {
+      "zh": "首页",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ThemeConfigFragment.kt:85: searchKeys = listOf(\"首页\", \"homepage\", \"底部导航\", \"底部导航栏\")"
+      ]
+    },
+    {
+      "zh": "底部导航",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ThemeConfigFragment.kt:85: searchKeys = listOf(\"首页\", \"homepage\", \"底部导航\", \"底部导航栏\")",
+        "ThemeConfigFragment.kt:96: searchKeys = listOf(\"统计\", \"stats\", \"底部导航\", \"底部导航栏\")"
+      ]
+    },
+    {
+      "zh": "底部导航栏",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ThemeConfigFragment.kt:85: searchKeys = listOf(\"首页\", \"homepage\", \"底部导航\", \"底部导航栏\")",
+        "ThemeConfigFragment.kt:96: searchKeys = listOf(\"统计\", \"stats\", \"底部导航\", \"底部导航栏\")"
+      ]
+    },
+    {
+      "zh": "统计",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ThemeConfigFragment.kt:96: searchKeys = listOf(\"统计\", \"stats\", \"底部导航\", \"底部导航栏\")"
+      ]
+    },
+    {
+      "zh": "复制失败：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:112: toastOnUi(\"复制失败：${it.localizedMessage ?: \"规则格式不正确\"}\")"
+      ]
+    },
+    {
+      "zh": "格式不对：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:128: toastOnUi(\"格式不对：${it.localizedMessage ?: \"规则校验失败\"}\")"
+      ]
+    },
+    {
+      "zh": "保存失败：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:139: toastOnUi(\"保存失败：${it.localizedMessage ?: \"规则校验失败\"}\")"
+      ]
+    },
+    {
+      "zh": "${worldBooks.count { it.enabled }}/${worldBooks.size} 启用 · ${worldBooks.sumOf { it.entries.size }} 条目",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:204: \"${worldBooks.count { it.enabled }}/${worldBooks.size} 启用 · ${worldBooks.sumOf { it.entries.size }} 条目\""
+      ]
+    },
+    {
+      "zh": "问AI ${modelLabel(AppConfig.aiAskModelConfig)} / 总结 ${modelLabel(AppConfig.aiSummaryModelConfig)} / 多角色 ${modelLabel(AppConfig.aiReadAloudRoleModelConfig)} / 生图 ${imageProviderLabel()}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:213: summary = \"问AI ${modelLabel(AppConfig.aiAskModelConfig)} / 总结 ${modelLabel(AppConfig.aiSummaryModelConfig)} / 多角色 ${mode"
+      ]
+    },
+    {
+      "zh": "漫画",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:47: searchKeys = listOf(\"漫画\", \"漫画浏览\", \"漫画界面\")"
+      ]
+    },
+    {
+      "zh": "漫画浏览",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:47: searchKeys = listOf(\"漫画\", \"漫画浏览\", \"漫画界面\")"
+      ]
+    },
+    {
+      "zh": "漫画界面",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:47: searchKeys = listOf(\"漫画\", \"漫画浏览\", \"漫画界面\")"
+      ]
+    },
+    {
+      "zh": "漫画预下载",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:56: searchKeys = listOf(\"漫画预下载\", \"预载\"),"
+      ]
+    },
+    {
+      "zh": "预载",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:56: searchKeys = listOf(\"漫画预下载\", \"预载\"),"
+      ]
+    },
+    {
+      "zh": "漫画标题",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:64: searchKeys = listOf(\"漫画标题\", \"标题栏\")"
+      ]
+    },
+    {
+      "zh": "标题栏",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:64: searchKeys = listOf(\"漫画标题\", \"标题栏\")"
+      ]
+    },
+    {
+      "zh": "页脚",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:85: searchKeys = listOf(\"页脚\", \"章节名\", \"页码\", \"进度\", \"页脚对齐\"),"
+      ]
+    },
+    {
+      "zh": "章节名",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:85: searchKeys = listOf(\"页脚\", \"章节名\", \"页码\", \"进度\", \"页脚对齐\"),"
+      ]
+    },
+    {
+      "zh": "页码",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:85: searchKeys = listOf(\"页脚\", \"章节名\", \"页码\", \"进度\", \"页脚对齐\"),"
+      ]
+    },
+    {
+      "zh": "进度",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:85: searchKeys = listOf(\"页脚\", \"章节名\", \"页码\", \"进度\", \"页脚对齐\"),"
+      ]
+    },
+    {
+      "zh": "页脚对齐",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:85: searchKeys = listOf(\"页脚\", \"章节名\", \"页码\", \"进度\", \"页脚对齐\"),"
+      ]
+    },
+    {
+      "zh": "滤镜",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "亮度",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "对比度",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "红",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "绿",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "蓝",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "透明度",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:92: searchKeys = listOf(\"滤镜\", \"亮度\", \"对比度\", \"红\", \"绿\", \"蓝\", \"透明度\"),"
+      ]
+    },
+    {
+      "zh": "边播边缓存",
+      "en": "Cache while playing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:106: \"边播边缓存\", appCtx.getString(R.string.skip_book_credits), \"播放器\""
+      ],
+      "key": "ui_main_cache_while_playing"
+    },
+    {
+      "zh": "播放器",
+      "en": "Player",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:106: \"边播边缓存\", appCtx.getString(R.string.skip_book_credits), \"播放器\""
+      ],
+      "key": "ui_main_player"
+    },
+    {
+      "zh": "墨水屏",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:122: searchKeys = listOf(\"墨水屏\", \"墨纸\", \"e-ink\"),"
+      ]
+    },
+    {
+      "zh": "墨纸",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:122: searchKeys = listOf(\"墨水屏\", \"墨纸\", \"e-ink\"),"
+      ]
+    },
+    {
+      "zh": "灰度",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "MangaVideoConfigFragment.kt:136: searchKeys = listOf(\"灰度\", \"黑白\", \"灰色\"),"
+      ]
+    },
+    {
+      "zh": "黑白",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:136: searchKeys = listOf(\"灰度\", \"黑白\", \"灰色\"),"
+      ]
+    },
+    {
+      "zh": "灰色",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MangaVideoConfigFragment.kt:136: searchKeys = listOf(\"灰度\", \"黑白\", \"灰色\"),"
+      ]
+    },
+    {
+      "zh": "正文加载",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:126: searchKeys = listOf(\"EPUB\", \"正文加载\", \"加载模板\", \"加载画面\"),"
+      ]
+    },
+    {
+      "zh": "加载模板",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:126: searchKeys = listOf(\"EPUB\", \"正文加载\", \"加载模板\", \"加载画面\"),"
+      ]
+    },
+    {
+      "zh": "加载画面",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:126: searchKeys = listOf(\"EPUB\", \"正文加载\", \"加载模板\", \"加载画面\"),"
+      ]
+    },
+    {
+      "zh": "分享模板",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadingConfigFragment.kt:134: searchKeys = listOf(\"分享模板\", \"摘录模板\", \"笔记模板\", \"正文分享\"),"
+      ]
+    },
+    {
+      "zh": "摘录模板",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:134: searchKeys = listOf(\"分享模板\", \"摘录模板\", \"笔记模板\", \"正文分享\"),"
+      ]
+    },
+    {
+      "zh": "笔记模板",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:134: searchKeys = listOf(\"分享模板\", \"摘录模板\", \"笔记模板\", \"正文分享\"),"
+      ]
+    },
+    {
+      "zh": "正文分享",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadingConfigFragment.kt:134: searchKeys = listOf(\"分享模板\", \"摘录模板\", \"笔记模板\", \"正文分享\"),"
+      ]
+    },
+    {
+      "zh": "模板文件过大",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateManageActivity.kt:63: require(output.size() + read <= limit) { \"模板文件过大\" }"
+      ]
+    },
+    {
+      "zh": "web服务",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NetworkConfigFragment.kt:74: searchKeys = listOf(\"web服务\", \"网页服务\", \"局域网\", \"web service\"),"
+      ]
+    },
+    {
+      "zh": "网页服务",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "NetworkConfigFragment.kt:74: searchKeys = listOf(\"web服务\", \"网页服务\", \"局域网\", \"web service\"),"
+      ]
+    },
+    {
+      "zh": "局域网",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "NetworkConfigFragment.kt:74: searchKeys = listOf(\"web服务\", \"网页服务\", \"局域网\", \"web service\"),"
+      ]
+    },
+    {
+      "zh": "复制地址",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NetworkConfigFragment.kt:82: searchKeys = listOf(\"复制地址\", \"web服务地址\"),"
+      ]
+    },
+    {
+      "zh": "web服务地址",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "NetworkConfigFragment.kt:82: searchKeys = listOf(\"复制地址\", \"web服务地址\"),",
+        "NetworkConfigFragment.kt:90: searchKeys = listOf(\"浏览器打开\", \"web服务地址\"),"
+      ]
+    },
+    {
+      "zh": "浏览器打开",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NetworkConfigFragment.kt:90: searchKeys = listOf(\"浏览器打开\", \"web服务地址\"),"
+      ]
+    },
+    {
+      "zh": "AI 朗读",
+      "en": "AI read aloud",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:54: appCtx.getString(R.string.ra_group_multi_role), \"AI 朗读\", appCtx.getString(R.string.ra_cfg_background_score), appCtx.getS"
+      ],
+      "key": "ui_main_ai_read_aloud"
+    },
+    {
+      "zh": "提示词",
+      "en": "Prompt",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:54: appCtx.getString(R.string.ra_group_multi_role), \"AI 朗读\", appCtx.getString(R.string.ra_cfg_background_score), appCtx.getS"
+      ],
+      "key": "ui_main_prompt"
+    },
+    {
+      "zh": "预处理",
+      "en": "Preprocessing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:55: appCtx.getString(R.string.ra_cfg_speaker), \"预处理\", \"朗读配置\""
+      ],
+      "key": "ui_main_preprocessing"
+    },
+    {
+      "zh": "朗读配置",
+      "en": "Read-aloud config",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:55: appCtx.getString(R.string.ra_cfg_speaker), \"预处理\", \"朗读配置\""
+      ],
+      "key": "ui_main_read_aloud_config"
+    },
+    {
+      "zh": "唤醒锁",
+      "en": "Wake lock",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:64: searchKeys = listOf(\"唤醒锁\", \"后台朗读\")",
+        "AudioConfigFragment.kt:161: appCtx.getString(R.string.skip_book_credits), \"唤醒锁\""
+      ],
+      "key": "ui_main_wake_lock"
+    },
+    {
+      "zh": "后台朗读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:64: searchKeys = listOf(\"唤醒锁\", \"后台朗读\")"
+      ]
+    },
+    {
+      "zh": "音频焦点",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:71: searchKeys = listOf(\"音频焦点\", \"打断\", \"混音\")"
+      ]
+    },
+    {
+      "zh": "打断",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:71: searchKeys = listOf(\"音频焦点\", \"打断\", \"混音\")"
+      ]
+    },
+    {
+      "zh": "混音",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:71: searchKeys = listOf(\"音频焦点\", \"打断\", \"混音\")"
+      ]
+    },
+    {
+      "zh": "来电",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:81: searchKeys = listOf(\"来电\", \"通话\", \"暂停朗读\")"
+      ]
+    },
+    {
+      "zh": "通话",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:81: searchKeys = listOf(\"来电\", \"通话\", \"暂停朗读\")"
+      ]
+    },
+    {
+      "zh": "暂停朗读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:81: searchKeys = listOf(\"来电\", \"通话\", \"暂停朗读\")"
+      ]
+    },
+    {
+      "zh": "按页朗读",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:89: searchKeys = listOf(\"按页朗读\", \"翻页朗读\")"
+      ]
+    },
+    {
+      "zh": "翻页朗读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:89: searchKeys = listOf(\"按页朗读\", \"翻页朗读\")"
+      ]
+    },
+    {
+      "zh": "流式",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:96: searchKeys = listOf(\"流式\", \"边合成边播\")"
+      ]
+    },
+    {
+      "zh": "边合成边播",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:96: searchKeys = listOf(\"流式\", \"边合成边播\")"
+      ]
+    },
+    {
+      "zh": "语速",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:103: searchKeys = listOf(\"语速\", \"系统语速\")"
+      ]
+    },
+    {
+      "zh": "系统语速",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:103: searchKeys = listOf(\"语速\", \"系统语速\")"
+      ]
+    },
+    {
+      "zh": "语音引擎",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:119: searchKeys = listOf(\"TTS\", \"语音引擎\", \"HTTP TTS\", \"系统语音\"),"
+      ]
+    },
+    {
+      "zh": "系统语音",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:119: searchKeys = listOf(\"TTS\", \"语音引擎\", \"HTTP TTS\", \"系统语音\"),"
+      ]
+    },
+    {
+      "zh": "媒体键",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AudioConfigFragment.kt:135: searchKeys = listOf(\"媒体键\", \"耳机按键\", \"上一首\", \"下一首\")",
+        "AudioConfigFragment.kt:149: searchKeys = listOf(\"媒体键\", \"退出后响应\")"
+      ]
+    },
+    {
+      "zh": "耳机按键",
+      "en": "",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:135: searchKeys = listOf(\"媒体键\", \"耳机按键\", \"上一首\", \"下一首\")",
+        "AudioConfigFragment.kt:142: searchKeys = listOf(\"耳机按键\", \"启动朗读\")"
+      ]
+    },
+    {
+      "zh": "上一首",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:135: searchKeys = listOf(\"媒体键\", \"耳机按键\", \"上一首\", \"下一首\")"
+      ]
+    },
+    {
+      "zh": "下一首",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:135: searchKeys = listOf(\"媒体键\", \"耳机按键\", \"上一首\", \"下一首\")"
+      ]
+    },
+    {
+      "zh": "启动朗读",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:142: searchKeys = listOf(\"耳机按键\", \"启动朗读\")"
+      ]
+    },
+    {
+      "zh": "退出后响应",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:149: searchKeys = listOf(\"媒体键\", \"退出后响应\")"
+      ]
+    },
+    {
+      "zh": "音频播放器",
+      "en": "Audio player",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:160: \"音频播放器\", appCtx.getString(R.string.play_mode), \"播放速度\", \"倍速\","
+      ],
+      "key": "ui_main_audio_player"
+    },
+    {
+      "zh": "播放速度",
+      "en": "Playback speed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:160: \"音频播放器\", appCtx.getString(R.string.play_mode), \"播放速度\", \"倍速\","
+      ],
+      "key": "ui_main_playback_speed"
+    },
+    {
+      "zh": "倍速",
+      "en": "Speed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:160: \"音频播放器\", appCtx.getString(R.string.play_mode), \"播放速度\", \"倍速\","
+      ],
+      "key": "ui_main_speed"
+    },
+    {
+      "zh": "悬浮球",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AudioConfigFragment.kt:180: searchKeys = listOf(\"悬浮球\", \"悬浮窗\", \"听书悬浮\"),"
+      ]
+    },
+    {
+      "zh": "悬浮窗",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:180: searchKeys = listOf(\"悬浮球\", \"悬浮窗\", \"听书悬浮\"),"
+      ]
+    },
+    {
+      "zh": "听书悬浮",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AudioConfigFragment.kt:180: searchKeys = listOf(\"悬浮球\", \"悬浮窗\", \"听书悬浮\"),"
+      ]
+    },
+    {
+      "zh": "斗破苍穹",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CoverHtmlActivity.kt:212: HtmlCoverRenderer.load(\"斗破苍穹\", \"天蚕土豆\")"
+      ]
+    },
+    {
+      "zh": "天蚕土豆",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CoverHtmlActivity.kt:212: HtmlCoverRenderer.load(\"斗破苍穹\", \"天蚕土豆\")"
+      ]
+    }
+  ]
+}

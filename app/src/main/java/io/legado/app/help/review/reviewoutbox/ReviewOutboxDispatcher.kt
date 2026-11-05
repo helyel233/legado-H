@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 离线评论发送调度器：唯一发送入口（菜单"发送离线评论"手动触发）。
@@ -134,7 +136,7 @@ object ReviewOutboxDispatcher {
         val reviewPageUrl = item.reviewPageUrl
         val buttonSrc = item.buttonSrc
         if (buttonSrc.isNullOrBlank()) {
-            requireNotNull(reviewPageUrl) { "缺少评论页地址，无法发送" }
+            requireNotNull(reviewPageUrl) { appCtx.getString(R.string.misc_review_page_url_missing_cannot) }
             return Triple(reviewPageUrl, null, null)
         }
         val book = appDb.bookDao.getBook(item.bookUrl)

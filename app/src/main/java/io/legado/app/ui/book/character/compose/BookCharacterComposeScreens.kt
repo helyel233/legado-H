@@ -107,6 +107,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import splitties.init.appCtx
 
 @Immutable
 data class CharacterColors(
@@ -227,7 +228,7 @@ fun BookCharacter.summaryText(): String = listOf(
     .map { it.trim() }
     .filter { it.isNotBlank() }
     .joinToString(" · ")
-    .ifBlank { "点击查看角色卡片" }
+    .ifBlank { appCtx.getString(R.string.bchar_tap_view_character_card) }
 
 @Composable
 fun CharacterScaffold(
@@ -251,7 +252,7 @@ fun CharacterScaffold(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBack) {
-                Text("返回", color = style.colors.text)
+                Text(appCtx.getString(R.string.text_return), color = style.colors.text)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -300,11 +301,11 @@ fun CharacterManageScreen(
     val selectedSection = roleSections.firstOrNull { it.roleLevel == selectedRoleLevel }
         ?: roleSections.first()
     CharacterScaffold(
-        title = "角色资料",
+        title = appCtx.getString(R.string.bchar_character_profile),
         subtitle = bookName,
         onBack = onBack,
         actions = {
-            TextButton(onClick = onOpenRelations) { Text("关系网", color = style.colors.accent) }
+            TextButton(onClick = onOpenRelations) { Text(appCtx.getString(R.string.bchar_relationship_graph), color = style.colors.accent) }
         }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -320,12 +321,12 @@ fun CharacterManageScreen(
                     )
                 }
                 if (characters.isEmpty()) {
-                    item { EmptyCharacterCard("还没有角色，先添加主角或重要角色。") }
+                    item { EmptyCharacterCard(appCtx.getString(R.string.bchar_no_characters_yet_add_protagonist)) }
                 } else if (selectedSection.items.isEmpty()) {
                     item(key = "section_${selectedSection.roleLevel}") {
                         CharacterRoleSectionHeader(selectedSection.title, 0)
                     }
-                    item { EmptyCharacterCard("这个分类还没有角色。") }
+                    item { EmptyCharacterCard(appCtx.getString(R.string.bchar_no_characters_this_category_yet)) }
                 } else {
                     item(key = "section_${selectedSection.roleLevel}") {
                         CharacterRoleSectionHeader(selectedSection.title, selectedSection.items.size)
@@ -360,17 +361,17 @@ private fun characterRoleSections(characters: List<BookCharacter>): List<Charact
     return listOf(
         CharacterRoleSection(
             BookCharacter.ROLE_MAIN,
-            "主角",
+            appCtx.getString(R.string.bchar_label_protagonist),
             characters.filter { it.roleLevel == BookCharacter.ROLE_MAIN }
         ),
         CharacterRoleSection(
             BookCharacter.ROLE_IMPORTANT,
-            "重要角色",
+            appCtx.getString(R.string.bchar_label_important_character),
             characters.filter { it.roleLevel == BookCharacter.ROLE_IMPORTANT }
         ),
         CharacterRoleSection(
             BookCharacter.ROLE_NORMAL,
-            "普通角色",
+            appCtx.getString(R.string.bchar_label_minor_character),
             characters.filter { it.roleLevel != BookCharacter.ROLE_MAIN && it.roleLevel != BookCharacter.ROLE_IMPORTANT }
         )
     )
@@ -450,7 +451,7 @@ private fun CharacterRoleSectionHeader(title: String, count: Int) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
         )
-        Text("$count 个", color = style.colors.subText, fontSize = 12.sp)
+        Text(appCtx.getString(R.string.bchar_text, count), color = style.colors.subText, fontSize = 12.sp)
     }
 }
 
@@ -469,9 +470,9 @@ private fun CharacterSummaryHeader(count: Int, onAdd: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("本书角色库", color = style.colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(appCtx.getString(R.string.bchar_characters_this_book), color = style.colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = if (count == 0) "角色卡会只绑定当前书籍" else "已记录 $count 个角色",
+                    text = if (count == 0) appCtx.getString(R.string.bchar_character_cards_bound_current_book) else appCtx.getString(R.string.bchar_characters_recorded, count),
                     color = style.colors.subText,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 4.dp)
@@ -481,7 +482,7 @@ private fun CharacterSummaryHeader(count: Int, onAdd: () -> Unit) {
                 onClick = onAdd,
                 colors = ButtonDefaults.buttonColors(containerColor = style.colors.accent)
             ) {
-                Text("添加")
+                Text(appCtx.getString(R.string.add))
             }
         }
     }
@@ -551,7 +552,7 @@ fun CharacterListCard(
             }
             var expanded by remember { mutableStateOf(false) }
             TextButton(onClick = { expanded = true }) {
-                Text("更多", color = style.colors.subText)
+                Text(appCtx.getString(R.string.more), color = style.colors.subText)
             }
             if (expanded) {
                 CharacterMoreDialog(
@@ -586,11 +587,11 @@ private fun CharacterMoreDialog(
         title = { Text(character.displayName(), color = style.colors.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                MoreActionRow("编辑角色", "修改头像、身份、技能和生平", onEdit)
-                MoreActionRow("删除角色", "同时删除与此角色相关的关系", onDelete, danger = true)
+                MoreActionRow(appCtx.getString(R.string.bchar_edit_character), appCtx.getString(R.string.bchar_change_avatar_identity_skills_biography), onEdit)
+                MoreActionRow(appCtx.getString(R.string.bchar_delete_character), appCtx.getString(R.string.bchar_also_delete_relations_linked_this), onDelete, danger = true)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭", color = style.colors.accent) } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(appCtx.getString(R.string.jf_convert_o), color = style.colors.accent) } }
     )
 }
 
@@ -626,17 +627,17 @@ fun CharacterCardScreen(
 ) {
     val style = rememberCharacterStyle()
     CharacterScaffold(
-        title = "角色卡片",
+        title = appCtx.getString(R.string.bchar_character_card),
         subtitle = character?.displayName().orEmpty(),
         onBack = onBack,
         actions = {
             TextButton(onClick = onEdit, enabled = character != null) {
-                Text("编辑", color = if (character == null) style.colors.subText else style.colors.accent)
+                Text(appCtx.getString(R.string.edit), color = if (character == null) style.colors.subText else style.colors.accent)
             }
         }
     ) {
         if (character == null) {
-            EmptyCharacterCard("角色不存在")
+            EmptyCharacterCard(appCtx.getString(R.string.bchar_character_not_found))
             return@CharacterScaffold
         }
         LazyColumn(
@@ -647,12 +648,12 @@ fun CharacterCardScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item { CharacterHeroCard(character, speechEngines, onSpeechRouteChange) }
-            item { CharacterSection("身份", character.identity) }
-            item { CharacterSection("技能", character.skills, minHeight = 112.dp) }
-            item { CharacterSection("属性", character.attributes, minHeight = 112.dp) }
-            item { CharacterSection("形象描述", character.appearance) }
-            item { CharacterSection("性格描述", character.personality) }
-            item { CharacterSection("角色生平", character.biography) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_identity), character.identity) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_skills), character.skills, minHeight = 112.dp) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_attributes), character.attributes, minHeight = 112.dp) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_appearance), character.appearance) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_personality), character.personality) }
+            item { CharacterSection(appCtx.getString(R.string.bchar_biography), character.biography) }
         }
     }
 }
@@ -718,8 +719,8 @@ private fun CharacterHeroCard(
                 }
             }
             val highlights = listOf(
-                "技能" to character.skills,
-                "属性" to BookCharacterProfileMeta.attributesWithoutAge(character.attributes)
+                appCtx.getString(R.string.bchar_skills) to character.skills,
+                appCtx.getString(R.string.bchar_attributes) to BookCharacterProfileMeta.attributesWithoutAge(character.attributes)
             ).filter { it.second.isNotBlank() }
             if (highlights.isNotEmpty()) {
                 Row(
@@ -783,9 +784,9 @@ private fun CharacterSpeechRouteQuickSwitch(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("角色配音", color = style.colors.subText, fontSize = 12.sp)
+                Text(appCtx.getString(R.string.bchar_character_voice), color = style.colors.subText, fontSize = 12.sp)
                 Text(
-                    text = speechRouteSummary(route, groups, defaultText = "使用默认朗读引擎"),
+                    text = speechRouteSummary(route, groups, defaultText = appCtx.getString(R.string.ra_cfg_use_default_read_aloud_engine)),
                     color = style.colors.text,
                     fontSize = 13.sp,
                     maxLines = 1,
@@ -793,12 +794,12 @@ private fun CharacterSpeechRouteQuickSwitch(
                     modifier = Modifier.padding(top = 3.dp)
                 )
             }
-            SmallAction("切换", { pickerVisible = true })
+            SmallAction(appCtx.getString(R.string.toggle_search_scope), { pickerVisible = true })
         }
     }
     if (pickerVisible) {
         SpeechVoiceRoutePickerDialog(
-            title = "角色配音",
+            title = appCtx.getString(R.string.bchar_character_voice),
             groups = groups,
             currentRoute = route,
             onDismiss = { pickerVisible = false },
@@ -847,7 +848,7 @@ private fun CharacterSection(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(label, color = style.colors.subText, fontSize = 13.sp)
             Text(
-                text = value.ifBlank { "未填写" },
+                text = value.ifBlank { appCtx.getString(R.string.bchar_not_set) },
                 color = style.colors.text,
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
@@ -876,7 +877,7 @@ fun CharacterEditScreen(
         title = title,
         onBack = onBack,
         actions = {
-            TextButton(onClick = onSave) { Text("保存", color = style.colors.accent) }
+            TextButton(onClick = onSave) { Text(appCtx.getString(R.string.action_save), color = style.colors.accent) }
         }
     ) {
         LazyColumn(
@@ -895,33 +896,33 @@ fun CharacterEditScreen(
                     ) {
                         CharacterAvatar(draft.avatar, draft.name, 82)
                         Column(modifier = Modifier.padding(start = 14.dp)) {
-                            Text("角色头像", color = style.colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Text(appCtx.getString(R.string.bchar_character_avatar), color = style.colors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             Row(
                                 modifier = Modifier
                                     .padding(top = 8.dp)
                                     .horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                SmallAction("本地", onPickLocalAvatar)
-                                SmallAction("在线", onPickOnlineAvatar)
-                                SmallAction("图库", onPickGalleryAvatar)
-                                SmallAction("生成", onRegenerateAvatar)
-                                SmallAction("清除", onClearAvatar, danger = true)
+                                SmallAction(appCtx.getString(R.string.local), onPickLocalAvatar)
+                                SmallAction(appCtx.getString(R.string.bchar_online), onPickOnlineAvatar)
+                                SmallAction(appCtx.getString(R.string.gallery), onPickGalleryAvatar)
+                                SmallAction(appCtx.getString(R.string.bchar_generate), onRegenerateAvatar)
+                                SmallAction(appCtx.getString(R.string.clear), onClearAvatar, danger = true)
                             }
                         }
                     }
                 }
             }
-            item { CharacterTextField("角色名称", draft.name, { onDraftChange(draft.copy(name = it)) }, singleLine = true) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_name), draft.name, { onDraftChange(draft.copy(name = it)) }, singleLine = true) }
             item { RoleSelector(draft.roleLevel) { onDraftChange(draft.copy(roleLevel = it)) } }
             item { GenderSelector(draft.gender) { onDraftChange(draft.copy(gender = it)) } }
-            item { CharacterTextField("角色年纪", draft.age, { onDraftChange(draft.copy(age = it)) }, singleLine = true) }
-            item { CharacterTextField("角色身份", draft.identity, { onDraftChange(draft.copy(identity = it)) }, singleLine = true) }
-            item { CharacterTextField("角色技能", draft.skills, { onDraftChange(draft.copy(skills = it)) }) }
-            item { CharacterTextField("角色属性", draft.attributes, { onDraftChange(draft.copy(attributes = it)) }) }
-            item { CharacterTextField("角色形象描述", draft.appearance, { onDraftChange(draft.copy(appearance = it)) }) }
-            item { CharacterTextField("角色性格描述", draft.personality, { onDraftChange(draft.copy(personality = it)) }) }
-            item { CharacterTextField("角色生平", draft.biography, { onDraftChange(draft.copy(biography = it)) }, minLines = 5) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_age), draft.age, { onDraftChange(draft.copy(age = it)) }, singleLine = true) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_identity), draft.identity, { onDraftChange(draft.copy(identity = it)) }, singleLine = true) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_skills), draft.skills, { onDraftChange(draft.copy(skills = it)) }) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_attributes), draft.attributes, { onDraftChange(draft.copy(attributes = it)) }) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_appearance), draft.appearance, { onDraftChange(draft.copy(appearance = it)) }) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_character_personality), draft.personality, { onDraftChange(draft.copy(personality = it)) }) }
+            item { CharacterTextField(appCtx.getString(R.string.bchar_biography), draft.biography, { onDraftChange(draft.copy(biography = it)) }, minLines = 5) }
             item {
                 CharacterSpeechRouteEditor(
                     speechRouteJson = draft.speechRouteJson,
@@ -945,16 +946,16 @@ private fun CharacterSpeechRouteEditor(
     var pickerVisible by remember { mutableStateOf(false) }
     Surface(color = style.colors.card, shape = RoundedCornerShape(style.radius)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("角色配音", color = style.colors.subText, fontSize = 13.sp)
+            Text(appCtx.getString(R.string.bchar_character_voice), color = style.colors.subText, fontSize = 13.sp)
             Text(
-                text = speechRouteSummary(route, groups, defaultText = "使用书籍或全局默认朗读引擎"),
+                text = speechRouteSummary(route, groups, defaultText = appCtx.getString(R.string.bchar_use_book_or_global_default)),
                 color = style.colors.text,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 8.dp)
             )
             if (groups.isEmpty()) {
                 Text(
-                    text = "暂无可用朗读引擎。",
+                    text = appCtx.getString(R.string.bchar_no_read_aloud_engines_available),
                     color = style.colors.subText,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
@@ -967,14 +968,14 @@ private fun CharacterSpeechRouteEditor(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SmallAction("选择发言人", { pickerVisible = true })
-                SmallAction("使用默认", { onChange("") })
+                SmallAction(appCtx.getString(R.string.ra_panel_select_speaker), { pickerVisible = true })
+                SmallAction(appCtx.getString(R.string.bchar_use_default), { onChange("") })
             }
         }
     }
     if (pickerVisible) {
         SpeechVoiceRoutePickerDialog(
-            title = "角色配音",
+            title = appCtx.getString(R.string.bchar_character_voice),
             groups = groups,
             currentRoute = route,
             onDismiss = { pickerVisible = false },
@@ -992,15 +993,15 @@ private fun GenderSelector(gender: String, onGenderChange: (String) -> Unit) {
     val current = BookCharacter.normalizeGender(gender)
     Surface(color = style.colors.card, shape = RoundedCornerShape(style.radius)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("角色性别", color = style.colors.subText, fontSize = 13.sp)
+            Text(appCtx.getString(R.string.bchar_character_gender), color = style.colors.subText, fontSize = 13.sp)
             Row(
                 modifier = Modifier.padding(top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
-                    BookCharacter.GENDER_UNKNOWN to "未知",
-                    BookCharacter.GENDER_MALE to "男",
-                    BookCharacter.GENDER_FEMALE to "女"
+                    BookCharacter.GENDER_UNKNOWN to appCtx.getString(R.string.unknown),
+                    BookCharacter.GENDER_MALE to appCtx.getString(R.string.bchar_label_male),
+                    BookCharacter.GENDER_FEMALE to appCtx.getString(R.string.bchar_label_female)
                 ).forEach { (value, label) ->
                     val selected = current == value
                     Surface(
@@ -1039,15 +1040,15 @@ private fun RoleSelector(role: Int, onRoleChange: (Int) -> Unit) {
     val style = rememberCharacterStyle()
     Surface(color = style.colors.card, shape = RoundedCornerShape(style.radius)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("角色类型", color = style.colors.subText, fontSize = 13.sp)
+            Text(appCtx.getString(R.string.bchar_character_type), color = style.colors.subText, fontSize = 13.sp)
             Row(
                 modifier = Modifier.padding(top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 listOf(
-                    BookCharacter.ROLE_NORMAL to "普通角色",
-                    BookCharacter.ROLE_IMPORTANT to "重要角色",
-                    BookCharacter.ROLE_MAIN to "主角"
+                    BookCharacter.ROLE_NORMAL to appCtx.getString(R.string.bchar_label_minor_character),
+                    BookCharacter.ROLE_IMPORTANT to appCtx.getString(R.string.bchar_label_important_character),
+                    BookCharacter.ROLE_MAIN to appCtx.getString(R.string.bchar_label_protagonist)
                 ).forEach { (value, label) ->
                     val selected = role == value
                     Surface(
@@ -1143,11 +1144,11 @@ fun CharacterRelationScreen(
         directRelationsForCenter(relations, graphCenterId)
     }
     CharacterScaffold(
-        title = "角色关系网",
-        subtitle = "主角视角 · ${graphCharacters.size} 个角色 · ${relations.size} 条关系",
+        title = appCtx.getString(R.string.bchar_character_relationships),
+        subtitle = appCtx.getString(R.string.bchar_protagonist_view_characters_relations, graphCharacters.size, relations.size),
         onBack = onBack,
         actions = {
-            TextButton(onClick = onAddRelation) { Text("添加关系", color = style.colors.accent) }
+            TextButton(onClick = onAddRelation) { Text(appCtx.getString(R.string.bchar_add_relation), color = style.colors.accent) }
         }
     ) {
         Column(
@@ -1156,7 +1157,7 @@ fun CharacterRelationScreen(
                 .navigationBarsPadding()
         ) {
             if (graphCharacters.isEmpty()) {
-                EmptyCharacterCard("暂无关系，点击右上角添加角色关系。")
+                EmptyCharacterCard(appCtx.getString(R.string.bchar_no_relations_yet_tap_top))
                 Spacer(modifier = Modifier.weight(1f))
             } else {
                 CharacterCenterSelector(graphCharacters, graphCenterId, onSelectCenter)
@@ -1802,9 +1803,9 @@ private fun RelationListPanel(
                     .clickable { expanded = !expanded },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("关系列表", color = style.colors.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("${relations.size} 条", color = style.colors.subText, fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))
-                Text(if (expanded) "收起" else "展开", color = style.colors.accent, fontSize = 13.sp)
+                Text(appCtx.getString(R.string.bchar_relations), color = style.colors.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(appCtx.getString(R.string.bchar_text_2, relations.size), color = style.colors.subText, fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))
+                Text(if (expanded) appCtx.getString(R.string.collapse) else appCtx.getString(R.string.expand), color = style.colors.accent, fontSize = 13.sp)
             }
             if (!expanded) {
                 val first = relations.firstOrNull()
@@ -1812,7 +1813,7 @@ private fun RelationListPanel(
                     val from = characters.firstOrNull { it.id == relation.fromCharacterId }?.displayName().orEmpty()
                     val to = characters.firstOrNull { it.id == relation.toCharacterId }?.displayName().orEmpty()
                     "$from → $to · ${relation.displayName()}"
-                } ?: "暂无关系，点击右上角添加"
+                } ?: appCtx.getString(R.string.bchar_no_relations_yet_tap_top_2)
                 Text(
                     text = summary,
                     color = style.colors.subText,
@@ -1838,8 +1839,8 @@ private fun RelationListPanel(
                                     Text("$from → $to", color = style.colors.text, fontSize = 14.sp, maxLines = 1)
                                     Text(relation.displayName(), color = style.colors.subText, fontSize = 12.sp, maxLines = 1)
                                 }
-                                TextButton(onClick = { onEdit(relation) }) { Text("编辑", color = style.colors.accent) }
-                                TextButton(onClick = { onDelete(relation) }) { Text("删除", color = style.colors.danger) }
+                                TextButton(onClick = { onEdit(relation) }) { Text(appCtx.getString(R.string.edit), color = style.colors.accent) }
+                                TextButton(onClick = { onDelete(relation) }) { Text(appCtx.getString(R.string.delete), color = style.colors.danger) }
                             }
                         }
                     }
@@ -1867,16 +1868,16 @@ private fun RelationDetailDialog(
         text = {
             Column {
                 Text("$from → $to")
-                Text("属性：${relation.relationType.ifBlank { "未填写" }}")
-                Text("强度：${relation.strength}")
+                Text(appCtx.getString(R.string.bchar_relation_attribute_value, relation.relationType.ifBlank { appCtx.getString(R.string.bchar_not_set) }))
+                Text(appCtx.getString(R.string.bchar_strength, relation.strength))
                 if (relation.description.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
                     Text(relation.description)
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onEdit) { Text("编辑") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        confirmButton = { TextButton(onClick = onEdit) { Text(appCtx.getString(R.string.edit)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(appCtx.getString(R.string.jf_convert_o)) } }
     )
 }
 
@@ -1927,27 +1928,27 @@ private fun RelationEditSheet(
             ) {
                 item {
                     Text(
-                        if (draft.id > 0) "编辑关系" else "添加关系",
+                        if (draft.id > 0) appCtx.getString(R.string.bchar_edit_relation) else appCtx.getString(R.string.bchar_add_relation),
                         color = style.colors.text,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
                 item {
-                    CharacterSelectField("角色 A", characters.firstOrNull { it.id == editing.fromCharacterId }) {
+                    CharacterSelectField(appCtx.getString(R.string.bchar_character), characters.firstOrNull { it.id == editing.fromCharacterId }) {
                         selectingTarget = RelationSelectTarget.FROM
                     }
                 }
                 item {
-                    CharacterSelectField("角色 B", characters.firstOrNull { it.id == editing.toCharacterId }) {
+                    CharacterSelectField(appCtx.getString(R.string.bchar_character_b), characters.firstOrNull { it.id == editing.toCharacterId }) {
                         selectingTarget = RelationSelectTarget.TO
                     }
                 }
-                item { CharacterTextField("关系名称", editing.relationName, { editing = editing.copy(relationName = it) }, singleLine = true) }
-                item { CharacterTextField("关系属性", editing.relationType, { editing = editing.copy(relationType = it) }, singleLine = true) }
+                item { CharacterTextField(appCtx.getString(R.string.bchar_relation_name), editing.relationName, { editing = editing.copy(relationName = it) }, singleLine = true) }
+                item { CharacterTextField(appCtx.getString(R.string.bchar_relation_attribute), editing.relationType, { editing = editing.copy(relationType = it) }, singleLine = true) }
                 item {
                     Column {
-                        Text("关系强度 ${editing.strength}", color = style.colors.subText, fontSize = 13.sp)
+                        Text(appCtx.getString(R.string.bchar_relation_strength, editing.strength), color = style.colors.subText, fontSize = 13.sp)
                         LegadoMiuixSlider(
                             value = editing.strength.toFloat(),
                             onValueChange = { editing = editing.copy(strength = it.roundToInt().coerceIn(0, 100)) },
@@ -1956,18 +1957,18 @@ private fun RelationEditSheet(
                         )
                     }
                 }
-                item { CharacterTextField("关系说明", editing.description, { editing = editing.copy(description = it) }, minLines = 3) }
+                item { CharacterTextField(appCtx.getString(R.string.bchar_relation_note), editing.description, { editing = editing.copy(description = it) }, minLines = 3) }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         LegadoMiuixActionButton(
-                            text = "取消",
+                            text = appCtx.getString(R.string.dialog_cancel),
                             palette = palette,
                             onClick = onDismiss,
                             modifier = Modifier.weight(1f),
                             cornerRadius = style.smallRadius
                         )
                         LegadoMiuixActionButton(
-                            text = "保存",
+                            text = appCtx.getString(R.string.action_save),
                             palette = palette,
                             onClick = { onChange(editing) },
                             modifier = Modifier.weight(1f),
@@ -1981,7 +1982,7 @@ private fun RelationEditSheet(
     }
     selectingTarget?.let { target ->
         CharacterSelectDialog(
-            title = if (target == RelationSelectTarget.FROM) "选择角色 A" else "选择角色 B",
+            title = if (target == RelationSelectTarget.FROM) appCtx.getString(R.string.bchar_select_character) else appCtx.getString(R.string.bchar_select_character_b),
             characters = characters,
             selectedId = if (target == RelationSelectTarget.FROM) editing.fromCharacterId else editing.toCharacterId,
             onDismiss = { selectingTarget = null },
@@ -2045,7 +2046,7 @@ private fun CharacterSelectField(
                         .padding(start = if (selected != null) 10.dp else 0.dp)
                 ) {
                     Text(
-                        text = selected?.displayName() ?: "请选择角色",
+                        text = selected?.displayName() ?: appCtx.getString(R.string.bchar_select_character_2),
                         color = style.colors.text,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -2056,7 +2057,7 @@ private fun CharacterSelectField(
                         Text(it, color = style.colors.subText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Text("更换", color = style.colors.accent, fontSize = 13.sp)
+                Text(appCtx.getString(R.string.bchar_change), color = style.colors.accent, fontSize = 13.sp)
             }
         }
     }
@@ -2124,14 +2125,14 @@ private fun CharacterSelectDialog(
                                 )
                             }
                             if (selected) {
-                                Text("已选", color = style.colors.accent, fontSize = 12.sp)
+                                Text(appCtx.getString(R.string.ra_panel_selected), color = style.colors.accent, fontSize = 12.sp)
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭", color = style.colors.accent) } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(appCtx.getString(R.string.jf_convert_o), color = style.colors.accent) } }
     )
 }
 

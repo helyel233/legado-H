@@ -172,7 +172,7 @@ object LocalBook {
         list.forEachIndexed { index, bookChapter ->
             bookChapter.index = index
             if (bookChapter.title.isEmpty()) {
-                bookChapter.title = "无标题章节"
+                bookChapter.title = appCtx.getString(R.string.misc_untitled_chapter)
             }
         }
         val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
@@ -222,7 +222,7 @@ object LocalBook {
             e.printOnDebug()
             AppLog.put("获取本地书籍内容失败\n${e.localizedMessage}", e)
             if (book.isEpub || book.usesDirectReader) throw e
-            "获取本地书籍内容失败\n${e.localizedMessage}"
+            appCtx.getString(R.string.misc_failed_load_local_book_content, e.localizedMessage)
         }
         if (book.isEpub) {
             content ?: return null
@@ -291,7 +291,7 @@ object LocalBook {
      */
     fun importFile(uri: Uri, onStage: ((String) -> Unit)? = null): Book {
         //updateTime变量不要修改,否则会导致读取不到缓存
-        onStage?.invoke("读取文件信息")
+        onStage?.invoke(appCtx.getString(R.string.misc_reading_file_info))
         val fileDoc = FileDoc.fromUri(uri, false)
         if (fileDoc.size == 0L) throw EmptyFileException("Unexpected empty File")
         val fileName = fileDoc.name
@@ -300,7 +300,7 @@ object LocalBook {
         val fileSize = fileDoc.size
         var book = appDb.bookDao.getBook(bookUrl)
         if (book == null) {
-            onStage?.invoke("解析书籍信息")
+            onStage?.invoke(appCtx.getString(R.string.misc_parsing_book_info))
             val nameAuthor = analyzeNameAuthor(fileName)
             book = Book(
                 type = BookType.text or BookType.local,
@@ -312,10 +312,10 @@ object LocalBook {
                 order = appDb.bookDao.minOrder - 1
             )
             upBookInfoSafely(book, fileSize)
-            onStage?.invoke("保存书籍信息")
+            onStage?.invoke(appCtx.getString(R.string.misc_saving_book_info))
             appDb.bookDao.insert(book)
         } else {
-            onStage?.invoke("更新书籍信息")
+            onStage?.invoke(appCtx.getString(R.string.misc_updating_book_info))
             deleteBook(book, false)
             upBookInfoSafely(book, fileSize)
             // 触发 isLocalModified
@@ -341,7 +341,7 @@ object LocalBook {
                 book.name = book.originName.substringBeforeLast(".")
             }
             if (book.intro.isNullOrBlank()) {
-                book.intro = "大体积 EPUB 已快速导入，封面和简介将在阅读时按需加载。"
+                book.intro = appCtx.getString(R.string.misc_large_epub_imported_quick_mode)
             }
             return
         }
@@ -357,7 +357,7 @@ object LocalBook {
                 book.name = book.originName.substringBeforeLast(".")
             }
             if (book.intro.isNullOrBlank()) {
-                book.intro = "EPUB 已导入，元数据将在阅读时按需加载。"
+                book.intro = appCtx.getString(R.string.misc_epub_imported_metadata_will_load)
             }
         }
     }
@@ -392,10 +392,10 @@ object LocalBook {
     /* 批量导入 支持自动导入压缩包的支持书籍 */
     fun importFiles(uri: Uri, onStage: ((String) -> Unit)? = null): List<Book> {
         val books = mutableListOf<Book>()
-        onStage?.invoke("读取文件信息")
+        onStage?.invoke(appCtx.getString(R.string.misc_reading_file_info))
         val fileDoc = FileDoc.fromUri(uri, false)
         if (ArchiveUtils.isArchive(fileDoc.name)) {
-            onStage?.invoke("解压压缩包")
+            onStage?.invoke(appCtx.getString(R.string.misc_extracting_archive))
             books.addAll(
                 importArchiveFile(uri) {
                     it.matches(AppPattern.bookFileRegex)

@@ -62,7 +62,7 @@ class CodeEditActivity :
     private var menuSaveBtn: MenuItem? = null
 
     private val isDark
-        get() = AppConfig.editTemeAuto && ThemeConfig.isDarkTheme()
+        get() = AppConfig.editThemeAuto && ThemeConfig.isDarkTheme()
     private var themeIndex = -1
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -350,10 +350,10 @@ class CodeEditActivity :
 
     override fun helpActions(): List<SelectItem<String>> {
         return arrayListOf(
-            SelectItem("书源教程", "ruleHelp"),
-            SelectItem("订阅源教程", "rssRuleHelp"),
-            SelectItem("js教程", "jsHelp"),
-            SelectItem("正则教程", "regexHelp")
+            SelectItem(getString(R.string.i18n_final_book_source_tutorial), "ruleHelp"),
+            SelectItem(getString(R.string.i18n_final_rss_tutorial), "rssRuleHelp"),
+            SelectItem(getString(R.string.i18n_final_js_tutorial), "jsHelp"),
+            SelectItem(getString(R.string.i18n_final_regex_tutorial), "regexHelp")
         )
     }
 

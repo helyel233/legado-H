@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.24.1 · 2026/11/05**
+
+- 设置搜索索引改为由 Compose 设置 spec 直接生成(不再解析遗留 pref_*.xml；新增项自动可搜、别名进搜索，并补齐朗读弹窗30+项/菜单编辑/高亮/段落/书架/评论/发现订阅/页面布局等此前搜不到的项)；新增独立设置页(书架设置合并显示13项+启动5项、音频、评论、漫画视频、页面布局)；删除15个遗留 XML 偏好文件；A 层死代码清理(删死键 cacheManage/updateSourceStrategy、5 个死分类字符串、editTemeAuto→editThemeAuto、封面硬编码 key→PreferKey 常量)；发现/订阅页模式上提到内容与规则；i18n 模块化拆分(40+ strings_* 文件 + 批处理工具)；一级行 RowSpec 收敛
+
 **vH.1.23.2 · 2026/11/01**
 
 - 修复重建/切主题时偶崩：离屏书架 Fragment 的 View 已被 ViewPager2 销毁却仍被 MainActivity 反向调用 upSort() 抛 IllegalStateException；新增 BaseBookshelfFragment.isViewReady()(isAdded&&view!=null) 守卫、recreate() 仅 View 就绪才排序、BookshelfFragment1/2.upSort() 同步加守卫；MainActivity 新增 recreateRequested 防同实例重复重建(漏掉由1.5s安全网补发)

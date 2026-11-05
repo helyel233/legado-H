@@ -8,6 +8,8 @@ import org.joni.Syntax
 import org.joni.WarnCallback
 import org.joni.constants.SyntaxProperties
 import org.joni.exception.SyntaxException
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Matching never changes text offsets; overlapping rules retain their list order. */
 class HighlightMatcher(rules: List<HighlightRule>) {
@@ -278,8 +280,8 @@ class HighlightMatcher(rules: List<HighlightRule>) {
         }
 
         fun validationError(rule: HighlightRule): String? {
-            if (rule.keyword.isEmpty() && !rule.titleOnly) return "正文匹配内容不能为空"
-            return runCatching { compile(rule); null }.getOrElse { it.message ?: "正则表达式无效" }
+            if (rule.keyword.isEmpty() && !rule.titleOnly) return appCtx.getString(R.string.misc_body_match_content_cannot_be)
+            return runCatching { compile(rule); null }.getOrElse { it.message ?: appCtx.getString(R.string.misc_invalid_regular_expression) }
         }
     }
 }

@@ -188,7 +188,7 @@ fun ReadMenuTitleBar(
             if (!state.isLocalBook) {
                 ReadMenuTitleIconButton(
                     painterRes = R.drawable.ic_exchange,
-                    contentDescription = "换源",
+                    contentDescription = appCtx.getString(R.string.change_origin),
                     tint = style.primaryText,
                     style = style,
                     onLongClick = actions.onChangeSourceLongClick,
@@ -199,7 +199,7 @@ fun ReadMenuTitleBar(
             // 刷新图标
             ReadMenuTitleIconButton(
                 painterRes = R.drawable.ic_refresh_black_24dp,
-                contentDescription = "刷新",
+                contentDescription = appCtx.getString(R.string.refresh),
                 tint = style.primaryText,
                 style = style,
                 onLongClick = actions.onRefreshLongClick,
@@ -210,7 +210,7 @@ fun ReadMenuTitleBar(
             if (!state.isLocalBook) {
                 ReadMenuTitleIconButton(
                     painterRes = R.drawable.ic_download_line,
-                    contentDescription = "缓存",
+                    contentDescription = appCtx.getString(R.string.cache_manage_cache_selected),
                     tint = style.primaryText,
                     style = style,
                     onClick = actions.onCacheClick
@@ -280,9 +280,9 @@ fun ReadMenuTitleBar(
                 Icon(
                     painter = painterResource(R.drawable.ic_more_vert),
                     contentDescription = if (state.offlineReviewPending > 0) {
-                        "更多选项（${state.offlineReviewPending} 条离线评论待发送）"
+                        appCtx.getString(R.string.ui_book_more_options_offline_comments_pending, state.offlineReviewPending)
                     } else {
-                        "更多选项"
+                        appCtx.getString(R.string.ui_book_more_options)
                     },
                     tint = style.primaryText,
                     modifier = Modifier.size(18.dp)
@@ -503,7 +503,7 @@ fun ReadMenuSeekBarRow(
         // 上一章图标
         Icon(
             painter = painterResource(R.drawable.ic_skip_previous),
-            contentDescription = "上一章",
+            contentDescription = appCtx.getString(R.string.previous_chapter),
             tint = if (canGoPrev) style.primaryText else style.secondaryText.copy(alpha = 0.5f),
             modifier = Modifier
                 .size(26.dp)
@@ -537,7 +537,7 @@ fun ReadMenuSeekBarRow(
         // 下一章图标
         Icon(
             painter = painterResource(R.drawable.ic_skip_next),
-            contentDescription = "下一章",
+            contentDescription = appCtx.getString(R.string.next_chapter),
             tint = if (canGoNext) style.primaryText else style.secondaryText.copy(alpha = 0.5f),
             modifier = Modifier
                 .size(26.dp)
@@ -572,7 +572,7 @@ fun ReadMenuBrightnessRow(
         // 自动按钮（左侧图标）
         Icon(
             painter = painterResource(R.drawable.ic_brightness_auto),
-            contentDescription = "自动亮度",
+            contentDescription = appCtx.getString(R.string.ui_book_auto_brightness),
             tint = if (isAuto) style.accent else style.secondaryText,
             modifier = Modifier
                 .size(26.dp)
@@ -800,19 +800,19 @@ private fun readMenuButtonTitle(
                 ?: ref.id
         }
         else -> when (ref.id) {
-            ReadMenuButtonConfig.Builtin.SEARCH -> "搜索"
-            ReadMenuButtonConfig.Builtin.AUTO_PAGE -> "自动"
-            ReadMenuButtonConfig.Builtin.REPLACE_RULE -> "替换"
-            ReadMenuButtonConfig.Builtin.NIGHT_THEME -> "夜间"
-            ReadMenuButtonConfig.Builtin.CATALOG -> "目录"
-            ReadMenuButtonConfig.Builtin.READ_ALOUD -> "朗读"
-            ReadMenuButtonConfig.Builtin.READ_STYLE -> "界面"
-            ReadMenuButtonConfig.Builtin.SETTING -> "设置"
-            ReadMenuButtonConfig.Builtin.READ_ASSISTANT -> "助手"
+            ReadMenuButtonConfig.Builtin.SEARCH -> appCtx.getString(R.string.action_search)
+            ReadMenuButtonConfig.Builtin.AUTO_PAGE -> appCtx.getString(R.string.ui_book_auto)
+            ReadMenuButtonConfig.Builtin.REPLACE_RULE -> appCtx.getString(R.string.replace)
+            ReadMenuButtonConfig.Builtin.NIGHT_THEME -> appCtx.getString(R.string.night)
+            ReadMenuButtonConfig.Builtin.CATALOG -> appCtx.getString(R.string.chapter_list)
+            ReadMenuButtonConfig.Builtin.READ_ALOUD -> appCtx.getString(R.string.read_aloud)
+            ReadMenuButtonConfig.Builtin.READ_STYLE -> appCtx.getString(R.string.interface_setting)
+            ReadMenuButtonConfig.Builtin.SETTING -> appCtx.getString(R.string.setting)
+            ReadMenuButtonConfig.Builtin.READ_ASSISTANT -> appCtx.getString(R.string.side_nav_assistant)
             ReadMenuButtonConfig.Builtin.AI_SUMMARY -> "AI"
-            ReadMenuButtonConfig.Builtin.PARAGRAPH_RULES -> "段落"
-            ReadMenuButtonConfig.Builtin.BUBBLE -> "气泡"
-            ReadMenuButtonConfig.Builtin.CHARACTERS -> "角色"
+            ReadMenuButtonConfig.Builtin.PARAGRAPH_RULES -> appCtx.getString(R.string.ui_book_paragraph)
+            ReadMenuButtonConfig.Builtin.BUBBLE -> appCtx.getString(R.string.package_sync_task_type_bubble)
+            ReadMenuButtonConfig.Builtin.CHARACTERS -> appCtx.getString(R.string.ra_panel_character)
             else -> ref.id
         }
     }
@@ -888,20 +888,20 @@ private fun buildOverflowActions(
     onClearOfflineReviewsClick: () -> Unit
 ): List<ModernActionPopup.Action> {
     val actions = mutableListOf<ModernActionPopup.Action>()
-    actions.add(ModernActionPopup.Action(title = "添加书签", invoke = onAddBookmarkClick))
-    if (!isEpub) actions.add(ModernActionPopup.Action(title = "编辑内容", invoke = onEditContentClick))
-    actions.add(ModernActionPopup.Action(title = "翻页动画", invoke = onPageAnimClick))
-    actions.add(ModernActionPopup.Action(title = "菜单编辑", invoke = onMenuEditClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.bookmark_add), invoke = onAddBookmarkClick))
+    if (!isEpub) actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.edit_content), invoke = onEditContentClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.page_anim), invoke = onPageAnimClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.read_menu_edit), invoke = onMenuEditClick))
     if (!isLocalBook) {
-        actions.add(ModernActionPopup.Action(title = "拉取云端进度", invoke = onGetProgressClick))
-        actions.add(ModernActionPopup.Action(title = "覆盖云端进度", invoke = onCoverProgressClick))
+        actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.get_book_progress), invoke = onGetProgressClick))
+        actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.cover_book_progress), invoke = onCoverProgressClick))
     }
-    if (!isEpub) actions.add(ModernActionPopup.Action(title = "反转内容", invoke = onReverseContentClick))
-    actions.add(ModernActionPopup.Action(title = "模拟追读", invoke = onSimulatedReadingClick))
+    if (!isEpub) actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.reverse_content), invoke = onReverseContentClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.simulated_reading), invoke = onSimulatedReadingClick))
     if (supportsReplaceRules) {
         val isReplaceEnabled = io.legado.app.model.ReadBook.book?.getUseReplaceRule() == true
         actions.add(ModernActionPopup.Action(
-            title = "替换净化",
+            title = appCtx.getString(R.string.replace_purify),
             checked = isReplaceEnabled,
             persistent = true,
             invoke = onChangeReplaceRuleClick
@@ -910,26 +910,26 @@ private fun buildOverflowActions(
     if (!isEpub) {
     val isSameTitleRemoved = io.legado.app.model.ReadBook.curTextChapter?.sameTitleRemoved == true
     actions.add(ModernActionPopup.Action(
-        title = "移除重复标题",
+        title = appCtx.getString(R.string.same_title_removed),
         checked = isSameTitleRemoved,
         persistent = true,
         invoke = onSameTitleRemovedClick
     ))
     val isReSegment = io.legado.app.model.ReadBook.book?.getReSegment() == true
     actions.add(ModernActionPopup.Action(
-        title = "重新分段",
+        title = appCtx.getString(R.string.re_segment),
         checked = isReSegment,
         persistent = true,
         invoke = onReSegmentClick
     ))
-    actions.add(ModernActionPopup.Action(title = "图片样式", invoke = onImageStyleClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.image_style), invoke = onImageStyleClick))
     }
-    actions.add(ModernActionPopup.Action(title = "更新目录", invoke = onUpdateTocClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.update_toc), invoke = onUpdateTocClick))
     if (!isEpub) {
-        actions.add(ModernActionPopup.Action(title = "段落规则", invoke = onParagraphRuleClick))
+        actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.paragraph_rule), invoke = onParagraphRuleClick))
     }
-    actions.add(ModernActionPopup.Action(title = "高亮规则", invoke = onHighlightRuleClick))
-    if (!isEpub) actions.add(ModernActionPopup.Action(title = "起效的替换", invoke = onEffectiveReplacesClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.ui_book_highlight_rules), invoke = onHighlightRuleClick))
+    if (!isEpub) actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.effective_replaces), invoke = onEffectiveReplacesClick))
     // 评论/段评设置（真实入口：阅读页三点菜单；book_read.xml 的 optionsMenu 在
     // 阅读页无 UI 入口，勿再把开关加进去）。
     // 直读（EPUB core）模式无段评泡、预热取不到正文，这些项均为 no-op，与
@@ -1015,7 +1015,7 @@ private fun buildOverflowActions(
             )
         }
     }
-    actions.add(ModernActionPopup.Action(title = "日志", invoke = onLogClick))
-    actions.add(ModernActionPopup.Action(title = "帮助", invoke = onHelpClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.log), invoke = onLogClick))
+    actions.add(ModernActionPopup.Action(title = appCtx.getString(R.string.help), invoke = onHelpClick))
     return actions
 }

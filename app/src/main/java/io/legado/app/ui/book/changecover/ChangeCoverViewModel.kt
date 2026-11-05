@@ -34,6 +34,8 @@ import kotlinx.coroutines.withTimeout
 import java.util.Collections
 import java.util.concurrent.Executors
 import kotlin.math.min
+import io.legado.app.R
+import splitties.init.appCtx
 
 class ChangeCoverViewModel(application: Application) : BaseViewModel(application) {
     private val threadCount = AppConfig.threadCount
@@ -44,7 +46,7 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
     private val defaultCover by lazy {
         listOf(
             SearchBook(
-                originName = "默认封面",
+                originName = appCtx.getString(R.string.default_cover),
                 name = name,
                 author = author,
                 coverUrl = "use_default_cover"
@@ -127,7 +129,7 @@ class ChangeCoverViewModel(application: Application) : BaseViewModel(application
                 val coverUrl = BookCover.searchCover(tempBook)
                 if (!coverUrl.isNullOrEmpty()) {
                     val searchBook = SearchBook(
-                        originName = "封面规则",
+                        originName = appCtx.getString(R.string.cover_rule),
                         name = name,
                         author = author,
                         coverUrl = coverUrl,

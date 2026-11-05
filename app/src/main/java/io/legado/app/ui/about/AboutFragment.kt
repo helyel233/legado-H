@@ -77,7 +77,7 @@ class AboutFragment : ComposeSettingFragment() {
                         },
                         action(
                             key = KEY_INTERNAL_BETA,
-                            title = "内测版",
+                            title = appCtx.getString(R.string.ui_main_beta),
                             summary = internalBetaSummary()
                         ) {
                             showInternalBetaDialog()
@@ -178,16 +178,16 @@ class AboutFragment : ComposeSettingFragment() {
         val enabled = AppUpdateConfig.internalBetaConfigured
         val url = AppUpdateConfig.internalBetaUrl.orEmpty()
         return if (enabled) {
-            "已启用 · $url"
+            appCtx.getString(R.string.ui_main_enabled, url)
         } else {
-            "未启用"
+            appCtx.getString(R.string.ui_main_not_enabled)
         }
     }
 
     private fun showInternalBetaDialog() {
         showComposeTextFormDialogWithChecks(
-            title = "内测版更新",
-            labels = listOf("下载密钥", "下载地址"),
+            title = appCtx.getString(R.string.ui_main_beta_updates),
+            labels = listOf("下载密钥", appCtx.getString(R.string.ui_main_download_url)),
             initialValues = listOf(
                 AppUpdateConfig.internalBetaKey.orEmpty(),
                 AppUpdateConfig.internalBetaUrl.orEmpty()
@@ -195,7 +195,7 @@ class AboutFragment : ComposeSettingFragment() {
             passwordFields = setOf(0),
             checkboxLabels = listOf("启用内测版更新"),
             checkedIndices = if (AppUpdateConfig.internalBetaEnabled) setOf(0) else emptySet(),
-            message = "启用后，检测更新会优先比较正式版和内测版。正式版版本高于内测版时更新正式版，否则在没有更高正式版时更新内测版。",
+            message = appCtx.getString(R.string.ui_main_when_enabled_update_checks_compare),
             validateInput = { values ->
                 val key = values.getOrNull(0).orEmpty().trim()
                 val url = values.getOrNull(1).orEmpty().trim()
@@ -259,17 +259,17 @@ class AboutFragment : ComposeSettingFragment() {
     private fun saveLog() {
         Coroutine.async(Coroutine.defaultScope) {
             val backupPath = AppConfig.backupPath ?: let {
-                appCtx.toastOnUi("未设置备份目录")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_backup_directory_not_set))
                 return@async
             }
             if (!AppConfig.recordLog) {
-                appCtx.toastOnUi("未开启日志记录，请去其他设置里打开记录日志")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_logging_disabled_enable_it_under))
                 delay(3000)
             }
             val doc = FileDoc.fromUri(Uri.parse(backupPath), true)
             copyLogs(doc)
             copyHeapDump(doc)
-            appCtx.toastOnUi("已保存至备份目录")
+            appCtx.toastOnUi(appCtx.getString(R.string.ui_main_saved_backup_directory))
         }.onError {
             AppLog.put("保存日志出错\n${it.localizedMessage}", it, true)
         }
@@ -278,21 +278,21 @@ class AboutFragment : ComposeSettingFragment() {
     private fun createHeapDump() {
         Coroutine.async(Coroutine.defaultScope) {
             val backupPath = AppConfig.backupPath ?: let {
-                appCtx.toastOnUi("未设置备份目录")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_backup_directory_not_set))
                 return@async
             }
             if (!AppConfig.recordHeapDump) {
-                appCtx.toastOnUi("未开启堆转储记录，请去其他设置里打开记录堆转储")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_heap_dump_recording_disabled_enable))
                 delay(3000)
             }
-            appCtx.toastOnUi("开始创建堆转储")
+            appCtx.toastOnUi(appCtx.getString(R.string.ui_main_creating_heap_dump))
             System.gc()
             CrashHandler.doHeapDump(true)
             val doc = FileDoc.fromUri(Uri.parse(backupPath), true)
             if (!copyHeapDump(doc)) {
-                appCtx.toastOnUi("未找到堆转储文件")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_no_heap_dump_file_found))
             } else {
-                appCtx.toastOnUi("已保存至备份目录")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_main_saved_backup_directory))
             }
         }.onError {
             AppLog.put("保存堆转储失败\n${it.localizedMessage}", it)

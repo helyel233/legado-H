@@ -1,0 +1,890 @@
+{
+  "prefix": "ra_panel",
+  "resource": "strings_ra_panel.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAloudPlayerPanel.kt"
+  ],
+  "entries": [
+    {
+      "zh": "当前章节重新分配角色中",
+      "en": "Reassigning roles for the current chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:628: roleStatusText = \"当前章节重新分配角色中\""
+      ]
+    },
+    {
+      "zh": "书籍不存在",
+      "en": "Book not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:646: ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, \"书籍不存在\")"
+      ]
+    },
+    {
+      "zh": "章节不存在",
+      "en": "Chapter not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:648: ?: return@async AiReadAloudRoleService.ManualSegmentAssignmentResult(false, \"章节不存在\")"
+      ]
+    },
+    {
+      "zh": "第 ${chapterIndex + 1} 章",
+      "en": "Chapter %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:765: }.getOrNull().orEmpty().ifBlank { \"第 ${chapterIndex + 1} 章\" }"
+      ]
+    },
+    {
+      "zh": "章节加载中",
+      "en": "Loading chapter",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:774: paragraphText = \"章节加载中\",",
+        "ReadAloudPlayerPanel.kt:787: text = \"章节加载中\""
+      ]
+    },
+    {
+      "zh": "下一章节",
+      "en": "Next chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:795: val prefix = if (state.stage == AiReadAloudRoleState.STAGE_NEXT) \"下一章节\" else \"当前章节\""
+      ]
+    },
+    {
+      "zh": "当前章节",
+      "en": "Current chapter",
+      "count": 4,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:795: val prefix = if (state.stage == AiReadAloudRoleState.STAGE_NEXT) \"下一章节\" else \"当前章节\"",
+        "ReadAloudPlayerPanel.kt:1197: chapterTitle = chapter.chapter.title.ifBlank { \"当前章节\" },",
+        "ReadAloudPlayerPanel.kt:2586: text = title.ifBlank { \"当前章节\" },"
+      ]
+    },
+    {
+      "zh": "新增 ${state.createdCharacterCount} 个角色",
+      "en": "%1$s new characters added",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:798: state.createdCharacterCount > 0 -> \"新增 ${state.createdCharacterCount} 个角色\""
+      ]
+    },
+    {
+      "zh": "${state.segmentCount} 个片段",
+      "en": "%1$s segments",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:799: state.segmentCount > 0 -> \"${state.segmentCount} 个片段\""
+      ]
+    },
+    {
+      "zh": "${prefix}分配角色中",
+      "en": "Assigning roles for %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:804: AiReadAloudRoleState.STATUS_RUNNING -> \"${prefix}分配角色中\""
+      ]
+    },
+    {
+      "zh": "${prefix}角色分配完成",
+      "en": "Role assignment completed for %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:805: AiReadAloudRoleState.STATUS_SUCCESS -> \"${prefix}角色分配完成\""
+      ]
+    },
+    {
+      "zh": "已使用默认分角色",
+      "en": "Using default role assignment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:806: AiReadAloudRoleState.STATUS_FALLBACK -> \"已使用默认分角色\""
+      ]
+    },
+    {
+      "zh": "${prefix}角色分配失败",
+      "en": "Role assignment failed for %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:807: AiReadAloudRoleState.STATUS_FAILED -> \"${prefix}角色分配失败\""
+      ]
+    },
+    {
+      "zh": "${prefix}角色已分配",
+      "en": "Roles assigned for %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:808: else -> \"${prefix}角色已分配\""
+      ]
+    },
+    {
+      "zh": "暂无当前段落",
+      "en": "No current paragraph",
+      "count": 4,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:1291: text = sentence.second.ifBlank { paragraphText.ifBlank { \"暂无当前段落\" } }",
+        "ReadAloudPlayerPanel.kt:1707: .ifBlank { \"暂无当前段落\" }",
+        "ReadAloudPlayerPanel.kt:4311: text = state.paragraphText.ifBlank { \"暂无当前段落\" }"
+      ]
+    },
+    {
+      "zh": "当前章节角色分配中",
+      "en": "Assigning roles for the current chapter",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:1389: ?.ifBlank { \"当前章节角色分配中\" }",
+        "ReadAloudPlayerPanel.kt:1390: ?: \"当前章节角色分配中\",",
+        "ReadAloudPlayerPanel.kt:3708: text = state.roleBlockingText.ifBlank { \"当前章节角色分配中\" },"
+      ]
+    },
+    {
+      "zh": "未命名章节",
+      "en": "Untitled chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:1500: title = chapter.title.ifBlank { \"未命名章节\" },"
+      ]
+    },
+    {
+      "zh": "卷",
+      "en": "Volume",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:1502: \"卷\""
+      ]
+    },
+    {
+      "zh": "暂无角色摘要",
+      "en": "No character summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:1669: .ifBlank { \"暂无角色摘要\" }"
+      ]
+    },
+    {
+      "zh": "收起",
+      "en": "Collapse",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2537: contentDescription = \"收起\","
+      ]
+    },
+    {
+      "zh": "设置",
+      "en": "Settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2552: contentDescription = \"设置\","
+      ]
+    },
+    {
+      "zh": "退出全屏",
+      "en": "Exit full screen",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2575: contentDescription = \"退出全屏\","
+      ]
+    },
+    {
+      "zh": "多角色分配明细",
+      "en": "Multi-role assignment details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2703: text = \"多角色分配明细\","
+      ]
+    },
+    {
+      "zh": "重新分配",
+      "en": "Reassign",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2721: RoleDialogAction(\"重新分配\", colors, onRetry)"
+      ]
+    },
+    {
+      "zh": "隐藏",
+      "en": "Hide",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2722: RoleDialogAction(\"隐藏\", colors, onHide)"
+      ]
+    },
+    {
+      "zh": "关闭",
+      "en": "Close",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2723: if (!state.roleStatusRunning) RoleDialogAction(\"关闭\", colors, onDismiss)"
+      ]
+    },
+    {
+      "zh": "智能音频",
+      "en": "Smart audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2771: text = \"智能音频\","
+      ]
+    },
+    {
+      "zh": "未分析",
+      "en": "Not analyzed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2783: if (audioInfo.cacheKey.isBlank()) \"未分析\" else audioStatusLabel(audioInfo.status),"
+      ]
+    },
+    {
+      "zh": "配乐 ${audioInfo.bgmCount}",
+      "en": "Score %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2786: RoleSummaryChip(\"配乐 ${audioInfo.bgmCount}\", colors)"
+      ]
+    },
+    {
+      "zh": "音效 ${audioInfo.soundEffectCount}",
+      "en": "Sound effects %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2787: RoleSummaryChip(\"音效 ${audioInfo.soundEffectCount}\", colors)"
+      ]
+    },
+    {
+      "zh": "耗时 ${formatRoleElapsed(audioInfo.elapsedMillis)}",
+      "en": "Elapsed %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2789: RoleSummaryChip(\"耗时 ${formatRoleElapsed(audioInfo.elapsedMillis)}\", colors)"
+      ]
+    },
+    {
+      "zh": "${audioInfo.requestCount} 次请求",
+      "en": "%1$s requests",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2792: RoleSummaryChip(\"${audioInfo.requestCount} 次请求\", colors)"
+      ]
+    },
+    {
+      "zh": "输入 ${audioInfo.inputTokens}",
+      "en": "Input %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2799: RoleSummaryChip(\"输入 ${audioInfo.inputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "未命中 $uncached",
+      "en": "%1$s misses",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2800: if (uncached > 0) RoleSummaryChip(\"未命中 $uncached\", colors)",
+        "ReadAloudPlayerPanel.kt:2889: RoleSummaryChip(\"未命中 $uncached\", colors)"
+      ]
+    },
+    {
+      "zh": "缓存命中 ${audioInfo.cachedInputTokens}",
+      "en": "Cache hits %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2803: RoleSummaryChip(\"缓存命中 ${audioInfo.cachedInputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "输出 ${audioInfo.outputTokens}",
+      "en": "Output %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2806: RoleSummaryChip(\"输出 ${audioInfo.outputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "配乐：",
+      "en": "Score:",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2811: add(\"配乐：\" + audioInfo.bgmNames.joinToString(\"、\"))"
+      ]
+    },
+    {
+      "zh": "音效：",
+      "en": "Sound effects:",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2814: add(\"音效：\" + audioInfo.soundEffectNames.joinToString(\"、\"))"
+      ]
+    },
+    {
+      "zh": "分析中",
+      "en": "Analyzing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2844: \"running\" -> \"分析中\""
+      ]
+    },
+    {
+      "zh": "已完成",
+      "en": "Completed",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2845: \"success\" -> \"已完成\"",
+        "ReadAloudPlayerPanel.kt:3393: AiReadAloudRoleState.STATUS_SUCCESS -> \"已完成\""
+      ]
+    },
+    {
+      "zh": "失败",
+      "en": "Failed",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2846: \"failed\" -> \"失败\"",
+        "ReadAloudPlayerPanel.kt:3395: AiReadAloudRoleState.STATUS_FAILED -> \"失败\""
+      ]
+    },
+    {
+      "zh": "已缓存",
+      "en": "Cached",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2847: else -> \"已缓存\"",
+        "ReadAloudPlayerPanel.kt:3396: AiReadAloudRoleState.STATUS_SKIPPED -> \"已缓存\""
+      ]
+    },
+    {
+      "zh": "${preview.size} 片段",
+      "en": "%1$s segments",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2873: RoleSummaryChip(\"${preview.size} 片段\", colors)"
+      ]
+    },
+    {
+      "zh": "耗时 ${formatRoleElapsed(roleState.elapsedMillis)}",
+      "en": "Elapsed %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2875: RoleSummaryChip(\"耗时 ${formatRoleElapsed(roleState.elapsedMillis)}\", colors)"
+      ]
+    },
+    {
+      "zh": "${roleState.requestCount} 次请求",
+      "en": "%1$s requests",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2878: RoleSummaryChip(\"${roleState.requestCount} 次请求\", colors)"
+      ]
+    },
+    {
+      "zh": "Token 未返回",
+      "en": "Token usage not returned",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2883: RoleSummaryChip(\"Token 未返回\", colors)"
+      ]
+    },
+    {
+      "zh": "输入 ${roleState.inputTokens}",
+      "en": "Input %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2887: RoleSummaryChip(\"输入 ${roleState.inputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "输出 ${roleState.outputTokens}",
+      "en": "Output %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2893: RoleSummaryChip(\"输出 ${roleState.outputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "缓存命中 ${roleState.cachedInputTokens}",
+      "en": "Cache hits %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2896: RoleSummaryChip(\"缓存命中 ${roleState.cachedInputTokens}\", colors)"
+      ]
+    },
+    {
+      "zh": "新增 ${roleState.createdCharacterCount} 角色",
+      "en": "%1$s characters added",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2899: RoleSummaryChip(\"新增 ${roleState.createdCharacterCount} 角色\", colors)"
+      ]
+    },
+    {
+      "zh": "响度 ${playerState.speakerLoudnessGainPercent}%",
+      "en": "Loudness %1$s%",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2902: RoleSummaryChip(\"响度 ${playerState.speakerLoudnessGainPercent}%\", colors)"
+      ]
+    },
+    {
+      "zh": "已学习 ${playerState.speakerLoudnessLearnedCount} 发言人",
+      "en": "%1$s speakers learned",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2904: RoleSummaryChip(\"已学习 ${playerState.speakerLoudnessLearnedCount} 发言人\", colors)"
+      ]
+    },
+    {
+      "zh": "响度学习中",
+      "en": "Learning loudness",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2906: RoleSummaryChip(\"响度学习中\", colors)"
+      ]
+    },
+    {
+      "zh": "$unmatchedCount 未匹配",
+      "en": "%1$s unmatched",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2910: RoleSummaryChip(\"$unmatchedCount 未匹配\", colors, danger = true)"
+      ]
+    },
+    {
+      "zh": "$unboundVoiceCount 未绑定发言人",
+      "en": "%1$s speakers unbound",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2913: RoleSummaryChip(\"$unboundVoiceCount 未绑定发言人\", colors, danger = true)"
+      ]
+    },
+    {
+      "zh": "等待 AI 返回具体片段分配",
+      "en": "Waiting for AI segment assignments",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2992: state.roleStatusRunning -> \"等待 AI 返回具体片段分配\""
+      ]
+    },
+    {
+      "zh": "没有可展示的分配片段",
+      "en": "No assignable segments to show",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2993: roleState.error.isNotBlank() -> \"没有可展示的分配片段\""
+      ],
+      "force": true
+    },
+    {
+      "zh": "暂无分配明细",
+      "en": "No assignment details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:2994: else -> \"暂无分配明细\""
+      ]
+    },
+    {
+      "zh": "段落 ${paragraphIndex + 1}",
+      "en": "Paragraph %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3044: text = \"段落 ${paragraphIndex + 1}\","
+      ]
+    },
+    {
+      "zh": "当前朗读",
+      "en": "Now reading",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3051: Text(\"当前朗读\", color = colors.accent, fontSize = 11.sp)"
+      ]
+    },
+    {
+      "zh": "空片段",
+      "en": "Empty segment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3101: text = segment.text.ifBlank { \"空片段\" },"
+      ]
+    },
+    {
+      "zh": "修改片段分配",
+      "en": "Edit segment assignment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3171: text = \"修改片段分配\","
+      ]
+    },
+    {
+      "zh": "段落 ${segment.paragraphIndex + 1}",
+      "en": "Paragraph %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3177: text = \"段落 ${segment.paragraphIndex + 1}\","
+      ]
+    },
+    {
+      "zh": "取消",
+      "en": "Cancel",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3183: RoleDialogAction(\"取消\", colors, onDismiss)"
+      ]
+    },
+    {
+      "zh": "搜索角色",
+      "en": "Search characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3215: label = { Text(\"搜索角色\") },"
+      ]
+    },
+    {
+      "zh": "没有可选角色",
+      "en": "No characters available",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3227: text = \"没有可选角色\","
+      ]
+    },
+    {
+      "zh": "保存",
+      "en": "Save",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3264: text = \"保存\","
+      ]
+    },
+    {
+      "zh": "已绑定发言人",
+      "en": "Speaker bound",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3311: .ifBlank { if (route.isConfigured) \"已绑定发言人\" else \"未绑定发言人\" }"
+      ]
+    },
+    {
+      "zh": "未绑定发言人",
+      "en": "Speaker not bound",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3311: .ifBlank { if (route.isConfigured) \"已绑定发言人\" else \"未绑定发言人\" }",
+        "ReadAloudPlayerPanel.kt:3421: ?: if (roleSegmentNeedsVoice(segment) && segment.matchedCharacter) \"未绑定发言人\" else null"
+      ]
+    },
+    {
+      "zh": "已选",
+      "en": "Selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3348: Text(\"已选\", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "旁白",
+      "en": "Narrator",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3383: \"narrator\" -> \"旁白\"",
+        "ReadAloudPlayerPanel.kt:3415: segment.roleType == \"narrator\" -> \"旁白\""
+      ]
+    },
+    {
+      "zh": "角色",
+      "en": "Character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3384: \"character\" -> \"角色\""
+      ]
+    },
+    {
+      "zh": "心理",
+      "en": "Thought",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3385: \"thought\" -> \"心理\""
+      ]
+    },
+    {
+      "zh": "其他",
+      "en": "Other",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3386: else -> \"其他\""
+      ]
+    },
+    {
+      "zh": "分配中",
+      "en": "Assigning",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3392: AiReadAloudRoleState.STATUS_RUNNING -> \"分配中\""
+      ]
+    },
+    {
+      "zh": "待处理",
+      "en": "Pending",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3397: else -> \"待处理\""
+      ]
+    },
+    {
+      "zh": "AI 原始结果",
+      "en": "AI raw result",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3403: AiReadAloudRoleState.SOURCE_AI -> \"AI 原始结果\""
+      ]
+    },
+    {
+      "zh": "本地预处理",
+      "en": "Local preprocessing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3404: AiReadAloudRoleState.SOURCE_RULE -> \"本地预处理\""
+      ]
+    },
+    {
+      "zh": "AI 确认",
+      "en": "AI confirmed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3405: AiReadAloudRoleState.SOURCE_AI_CONFIRM -> \"AI 确认\""
+      ]
+    },
+    {
+      "zh": "已匹配角色",
+      "en": "Matched character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3406: AiReadAloudRoleState.SOURCE_RESOLVED -> \"已匹配角色\""
+      ]
+    },
+    {
+      "zh": "缓存",
+      "en": "Cache",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3407: AiReadAloudRoleState.SOURCE_CACHE -> \"缓存\""
+      ]
+    },
+    {
+      "zh": "默认切分",
+      "en": "Default split",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3408: AiReadAloudRoleState.SOURCE_FALLBACK -> \"默认切分\""
+      ]
+    },
+    {
+      "zh": "等待结果",
+      "en": "Waiting for result",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3409: else -> \"等待结果\""
+      ]
+    },
+    {
+      "zh": "未识别角色",
+      "en": "Unrecognized character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3416: segment.characterName.isBlank() -> \"未识别角色\""
+      ]
+    },
+    {
+      "zh": "${segment.characterName}（未匹配）",
+      "en": "%1$s (unmatched)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3418: else -> \"${segment.characterName}（未匹配）\""
+      ]
+    },
+    {
+      "zh": "系统语音",
+      "en": "System voice",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3440: SpeechRoute.ENGINE_SYSTEM -> \"系统语音\""
+      ]
+    },
+    {
+      "zh": "沉浸",
+      "en": "Immersive",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3481: add(ReadAloudPlayerPanel.DisplayMode.Immersive to \"沉浸\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "情景",
+      "en": "Scene",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3482: if (multiRoleEnabled) add(ReadAloudPlayerPanel.DisplayMode.Scene to \"情景\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "原文",
+      "en": "Original text",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3483: add(ReadAloudPlayerPanel.DisplayMode.Text to \"原文\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "全屏",
+      "en": "Full screen",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3542: text = \"全屏\","
+      ]
+    },
+    {
+      "zh": "分配完成后再显示本章内容",
+      "en": "Show chapter content after assignment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:3715: text = \"分配完成后再显示本章内容\","
+      ]
+    },
+    {
+      "zh": "当前书籍",
+      "en": "Current book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:4275: text = state.bookName.ifBlank { \"当前书籍\" },"
+      ]
+    },
+    {
+      "zh": "章节",
+      "en": "Chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:4587: text = state.chapterIndexText.ifBlank { \"章节\" },"
+      ]
+    },
+    {
+      "zh": "上一章",
+      "en": "Previous chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:4633: contentDescription = \"上一章\","
+      ]
+    },
+    {
+      "zh": "下一章",
+      "en": "Next chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:4666: contentDescription = \"下一章\","
+      ]
+    },
+    {
+      "zh": "选择发言人",
+      "en": "Select speaker",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudPlayerPanel.kt:5110: title = \"选择发言人\","
+      ]
+    }
+  ]
+}

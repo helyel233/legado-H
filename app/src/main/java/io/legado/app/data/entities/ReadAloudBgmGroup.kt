@@ -4,6 +4,8 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Entity(
     tableName = "read_aloud_bgm_groups",
@@ -26,5 +28,5 @@ data class ReadAloudBgmGroup(
     @ColumnInfo(defaultValue = "0")
     val updatedAt: Long = System.currentTimeMillis()
 ) {
-    fun displayName(): String = name.ifBlank { "默认分组" }
+    fun displayName(): String = name.ifBlank { appCtx.getString(R.string.ra_cfg_default_group) }
 }

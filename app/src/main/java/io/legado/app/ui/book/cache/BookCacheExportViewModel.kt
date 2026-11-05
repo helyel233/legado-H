@@ -125,7 +125,7 @@ class BookCacheExportViewModel(application: Application) : AndroidViewModel(appl
                 }
             }.onFailure {
                 AppLog.put("书籍缓存导出失败\n${it.localizedMessage}", it)
-                appCtx.toastOnUi("导出失败：${it.localizedMessage}")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_book_export_failed, it.localizedMessage))
             }.onSuccess {
                 appCtx.toastOnUi(R.string.book_cache_export_done)
             }
@@ -142,7 +142,7 @@ class BookCacheExportViewModel(application: Application) : AndroidViewModel(appl
                 }
             }.onFailure {
                 AppLog.put("书籍缓存导入失败\n${it.localizedMessage}", it)
-                appCtx.toastOnUi("导入失败：${it.localizedMessage}")
+                appCtx.toastOnUi(appCtx.getString(R.string.ui_book_import_failed, it.localizedMessage))
             }.onSuccess {
                 appCtx.toastOnUi(R.string.book_cache_import_done)
             }

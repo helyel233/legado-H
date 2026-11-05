@@ -176,7 +176,7 @@ class ExportBookService : BaseService() {
         exportJob = lifecycleScope.launch(IO) {
             while (isActive) {
                 val (bookUrl, exportConfig) = waitExportBooks.entries.firstOrNull() ?: let {
-                    notificationContentText = "导出完成"
+                    notificationContentText = appCtx.getString(R.string.misc_export_complete)
                     upExportNotification(true)
                     stopSelf()
                     return@launch

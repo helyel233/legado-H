@@ -1,0 +1,2365 @@
+{
+  "prefix": "ai_ui",
+  "resource": "strings_ai_ui.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/config/AiConfigFragment.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/AiChatActivity.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiChatScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiWorldBookManageScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiChatUiMapper.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiToolPreviewDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/AiImageGalleryActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiWorldBookManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiImageProviderManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/AiImageProviderEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/config/ComposeDirectLinkUploadDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAiFloatingPanel.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/ReadAiSummaryPanel.kt"
+  ],
+  "entries": [
+    {
+      "zh": "AI 工作区",
+      "en": "AI workspace",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:135: title = \"AI 工作区\",",
+        "AiConfigFragment.kt:372: .putExtra(FileManageActivity.EXTRA_TITLE, \"AI 工作区\")"
+      ],
+      "key": "ai_ui_ai_workspace"
+    },
+    {
+      "zh": "查看 Agent 创建、编辑和备份的文件",
+      "en": "View files created, edited and backed up by the agent",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:136: summary = \"查看 Agent 创建、编辑和备份的文件\","
+      ],
+      "key": "ai_ui_view_files_created_edited_backed"
+    },
+    {
+      "zh": "AI 工具轮次上限",
+      "en": "Max AI tool rounds",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:141: title = \"AI 工具轮次上限\",",
+        "AiConfigFragment.kt:378: title = \"AI 工具轮次上限\","
+      ],
+      "key": "ai_ui_max_ai_tool_rounds"
+    },
+    {
+      "zh": "${AppConfig.aiAgentMaxToolRounds} 轮",
+      "en": "%1$s rounds",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:142: summary = \"${AppConfig.aiAgentMaxToolRounds} 轮\","
+      ],
+      "key": "ai_ui_rounds"
+    },
+    {
+      "zh": "正文问 AI 工具范围",
+      "en": "Tool scope for Ask AI on content",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:147: title = \"正文问 AI 工具范围\",",
+        "AiConfigFragment.kt:444: title = \"正文问 AI 工具范围\","
+      ],
+      "key": "ai_ui_tool_scope_ask_ai_content"
+    },
+    {
+      "zh": "显示思考工具栏",
+      "en": "Show thinking toolbar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:159: title = \"显示思考工具栏\","
+      ],
+      "key": "ai_ui_show_thinking_toolbar"
+    },
+    {
+      "zh": "关闭后聊天页不显示思考和工具调用过程卡片，不影响后台执行",
+      "en": "When off, the chat page hides thinking and tool-call cards; background execution is unaffected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:160: summary = \"关闭后聊天页不显示思考和工具调用过程卡片，不影响后台执行\","
+      ],
+      "key": "ai_ui_when_off_chat_page_hides"
+    },
+    {
+      "zh": "正文隐私授权",
+      "en": "Content privacy consent",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:182: title = \"正文隐私授权\",",
+        "AiConfigFragment.kt:689: title = \"正文隐私授权\","
+      ],
+      "key": "ai_ui_content_privacy_consent"
+    },
+    {
+      "zh": "用量与预算",
+      "en": "Usage and budget",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:188: title = \"用量与预算\","
+      ],
+      "key": "ai_ui_usage_budget"
+    },
+    {
+      "zh": "世界书管理",
+      "en": "World book management",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:200: title = \"世界书管理\","
+      ],
+      "key": "ai_ui_world_book_management"
+    },
+    {
+      "zh": "未配置世界书",
+      "en": "No world book configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:202: \"未配置世界书\""
+      ],
+      "key": "ai_ui_no_world_book_configured"
+    },
+    {
+      "zh": "${worldBooks.count { it.enabled }}/${worldBooks.size} 启用 · ${worldBooks.sumOf { it.entries.size }} 条目",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:204: \"${worldBooks.count { it.enabled }}/${worldBooks.size} 启用 · ${worldBooks.sumOf { it.entries.size }} 条目\""
+      ]
+    },
+    {
+      "zh": "默认模型",
+      "en": "Default model",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:212: title = \"默认模型\",",
+        "AiConfigFragment.kt:462: title = \"默认模型\","
+      ],
+      "key": "ai_ui_default_model"
+    },
+    {
+      "zh": "问AI ${modelLabel(AppConfig.aiAskModelConfig)} / 总结 ${modelLabel(AppConfig.aiSummaryModelConfig)} / 多角色 ${modelLabel(AppConfig.aiReadAloudRoleModelConfig)} / 生图 ${imageProviderLabel()}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:213: summary = \"问AI ${modelLabel(AppConfig.aiAskModelConfig)} / 总结 ${modelLabel(AppConfig.aiSummaryModelConfig)} / 多角色 ${mode"
+      ]
+    },
+    {
+      "zh": "全量工具",
+      "en": "All tools",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:406: AppConfig.AI_READ_TOOL_MODE_ALL -> \"全量工具\"",
+        "AiConfigFragment.kt:441: \"全量工具\""
+      ],
+      "key": "ai_ui_all_tools"
+    },
+    {
+      "zh": "阅读安全工具",
+      "en": "Reading safety tools",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:407: AppConfig.AI_READ_TOOL_MODE_SAFE -> \"阅读安全工具\"",
+        "AiConfigFragment.kt:440: \"阅读安全工具\","
+      ],
+      "key": "ai_ui_reading_safety_tools"
+    },
+    {
+      "zh": "使用已启用工具",
+      "en": "Use enabled tools",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:408: else -> \"使用已启用工具\"",
+        "AiConfigFragment.kt:439: \"使用已启用工具\","
+      ],
+      "key": "ai_ui_use_enabled_tools"
+    },
+    {
+      "zh": "正文问 AI：${modelLabel(AppConfig.aiAskModelConfig)}",
+      "en": "Ask AI on content: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:456: \"正文问 AI：${modelLabel(AppConfig.aiAskModelConfig)}\","
+      ],
+      "key": "ai_ui_ask_ai_content"
+    },
+    {
+      "zh": "文章总结：${modelLabel(AppConfig.aiSummaryModelConfig)}",
+      "en": "Article summary: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:457: \"文章总结：${modelLabel(AppConfig.aiSummaryModelConfig)}\","
+      ],
+      "key": "ai_ui_article_summary"
+    },
+    {
+      "zh": "多角色：${modelLabel(AppConfig.aiReadAloudRoleModelConfig)}",
+      "en": "Multi-role: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:458: \"多角色：${modelLabel(AppConfig.aiReadAloudRoleModelConfig)}\","
+      ],
+      "key": "ai_ui_multi_role"
+    },
+    {
+      "zh": "图像生成供应商：${imageProviderLabel()}",
+      "en": "Image provider: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:459: \"图像生成供应商：${imageProviderLabel()}\""
+      ],
+      "key": "ai_ui_image_provider"
+    },
+    {
+      "zh": "正文问 AI 模型",
+      "en": "Ask AI on content model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:466: 0 -> selectDefaultModel(\"正文问 AI 模型\", AppConfig.aiAskModelId) {"
+      ],
+      "key": "ai_ui_ask_ai_content_model"
+    },
+    {
+      "zh": "文章总结模型",
+      "en": "Article summary model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:469: 1 -> selectDefaultModel(\"文章总结模型\", AppConfig.aiSummaryModelId) {"
+      ],
+      "key": "ai_ui_article_summary_model"
+    },
+    {
+      "zh": "多角色模型",
+      "en": "Multi-role model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:472: 2 -> selectDefaultModel(\"多角色模型\", AppConfig.aiReadAloudRoleModelId) {"
+      ],
+      "key": "ai_ui_multi_role_model"
+    },
+    {
+      "zh": "图像生成供应商",
+      "en": "Image generation provider",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:513: title = \"图像生成供应商\","
+      ],
+      "key": "ai_ui_image_generation_provider"
+    },
+    {
+      "zh": "始终允许发送正文",
+      "en": "Always allow sending content",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:658: AppConfig.AI_CONTENT_CONSENT_ALLOW -> \"始终允许发送正文\"",
+        "AiConfigFragment.kt:692: \"始终允许发送正文\","
+      ],
+      "key": "ai_ui_always_allow_sending_content"
+    },
+    {
+      "zh": "始终禁止发送正文",
+      "en": "Never send content",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:659: AppConfig.AI_CONTENT_CONSENT_DENY -> \"始终禁止发送正文\"",
+        "AiConfigFragment.kt:693: \"始终禁止发送正文\""
+      ],
+      "key": "ai_ui_never_send_content"
+    },
+    {
+      "zh": "每次询问",
+      "en": "Ask every time",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:660: else -> \"每次询问\"",
+        "AiConfigFragment.kt:691: \"每次询问\","
+      ],
+      "key": "ai_ui_ask_every_time"
+    },
+    {
+      "zh": "不限",
+      "en": "Unlimited",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:666: val budgetText = if (budget > 0L) formatTokenCount(budget) else \"不限\"",
+        "AiConfigFragment.kt:680: labels = values.map { if (it <= 0L) \"不限\" else \"${formatTokenCount(it)} tokens\" }"
+      ],
+      "key": "ai_ui_unlimited"
+    },
+    {
+      "zh": "今日 ${formatTokenCount(usage.totalTokens)} tokens · ${usage.requests} 次请求 · 每日上限 $budgetText",
+      "en": "Today %1$s tokens · %2$s requests · daily limit %3$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:667: return \"今日 ${formatTokenCount(usage.totalTokens)} tokens · ${usage.requests} 次请求 · 每日上限 $budgetText\""
+      ],
+      "key": "ai_ui_today_tokens_requests_daily_limit"
+    },
+    {
+      "zh": "每日 token 预算",
+      "en": "Daily token budget",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:679: title = \"每日 token 预算\","
+      ],
+      "key": "ai_ui_daily_token_budget"
+    },
+    {
+      "zh": "关闭上下文压缩",
+      "en": "Disable context compression",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:706: val enabledText = if (AppConfig.aiContextCompressionEnabled) \"关闭上下文压缩\" else \"启用上下文压缩\""
+      ],
+      "key": "ai_ui_disable_context_compression"
+    },
+    {
+      "zh": "启用上下文压缩",
+      "en": "Enable context compression",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:706: val enabledText = if (AppConfig.aiContextCompressionEnabled) \"关闭上下文压缩\" else \"启用上下文压缩\""
+      ],
+      "key": "ai_ui_enable_context_compression"
+    },
+    {
+      "zh": "上下文长度: ${AppConfig.aiContextWindowTokens}",
+      "en": "Context length: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:711: \"上下文长度: ${AppConfig.aiContextWindowTokens}\","
+      ],
+      "key": "ai_ui_context_length"
+    },
+    {
+      "zh": "思考上下文: ${AppConfig.aiThinkingContextTokens}",
+      "en": "Thinking context: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiConfigFragment.kt:712: \"思考上下文: ${AppConfig.aiThinkingContextTokens}\""
+      ],
+      "key": "ai_ui_thinking_context"
+    },
+    {
+      "zh": "普通模式：正常对话和工具调用",
+      "en": "Normal mode: regular chat and tool calls",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:195: \"普通模式：正常对话和工具调用\","
+      ],
+      "key": "ai_ui_normal_mode_regular_chat_tool"
+    },
+    {
+      "zh": "Goal 模式：持续执行直到目标达成",
+      "en": "Goal mode: keep working until the goal is reached",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:196: \"Goal 模式：持续执行直到目标达成\","
+      ],
+      "key": "ai_ui_goal_mode_keep_working_until"
+    },
+    {
+      "zh": "Plan 模式：只读分析，只写计划不执行",
+      "en": "Plan mode: read-only analysis, plan without executing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:197: \"Plan 模式：只读分析，只写计划不执行\""
+      ],
+      "key": "ai_ui_plan_mode_read_only_analysis"
+    },
+    {
+      "zh": "Agent 模式",
+      "en": "Agent mode",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:199: selector(\"Agent 模式\", labels) { _, _, index ->"
+      ],
+      "key": "ai_ui_agent_mode"
+    },
+    {
+      "zh": "已切换普通模式",
+      "en": "Switched to Normal mode",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:205: AiAgentMode.NORMAL -> \"已切换普通模式\""
+      ],
+      "key": "ai_ui_switched_normal_mode"
+    },
+    {
+      "zh": "已切换 Goal 模式",
+      "en": "Switched to Goal mode",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:206: AiAgentMode.GOAL -> \"已切换 Goal 模式\""
+      ],
+      "key": "ai_ui_switched_goal_mode"
+    },
+    {
+      "zh": "已切换 Plan 模式",
+      "en": "Switched to Plan mode",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:207: AiAgentMode.PLAN -> \"已切换 Plan 模式\""
+      ],
+      "key": "ai_ui_switched_plan_mode"
+    },
+    {
+      "zh": "无法重试此条消息",
+      "en": "Cannot retry this message",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:230: toastOnUi(\"无法重试此条消息\")"
+      ],
+      "key": "ai_ui_cannot_retry_this_message"
+    },
+    {
+      "zh": "删除此条及其之后的所有内容？",
+      "en": "Delete this message and everything after it?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:248: message = \"删除此条及其之后的所有内容？\""
+      ],
+      "key": "ai_ui_delete_this_message_everything_after"
+    },
+    {
+      "zh": "没有可添加的角色卡",
+      "en": "No character cards available to add",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:388: toastOnUi(\"没有可添加的角色卡\")"
+      ],
+      "key": "ai_ui_no_character_cards_available_add"
+    },
+    {
+      "zh": "新建对话",
+      "en": "New chat",
+      "count": 3,
+      "risk": 1,
+      "samples": [
+        "AiChatActivity.kt:427: listOf(\"新建对话\", \"编辑默认助手人格\", appCtx.getString(R.string.ai_tool_world_book))",
+        "AiChatActivity.kt:429: listOf(\"编辑角色卡\", \"新建对话\", appCtx.getString(R.string.ai_tool_world_book), \"移除角色助手\")",
+        "ReadAiFloatingPanel.kt:824: \"新建对话\","
+      ],
+      "force": true,
+      "key": "ai_ui_new_chat"
+    },
+    {
+      "zh": "编辑默认助手人格",
+      "en": "Edit default assistant persona",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:427: listOf(\"新建对话\", \"编辑默认助手人格\", appCtx.getString(R.string.ai_tool_world_book))"
+      ],
+      "key": "ai_ui_edit_default_assistant_persona"
+    },
+    {
+      "zh": "编辑角色卡",
+      "en": "Edit character card",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatActivity.kt:429: listOf(\"编辑角色卡\", \"新建对话\", appCtx.getString(R.string.ai_tool_world_book), \"移除角色助手\")"
+      ],
+      "force": true,
+      "key": "ai_ui_edit_character_card"
+    },
+    {
+      "zh": "移除角色助手",
+      "en": "Remove character assistant",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:429: listOf(\"编辑角色卡\", \"新建对话\", appCtx.getString(R.string.ai_tool_world_book), \"移除角色助手\")"
+      ],
+      "key": "ai_ui_remove_character_assistant"
+    },
+    {
+      "zh": "角色卡不存在",
+      "en": "Character card not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:461: toastOnUi(\"角色卡不存在\")"
+      ],
+      "key": "ai_ui_character_card_not_found"
+    },
+    {
+      "zh": "${companion.name} · 人格",
+      "en": "%1$s · Persona",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:489: alert(title = \"${companion.name} · 人格\") {"
+      ],
+      "key": "ai_ui_persona"
+    },
+    {
+      "zh": "提示词不能为空",
+      "en": "Prompt cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:494: toastOnUi(\"提示词不能为空\")"
+      ],
+      "key": "ai_ui_prompt_cannot_be_empty"
+    },
+    {
+      "zh": "默认助手不能删除",
+      "en": "The default assistant cannot be deleted",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:506: toastOnUi(\"默认助手不能删除\")"
+      ],
+      "key": "ai_ui_default_assistant_cannot_be_deleted"
+    },
+    {
+      "zh": "删除角色助手",
+      "en": "Delete character assistant",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:510: title = \"删除角色助手\","
+      ],
+      "key": "ai_ui_delete_character_assistant"
+    },
+    {
+      "zh": "确定删除「${companion.name}」？它的聊天历史也会删除。",
+      "en": "Delete \"%1$s\"? Its chat history will also be deleted.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:511: message = \"确定删除「${companion.name}」？它的聊天历史也会删除。\""
+      ],
+      "key": "ai_ui_delete_its_chat_history_will"
+    },
+    {
+      "zh": "打开世界书管理",
+      "en": "Open world book management",
+      "count": 3,
+      "risk": 2,
+      "samples": [
+        "AiChatActivity.kt:525: selector(appCtx.getString(R.string.ai_tool_world_book), listOf(\"打开世界书管理\")) { _, _, _ ->",
+        "AiChatActivity.kt:532: selector(appCtx.getString(R.string.ai_tool_world_book), listOf(\"没有可单独绑定到角色的世界书\", \"打开世界书管理\")) { _, _, which ->",
+        "ReadAiFloatingPanel.kt:865: context.selector(appCtx.getString(R.string.ai_tool_world_book), listOf(\"打开世界书管理\")) { _, _, _ ->"
+      ],
+      "force": true,
+      "key": "ai_ui_open_world_book_management"
+    },
+    {
+      "zh": "没有可单独绑定到角色的世界书",
+      "en": "No world book can be bound to this character",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatActivity.kt:532: selector(appCtx.getString(R.string.ai_tool_world_book), listOf(\"没有可单独绑定到角色的世界书\", \"打开世界书管理\")) { _, _, which ->"
+      ],
+      "force": true,
+      "key": "ai_ui_no_world_book_can_be"
+    },
+    {
+      "zh": "${companion.name} · 世界书",
+      "en": "%1$s · World book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:539: alert(title = \"${companion.name} · 世界书\") {"
+      ],
+      "key": "ai_ui_world_book"
+    },
+    {
+      "zh": "（全局）",
+      "en": "(Global)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:545: append(\"（全局）\")"
+      ],
+      "key": "ai_ui_global"
+    },
+    {
+      "zh": "（资料库停用）",
+      "en": "(Library disabled)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:548: append(\"（资料库停用）\")"
+      ],
+      "key": "ai_ui_library_disabled"
+    },
+    {
+      "zh": "当前窗口能力",
+      "en": "Current window capabilities",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:575: \"当前窗口能力\",",
+        "ReadAiFloatingPanel.kt:822: \"当前窗口能力\","
+      ],
+      "key": "ai_ui_current_window_capabilities"
+    },
+    {
+      "zh": "Skill：${viewModel.activeWindowSkillIds().size} 个",
+      "en": "Skills: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:577: \"Skill：${viewModel.activeWindowSkillIds().size} 个\","
+      ],
+      "key": "ai_ui_skills"
+    },
+    {
+      "zh": "MCP：${viewModel.activeWindowMcpServerIds().size} 个",
+      "en": "MCP: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:578: \"MCP：${viewModel.activeWindowMcpServerIds().size} 个\","
+      ],
+      "key": "ai_ui_mcp"
+    },
+    {
+      "zh": "世界书：${activeCompanionWorldBookCount()} 个",
+      "en": "World books: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:579: \"世界书：${activeCompanionWorldBookCount()} 个\","
+      ],
+      "key": "ai_ui_world_books"
+    },
+    {
+      "zh": "清空 Skill/MCP",
+      "en": "Clear Skill/MCP",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:580: \"清空 Skill/MCP\"",
+        "ReadAiFloatingPanel.kt:829: \"清空 Skill/MCP\""
+      ],
+      "key": "ai_ui_clear_skill_mcp"
+    },
+    {
+      "zh": "没有可用 Skill",
+      "en": "No skills available",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:612: toastOnUi(\"没有可用 Skill\")"
+      ],
+      "key": "ai_ui_no_skills_available"
+    },
+    {
+      "zh": "当前窗口 Skill",
+      "en": "Current window skills",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:616: alert(title = \"当前窗口 Skill\") {"
+      ],
+      "key": "ai_ui_current_window_skills"
+    },
+    {
+      "zh": "没有已启用 MCP",
+      "en": "No MCP servers enabled",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:638: toastOnUi(\"没有已启用 MCP\")"
+      ],
+      "key": "ai_ui_no_mcp_servers_enabled"
+    },
+    {
+      "zh": "当前窗口 MCP",
+      "en": "Current window MCP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:642: alert(title = \"当前窗口 MCP\") {"
+      ],
+      "key": "ai_ui_current_window_mcp"
+    },
+    {
+      "zh": "添加角色助手",
+      "en": "Add character assistant",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:792: text = \"添加角色助手\","
+      ],
+      "key": "ai_ui_add_character_assistant"
+    },
+    {
+      "zh": "从《${it.bookName.ifBlank { it.label }}》选择角色",
+      "en": "Choose a character from \"%1$s\"",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:800: text = selectedGroup?.let { \"从《${it.bookName.ifBlank { it.label }}》选择角色\" }"
+      ],
+      "key": "ai_ui_choose_character_from"
+    },
+    {
+      "zh": "先选择书籍，再选择要添加到侧边栏的角色",
+      "en": "Pick a book first, then choose a character for the sidebar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:801: ?: \"先选择书籍，再选择要添加到侧边栏的角色\","
+      ],
+      "key": "ai_ui_pick_book_first_then_choose"
+    },
+    {
+      "zh": "选择书籍",
+      "en": "Select book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:831: text = \"选择书籍\","
+      ],
+      "key": "ai_ui_select_book"
+    },
+    {
+      "zh": "没有匹配的角色书籍",
+      "en": "No matching books with characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:838: CharacterPickerEmptyV2(\"没有匹配的角色书籍\")"
+      ],
+      "key": "ai_ui_no_matching_books_characters"
+    },
+    {
+      "zh": "选择角色",
+      "en": "Select character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:887: text = \"选择角色\","
+      ],
+      "key": "ai_ui_select_character"
+    },
+    {
+      "zh": "这一组还没有角色",
+      "en": "No characters in this group yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:911: CharacterPickerEmptyV2(\"这一组还没有角色\")"
+      ],
+      "key": "ai_ui_no_characters_this_group_yet"
+    },
+    {
+      "zh": "搜索书名、作者或角色",
+      "en": "Search book, author or character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:942: text = \"搜索书名、作者或角色\","
+      ],
+      "key": "ai_ui_search_book_author_or_character"
+    },
+    {
+      "zh": "${group.characters.size} 个角色",
+      "en": "%1$s characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1014: text = \"${group.characters.size} 个角色\","
+      ],
+      "key": "ai_ui_characters"
+    },
+    {
+      "zh": " }} · ${group.characters.size} 个角色",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1068: text = \"${group.author.ifBlank { \"未知作者\" }} · ${group.characters.size} 个角色\","
+      ]
+    },
+    {
+      "zh": "换书",
+      "en": "Change book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1077: text = \"换书\","
+      ],
+      "key": "ai_ui_change_book"
+    },
+    {
+      "zh": "未知",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiChatActivity.kt:1155: .filter { it.isNotBlank() && it != \"未知\" }"
+      ]
+    },
+    {
+      "zh": "角色卡",
+      "en": "Character card",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1157: .ifBlank { \"角色卡\" },",
+        "AiChatScreen.kt:1951: \"角色卡\","
+      ],
+      "key": "ai_ui_character_card"
+    },
+    {
+      "zh": "重要",
+      "en": "Important",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1205: label = \"重要\","
+      ],
+      "key": "ai_ui_important"
+    },
+    {
+      "zh": "普通",
+      "en": "Normal",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatActivity.kt:1210: label = \"普通\","
+      ],
+      "key": "ai_ui_normal"
+    },
+    {
+      "zh": "窗口能力",
+      "en": "Window capabilities",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:745: add(AiTopMenuAction(\"窗口能力\", openAbilities))",
+        "ReadAiFloatingPanel.kt:1405: add(ReadAiMenuAction(\"窗口能力\", onOpenAbilities))"
+      ],
+      "key": "ai_ui_window_capabilities"
+    },
+    {
+      "zh": "浏览世界书",
+      "en": "Browse world books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:748: add(AiTopMenuAction(\"浏览世界书\", openWorldBooks))"
+      ],
+      "key": "ai_ui_browse_world_books"
+    },
+    {
+      "zh": "自动播放语音：${if (autoSpeakEnabled) ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:751: add(AiTopMenuAction(\"自动播放语音：${if (autoSpeakEnabled) \"开\" else \"关\"}\", toggleAutoSpeak))"
+      ]
+    },
+    {
+      "zh": "AI 酒馆",
+      "en": "AI tavern",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:903: text = \"AI 酒馆\","
+      ],
+      "key": "ai_ui_ai_tavern"
+    },
+    {
+      "zh": "角色与会话",
+      "en": "Characters and sessions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:909: text = \"角色与会话\","
+      ],
+      "key": "ai_ui_characters_sessions"
+    },
+    {
+      "zh": "会话",
+      "en": "Sessions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1038: text = \"会话\","
+      ],
+      "key": "ai_ui_sessions"
+    },
+    {
+      "zh": "还没有历史会话",
+      "en": "No past sessions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1060: text = \"还没有历史会话\","
+      ],
+      "key": "ai_ui_no_past_sessions"
+    },
+    {
+      "zh": "还有 ${sessions.size - 8} 个会话",
+      "en": "%1$s more sessions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1077: text = \"还有 ${sessions.size - 8} 个会话\","
+      ],
+      "key": "ai_ui_more_sessions"
+    },
+    {
+      "zh": "默认系统提示词",
+      "en": "Default system prompt",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1150: isDefault -> \"默认系统提示词\""
+      ],
+      "key": "ai_ui_default_system_prompt"
+    },
+    {
+      "zh": "角色 · ${displayBookKeyLabel(companion.bookKey)}",
+      "en": "Character · %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1151: companion.bookKey.isNotBlank() -> \"角色 · ${displayBookKeyLabel(companion.bookKey)}\""
+      ],
+      "key": "ai_ui_character"
+    },
+    {
+      "zh": "未命名会话",
+      "en": "Untitled session",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1201: text = session.title.ifBlank { \"未命名会话\" },"
+      ],
+      "key": "ai_ui_untitled_session"
+    },
+    {
+      "zh": "${timeFormat.format(java.util.Date(session.updatedAt))} · ${session.messages.size} 条消息",
+      "en": "%1$s · %2$s messages",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1209: text = \"${timeFormat.format(java.util.Date(session.updatedAt))} · ${session.messages.size} 条消息\","
+      ],
+      "key": "ai_ui_messages"
+    },
+    {
+      "zh": "书籍结果 ${part.books.size} 条",
+      "en": "Book results: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1725: text = \"书籍结果 ${part.books.size} 条\","
+      ],
+      "key": "ai_ui_book_results"
+    },
+    {
+      "zh": "书籍结果",
+      "en": "Book results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1731: title = \"书籍结果\","
+      ],
+      "key": "ai_ui_book_results_2"
+    },
+    {
+      "zh": "共 ${part.books.size} 条",
+      "en": "Total %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1732: summary = \"共 ${part.books.size} 条\","
+      ],
+      "key": "ai_ui_total"
+    },
+    {
+      "zh": "图片结果 ${part.images.size} 张",
+      "en": "Image results: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1748: text = \"图片结果 ${part.images.size} 张\","
+      ],
+      "key": "ai_ui_image_results"
+    },
+    {
+      "zh": "图片结果",
+      "en": "Image results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1754: title = \"图片结果\","
+      ],
+      "key": "ai_ui_image_results_2"
+    },
+    {
+      "zh": "共 ${part.images.size} 张",
+      "en": "Total %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1755: summary = \"共 ${part.images.size} 张\","
+      ],
+      "key": "ai_ui_total_2"
+    },
+    {
+      "zh": "总结",
+      "en": "Summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1935: \"总结\","
+      ],
+      "key": "ai_ui_summary"
+    },
+    {
+      "zh": "请先查询我的书架找到最近在读的书，然后总结这本书目前已读内容的主要情节和要点。",
+      "en": "Find the book I am currently reading on my bookshelf, then summarize the main plot and key points of what I have read so far.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1936: \"请先查询我的书架找到最近在读的书，然后总结这本书目前已读内容的主要情节和要点。\""
+      ],
+      "key": "ai_ui_find_book_i_am_currently"
+    },
+    {
+      "zh": "问书",
+      "en": "Ask about the book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1939: \"问书\","
+      ],
+      "key": "ai_ui_ask_about_book"
+    },
+    {
+      "zh": "我想查证《书名》里的一个细节：\\n\\n请先搜索相关章节正文，引用原文并给出解读。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1940: \"我想查证《书名》里的一个细节：\\n\\n请先搜索相关章节正文，引用原文并给出解读。\""
+      ]
+    },
+    {
+      "zh": "续写",
+      "en": "Continue writing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1943: \"续写\","
+      ],
+      "key": "ai_ui_continue_writing"
+    },
+    {
+      "zh": "请先读取《书名》最近已读章节的正文，然后基于当前情节续写约 300 字的后续发展。",
+      "en": "Read the most recently read chapter of \"Book Title\", then continue the story by about 300 characters based on the current plot.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1944: \"请先读取《书名》最近已读章节的正文，然后基于当前情节续写约 300 字的后续发展。\""
+      ],
+      "key": "ai_ui_read_most_recently_read_chapter"
+    },
+    {
+      "zh": "配图",
+      "en": "Illustration",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1947: \"配图\","
+      ],
+      "key": "ai_ui_illustration"
+    },
+    {
+      "zh": "请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\\n\\n",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1948: \"请为《书名》当前阅读进度中的关键场景生成一张插画，画面风格：\\n\\n\""
+      ]
+    },
+    {
+      "zh": "请为《书名》中的主角创建角色卡，包含：外貌、性格、背景故事、说话风格与配音建议。",
+      "en": "Create a character card for the protagonist of \"Book Title\", including appearance, personality, backstory, speaking style and voice suggestions.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatScreen.kt:1952: \"请为《书名》中的主角创建角色卡，包含：外貌、性格、背景故事、说话风格与配音建议。\""
+      ],
+      "key": "ai_ui_create_character_card_protagonist_book"
+    },
+    {
+      "zh": "${imported.name} 副本",
+      "en": "%1$s (copy)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:163: name = \"${imported.name} 副本\""
+      ],
+      "key": "ai_ui_copy"
+    },
+    {
+      "zh": "世界书已导入",
+      "en": "World book imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:172: context.toastOnUi(\"世界书已导入\")"
+      ],
+      "key": "ai_ui_world_book_imported"
+    },
+    {
+      "zh": "世界书 JSON 解析失败",
+      "en": "Failed to parse world book JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:174: context.toastOnUi(it.localizedMessage ?: \"世界书 JSON 解析失败\")"
+      ],
+      "key": "ai_ui_failed_parse_world_book_json"
+    },
+    {
+      "zh": "${book.name} 副本",
+      "en": "%1$s (copy)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:260: name = \"${book.name} 副本\","
+      ],
+      "key": "ai_ui_copy_2"
+    },
+    {
+      "zh": "${book.name} · 导出 JSON",
+      "en": "%1$s · Export JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:270: title = \"${book.name} · 导出 JSON\","
+      ],
+      "key": "ai_ui_export_json"
+    },
+    {
+      "zh": "${books.count { it.isGloballyEnabled() }} 个全局启用 · ${books.sumOf { it.entries.size }} 条条目",
+      "en": "%1$s globally enabled · %2$s entries",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:371: subtitle = \"${books.count { it.isGloballyEnabled() }} 个全局启用 · ${books.sumOf { it.entries.size }} 条条目\","
+      ],
+      "key": "ai_ui_globally_enabled_entries"
+    },
+    {
+      "zh": "新增世界书",
+      "en": "New world book",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:487: WorldBookAddMenuItem(\"新增世界书\", palette, style) {",
+        "AiWorldBookManageScreen.kt:762: title = if (state.id == null) \"新增世界书\" else \"编辑世界书\","
+      ],
+      "key": "ai_ui_new_world_book"
+    },
+    {
+      "zh": "粘贴导入",
+      "en": "Paste to import",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:504: WorldBookAddMenuItem(\"粘贴导入\", palette, style) {"
+      ],
+      "key": "ai_ui_paste_import"
+    },
+    {
+      "zh": "搜索世界书、条目、关键词",
+      "en": "Search world books, entries, keywords",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:543: placeholder = { Text(\"搜索世界书、条目、关键词\") },"
+      ],
+      "key": "ai_ui_search_world_books_entries_keywords"
+    },
+    {
+      "zh": "无描述",
+      "en": "No description",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:593: text = book.description.ifBlank { \"无描述\" },"
+      ],
+      "key": "ai_ui_no_description"
+    },
+    {
+      "zh": "全局启用",
+      "en": "Globally enabled",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:608: InfoChip(if (book.isGloballyEnabled()) \"全局启用\" else \"可角色绑定\", style, selected = book.isGloballyEnabled())"
+      ],
+      "key": "ai_ui_globally_enabled"
+    },
+    {
+      "zh": "可角色绑定",
+      "en": "Bindable to characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:608: InfoChip(if (book.isGloballyEnabled()) \"全局启用\" else \"可角色绑定\", style, selected = book.isGloballyEnabled())"
+      ],
+      "key": "ai_ui_bindable_characters"
+    },
+    {
+      "zh": "资料库停用",
+      "en": "Library disabled",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:609: if (!book.enabled) InfoChip(\"资料库停用\", style)"
+      ],
+      "key": "ai_ui_library_disabled_2"
+    },
+    {
+      "zh": "${book.entries.size} 条目",
+      "en": "%1$s entries",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:610: InfoChip(\"${book.entries.size} 条目\", style)"
+      ],
+      "key": "ai_ui_entries"
+    },
+    {
+      "zh": "${book.activeBindingCount()} 个绑定",
+      "en": "%1$s bindings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:611: InfoChip(\"${book.activeBindingCount()} 个绑定\", style)"
+      ],
+      "key": "ai_ui_bindings"
+    },
+    {
+      "zh": "最多 ${book.maxEntries} 条",
+      "en": "Max %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:612: InfoChip(\"最多 ${book.maxEntries} 条\", style)"
+      ],
+      "key": "ai_ui_max"
+    },
+    {
+      "zh": "新增条目",
+      "en": "New entry",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:621: SmallAction(\"新增条目\", style, onClick = onAddEntry)",
+        "AiWorldBookManageScreen.kt:863: title = if (state.id == null) \"新增条目\" else \"编辑条目\","
+      ],
+      "key": "ai_ui_new_entry"
+    },
+    {
+      "zh": "暂无条目",
+      "en": "No entries",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:627: Text(\"暂无条目\", color = style.colors.secondaryText, fontSize = 13.sp)"
+      ],
+      "key": "ai_ui_no_entries"
+    },
+    {
+      "zh": "常驻",
+      "en": "Always active",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:685: if (entry.constant) InfoChip(\"常驻\", style, selected = true)"
+      ],
+      "key": "ai_ui_always_active"
+    },
+    {
+      "zh": "扫 ${entry.scanDepth}",
+      "en": "Scan %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:688: InfoChip(\"扫 ${entry.scanDepth}\", style)"
+      ],
+      "key": "ai_ui_scan"
+    },
+    {
+      "zh": "粘贴 RikkaHub lorebook JSON",
+      "en": "Paste RikkaHub lorebook JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:716: subtitle = if (state.importMode) \"粘贴 RikkaHub lorebook JSON\" else \"标准 lorebook JSON\","
+      ],
+      "key": "ai_ui_paste_rikkahub_lorebook_json"
+    },
+    {
+      "zh": "标准 lorebook JSON",
+      "en": "Standard lorebook JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:716: subtitle = if (state.importMode) \"粘贴 RikkaHub lorebook JSON\" else \"标准 lorebook JSON\","
+      ],
+      "key": "ai_ui_standard_lorebook_json"
+    },
+    {
+      "zh": "编辑世界书",
+      "en": "Edit world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:762: title = if (state.id == null) \"新增世界书\" else \"编辑世界书\","
+      ],
+      "key": "ai_ui_edit_world_book"
+    },
+    {
+      "zh": "资料库设置",
+      "en": "Library settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:763: subtitle = \"资料库设置\","
+      ],
+      "key": "ai_ui_library_settings"
+    },
+    {
+      "zh": "资料库可用",
+      "en": "Library available",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:769: LabeledSwitch(\"资料库可用\", enabled, style) { enabled = it }"
+      ],
+      "key": "ai_ui_library_available"
+    },
+    {
+      "zh": "描述",
+      "en": "Description",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:771: LabeledField(\"描述\", description, style, minLines = 3, onValueChange = { description = it })"
+      ],
+      "key": "ai_ui_description"
+    },
+    {
+      "zh": "每本世界书最大命中条数",
+      "en": "Max matched entries per world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:773: label = \"每本世界书最大命中条数\","
+      ],
+      "key": "ai_ui_max_matched_entries_per_world"
+    },
+    {
+      "zh": "系统提示词之后",
+      "en": "After the system prompt",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:802: \"系统提示词之后\","
+      ],
+      "key": "ai_ui_after_system_prompt"
+    },
+    {
+      "zh": "适合长期设定和角色资料",
+      "en": "Best for long-term settings and character profiles",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:803: \"适合长期设定和角色资料\""
+      ],
+      "key": "ai_ui_best_long_term_settings_character"
+    },
+    {
+      "zh": "对话正文之前",
+      "en": "Before the conversation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:807: \"对话正文之前\","
+      ],
+      "key": "ai_ui_before_conversation"
+    },
+    {
+      "zh": "适合本轮前置补充信息",
+      "en": "Best for context needed up front",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:808: \"适合本轮前置补充信息\""
+      ],
+      "key": "ai_ui_best_context_needed_up_front"
+    },
+    {
+      "zh": "最后一条用户消息之前",
+      "en": "Before the last user message",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:812: \"最后一条用户消息之前\","
+      ],
+      "key": "ai_ui_before_last_user_message"
+    },
+    {
+      "zh": "适合贴近当前问题的补充",
+      "en": "Best for details close to the current question",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:813: \"适合贴近当前问题的补充\""
+      ],
+      "key": "ai_ui_best_details_close_current_question"
+    },
+    {
+      "zh": "按深度插入",
+      "en": "Insert by depth",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:817: \"按深度插入\","
+      ],
+      "key": "ai_ui_insert_by_depth"
+    },
+    {
+      "zh": "按下方插入深度放入历史消息附近",
+      "en": "Place near history messages using the depth below",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:818: \"按下方插入深度放入历史消息附近\""
+      ],
+      "key": "ai_ui_place_near_history_messages_using"
+    },
+    {
+      "zh": "系统消息",
+      "en": "System message",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:823: WorldBookSelectOption(AiWorldBookEntry.ROLE_SYSTEM, \"系统消息\", \"最高优先级设定\"),"
+      ],
+      "key": "ai_ui_system_message"
+    },
+    {
+      "zh": "最高优先级设定",
+      "en": "Highest-priority settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:823: WorldBookSelectOption(AiWorldBookEntry.ROLE_SYSTEM, \"系统消息\", \"最高优先级设定\"),"
+      ],
+      "key": "ai_ui_highest_priority_settings"
+    },
+    {
+      "zh": "用户消息",
+      "en": "User message",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:824: WorldBookSelectOption(AiWorldBookEntry.ROLE_USER, \"用户消息\", \"模拟用户侧补充\"),"
+      ],
+      "key": "ai_ui_user_message"
+    },
+    {
+      "zh": "模拟用户侧补充",
+      "en": "Simulate a user-side note",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:824: WorldBookSelectOption(AiWorldBookEntry.ROLE_USER, \"用户消息\", \"模拟用户侧补充\"),"
+      ],
+      "key": "ai_ui_simulate_user_side_note"
+    },
+    {
+      "zh": "助手消息",
+      "en": "Assistant message",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:825: WorldBookSelectOption(AiWorldBookEntry.ROLE_ASSISTANT, \"助手消息\", \"模拟助手侧记忆\")"
+      ],
+      "key": "ai_ui_assistant_message"
+    },
+    {
+      "zh": "模拟助手侧记忆",
+      "en": "Simulate assistant-side memory",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:825: WorldBookSelectOption(AiWorldBookEntry.ROLE_ASSISTANT, \"助手消息\", \"模拟助手侧记忆\")"
+      ],
+      "key": "ai_ui_simulate_assistant_side_memory"
+    },
+    {
+      "zh": "编辑条目",
+      "en": "Edit entry",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:863: title = if (state.id == null) \"新增条目\" else \"编辑条目\","
+      ],
+      "key": "ai_ui_edit_entry"
+    },
+    {
+      "zh": "关键词命中后注入内容",
+      "en": "Inject content when keywords match",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:864: subtitle = \"关键词命中后注入内容\","
+      ],
+      "key": "ai_ui_inject_content_when_keywords_match"
+    },
+    {
+      "zh": "启用条目",
+      "en": "Enable entry",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:870: LabeledSwitch(\"启用条目\", enabled, style) { enabled = it }"
+      ],
+      "key": "ai_ui_enable_entry"
+    },
+    {
+      "zh": "常驻注入",
+      "en": "Always inject",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:871: LabeledSwitch(\"常驻注入\", constant, style) { constant = it }"
+      ],
+      "key": "ai_ui_always_inject"
+    },
+    {
+      "zh": "关键词按正则匹配",
+      "en": "Match keywords as regex",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:872: LabeledSwitch(\"关键词按正则匹配\", regexEnabled, style) { regexEnabled = it }"
+      ],
+      "key": "ai_ui_match_keywords_as_regex"
+    },
+    {
+      "zh": "区分大小写",
+      "en": "Case sensitive",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:873: LabeledSwitch(\"区分大小写\", caseSensitive, style) { caseSensitive = it }"
+      ],
+      "key": "ai_ui_case_sensitive"
+    },
+    {
+      "zh": "条目名称",
+      "en": "Entry name",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:874: LabeledField(\"条目名称\", title, style, onValueChange = { title = it })"
+      ],
+      "key": "ai_ui_entry_name"
+    },
+    {
+      "zh": "关键词，逗号或换行分隔",
+      "en": "Keywords, separated by commas or newlines",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:876: LabeledField(\"关键词，逗号或换行分隔\", keys, style, minLines = 2, onValueChange = { keys = it })"
+      ],
+      "key": "ai_ui_keywords_separated_by_commas_or"
+    },
+    {
+      "zh": "二级关键词",
+      "en": "Secondary keywords",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:877: LabeledField(\"二级关键词\", secondaryKeys, style, minLines = 2, onValueChange = { secondaryKeys = it })"
+      ],
+      "key": "ai_ui_secondary_keywords"
+    },
+    {
+      "zh": "排除关键词",
+      "en": "Exclude keywords",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:878: LabeledField(\"排除关键词\", excludeKeys, style, minLines = 2, onValueChange = { excludeKeys = it })"
+      ],
+      "key": "ai_ui_exclude_keywords"
+    },
+    {
+      "zh": "插入位置",
+      "en": "Insert position",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:881: label = \"插入位置\","
+      ],
+      "key": "ai_ui_insert_position"
+    },
+    {
+      "zh": "消息角色",
+      "en": "Message role",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:889: label = \"消息角色\","
+      ],
+      "key": "ai_ui_message_role"
+    },
+    {
+      "zh": "插入深度",
+      "en": "Insert depth",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:908: label = \"插入深度\","
+      ],
+      "key": "ai_ui_insert_depth"
+    },
+    {
+      "zh": "扫描深度",
+      "en": "Scan depth",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:921: label = \"扫描深度\","
+      ],
+      "key": "ai_ui_scan_depth"
+    },
+    {
+      "zh": "最大命中数",
+      "en": "Max matches",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:929: label = \"最大命中数\","
+      ],
+      "key": "ai_ui_max_matches"
+    },
+    {
+      "zh": "正则表达式有错误，不能保存。",
+      "en": "Invalid regular expression; cannot save.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageScreen.kt:938: Text(\"正则表达式有错误，不能保存。\", color = style.colors.danger, fontSize = 13.sp)"
+      ],
+      "key": "ai_ui_invalid_regular_expression_cannot_save"
+    },
+    {
+      "zh": "找到 ${books.size} 条结果",
+      "en": "Found %1$s results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:400: \"找到 ${books.size} 条结果\""
+      ],
+      "key": "ai_ui_found_results"
+    },
+    {
+      "zh": "搜索：$it",
+      "en": "Search: %1$s",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:402: root?.optString(\"keyword\")?.takeIf { it.isNotBlank() }?.let { \"搜索：$it\" }",
+        "AiChatUiMapper.kt:430: root?.optString(\"query\")?.takeIf { it.isNotBlank() }?.let { \"搜索：$it\" }"
+      ],
+      "key": "ai_ui_search"
+    },
+    {
+      "zh": "找到 ${webResults.size} 条网页",
+      "en": "Found %1$s web pages",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:428: \"找到 ${webResults.size} 条网页\""
+      ],
+      "key": "ai_ui_found_web_pages"
+    },
+    {
+      "zh": "已更新角色头像",
+      "en": "Character avatar updated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:453: summary = image?.prompt?.takeIf { it.isNotBlank() } ?: \"已更新角色头像\","
+      ],
+      "key": "ai_ui_character_avatar_updated"
+    },
+    {
+      "zh": "找到 ${images.size} 张角色头像",
+      "en": "Found %1$s character avatars",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:464: summary = \"找到 ${images.size} 张角色头像\","
+      ],
+      "key": "ai_ui_found_character_avatars"
+    },
+    {
+      "zh": "未命名",
+      "en": "Untitled",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:491: name = optString(\"name\").ifBlank { \"未命名\" },"
+      ],
+      "key": "ai_ui_untitled"
+    },
+    {
+      "zh": "，点按展开",
+      "en": ", tap to expand",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:561: .replace(\"，点按展开\", \"\")"
+      ],
+      "key": "ai_ui_tap_expand"
+    },
+    {
+      "zh": "，点击展开",
+      "en": ", tap to expand",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiChatUiMapper.kt:562: .replace(\"，点击展开\", \"\")"
+      ],
+      "key": "ai_ui_tap_expand_2"
+    },
+    {
+      "zh": "复制原始数据",
+      "en": "Copy raw data",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:104: text = \"复制原始数据\","
+      ],
+      "key": "ai_ui_copy_raw_data"
+    },
+    {
+      "zh": "暂无书籍结果",
+      "en": "No book results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:129: EmptyPreviewText(\"暂无书籍结果\", style)"
+      ],
+      "key": "ai_ui_no_book_results"
+    },
+    {
+      "zh": "暂无搜索结果",
+      "en": "No search results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:195: EmptyPreviewText(\"暂无搜索结果\", style)"
+      ],
+      "key": "ai_ui_no_search_results"
+    },
+    {
+      "zh": "暂无图片结果",
+      "en": "No image results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:260: EmptyPreviewText(\"暂无图片结果\", style)"
+      ],
+      "key": "ai_ui_no_image_results"
+    },
+    {
+      "zh": "图片已生成",
+      "en": "Image generated",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:298: text = image.prompt.ifBlank { \"图片已生成\" },"
+      ],
+      "key": "ai_ui_image_generated"
+    },
+    {
+      "zh": "无结果",
+      "en": "No results",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolPreviewDialog.kt:320: text = raw.ifBlank { \"无结果\" },"
+      ],
+      "key": "ai_ui_no_results"
+    },
+    {
+      "zh": "本书",
+      "en": "This book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageGalleryActivity.kt:131: addFilterChip(\"本书\", currentFilter == GalleryFilter.BOOK(fixedBookKey)) {"
+      ],
+      "key": "ai_ui_this_book"
+    },
+    {
+      "zh": "角色图",
+      "en": "Character images",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageGalleryActivity.kt:136: addFilterChip(\"角色图\", currentFilter == GalleryFilter.SOURCE_TYPE(AiImageGalleryManager.SOURCE_TYPE_CHARACTER_AVATAR)) {"
+      ],
+      "key": "ai_ui_character_images"
+    },
+    {
+      "zh": "已选择 ${selectedIds.size} 张",
+      "en": "%1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageGalleryActivity.kt:200: binding.tvBatchCount.text = \"已选择 ${selectedIds.size} 张\""
+      ],
+      "key": "ai_ui_selected"
+    },
+    {
+      "zh": "已移动分组",
+      "en": "Moved to group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageGalleryActivity.kt:242: toastOnUi(\"已移动分组\")"
+      ],
+      "key": "ai_ui_moved_group"
+    },
+    {
+      "zh": "删除选中的 ${ids.size} 张图片？",
+      "en": "Delete %1$s selected images?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageGalleryActivity.kt:251: alert(title = getString(R.string.delete), message = \"删除选中的 ${ids.size} 张图片？\") {"
+      ],
+      "key": "ai_ui_delete_selected_images"
+    },
+    {
+      "zh": "世界书文件读取失败",
+      "en": "Failed to read world book file",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AiWorldBookManageActivity.kt:39: toastOnUi(error.localizedMessage ?: \"世界书文件读取失败\")"
+      ],
+      "force": true,
+      "key": "ai_ui_failed_read_world_book_file"
+    },
+    {
+      "zh": "导入世界书",
+      "en": "Import world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageActivity.kt:67: title = \"导入世界书\""
+      ],
+      "key": "ai_ui_import_world_book"
+    },
+    {
+      "zh": "网络导入世界书",
+      "en": "Import world book from network",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageActivity.kt:74: title = \"网络导入世界书\","
+      ],
+      "key": "ai_ui_import_world_book_from_network"
+    },
+    {
+      "zh": "世界书下载失败",
+      "en": "World book download failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageActivity.kt:91: toastOnUi(it.localizedMessage ?: \"世界书下载失败\")"
+      ],
+      "key": "ai_ui_world_book_download_failed"
+    },
+    {
+      "zh": "世界书内容为空",
+      "en": "World book is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiWorldBookManageActivity.kt:98: toastOnUi(\"世界书内容为空\")"
+      ],
+      "key": "ai_ui_world_book_empty"
+    },
+    {
+      "zh": "导入 JS 生图规则",
+      "en": "Import JS image rule",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:111: \"导入 JS 生图规则\""
+      ],
+      "key": "ai_ui_import_js_image_rule"
+    },
+    {
+      "zh": "导入规则",
+      "en": "Import rule",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:127: menu.add(0, MENU_IMPORT_RULE, 0, \"导入规则\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)"
+      ],
+      "key": "ai_ui_import_rule"
+    },
+    {
+      "zh": "导出规则",
+      "en": "Export rule",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:128: menu.add(0, MENU_EXPORT_RULES, 1, \"导出规则\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)",
+        "AiImageProviderManageActivity.kt:189: add(AppManagementMenuAction(\"导出规则\") { exportRule(provider) })"
+      ],
+      "key": "ai_ui_export_rule"
+    },
+    {
+      "zh": "设为当前生图模型",
+      "en": "Set as current image model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:156: AppManagementMenuAction(\"设为当前生图模型\") {"
+      ],
+      "key": "ai_ui_set_as_current_image_model"
+    },
+    {
+      "zh": "请先启用该生图模型",
+      "en": "Enable this image model first",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:158: toastOnUi(\"请先启用该生图模型\")"
+      ],
+      "key": "ai_ui_enable_this_image_model_first"
+    },
+    {
+      "zh": "已设为当前生图模型",
+      "en": "Set as current image model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:163: toastOnUi(\"已设为当前生图模型\")"
+      ],
+      "key": "ai_ui_set_as_current_image_model_2"
+    },
+    {
+      "zh": "复制规则",
+      "en": "Copy rule",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:191: AppManagementMenuAction(\"复制规则\") {"
+      ],
+      "key": "ai_ui_copy_rule"
+    },
+    {
+      "zh": "生图规则",
+      "en": "Image rule",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:367: name = rule.name.trim().ifBlank { \"生图规则\" },"
+      ],
+      "key": "ai_ui_image_rule"
+    },
+    {
+      "zh": "已导入 ${validRules.size} 个生图规则",
+      "en": "%1$s image rules imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderManageActivity.kt:383: toastOnUi(\"已导入 ${validRules.size} 个生图规则\")"
+      ],
+      "key": "ai_ui_image_rules_imported"
+    },
+    {
+      "zh": "未设置",
+      "en": "Not set",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiImageProviderEditActivity.kt:227: return value.trim().lineSequence().firstOrNull()?.take(36)?.ifBlank { null } ?: \"未设置\""
+      ],
+      "key": "ai_ui_not_set"
+    },
+    {
+      "zh": "复制失败：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:112: toastOnUi(\"复制失败：${it.localizedMessage ?: \"规则格式不正确\"}\")"
+      ]
+    },
+    {
+      "zh": "剪贴板为空或格式不对",
+      "en": "Clipboard is empty or has an invalid format",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:121: toastOnUi(\"剪贴板为空或格式不对\")"
+      ],
+      "key": "ai_ui_clipboard_empty_or_has_invalid"
+    },
+    {
+      "zh": "格式不对：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:128: toastOnUi(\"格式不对：${it.localizedMessage ?: \"规则校验失败\"}\")"
+      ]
+    },
+    {
+      "zh": "保存失败：${it.localizedMessage ?: ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:139: toastOnUi(\"保存失败：${it.localizedMessage ?: \"规则校验失败\"}\")"
+      ]
+    },
+    {
+      "zh": "上传Url",
+      "en": "Upload URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:253: label = \"上传Url\","
+      ],
+      "key": "ai_ui_upload_url"
+    },
+    {
+      "zh": "下载Url规则",
+      "en": "Download URL rule",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:260: label = \"下载Url规则\","
+      ],
+      "key": "ai_ui_download_url_rule"
+    },
+    {
+      "zh": "注释",
+      "en": "Comment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:267: label = \"注释\","
+      ],
+      "key": "ai_ui_comment"
+    },
+    {
+      "zh": "压缩",
+      "en": "Compress",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ComposeDirectLinkUploadDialog.kt:285: text = \"压缩\","
+      ],
+      "key": "ai_ui_compress"
+    },
+    {
+      "zh": "阅读页问 AI",
+      "en": "Ask AI on the reading page",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAiFloatingPanel.kt:308: AiContentConsent.withConsent(this.context, \"阅读页问 AI\") {",
+        "ReadAiFloatingPanel.kt:338: currentTask = \"阅读页问 AI\","
+      ],
+      "key": "ai_ui_ask_ai_reading_page"
+    },
+    {
+      "zh": "Skill：${activeWindowSkills().size} 个",
+      "en": "Skills: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiFloatingPanel.kt:826: \"Skill：${activeWindowSkills().size} 个\","
+      ],
+      "key": "ai_ui_skills_2"
+    },
+    {
+      "zh": "MCP：${windowMcpServerIds.size} 个",
+      "en": "MCP: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiFloatingPanel.kt:827: \"MCP：${windowMcpServerIds.size} 个\","
+      ],
+      "key": "ai_ui_mcp_2"
+    },
+    {
+      "zh": "世界书：${activeReadAiWorldBookCount()} 个",
+      "en": "World books: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiFloatingPanel.kt:828: \"世界书：${activeReadAiWorldBookCount()} 个\","
+      ],
+      "key": "ai_ui_world_books_2"
+    },
+    {
+      "zh": "工具调用",
+      "en": "Tool call",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiFloatingPanel.kt:1709: ?: \"工具调用\","
+      ],
+      "key": "ai_ui_tool_call"
+    },
+    {
+      "zh": "正在读取缓存...",
+      "en": "Reading cache...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:133: summary = \"正在读取缓存...\","
+      ],
+      "key": "ai_ui_reading_cache"
+    },
+    {
+      "zh": "请等待当前总结完成",
+      "en": "Wait for the current summary to finish",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:168: context.toastOnUi(\"请等待当前总结完成\")",
+        "ReadAiSummaryPanel.kt:269: context.toastOnUi(\"请等待当前总结完成\")"
+      ],
+      "key": "ai_ui_wait_current_summary_finish"
+    },
+    {
+      "zh": "AI章节总结",
+      "en": "AI chapter summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:172: title = \"AI章节总结\","
+      ],
+      "key": "ai_ui_ai_chapter_summary"
+    },
+    {
+      "zh": "正在重新总结",
+      "en": "Regenerating summary",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:182: statusLines = if (forceRefresh) listOf(\"正在重新总结\") else listOf(\"正在检查缓存\"),"
+      ],
+      "force": true,
+      "key": "ai_ui_regenerating_summary"
+    },
+    {
+      "zh": "正在检查缓存",
+      "en": "Checking cache",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:182: statusLines = if (forceRefresh) listOf(\"正在重新总结\") else listOf(\"正在检查缓存\"),"
+      ],
+      "force": true,
+      "key": "ai_ui_checking_cache"
+    },
+    {
+      "zh": "正在请求 AI 总结...",
+      "en": "Requesting AI summary...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:183: summary = if (forceRefresh) \"正在请求 AI 总结...\" else uiState.summary"
+      ],
+      "key": "ai_ui_requesting_ai_summary"
+    },
+    {
+      "zh": "AI 章节总结",
+      "en": "AI chapter summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:192: if (!AiContentConsent.awaitConsent(context, \"AI 章节总结\")) {"
+      ],
+      "key": "ai_ui_ai_chapter_summary_2"
+    },
+    {
+      "zh": "已停止总结",
+      "en": "Summary stopped",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:222: \"已停止总结\""
+      ],
+      "key": "ai_ui_summary_stopped"
+    },
+    {
+      "zh": "总结失败：${throwable.localizedMessage ?: throwable.message ?: throwable.javaClass.simpleName}",
+      "en": "Summary failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:225: \"总结失败：${throwable.localizedMessage ?: throwable.message ?: throwable.javaClass.simpleName}\""
+      ],
+      "key": "ai_ui_summary_failed"
+    },
+    {
+      "zh": "思考中",
+      "en": "Thinking",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:248: \"thinking\" -> \"思考中\""
+      ],
+      "key": "ai_ui_thinking"
+    },
+    {
+      "zh": "已读取缓存",
+      "en": "Cache loaded",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:263: statusLines = if (fromCache) listOf(\"已读取缓存\") else listOf(\"总结完成\")"
+      ],
+      "force": true,
+      "key": "ai_ui_cache_loaded"
+    },
+    {
+      "zh": "总结完成",
+      "en": "Summary complete",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:263: statusLines = if (fromCache) listOf(\"已读取缓存\") else listOf(\"总结完成\")"
+      ],
+      "force": true,
+      "key": "ai_ui_summary_complete"
+    },
+    {
+      "zh": "已取消，未发送正文",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAiSummaryPanel.kt:375: private const val CONSENT_DENIED_MESSAGE = \"已取消，未发送正文\""
+      ]
+    },
+    {
+      "zh": "选择模型",
+      "en": "Select model",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:417: text = state.modelLabel.ifBlank { \"选择模型\" },"
+      ],
+      "key": "ai_ui_select_model"
+    },
+    {
+      "zh": "重新总结",
+      "en": "Regenerate summary",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:433: SummaryIconButton(R.drawable.ic_refresh_black_24dp, \"重新总结\", style, onRefresh)"
+      ],
+      "key": "ai_ui_regenerate_summary"
+    },
+    {
+      "zh": "正在总结",
+      "en": "Summarizing",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:500: text = \"正在总结\","
+      ],
+      "key": "ai_ui_summarizing"
+    },
+    {
+      "zh": "暂无总结",
+      "en": "No summary yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAiSummaryPanel.kt:553: markwon.setMarkdown(textView, content.ifBlank { \"暂无总结\" })"
+      ],
+      "key": "ai_ui_no_summary_yet"
+    }
+  ]
+}

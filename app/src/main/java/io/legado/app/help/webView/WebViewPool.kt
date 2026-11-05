@@ -26,6 +26,7 @@ import splitties.init.appCtx
 import java.util.Stack
 import kotlin.math.max
 import kotlin.random.Random
+import io.legado.app.R
 
 object WebViewPool {
     const val BLANK_HTML = "about:blank"
@@ -290,8 +291,8 @@ object WebViewPool {
 
     private fun logScopedDestroy(scope: Scope, action: String, count: Int? = null) {
         val pageName = when (scope) {
-            Scope.DISCOVERY -> "发现页"
-            Scope.RSS -> "订阅页"
+            Scope.DISCOVERY -> appCtx.getString(R.string.misc_discover)
+            Scope.RSS -> appCtx.getString(R.string.misc_subscriptions)
             // GLOBAL 随进程生命周期；INLINE 即用即毁，不存在 scope 级销毁动作。
             Scope.GLOBAL, Scope.INLINE -> return
         }

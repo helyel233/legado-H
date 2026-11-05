@@ -2,6 +2,8 @@ package io.legado.app.model.localBook.epubcore.template
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** The existing library document also carries which bundled templates the user has removed. */
 internal data class EpubReaderTemplateLibrary(
@@ -15,7 +17,7 @@ internal data class EpubReaderTemplateLibrary(
             require(ids.add(template.id)) { "模板重复：" + template.id }
         }
         require(hiddenBuiltInIds.all { it.startsWith("builtin.") && it.length > "builtin.".length }) {
-            "内置模板记录无效"
+            appCtx.getString(R.string.misc_invalid_built_template_record)
         }
     }
 
@@ -39,7 +41,7 @@ internal data class EpubReaderTemplateLibrary(
 
         fun fromJsonObject(root: JsonObject): EpubReaderTemplateLibrary {
             require(EpubReaderTemplate.readVersion(root) in EpubReaderTemplate.SCHEMA_VERSION..EpubReaderTemplate.SCROLL_SCHEMA_VERSION) {
-                "不支持的模板库版本"
+                appCtx.getString(R.string.misc_unsupported_template_library_version)
             }
             val templates = root.get("templates")
             require(templates != null && templates.isJsonArray) { "模板库内容无效" }

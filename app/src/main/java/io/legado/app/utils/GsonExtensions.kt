@@ -24,6 +24,8 @@ import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.lang.reflect.Type
 import kotlin.math.ceil
+import io.legado.app.R
+import splitties.init.appCtx
 
 val INITIAL_GSON: Gson by lazy {
     GsonBuilder()
@@ -76,7 +78,7 @@ inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> {
         val list = fromJson(json, type) as List<T?>
         if (list.contains(null)) {
             throw JsonSyntaxException(
-                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致"
+                appCtx.getString(R.string.misc_list_cannot_contain_null_elements)
             )
         }
         @Suppress("UNCHECKED_CAST")
@@ -104,7 +106,7 @@ inline fun <reified T> Gson.fromJsonArray(inputStream: InputStream?): Result<Lis
         val list = fromJson(reader, type) as List<T?>
         if (list.contains(null)) {
             throw JsonSyntaxException(
-                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致"
+                appCtx.getString(R.string.misc_list_cannot_contain_null_elements)
             )
         }
         @Suppress("UNCHECKED_CAST")

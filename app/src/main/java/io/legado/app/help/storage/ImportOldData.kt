@@ -44,7 +44,7 @@ object ImportOldData {
             if (uri.isContentScheme()) {
                 importContentUri(context, uri)
             } else {
-                val path = uri.path ?: return "导入旧版数据失败\n无效路径"
+                val path = uri.path ?: return appCtx.getString(R.string.svc_failed_import_legacy_data_ninvalid)
                 val file = File(path)
                 if (file.isFile) {
                     importZipFile(context, file)
@@ -54,7 +54,7 @@ object ImportOldData {
             }
         } catch (e: Exception) {
             AppLog.put("导入旧版数据出错\n${e.localizedMessage}", e)
-            "导入旧版数据出错\n${e.localizedMessage}"
+            appCtx.getString(R.string.svc_error_importing_legacy_data_n, e.localizedMessage)
         }
     }
 
@@ -69,7 +69,7 @@ object ImportOldData {
         return when {
             name == null || name.endsWith(".zip", true) -> importZipUri(context, uri)
             name in oldFileNames -> importSingleJson(context, uri, name)
-            else -> "导入旧版数据失败\n不支持的文件：$name"
+            else -> appCtx.getString(R.string.svc_failed_import_legacy_data_nunsupported, name)
         }
     }
 
@@ -93,7 +93,7 @@ object ImportOldData {
 
     private fun importLocalDir(dir: File): String {
         if (!dir.isDirectory) {
-            return "导入旧版数据失败\n目录不存在：${dir.absolutePath}"
+            return appCtx.getString(R.string.svc_failed_import_legacy_data_ndirectory, dir.absolutePath)
         }
         val messages = mutableListOf<String>()
         findFile(dir, SHELF_FILE_NAME)?.let { readLocalFile(it, messages) }
@@ -108,7 +108,7 @@ object ImportOldData {
     private fun importSingleJson(context: Context, uri: Uri, name: String): String {
         val json = runCatching { uri.readText(context) }.getOrElse {
             AppLog.put("导入旧版数据读取 $name 失败\n${it.localizedMessage}", it)
-            return "导入旧版数据失败\n${it.localizedMessage}"
+            return appCtx.getString(R.string.svc_failed_import_legacy_data_n, it.localizedMessage)
         }
         val messages = mutableListOf<String>()
         when (name) {
@@ -127,7 +127,7 @@ object ImportOldData {
                     BackupArchiveExtractor.copyToTemporaryFile(input, tempZip)
                 }
             }.getOrElse {
-                return "导入旧版数据失败\n无法读取所选文件：${it.localizedMessage}"
+                return appCtx.getString(R.string.svc_failed_import_legacy_data_ncould, it.localizedMessage)
             }
             importZipFile(context, tempZip)
         } finally {
@@ -143,7 +143,7 @@ object ImportOldData {
             importLocalDir(tempDir)
         } catch (e: Exception) {
             AppLog.put("导入旧版数据解压失败\n${e.localizedMessage}", e)
-            "导入旧版数据失败\n解压失败：${e.localizedMessage}"
+            appCtx.getString(R.string.svc_failed_import_legacy_data_nextraction, e.localizedMessage)
         } finally {
             tempDir.deleteRecursively()
         }
@@ -166,7 +166,7 @@ object ImportOldData {
     ): String? {
         return runCatching { doc.uri.readText(context) }.getOrElse {
             AppLog.put("导入旧版数据读取 ${doc.name} 失败\n${it.localizedMessage}", it)
-            messages.add("读取 ${doc.name} 失败\n${it.localizedMessage}")
+            messages.add(appCtx.getString(R.string.svc_failed_read_n, doc.name, it.localizedMessage))
             null
         }
     }
@@ -174,59 +174,59 @@ object ImportOldData {
     private fun readLocalFile(file: File, messages: MutableList<String>): String? {
         return runCatching { file.readText() }.getOrElse {
             AppLog.put("导入旧版数据读取 ${file.name} 失败\n${it.localizedMessage}", it)
-            messages.add("读取 ${file.name} 失败\n${it.localizedMessage}")
+            messages.add(appCtx.getString(R.string.svc_failed_read_n_2, file.name, it.localizedMessage))
             null
         }
     }
 
     private fun importShelf(json: String, messages: MutableList<String>) {
         if (json.isBlank()) {
-            messages.add("书架数据为空")
+            messages.add(appCtx.getString(R.string.svc_bookshelf_data_empty))
             return
         }
         runCatching {
             val count = importOldBookshelf(json)
-            messages.add("成功导入书架${count}本")
+            messages.add(appCtx.getString(R.string.svc_books_imported_bookshelf, count))
         }.onFailure {
-            messages.add("导入书架失败\n${it.localizedMessage}")
+            messages.add(appCtx.getString(R.string.svc_failed_import_bookshelf_n, it.localizedMessage))
             AppLog.put("导入旧版书架失败\n${it.localizedMessage}", it)
         }
     }
 
     private fun importSources(json: String, messages: MutableList<String>) {
         if (json.isBlank()) {
-            messages.add("书源数据为空")
+            messages.add(appCtx.getString(R.string.svc_book_source_data_empty))
             return
         }
         runCatching {
             val (count, failed) = importOldSources(json)
             messages.add(
-                if (failed > 0) "成功导入书源${count}条，${failed}条格式错误已跳过"
-                else "成功导入书源${count}条"
+                if (failed > 0) appCtx.getString(R.string.svc_sources_imported_skipped_due_invalid, count, failed)
+                else appCtx.getString(R.string.svc_sources_imported, count)
             )
         }.onFailure {
-            messages.add("导入书源失败\n${it.localizedMessage}")
+            messages.add(appCtx.getString(R.string.svc_failed_import_book_sources_n, it.localizedMessage))
             AppLog.put("导入旧版书源失败\n${it.localizedMessage}", it)
         }
     }
 
     private fun importReplaceRules(json: String, messages: MutableList<String>) {
         if (json.isBlank()) {
-            messages.add("替换规则数据为空")
+            messages.add(appCtx.getString(R.string.svc_replace_rule_data_empty))
             return
         }
         runCatching {
             val count = importOldReplaceRule(json)
-            messages.add("成功导入替换规则${count}条")
+            messages.add(appCtx.getString(R.string.svc_replace_rules_imported, count))
         }.onFailure {
-            messages.add("导入替换规则失败\n${it.localizedMessage}")
+            messages.add(appCtx.getString(R.string.svc_failed_import_replace_rules_n, it.localizedMessage))
             AppLog.put("导入旧版替换规则失败\n${it.localizedMessage}", it)
         }
     }
 
     private fun summary(messages: List<String>): String {
         if (messages.isEmpty()) {
-            return "未找到旧版数据文件\n（myBookShelf.json、myBookSource.json、myBookReplaceRule.json）"
+            return appCtx.getString(R.string.svc_no_legacy_data_files_found)
         }
         return messages.joinToString("\n")
     }

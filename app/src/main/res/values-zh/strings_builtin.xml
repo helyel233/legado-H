@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 内置实体显示名。持久化 id 保持不变，仅这些标签随界面语言切换。 -->
+    <string name="builtin_speaker_default">默认发言人</string>
+    <string name="builtin_epub_loading_botanical">山茶花</string>
+    <string name="builtin_epub_loading_botanical_desc">山茶、枝叶与奶油色的花笺</string>
+    <string name="builtin_epub_loading_botanical_caption">把片刻留白，交给一场盛开。</string>
+    <string name="builtin_epub_loading_aurora">极光航迹</string>
+    <string name="builtin_epub_loading_aurora_desc">极光光带、群山与远行的坐标</string>
+    <string name="builtin_epub_loading_aurora_caption">下一段旅程，从这一页出发。</string>
+    <string name="builtin_bubble_package">内置段评气泡</string>
+    <string name="builtin_kit_floating_no_search">无搜索悬浮底栏</string>
+    <string name="builtin_kit_floating_no_search_summary">悬浮底栏(隐藏搜索) + 顶栏显示搜索</string>
+    <string name="builtin_cover_template_default">默认模板</string>
+</resources>

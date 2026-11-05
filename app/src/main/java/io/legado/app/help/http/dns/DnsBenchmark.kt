@@ -1,5 +1,6 @@
 package io.legado.app.help.http.dns
 
+import io.legado.app.R
 import okhttp3.Dns
 import java.net.InetAddress
 import java.net.SocketTimeoutException
@@ -11,9 +12,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import javax.net.ssl.SSLException
 
-data class DnsProbeSample(val milliseconds: Double?, val addressCount: Int, val error: String?)
+/** 单次探测失败的原因，文案在设置页（`dns_probe_*`），这里只说发生了什么。 */
+enum class DnsProbeError { BUSY, EMPTY, TIMEOUT, TLS, FAILED }
 
-data class DnsProbeResult(val name: String, val provider: DohProvider?, val hostname: String, val samples: List<DnsProbeSample>) {
+data class DnsProbeSample(val milliseconds: Double?, val addressCount: Int, val error: DnsProbeError?)
+
+data class DnsProbeResult(val provider: DohProvider?, val hostname: String, val samples: List<DnsProbeSample>) {
     val successCount: Int get() = samples.count { it.milliseconds != null }
     val firstMilliseconds: Double? get() = samples.firstOrNull()?.milliseconds
     val medianMilliseconds: Double? get() {
@@ -31,14 +35,16 @@ object DnsBenchmark {
     }, ThreadPoolExecutor.AbortPolicy())
 
     fun providers(config: NetworkDnsConfig): List<DohProvider?> = listOf(null) +
-        (DohProvider.presets + DohProvider("custom", "当前自定义服务", config.endpoint, config.bootstrap))
+        (DohProvider.presets + DohProvider("custom", R.string.dns_provider_current_custom, config.endpoint, config.bootstrap))
             .distinctBy { it.url to it.bootstrap }
 
     @Throws(InterruptedException::class)
     fun measure(config: NetworkDnsConfig, provider: DohProvider?, hostname: String, count: Int = 3): DnsProbeResult {
         require(count in 1..5)
-        val host = requireNotNull(DnsNames.host(hostname)) { "请输入有效域名" }
-        require(DnsNames.literal(host) == null) { "测速需要域名，不能填写 IP 地址" }
+        val host = DnsNames.host(hostname) ?: throw DnsConfigException(DnsConfigError.INVALID_DOMAIN)
+        if (DnsNames.literal(host) != null) {
+            throw DnsConfigException(DnsConfigError.IP_NOT_ALLOWED)
+        }
         val transport = provider?.let { DohTransport(config.copy(endpoint = it.url, bootstrap = it.bootstrap).validated()) }
         try {
             val resolver = transport?.dns ?: Dns.SYSTEM
@@ -46,7 +52,7 @@ object DnsBenchmark {
                 if (Thread.currentThread().isInterrupted) throw InterruptedException()
                 sample(resolver, host)
             }
-            return DnsProbeResult(provider?.name ?: "系统 DNS", provider, host, samples)
+            return DnsProbeResult(provider, host, samples)
         } finally { transport?.close() }
     }
 
@@ -55,11 +61,11 @@ object DnsBenchmark {
         val future = try {
             executor.submit<List<InetAddress>> { dns.lookup(host) }
         } catch (_: RejectedExecutionException) {
-            return DnsProbeSample(null, 0, "测速队列繁忙，请稍后重试")
+            return DnsProbeSample(null, 0, DnsProbeError.BUSY)
         }
         try {
             val result = future.get(9, TimeUnit.SECONDS)
-            if (result.isEmpty()) return DnsProbeSample(null, 0, "没有解析结果")
+            if (result.isEmpty()) return DnsProbeSample(null, 0, DnsProbeError.EMPTY)
             return DnsProbeSample((System.nanoTime() - started) / 1_000_000.0, result.size, null)
         } catch (error: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -67,12 +73,12 @@ object DnsBenchmark {
         } catch (error: Exception) {
             val cause = if (error is ExecutionException) error.cause ?: error else error
             val chain = generateSequence(cause) { it.cause }.take(12).toList()
-            val message = when {
-                chain.any { it is TimeoutException || it is SocketTimeoutException } -> "查询超时"
-                chain.any { it is SSLException } -> "TLS 连接或证书校验失败"
-                else -> "解析失败或服务不可达"
+            val reason = when {
+                chain.any { it is TimeoutException || it is SocketTimeoutException } -> DnsProbeError.TIMEOUT
+                chain.any { it is SSLException } -> DnsProbeError.TLS
+                else -> DnsProbeError.FAILED
             }
-            return DnsProbeSample(null, 0, message)
+            return DnsProbeSample(null, 0, reason)
         } finally {
             future.cancel(true)
             executor.purge()

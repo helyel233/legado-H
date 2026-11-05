@@ -103,7 +103,7 @@ class CheckSourceService : BaseService() {
 
     private fun check(ids: List<String>) {
         if (checkJob?.isActive == true) {
-            toastOnUi("已有书源在校验,等完成后再试")
+            toastOnUi(appCtx.getString(R.string.misc_book_source_already_being_validated))
             return
         }
         // 订阅源校验进行中时不能清共享消息缓存：那会把 RSS 管理页
@@ -151,9 +151,9 @@ class CheckSourceService : BaseService() {
         }.onFailure {
             currentCoroutineContext().ensureActive()
             when (it) {
-                is TimeoutCancellationException -> source.addGroup("校验超时")
-                is ScriptException, is WrappedException -> source.addGroup("js失效")
-                !is NoStackTraceException -> source.addGroup("网站失效")
+                is TimeoutCancellationException -> source.addGroup(appCtx.getString(R.string.misc_validation_timed_out))
+                is ScriptException, is WrappedException -> source.addGroup(appCtx.getString(R.string.misc_js_broken))
+                !is NoStackTraceException -> source.addGroup(appCtx.getString(R.string.misc_website_broken))
             }
             if (CheckSource.wSourceComment) {
                 source.addErrorComment(it)
@@ -193,9 +193,9 @@ class CheckSourceService : BaseService() {
                 throw NoStackTraceException("源地址不是http链接")
             }
             else if (isDomainReachable(domain)) {
-                source.removeGroupSafe("域名失效")
+                source.removeGroupSafe(appCtx.getString(R.string.misc_domain_broken))
             } else {
-                source.addGroupSafe("域名失效")
+                source.addGroupSafe(appCtx.getString(R.string.misc_domain_broken))
                 throw NoStackTraceException("源地址不可访问")
             }
         }
@@ -225,20 +225,20 @@ class CheckSourceService : BaseService() {
         if (CheckSource.checkSearch) {
             val searchWord = source.getCheckKeyword(CheckSource.keyword)
             if (!source.searchUrl.isNullOrBlank()) {
-                source.removeGroupSafe("搜索链接规则为空")
+                source.removeGroupSafe(appCtx.getString(R.string.misc_search_url_rule_empty))
                 val searchBooks = WebBook.searchBookAwait(
                     source,
                     searchWord,
                     shouldBreak = { it > 0 }
                 )
                 if (searchBooks.isEmpty()) {
-                    source.addGroupSafe("搜索失效")
+                    source.addGroupSafe(appCtx.getString(R.string.misc_search_broken))
                 } else {
-                    source.removeGroupSafe("搜索失效")
+                    source.removeGroupSafe(appCtx.getString(R.string.misc_search_broken))
                     checkBook(searchBooks.first().toBook(), source)
                 }
             } else {
-                source.addGroupSafe("搜索链接规则为空")
+                source.addGroupSafe(appCtx.getString(R.string.misc_search_url_rule_empty))
             }
         }
     }
@@ -250,18 +250,18 @@ class CheckSourceService : BaseService() {
                 !it.url.isNullOrBlank()
             }?.url
             if (url.isNullOrBlank()) {
-                source.addGroupSafe("发现规则为空")
+                source.addGroupSafe(appCtx.getString(R.string.misc_discovery_rule_empty))
             } else {
-                source.removeGroupSafe("发现规则为空")
+                source.removeGroupSafe(appCtx.getString(R.string.misc_discovery_rule_empty))
                 val exploreBooks = WebBook.exploreBookAwait(
                     source,
                     url,
                     shouldBreak = { it > 0 }
                 )
                 if (exploreBooks.isEmpty()) {
-                    source.addGroupSafe("发现失效")
+                    source.addGroupSafe(appCtx.getString(R.string.misc_discovery_broken))
                 } else {
-                    source.removeGroupSafe("发现失效")
+                    source.removeGroupSafe(appCtx.getString(R.string.misc_discovery_broken))
                     checkBook(exploreBooks.first().toBook(), source, false)
                 }
             }
@@ -301,16 +301,16 @@ class CheckSourceService : BaseService() {
                 needSave = false
             )
         }.onFailure {
-            val bookType = if (isSearchBook) "搜索" else "发现"
+            val bookType = if (isSearchBook) appCtx.getString(R.string.action_search) else appCtx.getString(R.string.find_on_www)
             when (it) {
-                is ContentEmptyException -> source.addGroupSafe("${bookType}正文失效")
-                is TocEmptyException -> source.addGroupSafe("${bookType}目录失效")
+                is ContentEmptyException -> source.addGroupSafe(appCtx.getString(R.string.misc_content_broken, bookType))
+                is TocEmptyException -> source.addGroupSafe(appCtx.getString(R.string.misc_table_contents_broken, bookType))
                 else -> throw it
             }
         }.onSuccess {
-            val bookType = if (isSearchBook) "搜索" else "发现"
-            source.removeGroupSafe("${bookType}目录失效")
-            source.removeGroupSafe("${bookType}正文失效")
+            val bookType = if (isSearchBook) appCtx.getString(R.string.action_search) else appCtx.getString(R.string.find_on_www)
+            source.removeGroupSafe(appCtx.getString(R.string.misc_table_contents_broken, bookType))
+            source.removeGroupSafe(appCtx.getString(R.string.misc_content_broken, bookType))
         }
     }
 

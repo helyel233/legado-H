@@ -12,6 +12,8 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** 评论快照两个浏览器宿主共用的图片交互与本地资源读取。 */
 object ReviewSnapshotImages {
@@ -36,14 +38,14 @@ object ReviewSnapshotImages {
         val key = ReviewSnapshotResourceStore.keyFromReference(url) ?: return null
         return checkNotNull(ReviewSnapshotResourceStore.open(checkNotNull(book) {
             "评论图片缺少书籍上下文"
-        }, key)) { "评论图片资源不存在：$url" }
+        }, key)) { appCtx.getString(R.string.misc_review_image_resource_not_found, url) }
     }
 
     fun readLocal(book: Book?, url: String): Pair<String, ByteArray>? {
         val local = resource(book, url) ?: return null
         return local.inputStream.use { stream ->
             val extension = requireNotNull(MimeTypeMap.getSingleton().getExtensionFromMimeType(local.mimeType)) {
-                "评论图片类型无法识别：${local.mimeType}"
+                appCtx.getString(R.string.misc_unrecognized_review_image_type, local.mimeType)
             }
             extension to stream.readBytes()
         }
@@ -54,7 +56,7 @@ object ReviewSnapshotImages {
         activity.lifecycleScope.launch {
             try {
                 val src = withContext(Dispatchers.IO) {
-                    val reference = requireNotNull(uri.getQueryParameter("src")) { "评论图片地址为空" }
+                    val reference = requireNotNull(uri.getQueryParameter("src")) { appCtx.getString(R.string.misc_review_image_url_empty) }
                     val local = resource(book, reference)
                     if (local != null) {
                         local.inputStream.close()
@@ -68,7 +70,7 @@ object ReviewSnapshotImages {
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 AppLog.put("评论图片打开失败", error)
-                activity.toastOnUi("评论图片打开失败：${error.localizedMessage}")
+                activity.toastOnUi(appCtx.getString(R.string.misc_failed_open_review_image, error.localizedMessage))
             }
         }
         return true

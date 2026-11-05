@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>legado-H 全项目设置体系优化方案（单项级拆出/归入分析）</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-soft: #14181f;
+    --card: #1a1f28;
+    --card-2: #20262f;
+    --border: #2a323d;
+    --border-strong: #39424f;
+    --text: #e8ecf1;
+    --text-dim: #a6b0bd;
+    --text-faint: #6b7684;
+    --accent: #4a9eff;
+    --accent-2: #a78bfa;
+    --danger: #ff6b6b;
+    --warn: #fbbf24;
+    --ok: #34d399;
+    --info: #38bdf8;
+    --cat-content: #f472b6;
+    --cat-reading: #4a9eff;
+    --cat-ai: #a78bfa;
+    --cat-network: #38bdf8;
+    --cat-data: #34d399;
+    --cat-advanced: #fbbf24;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,.4);
+    --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ===== 顶部导航 ===== */
+  .topbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15,17,21,.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .topbar .brand { font-weight: 700; font-size: 16px; color: var(--text); }
+  .topbar .brand .dot { color: var(--accent); }
+  .topbar nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  .topbar nav a {
+    color: var(--text-dim); padding: 6px 12px; border-radius: 8px; font-size: 13px;
+    transition: .15s;
+  }
+  .topbar nav a:hover { background: var(--card-2); color: var(--text); text-decoration: none; }
+
+  /* ===== 布局 ===== */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 32px 120px; }
+
+  .hero { margin-bottom: 32px; }
+  .hero h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: -.5px; }
+  .hero .sub { color: var(--text-dim); font-size: 16px; max-width: 860px; }
+  .hero .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .badge {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong);
+    color: var(--text-dim); background: var(--card);
+  }
+  .badge b { color: var(--text); font-weight: 600; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 24px 0 8px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .kpi .num { font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
+  .kpi .lbl { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+
+  section { margin-top: 56px; }
+  h2 {
+    font-size: 23px; margin: 0 0 6px; padding-bottom: 12px; border-bottom: 2px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2 .idx {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #04121f;
+    font-size: 17px; font-weight: 700; flex: none;
+  }
+  h3 { font-size: 17px; margin: 28px 0 12px; color: var(--text); }
+  .lead { color: var(--text-dim); margin: 6px 0 20px; font-size: 15px; }
+
+  /* ===== 图例 ===== */
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 22px; font-size: 13px; color: var(--text-dim); }
+  .legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+  .lg .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+
+  /* ===== 树 ===== */
+  .tree { font-size: 14px; }
+  .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree li { position: relative; padding: 3px 0 3px 0; }
+  .tree ul ul { margin-left: 20px; border-left: 1px solid var(--border-strong); padding-left: 18px; }
+  .node { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 7px; }
+  .lvl1 {
+    font-weight: 700; font-size: 15px; padding: 7px 12px; border-radius: 9px; color: #0b0f14;
+    display: inline-flex; align-items: center; gap: 9px; margin: 6px 0 2px;
+  }
+  .lvl2 { font-weight: 600; color: var(--text); }
+  .lvl3 { color: var(--text-dim); }
+  .lvl4 { color: var(--text-faint); font-size: 13px; }
+  .pill {
+    font-size: 11px; padding: 1px 7px; border-radius: 999px; font-weight: 600; white-space: nowrap;
+  }
+  .pill.switch { background: rgba(255,255,255,.08); color: var(--text-dim); border: 1px solid var(--border-strong); }
+  .pill.moved-out { background: rgba(255,107,107,.15); color: var(--danger); border: 1px solid rgba(255,107,107,.4); }
+  .pill.moved-in { background: rgba(52,211,153,.15); color: var(--ok); border: 1px solid rgba(52,211,153,.4); }
+  .pill.merged { background: rgba(251,191,36,.15); color: var(--warn); border: 1px solid rgba(251,191,36,.4); }
+  .pill.del { background: rgba(255,107,107,.12); color: var(--danger); border: 1px dashed rgba(255,107,107,.5); }
+  .pill.fix { background: rgba(74,158,255,.15); color: var(--accent); border: 1px solid rgba(74,158,255,.4); }
+  .pill.new { background: rgba(167,139,250,.15); color: var(--accent-2); border: 1px solid rgba(167,139,250,.4); }
+  .pill.pending { background: rgba(251,191,36,.12); color: var(--warn); border: 1px dashed rgba(251,191,36,.55); }
+  .tag-cat { font-size: 11px; opacity: .85; font-weight: 700; letter-spacing: .5px; }
+
+  /* ===== 卡片清单（核心） ===== */
+  .move-list { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .move-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .move-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  }
+  .move-card.t-out::before { background: var(--danger); }
+  .move-card.t-in::before { background: var(--ok); }
+  .move-card.t-merge::before { background: var(--warn); }
+  .move-card.t-fix::before { background: var(--accent); }
+  .move-card.t-split::before { background: var(--accent-2); }
+  .move-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .move-id { font-size: 13px; font-weight: 700; color: var(--text-faint); font-family: var(--mono); padding-top: 3px; }
+  .move-title { font-size: 17px; font-weight: 700; flex: 1; min-width: 220px; }
+  .move-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mtag { font-size: 12px; padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+  .mtag.p0 { background: rgba(255,107,107,.16); color: var(--danger); }
+  .mtag.p1 { background: rgba(251,191,36,.16); color: var(--warn); }
+  .mtag.p2 { background: rgba(74,158,255,.16); color: var(--accent); }
+  .flow {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 6px;
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px;
+  }
+  .flow .from, .flow .to {
+    background: var(--card-2); border: 1px solid var(--border-strong); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px;
+  }
+  .flow .from { border-color: rgba(255,107,107,.45); }
+  .flow .from .lbl { color: var(--danger); font-size: 11px; font-weight: 700; display: block; }
+  .flow .to { border-color: rgba(52,211,153,.45); }
+  .flow .to .lbl { color: var(--ok); font-size: 11px; font-weight: 700; display: block; }
+  .flow .arrow { color: var(--text-faint); font-size: 20px; font-weight: 700; }
+  .flow .path { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .move-body p { margin: 8px 0; color: var(--text-dim); font-size: 14px; }
+  .items { margin-top: 10px; }
+  .items .k { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; }
+  .items .codes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .items .codes code {
+    font-family: var(--mono); font-size: 11.5px; background: var(--bg-soft); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 6px; color: var(--accent-2);
+  }
+  .files { margin-top: 12px; font-size: 12.5px; color: var(--text-faint); }
+  .files .k { color: var(--text-dim); font-weight: 600; }
+  .files code { font-family: var(--mono); font-size: 11.5px; color: var(--info); }
+  .reason { margin-top: 10px; padding: 10px 14px; background: rgba(74,158,255,.06); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-size: 13.5px; color: var(--text-dim); }
+
+  /* ===== 表格 ===== */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 16px 0; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-dim); font-weight: 600; background: var(--card); position: sticky; top: 0; }
+  td code { font-family: var(--mono); font-size: 12px; color: var(--accent-2); }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* ===== 校验清单 ===== */
+  .checklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .check-group { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .check-group h4 { margin: 0 0 10px; font-size: 15px; }
+  .check-group ul { margin: 0; padding-left: 4px; list-style: none; }
+  .check-group li { padding: 5px 0 5px 26px; position: relative; font-size: 13.5px; color: var(--text-dim); }
+  .check-group li::before {
+    content: "✓"; position: absolute; left: 0; top: 5px; width: 18px; height: 18px;
+    border-radius: 5px; background: rgba(52,211,153,.15); color: var(--ok);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+  }
+
+  .callout {
+    background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.35);
+    border-radius: var(--radius); padding: 14px 18px; margin: 18px 0; font-size: 14px;
+  }
+  .callout .t { color: var(--danger); font-weight: 700; }
+
+  .footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 12.5px; }
+  .mono { font-family: var(--mono); }
+
+  @media (max-width: 700px) {
+    .wrap { padding: 20px 16px 80px; }
+    .topbar { padding: 10px 16px; }
+    .flow .arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">legado-H <span class="dot">·</span> 设置体系优化方案</span>
+  <nav>
+    <a href="#s1">1 现状谱系</a>
+    <a href="#s2">2 单项拆出/归入</a>
+    <a href="#s3">3 目标谱系</a>
+    <a href="#s4">4 修改方案</a>
+    <a href="#s5">5 校验清单</a>
+    <a href="#s6">6 实施进度</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <!-- ===== Hero ===== -->
+  <div class="hero">
+    <h1>全项目设置体系 · 单项级「拆出 / 归入」深度分析</h1>
+    <div class="sub">
+      本次分析的粒度从「整页 / 整分区」下探到<strong>单个设置项</strong>：判断某一项是否该从当前父项（二级页 / 分区 / 弹窗）中<strong>拆出</strong>，归并到语义更贴合的另一父项下。
+      所有结论均基于对 <span class="mono">ReadingConfigFragment</span>、<span class="mono">ThemeConfigFragment</span>、<span class="mono">AdvancedConfigFragment</span>、
+      <span class="mono">NetworkConfigFragment</span>、<span class="mono">AiConfigFragment</span> 等 11 个二级页 + DNS 三级页的<strong>逐项 spec 代码核对</strong>。
+    </div>
+    <div class="badges">
+      <span class="badge">覆盖 <b>6</b> 个主 Tab</span>
+      <span class="badge">一级分类 <b>6</b> 区</span>
+      <span class="badge">二级设置页 <b>11</b> 页</span>
+      <span class="badge">三级页 <b>16+</b>（DNS / 主题包 / 底导 / 顶栏 / 书籍详情 / 气泡 / 封面合集 / S3 / 书库 / AI 供应商 / 生图 / 世界书 / 外观套装 / 加载模板 / 分享模板 / 高级标题 / 高级信息）</span>
+      <span class="badge">偏好键 <b>517</b> 个（PreferKey 全集，已无裸字符串键）</span>
+      <span class="badge">单项级结论 <b>50</b> 条</span>
+      <span class="badge">独立偏好载体 <b>7</b>（video_config / local / SourceConfig / SecurePrefs / DB 表 / Book 级 / AppUpdateConfig 硬编码）</span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="num" style="color:var(--danger)">13</div><div class="lbl">拆出 / 归入（跨父项迁移单项）</div></div>
+    <div class="kpi"><div class="num" style="color:var(--warn)">6</div><div class="lbl">合并 / 归拢（跨处收拢同类项）</div></div>
+    <div class="kpi"><div class="num" style="color:var(--accent)">5</div><div class="lbl">零风险修正（硬编码 key / 死串 / 拼写）</div></div>
+    <div class="kpi"><div class="num" style="color:var(--accent-2)">28</div><div class="lbl">深层子项下钻（逐项展开"叶子"节点）</div></div>
+  </div>
+
+  <!-- ===== 1 现状谱系 ===== -->
+  <section id="s1">
+    <h2><span class="idx">1</span> 现状谱系图（深入到分区 / 单项）</h2>
+    <p class="lead">下方为「我的」页设置体系的完整树。标 <span class="pill moved-out">拆出</span> 的节点是本次识别出的「挂错父项」的单项 / 分区；标 <span class="pill del">删除</span> 的是废弃项。</p>
+
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--cat-content)"></span>内容与规则</span>
+      <span class="lg"><span class="sw" style="background:var(--cat-reading)"></span>阅读与界面</span>
+      <span class="lg"><span class="sw" style="background:var(--cat-ai)"></span>AI 与自动化</span>
+      <span class="lg"><span class="sw" style="background:var(--cat-network)"></span>网络与同步</span>
+      <span class="lg"><span class="sw" style="background:var(--cat-data)"></span>数据与工具</span>
+      <span class="lg"><span class="sw" style="background:var(--cat-advanced)"></span>高级与关于</span>
+      <span class="lg"><span class="sw" style="background:var(--danger)"></span>拆出项</span>
+      <span class="lg"><span class="sw" style="background:var(--warn)"></span>合并项</span>
+    </div>
+
+    <div class="tree">
+      <ul>
+        <li>
+          <span class="node lvl1" style="background:var(--cat-content)"><span class="tag-cat">①</span> 内容与规则</span>
+          <ul>
+            <li><span class="node lvl2">书源管理</span></li>
+            <li><span class="node lvl2">订阅源管理</span></li>
+            <li><span class="node lvl2">替换净化</span></li>
+            <li><span class="node lvl2">目录规则</span></li>
+            <li><span class="node lvl2">字典规则</span></li>
+            <li><span class="node lvl2">回收站</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-reading)"><span class="tag-cat">②</span> 阅读与界面</span>
+          <ul>
+            <li>
+              <span class="node lvl2">阅读设置 <span class="pill switch">ReadingConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">内容选择菜单 <span class="pill switch">弹窗入口</span></span></li>
+                <li><span class="node lvl3">解析引擎 · epub / text</span></li>
+                <li><span class="node lvl3">离线预载 · 5 项</span></li>
+                <li><span class="node lvl3">漫画视频 · showMangaUi / 视频设置</span></li>
+                <li>
+                  <span class="node lvl3">书架启动 · 5 项</span>
+                  <span class="pill moved-out">拆出 → 归入书架设置</span>
+                  <ul>
+                    <li><span class="node lvl4 mono">showAddToShelfAlert · autoRefresh · onlyUpdateRead · defaultToRead · defaultHomePage</span></li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">主题模式 <span class="pill switch">开关行</span></span></li>
+            <li><span class="node lvl2">外观套装 <span class="pill switch">AppearanceKitActivity → AppearanceKitEditActivity</span></span>
+              <ul>
+                <li><span class="node lvl3">套件增删 / 导入 / 应用 · 编辑页：名称 · 导航样式 · 应用主题 · 日间/夜间绑定 + 预览</span></li>
+              </ul>
+            </li>
+            <li>
+              <span class="node lvl2">界面设置 <span class="pill switch">ThemeConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">图标状态栏 · launcherIcon / 沉浸状态栏 / 沉浸管理栏</span></li>
+                <li>
+                  <span class="node lvl3">导航页面 · 4 项</span>
+                  <ul>
+                    <li><span class="node lvl4">首页显隐 <span class="pill moved-out">拆出</span> · 统计显隐 <span class="pill moved-out">拆出</span> · 底部导航栏管理 · 顶栏管理</span></li>
+                  </ul>
+                </li>
+                <li>
+                  <span class="node lvl3">外观 · 3 个管理页</span>
+                  <ul>
+                    <li>
+                      <span class="node lvl4">主题包管理 ThemeManageActivity</span>
+                      <ul>
+                        <li><span class="node lvl5">主背景图 / 书籍详情背景 / 面板背景 / 面板边框(色+透明度) / 背景模糊 / 圆角缩放 / 界面透明度 / 弹窗透明度 / 卡片色 / 弱化色 / 搜索框背景 / Tab 背景 / 书架色 / 卡片阴影 / 卡片毛玻璃 / 发现页毛玻璃 / 字体缩放 / UI 字体 / 标题字体 / 字体颜色</span></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <span class="node lvl4">书籍详情管理 BookInfoManageActivity</span>
+                      <ul>
+                        <li><span class="node lvl5">页面样式（经典 / 沉浸式）· 6 组件（头部/元数据/操作/详情/目录/AI图）可显隐 + 拖拽排序</span></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <span class="node lvl4">气泡管理 BubbleManageActivity → BubbleEditDialog</span>
+                      <ul>
+                        <li><span class="node lvl5">名称 · 尺寸缩放 · 4 色（日间普通/日间强调/夜间普通/夜间强调）· SVG 模板编辑器</span></li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  <span class="node lvl3">导航页面 · 底部导航栏管理 NavigationBarManageActivity</span>
+                  <ul>
+                    <li><span class="node lvl5">栏样式（悬浮/标准/侧栏）· 材质（纯色/玻璃/磨砂）· 悬浮隐藏搜索 · 壁纸 · 透明度 · 边框色+透明度 · 侧栏背景 · 导航栏项目增删排序</span></li>
+                  </ul>
+                </li>
+                <li>
+                  <span class="node lvl3">顶栏管理 TopBarManageActivity → TopBarEditDialog</span>
+                  <ul>
+                    <li><span class="node lvl5">名称 · 样式（默认/常规）· 圆角缩放 · 背景色 · 壁纸+透明度 · 过滤默认态 · 过滤按钮显隐 · 标签栏色+透明度 · 标签选中色+透明度 · 搜索</span></li>
+                  </ul>
+                </li>
+                <li>
+                  <span class="node lvl3">模板 · 3 项</span>
+                  <ul>
+                    <li><span class="node lvl4">EPUB 加载模板 EpubLoadingTemplateManageActivity <span class="pill moved-out">拆出</span>（复制/导入/导出/编辑 JSON/预览/应用）</span></li>
+                    <li><span class="node lvl4">分享笔记模板 ShareNoteTemplateManageActivity <span class="pill moved-out">拆出</span>（导入 zip/html/编辑/导出）</span></li>
+                    <li><span class="node lvl4">发现/订阅页模式 <span class="pill moved-out">拆出 → 内容与规则</span></span></li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">封面设置 <span class="pill switch">CoverConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">封面加载 · 仅 WiFi <span class="pill fix">硬编码 key</span> · 高清 <span class="pill fix">硬编码 key</span> · 阴影 · 封面规则 · 默认封面 <span class="pill fix">硬编码 key</span> · 封面 HTML</span></li>
+                <li>
+                  <span class="node lvl3">封面合集管理 CoverCollectionManageActivity</span>
+                  <ul>
+                    <li><span class="node lvl4">日间 / 夜间 Tab · S3 容器切换 · 新建 / 导入 zip · 重命名 / 导出 / 上传 / 下载 / 删除本地 / 删除远端</span></li>
+                    <li><span class="node lvl4">合集详情 CoverCollectionDetailActivity</span></li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">欢迎页设置 <span class="pill switch">WelcomeConfigFragment</span></span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-ai)"><span class="tag-cat">③</span> AI 与自动化</span>
+          <ul>
+            <li>
+              <span class="node lvl2">AI 设置 <span class="pill switch">AiConfigFragment</span></span>
+              <ul>
+                <li>
+                  <span class="node lvl3">AI 助手 · 16 项 <span class="pill merged">巨型区待拆分</span></span>
+                  <ul>
+                    <li><span class="node lvl4">正文隐私授权 <span class="pill moved-out">拆出</span> · 用量与预算 <span class="pill moved-out">拆出</span> · 默认模型 <span class="pill moved-out">拆出</span> · 生图供应商/图库 <span class="pill moved-out">拆出</span> · 世界书管理 <span class="pill moved-out">拆出</span></span></li>
+                  </ul>
+                </li>
+                <li><span class="node lvl3">AI 供应商 · 管理供应商 AiProviderManageActivity → 编辑页</span>
+                  <ul>
+                    <li><span class="node lvl4">供应商：名称 / URL / key / 模式(chat/responses) · 模型增删 / 设当前 / 一键拉取模型列表</span></li>
+                  </ul>
+                </li>
+                <li><span class="node lvl3">生图供应商 AiImageProviderManageActivity → 编辑页（类型 openai/js / 名称 / URL / 模型 / 风格提示词 / 参数 / 脚本）</span></li>
+                <li><span class="node lvl3">世界书管理 AiWorldBookManageActivity（条目增删 / 导入文件 / 网络导入）</span></li>
+                <li><span class="node lvl3">MCP · 添加 / 管理</span></li>
+                <li><span class="node lvl3">联网工具 · Tavily 开关 / key + 折叠调优 4 项</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">自动任务开关 <span class="pill switch">开关行</span></span></li>
+            <li><span class="node lvl2">自动任务管理</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-network)"><span class="tag-cat">④</span> 网络与同步</span>
+          <ul>
+            <li>
+              <span class="node lvl2">网络设置 <span class="pill switch">NetworkConfigFragment</span></span>
+              <ul>
+                <li>
+                  <span class="node lvl3">DNS <span class="pill switch">三级页 NetworkDnsConfigFragment</span></span>
+                  <ul>
+                    <li><span class="node lvl4">启用 DoH · 服务 · 地址 · 分流 · 域名规则 · 测速 · 自定义 Hosts</span></li>
+                    <li><span class="node lvl4">优先使用 Cronet <span class="pill moved-out">拆出 → 网络设置主区</span></span></li>
+                  </ul>
+                </li>
+                <li><span class="node lvl3">Web 服务 · webPort / 口令 / 唤醒锁 <span class="pill merged">与一级开关归拢</span></span></li>
+                <li><span class="node lvl3">连接与请求 · User-Agent / 线程数</span></li>
+                <li><span class="node lvl3">书源上传 · 校验 / 直链上传规则</span></li>
+              </ul>
+            </li>
+            <li>
+              <span class="node lvl2">备份与恢复 <span class="pill switch">BackupConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">云存储配置 · 类型 / WebDAV / 进度同步</span></li>
+                <li>
+                  <span class="node lvl3">S3 容器管理 S3ContainerManageActivity</span>
+                  <ul>
+                    <li><span class="node lvl5">名称 · 端点 · 桶 · 访问密钥 · 秘密密钥 · 容量(GB) · 前缀 · 区域 · 会话令牌 · 启用 / PathStyle · 动作（编辑/测试/刷新/设默认/启停/删除）</span></li>
+                  </ul>
+                </li>
+                <li>
+                  <span class="node lvl3">书库容器管理 LibraryContainerManageActivity</span>
+                  <ul>
+                    <li><span class="node lvl5">导入(文件/在线) · 新建 · 编辑(名称/端点/桶/密钥/容量/前缀/区域/启用) · 导出 / 测试 / 刷新 / 设默认 / 启停 / 删除</span></li>
+                  </ul>
+                </li>
+                <li><span class="node lvl3">备份恢复 · 路径 / 备份 / 恢复 / 忽略 / 旧版导入</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">Web 服务开关 <span class="pill switch">开关行</span></span></li>
+            <li><span class="node lvl2">公开中继 <span class="pill switch">RelaySettingsActivity</span></span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-data)"><span class="tag-cat">⑤</span> 数据与工具</span>
+          <ul>
+            <li><span class="node lvl2">书签</span></li>
+            <li><span class="node lvl2">阅读记录</span></li>
+            <li><span class="node lvl2">缓存管理</span></li>
+            <li>
+              <span class="node lvl2">存储与清理 <span class="pill switch">StorageConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">默认导入目录</span></li>
+                <li><span class="node lvl3">清理动作 · 过期 / 清缓存 / 清 WebView / 收缩数据库</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">文件管理</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-advanced)"><span class="tag-cat">⑥</span> 高级与关于</span>
+          <ul>
+            <li>
+              <span class="node lvl2">高级设置 <span class="pill switch">AdvancedConfigFragment</span></span>
+              <ul>
+                <li><span class="node lvl3">语言 <span class="pill merged">单项独占一区</span></span></li>
+                <li><span class="node lvl3">渲染性能 · 快速滚动 / 抗锯齿 / 高刷 / 位图缓存 / 图片保留 / 源编辑行数</span></li>
+                <li><span class="node lvl3">媒体按键 · 2 项 <span class="pill moved-out">拆出 → 朗读配置</span></span></li>
+                <li><span class="node lvl3">隐私与安全 · 本地密码</span></li>
+                <li><span class="node lvl3">系统 · 文本菜单 / 自动更新 / 记录日志 / 堆转储</span></li>
+                <li><span class="node lvl3">评论缓存 · 8 项 + 6 个折叠区 ~17 项 <span class="pill moved-out">拆出 → 独立页</span></span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">关于</span></li>
+            <li><span class="node lvl2">退出</span></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <div class="callout">
+      <span class="t">⚠ 关键发现：</span>设置并非只存在于「我的」页 —— 除了书架 / 发现 / 订阅 / 首页 / 统计的页面级设置，还有<strong>五类隐藏更深的「阅读页内」设置块</strong>游离在全局体系之外：
+      <strong>① 视频播放器</strong>（8 项，独立 <span class="mono">video_config</span> 偏好）、
+      <strong>② 音频播放器</strong>（唤醒锁 / 播放模式 / 跳片头尾，部分存 Book 级）、
+      <strong>③ 漫画阅读</strong>（~14 菜单开关 + 滤镜/墨纸/页脚 3 弹窗）、
+      <strong>④ 代码编辑器</strong>（字号 / 补全 / 空白字符 / 编辑器主题）、
+      <strong>⑤ 键盘辅助 + 选择文本搜索引擎</strong>。
+      这些都不在 <span class="mono">SettingsSearchIndex</span> 里。此外「朗读配置」「高亮规则」「段落规则」「阅读底部菜单按钮」「阅读素材库」「公开中继」等节点的<strong>下一层还有具体子项</strong>，本轮（R21–R29）已逐条下钻穷举。
+    </div>
+  </section>
+
+  <!-- ===== 2 单项拆出/归入 ===== -->
+  <section id="s2">
+    <h2><span class="idx">2</span> 单项级「拆出 / 归入」分析（核心）</h2>
+    <p class="lead">以下 50 条是深入到<strong>单个设置项 / 单个分区</strong>的迁移判断。其中 R15–R20 是<strong>补充探索</strong>发现的、游离在「我的页设置 + PreferKey」体系之外的设置块（视频/音频/漫画/编辑器/键盘/选择文本）；R21–R29 是<strong>「逐条过子项」</strong>下钻补全的阅读页深层子项与修正；R30–R42 是下钻补全的「软件设置二级页下挂载的管理/编辑三级页」子项；R43–R50 是本轮以 <span class="mono">PreferKey.kt</span> 全集（485 常量）+ 独立 SharedPreferences 载体反向审计后，补全的<strong>页面级设置与硬编码偏好域</strong>。每条给出「源父项 → 目标父项」、涉及的精确存储载体、原因与优先级。</p>
+
+    <div class="move-list">
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R1</span>
+          <span class="move-title">书架启动 5 项拆出，归入书架设置</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读与界面 › 阅读设置 › 书架启动区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">书架菜单 › 书架布局弹窗（或新建「书架设置」二级页）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（5）</span>
+          <div class="codes">
+            <code>showAddToShelfAlert</code><code>autoRefresh</code><code>onlyUpdateRead</code><code>defaultToRead</code><code>defaultHomePage</code>
+          </div>
+        </div>
+        <div class="reason">这 5 项管的是<strong>书架行为</strong>（加书提示、自动刷新、默认书架、启动主页），却挂在「阅读设置」的正文渲染页里；而书架自己的 13 项显示配置（分组样式、未读、更新时间、排序…）又在书架菜单的 <span class="mono">BookshelfConfigDialog</span>。同一「书架」域被拆成两处，用户调书架要跑两个页面。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R2</span>
+          <span class="move-title">「发现/订阅页模式」整页拆出，归入「内容与规则」</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读与界面 › 界面设置 › 模板区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">内容与规则 › 独立二级行（订阅源管理之后）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（3）</span>
+          <div class="codes"><code>discoveryPageMode</code><code>modernRssPage</code><code>discoveryPageLayout</code></div>
+        </div>
+        <div class="reason"><span class="mono">DiscoverySubscriptionConfigFragment</span> 是<strong>二级页</strong>，却作为「模板」分区的一个 action 藏在主题设置里，面包屑显示「阅读与界面 › 界面设置」，搜索 ownerKey 仍为 <span class="mono">theme_setting</span>。它改的是发现页/订阅页的内容形态，与「内容与规则」的书源/订阅源管理强相关。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R3</span>
+          <span class="move-title">「首页显隐 / 统计显隐」拆出，归入底部导航域</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读与界面 › 界面设置 › 导航页面区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">与「底部导航栏管理」归拢为独立「底部导航」分区</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（2）</span>
+          <div class="codes"><code>homepage_visible</code><code>stats_visible</code></div>
+        </div>
+        <div class="reason">这两个开关（<span class="mono">KEY_HOMEPAGE_VISIBLE</span> / <span class="mono">KEY_STATS_VISIBLE</span>）改的是<strong>底部导航栏显隐</strong>，却与「图标状态栏」「外观」「模板」混在同一页。它们应与「底部导航栏管理」「顶栏管理」同属「导航」主题，而非「外观」。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R4</span>
+          <span class="move-title">「EPUB 加载模板 / 分享笔记模板」拆出，归入阅读设置</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读与界面 › 界面设置 › 模板区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">阅读设置 › 新增「阅读模板」区（或正文相关分区）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（2）</span>
+          <div class="codes"><code>epub_loading_templates</code><code>share_note_template_manage</code></div>
+        </div>
+        <div class="reason">EPUB 加载模板是<strong>正文加载</strong>、分享笔记模板是<strong>正文分享</strong>，都属「阅读」域，不属于「界面外观」。把 R2 的发现/订阅页模式拆出后，「模板区」只剩这 2 项，恰好可整体迁入阅读设置，让「界面设置」回归纯外观。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R5</span>
+          <span class="move-title">「媒体按键」<b>3</b> 项拆出，归入朗读配置（修正：实为 3 项）</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">高级与关于 › 高级设置 › 媒体按键区（2 项）＋ 朗读配置 › 基础组（1 项）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">朗读配置弹窗 › 基础组（三枚媒体键合一）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（3）</span>
+          <div class="codes"><code>mediaButtonOnExit</code><code>readAloudByMediaButton</code><code>mediaButtonPerNext</code></div>
+        </div>
+        <div class="reason"><strong>本轮下钻修正：</strong>三枚「媒体键」设置目前被拆在<strong>两处</strong>——「退出时媒体键行为 <code>mediaButtonOnExit</code>」「媒体键控制朗读 <code>readAloudByMediaButton</code>」在高级设置「媒体按键」区，「媒体键逐句 <code>mediaButtonPerNext</code>」已在朗读配置「基础」分组。同域被割裂。另注意：<code>mediaButtonOnExit</code> 与 <code>mediaButtonPerNext</code> 是<strong>裸字符串</strong>（<code>PreferKey</code> 无对应常量，仅 <code>readAloudByMediaButton</code> 有），两处读写用 <code>getPrefBoolean("…")</code> 直取，也是硬编码隐患（见 R22）。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R6</span>
+          <span class="move-title">「评论抓取」折叠参数拆出，独立成二级页</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">高级与关于 › 高级设置 › 评论缓存区 + 6 个折叠区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">独立 ConfigTag（如 COMMENT_CONFIG）二级页</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（约 25，含 8 项缓存 + 下载引擎/数据/回复/页面/资源/超时/完整性）</span>
+          <div class="codes"><code>syncCacheReview</code><code>cacheReviewSilent</code><code>autoDownloadReview</code><code>compressReviewAvatars</code><code>reviewDownloadEngine</code><code>…</code></div>
+        </div>
+        <div class="reason"><span class="mono">ReviewDownloadConfig</span> 是自成体系的评论下载调优（并发/超时/完整性），约 25 项塞在高级设置里、默认折叠。独立成页后更清晰、可被搜索精准定位，高级设置也真正回归「兜底」定位。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R7</span>
+          <span class="move-title">「优先使用 Cronet」拆出，归入网络设置主区</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">网络与同步 › 网络设置 › DNS 三级页 › 高级区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">网络设置 › 连接与请求区</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（1）</span>
+          <div class="codes"><code>PreferKey.cronet</code></div>
+        </div>
+        <div class="reason"><span class="mono">cronet</span> 是全局网络栈选择（OkHttp / Cronet），不是 DoH 的子项。它被塞在 DNS 三级页的「高级」区，与 DoH、Hosts、分流混在一起。应回到「连接与请求」区，与 User-Agent、线程数并列。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R8</span>
+          <span class="move-title">Web 服务开关与 3 项参数归拢到网络设置</span>
+          <span class="move-tags"><span class="mtag p0">已完成</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">网络与同步 › 网络设置 › Web 服务区（端口/口令/唤醒锁）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">网络与同步 › 网络设置 › Web 服务区（开关 + 端口 + 口令 + 唤醒锁同屏）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（3）</span>
+          <div class="codes"><code>webPort</code><code>webServiceToken</code><code>webServiceWakeLock</code></div>
+        </div>
+        <div class="reason">一级「网络与同步」区有「Web 服务开关」行，二级「网络设置」里又有 Web 服务的端口、口令、唤醒锁。用户要配 Web 服务得跑两处。<strong>落地方式：反向归拢</strong>——把开关整个搬进网络设置，「我的」页那一行连同行内的「复制地址 / 浏览器打开」一起移除，全应用只留一个启停入口。反过来（参数搬去「我的」）会让网络设置变空壳，也放不下地址展示。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R9</span>
+          <span class="move-title">「布局类」设置三处归拢为统一入口</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">发现页布局（发现/订阅设置）· 订阅列数（订阅菜单）· 首页布局（首页菜单）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">归拢为一个「页面布局」统一入口（或至少互链 + 进搜索）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（3）</span>
+          <div class="codes"><code>discoveryPageLayout</code><code>rssSourceLayout</code><code>homepageLayoutMode</code></div>
+        </div>
+        <div class="reason">「发现页布局」「订阅列数」「首页布局」是同一语义（页面内容的排列方式），却分散在三个不同的页面菜单里，且<strong>都不在全局搜索索引</strong>。应归拢到一个「布局」父项，或至少让三者互链 + 纳入搜索。</div>
+      </div>
+
+      <div class="move-card t-split">
+        <div class="move-head">
+          <span class="move-id">R10</span>
+          <span class="move-title">AI 设置「AI 助手」16 项大区拆分</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">AI 与自动化 › AI 设置 › AI 助手区（16 项混杂）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">拆为「助手功能」「内容隐私与用量」「模型与生图」3 子区</span></span>
+        </div>
+        <div class="items">
+          <span class="k">建议拆出的单项（5）</span>
+          <div class="codes"><code>aiContentConsent</code><code>aiUsageBudget</code><code>aiDefaultModelSettings</code><code>aiImageProviderManage</code><code>aiWorldBookManage</code></div>
+        </div>
+        <div class="reason">「AI 助手」区塞了 16 项，从开关、技能、原生工具、工作区，到正文隐私授权、用量预算、默认模型、生图供应商、世界书管理，分属「功能 / 治理 / 模型 / 内容」四个子域。拆分后定位更快，也便于搜索。</div>
+      </div>
+
+      <div class="move-card t-fix">
+        <div class="move-head">
+          <span class="move-id">R11</span>
+          <span class="move-title">封面 3 项硬编码 key 改回 PreferKey 常量</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读与界面 › 封面设置 › 封面加载区</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">改回 PreferKey 常量（零风险，无数据迁移）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（3）</span>
+          <div class="codes"><code>"loadCoverOnlyWifi"</code><code>"loadCoverHighQuality"</code><code>"useDefaultCover"</code></div>
+        </div>
+        <div class="reason"><span class="mono">CoverConfigFragment</span> 第 46/55/82 行用了<strong>裸字符串</strong>，而 <span class="mono">PreferKey</span> 第 26-28 行已定义同名常量 <span class="mono">loadCoverOnlyWifi / loadCoverHighQuality / useDefaultCover</span>。改回常量即可，字符串值不变、零迁移。</div>
+      </div>
+
+      <div class="move-card t-fix">
+        <div class="move-head">
+          <span class="move-id">R12</span>
+          <span class="move-title">删除 5 个死字符串分类名</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源</span><span class="path">res/values/strings.xml + values-zh（零引用）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">删除（编译期可验证）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及（5）</span>
+          <div class="codes"><code>config_category_reading</code><code>config_category_data_device</code><code>config_category_sync</code><code>config_category_tools</code><code>config_category_appearance</code></div>
+        </div>
+        <div class="reason">设置重组历史遗留的死字符串，仅 values + values-zh 两文件定义、代码零引用，其余 8 个本地化目录均无，删除不会触发 ExtraTranslation。</div>
+      </div>
+
+      <div class="move-card t-fix">
+        <div class="move-head">
+          <span class="move-id">R13</span>
+          <span class="move-title">PreferKey.editTemeAuto 拼写修正</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源</span><span class="path">PreferKey.kt（teme → theme 拼写错）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">改常量名 editThemeAuto，保留字符串值（零迁移）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">引用点（5 处）</span>
+          <div class="codes"><code>AppConfig×2</code><code>CodeEditActivity×1</code><code>ChangeThemeDialog×…</code></div>
+        </div>
+        <div class="reason">命名是 API 面，拼写错会误导后续开发者。仅改<strong>常量名</strong>、保留字符串值 <span class="mono">"editTemeAuto"</span>，零数据迁移、最安全。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R14</span>
+          <span class="move-title">「语言」单项独占一区，并入「系统」区</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">高级与关于 › 高级设置 › 无标题区（仅语言 1 项）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">并入「系统」区（或上提为常用项）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（1）</span>
+          <div class="codes"><code>KEY_LANGUAGE</code></div>
+        </div>
+        <div class="reason"><span class="mono">KEY_LANGUAGE</span> 独占一个无标题分区，语言切换其实是常用项，孤零零放在高级设置顶部既浪费空间又不直观。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R15</span>
+          <span class="move-title">视频播放器设置（8 项）游离，未进全局设置</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">视频播放页 › 右上菜单 ›「设置」（video_play.xml menu_config_settings）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">「阅读设置 › 漫画视频区」已有「视频设置」入口（action 已挂）；建议补进搜索索引 + 标注载体</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（8，存独立 <code>video_config</code> SharedPreferences，非 PreferKey）</span>
+          <div class="codes"><code>autoPlay</code><code>startFull</code><code>fullBottomProgressBar</code><code>playCacheEnabled</code><code>longPressSpeed</code><code>skipIntroOutroEnabled</code><code>skipIntroSeconds</code><code>skipOutroSeconds</code></div>
+        </div>
+        <div class="reason">视频播放器有一套完整设置弹窗（<span class="mono">ui/video/config/SettingsDialog.kt</span>，自动播放 / 直接全屏 / 长按倍速 / 全屏进度条 / 边播边缓存 / 跳片头片尾）。它<strong>不存 PreferKey</strong>，而是 <span class="mono">VideoPlay</span> 对象自己持有的独立 <span class="mono">video_config</span> 偏好文件——这是「我的页 + PreferKey」审计完全看不到的一块。好在「阅读设置 › 漫画视频」已有一个「视频设置」action 入口（<span class="mono">PreferKey.videoSetting</span>）指向它，但该入口未进搜索索引，且其独立存储载体在备份恢复里需单独处理。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R16</span>
+          <span class="move-title">代码编辑器设置（4 项 + 编辑器主题）游离</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">书源/规则编辑页 CodeEditActivity › 菜单「设置」「主题」</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">可选纳入「高级设置」或保持就地（面向高级用户，价值低）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（4 + 编辑器主题）</span>
+          <div class="codes"><code>editFontScale</code><code>editAutoComplete</code><code>editAutoWrap</code><code>editNonPrintable</code><code>editTheme / editThemeDark / editTemeAuto</code></div>
+        </div>
+        <div class="reason"><span class="mono">ui/code/config/SettingsDialog.kt</span>（编辑器字号 / 自动补全 / 显示空白字符 6 标志位）与 <span class="mono">ChangeThemeDialog.kt</span>（编辑器主题，含 <span class="mono">editTemeAuto</span> 拼写错）从书源编辑页右上菜单进入。它们<strong>面向规则编写者</strong>，不是普通用户设置，进全局搜索价值有限，建议保留就地、仅修拼写（见 R13）。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R17</span>
+          <span class="move-title">音频播放器设置（唤醒锁 / 播放模式 / 跳过片头尾 / 倍速）游离</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">音频播放页 AudioPlayActivity › 菜单（audio_play.xml：唤醒锁 / 播放模式 / 跳过片头尾）+ 底部倍速滑块</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">与「朗读配置」同属「朗读/音频」域，建议纳入搜索（音频设置常被用户找不到）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（唤醒锁 + 播放模式 + 片头尾 + 倍速）</span>
+          <div class="codes"><code>AppConfig.audioPlayUseWakeLock</code><code>AudioPlay.playMode（存书 Book.playMode）</code><code>Book.openCredits / closeCredits</code><code>Book.playSpeed</code></div>
+        </div>
+        <div class="reason"><span class="mono">AudioPlayActivity</span> 的「唤醒锁」存 <span class="mono">AppConfig.audioPlayUseWakeLock</span>，播放模式 / 倍速 / 跳片头尾则存到<strong>每本书的 Book 实体</strong>（<span class="mono">book.setPlayMode / setPlaySpeed / setOpenCredits</span>）——这是「全局设置」与「书籍级设置」的混合，分类最隐蔽。与「朗读配置」语义重叠，值得纳入搜索。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R18</span>
+          <span class="move-title">漫画阅读设置（~14 菜单项 + 3 弹窗）游离，且部分存 Book 级</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">漫画阅读页 ReadMangaActivity › 菜单（book_manga.xml：预载 / 缩放 / 点按滚动 / 自动翻页 / 横向滚动 / 页脚 / 滤镜 / 墨纸 / 灰度 等）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">与「阅读设置 › 漫画视频」区的 showMangaUi 归拢；墨纸 / 滤镜 / 页脚三弹窗补进搜索</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（~14 菜单开关 + MangaColorFilter / MangaEpaper / MangaFooterSetting 3 弹窗）</span>
+          <div class="codes"><code>pre_manga_number</code><code>disable_manga_scale</code><code>disable_click_scroll</code><code>enable_auto_page</code><code>enable_horizontal_scroll</code><code>manga_footer_config</code><code>manga_color_filter</code><code>manga_epaper</code><code>…</code></div>
+        </div>
+        <div class="reason"><span class="mono">ReadMangaActivity</span> 的三点菜单里塞了约 14 个漫画阅读开关，另有「页脚设置 / 颜色滤镜 / 墨纸设置」三个 Compose 弹窗（<span class="mono">ui/book/manga/config/</span>）。「阅读设置 › 漫画视频」区目前只有 <span class="mono">showMangaUi</span> 一个开关 + 视频设置入口，漫画的其余配置全部只在阅读页内可达，且多存 Book 级，搜索完全盲区。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R19</span>
+          <span class="move-title">键盘辅助按键配置游离（5 个编辑页共用）</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">键盘工具条 KeyboardToolPop › 辅助按键配置（书源/订阅源/替换/代码 5 个编辑页共用）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">保持就地（属编辑工具，非全局设置）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（辅助按键列表，存数据库 KeyboardAssist 表）</span>
+          <div class="codes"><code>KeyboardAssistsConfig.kt</code><code>appDb.keyboardAssistDao</code></div>
+        </div>
+        <div class="reason"><span class="mono">KeyboardToolPop</span> 的「辅助按键」配置是编辑器的工具栏定制，存数据库表 <span class="mono">KeyboardAssist</span>，被 5 个编辑页（书源 / 订阅源 / 替换规则 / 代码编辑器 / 字典规则）共享。它是编辑工具属性，不应进全局设置，但应在文档中登记以证「已穷举」。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R20</span>
+          <span class="move-title">选择文本「搜索引擎管理」子配置游离（修正：挂于「网页搜索」而非「内容选择菜单」）</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读页选择文本 › 网页搜索 SelectionWebSearchDialog ›「管理搜索引擎」</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记（三级子弹窗，最易被漏）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（自定义搜索引擎列表，存 ContentSelectConfig）</span>
+          <div class="codes"><code>SelectionSearchEngineManageDialog</code><code>ContentSelectConfig.searchEngines</code></div>
+        </div>
+        <div class="reason"><span class="mono">SelectionSearchEngineManageDialog</span>（自定义搜索引擎增删排序 + 隐藏 CSS）挂载在「网页搜索」<span class="mono">SelectionWebSearchDialog</span> 之下，是<strong>三级子弹窗</strong>。前版误记为「内容选择菜单配置」的下属 action，本轮下钻纠正：它与「内容选择菜单」平行、都属阅读页内可达、搜索审计最易漏。搜索引擎条目含 <code>name / url / hideCss</code> 三字段。</div>
+      </div>
+
+      <!-- ========== R21–R29 本轮下钻新增 ========== -->
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R21</span>
+          <span class="move-title">朗读配置弹窗（ComposeSettingFragment 双子项承载）补齐谱系</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读页朗读 › 设置 → ReadAloudConfigDialog（4 Tab 分组，非 spec 体系）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">纳入搜索索引 + 与「高级设置 › 媒体按键」「音频播放器设置」归拢（见 R5/R17）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（按 4 个 Tab）</span>
+          <div class="codes"><code>基础</code><code>ignoreAudioFocus</code><code>pauseReadAloudWhilePhoneCalls</code><code>readAloudWakeLock</code><code>showReadAloudFloatingBall</code><code>mediaButtonPerNext</code></div>
+          <div class="codes"><code>朗读</code><code>readAloudByPage</code><code>streamReadAloudAudio</code><code>ttsFollowSys</code><code>ttsSpeechRate</code></div>
+          <div class="codes"><code>多角色</code><code>aiReadAloudRoleEnabled</code><code>模型与超时</code><code>自动建卡</code><code>发言人管理</code><code>处理模式</code><code>预处理规则</code><code>并发/上下文/合并段</code><code>提示词</code><code>消耗记录</code><code>配乐/音效+音量</code><code>响度均衡</code></div>
+          <div class="codes"><code>引擎</code><code>ttsEngine</code><code>发言人管理</code><code>系统TTS设置</code></div>
+        </div>
+        <div class="reason"><span class="mono">ReadAloudConfigDialog</span> 内嵌 <span class="mono">ReadAloudPreferenceFragment : ComposeSettingFragment</span>，本身就是 spec 体系，但宿主是 Dialog 而非二级页，未挂进 <span class="mono">SettingsSearchIndex</span>。它有 4 个 Tab、约 30 个子项，是「朗读域」的真正中心，媒体按键（R5）、音频播放（R17）、AI 多角色/配乐都该向它收敛。</div>
+      </div>
+
+      <div class="move-card t-fix">
+        <div class="move-head">
+          <span class="move-id">R22</span>
+          <span class="move-title">媒体键 2 个裸字符串 key 补进 PreferKey 常量</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源</span><span class="path">MediaButtonReceiver / BaseReadAloudService / ReadAloudConfigDialog / AdvancedConfigFragment 直写字符串</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">PreferKey 增加 mediaButtonOnExit / mediaButtonPerNext 两常量并替换引用</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及（2 个 key，5+ 处读写）</span>
+          <div class="codes"><code>"mediaButtonOnExit"</code><code>"mediaButtonPerNext"</code></div>
+        </div>
+        <div class="reason"><code>PreferKey</code> 里只有 <code>readAloudByMediaButton</code>，另外两个媒体键 key 全程裸字符串（<code>getPrefBoolean("mediaButtonPerNext")</code> 等）。这既是不一致隐患，也让「媒体键同域」更难追踪（R5）。补常量、值不变、零迁移。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R23</span>
+          <span class="move-title">高亮规则管理（三级 + 编辑页）补齐子项</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读页三点菜单 › 高亮规则 → HighlightRuleManageActivity → HighlightRuleEditActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（规则域，不进全局搜索，但需在谱系图标明层级）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>管理页</code><code>搜索/拖拽排序/开关</code><code>作用域(全局|本书)</code><code>导入.red/导出</code><code>帮助/素材库入口</code></div>
+          <div class="codes"><code>编辑页</code><code>name/group</code><code>keyword(正则|多行)</code><code>styleType 6类</code><code>styleColorType 11色</code><code>CSS/字体/背景图</code><code>启用|全局|仅标题|适配排版书</code></div>
+        </div>
+        <div class="reason">高亮规则是「正文渲染」的规则域，管理页有搜索/拖拽排序/作用域/导入导出，编辑页有 6 种样式类型（文字/背景/下划线/双线/波浪线/删除线）＋ 11 种颜色 + 字体/背景图选择。它们藏在阅读页三点菜单三层之下，属「书源/规则」属性，不进全局设置，但本轮已穷举其子项以证「每个设置项下是否有子项」。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R24</span>
+          <span class="move-title">段落规则管理（三级 + 编辑页 + 快速开关）补齐子项</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读页三点菜单 › 段落规则 → ParagraphRuleQuickDialog / ParagraphRuleManageActivity / ParagraphRuleEditActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（规则域，含登录态 / 变量表，最复杂）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>快速弹窗</code><code>按本书开关段落规则</code><code>登录源</code><code>进管理</code></div>
+          <div class="codes"><code>管理页</code><code>添加/文件导入/在线导入</code><code>编辑/导出/复制/变量/删除</code><code>登录源 SourceLoginActivity</code><code>拖拽排序</code></div>
+          <div class="codes"><code>编辑页</code><code>name/loginUrl/loginUi/enabledCookieJar/timeout</code><code>script/jsLib</code><code>调试(选章节跑规则)</code><code>复制/粘贴规则</code></div>
+        </div>
+        <div class="reason">段落规则是「正文预处理」规则域，三层弹窗 + 编辑页。它依赖<strong>登录态</strong>（可跳 <span class="mono">SourceLoginActivity</span>）并有<strong>变量表</strong>（<code>ParagraphRuleVar</code>），是「源/规则」属性，不进全局设置。本轮穷举：快速弹窗、管理页 7 动作、编辑页 7 字段 + 调试。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R25</span>
+          <span class="move-title">阅读底部菜单按钮定制（两行可自定义 + 14 内置 + 自定义脚本按钮）</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读页三点菜单 › 菜单编辑 → ReadMenuButtonManageActivity → ReadMenuCustomButtonEditActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（<code>readMenuButtonLayout</code> 持久化，13 内置按钮可增删排序）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>两行布局</code><code>拖拽排序/移到另一行</code><code>添加/删除/重置</code><code>图标定制(日夜)</code></div>
+          <div class="codes"><code>13 内置按钮</code><code>搜索/自动翻页/替换规则/夜间/目录/朗读/阅读样式/设置/AI助手/AI总结/段落规则/气泡/角色</code></div>
+          <div class="codes"><code>自定义按钮</code><code>name/loginUrl/loginUi/cookie/timeout/script/jsLib</code></div>
+        </div>
+        <div class="reason">阅读底部两行菜单按钮可完全自定义（<code>ReadMenuButtonConfig.defaultLayout()</code> + <code>readMenuButtonLayout</code> 持久化），13 个内置按钮可增删排序、图标可日夜切换，还支持脚本型自定义按钮。属「阅读页内」UI 定制，不进全局搜索，本轮已逐项穷举。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R26</span>
+          <span class="move-title">阅读素材库（字体/图片，共享给模板 + 高亮）补齐子项</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">ReaderTemplateDialog › 素材库 / HighlightRuleEdit › 字体/背景图 → ReaderAssetManageActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（资源库，多入口共享，非设置项）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>分类</code><code>全部/图片/字体/文件夹</code><code>导入单文件</code><code>添加/导入文件夹</code><code>重命名/引用/导出/复制/删除</code><code>预览</code></div>
+        </div>
+        <div class="reason"><span class="mono">ReaderAssetManageActivity</span> 是字体/图片素材库，被阅读模板、高亮规则字体/背景图多入口共享，支持分类/导入/文件夹/引用/导出/删除/预览。属「资源」非「设置」，但它是「模板」「高亮」两个设置项的下级子页，本轮补进谱系。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R27</span>
+          <span class="move-title">漫画三弹窗补齐子项 + 与 showMangaUi 归拢</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">漫画阅读页 ReadMangaActivity › 滤镜/墨纸/页脚三弹窗</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">与「阅读设置 › 漫画视频」归拢 + 进搜索</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>页脚 MangaFooterSettingDialog</code><code>章节标签/章节/章节名</code><code>页码标签/页码</code><code>进度标签/进度</code><code>页脚显示/对齐</code></div>
+          <div class="codes"><code>滤镜 MangaColorFilterDialog</code><code>亮度/红/绿/蓝/透明度 5 滑杆</code></div>
+          <div class="codes"><code>墨纸 MangaEpaperDialog</code><code>墨水屏阈值滑杆</code></div>
+        </div>
+        <div class="reason">R18 只说「3 弹窗」，本轮下钻：页脚弹窗有 9 项（3 组 label+值开关 + 显示 + 对齐），滤镜弹窗 5 滑杆（RGBA+亮度），墨纸弹窗 1 滑杆。三者分别存 <code>AppConfig.mangaFooterConfig / mangaColorFilter / mangaEInkThreshold</code>，是「漫画」域下最深的配置层，与「阅读设置 › 漫画视频」的 <code>showMangaUi</code> 割裂。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R28</span>
+          <span class="move-title">公开中继设置补齐子项（网络域，存 SecurePrefs）</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">网络与同步 › 公开中继 → RelaySettingsActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（6 个 PreferKey + SecurePrefs 加密身份）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>连接</code><code>启用开关</code><code>workerUrl</code><code>deviceName</code><code>保存/重连</code></div>
+          <div class="codes"><code>配对</code><code>adminToken(≥32位)</code><code>配对</code></div>
+          <div class="codes"><code>状态/共享</code><code>设备ID</code><code>永久共享</code><code>进度同步</code><code>测试/创建分享</code><code>复制/二维码/撤销</code></div>
+          <div class="codes"><code>安全</code><code>电池优化设置</code></div>
+        </div>
+        <div class="reason"><span class="mono">RelaySettingsActivity</span> 是公开中继的完整配置页，6 个 <code>PreferKey.publicWebRelay*</code> + <code>RelaySecretStore</code>（AndroidKeyStore 加密身份），存 <code>SecurePrefs</code> 而非普通偏好。它已是「网络与同步」一级行，但作为「另一类独立偏好载体」应在谱系与校验清单中显式标注。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R29</span>
+          <span class="move-title">阅读记录组件定制（7 组件拖拽 + 显隐）补齐子项</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">统计（阅读记录）› 组件定制 → ReadRecordComponentConfigDialog</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（统计页级设置，7 组件可显隐 + 拖拽排序）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（7 组件）</span>
+          <div class="codes"><code>总览</code><code>热力图</code><code>最近书籍</code><code>每日记录</code><code>最近封面</code><code>阅读排行</code><code>目标卡</code></div>
+        </div>
+        <div class="reason">前版只登记了 <span class="mono">ReadRecordComponentConfigDialog</span> 名称。本轮下钻确认 <span class="mono">ReadRecordComponentType</span> 共 7 个组件（总览/热力图/最近书籍/每日记录/最近封面/阅读排行/目标卡），每个带开关 + 拖拽排序，改动即时生效（不设确认键）。属统计页级设置，与「年度报告 / 目标」同级，不进全局搜索但需登记完整。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R30</span>
+          <span class="move-title">主题包管理（ThemeManageActivity）子项下钻 —— 21+ 个视觉字段</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 外观 › 主题包 ThemeManageActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（主题包列表 + 编辑弹窗 21+ 视觉字段 + 导入/导出/远程同步）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">编辑弹窗字段（约 21 项）</span>
+          <div class="codes"><code>主背景图</code><code>书籍详情背景</code><code>面板背景</code><code>面板边框色/透明度</code><code>背景模糊</code><code>圆角缩放</code><code>界面透明度</code><code>弹窗透明度</code></div>
+          <div class="codes"><code>卡片色</code><code>弱化色</code><code>搜索框背景</code><code>Tab 背景</code><code>书架色</code><code>卡片阴影</code><code>卡片毛玻璃</code><code>发现页毛玻璃</code></div>
+          <div class="codes"><code>字体缩放</code><code>UI 字体</code><code>标题字体</code><code>字体颜色</code></div>
+        </div>
+        <div class="reason">前版只记了「主题包」三个字。本轮展开 <span class="mono">ThemeManageActivity</span>（2648 行），确认主题包编辑弹窗含主背景/书籍详情背景/面板背景三张背景图（各带裁剪）、面板边框色+透明度、背景模糊、圆角缩放、界面/弹窗透明度、卡片色/弱化色/搜索框背景/Tab 背景/书架色、卡片阴影、卡片+发现页毛玻璃、字体缩放、UI/标题字体、字体颜色共 21+ 字段，且支持主题包 zip 导入导出、远程同步任务（WebDAV）。这是「软件设置」里最深的视觉配置块。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R31</span>
+          <span class="move-title">底部导航栏管理（NavigationBarManageActivity）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 导航 › 底部导航栏管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（栏样式 3 种 + 材质 3 种 + 壁纸/透明度/边框 + 项目增删排序）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>栏样式</code><code>悬浮/标准/侧栏</code><code>材质</code><code>纯色/玻璃/磨砂</code><code>悬浮隐藏搜索</code></div>
+          <div class="codes"><code>壁纸</code><code>透明度</code><code>边框色/透明度</code><code>侧栏背景</code></div>
+          <div class="codes"><code>导航项目</code><code>增删/排序</code><code>包导入导出</code><code>远程同步</code></div>
+        </div>
+        <div class="reason">前版把「底部导航栏管理」当成 <span class="mono">ThemeConfigFragment</span> 里的一行 action。本轮展开 <span class="mono">NavigationBarManageActivity</span>（1294 行），确认它是导航栏的完整定制页：栏样式（悬浮/标准/侧栏）、材质（纯色/玻璃/磨砂）、悬浮隐藏搜索、壁纸、透明度、边框色+透明度、侧栏背景，以及导航项目的增删排序、整包导入导出、S3 远程同步任务。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R32</span>
+          <span class="move-title">顶栏管理（TopBarManageActivity → TopBarEditDialog）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 导航 › 顶栏管理 → TopBarEditDialog</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（顶栏配置字段 10+ 项）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>名称</code><code>样式(默认/常规)</code><code>圆角缩放</code><code>背景色</code><code>壁纸+透明度</code></div>
+          <div class="codes"><code>过滤默认态(折叠/展开)</code><code>过滤按钮显隐</code><code>标签栏色+透明度</code><code>标签选中色+透明度</code><code>搜索</code></div>
+        </div>
+        <div class="reason">前版只记了「顶栏管理」action 名。本轮展开 <span class="mono">TopBarManageActivity</span>（928 行）+ <span class="mono">TopBarEditDialog</span>（588 行），确认顶栏配置含名称、样式（默认/常规）、圆角缩放、背景色、壁纸+透明度、过滤默认态、过滤按钮显隐、标签栏色+透明度、标签选中色+透明度、搜索等字段。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R33</span>
+          <span class="move-title">书籍详情管理（BookInfoManageActivity）子项下钻 —— 2 样式 + 6 组件</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 外观 › 书籍详情管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（页面样式 2 种 + 组件 6 项可显隐 + 拖拽排序）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>页面样式</code><code>经典 CLASSIC</code><code>沉浸式 IMMERSIVE_COMPOSE</code></div>
+          <div class="codes"><code>组件(6)</code><code>头部</code><code>元数据</code><code>操作</code><code>详情</code><code>目录</code><code>AI图</code></div>
+        </div>
+        <div class="reason">前版把「书籍详情」当外观区一行。本轮确认 <span class="mono">BookInfoManageActivity</span> 用 <span class="mono">BookInfoComponentConfig</span> 持久化页面样式（CLASSIC / IMMERSIVE_COMPOSE 两种）+ 6 个组件（HEADER/META/ACTIONS/DETAIL/CATALOG/AI_IMAGES）的显隐开关与拖拽排序（至少保留 1 个开启），存 <code>PreferKey.bookInfoPageStyle</code>。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R34</span>
+          <span class="move-title">气泡管理（BubbleManageActivity → BubbleEditDialog）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 外观 › 气泡管理 → BubbleEditDialog</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（名称 + 尺寸缩放 + 4 色 + SVG 模板编辑）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>名称</code><code>尺寸缩放</code><code>日间普通色</code><code>日间强调色</code><code>夜间普通色</code><code>夜间强调色</code><code>SVG 模板编辑器</code></div>
+        </div>
+        <div class="reason">前版只记了「气泡」二字。本轮展开 <span class="mono">BubbleManageActivity</span>（698 行）+ <span class="mono">BubbleEditDialog</span>（464 行），确认气泡配置含名称、尺寸缩放、日间/夜间各普通/强调 4 色（走 ColorPickerDialog）、SVG 模板编辑器（<span class="mono">CodeEditActivity</span>）。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R35</span>
+          <span class="move-title">封面合集管理（CoverCollectionManageActivity）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">封面设置 › 封面合集管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（日/夜 Tab + S3 容器 + 6 动作 + 详情页）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>日间/夜间 Tab</code><code>S3 容器切换</code><code>新建</code><code>导入 zip</code></div>
+          <div class="codes"><code>动作(6)</code><code>重命名/导出/上传/下载/删除本地/删除远端</code><code>详情页 CoverCollectionDetailActivity</code></div>
+        </div>
+        <div class="reason">前版只记了「封面合集管理」action。本轮展开 <span class="mono">CoverCollectionManageActivity</span>（295 行）+ <span class="mono">CoverCollectionDetailActivity</span>（134 行），确认日间/夜间 Tab、S3 容器切换（<code>coverCollection</code> scope）、新建/导入 zip、以及重命名/导出/上传/下载/删除本地/删除远端 6 动作，本地与云端（S3）封面合集分离。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R36</span>
+          <span class="move-title">S3 容器管理（S3ContainerManageActivity）子项下钻 —— 9 字段 + 7 动作</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">备份恢复 › S3 容器管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（9 表单字段 + 2 勾选 + 7 动作）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">表单字段（9）</span>
+          <div class="codes"><code>名称</code><code>端点</code><code>桶</code><code>访问密钥</code><code>秘密密钥</code><code>容量(GB)</code><code>前缀</code><code>区域</code><code>会话令牌</code></div>
+          <div class="codes"><code>勾选(2)</code><code>启用</code><code>PathStyle</code><code>动作(7)</code><code>编辑/测试/刷新容量/设默认/启停/删除</code></div>
+        </div>
+        <div class="reason">前版把「S3」当云存储配置里的一行。本轮展开 <span class="mono">S3ContainerManageActivity</span>（321 行），确认 9 表单字段（含秘密密钥/会话令牌两个密码字段）、启用+PathStyle 两个勾选、7 个动作（编辑/测试连接/刷新容量/设默认/启停/删除）。与 <span class="mono">LibraryContainerManageActivity</span>（书库容器）是两套独立容器管理。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R37</span>
+          <span class="move-title">书库容器管理（LibraryContainerManageActivity）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">备份恢复 › 书库容器管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（导入/新建/编辑/导出 + 7 动作）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>导入(文件/在线)</code><code>新建</code><code>编辑(名称/端点/桶/密钥/容量/前缀/区域/启用)</code><code>导出</code><code>测试/刷新/设默认/启停/删除</code></div>
+        </div>
+        <div class="reason">前版漏了「书库容器」这个独立管理页。本轮确认 <span class="mono">LibraryContainerManageActivity</span>（685 行）是书库专用容器的管理页，支持从文件/在线导入、新建、编辑（名称/端点/桶/密钥/容量/前缀/区域/启用）、导出容器包，以及测试/刷新/设默认/启停/删除 7 动作，与 S3 容器管理平行但针对「书库」作用域。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R38</span>
+          <span class="move-title">AI 供应商 / 生图供应商 / 世界书 三个管理页子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">AI 设置 › 供应商 / 生图供应商 / 世界书管理</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（AI 供应商编辑 / 生图供应商编辑 / 世界书导入）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">AI 供应商编辑 AiProviderEditActivity</span>
+          <div class="codes"><code>名称/URL/key</code><code>模式(chat/responses)</code><code>模型增删/设当前</code><code>一键拉取模型列表</code></div>
+          <div class="codes"><code>生图编辑 AiImageProviderEditActivity</code><code>类型(openai/js)/名称/URL/模型/风格提示词/参数/脚本</code></div>
+          <div class="codes"><code>世界书 AiWorldBookManageActivity</code><code>条目增删/导入文件/网络导入</code></div>
+        </div>
+        <div class="reason">前版只记了「管理供应商 / 生图供应商 / 世界书」三个 action 名。本轮展开三页：<span class="mono">AiProviderEditActivity</span>（462 行，供应商名/URL/key/模式 + 模型增删设当前 + 一键拉取模型列表）、<span class="mono">AiImageProviderEditActivity</span>（248 行，openai/js 两种类型 + 风格提示词/参数/脚本）、<span class="mono">AiWorldBookManageActivity</span>（108 行，条目增删 + 文件/网络导入）。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R39</span>
+          <span class="move-title">外观套装（AppearanceKitActivity → EditActivity）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读与界面 › 外观套装 AppearanceKitActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（套件增删/导入/应用 + 编辑页：名称/导航样式/应用主题/日夜绑定）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>套件列表</code><code>创建/导入/应用/删除</code><code>编辑页</code><code>名称</code><code>导航样式</code><code>应用主题</code><code>日间/夜间绑定</code><code>预览</code></div>
+        </div>
+        <div class="reason">前版是文档里唯一提到 <span class="mono">AppearanceKit</span> 的地方，但也没展开。本轮确认 <span class="mono">AppearanceKitActivity</span>（774 行）管理外观套装列表（创建/导入/应用/删除），<span class="mono">AppearanceKitEditActivity</span>（402 行）编辑套件的名称、导航样式、应用主题，以及日间/夜间两套绑定 + 预览。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R40</span>
+          <span class="move-title">EPUB 加载模板 / 分享笔记模板 两个管理页子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">界面设置 › 模板 › EPUB 加载模板 / 分享笔记模板</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（两套模板管理，各含导入/编辑/导出/应用）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">EPUB 加载模板</span>
+          <div class="codes"><code>复制/导入 json/编辑(CodeEditActivity)/导出/预览/应用</code><code>日/夜预览切换</code></div>
+          <div class="codes"><code>分享笔记模板</code><code>导入 zip/html/编辑/导出/预览</code></div>
+        </div>
+        <div class="reason">前版只记了「EPUB 加载模板」「分享笔记模板」两个 action。本轮展开 <span class="mono">EpubLoadingTemplateManageActivity</span>（190 行，复制/导入 json/CodeEditActivity 编辑/导出/预览/应用 + 日夜预览切换）与 <span class="mono">ShareNoteTemplateManageActivity</span>（353 行，导入 zip/html、编辑、导出、预览）。二者都是模板数据管理页，是 R4 拆出的对象。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R41</span>
+          <span class="move-title">高级标题 / 高级信息 两个管理页子项下钻（TipConfigDialog 三级页）</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">阅读页 › 信息提示 TipConfigDialog › 高级标题/高级信息 → AdvancedTitleManageActivity / AdvancedTipManageActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（JSON 规则管理页，含内置/文件/网络导入 + 导出 + 编辑）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>高级标题 AdvancedTitleManageActivity</code><code>内置添加/文件导入/网络导入/复制导出/删除</code></div>
+          <div class="codes"><code>高级信息 AdvancedTipManageActivity(HEADER/FOOTER 槽)</code><code>打开编辑器/重命名/导出/删除 + 内置/文件/网络导入</code></div>
+        </div>
+        <div class="reason">前版完全漏了这两个页。本轮确认它们挂在阅读页「信息提示」弹窗（<span class="mono">TipConfigDialog</span>）下：<span class="mono">AdvancedTitleManageActivity</span>（416 行）管高级标题 JSON 规则，<span class="mono">AdvancedTipManageActivity</span>（495 行）管页眉/页脚信息槽，二者均支持内置添加、文件导入、网络导入、复制导出、JSON 编辑器、删除。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R42</span>
+          <span class="move-title">导航栏/主题包远程同步（S3 + WebDAV 任务）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">现状</span><span class="path">NavigationBarManageActivity / ThemeManageActivity / TopBarManageActivity › 菜单 › 同步任务</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标</span><span class="path">登记（PackageSyncTaskDialog 统一远程同步入口）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项</span>
+          <div class="codes"><code>PackageSyncTaskDialog</code><code>同步任务管理</code><code>WebDAV/S3 上传</code><code>PackageManageUi 名称输入</code></div>
+        </div>
+        <div class="reason">本轮在 <span class="mono">NavigationBarManageActivity</span>、<span class="mono">ThemeManageActivity</span>、<span class="mono">TopBarManageActivity</span> 三处都发现「同步任务」菜单，走统一的 <span class="mono">PackageSyncTaskDialog</span>（184 行）+ <span class="mono">PackageManageUi</span>（81 行），把导航栏/主题包/顶栏包上传到 WebDAV/S3 云端。这是一个跨三个管理页复用的远程同步子页，此前完全未登记。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R43</span>
+          <span class="move-title">首页（首页 Tab）设置块游离，未进「我的」体系</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">首页 Tab › 右上角菜单（切布局 / 预加载开关）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记为「首页设置」页面级设置（与「我的」页一级行平级）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（约 5 项，均存 PreferKey）</span>
+          <div class="codes"><code>defaultHomePage</code><code>homepageLayoutMode</code><code>homepagePreload</code><code>homepageSourceHidden</code><code>showLocalBookIcon</code></div>
+        </div>
+        <div class="reason">用 PreferKey 全集反查，首页 Tab 有一套独立设置只在 <span class="mono">HomepageFragment</span> 右上角菜单里暴露：切换布局（<span class="mono">homepageLayoutMode</span>，1/2/3 循环）、预加载开关（<span class="mono">homepagePreload</span> 0/1）、隐藏书源图标（<span class="mono">homepageSourceHidden</span>）、本地书籍图标（<span class="mono">showLocalBookIcon</span>）、默认首页（<span class="mono">defaultHomePage</span>）。这些是页面级设置，不进 <span class="mono">SettingsSearchIndex</span>，搜索设置页根本搜不到。此前文档只零散覆盖了 <span class="mono">homepageLayoutMode</span> 一处。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R44</span>
+          <span class="move-title">主页模块管理（首页 Tab 的「模块」底部弹窗）多层子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">首页 Tab › 管理按钮 › HomepageModuleManageSheet</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记（内容/布局类设置，存 HomepageModuleDao 数据库表）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（6 层页面栈 + 模块编辑弹窗）</span>
+          <div class="codes"><code>HomepageModuleManageSheet</code><code>HomepageModuleEditDialog</code><code>HomepageKindSelectSheet</code><code>HomepageModuleType（Grid/Ranking/…）</code></div>
+        </div>
+        <div class="reason">首页模块管理是一个 6 层页面栈的底部弹窗（集列表→集详情→浏览书源/订阅源→源详情「已加入/发现」双 Tab→自定义集复制），模块编辑弹窗含标题/URL/类型下拉/参数 JSON/布局配置。模块类型枚举 <span class="mono">HomepageModuleType</span>（Grid/Ranking 等）。这是首页最深的布局配置块，此前文档仅用一句「HomepageModuleManageSheet」带过，内部层级从未展开。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R45</span>
+          <span class="move-title">发现套件管理（DiscoverySuiteManageActivity）控件体系下钻</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">发现 Tab › 套件管理 DiscoverySuiteManageActivity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记（存 DiscoverySuiteConfig / discoverySuiteConfig）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（套件列表/详情/控件编辑器三级 + 6 控件类型）</span>
+          <div class="codes"><code>DiscoverySuiteManageActivity</code><code>DiscoverySuiteWidgetType</code><code>TagBar / RankButtons / RankedList / WaterfallBooks / HorizontalBooks / RandomBooks</code><code>透明度倍率 1–4x</code></div>
+        </div>
+        <div class="reason">发现套件管理是三级页面（列表→套件详情→控件编辑器），支持 6 种控件类型（Tag 按键栏/排行榜按钮/排行榜列表/瀑布流/横排滑动/随机推荐），每种有独立选中数量约束（横排 1 个、排行榜 3-9 个、瀑布流固定底部），另有套件级「透明度倍率 1–4x」滑杆。这是发现页最核心的页面级布局设置，此前文档未展开。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R46</span>
+          <span class="move-title">订阅页（RSS）设置块游离：布局切换 + 文章样式 + 合并发现</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">订阅 Tab › RssFragment 菜单（布局切换 / 文章样式 / 切回经典）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记为「订阅设置」页面级设置；「合并发现/RSS」与 R2 的「发现/订阅页模式」归拢</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（约 6 项）</span>
+          <div class="codes"><code>rssSourceLayout</code><code>modernRssPage</code><code>mergeDiscoveryRss</code><code>mergedDiscoveryRssTarget</code><code>rssNoImgIframe</code><code>showRss</code></div>
+        </div>
+        <div class="reason">订阅 Tab 有独立设置：布局切换（<span class="mono">rssSourceLayout</span> 1/2/3 循环，<span class="mono">RssFragment</span> 右上角菜单）、文章样式切换、切回经典 RSS（写 <span class="mono">modernRssPage</span>=false）。关键的是 <span class="mono">mergeDiscoveryRss</span>（发现/RSS 合并）及其目标 <span class="mono">mergedDiscoveryRssTarget</span>，与 R2 的「发现/订阅页模式」语义重叠，应归拢。此前文档完全未覆盖订阅页设置。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R47</span>
+          <span class="move-title">AI 聊天伴侣 / 人格 / 世界书（AiChatActivity 内）体系下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">AI 聊天页 AiChatActivity（侧栏 + 弹窗）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记（存 aiChatCompanionList / aiPersonaList / aiWorldBookList / aiSkillList）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（角色助手 / 人格 / 世界书 / 窗口 Skill+MCP / 默认 Prompt）</span>
+          <div class="codes"><code>AiChatCompanionConfig</code><code>aiChatCompanionList</code><code>aiPersonaList</code><code>aiWorldBookList</code><code>aiSkillList</code><code>aiChatAutoSpeakEnabled</code></div>
+        </div>
+        <div class="reason">AI 设置页（AiConfigFragment）只挂「世界书管理」一个入口，但 <span class="mono">AiChatActivity</span> 里还藏着一整套「角色助手（character companion）」体系：添加角色（从书籍角色选择器 V2）、人格弹窗、世界书弹窗、默认 Prompt 编辑、窗口 Skill/MCP 选择、自动朗读开关（<span class="mono">aiChatAutoSpeakEnabled</span>）。这些与「AI 助手」域强相关却只在聊天页可达，此前文档未展开。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R48</span>
+          <span class="move-title">评论下载配置（ReviewDownloadConfig）为独立硬编码偏好域</span>
+          <span class="move-tags"><span class="mtag p0">P0</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">高级设置 › 评论缓存折叠区（仅 8 项 PreferKey）+ 隐藏的 22 项下载参数</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">ReviewDownloadConfig 硬编码 22+ 参数独立承载，需纳入审计与备份</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（8 开关 + 14 数值 + 3 引擎/退避枚举，共 22+，key 硬编码）</span>
+          <div class="codes"><code>reviewDownloadEngine</code><code>reviewDownloadBackoff</code><code>reviewDownloadDataConcurrency</code><code>reviewDownloadPageTimeout</code><code>reviewDownloadRetries</code><code>reviewDownloadRequireAvatars/Images/Css/Fonts</code></div>
+        </div>
+        <div class="reason">这是本轮最关键的发现：评论下载有一整套 22+ 参数的配置 <span class="mono">ReviewDownloadConfig</span>，其 key（<span class="mono">reviewDownloadEngine</span>、<span class="mono">reviewDownloadBackoff</span>、5 个并发数、5 个超时、重试次数/间隔、4 个资源开关、页大小/回复大小/稳定轮次等）<strong>全部硬编码字符串，不在 PreferKey.kt 里</strong>。引擎/退避枚举（auto/data/web、fixed/linear/exponential）+ 14 个带边界校验的数值（并发按核数自适应 2–8）。此前文档只提了「评论缓存 8 项 + 折叠区」，这 22 项下载参数完全漏掉。且这些 key 硬编码，正是 R 系列「零风险修正」应补进 PreferKey 的对象。</div>
+      </div>
+
+      <div class="move-card t-out">
+        <div class="move-head">
+          <span class="move-id">R49</span>
+          <span class="move-title">更新设置（AppUpdateConfig）游离在「关于」页，且硬编码 key</span>
+          <span class="move-tags"><span class="mtag p1">P1</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">关于 Tab › 内测版更新弹窗 + 加速管理弹窗（UpdateAcceleratorDialog）</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记；内测/GitHub 代理配置纳入备份与 PreferKey 收口</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及设置项（6 项，key 部分硬编码）</span>
+          <div class="codes"><code>updateToVariant</code><code>updateSourceStrategy</code><code>updateGithubProxyTemplates</code><code>updateGithubProxyIndex</code><code>internalBetaUpdateEnabled/Url/Key</code></div>
+        </div>
+        <div class="reason">更新设置有独立承载 <span class="mono">AppUpdateConfig</span>：GitHub 加速代理模板列表 + 当前索引（<span class="mono">UpdateAcceleratorDialog</span> 管理），内测版更新开关/URL/Key（<span class="mono">AboutFragment</span> 弹窗，含 X-Download-Key 头）。这些 key 在 PreferKey.kt 里有常量，但 <span class="mono">AppUpdateConfig</span> 内部又用 <span class="mono">getPrefString(PreferKey.xxx)</span> 直连。此前文档完全未覆盖「关于」页的更新设置子项。</div>
+      </div>
+
+      <div class="move-card t-merge">
+        <div class="move-head">
+          <span class="move-id">R50</span>
+          <span class="move-title">段落气泡（BubblePackageManager / BubbleQuickSwitchDialog）子项下钻</span>
+          <span class="move-tags"><span class="mtag p2">P2</span></span>
+        </div>
+        <div class="flow">
+          <span class="from"><span class="lbl">源父项</span><span class="path">阅读页 › 段评气泡快速切换弹窗 + 气泡管理 Activity</span></span>
+          <span class="arrow">→</span>
+          <span class="to"><span class="lbl">目标父项</span><span class="path">登记（存 paragraphBubblePackage / forceSoftwareParagraphBubble + BubblePackageManager 文件）</span></span>
+        </div>
+        <div class="items">
+          <span class="k">涉及子项（气泡包切换 + 强制软件气泡开关 + 内置/本地/云端来源）</span>
+          <div class="codes"><code>BubbleQuickSwitchDialog</code><code>BubblePackageManager</code><code>paragraphBubblePackage</code><code>forceSoftwareParagraphBubble</code></div>
+        </div>
+        <div class="reason">段评气泡有独立的快速切换弹窗（<span class="mono">BubbleQuickSwitchDialog</span>）：选择气泡包（内置/本地/云端来源，含预览图）+「强制使用软件气泡」开关（<span class="mono">forceSoftwareParagraphBubble</span>）。气泡包由 <span class="mono">BubblePackageManager</span> 管理文件目录，与 R34 的气泡管理 Activity 是同一域的两条入口。此前文档只在 R34 记了气泡管理 Activity 的 SVG 编辑器，漏了阅读页的快速切换弹窗这一层。</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== 3 目标谱系 ===== -->
+  <section id="s3">
+    <h2><span class="idx">3</span> 目标谱系图（迁移后）</h2>
+    <p class="lead">目标谱系按<strong>语义域</strong>重新排布（而非页面）。标 <span class="pill moved-in">归入</span> 的节点为迁移后的新归属；<span class="pill new">新建</span> 为新建父项（聚合此前游离的散落设置块）；<span class="pill merged">归并</span> 为跨父项同类项收拢到同一域；<span class="pill pending">待定</span> 为<strong>核对后豁免或仅部分落地</strong>（R3 / R49，详见第 6 节）。</p>
+
+    <div class="legend">
+      <span class="lg"><span class="sw" style="background:var(--ok)"></span>归入项</span>
+      <span class="lg"><span class="sw" style="background:var(--accent-2)"></span>新建父项</span>
+      <span class="lg"><span class="sw" style="background:var(--warn)"></span>归并同类项</span>
+    </div>
+
+    <div class="tree">
+      <ul>
+        <li>
+          <span class="node lvl1" style="background:var(--cat-content)"><span class="tag-cat">①</span> 内容与规则 <span class="pill new">扩展</span></span>
+          <ul>
+            <li><span class="node lvl2">书源管理</span></li>
+            <li><span class="node lvl2">订阅源管理</span></li>
+            <li>
+              <span class="node lvl2">发现/订阅/首页内容 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">发现/订阅页模式 <span class="pill moved-in">R2</span> · 订阅页设置 <span class="pill moved-in">R46</span>（合并发现 R2↔R46）</span></li>
+                <li><span class="node lvl3">首页设置 <span class="pill moved-in">R43</span> · 主页模块管理 <span class="pill moved-in">R44</span> · 发现套件管理 <span class="pill moved-in">R45</span></span></li>
+                <li><span class="node lvl3">页面布局 <span class="pill moved-in">R9 已归拢</span>（发现/订阅/首页三处布局 + 就近菜单互链 + 整页进搜索）</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">替换净化 · 目录规则 · 字典规则 · 回收站</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-reading)"><span class="tag-cat">②</span> 阅读 <span class="pill new">拆分</span></span>
+          <ul>
+            <li>
+              <span class="node lvl2">阅读设置</span>
+              <ul>
+                <li><span class="node lvl3">内容选择菜单 · 解析引擎 · 离线预载</span></li>
+                <li><span class="node lvl3">阅读模板 <span class="pill moved-in">R4 归入</span> <span class="pill new">新分区</span>（EPUB 加载 / 分享笔记）</span></li>
+                <li><span class="node lvl3">（书架启动 5 项 <span class="pill moved-out">已拆出 → 书架设置</span>）</span></li>
+              </ul>
+            </li>
+            <li>
+              <span class="node lvl2">朗读与音频 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">朗读配置 4 Tab <span class="pill moved-in">R21</span> · 音频播放器设置 <span class="pill moved-in">R17</span></span></li>
+                <li><span class="node lvl3">媒体键 3 项合一 <span class="pill moved-in">R5</span> + 裸 key 收口 <span class="pill fix">R22</span></span></li>
+              </ul>
+            </li>
+            <li>
+              <span class="node lvl2">漫画与视频 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">漫画 ~14 菜单开关 <span class="pill moved-in">R18</span> · 滤镜/墨纸/页脚三弹窗 <span class="pill moved-in">R27</span></span></li>
+                <li><span class="node lvl3">视频播放器 8 项 <span class="pill moved-in">R15</span>（标注 video_config 载体）</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-ai)"><span class="tag-cat">③</span> 界面与外观 <span class="pill new">拆分</span></span>
+          <ul>
+            <li><span class="node lvl2">主题模式 · 外观套装 <span class="pill moved-in">R39</span></span></li>
+            <li>
+              <span class="node lvl2">界面设置</span>
+              <ul>
+                <li><span class="node lvl3">图标状态栏</span></li>
+                <li><span class="node lvl3">外观（主题包 R30 / 书籍详情 R33 / 气泡 R34·R50）</span></li>
+                <li><span class="node lvl3">（模板区已清空并拆分）</span></li>
+              </ul>
+            </li>
+            <li>
+              <span class="node lvl2">底部导航 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">首页显隐 · 统计显隐 <span class="pill pending">R3 核对后豁免</span> · 底部导航栏管理 <span class="pill moved-in">R31</span> · 顶栏管理 <span class="pill moved-in">R32</span></span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">封面设置 <span class="pill fix">R11</span>（封面合集 R35）· 欢迎页设置</span></li>
+            <li>
+              <span class="node lvl2">书架设置 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">书架启动 5 项 <span class="pill moved-in">R1</span> + 书架显示 13 项（BookshelfConfigDialog）</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-data)"><span class="tag-cat">④</span> AI 与自动化</span>
+          <ul>
+            <li>
+              <span class="node lvl2">AI 设置</span>
+              <ul>
+                <li><span class="node lvl3">助手功能（开关/技能/工具/工作区）</span></li>
+                <li><span class="node lvl3">内容隐私与用量 <span class="pill moved-in">R10</span> · 模型与生图 <span class="pill moved-in">R10</span></span></li>
+                <li><span class="node lvl3">供应商 · 生图 · 世界书 <span class="pill moved-in">R38</span> · MCP · 联网工具</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">AI 聊天（伴侣/人格）<span class="pill new">新建父项</span> <span class="pill moved-in">R47</span></span></li>
+            <li><span class="node lvl2">自动任务开关 · 自动任务管理</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-network)"><span class="tag-cat">⑤</span> 网络与云</span>
+          <ul>
+            <li>
+              <span class="node lvl2">网络设置</span>
+              <ul>
+                <li><span class="node lvl3">DNS（三级页）· 仅 DoH/Hosts/分流/测速</span></li>
+                <li><span class="node lvl3">连接与请求 · User-Agent / 线程数 / Cronet <span class="pill moved-in">R7</span></span></li>
+                <li><span class="node lvl3">书源上传</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">Web 服务 <span class="pill moved-in">R8 归拢</span>（开关 + 端口 + 口令 + 唤醒锁合一）</span></li>
+            <li>
+              <span class="node lvl2">云存储 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span></span>
+              <ul>
+                <li><span class="node lvl3">S3 容器 <span class="pill moved-in">R36</span> · 书库容器 <span class="pill moved-in">R37</span> · 包远程同步 <span class="pill moved-in">R42</span></span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">备份与恢复 · 公开中继 <span class="pill moved-in">R28</span> · 更新设置 <span class="pill pending">R49 仅 key 收口</span></span></li>
+          </ul>
+        </li>
+
+        <li>
+          <span class="node lvl1" style="background:var(--cat-advanced)"><span class="tag-cat">⑥</span> 高级与工具 <span class="pill new">合并</span></span>
+          <ul>
+            <li>
+              <span class="node lvl2">高级设置</span>
+              <ul>
+                <li><span class="node lvl3">语言 + 系统（R14 并入）· 渲染性能 · 隐私与安全</span></li>
+                <li><span class="node lvl3">（媒体按键 <span class="pill moved-out">已拆出到朗读</span> · 评论 <span class="pill moved-out">已拆出</span>）</span></li>
+              </ul>
+            </li>
+            <li><span class="node lvl2">评论抓取/下载 <span class="pill new">新建父项</span> <span class="pill merged">跨父项归并</span>（评论缓存 R6 + 下载 22+ 参数收口 <span class="pill fix">R48</span>）</span></li>
+            <li><span class="node lvl2">数据与工具（原⑤并入）：书签 · 阅读记录 · 缓存管理 · 文件管理 · 存储清理</span></li>
+            <li><span class="node lvl2">关于 · 退出</span></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <div class="callout">
+      <span class="t">⚠ 落地铁律：</span>任何「拆出 / 归入」只要动了「我的」页，必须<strong>四处同步改</strong>：
+      <span class="mono">① ConfigTag</span> ·
+      <span class="mono">② ConfigActivity.when + breadcrumbOf</span> ·
+      <span class="mono">③ MyFragment.buildSections 行 key + handleRowClick 跳转</span> ·
+      <span class="mono">④ SettingsSearchIndex.ownerKey</span>。
+      任一处漏改，都会产生死入口 / 错面包屑 / 搜索断链（debug 包的 <span class="mono">verifySubSearchOwners</span> 会当场拦下断链）。
+    </div>
+
+    <h3>整体排布原则（从"页面"改为"语义域"）</h3>
+    <div class="tree">
+      <ul>
+        <li><span class="node lvl2">合并原则：同一「语义域」只保留一个父项</span>
+          <ul><li><span class="node lvl3">书架（R1+13项）· 媒体键（R5）· 朗读音频（R21+R17）· 漫画视频（R18+R15）· 页面内容（R2+R46+R43+R44+R45+R9）· 评论（R6+R48）· 云存储（R36+R37+R42）· 导航栏（R3+R31+R32）共 8 组</span></li></ul>
+        </li>
+        <li><span class="node lvl2">拆大原则：巨型分区拆子区，兜底页瘦身</span>
+          <ul><li><span class="node lvl3">AI 助手 16 项 → 3 子区（R10）· 高级设置拆出媒体键/评论（R5/R6）· 界面设置拆出导航（R3）与模板（R4）</span></li></ul>
+        </li>
+        <li><span class="node lvl2">保持就地原则：规则/编辑工具域不进全局</span>
+          <ul><li><span class="node lvl3">高亮 R23 · 段落 R24 · 菜单按钮 R25 · 素材库 R26 · 键盘辅助 R19 · 代码编辑器 R16 · 选择文本搜索 R20 —— 仅登记，不动位置</span></li></ul>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== 4 修改方案 ===== -->
+  <section id="s4">
+    <h2><span class="idx">4</span> 修改方案总览</h2>
+    <p class="lead">按优先级排序。P0 为零风险可直接做，P1 为核心结构迁移，P2 为体验优化。</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:52px">编号</th>
+          <th style="width:220px">优化项</th>
+          <th>动作</th>
+          <th style="width:110px">优先级</th>
+          <th>关键影响文件</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>R1</td><td>书架启动 5 项</td><td>拆出 → 归入书架设置</td><td><span class="mtag p0">P0</span></td><td><code>ReadingConfigFragment</code> + <code>BookshelfConfigDialog</code></td></tr>
+        <tr><td>R2</td><td>发现/订阅页模式</td><td>拆出 → 内容与规则一级行</td><td><span class="mtag p0">P0</span></td><td>四处同步（ConfigTag / ConfigActivity / MyFragment / SettingsSearchIndex）</td></tr>
+        <tr><td>R11</td><td>封面硬编码 key</td><td>改回 PreferKey 常量</td><td><span class="mtag p0">P0</span></td><td><code>CoverConfigFragment</code>（46/55/82 行）</td></tr>
+        <tr><td>R12</td><td>5 个死字符串</td><td>删除</td><td><span class="mtag p0">P0</span></td><td><code>values/strings.xml</code> + <code>values-zh/strings.xml</code></td></tr>
+        <tr><td>R13</td><td>editTemeAuto</td><td>改名（不动字符串值）</td><td><span class="mtag p0">P0</span></td><td><code>PreferKey.kt</code> + 5 处引用</td></tr>
+        <tr><td>R3</td><td>首页/统计显隐</td><td>拆出 → 底部导航分区</td><td><span class="mtag p1">P1</span></td><td><code>ThemeConfigFragment</code> + 新分区</td></tr>
+        <tr><td>R4</td><td>EPUB/分享模板</td><td>拆出 → 阅读设置模板区</td><td><span class="mtag p1">P1</span></td><td><code>ThemeConfigFragment</code> + <code>ReadingConfigFragment</code></td></tr>
+        <tr><td>R5</td><td>媒体按键（3 项）</td><td>拆出 → 朗读配置「基础」组</td><td><span class="mtag p1">P1</span></td><td><code>AdvancedConfigFragment</code> + <code>ReadAloudConfigDialog</code> + <code>MediaButtonReceiver</code></td></tr>
+        <tr><td>R8</td><td>Web 服务参数</td><td>与一级开关归拢</td><td><span class="mtag p1">P1</span></td><td><code>NetworkConfigFragment</code> + <code>MyFragment</code></td></tr>
+        <tr><td>R9</td><td>布局类设置</td><td>三处归拢 / 互链 + 进搜索</td><td><span class="mtag p1">P1</span></td><td><code>DiscoverySubscriptionConfigFragment</code> + Rss/Homepage 菜单 + 搜索索引</td></tr>
+        <tr><td>R6</td><td>评论抓取参数</td><td>拆出 → 独立二级页</td><td><span class="mtag p2">P2</span></td><td><code>AdvancedConfigFragment</code> + 新 ConfigTag</td></tr>
+        <tr><td>R7</td><td>Cronet</td><td>拆出 → 连接与请求区</td><td><span class="mtag p2">P2</span></td><td><code>NetworkDnsConfigFragment</code> + <code>NetworkConfigFragment</code></td></tr>
+        <tr><td>R10</td><td>AI 助手 16 项</td><td>拆 3 子区</td><td><span class="mtag p2">P2</span></td><td><code>AiConfigFragment</code></td></tr>
+        <tr><td>R14</td><td>语言单项</td><td>并入系统区</td><td><span class="mtag p2">P2</span></td><td><code>AdvancedConfigFragment</code></td></tr>
+        <tr><td>R15</td><td>视频播放器设置</td><td>补进搜索 + 标注载体</td><td><span class="mtag p1">P1</span></td><td><code>SettingsSearchIndex</code> + 备份恢复（video_config）</td></tr>
+        <tr><td>R16</td><td>代码编辑器设置</td><td>保留就地，仅修拼写</td><td><span class="mtag p2">P2</span></td><td><code>ui/code/config/</code>（无迁移）</td></tr>
+        <tr><td>R17</td><td>音频播放器设置</td><td>纳入搜索（朗读/音频域）</td><td><span class="mtag p1">P1</span></td><td><code>AudioPlayActivity</code> + 搜索索引</td></tr>
+        <tr><td>R18</td><td>漫画阅读设置</td><td>与 showMangaUi 归拢 + 进搜索</td><td><span class="mtag p1">P1</span></td><td><code>ReadMangaActivity</code> + <code>ReadingConfigFragment</code></td></tr>
+        <tr><td>R19</td><td>键盘辅助按键</td><td>保持就地（登记）</td><td><span class="mtag p2">P2</span></td><td><code>KeyboardToolPop</code>（无迁移）</td></tr>
+        <tr><td>R20</td><td>选择文本搜索引擎</td><td>登记（网页搜索下三级子弹窗）</td><td><span class="mtag p2">P2</span></td><td><code>SelectionWebSearchDialog</code> + <code>ContentSelectConfig</code></td></tr>
+        <tr><td>R21</td><td>朗读配置弹窗</td><td>谱系补全（4 Tab ~30 项）</td><td><span class="mtag p1">P1</span></td><td><code>ReadAloudConfigDialog</code> + <code>SettingsSearchIndex</code></td></tr>
+        <tr><td>R22</td><td>媒体键 2 裸 key</td><td>补进 PreferKey 常量</td><td><span class="mtag p0">P0</span></td><td><code>PreferKey.kt</code> + 5 处读写</td></tr>
+        <tr><td>R23</td><td>高亮规则</td><td>下钻登记（管理页 + 编辑页）</td><td><span class="mtag p2">P2</span></td><td><code>HighlightRuleManage/EditActivity</code></td></tr>
+        <tr><td>R24</td><td>段落规则</td><td>下钻登记（快速/管理/编辑 + 登录态 + 变量）</td><td><span class="mtag p2">P2</span></td><td><code>ParagraphRule*</code> 三页 + <code>SourceLoginActivity</code></td></tr>
+        <tr><td>R25</td><td>阅读底部菜单按钮</td><td>下钻登记（13 内置 + 脚本自定义）</td><td><span class="mtag p2">P2</span></td><td><code>ReadMenuButtonManageActivity</code></td></tr>
+        <tr><td>R26</td><td>阅读素材库</td><td>下钻登记（字体/图片/文件夹）</td><td><span class="mtag p2">P2</span></td><td><code>ReaderAssetManageActivity</code></td></tr>
+        <tr><td>R27</td><td>漫画三弹窗</td><td>下钻 + 与 showMangaUi 归拢</td><td><span class="mtag p1">P1</span></td><td><code>MangaFooter/ColorFilter/Epaper</code> + <code>ReadingConfigFragment</code></td></tr>
+        <tr><td>R28</td><td>公开中继设置</td><td>下钻登记（SecurePrefs 载体）</td><td><span class="mtag p2">P2</span></td><td><code>RelaySettingsActivity</code> + <code>RelaySecretStore</code></td></tr>
+        <tr><td>R29</td><td>阅读记录组件</td><td>下钻登记（7 组件）</td><td><span class="mtag p2">P2</span></td><td><code>ReadRecordComponentConfigDialog</code></td></tr>
+        <tr><td>R30</td><td>主题包管理</td><td>下钻登记（21+ 视觉字段）</td><td><span class="mtag p2">P2</span></td><td><code>ThemeManageActivity</code></td></tr>
+        <tr><td>R31</td><td>底部导航栏管理</td><td>下钻登记（栏样式/材质/壁纸/项目）</td><td><span class="mtag p2">P2</span></td><td><code>NavigationBarManageActivity</code></td></tr>
+        <tr><td>R32</td><td>顶栏管理</td><td>下钻登记（10+ 字段）</td><td><span class="mtag p2">P2</span></td><td><code>TopBarManageActivity</code> + <code>TopBarEditDialog</code></td></tr>
+        <tr><td>R33</td><td>书籍详情管理</td><td>下钻登记（2 样式 + 6 组件）</td><td><span class="mtag p2">P2</span></td><td><code>BookInfoManageActivity</code> + <code>BookInfoComponentConfig</code></td></tr>
+        <tr><td>R34</td><td>气泡管理</td><td>下钻登记（名称/缩放/4色/SVG）</td><td><span class="mtag p2">P2</span></td><td><code>BubbleManageActivity</code> + <code>BubbleEditDialog</code></td></tr>
+        <tr><td>R35</td><td>封面合集管理</td><td>下钻登记（日/夜 + S3 + 6 动作）</td><td><span class="mtag p2">P2</span></td><td><code>CoverCollectionManageActivity</code> + <code>CoverCollectionDetailActivity</code></td></tr>
+        <tr><td>R36</td><td>S3 容器管理</td><td>下钻登记（9 字段 + 7 动作）</td><td><span class="mtag p2">P2</span></td><td><code>S3ContainerManageActivity</code></td></tr>
+        <tr><td>R37</td><td>书库容器管理</td><td>下钻登记（导入/编辑/导出）</td><td><span class="mtag p2">P2</span></td><td><code>LibraryContainerManageActivity</code></td></tr>
+        <tr><td>R38</td><td>AI 供应商/生图/世界书</td><td>下钻登记（三管理页）</td><td><span class="mtag p2">P2</span></td><td><code>AiProviderEditActivity</code> + <code>AiImageProviderEditActivity</code> + <code>AiWorldBookManageActivity</code></td></tr>
+        <tr><td>R39</td><td>外观套装</td><td>下钻登记（套件 + 编辑页）</td><td><span class="mtag p2">P2</span></td><td><code>AppearanceKitActivity</code> + <code>AppearanceKitEditActivity</code></td></tr>
+        <tr><td>R40</td><td>EPUB/分享模板</td><td>下钻登记（导入/编辑/导出）</td><td><span class="mtag p2">P2</span></td><td><code>EpubLoadingTemplateManageActivity</code> + <code>ShareNoteTemplateManageActivity</code></td></tr>
+        <tr><td>R41</td><td>高级标题/信息</td><td>下钻登记（TipConfigDialog 三级页）</td><td><span class="mtag p2">P2</span></td><td><code>AdvancedTitleManageActivity</code> + <code>AdvancedTipManageActivity</code></td></tr>
+        <tr><td>R42</td><td>包远程同步</td><td>下钻登记（PackageSyncTaskDialog）</td><td><span class="mtag p2">P2</span></td><td><code>PackageSyncTaskDialog</code> + <code>PackageManageUi</code></td></tr>
+        <tr><td>R43</td><td>首页设置块</td><td>登记（游离页面级设置）</td><td><span class="mtag p1">P1</span></td><td><code>HomepageFragment</code> + 5 key</td></tr>
+        <tr><td>R44</td><td>主页模块管理</td><td>下钻（6 层页面栈 + 类型枚举）</td><td><span class="mtag p2">P2</span></td><td><code>HomepageModuleManageSheet</code> + <code>HomepageModuleType</code></td></tr>
+        <tr><td>R45</td><td>发现套件管理</td><td>下钻（6 控件类型 + 透明度倍率）</td><td><span class="mtag p1">P1</span></td><td><code>DiscoverySuiteManageActivity</code> + <code>DiscoverySuiteWidgetType</code></td></tr>
+        <tr><td>R46</td><td>订阅页设置块</td><td>登记 + 归拢（与 R2 合并）</td><td><span class="mtag p1">P1</span></td><td><code>RssFragment</code> + 6 key</td></tr>
+        <tr><td>R47</td><td>AI 聊天伴侣/人格/世界书</td><td>下钻登记（聊天页体系）</td><td><span class="mtag p2">P2</span></td><td><code>AiChatActivity</code> + <code>AiChatCompanionConfig</code></td></tr>
+        <tr><td>R48</td><td>评论下载配置</td><td>硬编码 22+ 参数收口</td><td><span class="mtag p0">P0</span></td><td><code>ReviewDownloadConfig</code>（key 硬编码）</td></tr>
+        <tr><td>R49</td><td>更新设置（内测/GitHub 代理）</td><td>登记 + key 收口</td><td><span class="mtag p1">P1</span></td><td><code>AppUpdateConfig</code> + <code>AboutFragment</code></td></tr>
+        <tr><td>R50</td><td>段落气泡快速切换</td><td>下钻登记（气泡包切换）</td><td><span class="mtag p2">P2</span></td><td><code>BubbleQuickSwitchDialog</code> + <code>BubblePackageManager</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>实施顺序建议</h3>
+    <div class="tree">
+      <ul>
+        <li><span class="node lvl2">第一批（P0，约半小时，零风险）</span>
+          <ul><li><span class="node lvl3">R11 封面 key 改常量 → R12 删死串 → R13 改名 → 每步 <span class="mono">./gradlew :app:compileAppDebugKotlin</span></span></li></ul>
+        </li>
+        <li><span class="node lvl2">第二批（P0 结构，R2）</span>
+          <ul><li><span class="node lvl3">「先增后删」：先在内容与规则加新行 → 验证跳转/面包屑/搜索 → 再删主题模板旧入口 → 同一 commit 改四处映射</span></li></ul>
+        </li>
+        <li><span class="node lvl2">第三批（P1 拆出/归拢，R3/R4/R5/R8/R9）</span>
+          <ul><li><span class="node lvl3">逐个迁移，每项改完跑 debug 包校验 <span class="mono">verifySubSearchOwners</span> 无断链</span></li></ul>
+        </li>
+        <li><span class="node lvl2">第四批（P2 体验优化，R6/R7/R10/R14）</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== 5 校验 ===== -->
+  <section id="s5">
+    <h2><span class="idx">5</span> 校验清单</h2>
+    <p class="lead">交付 QA 的一致性检查点。核心是「四处映射」与「搜索断链」。</p>
+
+    <div class="checklist">
+      <div class="check-group">
+        <h4>零风险项（R11/R12/R13）</h4>
+        <ul>
+          <li><span class="mono">grep</span> 确认 5 个死字符串在 app/src 零引用（Kotlin + XML + 资源引用）</li>
+          <li>封面 3 项 key 改回常量后，字符串值不变、无数据迁移</li>
+          <li><span class="mono">editTemeAuto</span> 改名后 grep 无残留旧常量名</li>
+          <li>全量编译 + lint 通过，无 missing string / unused resource</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>四处映射一致性（R2/R3/R4 等）</h4>
+        <ul>
+          <li><span class="mono">buildSections</span> 每行 key 唯一</li>
+          <li>每个 ConfigTag 在 <span class="mono">ConfigActivity.when</span> 有 Fragment 映射</li>
+          <li>每个搜索 spec 的 ownerKey 指向真实存在的一级行 key（无悬空）</li>
+          <li>每个面包屑父级链与搜索 ownerKey 一致</li>
+          <li>debug 包 <span class="mono">verifySubSearchOwners</span> 无崩溃</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>迁移项行为（R2 上提）</h4>
+        <ul>
+          <li>「内容与规则」出现「发现/订阅页模式」行且位置正确</li>
+          <li>点击能打开 <span class="mono">DiscoverySubscriptionConfigFragment</span></li>
+          <li>面包屑为「内容与规则 › 发现/订阅页模式」</li>
+          <li>主题「模板」分区不再残留旧入口</li>
+          <li>搜索「发现 / 订阅 / 模式」命中且跳转正确</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>回归</h4>
+        <ul>
+          <li>「我的」页 6 大区块无空白行 / 死行 / 重复行</li>
+          <li>设置搜索可打开、结果可跳转、无崩溃</li>
+          <li>主题 / AI / 备份等自定义行 key 入口仍正常跳转</li>
+          <li>书架 / 发现 / 订阅 / 首页 / 统计页面级设置未受影响</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>遗漏设置块（R15–R20）</h4>
+        <ul>
+          <li>视频设置：搜索「视频 / 倍速 / 片头」能命中且跳转到「阅读设置 › 漫画视频」区</li>
+          <li><span class="mono">video_config</span> 独立偏好已纳入备份恢复清单（<span class="mono">Backup.kt / Restore.kt</span> 已处理，需复核）</li>
+          <li>音频「唤醒锁」开关在朗读/音频域可被搜索定位</li>
+          <li>漫画「颜色滤镜 / 墨纸 / 页脚」三弹窗入口已被登记（不遗漏）</li>
+          <li>编辑器设置与键盘辅助确认为「编辑工具域」，明确不进全局搜索（有意为之）</li>
+          <li>选择文本搜索引擎管理的三级子弹窗入口已登记</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>本轮下钻新增（R21–R29）</h4>
+        <ul>
+          <li>媒体按键共 3 项：<code>mediaButtonOnExit / readAloudByMediaButton / mediaButtonPerNext</code> 三键合一后无遗漏、无双重入口</li>
+          <li><span class="mono">grep "mediaButtonPerNext\|mediaButtonOnExit"</span> 全仓库无裸字符串残留（R22 改完）</li>
+          <li>朗读配置 4 Tab 子项（基础/朗读/多角色/引擎）已全部枚举，无隐藏 key（<span class="mono">hiddenPreferenceKeys</span> 4 项已登记）</li>
+          <li>高亮/段落/菜单按钮/素材库的下一级弹窗与 Activity 入口已逐项列出</li>
+          <li>漫画页脚 9 项、滤镜 5 滑杆、墨纸 1 滑杆已核对</li>
+          <li>公开中继 6 个 <code>publicWebRelay*</code> key + SecurePrefs 载体已标注</li>
+          <li>阅读记录 7 组件（总览/热力图/最近书籍/每日记录/最近封面/阅读排行/目标卡）已核对</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>本轮下钻新增（R30–R42，软件设置二级页挂载的管理/编辑三级页）</h4>
+        <ul>
+          <li>主题包管理：主背景/书籍详情背景/面板背景三图 + 面板边框 + 背景模糊 + 圆角缩放 + 界面/弹窗透明度 + 卡片色/弱化色/搜索框背景/Tab背景/书架色 + 卡片阴影 + 卡片/发现页毛玻璃 + 字体缩放/UI字体/标题字体/字体颜色已枚举</li>
+          <li>底部导航栏管理：栏样式（悬浮/标准/侧栏）+ 材质（纯色/玻璃/磨砂）+ 悬浮隐藏搜索 + 壁纸 + 透明度 + 边框 + 侧栏背景 + 项目增删排序已枚举</li>
+          <li>顶栏管理：名称/样式/圆角缩放/背景色/壁纸/过滤态/标签栏色/标签选中色/搜索已枚举</li>
+          <li>书籍详情：页面样式 2 种（CLASSIC/IMMERSIVE_COMPOSE）+ 6 组件（HEADER/META/ACTIONS/DETAIL/CATALOG/AI_IMAGES）显隐+排序已核对</li>
+          <li>气泡管理：名称 + 尺寸缩放 + 4 色 + SVG 模板编辑器已核对</li>
+          <li>封面合集：日/夜 Tab + S3 容器切换 + 新建/导入 + 重命名/导出/上传/下载/删本地/删远端 6 动作已核对</li>
+          <li>S3 容器：9 字段（含 2 密码字段）+ 启用/PathStyle 勾选 + 编辑/测试/刷新/设默认/启停/删除 7 动作已核对</li>
+          <li>书库容器：导入(文件/在线)/新建/编辑/导出 + 测试/刷新/设默认/启停/删除已核对</li>
+          <li>AI 供应商/生图/世界书三个编辑管理页字段已枚举</li>
+          <li>外观套装：创建/导入/应用/删除 + 编辑页名称/导航样式/应用主题/日夜绑定已核对</li>
+          <li>EPUB 加载模板 + 分享笔记模板：导入/编辑/导出/预览/应用已核对</li>
+          <li>高级标题/高级信息：内置/文件/网络导入 + 导出 + JSON 编辑 + 删除已核对</li>
+          <li>包远程同步：PackageSyncTaskDialog 在导航栏/主题包/顶栏三处复用已核对</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>本轮下钻新增（R43–R50，以 PreferKey 全集 + 独立载体反向审计）</h4>
+        <ul>
+          <li>首页设置块：defaultHomePage / homepageLayoutMode / homepagePreload / homepageSourceHidden / showLocalBookIcon 五项已定位到 HomepageFragment 菜单</li>
+          <li>主页模块管理：HomepageModuleManageSheet 6 层页面栈 + HomepageModuleEditDialog（标题/URL/类型/参数 JSON/布局配置）+ HomepageModuleType 枚举已枚举</li>
+          <li>发现套件管理：DiscoverySuiteWidgetType 6 控件（TagBar/RankButtons/RankedList/WaterfallBooks/HorizontalBooks/RandomBooks）+ 透明度倍率 1–4x 已核对</li>
+          <li>订阅页设置：rssSourceLayout / modernRssPage / mergeDiscoveryRss / mergedDiscoveryRssTarget / rssNoImgIframe / showRss 六项已定位到 RssFragment 菜单</li>
+          <li>AI 聊天伴侣/人格/世界书：AiChatActivity 角色助手体系 + aiChatCompanionList / aiPersonaList / aiWorldBookList / aiSkillList 已核对</li>
+          <li>评论下载配置：ReviewDownloadConfig 22 个参数（引擎/退避枚举 + 5 并发 + 5 超时 + 重试 + 4 资源开关 + 页/回复大小 + 稳定轮次）已枚举；其 key 已在本轮全部收进 <code>PreferKey</code></li>
+          <li>更新设置：AppUpdateConfig（GitHub 加速代理模板/索引 + 内测开关/URL/Key）已定位到 AboutFragment + UpdateAcceleratorDialog</li>
+          <li>段落气泡：BubbleQuickSwitchDialog（气泡包切换 + 强制软件气泡开关）+ BubblePackageManager 来源（内置/本地/云端）已核对</li>
+        </ul>
+      </div>
+      <div class="check-group">
+        <h4>实施后校验（可重复执行的静态检查）</h4>
+        <ul>
+          <li>编译：<code>./gradlew :app:compileAppDebugKotlin</code> → BUILD SUCCESSFUL</li>
+          <li>四处映射：<code>python3 tools/check_settings_mapping.py</code> → 16 个 ConfigTag 由 <code>ConfigActivity.when</code> 的 16 个分支与 <code>breadcrumbOf</code> 的 13 个 case（含 2 处合并分支）全部覆盖；17 个搜索 <code>PageSource</code> / 15 个唯一 ownerKey 全部命中「我的」页一级行 key，悬空 0；面包屑父级分区与 ownerKey 所在分区逐条一致</li>
+          <li>偏好键反向审计：扫描全部 <code>getPref* / putPref* / removePref / defaultSharedPreferences.*</code> 调用，未进 <code>PreferKey</code> 的裸字符串键 <b>0 个</b>（<code>PreferKey</code> 共 517 个常量）</li>
+          <li>弹窗深链：朗读弹窗 4 个分组共 35 个可见项，key 100% 落在某个分组的 <code>preferenceKeys</code> 内，命中后必定能切到对应 Tab，不会静默落空</li>
+          <li>文案国际化：设置主链路 8 个文件（DNS 页 + DNS 数据层 3 个 + 评论 / 备份 / 欢迎 / 封面规则）里的中文字面量 <b>0 处</b>；中英资源逐条比对，占位符集合完全一致、缺项 0</li>
+          <li>XML 合法性：<code>strings.xml</code> / <code>strings-zh</code> / <code>strings_review_download.xml</code> / <code>strings-zh-review_download</code> 四份均可解析，条目数 56 = 56</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 6 实施进度 ===== -->
+  <section id="s6">
+    <h2><span class="idx">6</span> 实施进度（本轮已落地）</h2>
+    <p class="lead">本节点记录<strong>已经改完并通过编译验证</strong>的条目。校验方式：<span class="mono">./gradlew :app:compileAppDebugKotlin :app:processAppDebugResources</span> 通过；再用 <span class="mono">python3 tools/check_settings_mapping.py</span> 静态校验「ConfigTag ↔ when / breadcrumbOf」「一级行 ↔ 跳转」「搜索 ownerKey ↔ 一级行」与面包屑分区归属，零断链。</p>
+
+    <div class="kpis">
+      <div class="kpi"><div class="num" style="color:var(--ok)">28</div><div class="lbl">已实施条目</div></div>
+      <div class="kpi"><div class="num" style="color:var(--accent)">5</div><div class="lbl">新建二级页（书架 / 评论 / 朗读音频 / 漫画视频 / 页面布局）</div></div>
+      <div class="kpi"><div class="num" style="color:var(--accent-2)">1641</div><div class="lbl">文案抽出（中英各一份，累计）</div></div>
+      <div class="kpi"><div class="num" style="color:var(--ok)">2019</div><div class="lbl">累计净清的中文字面量（4509 → 2490）</div></div>
+      <div class="kpi"><div class="num" style="color:var(--accent-2)">629</div><div class="lbl">存量默认资源英化（R58+R59：609 &lt;string&gt; + 20 &lt;item&gt;）</div></div>
+      <div class="kpi"><div class="num" style="color:var(--warn)">0</div><div class="lbl">数据迁移（偏好键字符串值全部不变）</div></div>
+      <div class="kpi"><div class="num" style="color:var(--ok)">0</div><div class="lbl">未实施动作项（复核发现的 R9 已补齐）</div></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:56px">编号</th>
+          <th style="width:220px">条目</th>
+          <th>落地内容</th>
+          <th style="width:88px">状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>R11</td><td>封面 3 项硬编码 key</td><td><code>CoverConfigFragment</code> 的 <code>"loadCoverOnlyWifi" / "loadCoverHighQuality" / "useDefaultCover"</code> 改为 <code>PreferKey.*</code> 常量，字符串值不变</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R12</td><td>5 个死字符串</td><td>从 <code>values</code> + <code>values-zh</code> 删除 <code>config_category_reading / _data_device / _sync / _tools / _appearance</code>（精确 grep 确认零引用）</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R13</td><td>editTemeAuto 拼写</td><td><code>PreferKey.editThemeAuto</code> 改名，字符串值仍为 <code>"editTemeAuto"</code>；同步 <code>AppConfig</code> / <code>CodeEditActivity</code> / <code>ChangeThemeDialog</code></td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R22</td><td>媒体键 2 个裸 key</td><td><code>PreferKey.mediaButtonOnExit / mediaButtonPerNext</code> 新增，替换 <code>MediaButtonReceiver</code> / <code>AppConfig</code> / <code>BaseReadAloudService</code> / 两处设置页的裸字符串</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R5</td><td>媒体按键 3 项归朗读域</td><td>从「高级设置」移除媒体按键区，<code>readAloudByMediaButton</code> + <code>mediaButtonOnExit</code> 并入朗读配置「基础」组，与 <code>mediaButtonPerNext</code> 三键同屏</td><td><span class="mtag p1">已完成</span></td></tr>
+        <tr><td>R14</td><td>语言并入系统区</td><td>删除语言独占的无标题分区，<code>KEY_LANGUAGE</code> 移入「系统」区首项</td><td><span class="mtag p2">已完成</span></td></tr>
+        <tr><td>R7</td><td>Cronet 归连接与请求</td><td>从 DNS 三级页「高级」区移除，移入网络设置「连接与请求」区，与 User-Agent / 线程数并列</td><td><span class="mtag p2">已完成</span></td></tr>
+        <tr><td>R2</td><td>发现/订阅页模式上提</td><td>从「界面设置 › 模板」拆出，成为「内容与规则」一级行；面包屑改为「内容与规则」，搜索 ownerKey 同步改为该 ConfigTag</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R4</td><td>EPUB / 分享模板归阅读</td><td>从「界面设置 › 模板」迁入阅读设置新增的「阅读模板」区；「界面设置」模板区清空，回归纯外观</td><td><span class="mtag p1">已完成</span></td></tr>
+        <tr><td>R6 + R48</td><td>评论抓取独立成页</td><td>新建 <code>CommentConfigFragment</code>（<code>ConfigTag.COMMENT_CONFIG</code>），把 8 项缓存开关 + 6 个下载调优区从高级设置整体迁出；「我的」页新增「评论抓取」一级行</td><td><span class="mtag p2">已完成</span></td></tr>
+        <tr><td>R1</td><td>书架设置独立成页</td><td>新建 <code>BookshelfSettingsFragment</code>（<code>ConfigTag.BOOKSHELF_CONFIG</code>），容纳书架启动/入口 5 项；阅读设置不再混入书架行为（书架布局弹窗因带实时预览保留在书架页）</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R10</td><td>AI 助手 16 项拆子区</td><td>拆为「AI 助手 / 内容隐私与用量 / 模型与生图」三区，世界书、默认模型、图库、生图供应商归入模型区</td><td><span class="mtag p2">已完成</span></td></tr>
+        <tr><td>R17 + R21</td><td>朗读与音频独立成页</td><td>新建 <code>AudioConfigFragment</code>（<code>ConfigTag.AUDIO_CONFIG</code>）：把朗读弹窗「基础」「朗读」两组的 10 个全局项（唤醒锁 / 音频焦点 / 来电暂停 / 悬浮球 / 按页朗读 / 流式合成 / 跟随系统语速 / 语速滑条 / 引擎）与三枚媒体键平铺成页，弹窗保留为「朗读详细设置」入口（多角色、配乐、提示词、发言人）；音频播放器唤醒锁单独成区，并在 searchKeys 里挂上「播放模式 / 倍速 / 跳片头尾」把书籍级项指向播放页菜单</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R15 + R18 + R27</td><td>漫画与视频独立成页</td><td>新建 <code>MangaVideoConfigFragment</code>（<code>ConfigTag.MANGA_VIDEO_CONFIG</code>）：收拢漫画全局项（漫画浏览 / 预下载页数 / 隐藏标题 / 墨纸+阈值 / 灰度 / 页脚 / 滤镜）与视频设置入口。墨纸与灰度在此维持阅读页菜单的互斥关系；缩放、点按滚动、横向滚动、自动翻页速度等 Book 级项仍留阅读页，避免出现「设置页改了当前漫画没变」。新增 <code>EventBus.UP_MANGA_DISPLAY</code>：改墨纸/灰度/隐藏标题/控制栏后，栈里的 <code>ReadMangaActivity</code> 回来即按新值重刷，不会出现「改了没生效」</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R15 余项</td><td>阅读设置去重</td><td>删除阅读设置里的「漫画与视频」区（原 <code>showMangaUi</code> + 视频入口），避免与新页形成第二个入口；该区原有两项已完整并入新页</td><td><span class="mtag p1">已完成</span></td></tr>
+        <tr><td>R21 余项</td><td>弹窗内深链</td><td>朗读弹窗的 4 个 Tab 共 35 个可见项（去重 34 项）全部进入搜索索引，其中 <strong>22 项此前完全不可搜</strong>（多角色 / 模型路由 / 自动建卡 / 配乐 / 音效 / 提示词 / 发言人管理 / 消耗记录 / 响度均衡 / 处理模式 / 预处理规则…），其余 12 项与音频页重复、去重后仍落在页面上。<code>ReadAloudPreferenceFragment</code> 新增 <code>indexAllGroups</code>，索引态下一次吐出全部分组；命中后由 <code>AudioConfigFragment.onTargetKeyUnresolved</code> 带着 key 重开弹窗，弹窗按 <code>ReadAloudConfigGroup.groupOfKey</code> 切到对应 Tab 再滚到该项。<code>ComposeSettingFragment</code> 为此补了 <code>requestScrollTo()</code> 与 <code>onTargetKeyUnresolved()</code> 两个钩子。弹窗内 23 处 <code>getString</code> / <code>resources</code> 改为 <code>str()</code> / <code>ctx.resources</code>（未 attach 的 Fragment 上这两个会直接 NPE，构建索引必崩），DB 计数摘要改为索引态留空，避免搜索时跑三次查询</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R48</td><td>偏好键全量收口</td><td><code>ReviewDownloadConfig</code> 的 22 个裸 key（8 个开关 + 14 个数值项）收进 <code>PreferKey</code>，枚举改为引用常量；反向审计脚本又抓出 8 个漏网键（<code>brightnessAuto</code> / <code>importBookPath</code> / <code>searchScope</code> / <code>searchGroup</code> / <code>disableReturnKey</code> / <code>autoUpdateVariant</code> + <code>epubLayout.</code> / <code>readerTemplateScroll.</code> 两个动态前缀）一并收口。复检结果：<strong>裸字符串偏好键 0 个</strong>，<code>PreferKey</code> 517 个常量</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R8</td><td>Web 服务归拢网络设置</td><td>启停开关、运行地址、「复制地址 / 在浏览器打开」整体搬到 <code>NetworkConfigFragment</code> 的「Web 服务」区，与端口、口令、唤醒锁同屏——开关和它配置的参数终于在一个页面。「我的」页那一整行移除（含 <code>webServiceState</code>、<code>setWebServiceEnabled</code>、<code>startWebService</code>、<code>showWebServiceActions</code> 与 <code>MySettingsRowKind.WebService</code> 分支），<strong>设置体系里只剩一个启停入口</strong>（下拉快捷开关属系统级入口，不在设置树内），不存在两个地方互相打架。开关的 <code>checked</code> 读 <code>WebService.isRun</code> 而非偏好值：端口被占用或本地网络权限被拒时服务没起来，偏好里却写着 true，读偏好会让开关骗人。<code>start()</code> 是异步的（<code>isRun</code> 要等 <code>Service.onCreate</code>），因此 <code>onViewCreated</code> 订阅 <code>EventBus.WEB_SERVICE</code> 补一次重画，否则开关会先闪回未开启</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>附</td><td>朗读设置文案国际化</td><td><code>ReadAloudConfigDialog</code> 里 <strong>134 处中文字面量（去重 120 条）全部抽进 <code>strings.xml</code></strong>，中英各一份共 123 个 <code>ra_</code> 资源（含 4 个分组标题改为 <code>@StringRes</code>）。带插值的 29 条转成位置参数（<code>%1$s</code>），其中 6 条内嵌的「不使用 / 跟随多角色 / 开启 / 关闭 / 内置默认」也各自成串，避免把中文塞进格式化参数。校验：29 个带参调用的实参个数与占位符索引逐条比对一致，中英占位符集合完全一致，源码中文硬编码归零</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R51</td><td>设置页文案国际化收口</td><td>把设置体系里剩下几处「界面全是中文」的页面清干净，<strong>131 处中文字面量归零</strong>：DNS 页 <code>NetworkDnsConfigFragment</code> 62 处（含测速结果、校验提示、帮助说明四段长文）、评论页 <code>CommentConfigFragment</code> 19 处、备份页 <code>BackupConfigFragment</code> 11 处（含 toast 与 AppLog）、欢迎页 2 处、封面规则 1 处。<code>strings_review_download.xml</code> 原本只有中文一份，补出英文版并把 19 条区块说明一起纳入，形成 <code>values/</code>（英）+ <code>values-zh/</code>（中）双份。带插值的统一改位置参数（<code>%1$d</code> / <code>%1$s</code>），多行文本把 <code>\n</code> 写进资源而不是拼在代码里</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R52</td><td>校验错误改为原因枚举</td><td>数据层原先用 <code>require(x) { "中文提示" }</code> 把用户可见文案写死在 <code>NetworkDnsConfig.validated()</code> / <code>decode()</code> / <code>DnsDomainRule.normalized()</code> / <code>DnsHosts.parse()</code> 里，再由设置页 <code>it.message</code> 直接弹给用户——英文环境下这些错误永远冒中文。改为 <code>DnsConfigError</code>（15 个原因）+ <code>DnsConfigException</code>，设置页 <code>validationText()</code> 统一映射到 <code>dns_validation_*</code>；测速单次失败同理改为 <code>DnsProbeError</code>（5 个原因）。顺带把 <code>DohProvider.name</code> / <code>DnsScope.title</code> / <code>DnsProbeResult.name</code> 换成 <code>@StringRes</code>，品牌名与系统 DNS 也随语言切换。等价性：<code>DnsConfigException</code> 继承 <code>IllegalArgumentException</code>，原有 <code>runCatching</code> 兜底逻辑不受影响</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R53</td><td>子功能管理页文案国际化收口</td><td>把上一轮刻意留下的四个<strong>子功能管理页</strong>（书库容器 / 摘录分享模板 / 外观套件编辑 / 段评气泡）按功能面整体清干净，<strong>127 处中文字面量归零</strong>，含其数据层实体名与阅读页调用点。① <code>ShareNoteTemplateManager</code> 的 6 个配色名 / 4 个字体名 / 宽图长图 / 默认模板名 / "副本"后缀 / 三条错误文案全从数据层抽出，<code>StylePalette.name</code> → <code>@StringRes nameRes</code>，连带修正 <code>ShareNotePreviewOverlay</code> 与 <code>ShareNoteTemplateSelectDialog</code> 两个阅读页浮层的引用（<code>stringResource(nameRes)</code>）；顺带纠正 8 个历史"伪国际化" key——中文值被直接写进了默认 <code>values/</code>、<code>values-zh/</code> 反而缺失。② <code>BubbleManageActivity</code> / <code>Screen</code> / <code>BubbleEditDialog</code> 的 <code>Action</code> 枚举 <code>title: String</code> → <code>titleRes: Int</code>，帮助长文与 SVG 模板提示入资源（含 <code>&lt;img&gt;</code> 尖括号转义）。③ <code>LibraryContainerManageActivity</code> / <code>Screen</code> 的 7 个动作 + 容量/已用/剩余/最少字数/每日上限/加密导入状态等插值串全部转 <code>%1$s</code> / <code>%1$d</code> 位置参数。④ <code>AppearanceKitEditActivity</code> 的导航样式 / 日间夜间 / 顶栏底栏 / 封面图集等标签入资源。校验：11 个文件中文硬编码 0，四个前缀（<code>share_note_</code> / <code>bubble_</code> / <code>appearance_kit_</code> / <code>library_container_</code>）152 条资源中英齐全、占位符集合一致，代码引用的资源零缺失</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R54</td><td>全项目文案按功能面批量国际化</td><td>设置体系之外的中文字面量不再逐文件手改，改用可复用流水线 <code>tools/i18n_batch.py</code>（<code>scan → fill → apply → reuse → validate</code>）：扫描 → 标注风险上下文 → 填英文译文 → 生成 <code>values/</code> + <code>values-zh/</code> 双份资源 → 统一替换为 <code>appCtx.getString(R.string.*)</code> → 校验占位符与引用。<strong>本轮清掉 1270 处中文字面量</strong>（4509 → 3239），新增 6 个资源文件共 <strong>618 条</strong>双语文案：① 朗读播放面板 111 处；② 朗读配置群（配乐/发言人分组/消耗记录/HTTP TTS/引擎/语音路由/背景文字）253 处；③ 图书角色 5 个页面 132 处（含 UI 侧类型/性别标签，数据层 <code>genderLabel()/roleLabel()</code> 因被 AI prompt、导出 JSON 与 <code>!= "未知"</code> 依赖而保留中文）；④ AI 工具注册表 87 个工具显示名 129 处；⑤ AI 设置/聊天/世界书/阅读页问 AI 面 245 处；⑥ 另有 <code>reuse</code> 通道把源码里能精确命中现有中文资源的 406 处直接复用已有 key，零新增译文。<br><strong>豁免规则（刻意不翻）</strong>：正则 / JS / HTML 模板、日志与异常诊断、<code>==</code> 与 <code>when</code> 比较值、持久化默认值（<code>"默认分组"</code>）、Web 路由值（<code>"网络导入"</code>）、<code>const val</code> 常量、map/协议 key——把它们改成资源会让英文环境下的数据语义随语言漂移。<strong>修掉的两个生成器缺陷</strong>：英文译文里的 <code>%1$s</code> 曾被 Kotlin 插值解析器二次处理成 <code>%%1%1$s</code>（94 条静默损坏，已全量修复并加入校验）；同名资源文件被自身当作"已有资源"复用导致 key 丢失（改为排除自身 + 固定 key 保证重跑幂等）。校验：<code>compileAppDebugKotlin</code> + <code>processAppDebugResources</code> 通过；6 个新资源文件中英条目数相等、占位符集合一致、损坏占位符 0、全局重复 key 0、代码引用资源零缺失</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R55</td><td>剩余 UI 面整体收口 + 数据语义漂移修复</td><td>沿用 R54 流水线按功能面再推四批，<strong>净清掉 432 处中文字面量（3239 → 2807）</strong>，新增 5 个资源文件 / <strong>373 条</strong>中英双语文案：① <code>ui_main</code> 113 条——发现套件管理、关于/内测版更新、RSS/书源编辑、导入关联、设置搜索页；② <code>ui_book</code> 138 条——阅读页、书库云端章节、高亮规则、素材库、导入书籍、音频播放；③ <code>strings_service.xml</code> 79 条——Web 服务接口返回消息、旧版数据导入结果、缓存通知栏、备份恢复 toast；④ <code>strings_ai_state.xml</code> 40 条——AI 任务通知标题、正文授权对话框、思考状态、朗读多角色分配状态。<br><strong>按「是不是用户可见」重新划边界</strong>，以下刻意豁免：<code>ChineseUtils</code> 简繁词表、<code>ShibbolethCodec</code> 编码映射、<code>SpeechModels</code> 与 <code>ReadAloudPreprocessRuleConfig</code> 的中文关键词匹配表、<code>help/review</code> 295 条诊断日志与 JS 正则拼接片段、<code>help/ai</code> 的工具 schema / prompt / 角色推断关键词（约 600 处，属发给大模型的协议文本，翻了会让模型行为随语言漂移）、内置模板/气泡/外观套件的 <code>name</code> 字段（数据层实体，需 <code>@StringRes</code> 化而非直接替换）、WebSocket close reason、分享卡片预览假数据。<br><strong>修掉上一轮遗留的四类语义漂移</strong>：① <code>searchKeys</code> 搜索索引别名（含跨行 <code>listOf</code> 续行）被换成资源调用 → 回退 18 处并给流水线加括号级状态跟踪；② <code>ShibbolethCodec</code> 编码表里的「是」、<code>AiChatService</code> 判断用户消息是否涉及书架的中文关键词集合变成半中半英 → 回退 10 处并加静态数据表防护与文件级排除；③ Kotlin 三引号原始字符串 <code>"""使用js..."""</code> 被正则从中间切开，产出 <code>""appCtx.getString(...))""</code> 语法错误（编译抓到）→ 修源码并给流水线加 raw string 区块跟踪；④ 云端章节删除确认用 <code>!= "删除"</code> 硬编码比较，单独翻译提示会让英文用户永远无法确认 → 比较值、hint、toast、message 一起资源化（新增 <code>strings_lib_cloud.xml</code>），形成语言一致闭环。<br>校验：<code>compileAppDebugKotlin</code> + <code>processAppDebugResources</code> 通过；5 个新资源文件中英条目数相等、占位符集合一致、损坏占位符 0；全局重复 key 0；引号异常行 0；代码引用资源零缺失（仅 5 个第三方库自有资源属既有）</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R56</td><td>统计口径落地 + 服务/生成内容收口 + 内置显示名</td><td>把 R55 留下的「哪些中文根本不该翻」从临时脚本变成<strong>流水线自带的 <code>classify</code> 命令</strong>：<code>EXCLUDE_BASENAMES</code> 由 5 个扩到 12 个纯技术文件（简繁词表、编码表、TTS 关键词表、性别关键词表、中文正则与日历解析等），新增 <code>LLM_TEXT_BASENAMES</code>（14 个 AI schema / prompt 文件）与 <code>DIAGNOSTIC_BASENAMES</code>（6 个诊断 / 预览假数据文件）作为统计口径，并把 raw string 区块、跨行 <code>searchKeys</code>、日志上下文统一计入，使总量与历史口径自洽。<strong>2807 = 367 文件级技术豁免 + 509 LLM 协议文本 + 224 诊断/示例数据 + 130 原始串/搜索索引 + 58 技术字符串 + 961 日志异常 + 95 数据语义 + 463 真实可见候选</strong>——R55 报告里虚高的「1533 处候选」收敛到真实的 463 处。<br>按此清单推 B9 批次，<strong>净清 271 处中文字面量（2807 → 2536）</strong>，新增 2 个资源文件 / <strong>230 条</strong>中英双语文案：① <code>strings_misc.xml</code> 219 条、260 处替换、83 个文件，覆盖朗读 / 下载 / TTS / 书源校验服务的通知栏与 toast、EPUB / PDF 自动生成章节名（人物画廊 / 版权信息 / 插图页 / 卷首 / EPUB 页面 / 分段_N）、高亮包与素材库导入错误提示、零散 UI 状态；译文生成前先滤掉 5 条 Kotlin 插值残片与转义美元串，223 条译文的 <code>%N$s</code> 数量与源码插值逐条自动比对全对齐。dry-run 跳过的 12 处经逐行核对全部正确：<code>raw == "卷首"</code> / <code>it == "校验超时"</code> 类比较值、<code>require { }</code> 异常消息、<code>AppLog.put</code> 日志行——同一文案的 <code>toastOnUi</code> 行已被替换，保持「日志留中文、界面随语言」。② <code>strings_builtin.xml</code> 11 条，收口 R55 点名未做的<strong>内置实体显示名</strong>：<code>ReadAloudSpeakerGroupItem.displayName()</code> 的「默认发言人」、<code>EpubLoadingTemplate</code> 两套内置加载模板的 name / description / caption、<code>BubblePackageManager</code> 内置段评气泡、<code>AppearanceKitManager</code> 无搜索悬浮底栏 name + summary、<code>CoverHtmlTemplateConfig</code> 默认模板；持久化 id 一律不变，<code>EpubLoadingTemplate.builtins</code> 由静态 <code>val</code> 改为惰性 <code>get()</code>，避免类加载期解析字符串资源。<br>校验：<code>compileAppDebugKotlin</code> + <code>processAppDebugResources</code> → BUILD SUCCESSFUL；2 个新资源文件 en/zh 219/219 与 11/11 齐全、占位符集合一致、损坏占位符 0；全局重复 key 0（values 4794 / values-zh 4503）；引号异常行 0；注解 / 实体默认值 / 静态集合污染 0（<code>TextPage</code> 两处资源默认值经 <code>git diff</code> 确认是项目原有代码，非本轮改动）；HTML 无未闭合标签。<strong>真实可见候选由 463 降到 192</strong>，剩余集中在 AI 工具 schema、调试事件中心与书源目录解析诊断</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R9</td><td>布局类设置三处归拢</td><td>代码级复核发现这是<strong>唯一未实施的动作型 P1</strong>，本轮补齐：新建 <code>PageLayoutConfigFragment</code>（<code>ConfigTag.PAGE_LAYOUT_CONFIG</code>）挂在「内容与规则」，把 <code>discoveryPageLayout</code>（列表 / 瀑布流 / 三列）、<code>rssSourceLayout</code>（1–3 列）、<code>homepageLayoutMode</code>（混合列表 / 书源页签）三项以 <code>SettingChoiceSpec</code> 同屏呈现、各自带 <code>searchKeys</code> 别名，整页进 <code>SettingsSearchIndex</code>；三项仍可从发现 / 订阅 / 首页各自菜单切换（就近入口保留），页内另加三个「前往对应页面」互链 action（<code>MainActivity.openExplore/openRss/openHomepage</code>）。改值后发 <code>EventBus.UP_PAGE_LAYOUT</code>：<code>RssFragment</code> 按新列数重排 <code>GridLayoutManager</code>、<code>HomepageFragment</code> 借 <code>setLayoutMode()</code> 重发 uiState 切换混合 / 分源，避免「设置页改了、切回去还是旧布局」。原 <code>DiscoverySubscriptionConfigFragment</code> 里的「发现页布局」action 移除，避免双入口。四处映射同步为 <strong>16 个 ConfigTag / 16 个 when 分支 / 13 个 breadcrumb case / 32 个一级行 / 17 个 PageSource</strong>。偏好键字符串值全部不变，零数据迁移；新增 <code>strings_page_layout.xml</code> 中英各 14 条。</td><td><span class="mtag p1">已完成</span></td></tr>
+        <tr><td>R57</td><td>国际化最终收尾（192 处逐条判定）</td><td>对 <code>classify</code> 报出的最后 <strong>192 处真实可见候选</strong>逐条读完上下文后二分：<strong>A 类 56 处真用户可见</strong>完成双语资源化，<strong>B 类 136 处</strong>经判定确实不该翻、保留原文并把豁免依据固化进分类规则。<br>① <strong>A 类</strong>：新增 <code>values/strings_i18n_final.xml</code> 与 <code>values-zh/strings_i18n_final.xml</code> 各 <strong>55 条</strong>，译文批次 <code>tools/i18n_batches/b10.json</code>；手工改写 <strong>28 个 Kotlin 文件的 50 处语句</strong>——toast / 帮助菜单项 / Compose 说明文本 / 通知与下载重试 / 导入结果提示 / 调试枚举显示名。刻意不用批量替换：其中含 Kotlin 模板插值被 <code>STR_RE</code> 切出的碎片（<code>复制失败：${...}</code>、<code>请选择${if (...)}素材</code>）、嵌套三元、<code>StringBuilder.append</code> 拼接链与转义美元串 <code>\${url}</code>，逐条改成 <code>appCtx.getString(R.string.*, args)</code> / <code>stringResource(...)</code>，插值统一转 <code>%N$s</code> 位置参数；<code>DebugCategory</code> / <code>DebugLevel</code> 与 <code>AutoTaskProtocol</code> 里同段已资源化的枚举显示名、结果摘要项一并补齐遗漏。<br>② <strong>B 类</strong>：<code>tools/i18n_batch.py</code> 新增 <code>FINAL_EXEMPT_RULES</code> / <code>FINAL_EXEMPT_MAP</code>，以「<strong>basename + 精确字面量</strong>」的 61 组 / 127 条逐条判定结果（每组写明豁免类别与理由）在 <code>classify</code> 里归入既有七个豁免桶；<strong>没有把任何 192 处所在文件整体塞进 <code>EXCLUDE_BASENAMES</code></strong>，<code>EpubFile</code>（EPUB 调试 README / spine 日志 / CSS 选择器 / 首发·完本·简介 元数据比较值）与 <code>DiagnosticExporter</code>（崩溃报告段落标题）等混合文件按条目性质拆开处理。豁免面覆盖：LLM 工具 schema 描述、调试事件导出文本、书源目录 <code>Debug.log</code>（<code>◇/⇒</code> 是日志符号而非自动生成章节名）、<code>DebugLog.e</code> 日志、异常与断言消息、中文正则 / 关键词集合 / 比较值、Room <code>@Query</code>、WebSocket close reason、封面预览假数据、持久化实体名与导出文件名模板。<br>③ <strong>R9 增量核实</strong>：多出的 10 处确认为 <code>PageLayoutConfigFragment</code> 三行 <code>searchKeys</code> 中文别名（4+3+3），属搜索索引数据、分类正确，无真 UI 中文被误豁免。<br><strong>结果</strong>：<code>classify</code> 总量 <strong>2546 → 2490</strong>（本轮净清 56），<strong>真实可见候选 192 → 0</strong>，八类加总恰等于总量；<code>4509 → 2490</code> 累计净清 2019 处。<br><strong>校验</strong>：<code>./gradlew :app:compileAppDebugKotlin :app:processAppDebugResources --offline</code> → <strong>BUILD SUCCESSFUL（6m17s）</strong>；<code>check_settings_mapping.py</code> 仍 PASS（16/16）；新资源 en/zh 55/55、占位符逐条一致、损坏占位符 0、全局重复 key 0、引号异常 0、三引号成对、60 处 <code>getString</code> 实参个数 ≥ 占位符最大编号、HTML 未闭合/错配 0。</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R58</td><td>存量默认资源英化（609 条，零语义变化）</td><td>对 <code>values/</code> 下 8 个历史 XML（<code>strings.xml</code> 471 / <code>reader_templates.xml</code> 45 / <code>strings_reader_assets.xml</code> 44 / <code>strings_highlight.xml</code> 34 / <code>reader_template_preview.xml</code> 7 / <code>text_reader.xml</code> 5 / <code>network_dns.xml</code> 2 / <code>non_translat.xml</code> 1）的 <strong>609 条含中文 &lt;string&gt;</strong> 全部英译，逐条按 <code>values-zh/</code> 现状分类处理：<strong>275 条无同名 key</strong> → 默认侧改英文、<code>values-zh/</code> 补同名 key 且值 = 原中文原样（含转义与占位符）；<strong>316 条两侧值相同</strong> → 只改默认侧、<code>values-zh/</code> 完全不动；<strong>18 条两侧值不同</strong> → 只英译默认侧、<code>values-zh/</code> 完全不动（<code>read_menu_custom_button_help</code> 两篇不同文案各自保留）。8 个 XML 全部为模板编辑器 UI 标签与帮助文本（含 5 条长帮助说明，最长 2892 字），不是 HTML 模板数据或示例数据。<br>译文来源：<strong>79 条精确复用</strong>既有中英对照（77 条来自既有双语资源对、2 条来自 <code>b1/b2</code> 批次），<strong>520 条逐条新译</strong>，<strong>10 条显式豁免</strong>原样保留（<code>{书名}…{进度}</code> 模板占位符、<code>心道</code>/<code>吱呀·敲门声·枪声</code>/<code>心声·名声</code> 示例触发词、<code>开源阅读</code>/<code>开源阅读软件</code>/<code>阅读H·Search</code> 产品专名、<code>separator = 丨</code> 视觉分隔符且带 <code>translatable="false"</code>）——在 <code>tools/check_r58_resources.py</code> 中以精确豁免清单逐条写明理由，不做「英文资源零中文」的漏网项。<br>硬约束全部落地：<strong>key 一律不变、中文用户所见一律不变、不新增资源 key、不改 Kotlin 业务逻辑、不动设置层级映射</strong>；长文本 <code>\n</code> / HTML 标签 / 引号按 Android XML 规则转义，<code>%N$s</code> 占位符数量与编号逐条一致，<code>linkify</code> / <code>Html.fromHtml</code> 用法未破坏；更全面的比较值检查（<code>==</code> / <code>!=</code> / <code>.equals</code> / <code>when</code> / <code>setOf</code>）确认英文 locale 无中文比较值漂移。<code>1641</code> 与 <code>2019</code> 口径保持不变。<br><strong>校验</strong>：<code>./gradlew :app:compileAppDebugKotlin :app:processAppDebugResources --offline</code> BUILD SUCCESSFUL；<code>python3 tools/check_r58_resources.py</code> PASS（609 key 中英全覆盖、中文侧 334 条逐字节一致、英文资源零中文除 10 条豁免、中英占位符一致、全局重复 key 0、XML 可解析、HTML 未闭合 0、比较值命中 0）；<code>classify --top 40</code> 仍 2490 / 候选 0；<code>check_settings_mapping.py</code> 仍 PASS；<code>validate --resource strings_i18n_final.xml</code> 仍 55/55 通过。</td><td><span class="mtag p0">已完成</span></td></tr>
+        <tr><td>R59</td><td>默认资源数组项收口（20 条中文 &lt;item&gt;，最终口径）</td><td>R58 回传曾把 <code>values/</code> 的 20 处中文 <code>&lt;item&gt;</code> 记为「不同资源类型」并留作范围说明，经逐条核实为同一缺口：它们是 <strong>UI 选项标签</strong>，英文 locale 同样会读到中文。本轮全部收口。<br><strong>精确清单</strong>：<code>values/arrays.xml</code> 18 项 / 5 个数组（<code>ai_read_aloud_role_mode_title</code> 2、<code>layout_type</code> 5、<code>rss_type</code> 3、<code>click_image_way_title</code> 5、<code>bottom_bar_effect_mode_entries</code> 3）+ <code>values/text_reader.xml</code> 2 项 / <code>text_read_engine_entries</code>（原生渲染 / EPUB 渲染），合计 <strong>20 项</strong>。<br><strong>执行</strong>：20 项默认侧 → 真实英文（<strong>7 条复用</strong>既有双语资源对的精确中文匹配：列表→List、三列→Three-column grid、图片→Image、视频→Video、常规→Solid、玻璃→Glass、磨砂玻璃→Frosted glass；<strong>13 条逐条新译</strong>），禁止拼音 / TODO / 占位文本 / 中文残留；<code>values-zh/</code> 补 <strong>5 个同名数组 / 17 项</strong>，值 = 默认侧原中文逐字节原样（<code>arrays.xml</code> 补前 4 个、<code>text_reader.xml</code> 补 <code>text_read_engine_entries</code>），既有 <code>bottom_bar_effect_mode_entries</code>（3 项中文）完全不动；<code>text_read_engine_values</code>（native / epub）与 <code>ai_read_aloud_role_mode_value</code>（full_tool / chunk_context）等纯值数组不本地化、未改动。<strong>数组名、项数、顺序一律不变</strong>（选项索引与 <code>*_values</code> 数组对齐，错位会改行为）；更全面的比较值检查（<code>getStringArray</code> / <code>getTextArray</code> 结果与 20 条中文字面量在同行及 ±4 行窗口内比较）0 命中，中文 locale 行为不变。不新增 <code>&lt;string&gt;</code> key、不改 Kotlin 业务逻辑、不动设置层级映射。<br><strong>校验口径收口</strong>：<code>tools/check_r58_resources.py</code> 升级为 R58+R59 统一校验器，「英文资源零中文」断言从「只扫 8 个 XML 的 <code>&lt;string&gt;</code>」扩展为<strong>扫 <code>values/</code> 下全部 XML 的全部文本节点类型（<code>&lt;string&gt;</code> / <code>&lt;item&gt;</code> / <code>&lt;plurals&gt;</code>）</strong>，硬断言中文命中恰为 <strong>10/10 显式豁免</strong>、非豁免残留 0，并逐条列出豁免 key 与理由；同时断言 609 条 <code>&lt;string&gt;</code> + 20 条 <code>&lt;item&gt;</code> 的中文侧值与 R58 基线 / 原中文一致、6 个数组项数与顺序一致、40 个非目标数组与 HEAD 逐项一致、纯值数组未动、译文来源统计 7+13=20。基线 <code>tools/r58_baseline.json</code> 追加期望英文 / 未动数组快照 / R59 元数据。<br><strong>最终口径</strong>：存量默认资源英化 KPI <strong>609 → 629</strong>（609 <code>&lt;string&gt;</code> + 20 <code>&lt;item&gt;</code>），<strong>默认资源中文文本节点仅剩 10 条显式豁免</strong>；<code>classify</code> 2490 / 候选 0、<code>1641</code>、<code>2019</code> 全部不变；R58 校验器里关于数组 item 的范围说明已更正为已覆盖的事实陈述。<br><strong>校验（全部实跑）</strong>：<code>./gradlew :app:compileAppDebugKotlin :app:processAppDebugResources --offline</code> BUILD SUCCESSFUL；<code>python3 tools/check_r58_resources.py</code> PASS（全量文本节点扫描 10/10 豁免、item/plurals 中文 0、20 项中英逐条一致、40 数组未动、比较值 0 命中）；<code>classify --top 40</code> 仍 2490 / 候选 0；<code>check_settings_mapping.py</code> PASS；<code>validate --resource strings_i18n_final.xml</code> 仍 55/55；中英占位符一致、全局重复 key 0、XML 可解析、HTML 未闭合/错配 0。</td><td><span class="mtag p0">已完成</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout" style="margin-top:20px">
+      <span class="t">⚠ 部分实施 / 豁免（2026-11-04 代码级复核后如实登记）：</span><br>
+      <strong style="color:var(--ok)">R9 布局类设置 —— 复核时确实未实施，本轮已补齐。</strong>
+      复核当时 <code>discoveryPageLayout</code> / <code>rssSourceLayout</code> / <code>homepageLayoutMode</code> 三键仍分散在发现/订阅设置页、订阅菜单、首页菜单，后两者完全不可搜，且无统一入口与互链。
+      按方案「归拢为一个统一入口（或至少互链 + 进搜索）」的主路径落地：<strong>新建独立二级页 + 三项同屏 + 整页进搜索 + 三个互链 action + 改值即时刷新</strong>，就近菜单入口保留，偏好键值不变。详见上表 R9 行；目标谱系里该节点不再只是建议。<br>
+      <strong>R49 更新设置 —— 部分实施。</strong> 7 个键已全部收进 <code>PreferKey:419-425</code>，<code>AppUpdateConfig</code> / <code>AboutFragment</code> / <code>UpdateAcceleratorDialog</code> 均走常量，裸字符串 0；
+      但「登记」未做：更新设置仍只是「关于」页两个弹窗，未进设置树、未进搜索索引、备份清单未显式登记（仅靠默认全量偏好备份捎带覆盖）。<br>
+      <strong>R1 书架显示 13 项 —— 有意保留在书架页</strong>：<code>BookshelfConfigDialog</code> 带实时预览，新页只收 5 项启动/入口配置，非遗漏。<br>
+      <strong>R3 首页/统计显隐 —— 核对后豁免</strong>：二者已在「界面设置 › 导航」区与底部导航栏管理、顶栏管理同区且带「底部导航」搜索别名，实际已满足归类，无需迁移；<br>
+      <strong>R18 书级项（缩放 / 点按滚动 / 横向滚动 / 自动翻页速度）—— 核对后豁免</strong>：按书保存在 <code>BookMangaReadConfig</code>，全局页无法提供统一值，保持留在漫画阅读页菜单。
+    </div>
+
+    <div class="callout" style="margin-top:14px">
+      <span class="t" style="color:var(--ok)">✅ 复核结论（2026-11-04，代码级）：</span>
+      上表原有 <strong>27 条经逐项核对全部属实</strong>；复核额外查出 R9 未落地并已补齐，<strong>合计 28 条全部完成</strong>。用户明确要求的两项（<strong>R8 Web 服务归拢、不做跳转</strong>；<strong>R17+R21 朗读设置独立成页 + 弹窗内深链</strong>）均已落地：
+      Web 服务开关 / 地址 / 端口 / 口令 / 唤醒锁同屏于 <code>NetworkConfigFragment:60-146</code>，开关 checked 读 <code>WebService.isRun</code> 并订阅 <code>EventBus.WEB_SERVICE</code> 重画，「我的」页那一行与 <code>MySettingsRowKind.WebService</code> 已整体移除，设置树内无第二个启停入口；
+      <code>AudioConfigFragment</code> / <code>ReadAloudPreferenceFragment.indexAllGroups</code> / <code>ComposeSettingFragment.requestScrollTo()</code> / <code>onTargetKeyUnresolved()</code> 链路完整。<br>
+      四处映射用新增脚本 <code>python3 tools/check_settings_mapping.py</code> 复跑通过（补齐 R9 后）：<strong>16 Tag ↔ 16 when 分支 ↔ 13 个 breadcrumb case（含 2 处合并）、32 个一级行 key 全唯一、30 个 Action 行全接跳转、17 个 PageSource / 15 个唯一 ownerKey 悬空 0、面包屑父级分区与 ownerKey 分区逐条一致</strong>。
+      <code>./gradlew :app:compileAppDebugKotlin :app:processAppDebugResources</code> 通过。<br>
+      <strong>口径修正</strong>：复核时「16 个 ownerKey」应为 16 个 PageSource / 14 个唯一 ownerKey，「15 条 breadcrumb 分支」应为 12 个 case 覆盖 15 个 Tag；补齐 R9 后相应变为 17 / 15 与 13 / 16。原「用脚本静态校验」此前仓库里并无脚本，本轮已补齐。<br>
+      <strong>已知非阻断项</strong>：<code>MyFragment.verifySubSearchOwners</code> 仅 DEBUG、仅首次搜索、仅校验 ownerKey→行单向，新增 Tag 漏 <code>when</code>/<code>breadcrumbOf</code> 在 release 不会告警（现已由上述脚本覆盖）；
+      <code>SettingsSearchIndex:53</code> 与 <code>:58</code> 两个 PageSource 的 <code>(ownerKey, configTag)</code> 完全相同，<code>distinctBy { ownerConfigTag to key }</code> 去重时撞 key 的项会静默丢弃，属已知且已接受的行为。
+    </div>
+
+    <div class="callout" style="margin-top:14px">
+      <span class="t">📌 收尾后（R57）的全项目中文分布（2490 处，<code>classify</code> 精确口径）：</span>
+      以 <code>python3 tools/i18n_batch.py classify --top 40</code> 为单一事实来源，八类相加恰等于总量 2490：<strong>367 处文件级技术豁免</strong>（转换词表 / 编码表 / 关键词匹配表）、<strong>522 处 LLM 协议文本</strong>（AI 工具 schema、系统 prompt、planner 阶段描述，含本轮并入的 12 处工具 description）、<strong>244 处诊断 / 示例数据</strong>（评论快照诊断片段、EPUB 调试 README、崩溃报告段落标题、封面预览假数据，含本轮并入的 20 处）、<strong>140 处原始串 / 搜索索引</strong>（Kotlin raw string 里的 SQL / JS / 正则、跨行 <code>searchKeys</code> 别名，含 R9 新增 10 处）、<strong>75 处技术字符串</strong>（中文正则、字符宽度样本、日期格式、Room <code>@Query</code>）、<strong>1025 处日志 / 异常输出</strong>、<strong>117 处数据语义值</strong>（比较值、持久化默认值、map / 协议 key、WebSocket close reason）——合计 <strong>2490 处刻意豁免</strong>，<strong>真实可见候选 0 处</strong>。翻译它们会让英文环境下的数据、协议与模型行为随语言漂移；本轮已把 136 处边界项以「文件 + 精确字面量」逐条固化进 <code>FINAL_EXEMPT_RULES</code>（61 组 / 127 条，每组附豁免类别与理由），口径可重复、可审计，且未整体排除任何文件。<strong>结论：全项目 Kotlin 中文字面量已 100% 归入八个可解释类别，用户可见 UI 文案主链全部收口；全项目中文字面量 4509 → 2490，累计净清 2019 处。</strong>
+    </div>
+
+    <div class="callout" style="margin-top:14px">
+      <span class="t" style="color:var(--ok)">✅ 收尾后遗留项收敛（R58–R59 已完成的事实陈述）：</span><br>
+      ① <strong>存量默认资源已全部英化</strong>：<code>values/</code> 下 8 个历史 XML（<code>strings.xml</code> 471 / <code>reader_templates.xml</code> 45 / <code>strings_reader_assets.xml</code> 44 / <code>strings_highlight.xml</code> 34 / <code>reader_template_preview.xml</code> 7 / <code>text_reader.xml</code> 5 / <code>network_dns.xml</code> 2 / <code>non_translat.xml</code> 1）共 <strong>609 条含中文的 &lt;string&gt;</strong> 已逐条英译完成：<strong>275 条 <code>values-zh/</code> 无同名 key</strong> → 默认侧改英文、<code>values-zh/</code> 补同名中文键（原中文原样，含转义与占位符）；<strong>316 条两侧值相同</strong> → 默认侧改英文、<code>values-zh/</code> 完全不动；<strong>18 条两侧值不同</strong> → 只英译默认侧、<code>values-zh/</code> 完全不动（含 <code>read_menu_custom_button_help</code> 两篇不同文案各自保留）。这 8 个 XML 全部是模板编辑器 UI 标签与帮助说明（含 5 条长帮助文本，最长 2892 字），<strong>不是 HTML 模板数据或示例数据</strong>；此前「部分是 HTML 模板 / 示例数据而非 UI 文案」的判断已作废。译文 79 条复用既有中英对照、520 条逐条新译，<strong>10 条不可翻片段</strong>（模板占位符、示例触发词、产品专名、视觉分隔符 <code>separator = 丨</code>）按数据语义原样保留，并在 <code>tools/check_r58_resources.py</code> 中以精确豁免清单逐条登记理由，不是「英文资源零中文」的漏网项。<code>key</code> 一律不变、中文用户所见一律不变、不新增资源 key、不改 Kotlin 业务逻辑、不动设置层级映射；<code>1641</code> 与 <code>2019</code> 口径保持不变。<br>
+      ② <strong>唯一剩余遗留项：5 个第三方库资源引用</strong>（<code>abc_action_bar_up_description</code> / <code>cpv_custom</code> / <code>cpv_default_title</code> / <code>cpv_presets</code> / <code>cpv_select</code>）：<code>validate</code> 报 missing 5，均为 appcompat / color-picker 自有资源，R55 已登记为既有非阻断项，R58 零新增缺失。<br>
+       ③ 该项<strong>不影响</strong>编译、设置层级四处映射与 <code>classify</code> 八类自洽（367+522+244+140+75+1025+117+0 = 2490 = 总量）。<br>
+       ④ <strong>R59 数组项收口（最终口径）</strong>：<code>values/arrays.xml</code>（18 项 / 5 个数组）与 <code>values/text_reader.xml</code>（2 项 / <code>text_read_engine_entries</code>）共 <strong>20 条中文 <code>&lt;item&gt;</code></strong> 已全部英化，<code>values-zh/</code> 补齐 5 个同名数组 / 17 项中文原样，既有 3 项与全部纯值数组未动，数组名 / 项数 / 顺序不变。存量默认资源英化累计 <strong>629 条</strong>（609 <code>&lt;string&gt;</code> + 20 <code>&lt;item&gt;</code>）；<code>tools/check_r58_resources.py</code> 的零中文断言已覆盖 <code>values/</code> 下全部 XML 的全部文本节点类型，<strong>默认资源中文文本节点仅剩 10 条显式豁免、非豁免残留 0</strong>。详见上表 R59 卡片。
+    </div>
+  </section>
+
+  <div class="footer">
+    <div>本报告基于对 legado-H 源码的逐项 spec 核对生成 · 深色主题 · 结论均附精确 preference key 与文件行号依据</div>
+    <div style="margin-top:6px">文件：<span class="mono">docs/settings-optimization-plan.html</span> · 生成时间：2026-11-04 · 结论 R1–R56，其中 R1/R2/R4/R5/R6/R7/R8/R10/R11/R12/R13/R14/R15/R17/R18/R21（含弹窗内深链）/R22/R27/R48/R51/R52/R53/R54/R55/R56 共 26 条 + 朗读文案国际化 1 项 + 复核补齐的 R9，合计 <strong>28 条全部落地并通过编译</strong>（2026-11-04 代码级复核属实）；余下仅 R3 / R18 经核对豁免、R49 仅完成 key 收口与谱系登记（更新设置仍留在「关于」页，属方案内的「登记」而非结构迁移）。R54–R57 累计将全项目中文字面量由 4509 降到 2490（累计净清 2019 处），剩余 2490 处全部为刻意豁免、真实可见候选 0，按 <code>classify</code> 八类口径见上；R58 另将 8 个历史 XML 的 609 条存量默认资源完成英化（275 条补中文键 / 316 条保留两侧 / 18 条保留差异 / 10 条显式豁免），key 与中文侧零变化、1641 与 2019 口径不变；R59 再补完 <code>values/arrays.xml</code> 与 <code>values/text_reader.xml</code> 的 20 条中文 <code>&lt;item&gt;</code> 数组项（7 条复用 / 13 条新译、values-zh 补 5 个数组 / 17 项），存量默认资源英化合计 <strong>629 条</strong>，默认资源中文文本节点仅剩 10 条显式豁免。翻译收尾详见第 6 节 R57、R58、R59 卡片</div>
+  </div>
+
+</div>
+</body>
+</html>

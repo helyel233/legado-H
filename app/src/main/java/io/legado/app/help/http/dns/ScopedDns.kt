@@ -14,7 +14,7 @@ class DnsHosts private constructor(val entries: Map<String, List<String>>) {
         fun parse(raw: String?, strict: Boolean = false): DnsHosts {
             if (raw.isNullOrBlank()) return DnsHosts(emptyMap())
             return runCatching {
-                require(raw.length <= 256 * 1024) { "Hosts 配置过大" }
+                if (raw.length > 256 * 1024) throw DnsConfigException(DnsConfigError.HOSTS_TOO_LARGE)
                 val json = JsonParser.parseString(raw).asJsonObject
                 val result = linkedMapOf<String, List<String>>()
                 for ((key, value) in json.entrySet()) {
@@ -22,21 +22,26 @@ class DnsHosts private constructor(val entries: Map<String, List<String>>) {
                     val values = when {
                         value.isJsonArray -> value.asJsonArray.mapNotNull {
                             val valid = it.isJsonPrimitive && it.asJsonPrimitive.isString
-                            if (strict) require(valid) { "Hosts 地址必须是字符串" }
+                            if (strict && !valid) throw DnsConfigException(DnsConfigError.HOSTS_NEED_STRING)
                             if (valid) it.asString else null
                         }
                         value.isJsonPrimitive && value.asJsonPrimitive.isString -> value.asString.split(',')
                         else -> emptyList()
                     }
                     val targets = values.mapNotNull { DnsNames.host(it) }.distinct()
-                    if (strict) require(host != null && targets.isNotEmpty() && targets.size == values.map { it.trim() }.distinct().size) {
-                        "Hosts 必须是域名到 IP 或域名列表的映射"
-                    }
-                    if (strict) require(host !in result) { "Hosts 域名重复" }
+                    val mapped = host != null && targets.isNotEmpty() &&
+                        targets.size == values.map { it.trim() }.distinct().size
+                    if (strict && !mapped) throw DnsConfigException(DnsConfigError.HOSTS_BAD_MAPPING)
+                    if (strict && host in result) throw DnsConfigException(DnsConfigError.HOSTS_DUPLICATE)
                     if (host != null && targets.isNotEmpty()) result[host] = targets
                 }
                 DnsHosts(result)
-            }.getOrElse { if (strict) throw IllegalArgumentException("Hosts 格式无效：${it.message}", it) else DnsHosts(emptyMap()) }
+            }.getOrElse { error ->
+                if (!strict) return DnsHosts(emptyMap())
+                // 已经带原因的校验异常（如"地址必须是字符串"）直接冒泡，
+                // 只有 JSON 层级之类的外来异常才归为「格式无效」。
+                throw if (error is DnsConfigException) error else DnsConfigException(DnsConfigError.HOSTS_INVALID)
+            }
         }
     }
 }

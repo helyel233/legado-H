@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import kotlin.math.max
+import io.legado.app.R
+import splitties.init.appCtx
 
 class ImportBookViewModel(application: Application) : BaseViewModel(application) {
     var rootDoc: FileDoc? = null
@@ -117,10 +119,10 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
             }
             LocalBook.importFiles(fileUris)
         }.onError {
-            context.toastOnUi("添加书架失败，请尝试重新选择文件夹")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_failed_add_bookshelf_try_selecting))
             AppLog.put("添加书架失败\n${it.localizedMessage}", it)
         }.onSuccess {
-            context.toastOnUi("添加书架成功")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_added_bookshelf))
         }.onFinally {
             finally.invoke()
         }
@@ -152,7 +154,7 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
                         importProgressFlow.value = progress
                         onProgress(progress)
                     }
-                    emitItemStage("读取文件信息 ${item.name}")
+                    emitItemStage(appCtx.getString(R.string.ui_book_reading_file_info, item.name))
                     val books = LocalBook.importFiles(item.file.uri) { stage ->
                         emitItemStage("$stage ${item.name}")
                     }
@@ -164,10 +166,10 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
                             if (shouldEmit) {
                                 lastEmitTime = now
                                 val stageName = when (stage) {
-                                    "toc" -> "目录解析"
-                                    "index" -> "索引构建"
-                                    "layout" -> "排版缓存"
-                                    else -> "正文解码"
+                                    "toc" -> appCtx.getString(R.string.ui_book_parsing_contents_2)
+                                    "index" -> appCtx.getString(R.string.ui_book_building_index)
+                                    "layout" -> appCtx.getString(R.string.ui_book_layout_cache)
+                                    else -> appCtx.getString(R.string.ui_book_decoding_content)
                                 }
                                 val decodeProgress = ImportProgress(
                                     total = total,
@@ -193,7 +195,7 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
                     processed = processed,
                     imported = imported,
                     failed = failed,
-                    message = "导入 ${item.name}"
+                    message = appCtx.getString(R.string.ui_book_importing, item.name)
                 )
                 importProgressFlow.value = progress
                 onProgress(progress)
@@ -202,10 +204,10 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
                 throw NoStackTraceException("ImportFiles Error:\nAll input files occur error")
             }
         }.onError {
-            context.toastOnUi("添加书架失败，请尝试重新选择文件夹")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_failed_add_bookshelf_try_selecting))
             AppLog.put("添加书架失败\n${it.localizedMessage}", it)
         }.onSuccess {
-            context.toastOnUi("添加书架成功")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_added_bookshelf))
         }.onFinally {
             importProgressFlow.value = null
             finally.invoke()
@@ -229,7 +231,7 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
             }
             dataCallback?.setItems(docList!!)
         }.onError {
-            context.toastOnUi("获取文件列表出错\n${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_failed_get_file_list_n, it.localizedMessage))
         }
     }
 
@@ -270,7 +272,7 @@ class ImportBookViewModel(application: Application) : BaseViewModel(application)
                 }.takeWhile {
                     n > 0
                 }.catch {
-                    context.toastOnUi("扫描文件夹出错\n${it.localizedMessage}")
+                    context.toastOnUi(appCtx.getString(R.string.ui_book_failed_scan_folder_n, it.localizedMessage))
                 }.collect()
         } finally {
             dataCallback?.onScanFinish()

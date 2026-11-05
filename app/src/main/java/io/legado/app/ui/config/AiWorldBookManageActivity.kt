@@ -20,6 +20,8 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>(
     fullScreen = false,
@@ -36,7 +38,7 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
                 val text = kotlin.runCatching {
                     uri.readText(this@AiWorldBookManageActivity)
                 }.getOrElse { error ->
-                    toastOnUi(error.localizedMessage ?: "世界书文件读取失败")
+                    toastOnUi(error.localizedMessage ?: appCtx.getString(R.string.ai_ui_failed_read_world_book_file))
                     return@launch
                 }
                 withContext(Dispatchers.Main) { emitImportPayload(text) }
@@ -64,14 +66,14 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
     private fun launchImportFile() {
         importWorldBook.launch {
             mode = HandleFileContract.FILE
-            title = "导入世界书"
+            title = appCtx.getString(R.string.ai_ui_import_world_book)
             allowExtensions = arrayOf("json")
         }
     }
 
     private fun showImportUrlDialog() {
         showComposeTextInputDialog(
-            title = "网络导入世界书",
+            title = appCtx.getString(R.string.ai_ui_import_world_book_from_network),
             hint = "https://...",
             onPositive = { value ->
                 val url = value.trim()
@@ -88,14 +90,14 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
                 }
             }.onSuccess(::emitImportPayload)
                 .onFailure {
-                    toastOnUi(it.localizedMessage ?: "世界书下载失败")
+                    toastOnUi(it.localizedMessage ?: appCtx.getString(R.string.ai_ui_world_book_download_failed))
                 }
         }
     }
 
     private fun emitImportPayload(raw: String) {
         if (raw.isBlank()) {
-            toastOnUi("世界书内容为空")
+            toastOnUi(appCtx.getString(R.string.ai_ui_world_book_empty))
             return
         }
         importPayload = AiWorldBookImportPayload(++importRequestId, raw)

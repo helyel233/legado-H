@@ -101,6 +101,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.io.File
+import splitties.init.appCtx
 
 /**
  * TTS 引擎管理。
@@ -221,12 +222,12 @@ class SpeakEngineDialog : BaseDialogFragment(0), SpeakEngineDialogActions {
                     val result = SpeechRouteSanitizer.cleanDeletedHttpTts(httpTTS)
                     if (result.changed) {
                         val message = buildList {
-                            if (result.characterCount > 0) add("${result.characterCount} 个角色")
-                            if (result.bookCount > 0) add("${result.bookCount} 本书")
-                            if (result.speakerGroupItemCount > 0) add("${result.speakerGroupItemCount} 个发言人分组条目")
-                            if (result.globalCleared) add("通用朗读引擎")
+                            if (result.characterCount > 0) add(appCtx.getString(R.string.ra_cfg_characters, result.characterCount))
+                            if (result.bookCount > 0) add(appCtx.getString(R.string.ra_cfg_books, result.bookCount))
+                            if (result.speakerGroupItemCount > 0) add(appCtx.getString(R.string.ra_cfg_speaker_group_items, result.speakerGroupItemCount))
+                            if (result.globalCleared) add(appCtx.getString(R.string.ra_cfg_generic_read_aloud_engine))
                         }.joinToString("、")
-                        appContext.toastOnUi("已清理 $message 的失效朗读配置")
+                        appContext.toastOnUi(appCtx.getString(R.string.ra_cfg_cleared_invalid_read_aloud_config, message))
                     }
                     notifyReadAloudEngineChanged()
                 }
@@ -388,16 +389,16 @@ private fun SpeakEngineScreen(
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "朗读引擎",
+                    text = appCtx.getString(R.string.speak_engine),
                     color = colors.text,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = actions::close) { Text("关闭", color = colors.subText) }
+                TextButton(onClick = actions::close) { Text(appCtx.getString(R.string.jf_convert_o), color = colors.subText) }
             }
             Text(
-                text = speechRouteSummary(currentRoute, groups, defaultText = "系统默认"),
+                text = speechRouteSummary(currentRoute, groups, defaultText = appCtx.getString(R.string.ra_cfg_system_default)),
                 color = colors.subText,
                 fontSize = 12.sp,
                 maxLines = 1,
@@ -439,7 +440,7 @@ private fun SpeakEngineScreen(
         }
         pickerGroupKey?.let { key ->
             SpeechVoiceRoutePickerDialog(
-                title = "选择发言人",
+                title = appCtx.getString(R.string.ra_panel_select_speaker),
                 groups = groups,
                 currentRoute = currentRoute,
                 initialGroupKey = key,
@@ -497,10 +498,10 @@ private fun EngineTopActions(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SmallEngineAction("新增", onAdd, colors)
-        SmallEngineAction("导入", onImport, colors)
-        SmallEngineAction("导出全部", onExportAll, colors)
-        SmallEngineAction("清缓存", onClearCache, colors)
+        SmallEngineAction(appCtx.getString(R.string.auto_task_import_new), onAdd, colors)
+        SmallEngineAction(appCtx.getString(R.string.import_str), onImport, colors)
+        SmallEngineAction(appCtx.getString(R.string.library_container_export_all), onExportAll, colors)
+        SmallEngineAction(appCtx.getString(R.string.ra_cfg_clear_cache), onClearCache, colors)
     }
 }
 
@@ -522,17 +523,17 @@ private fun ImportChoiceDialog(
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "导入朗读规则",
+                        text = appCtx.getString(R.string.ra_cfg_import_read_aloud_rules),
                         color = colors.text,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = onDismiss) { Text("关闭", color = colors.subText) }
+                    TextButton(onClick = onDismiss) { Text(appCtx.getString(R.string.jf_convert_o), color = colors.subText) }
                 }
-                ImportChoiceRow("默认规则", "导入内置 HTTP TTS 规则", colors, onDefault)
-                ImportChoiceRow("本地导入", "从本机 txt/json 文件导入", colors, onLocal)
-                ImportChoiceRow("在线导入", "通过 URL 导入朗读规则", colors, onOnline)
+                ImportChoiceRow(appCtx.getString(R.string.ra_cfg_default_rules), appCtx.getString(R.string.ra_cfg_import_built_http_tts_rules), colors, onDefault)
+                ImportChoiceRow(appCtx.getString(R.string.import_local), appCtx.getString(R.string.ra_cfg_import_from_local_txt_json), colors, onLocal)
+                ImportChoiceRow(appCtx.getString(R.string.dns_scope_import), appCtx.getString(R.string.ra_cfg_import_read_aloud_rules_from), colors, onOnline)
             }
         }
     }
@@ -583,7 +584,7 @@ private fun EngineGroupRow(
                     Text(group.subtitle, color = colors.subText, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (selected) {
-                    Text("当前", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(appCtx.getString(R.string.default_version), color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             val explicitCount = group.options.count { it.explicitSpeaker }
@@ -593,10 +594,10 @@ private fun EngineGroupRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (explicitCount > 0) {
-                        InfoPill("${explicitCount}发言人", colors)
+                        InfoPill(appCtx.getString(R.string.ra_cfg_speakers_2, explicitCount), colors)
                     }
                     if (group.emotions.isNotEmpty()) {
-                        InfoPill("${group.emotions.size}情绪", colors)
+                        InfoPill(appCtx.getString(R.string.ra_cfg_emotions, group.emotions.size), colors)
                     }
                 }
             }
@@ -605,10 +606,10 @@ private fun EngineGroupRow(
                     modifier = Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    onLogin?.let { InlineEngineAction("登录", colors.accent, it) }
-                    onEdit?.let { InlineEngineAction("编辑", colors.accent, it) }
-                    onExport?.let { InlineEngineAction("导出", colors.accent, it) }
-                    onDelete?.let { InlineEngineAction("删除", colors.danger, it) }
+                    onLogin?.let { InlineEngineAction(appCtx.getString(R.string.login), colors.accent, it) }
+                    onEdit?.let { InlineEngineAction(appCtx.getString(R.string.edit), colors.accent, it) }
+                    onExport?.let { InlineEngineAction(appCtx.getString(R.string.export), colors.accent, it) }
+                    onDelete?.let { InlineEngineAction(appCtx.getString(R.string.delete), colors.danger, it) }
                 }
             }
         }
@@ -644,7 +645,7 @@ private fun EngineDetail(
 ) {
     if (group == null) {
         Box(modifier = Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-            Text("暂无朗读引擎", color = colors.subText, fontSize = 14.sp)
+            Text(appCtx.getString(R.string.ra_cfg_no_read_aloud_engines), color = colors.subText, fontSize = 14.sp)
         }
         return
     }
@@ -661,16 +662,16 @@ private fun EngineDetail(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (!group.loginUrl.isNullOrBlank()) {
-                    DetailEngineAction("登录", colors.accent) { actions.login(group) }
+                    DetailEngineAction(appCtx.getString(R.string.login), colors.accent) { actions.login(group) }
                 }
                 httpTts?.let {
-                    DetailEngineAction("编辑", colors.accent) { actions.editHttpTts(it.id) }
-                    DetailEngineAction("删除", colors.danger) { actions.deleteHttpTts(it) }
+                    DetailEngineAction(appCtx.getString(R.string.edit), colors.accent) { actions.editHttpTts(it.id) }
+                    DetailEngineAction(appCtx.getString(R.string.delete), colors.danger) { actions.deleteHttpTts(it) }
                 }
             }
         }
         Text(
-            "发言人列表",
+            appCtx.getString(R.string.ra_cfg_speaker_list),
             color = colors.subText,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
@@ -689,7 +690,7 @@ private fun EngineDetail(
         }
         if (group.emotions.isNotEmpty()) {
             Text(
-                "情绪",
+                appCtx.getString(R.string.ra_cfg_emotions_2),
                 color = colors.subText,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -713,7 +714,7 @@ private fun EngineDetail(
             }
         }
         Text(
-            text = "选择此引擎后，普通朗读会使用该引擎；角色配音可在角色编辑页按发言人单独指定。",
+            text = appCtx.getString(R.string.ra_cfg_once_selected_normal_read_aloud),
             color = colors.subText,
             fontSize = 12.sp,
             lineHeight = 18.sp,

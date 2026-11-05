@@ -92,7 +92,8 @@ object ReadBookConfig {
         return true
     }
 
-    fun layoutPreferenceKey(key: String): String = if (usingEpubLayout) "epubLayout." + key else key
+    fun layoutPreferenceKey(key: String): String =
+        if (usingEpubLayout) PreferKey.epubLayoutPrefix + key else key
 
     data class RepairResult(
         val readConfigChanged: Boolean,
@@ -159,7 +160,7 @@ object ReadBookConfig {
             atomicWrite(epubFile, GSON.toJson(epubConfigs))
             appCtx.putPrefInt(PreferKey.epubReadStyleSelect, appCtx.getPrefInt(PreferKey.readStyleSelect))
             appCtx.putPrefBoolean(PreferKey.epubShareLayout, appCtx.getPrefBoolean(PreferKey.shareLayout))
-            appCtx.putPrefBoolean("epubLayout." + PreferKey.textFullJustify,
+            appCtx.putPrefBoolean(PreferKey.epubLayoutPrefix + PreferKey.textFullJustify,
                 appCtx.getPrefBoolean(PreferKey.textFullJustify, true))
         }
     }
@@ -947,7 +948,7 @@ object ReadBookConfig {
                 config.readerTemplateId = ""
             } else {
                 requireNotNull(EpubReaderTemplateStore.resolve(config.readerTemplateId)) {
-                    "阅读样式缺少页面模板文件：" + config.readerTemplateId
+                    appCtx.getString(R.string.svc_reading_style_missing_its_page) + config.readerTemplateId
                 }
             }
         }

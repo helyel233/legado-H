@@ -2,6 +2,8 @@ package io.legado.app.data.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 离线评论账本：离线评论模式下拦截记录的待发评论，全历史永久保留，
@@ -41,15 +43,15 @@ data class PendingReviewComment(
 ) {
 
     fun statusText(): String = when (status) {
-        STATUS_PENDING -> "待发送"
-        STATUS_SENDING -> "发送中"
-        STATUS_SENT -> "已发送"
-        else -> "失败"
+        STATUS_PENDING -> appCtx.getString(R.string.misc_pending)
+        STATUS_SENDING -> appCtx.getString(R.string.misc_sending)
+        STATUS_SENT -> appCtx.getString(R.string.misc_sent)
+        else -> appCtx.getString(R.string.dns_result_failed)
     }
 
     fun kindText(): String = when (kind) {
-        KIND_CHAPTER -> "章评"
-        else -> "段评"
+        KIND_CHAPTER -> appCtx.getString(R.string.misc_chapter_review)
+        else -> appCtx.getString(R.string.review)
     }
 
     companion object {

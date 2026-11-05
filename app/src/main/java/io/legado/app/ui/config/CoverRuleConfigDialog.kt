@@ -167,7 +167,7 @@ class CoverRuleConfigDialog : ComposeDialogFragment() {
         coverRule: String
     ) {
         if (searchUrl.isBlank() || coverRule.isBlank()) {
-            toastOnUi("搜索url和cover规则不能为空")
+            toastOnUi(requireContext().getString(R.string.cover_rule_empty_error))
             return
         }
         BookCover.CoverRule(enable, searchUrl, coverRule).let { config ->

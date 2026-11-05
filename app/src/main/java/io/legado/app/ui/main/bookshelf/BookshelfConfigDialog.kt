@@ -71,6 +71,7 @@ import io.legado.app.ui.widget.compose.toMiuixPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import splitties.init.appCtx
 
 private const val BOOKSHELF_PANEL_ANIMATION_MS = 160
 private const val BOOKSHELF_PANEL_DISMISS_MS = BOOKSHELF_PANEL_ANIMATION_MS + 20L
@@ -377,28 +378,28 @@ private fun BookshelfConfigContent(
         BookshelfSwitchItem(
             key = "unread",
             label = stringResource(R.string.show_unread),
-            summaryLabel = "未读",
+            summaryLabel = appCtx.getString(R.string.ui_main_unread),
             checked = values.showUnread,
             onCheckedChange = { onValuesChange(values.copy(showUnread = it)) }
         ),
         BookshelfSwitchItem(
             key = "updateTime",
             label = stringResource(R.string.show_last_update_time),
-            summaryLabel = "更新",
+            summaryLabel = appCtx.getString(R.string.auto_task_import_update),
             checked = values.showLastUpdateTime,
             onCheckedChange = { onValuesChange(values.copy(showLastUpdateTime = it)) }
         ),
         BookshelfSwitchItem(
             key = "waitUp",
             label = stringResource(R.string.show_wait_up_count),
-            summaryLabel = "追更",
+            summaryLabel = appCtx.getString(R.string.pursue_more),
             checked = values.showWaitUpCount,
             onCheckedChange = { onValuesChange(values.copy(showWaitUpCount = it)) }
         ),
         BookshelfSwitchItem(
             key = "fastScroller",
             label = stringResource(R.string.show_bookshelf_fast_scroller),
-            summaryLabel = "快滑",
+            summaryLabel = appCtx.getString(R.string.ui_main_fast_scroll),
             checked = values.showFastScroller,
             onCheckedChange = { onValuesChange(values.copy(showFastScroller = it)) }
         ),
@@ -843,7 +844,7 @@ private fun BookshelfDisplaySummaryCard(
                 ) {
                     if (activeItems.isEmpty()) {
                         BookshelfSummaryChip(
-                            text = "未启用",
+                            text = appCtx.getString(R.string.ui_main_not_enabled),
                             active = false,
                             style = style
                         )

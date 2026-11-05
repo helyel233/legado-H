@@ -1,5 +1,6 @@
 package io.legado.app.ui.config.compose
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -36,12 +37,46 @@ abstract class ComposeSettingFragment : Fragment(),
 
     protected open val drawPanelImage: Boolean = true
 
+    /**
+     * 构建 spec 时使用的上下文。
+     *
+     * 正常页面里为 null，[ctx] 退回 requireContext()；构建搜索索引时由 [buildSpec]
+     * 注入 Application context。搜索索引和页面 spec 因此共用同一份数据来源：
+     * 新增或改名设置项后，「我的」页搜索立刻能命中，不再需要同步维护一份影子 XML。
+     */
+    private var specContext: Context? = null
+
+    protected val ctx: Context
+        get() = specContext ?: requireContext()
+
+    protected fun str(@StringRes resId: Int): String = ctx.getString(resId)
+
+    protected fun str(@StringRes resId: Int, vararg formatArgs: Any): String =
+        ctx.getString(resId, *formatArgs)
+
+    /**
+     * 不依赖宿主生命周期地构建一次 spec，供设置搜索索引使用。
+     * 只在主线程调用（spec 构建会读 SharedPreferences），构建完立刻清掉注入的 context，
+     * 避免这个未 attach 的裸实例被后续误当成正常页面使用。
+     */
+    fun buildSpec(context: Context): SettingPageSpec {
+        specContext = context
+        return try {
+            buildPageSpec()
+        } finally {
+            specContext = null
+        }
+    }
+
     private val refreshTick = mutableIntStateOf(0)
     private val scrollTargetKey = mutableStateOf<String?>(null)
     private var targetKeyHandled = false
 
+    /** 带着进来的原始 targetKey，定位失败时要原样交给 [onTargetKeyUnresolved] */
+    private var pendingRawTargetKey: String? = null
+
     protected val prefs: SharedPreferences
-        get() = requireContext().defaultSharedPreferences
+        get() = ctx.defaultSharedPreferences
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -116,28 +151,28 @@ abstract class ComposeSettingFragment : Fragment(),
         key: String,
         defaultValue: Boolean
     ): Boolean {
-        return requireContext().getPrefBoolean(key, defaultValue)
+        return ctx.getPrefBoolean(key, defaultValue)
     }
 
     protected fun stringSetting(
         key: String,
         defaultValue: String
     ): String {
-        return requireContext().getPrefString(key, defaultValue) ?: defaultValue
+        return ctx.getPrefString(key, defaultValue) ?: defaultValue
     }
 
     protected fun intSetting(
         key: String,
         defaultValue: Int
     ): Int {
-        return requireContext().getPrefInt(key, defaultValue)
+        return ctx.getPrefInt(key, defaultValue)
     }
 
     protected fun updateBooleanSetting(
         key: String,
         value: Boolean
     ) {
-        requireContext().putPrefBoolean(key, value)
+        ctx.putPrefBoolean(key, value)
     }
 
     protected fun updateStringSetting(
@@ -151,7 +186,7 @@ abstract class ComposeSettingFragment : Fragment(),
         key: String,
         value: Int
     ) {
-        requireContext().putPrefInt(key, value)
+        ctx.putPrefInt(key, value)
     }
 
     /**
@@ -163,7 +198,8 @@ abstract class ComposeSettingFragment : Fragment(),
         title: String,
         summary: String? = null,
         defaultValue: Boolean,
-        visible: Boolean = true
+        visible: Boolean = true,
+        searchKeys: List<String> = emptyList()
     ): SettingSwitchSpec {
         return SettingSwitchSpec(
             key = key,
@@ -171,6 +207,7 @@ abstract class ComposeSettingFragment : Fragment(),
             summary = summary,
             checked = booleanSetting(key, defaultValue),
             visible = visible,
+            searchKeys = searchKeys,
             onCheckedChange = { updateBooleanSetting(key, it) }
         )
     }
@@ -181,7 +218,8 @@ abstract class ComposeSettingFragment : Fragment(),
         entriesRes: Int,
         valuesRes: Int,
         defaultValue: String,
-        summary: String? = null
+        summary: String? = null,
+        searchKeys: List<String> = emptyList()
     ): SettingChoiceSpec {
         val options = choiceOptionList(entriesRes, valuesRes)
         val selectedValue = stringSetting(key, defaultValue)
@@ -191,6 +229,7 @@ abstract class ComposeSettingFragment : Fragment(),
             summary = summary ?: choiceDisplayLabel(options, selectedValue),
             options = options,
             selectedValue = selectedValue,
+            searchKeys = searchKeys,
             onSelected = { updateStringSetting(key, it) }
         )
     }
@@ -201,7 +240,8 @@ abstract class ComposeSettingFragment : Fragment(),
         entriesRes: Int,
         valuesRes: Int,
         defaultValue: Int,
-        summary: String? = null
+        summary: String? = null,
+        searchKeys: List<String> = emptyList()
     ): SettingChoiceSpec {
         val options = choiceOptionList(entriesRes, valuesRes)
         val selectedValue = intSetting(key, defaultValue).toString()
@@ -211,6 +251,7 @@ abstract class ComposeSettingFragment : Fragment(),
             summary = summary ?: choiceDisplayLabel(options, selectedValue),
             options = options,
             selectedValue = selectedValue,
+            searchKeys = searchKeys,
             onSelected = { updateIntSetting(key, it.toIntOrNull() ?: defaultValue) }
         )
     }
@@ -224,8 +265,8 @@ abstract class ComposeSettingFragment : Fragment(),
         entriesRes: Int,
         valuesRes: Int
     ): List<SettingChoiceOption> {
-        val entries = resources.getStringArray(entriesRes)
-        val values = resources.getStringArray(valuesRes)
+        val entries = ctx.resources.getStringArray(entriesRes)
+        val values = ctx.resources.getStringArray(valuesRes)
         return values.mapIndexed { index, value ->
             SettingChoiceOption(
                 value = value,
@@ -252,6 +293,7 @@ abstract class ComposeSettingFragment : Fragment(),
         max: Int,
         value: Int,
         visible: Boolean = true,
+        searchKeys: List<String> = emptyList(),
         onSelected: (Int) -> Unit
     ): SettingActionSpec {
         return SettingActionSpec(
@@ -259,6 +301,7 @@ abstract class ComposeSettingFragment : Fragment(),
             title = title,
             summary = summary,
             visible = visible,
+            searchKeys = searchKeys,
             onClick = {
                 showComposeNumberPickerDialog(
                     title = title,
@@ -275,16 +318,41 @@ abstract class ComposeSettingFragment : Fragment(),
         if (targetKeyHandled) return
         val rawTargetKey = activity?.intent?.getStringExtra("targetKey")?.trim().orEmpty()
         if (rawTargetKey.isBlank()) return
+        pendingRawTargetKey = rawTargetKey
         scrollTargetKey.value = normalizeTargetKey(rawTargetKey)
     }
+
+    /**
+     * 让嵌套在本页里的配置（例如某个 action 打开的弹窗）也能定位到具体某一项。
+     *
+     * 搜索索引是平铺的：弹窗里的项和页面上的项一样都是一条搜索结果，点进来却可能
+     * 落在「页面里根本没有这个 key」的页面上。子类接管了 [onTargetKeyUnresolved]
+     * 之后，用这个方法把 key 透传给弹窗自己的 spec。
+     */
+    protected fun requestScrollTo(targetKey: String) {
+        if (targetKey.isBlank()) return
+        scrollTargetKey.value = targetKey
+    }
+
+    /**
+     * 目标项不在本页的 spec 里。
+     *
+     * 默认什么都不做（等于「点到一条定位不到的结果」）。把一批设置收在弹窗里的页面
+     * 重写它，把 key 转交给弹窗，搜索命中这些项才不会落到一个毫无高亮的页面上。
+     */
+    protected open fun onTargetKeyUnresolved(rawKey: String) = Unit
 
     private fun handleTargetReady(targetKey: String) {
         if (targetKeyHandled) return
         val item = findItem(targetKey) ?: return consumeMissingTarget()
         targetKeyHandled = true
+        pendingRawTargetKey = null
         scrollTargetKey.value = null
         view?.post {
-            if (autoOpenTargetItem) {
+            // 开关项不自动执行：handleItemClick 对开关就是「取反」，
+            // 从搜索点进来时会静默改掉用户的设置。开关只需要定位 + 高亮，
+            // 由用户自己决定要不要切换。动作项/选择项则自动展开，因为那才是「找到它」的终点。
+            if (autoOpenTargetItem && item !is SettingSwitchSpec) {
                 handleItemClick(item)
             }
             activity?.intent?.removeExtra("targetKey")
@@ -294,8 +362,11 @@ abstract class ComposeSettingFragment : Fragment(),
     private fun consumeMissingTarget() {
         if (targetKeyHandled) return
         targetKeyHandled = true
+        val unresolvedKey = pendingRawTargetKey
+        pendingRawTargetKey = null
         scrollTargetKey.value = null
         activity?.intent?.removeExtra("targetKey")
+        if (unresolvedKey != null) onTargetKeyUnresolved(unresolvedKey)
     }
 
     private fun findItem(targetKey: String): SettingItemSpec? {

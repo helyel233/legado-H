@@ -7,6 +7,8 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.UUID
+import io.legado.app.R
+import splitties.init.appCtx
 
 class ReaderAssetStore(val directory: File) {
     private val gson = Gson()
@@ -21,7 +23,7 @@ class ReaderAssetStore(val directory: File) {
         atomic.recoverInterruptedCommit()
         val result = if (index.isFile) {
             require(index.length() <= 4L * 1024 * 1024) { "素材目录过大" }
-            requireNotNull(gson.fromJson(index.readText(Charsets.UTF_8), ReaderAssetLibrary::class.java)) { "素材目录为空" }
+            requireNotNull(gson.fromJson(index.readText(Charsets.UTF_8), ReaderAssetLibrary::class.java)) { appCtx.getString(R.string.misc_asset_directory_empty) }
         } else ReaderAssetLibrary()
         validate(result)
         cached = result
@@ -94,7 +96,7 @@ class ReaderAssetStore(val directory: File) {
         val added = unique.filter { incoming -> original.assets.none { it.id == incoming.id } }
         require(original.assets.size + added.size <= 2048 &&
             original.assets.sumOf { it.size } + added.sumOf { it.bytes.size.toLong() } <= 512L * 1024 * 1024) {
-            "素材库空间不足，请先整理素材"
+            appCtx.getString(R.string.misc_asset_library_full_please_clean)
         }
         return unique.map { import(it.bytes.inputStream(), it.name, it.id) }
     }
@@ -155,7 +157,7 @@ class ReaderAssetStore(val directory: File) {
         val original = library()
         val added = assets.filter { asset -> original.assets.none { it.id == asset.id } }
         require(original.assets.size + added.size <= 2048 &&
-            original.assets.sumOf { it.size } + added.sumOf { it.size } <= 512L * 1024 * 1024) { "素材库空间不足" }
+            original.assets.sumOf { it.size } + added.sumOf { it.size } <= 512L * 1024 * 1024) { appCtx.getString(R.string.misc_asset_library_full) }
         assets.forEach { incoming.verifiedBytes(it.id) }
         assets.forEach { asset -> import(incoming.file(asset.id)!!.inputStream(), asset.name, asset.id) }
     }
@@ -168,7 +170,7 @@ class ReaderAssetStore(val directory: File) {
         val format = ReaderAssetFormat.inspect(bytes)
         val asset = requireNotNull(find(id))
         require(format.kind == asset.kind && format.mime == asset.mimeType && format.extension == asset.extension &&
-            format.width == asset.width && format.height == asset.height) { "素材信息与文件不一致：${asset.name}" }
+            format.width == asset.width && format.height == asset.height) { appCtx.getString(R.string.misc_asset_metadata_does_not_match, asset.name) }
         return bytes
     }
 
@@ -184,12 +186,12 @@ class ReaderAssetStore(val directory: File) {
             ReaderAssetReferences.validId(it.id) && it.kind in setOf("font", "image") && it.size in 1..ReaderAssetFormat.MAX_FILE_BYTES &&
                 it.name.isNotBlank() && it.name.length <= 256 && supportedTypes[it.extension] == it.mimeType &&
                 (it.kind == "image") == it.mimeType.startsWith("image/")
-        }) { "素材目录内容无效" }
+        }) { appCtx.getString(R.string.misc_invalid_asset_directory_contents) }
         require(value.assets.sumOf { it.size } <= 512L * 1024 * 1024) { "素材库超过大小上限" }
         require(value.folders.map { it.id }.distinct().size == value.folders.size && value.folders.all {
             it.id.length <= 64 && it.name.length <= 256 && it.uri.length <= 8192 &&
                 (it.uri.startsWith("content://") || it.uri.startsWith("file://"))
-        }) { "素材来源文件夹无效" }
+        }) { appCtx.getString(R.string.misc_invalid_asset_source_folder) }
     }
 
     companion object {
@@ -197,6 +199,6 @@ class ReaderAssetStore(val directory: File) {
             "webp" to "image/webp", "ttf" to "font/ttf", "otf" to "font/otf", "ttc" to "font/collection",
             "woff" to "font/woff", "woff2" to "font/woff2")
         fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
-        fun cleanName(name: String) = name.trim().replace(Regex("[\\p{Cntrl}/\\\\]"), "_").take(256).ifBlank { "未命名素材" }
+        fun cleanName(name: String) = name.trim().replace(Regex("[\\p{Cntrl}/\\\\]"), "_").take(256).ifBlank { appCtx.getString(R.string.misc_untitled_asset) }
     }
 }

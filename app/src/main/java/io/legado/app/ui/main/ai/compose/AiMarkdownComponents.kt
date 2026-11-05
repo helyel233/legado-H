@@ -59,13 +59,14 @@ import io.legado.app.utils.parseToUri
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import kotlin.math.min
+import splitties.init.appCtx
 
 @Composable
 internal fun AiCopyTextButton(
     text: String,
     style: AiComposeStyle,
     modifier: Modifier = Modifier,
-    label: String = "复制"
+    label: String = appCtx.getString(R.string.ra_cfg_copy)
 ) {
     if (text.isBlank()) return
     val clipboardManager = LocalClipboardManager.current
@@ -285,7 +286,7 @@ private fun AiMarkdownCodeBlock(
                 AiCopyTextButton(
                     text = text,
                     style = style,
-                    label = "复制代码"
+                    label = appCtx.getString(R.string.ui_main_copy_code)
                 )
             }
             SelectionContainer {

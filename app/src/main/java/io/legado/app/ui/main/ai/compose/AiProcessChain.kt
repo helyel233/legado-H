@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Immutable
 data class AiProcessChainStep(
@@ -168,7 +170,7 @@ private fun StepCountChip(count: Int, style: AiComposeStyle) {
             .padding(horizontal = 9.dp, vertical = 5.dp)
     ) {
         Text(
-            text = "$count 步",
+            text = appCtx.getString(R.string.ui_main_steps, count),
             color = style.colors.accent,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold

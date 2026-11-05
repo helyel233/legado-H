@@ -42,6 +42,7 @@ import kotlinx.coroutines.ensureActive
 import splitties.init.appCtx
 import java.io.File
 import java.util.UUID
+import io.legado.app.R
 
 object AppCloudStorage {
 
@@ -203,7 +204,7 @@ object AppCloudStorage {
                         webDavBackend.delete(file.displayName)
                     }.onFailure {
                         io.legado.app.constant.AppLog.put(
-                            "删除云端旧备份失败: ${file.displayName}\n${it.localizedMessage}", it
+                            appCtx.getString(R.string.misc_failed_delete_old_cloud_backup, file.displayName, it.localizedMessage), it
                         )
                     }
                 }
@@ -431,7 +432,7 @@ object AppCloudStorage {
                     target.upload(COVERS_DIR + file.name, file)
                 }.onFailure {
                     io.legado.app.constant.AppLog.put(
-                        "上传书架封面失败: ${file.name}\n${it.localizedMessage}", it
+                        appCtx.getString(R.string.misc_failed_upload_bookshelf_cover_n, file.name, it.localizedMessage), it
                     )
                 }
             }
@@ -463,7 +464,7 @@ object AppCloudStorage {
                 }.onFailure {
                     localFile.delete()
                     io.legado.app.constant.AppLog.put(
-                        "下载书架封面失败: $name\n${it.localizedMessage}", it
+                        appCtx.getString(R.string.misc_failed_download_bookshelf_cover_n, name, it.localizedMessage), it
                     )
                 }
             }

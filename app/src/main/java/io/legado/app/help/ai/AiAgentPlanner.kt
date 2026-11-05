@@ -3,6 +3,8 @@ package io.legado.app.help.ai
 import io.legado.app.ui.main.ai.AiChatMessage
 import org.json.JSONArray
 import org.json.JSONObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class AiAgentPlanStep(
     val id: String,
@@ -121,16 +123,16 @@ object AiAgentPlanner {
 
     private fun needsLocalData(goal: String): Boolean {
         val keywords = listOf(
-            "书架", "书籍", "章节", "阅读记录", "书源", "角色", "配音", "工具",
-            "设置", "查询", "查看", "读取", "搜索", "调试", "生成图片", "生图"
+            appCtx.getString(R.string.bookshelf), appCtx.getString(R.string.cache_manage_books), appCtx.getString(R.string.manga_check_chapter), appCtx.getString(R.string.read_record), appCtx.getString(R.string.book_source), appCtx.getString(R.string.ra_panel_character), "配音", appCtx.getString(R.string.ai_tool_default_name),
+            appCtx.getString(R.string.setting), "查询", appCtx.getString(R.string.see), "读取", appCtx.getString(R.string.action_search), appCtx.getString(R.string.debug), appCtx.getString(R.string.ai_tool_generate_image), "生图"
         )
         return keywords.any { goal.contains(it, ignoreCase = true) }
     }
 
     private fun needsWrite(goal: String): Boolean {
         val keywords = listOf(
-            "创建", "新增", "修改", "更新", "删除", "移除", "设置", "分配", "导入",
-            "保存", "清空", "批量", "生成头像", "生成图片", "重绘"
+            "创建", appCtx.getString(R.string.auto_task_import_new), "修改", appCtx.getString(R.string.auto_task_import_update), appCtx.getString(R.string.delete), appCtx.getString(R.string.ra_cfg_remove), appCtx.getString(R.string.setting), "分配", appCtx.getString(R.string.import_str),
+            appCtx.getString(R.string.action_save), appCtx.getString(R.string.cache_manage_review_clear), "批量", "生成头像", appCtx.getString(R.string.ai_tool_generate_image), "重绘"
         )
         return keywords.any { goal.contains(it, ignoreCase = true) }
     }

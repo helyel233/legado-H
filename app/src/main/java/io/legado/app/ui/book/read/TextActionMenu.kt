@@ -75,6 +75,7 @@ import io.legado.app.utils.sendToClip
 import io.legado.app.utils.share
 import io.legado.app.utils.toastOnUi
 import kotlin.math.ceil
+import splitties.init.appCtx
 
 @SuppressLint("RestrictedApi")
 class TextActionMenu(private val context: Context, private val callBack: CallBack) :
@@ -141,7 +142,7 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
                             // Multi-page selections can exceed an external app's Binder or
                             // clipboard limit. The reader must remain usable if it refuses.
                             AppLog.putDebug("Reader selection action failed", error)
-                            context.toastOnUi("文字操作失败，请缩小选区后重试")
+                            context.toastOnUi(appCtx.getString(R.string.ui_book_text_action_failed_narrow_selection))
                         } finally {
                             callBack.onMenuActionFinally()
                         }

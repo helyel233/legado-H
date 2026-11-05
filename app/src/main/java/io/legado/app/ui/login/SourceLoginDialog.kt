@@ -793,7 +793,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     }
                 } catch (e: Exception) {
                     AppLog.put("登录出错\n${e.localizedMessage}", e)
-                    context?.toastOnUi("登录出错\n${e.localizedMessage}")
+                    context?.toastOnUi(appCtx.getString(R.string.misc_login_failed_n, e.localizedMessage))
                     e.printOnDebug()
                 }
             }

@@ -7,6 +7,8 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.parcelize.Parcelize
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Parcelize
 @Entity(
@@ -36,7 +38,7 @@ data class ParagraphRule(
     var updateTime: Long = System.currentTimeMillis()
 ) : Parcelable {
 
-    fun displayName(): String = name.ifBlank { "段落规则" }
+    fun displayName(): String = name.ifBlank { appCtx.getString(R.string.paragraph_rule) }
 
     fun validTimeout(): Long = timeoutMillisecond.takeIf { it > 0 } ?: C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS
 }

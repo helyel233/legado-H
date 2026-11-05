@@ -323,7 +323,7 @@ fun SourceRecycleBinScreen() {
                         }
                     }.onFailure {
                         AppLog.put("回收站清空失败\n${it.localizedMessage}", it)
-                        appCtx.toastOnUi("清空失败：${it.localizedMessage}")
+                        appCtx.toastOnUi(appCtx.getString(R.string.misc_clear_failed, it.localizedMessage))
                         return@launch
                     }
                     appCtx.toastOnUi(R.string.source_recycle_bin_cleared)
@@ -480,7 +480,7 @@ private suspend fun runRestore(items: List<SourceRecycleBin>, overwrite: Boolean
         }
     }.onFailure {
         AppLog.put("回收站恢复失败\n${it.localizedMessage}", it)
-        appCtx.toastOnUi("恢复失败：${it.localizedMessage}")
+        appCtx.toastOnUi(appCtx.getString(R.string.misc_restore_failed, it.localizedMessage))
         return
     }
     appCtx.toastOnUi(R.string.source_recycle_bin_restored)
@@ -497,7 +497,7 @@ private suspend fun runDelete(items: List<SourceRecycleBin>) {
         }
     }.onFailure {
         AppLog.put("回收站删除失败\n${it.localizedMessage}", it)
-        appCtx.toastOnUi("删除失败：${it.localizedMessage}")
+        appCtx.toastOnUi(appCtx.getString(R.string.misc_delete_failed, it.localizedMessage))
         return
     }
     appCtx.toastOnUi(R.string.source_recycle_bin_deleted)

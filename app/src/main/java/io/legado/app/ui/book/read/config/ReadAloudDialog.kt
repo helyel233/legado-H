@@ -20,6 +20,7 @@ import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.*
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 
 
 class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
@@ -129,12 +130,12 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         }
         ivTimer.setOnClickListener {
             AppConfig.ttsTimer = seekTimer.progress
-            toastOnUi("保存设定时间成功！")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_timer_saved))
         }
         tvTimer.setOnClickListener {
             val times = intArrayOf(0, 5, 10, 15, 30, 60, 90, 180)
-            val timeKeys = times.map { "$it 分钟" }
-            showComposeChoiceListDialog("设定时间", timeKeys) { index ->
+            val timeKeys = times.map { appCtx.getString(R.string.ra_cfg_min, it) }
+            showComposeChoiceListDialog(appCtx.getString(R.string.ra_cfg_set_timer), timeKeys) { index ->
                 times.getOrNull(index)?.let { time ->
                     ReadAloud.setTimer(requireContext(), time)
                 }

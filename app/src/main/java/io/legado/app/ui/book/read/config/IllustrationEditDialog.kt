@@ -105,7 +105,7 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
                         }
                     }.getOrNull()
                     if (bytes == null || bytes.isEmpty()) {
-                        appCtx.toastOnUi("读取媒体文件失败")
+                        appCtx.toastOnUi(appCtx.getString(R.string.ui_book_failed_read_media_file))
                         return@forEach
                     }
                     // 文件选择器返回的 MIME 可能不可靠（null/octet-stream/报成 image 类），
@@ -117,7 +117,7 @@ class IllustrationEditDialog() : BaseDialogFragment(R.layout.dialog_illustration
                         ext !in IllustrationHelp.AUDIO_EXTS &&
                         ext !in IllustrationHelp.IMAGE_EXTS
                     ) {
-                        appCtx.toastOnUi("仅支持图片、视频、音频文件")
+                        appCtx.toastOnUi(appCtx.getString(R.string.ui_book_only_image_video_audio_files))
                         return@forEach
                     }
                     parsed.add(bytes to ext)

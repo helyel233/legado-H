@@ -39,6 +39,7 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 
 class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
 
@@ -128,12 +129,12 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
             reload()
         }
         if (fixedBookKey.isNotBlank()) {
-            addFilterChip("本书", currentFilter == GalleryFilter.BOOK(fixedBookKey)) {
+            addFilterChip(appCtx.getString(R.string.ai_ui_this_book), currentFilter == GalleryFilter.BOOK(fixedBookKey)) {
                 currentFilter = GalleryFilter.BOOK(fixedBookKey)
                 reload()
             }
         }
-        addFilterChip("角色图", currentFilter == GalleryFilter.SOURCE_TYPE(AiImageGalleryManager.SOURCE_TYPE_CHARACTER_AVATAR)) {
+        addFilterChip(appCtx.getString(R.string.ai_ui_character_images), currentFilter == GalleryFilter.SOURCE_TYPE(AiImageGalleryManager.SOURCE_TYPE_CHARACTER_AVATAR)) {
             currentFilter = GalleryFilter.SOURCE_TYPE(AiImageGalleryManager.SOURCE_TYPE_CHARACTER_AVATAR)
             reload()
         }
@@ -197,7 +198,7 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
 
     private fun updateBatchBar() {
         binding.batchBar.isVisible = selectedIds.isNotEmpty()
-        binding.tvBatchCount.text = "已选择 ${selectedIds.size} 张"
+        binding.tvBatchCount.text = appCtx.getString(R.string.ai_ui_selected, selectedIds.size)
     }
 
     private fun showBatchGroupDialog() {
@@ -239,7 +240,7 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
             withContext(Dispatchers.IO) {
                 AiImageGalleryManager.moveImagesToGroup(ids, groupId)
             }
-            toastOnUi("已移动分组")
+            toastOnUi(appCtx.getString(R.string.ai_ui_moved_group))
             clearSelection()
             reload()
         }
@@ -248,7 +249,7 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
     private fun confirmBatchDelete() {
         val ids = selectedIds.toList()
         if (ids.isEmpty()) return
-        alert(title = getString(R.string.delete), message = "删除选中的 ${ids.size} 张图片？") {
+        alert(title = getString(R.string.delete), message = appCtx.getString(R.string.ai_ui_delete_selected_images, ids.size)) {
             okButton {
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) {

@@ -30,6 +30,7 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.image.glide.GlideImagesPlugin
+import splitties.init.appCtx
 
 class UpdateDialog() : ComposeDialogFragment() {
 
@@ -86,7 +87,7 @@ class UpdateDialog() : ComposeDialogFragment() {
                 }
 
                 if (updateBody == null) {
-                    toastOnUi("没有数据")
+                    toastOnUi(appCtx.getString(R.string.ui_main_no_data))
                     dismissAllowingStateLoss()
                     return@setContent
                 }

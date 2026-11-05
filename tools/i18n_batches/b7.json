@@ -1,0 +1,2559 @@
+{
+  "prefix": "svc",
+  "resource": "strings_service.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/api/controller/BookSourceController.kt",
+    "app/src/main/java/io/legado/app/api/controller/ReplaceRuleController.kt",
+    "app/src/main/java/io/legado/app/api/controller/RssSourceController.kt",
+    "app/src/main/java/io/legado/app/api/controller/BookSourceWebController.kt",
+    "app/src/main/java/io/legado/app/api/controller/BookController.kt",
+    "app/src/main/java/io/legado/app/help/storage/BackupPrefsFile.kt",
+    "app/src/main/java/io/legado/app/help/storage/BackupProgress.kt",
+    "app/src/main/java/io/legado/app/help/storage/Restore.kt",
+    "app/src/main/java/io/legado/app/help/storage/BookCacheZip.kt",
+    "app/src/main/java/io/legado/app/help/storage/BackupConfig.kt",
+    "app/src/main/java/io/legado/app/help/storage/BackupArchiveExtractor.kt",
+    "app/src/main/java/io/legado/app/help/storage/RestoreSnapshot.kt",
+    "app/src/main/java/io/legado/app/help/storage/ReaderDataRepair.kt",
+    "app/src/main/java/io/legado/app/help/storage/Backup.kt",
+    "app/src/main/java/io/legado/app/help/storage/BookCacheSelectorConfig.kt",
+    "app/src/main/java/io/legado/app/help/storage/ImportOldData.kt",
+    "app/src/main/java/io/legado/app/help/cache/ReviewCaptureHost.kt",
+    "app/src/main/java/io/legado/app/help/cache/CacheCoordinator.kt",
+    "app/src/main/java/io/legado/app/help/cache/MediaWorkerAdapter.kt",
+    "app/src/main/java/io/legado/app/help/cache/CacheNotificationPolicy.kt",
+    "app/src/main/java/io/legado/app/help/cache/CacheNotificationBridge.kt",
+    "app/src/main/java/io/legado/app/help/cache/CacheContracts.kt",
+    "app/src/main/java/io/legado/app/help/cache/ReviewWorkerAdapter.kt",
+    "app/src/main/java/io/legado/app/help/cache/MediaCacheTaskManager.kt",
+    "app/src/main/java/io/legado/app/help/cache/CacheRetryPolicy.kt",
+    "app/src/main/java/io/legado/app/help/config/SecurePrefs.kt",
+    "app/src/main/java/io/legado/app/help/config/EpubLoadingTemplate.kt",
+    "app/src/main/java/io/legado/app/help/config/ReadPresetPreferences.kt",
+    "app/src/main/java/io/legado/app/help/config/ThemeConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/BubblePackageManager.kt",
+    "app/src/main/java/io/legado/app/help/config/SourceConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/BookReadStyleSession.kt",
+    "app/src/main/java/io/legado/app/help/config/NavigationBarIconConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/EpubLoadingTemplateStore.kt",
+    "app/src/main/java/io/legado/app/help/config/AppearanceKitManager.kt",
+    "app/src/main/java/io/legado/app/help/config/AdvancedTitleConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/ReadBookConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/LocalConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/TipTemplateRenderer.kt",
+    "app/src/main/java/io/legado/app/help/config/ThemePackageManager.kt",
+    "app/src/main/java/io/legado/app/help/config/TopBarConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/BubbleSvgPolicy.kt",
+    "app/src/main/java/io/legado/app/help/config/IconSampleSizePolicy.kt",
+    "app/src/main/java/io/legado/app/help/config/MainBottomNavConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/AppConfig.kt",
+    "app/src/main/java/io/legado/app/help/config/CoverHtmlTemplateConfig.kt",
+    "app/src/main/java/io/legado/app/web/socket/BookSearchWebSocket.kt",
+    "app/src/main/java/io/legado/app/web/socket/RssSourceDebugWebSocket.kt",
+    "app/src/main/java/io/legado/app/web/socket/BookSourceDebugWebSocket.kt"
+  ],
+  "entries": [
+    {
+      "zh": "设备源列表为空",
+      "en": "Device source list is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:20: returnData.setErrorMsg(\"设备源列表为空\")"
+      ],
+      "key": "svc_device_source_list_empty"
+    },
+    {
+      "zh": "数据不能为空",
+      "en": "Data cannot be empty",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:26: postData ?: return returnData.setErrorMsg(\"数据不能为空\")",
+        "ReplaceRuleController.kt:27: postData ?: return returnData.setErrorMsg(\"数据不能为空\")",
+        "ReplaceRuleController.kt:43: postData ?: return returnData.setErrorMsg(\"数据不能为空\")"
+      ],
+      "key": "svc_data_cannot_be_empty"
+    },
+    {
+      "zh": "源名称和URL不能为空",
+      "en": "Source name and URL cannot be empty",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:30: returnData.setErrorMsg(\"源名称和URL不能为空\")",
+        "RssSourceController.kt:33: returnData.setErrorMsg(\"源名称和URL不能为空\")"
+      ],
+      "key": "svc_source_name_url_cannot_be"
+    },
+    {
+      "zh": "转换源失败",
+      "en": "Source conversion failed",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:36: returnData.setErrorMsg(\"转换源失败\")",
+        "BookSourceController.kt:46: return ReturnData().setErrorMsg(\"转换源失败\")",
+        "RssSourceController.kt:47: return ReturnData().setErrorMsg(\"转换源失败\")"
+      ],
+      "key": "svc_source_conversion_failed"
+    },
+    {
+      "zh": "数据为空",
+      "en": "Data is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:42: postData ?: return ReturnData().setErrorMsg(\"数据为空\")"
+      ],
+      "key": "svc_data_empty"
+    },
+    {
+      "zh": "参数url不能为空，请指定源地址",
+      "en": "The url parameter is required; please provide a source address",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:63: return returnData.setErrorMsg(\"参数url不能为空，请指定源地址\")"
+      ],
+      "key": "svc_url_parameter_required_please_provide"
+    },
+    {
+      "zh": "未找到源，请检查书源地址",
+      "en": "Source not found; check the book source address",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:66: ?: return returnData.setErrorMsg(\"未找到源，请检查书源地址\")"
+      ],
+      "key": "svc_source_not_found_check_book"
+    },
+    {
+      "zh": "数据格式错误",
+      "en": "Invalid data format",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:76: return ReturnData().setErrorMsg(it.localizedMessage ?: \"数据格式错误\")",
+        "BookSourceWebController.kt:37: ?: return returnData.setErrorMsg(\"数据格式错误\")"
+      ],
+      "key": "svc_invalid_data_format"
+    },
+    {
+      "zh": "已执行",
+      "en": "Executed",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookSourceController.kt:78: return ReturnData().setData(\"已执行\"/*okSources*/)",
+        "RssSourceController.kt:77: return ReturnData().setData(\"已执行\"/*okSources*/)"
+      ],
+      "key": "svc_executed"
+    },
+    {
+      "zh": "替换规则不能为空",
+      "en": "Replace rule cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReplaceRuleController.kt:82: returnData.setErrorMsg(\"替换规则不能为空\")"
+      ],
+      "key": "svc_replace_rule_cannot_be_empty"
+    },
+    {
+      "zh": "text不能为空",
+      "en": "text cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReplaceRuleController.kt:85: returnData.setErrorMsg(\"text不能为空\")"
+      ],
+      "key": "svc_text_cannot_be_empty"
+    },
+    {
+      "zh": "替换规则测试失败: ${e.message}",
+      "en": "Replace rule test failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReplaceRuleController.kt:100: returnData.setErrorMsg(\"替换规则测试失败: ${e.message}\")"
+      ],
+      "key": "svc_replace_rule_test_failed"
+    },
+    {
+      "zh": "源列表为空",
+      "en": "Source list is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceController.kt:22: returnData.setErrorMsg(\"源列表为空\")"
+      ],
+      "key": "svc_source_list_empty"
+    },
+    {
+      "zh": "转换源失败${it.localizedMessage}",
+      "en": "Source conversion failed%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceController.kt:30: returnData.setErrorMsg(\"转换源失败${it.localizedMessage}\")"
+      ],
+      "key": "svc_source_conversion_failed_2"
+    },
+    {
+      "zh": "参数url不能为空，请指定书源地址",
+      "en": "The url parameter is required; please provide a source address",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceController.kt:63: return returnData.setErrorMsg(\"参数url不能为空，请指定书源地址\")"
+      ],
+      "key": "svc_url_parameter_required_please_provide_2"
+    },
+    {
+      "zh": "未找到源，请检查源地址",
+      "en": "Source not found; check the source address",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceController.kt:66: ?: return returnData.setErrorMsg(\"未找到源，请检查源地址\")"
+      ],
+      "key": "svc_source_not_found_check_source"
+    },
+    {
+      "zh": "没有传递数据",
+      "en": "No data provided",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "RssSourceController.kt:71: postData ?: return ReturnData().setErrorMsg(\"没有传递数据\")"
+      ],
+      "key": "svc_no_data_provided"
+    },
+    {
+      "zh": "未找到书源",
+      "en": "Book source not found",
+      "count": 5,
+      "risk": 0,
+      "samples": [
+        "BookSourceWebController.kt:18: val source = getSource(parameters) ?: return ReturnData().setErrorMsg(\"未找到书源\")",
+        "BookSourceWebController.kt:39: ?: return returnData.setErrorMsg(\"未找到书源\")",
+        "BookSourceWebController.kt:63: val source = getBookSource(parameters) ?: return ReturnData().setErrorMsg(\"未找到书源\")"
+      ],
+      "key": "svc_book_source_not_found"
+    },
+    {
+      "zh": "发现地址不能为空",
+      "en": "Discover URL cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookSourceWebController.kt:73: ?: return ReturnData().setErrorMsg(\"发现地址不能为空\")"
+      ],
+      "key": "svc_discover_url_cannot_be_empty"
+    },
+    {
+      "zh": "还没有添加小说",
+      "en": "No books added yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:53: returnData.setErrorMsg(\"还没有添加小说\")"
+      ],
+      "key": "svc_no_books_added_yet"
+    },
+    {
+      "zh": "bookUrl为空",
+      "en": "bookUrl is empty",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:101: ?: return ReturnData().setErrorMsg(\"bookUrl为空\")",
+        "BookController.kt:113: ?: return returnData.setErrorMsg(\"bookUrl为空\")"
+      ],
+      "key": "svc_bookurl_empty"
+    },
+    {
+      "zh": "bookUrl不对",
+      "en": "bookUrl is invalid",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:103: ?: return ReturnData().setErrorMsg(\"bookUrl不对\")",
+        "BookController.kt:119: ?: return returnData.setErrorMsg(\"bookUrl不对\")"
+      ],
+      "key": "svc_bookurl_invalid"
+    },
+    {
+      "zh": "图片链接为空",
+      "en": "Image URL is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:115: ?: return returnData.setErrorMsg(\"图片链接为空\")"
+      ],
+      "key": "svc_image_url_empty"
+    },
+    {
+      "zh": "参数url不能为空，请指定书籍地址",
+      "en": "The url parameter is required; please provide a book address",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:138: return returnData.setErrorMsg(\"参数url不能为空，请指定书籍地址\")",
+        "BookController.kt:176: return returnData.setErrorMsg(\"参数url不能为空，请指定书籍地址\")",
+        "BookController.kt:193: return returnData.setErrorMsg(\"参数url不能为空，请指定书籍地址\")"
+      ],
+      "key": "svc_url_parameter_required_please_provide_3"
+    },
+    {
+      "zh": "未在数据库找到对应书籍，请先添加",
+      "en": "The book was not found in the database; add it first",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:141: ?: return returnData.setErrorMsg(\"未在数据库找到对应书籍，请先添加\")"
+      ],
+      "key": "svc_book_was_not_found_database"
+    },
+    {
+      "zh": "未找到对应书源,请换源",
+      "en": "No matching book source found; switch sources",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:151: ?: return returnData.setErrorMsg(\"未找到对应书源,请换源\")"
+      ],
+      "key": "svc_no_matching_book_source_found"
+    },
+    {
+      "zh": "参数index不能为空, 请指定目录序号",
+      "en": "The index parameter is required; please provide a chapter index",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:196: return returnData.setErrorMsg(\"参数index不能为空, 请指定目录序号\")"
+      ],
+      "key": "svc_index_parameter_required_please_provide"
+    },
+    {
+      "zh": "未找到",
+      "en": "Not found",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:210: return returnData.setErrorMsg(\"未找到\")"
+      ],
+      "key": "svc_not_found"
+    },
+    {
+      "zh": "正文格式无效",
+      "en": "Invalid content format",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:241: val content = base.data as? String ?: return ReturnData().setErrorMsg(\"正文格式无效\")"
+      ],
+      "key": "svc_invalid_content_format"
+    },
+    {
+      "zh": "fileName 不能为空",
+      "en": "fileName cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:309: ?: return returnData.setErrorMsg(\"fileName 不能为空\")"
+      ],
+      "key": "svc_filename_cannot_be_empty"
+    },
+    {
+      "zh": "fileData 不能为空",
+      "en": "fileData cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:311: ?: return returnData.setErrorMsg(\"fileData 不能为空\")"
+      ],
+      "key": "svc_filedata_cannot_be_empty"
+    },
+    {
+      "zh": "需重新设置书籍保存位置!",
+      "en": "Please set the book storage location again!",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:317: is SecurityException -> returnData.setErrorMsg(\"需重新设置书籍保存位置!\")"
+      ],
+      "key": "svc_please_set_book_storage_location"
+    },
+    {
+      "zh": "保存书籍错误\\n${it.localizedMessage}",
+      "en": "Failed to save book\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:318: else -> returnData.setErrorMsg(\"保存书籍错误\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_save_book_n"
+    },
+    {
+      "zh": "没有配置",
+      "en": "Not configured",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookController.kt:341: ?: return returnData.setErrorMsg(\"没有配置\")"
+      ],
+      "key": "svc_not_configured"
+    },
+    {
+      "zh": "开始恢复备份 uri:$uri",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:136: LogUtils.d(TAG, \"开始恢复备份 uri:$uri\")"
+      ]
+    },
+    {
+      "zh": "恢复资源包出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:147: AppLog.put(\"恢复资源包出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复备份出错\\n${it.localizedMessage}",
+      "en": "Failed to restore backup\\n%1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:157: appCtx.toastOnUi(\"恢复备份出错\\n${it.localizedMessage}\")",
+        "Restore.kt:158: AppLog.put(\"恢复备份出错\\n${it.localizedMessage}\", it)"
+      ],
+      "key": "svc_failed_restore_backup_n"
+    },
+    {
+      "zh": "无效的文件路径",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:179: ?: throw NoStackTraceException(\"无效的文件路径\")"
+      ]
+    },
+    {
+      "zh": "恢复过程异常: ${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:198: snapshot.rollback(\"恢复过程异常: ${e.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "恢复服务器配置出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:295: AppLog.put(\"恢复服务器配置出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "备份中的直链上传规则超过大小限制",
+      "en": "The direct-link upload rule in the backup exceeds the size limit",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:302: \"备份中的直链上传规则超过大小限制\""
+      ],
+      "key": "svc_direct_link_upload_rule_backup"
+    },
+    {
+      "zh": "备份中的直链上传规则无效，已保留当前配置\\n",
+      "en": "The direct-link upload rule in the backup is invalid; the current configuration was kept\\n",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:309: \"备份中的直链上传规则无效，已保留当前配置\\n\" +"
+      ],
+      "key": "svc_direct_link_upload_rule_backup_2"
+    },
+    {
+      "zh": "未知错误",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:310: (error.localizedMessage ?: \"未知错误\"),"
+      ]
+    },
+    {
+      "zh": "备份中的直链上传规则无效，已保留当前配置",
+      "en": "The direct-link upload rule in the backup is invalid; the current configuration was kept",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:313: appCtx.toastOnUi(\"备份中的直链上传规则无效，已保留当前配置\")"
+      ],
+      "key": "svc_direct_link_upload_rule_backup_3"
+    },
+    {
+      "zh": "恢复封面规则出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:326: AppLog.put(\"恢复封面规则出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复书籍缓存索引出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:354: AppLog.put(\"恢复书籍缓存索引出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "按备份覆盖已跳过：备份中没有 bookshelf.json，未删除任何书籍",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:478: AppLog.put(\"按备份覆盖已跳过：备份中没有 bookshelf.json，未删除任何书籍\")"
+      ]
+    },
+    {
+      "zh": "按备份覆盖已跳过：bookshelf.json 未解析出任何书籍，未删除任何书籍",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:486: AppLog.put(\"按备份覆盖已跳过：bookshelf.json 未解析出任何书籍，未删除任何书籍\")"
+      ]
+    },
+    {
+      "zh": "按备份覆盖：已删除 ${toDelete.size} 本备份中不存在的在线书籍",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:503: AppLog.put(\"按备份覆盖：已删除 ${toDelete.size} 本备份中不存在的在线书籍\")"
+      ]
+    },
+    {
+      "zh": "按备份覆盖清单落盘失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:520: AppLog.put(\"按备份覆盖清单落盘失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复角色资料出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:570: AppLog.put(\"恢复角色资料出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复定时任务出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:583: AppLog.put(\"恢复定时任务出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复定时任务失败，已保留当前任务",
+      "en": "Failed to restore scheduled tasks; the current tasks were kept",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:584: appCtx.toastOnUi(\"恢复定时任务失败，已保留当前任务\")"
+      ],
+      "key": "svc_failed_restore_scheduled_tasks_current"
+    },
+    {
+      "zh": "恢复分组封面出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:599: AppLog.put(\"恢复分组封面出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "修正分组封面路径出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:617: AppLog.put(\"修正分组封面路径出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复源运行期数据出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:653: AppLog.put(\"恢复源运行期数据出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "阅读恢复备份 $fileName 文件大小 ${file.length()}",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:680: LogUtils.d(TAG, \"阅读恢复备份 $fileName 文件大小 ${file.length()}\")",
+        "Restore.kt:701: LogUtils.d(TAG, \"阅读恢复备份 $fileName 文件大小 ${file.length()}\")"
+      ]
+    },
+    {
+      "zh": "阅读恢复备份 $fileName 列表大小 ${list.size}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:683: LogUtils.d(TAG, \"阅读恢复备份 $fileName 列表大小 ${list.size}\")"
+      ]
+    },
+    {
+      "zh": "阅读恢复备份 $fileName 文件不存在",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:687: LogUtils.d(TAG, \"阅读恢复备份 $fileName 文件不存在\")",
+        "Restore.kt:733: LogUtils.d(TAG, \"阅读恢复备份 $fileName 文件不存在\")"
+      ]
+    },
+    {
+      "zh": "$fileName\\n读取解析出错\\n${e.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "Restore.kt:690: AppLog.put(\"$fileName\\n读取解析出错\\n${e.localizedMessage}\", e)",
+        "Restore.kt:736: AppLog.put(\"$fileName\\n读取解析出错\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "$fileName\\n读取文件出错\\n${e.localizedMessage}",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:691: appCtx.toastOnUi(\"$fileName\\n读取文件出错\\n${e.localizedMessage}\")",
+        "Restore.kt:737: appCtx.toastOnUi(\"$fileName\\n读取文件出错\\n${e.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "阅读恢复备份 $fileName 列表大小 $restoredCount",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:731: LogUtils.d(TAG, \"阅读恢复备份 $fileName 列表大小 $restoredCount\")"
+      ]
+    },
+    {
+      "zh": "bookshelf.json 第${index + 1}项读取失败\\n${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Restore.kt:745: \"bookshelf.json 第${index + 1}项读取失败\\n${error.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "恢复正文背景图片配置出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:842: AppLog.put(\"恢复正文背景图片配置出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复阅读字体出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:903: AppLog.put(\"恢复阅读字体出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "修正阅读字体引用出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:925: AppLog.put(\"修正阅读字体引用出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复书籍文件完成",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:938: AppLog.put(\"恢复书籍文件完成\")"
+      ]
+    },
+    {
+      "zh": "恢复书籍文件出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:940: AppLog.put(\"恢复书籍文件出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "备份配置文件无效：${source.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:995: require(source.isFile) { \"备份配置文件无效：${source.name}\" }"
+      ]
+    },
+    {
+      "zh": "无法创建恢复目录",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:997: check(parent.isDirectory || parent.mkdirs()) { \"无法创建恢复目录\" }"
+      ]
+    },
+    {
+      "zh": "恢复目标不是文件：${target.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:999: require(!target.exists() || target.isFile) { \"恢复目标不是文件：${target.name}\" }"
+      ]
+    },
+    {
+      "zh": "无法创建恢复临时文件",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1003: check(staging.createNewFile()) { \"无法创建恢复临时文件\" }"
+      ]
+    },
+    {
+      "zh": "备份配置文件复制不完整",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1010: check(copied == source.length() && staging.length() == copied) { \"备份配置文件复制不完整\" }"
+      ]
+    },
+    {
+      "zh": "无法清理已恢复配置的临时文件：${target.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1013: runCatching { AppLog.put(\"无法清理已恢复配置的临时文件：${target.name}\") }"
+      ]
+    },
+    {
+      "zh": "恢复书架封面出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1033: AppLog.put(\"恢复书架封面出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复主题包出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1041: AppLog.put(\"恢复主题包出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复顶栏包出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1045: AppLog.put(\"恢复顶栏包出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "恢复底栏包出错\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Restore.kt:1048: AppLog.put(\"恢复底栏包出错\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书籍缓存导出复制不完整：${book.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCacheZip.kt:133: AppLog.put(\"书籍缓存导出复制不完整：${book.name}\")"
+      ]
+    },
+    {
+      "zh": "书籍缓存恢复图片复制不完整：${cacheIndex.bookName}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCacheZip.kt:336: AppLog.put(\"书籍缓存恢复图片复制不完整：${cacheIndex.bookName}\")"
+      ]
+    },
+    {
+      "zh": "书籍缓存恢复评论快照出错：${cacheIndex.bookName}\\n${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BookCacheZip.kt:352: \"书籍缓存恢复评论快照出错：${cacheIndex.bookName}\\n${error.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "跳过评论快照恢复：书身份已变化（${cacheIndex.bookName}）",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookCacheZip.kt:357: AppLog.put(\"跳过评论快照恢复：书身份已变化（${cacheIndex.bookName}）\")"
+      ]
+    },
+    {
+      "zh": "恢复失败，回滚快照：$reason",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RestoreSnapshot.kt:44: AppLog.put(\"恢复失败，回滚快照：$reason\")"
+      ]
+    },
+    {
+      "zh": "回滚失败：${entry.target.absolutePath}\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RestoreSnapshot.kt:58: AppLog.put(\"回滚失败：${entry.target.absolutePath}\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "无法创建恢复快照目录",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RestoreSnapshot.kt:72: check(snapshotDir.mkdir()) { \"无法创建恢复快照目录\" }"
+      ]
+    },
+    {
+      "zh": "恢复快照失败：${target.absolutePath}\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "RestoreSnapshot.kt:90: AppLog.put(\"恢复快照失败：${target.absolutePath}\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "自动备份触发",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:186: AppLog.put(\"自动备份触发\")"
+      ]
+    },
+    {
+      "zh": "自动备份跳过: 今日已备份",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:191: AppLog.put(\"自动备份跳过: 今日已备份\")"
+      ]
+    },
+    {
+      "zh": "自动备份失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:197: AppLog.put(\"自动备份失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书架变动自动备份已跳过：恢复流程进行中",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "Backup.kt:225: AppLog.put(\"书架变动自动备份已跳过：恢复流程进行中\")",
+        "Backup.kt:241: AppLog.put(\"书架变动自动备份已跳过：恢复流程进行中\")"
+      ]
+    },
+    {
+      "zh": "书架变动自动备份已跳过：未配置备份路径",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:247: AppLog.put(\"书架变动自动备份已跳过：未配置备份路径\")"
+      ]
+    },
+    {
+      "zh": "书架变动自动备份已跳过：身份键集合未变化",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:253: AppLog.put(\"书架变动自动备份已跳过：身份键集合未变化\")"
+      ]
+    },
+    {
+      "zh": "书架变动自动备份完成：${currentKeys.size} 本在线书",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:260: AppLog.put(\"书架变动自动备份完成：${currentKeys.size} 本在线书\")"
+      ]
+    },
+    {
+      "zh": "书架变动自动备份失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:263: AppLog.put(\"书架变动自动备份失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "开始备份 path:$path",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Backup.kt:295: LogUtils.d(TAG, \"开始备份 path:$path\")"
+      ]
+    },
+    {
+      "zh": "备份直链上传规则失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:344: .onFailure { AppLog.put(\"备份直链上传规则失败\", it) }"
+      ]
+    },
+    {
+      "zh": "备份加密 $key 失败，已跳过该键",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:369: } ?: AppLog.put(\"备份加密 $key 失败，已跳过该键\")"
+      ]
+    },
+    {
+      "zh": "资源单独备份：${assetSources.size} 项资源拆分为独立包",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:410: AppLog.put(\"资源单独备份：${assetSources.size} 项资源拆分为独立包\")"
+      ]
+    },
+    {
+      "zh": "资源分离已开启，但没有可拆分的资源（字体/背景图/头像）",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:413: AppLog.put(\"资源分离已开启，但没有可拆分的资源（字体/背景图/头像）\")"
+      ]
+    },
+    {
+      "zh": "外部存储不可用",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "Backup.kt:435: ?: throw NoStackTraceException(\"外部存储不可用\")",
+        "Backup.kt:787: ?: throw NoStackTraceException(\"外部存储不可用\"),"
+      ]
+    },
+    {
+      "zh": "创建备份压缩包失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:470: throw NoStackTraceException(\"创建备份压缩包失败\")"
+      ]
+    },
+    {
+      "zh": "备份阅读字体库 ${sources.size} 项",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:622: AppLog.put(\"备份阅读字体库 ${sources.size} 项\")"
+      ]
+    },
+    {
+      "zh": "从字体库目录收集字体失败：$name\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:663: AppLog.put(\"从字体库目录收集字体失败：$name\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "备份书架分组封面 ${sources.size} 项",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:686: AppLog.put(\"备份书架分组封面 ${sources.size} 项\")"
+      ]
+    },
+    {
+      "zh": "备份书籍文件：直接从缓存目录打包",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:737: AppLog.put(\"备份书籍文件：直接从缓存目录打包\")"
+      ]
+    },
+    {
+      "zh": "资源未变化，跳过打包与上传：$assetsZipName",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:770: AppLog.put(\"资源未变化，跳过打包与上传：$assetsZipName\")"
+      ]
+    },
+    {
+      "zh": "资源未变化，仅补齐本地资源包：$assetsZipName",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:774: AppLog.put(\"资源未变化，仅补齐本地资源包：$assetsZipName\")"
+      ]
+    },
+    {
+      "zh": "创建资源备份压缩包失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:779: throw NoStackTraceException(\"创建资源备份压缩包失败\")"
+      ]
+    },
+    {
+      "zh": "资源包备份失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:810: AppLog.put(\"资源包备份失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "阅读备份 $fileName 列表大小 ${list.size}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Backup.kt:898: LogUtils.d(TAG, \"阅读备份 $fileName 列表大小 ${list.size}\")"
+      ]
+    },
+    {
+      "zh": "阅读备份 $fileName 写入大小 ${file.length()}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Backup.kt:903: LogUtils.d(TAG, \"阅读备份 $fileName 写入大小 ${file.length()}\")"
+      ]
+    },
+    {
+      "zh": "阅读备份 $fileName 列表为空",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "Backup.kt:905: LogUtils.d(TAG, \"阅读备份 $fileName 列表为空\")"
+      ]
+    },
+    {
+      "zh": "创建临时文件失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:951: ?: throw NoStackTraceException(\"创建临时文件失败\")"
+      ]
+    },
+    {
+      "zh": "打开OutputStream失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:954: ?: throw NoStackTraceException(\"打开OutputStream失败\")"
+      ]
+    },
+    {
+      "zh": "创建文件失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "Backup.kt:968: ?: throw NoStackTraceException(\"创建文件失败\")"
+      ]
+    },
+    {
+      "zh": "导入旧版数据失败\\n无效路径",
+      "en": "Failed to import legacy data\\nInvalid path",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:47: val path = uri.path ?: return \"导入旧版数据失败\\n无效路径\""
+      ],
+      "key": "svc_failed_import_legacy_data_ninvalid"
+    },
+    {
+      "zh": "导入旧版数据出错\\n${e.localizedMessage}",
+      "en": "Error importing legacy data\\n%1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:56: AppLog.put(\"导入旧版数据出错\\n${e.localizedMessage}\", e)",
+        "ImportOldData.kt:57: \"导入旧版数据出错\\n${e.localizedMessage}\""
+      ],
+      "key": "svc_error_importing_legacy_data_n"
+    },
+    {
+      "zh": "导入旧版数据失败\\n不支持的文件：$name",
+      "en": "Failed to import legacy data\\nUnsupported file: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:72: else -> \"导入旧版数据失败\\n不支持的文件：$name\""
+      ],
+      "key": "svc_failed_import_legacy_data_nunsupported"
+    },
+    {
+      "zh": "导入旧版数据失败\\n目录不存在：${dir.absolutePath}",
+      "en": "Failed to import legacy data\\nDirectory does not exist: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:96: return \"导入旧版数据失败\\n目录不存在：${dir.absolutePath}\""
+      ],
+      "key": "svc_failed_import_legacy_data_ndirectory"
+    },
+    {
+      "zh": "导入旧版数据读取 $name 失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:110: AppLog.put(\"导入旧版数据读取 $name 失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "导入旧版数据失败\\n${it.localizedMessage}",
+      "en": "Failed to import legacy data\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:111: return \"导入旧版数据失败\\n${it.localizedMessage}\""
+      ],
+      "key": "svc_failed_import_legacy_data_n"
+    },
+    {
+      "zh": "导入旧版数据失败\\n无法读取所选文件：${it.localizedMessage}",
+      "en": "Failed to import legacy data\\nCould not read the selected file: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:130: return \"导入旧版数据失败\\n无法读取所选文件：${it.localizedMessage}\""
+      ],
+      "key": "svc_failed_import_legacy_data_ncould"
+    },
+    {
+      "zh": "导入旧版数据解压失败\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:145: AppLog.put(\"导入旧版数据解压失败\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "导入旧版数据失败\\n解压失败：${e.localizedMessage}",
+      "en": "Failed to import legacy data\\nExtraction failed: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:146: \"导入旧版数据失败\\n解压失败：${e.localizedMessage}\""
+      ],
+      "key": "svc_failed_import_legacy_data_nextraction"
+    },
+    {
+      "zh": "导入旧版数据读取 ${doc.name} 失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:168: AppLog.put(\"导入旧版数据读取 ${doc.name} 失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "读取 ${doc.name} 失败\\n${it.localizedMessage}",
+      "en": "Failed to read %1$s\\n%2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:169: messages.add(\"读取 ${doc.name} 失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_read_n"
+    },
+    {
+      "zh": "导入旧版数据读取 ${file.name} 失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:176: AppLog.put(\"导入旧版数据读取 ${file.name} 失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "读取 ${file.name} 失败\\n${it.localizedMessage}",
+      "en": "Failed to read %1$s\\n%2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:177: messages.add(\"读取 ${file.name} 失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_read_n_2"
+    },
+    {
+      "zh": "书架数据为空",
+      "en": "Bookshelf data is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:184: messages.add(\"书架数据为空\")"
+      ],
+      "key": "svc_bookshelf_data_empty"
+    },
+    {
+      "zh": "成功导入书架${count}本",
+      "en": "%1$s books imported to the bookshelf",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:189: messages.add(\"成功导入书架${count}本\")"
+      ],
+      "key": "svc_books_imported_bookshelf"
+    },
+    {
+      "zh": "导入书架失败\\n${it.localizedMessage}",
+      "en": "Failed to import bookshelf\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:191: messages.add(\"导入书架失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_import_bookshelf_n"
+    },
+    {
+      "zh": "导入旧版书架失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:192: AppLog.put(\"导入旧版书架失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "书源数据为空",
+      "en": "Book source data is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:198: messages.add(\"书源数据为空\")"
+      ],
+      "key": "svc_book_source_data_empty"
+    },
+    {
+      "zh": "成功导入书源${count}条，${failed}条格式错误已跳过",
+      "en": "%1$s sources imported, %2$s skipped due to invalid format",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:204: if (failed > 0) \"成功导入书源${count}条，${failed}条格式错误已跳过\""
+      ],
+      "key": "svc_sources_imported_skipped_due_invalid"
+    },
+    {
+      "zh": "成功导入书源${count}条",
+      "en": "%1$s sources imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:205: else \"成功导入书源${count}条\""
+      ],
+      "key": "svc_sources_imported"
+    },
+    {
+      "zh": "导入书源失败\\n${it.localizedMessage}",
+      "en": "Failed to import book sources\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:208: messages.add(\"导入书源失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_import_book_sources_n"
+    },
+    {
+      "zh": "导入旧版书源失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:209: AppLog.put(\"导入旧版书源失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "替换规则数据为空",
+      "en": "Replace rule data is empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:215: messages.add(\"替换规则数据为空\")"
+      ],
+      "key": "svc_replace_rule_data_empty"
+    },
+    {
+      "zh": "成功导入替换规则${count}条",
+      "en": "%1$s replace rules imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:220: messages.add(\"成功导入替换规则${count}条\")"
+      ],
+      "key": "svc_replace_rules_imported"
+    },
+    {
+      "zh": "导入替换规则失败\\n${it.localizedMessage}",
+      "en": "Failed to import replace rules\\n%1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:222: messages.add(\"导入替换规则失败\\n${it.localizedMessage}\")"
+      ],
+      "key": "svc_failed_import_replace_rules_n"
+    },
+    {
+      "zh": "导入旧版替换规则失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:223: AppLog.put(\"导入旧版替换规则失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "未找到旧版数据文件\\n（myBookShelf.json、myBookSource.json、myBookReplaceRule.json）",
+      "en": "No legacy data files found\\n(myBookShelf.json, myBookSource.json, myBookReplaceRule.json)",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ImportOldData.kt:229: return \"未找到旧版数据文件\\n（myBookShelf.json、myBookSource.json、myBookReplaceRule.json）\""
+      ],
+      "key": "svc_no_legacy_data_files_found"
+    },
+    {
+      "zh": "导入旧版书源：${failed}条格式错误已跳过",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:245: AppLog.put(\"导入旧版书源：${failed}条格式错误已跳过\")"
+      ]
+    },
+    {
+      "zh": "旧版书源转换失败\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:259: AppLog.put(\"旧版书源转换失败\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "旧版书架条目转换失败\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ImportOldData.kt:294: AppLog.put(\"旧版书架条目转换失败\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "评论缓存消费循环异常退出\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReviewCaptureHost.kt:61: AppLog.put(\"评论缓存消费循环异常退出\\n${e.localizedMessage}\", e)"
+      ]
+    },
+    {
+      "zh": "评论任务出队失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReviewCaptureHost.kt:75: AppLog.put(\"评论任务出队失败\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "评论快照任务处理失败 ${task.key}\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReviewCaptureHost.kt:98: \"评论快照任务处理失败 ${task.key}\\n${it.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "评论缓存宿主结束：收敛未完成的 Coordinator 任务",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReviewCaptureHost.kt:134: AppLog.put(\"评论缓存宿主结束：收敛未完成的 Coordinator 任务\")"
+      ]
+    },
+    {
+      "zh": "缓存终态副作用重试超过上限，放弃：$effectKey",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "CacheCoordinator.kt:558: AppLog.put(\"缓存终态副作用重试超过上限，放弃：$effectKey\")"
+      ]
+    },
+    {
+      "zh": "缓存正文",
+      "en": "Caching content",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:162: title = \"缓存正文\","
+      ],
+      "key": "svc_caching_content"
+    },
+    {
+      "zh": "缓存视频",
+      "en": "Caching video",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:175: title = if (task.kind == CacheKind.VIDEO) \"缓存视频\" else \"缓存音频\","
+      ],
+      "key": "svc_caching_video"
+    },
+    {
+      "zh": "缓存音频",
+      "en": "Caching audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:175: title = if (task.kind == CacheKind.VIDEO) \"缓存视频\" else \"缓存音频\","
+      ],
+      "key": "svc_caching_audio"
+    },
+    {
+      "zh": "处理中",
+      "en": "In progress",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:191: val snapshotText = total?.let { \"$completed/$it\" } ?: \"处理中\"",
+        "CacheNotificationBridge.kt:209: val unitText = total?.let { \"$completed/$it\" } ?: \"处理中\""
+      ],
+      "key": "svc_progress"
+    },
+    {
+      "zh": "${displayUnitText(task, progress)}  快照：$snapshotText  失败：$failed  ",
+      "en": "%1$s  Snapshot: %2$s  Failed: %3$s  ",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:194: text = \"${displayUnitText(task, progress)}  快照：$snapshotText  失败：$failed  \" +"
+      ],
+      "key": "svc_snapshot_failed"
+    },
+    {
+      "zh": "缓存TTS音频",
+      "en": "Caching TTS audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:211: title = \"缓存TTS音频\","
+      ],
+      "key": "svc_caching_tts_audio"
+    },
+    {
+      "zh": "${displayUnitText(task, progress)}  单元：$unitText  失败：$failed  ",
+      "en": "%1$s  Units: %2$s  Failed: %3$s  ",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:212: text = \"${displayUnitText(task, progress)}  单元：$unitText  失败：$failed  \" +"
+      ],
+      "key": "svc_units_failed"
+    },
+    {
+      "zh": "当前章节：无",
+      "en": "Current chapter: none",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:317: ?: return \"当前章节：无\""
+      ],
+      "key": "svc_current_chapter_none"
+    },
+    {
+      "zh": "第${unit.chapterIndex + 1}章 $title",
+      "en": "Chapter %1$s %2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:320: \"第${unit.chapterIndex + 1}章 $title\""
+      ],
+      "key": "svc_chapter"
+    },
+    {
+      "zh": "第${unit.chapterIndex + 1}章",
+      "en": "Chapter %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:321: } ?: \"第${unit.chapterIndex + 1}章\""
+      ],
+      "key": "svc_chapter_2"
+    },
+    {
+      "zh": "$current/${total}章",
+      "en": "%1$s/%2$s chapters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CacheNotificationBridge.kt:340: private fun chapterText(current: Int, total: Int): String = \"$current/${total}章\""
+      ],
+      "key": "svc_chapters"
+    },
+    {
+      "zh": "评论缓存宿主异常结束",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReviewWorkerAdapter.kt:275: failTask(binding.lease, \"评论缓存宿主异常结束\")"
+      ]
+    },
+    {
+      "zh": "媒体缓存尝试失败 ${book.name}-${chapter.title}：${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "MediaCacheTaskManager.kt:277: \"媒体缓存尝试失败 ${book.name}-${chapter.title}：${error.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "SecurePrefs 加密 $key 失败，已按明文保存",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SecurePrefs.kt:113: AppLog.put(\"SecurePrefs 加密 $key 失败，已按明文保存\")"
+      ]
+    },
+    {
+      "zh": "山茶花",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:51: id = \"builtin.loading_botanical\", name = \"山茶花\","
+      ]
+    },
+    {
+      "zh": "山茶、枝叶与奶油色的花笺",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:52: description = \"山茶、枝叶与奶油色的花笺\","
+      ]
+    },
+    {
+      "zh": "把片刻留白，交给一场盛开。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:53: scene = Scene.BOTANICAL, eyebrow = \"A LETTER IN BLOOM\", caption = \"把片刻留白，交给一场盛开。\","
+      ]
+    },
+    {
+      "zh": "极光航迹",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:58: id = \"builtin.loading_aurora\", name = \"极光航迹\","
+      ]
+    },
+    {
+      "zh": "极光光带、群山与远行的坐标",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:59: description = \"极光光带、群山与远行的坐标\","
+      ]
+    },
+    {
+      "zh": "下一段旅程，从这一页出发。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "EpubLoadingTemplate.kt:60: scene = Scene.AURORA, eyebrow = \"SOMEWHERE BEYOND\", caption = \"下一段旅程，从这一页出发。\","
+      ]
+    },
+    {
+      "zh": "阅读设置类型错误: $key",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadPresetPreferences.kt:69: require(it.isJsonPrimitive && it.asJsonPrimitive.isBoolean) { \"阅读设置类型错误: $key\" }"
+      ]
+    },
+    {
+      "zh": "阅读设置取值错误: $key",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadPresetPreferences.kt:75: ) { \"阅读设置取值错误: $key\" }"
+      ]
+    },
+    {
+      "zh": "阅读设置数值错误: $key",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadPresetPreferences.kt:81: ) { \"阅读设置数值错误: $key\" }"
+      ]
+    },
+    {
+      "zh": "璁剧疆涓婚鍑洪敊\\n$e",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ThemeConfig.kt:520: AppLog.put(\"璁剧疆涓婚鍑洪敊\\n$e\", e, true)"
+      ]
+    },
+    {
+      "zh": "内置段评气泡",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BubblePackageManager.kt:95: name = \"内置段评气泡\","
+      ]
+    },
+    {
+      "zh": "段评气泡",
+      "en": "",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BubblePackageManager.kt:191: val name = normalized.name.trim().ifBlank { \"段评气泡\" }",
+        "BubblePackageManager.kt:499: name = config.name.trim().ifBlank { \"段评气泡\" },"
+      ]
+    },
+    {
+      "zh": "内置气泡不可导出",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BubblePackageManager.kt:241: throw IllegalArgumentException(\"内置气泡不可导出\")"
+      ]
+    },
+    {
+      "zh": "气泡导出失败",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BubblePackageManager.kt:247: throw IllegalStateException(\"气泡导出失败\")"
+      ]
+    },
+    {
+      "zh": "本书预设读取失败，恢复跟随全局\\n${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BookReadStyleSession.kt:88: AppLog.put(\"本书预设读取失败，恢复跟随全局\\n${error.localizedMessage}\", error)"
+      ]
+    },
+    {
+      "zh": "恢复底栏包未找到: $dirName",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:296: io.legado.app.constant.AppLog.put(\"恢复底栏包未找到: $dirName\")"
+      ]
+    },
+    {
+      "zh": "恢复底栏包下载失败: $dirName\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:303: io.legado.app.constant.AppLog.put(\"恢复底栏包下载失败: $dirName\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "跳过异常远端底栏包: ${file.displayName}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:739: AppLog.put(\"跳过异常远端底栏包: ${file.displayName}\")"
+      ]
+    },
+    {
+      "zh": "加载远端底栏包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "NavigationBarIconConfig.kt:776: \"加载远端底栏包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms\""
+      ]
+    },
+    {
+      "zh": "加载远端底栏包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "NavigationBarIconConfig.kt:783: \"加载远端底栏包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "跳过无法识别的 RED 底栏图标: ${source.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:901: AppLog.put(\"跳过无法识别的 RED 底栏图标: ${source.name}\")"
+      ]
+    },
+    {
+      "zh": "读取 RED 底栏图标失败: ${file.name}, ${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:978: AppLog.put(\"读取 RED 底栏图标失败: ${file.name}, ${it.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "跳过无法解析的 RED 底栏 SVG: ${file.name}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:1008: AppLog.put(\"跳过无法解析的 RED 底栏 SVG: ${file.name}\")"
+      ]
+    },
+    {
+      "zh": "解析 RED 底栏 SVG 失败($label): ${file.name}, ${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "NavigationBarIconConfig.kt:1016: AppLog.put(\"解析 RED 底栏 SVG 失败($label): ${file.name}, ${it.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "模板不存在",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:56: require(all(context).any { it.id == template.id }) { \"模板不存在\" }"
+      ]
+    },
+    {
+      "zh": "模板文件过大",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:62: require(source.toByteArray(Charsets.UTF_8).size <= MAX_IMPORT_BYTES) { \"模板文件过大\" }"
+      ]
+    },
+    {
+      "zh": "请先复制内置模板，再编辑副本",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:65: require(custom.any { it.id == editingId }) { \"请先复制内置模板，再编辑副本\" }"
+      ]
+    },
+    {
+      "zh": "最多保存 $MAX_TEMPLATES 个自定义模板",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:67: require(custom.size < MAX_TEMPLATES) { \"最多保存 $MAX_TEMPLATES 个自定义模板\" }"
+      ]
+    },
+    {
+      "zh": "内置模板不能删除",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:79: require(!template.builtIn) { \"内置模板不能删除\" }"
+      ]
+    },
+    {
+      "zh": "不是支持的加载模板",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:115: require(json.optString(\"type\") == TYPE && json.optInt(\"version\") == 1) { \"不是支持的加载模板\" }"
+      ]
+    },
+    {
+      "zh": "$key 内容不符合要求",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:118: require(value.length <= max && (!required || value.isNotBlank())) { \"$key 内容不符合要求\" }"
+      ]
+    },
+    {
+      "zh": "$key 超出范围 ($min–$max)",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:123: require(value.isFinite() && value in min..max) { \"$key 超出范围 ($min–$max)\" }"
+      ]
+    },
+    {
+      "zh": "scene 可选 portal、botanical、aurora",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:127: require(scene != null) { \"scene 可选 portal、botanical、aurora\" }"
+      ]
+    },
+    {
+      "zh": "不支持的标题字体",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:129: require(font in listOf(\"serif\", \"sans-serif\", \"sans-serif-light\")) { \"不支持的标题字体\" }"
+      ]
+    },
+    {
+      "zh": "$name 请使用 #RRGGBB 颜色",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "EpubLoadingTemplateStore.kt:138: require(value.matches(Regex(\"#[0-9a-fA-F]{6}\"))) { \"$name 请使用 #RRGGBB 颜色\" }"
+      ]
+    },
+    {
+      "zh": "无搜索悬浮底栏",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:78: name = \"无搜索悬浮底栏\","
+      ]
+    },
+    {
+      "zh": "悬浮底栏(隐藏搜索) + 顶栏显示搜索",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:79: summary = \"悬浮底栏(隐藏搜索) + 顶栏显示搜索\","
+      ]
+    },
+    {
+      "zh": "已导入日间 / 夜间界面主题",
+      "en": "Day and night themes imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:120: hasDay && hasNight -> \"已导入日间 / 夜间界面主题\""
+      ],
+      "key": "svc_day_night_themes_imported"
+    },
+    {
+      "zh": "已导入夜间界面主题",
+      "en": "Night theme imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:121: hasNight -> \"已导入夜间界面主题\""
+      ],
+      "key": "svc_night_theme_imported"
+    },
+    {
+      "zh": "已导入日间界面主题",
+      "en": "Day theme imported",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:122: else -> \"已导入日间界面主题\""
+      ],
+      "key": "svc_day_theme_imported"
+    },
+    {
+      "zh": "应用主题名称已存在",
+      "en": "",
+      "count": 2,
+      "risk": 2,
+      "samples": [
+        "AppearanceKitManager.kt:244: throw IllegalArgumentException(\"应用主题名称已存在\")",
+        "AppearanceKitManager.kt:285: throw IllegalArgumentException(\"应用主题名称已存在\")"
+      ]
+    },
+    {
+      "zh": "应用后缺失组件将恢复默认",
+      "en": "Missing components will reset to default after applying",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppearanceKitManager.kt:875: summary = if (parts.isEmpty()) \"应用后缺失组件将恢复默认\" else parts.joinToString(\" / \"),"
+      ],
+      "key": "svc_missing_components_will_reset_default"
+    },
+    {
+      "zh": "^\\\\s*(第\\\\S+[章节回卷部篇集])\\\\s+(.+?)\\\\s*$",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AdvancedTitleConfig.kt:260: const val DEFAULT_REGEX = \"^\\\\s*(第\\\\S+[章节回卷部篇集])\\\\s+(.+?)\\\\s*$\""
+      ]
+    },
+    {
+      "zh": "保存本书预设失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookConfig.kt:79: .onFailure { AppLog.put(\"保存本书预设失败\\n${it.localizedMessage}\", it) }"
+      ]
+    },
+    {
+      "zh": "页面模板仅用于 EPUB 排版配置",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadBookConfig.kt:236: check(usingEpubLayout) { \"页面模板仅用于 EPUB 排版配置\" }"
+      ]
+    },
+    {
+      "zh": "阅读样式缺少页面模板文件：",
+      "en": "The reading style is missing its page template file: ",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadBookConfig.kt:951: \"阅读样式缺少页面模板文件：\" + config.readerTemplateId"
+      ],
+      "key": "svc_reading_style_missing_its_page"
+    },
+    {
+      "zh": "{书名}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:9: const val PLACEHOLDER_BOOK = \"{书名}\""
+      ]
+    },
+    {
+      "zh": "{作者}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:10: const val PLACEHOLDER_AUTHOR = \"{作者}\""
+      ]
+    },
+    {
+      "zh": "{章节名}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:11: const val PLACEHOLDER_TITLE = \"{章节名}\""
+      ]
+    },
+    {
+      "zh": "{时间}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:12: const val PLACEHOLDER_TIME = \"{时间}\""
+      ]
+    },
+    {
+      "zh": "{电量}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:13: const val PLACEHOLDER_BATTERY = \"{电量}\""
+      ]
+    },
+    {
+      "zh": "{电量百分比}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:14: const val PLACEHOLDER_BATTERY_PERCENTAGE = \"{电量百分比}\""
+      ]
+    },
+    {
+      "zh": "{页码}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:15: const val PLACEHOLDER_PAGE = \"{页码}\""
+      ]
+    },
+    {
+      "zh": "{总页数}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:16: const val PLACEHOLDER_PAGES = \"{总页数}\""
+      ]
+    },
+    {
+      "zh": "{进度}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TipTemplateRenderer.kt:17: const val PLACEHOLDER_PROGRESS = \"{进度}\""
+      ]
+    },
+    {
+      "zh": "跳过异常远端主题包: ${remoteDir.displayName}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ThemePackageManager.kt:539: AppLog.put(\"跳过异常远端主题包: ${remoteDir.displayName}\")"
+      ]
+    },
+    {
+      "zh": "加载远端主题包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ThemePackageManager.kt:583: \"加载远端主题包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms\""
+      ]
+    },
+    {
+      "zh": "加载远端主题包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ThemePackageManager.kt:590: \"加载远端主题包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "恢复顶栏包未找到: $dirName",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TopBarConfig.kt:240: io.legado.app.constant.AppLog.put(\"恢复顶栏包未找到: $dirName\")"
+      ]
+    },
+    {
+      "zh": "恢复顶栏包下载失败: $dirName\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TopBarConfig.kt:246: io.legado.app.constant.AppLog.put(\"恢复顶栏包下载失败: $dirName\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "跳过异常远端顶栏包: ${file.displayName}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "TopBarConfig.kt:335: AppLog.put(\"跳过异常远端顶栏包: ${file.displayName}\")"
+      ]
+    },
+    {
+      "zh": "加载远端顶栏包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TopBarConfig.kt:372: \"加载远端顶栏包列表超时: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}, timeout=${remoteListTimeoutMillis}ms\""
+      ]
+    },
+    {
+      "zh": "加载远端顶栏包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "TopBarConfig.kt:379: \"加载远端顶栏包列表失败: type=${AppCloudStorage.type}, container=${containerId.orEmpty()}\\n${e.localizedMessage}\","
+      ]
+    },
+    {
+      "zh": "你是阅读应用内的 AI 助手。回答直接、准确、简洁。需要真实应用数据时必须优先调用工具，工具返回的数据优先级高于你的记忆，不允许编造工具未返回的结果。用户询问书架、书籍、作者、阅读记录、书籍简介、书源、分组、标签、分类方案时，必须先调用 query_bookshelf、get_bookshelf_book_info、manage_bookshelf_group 或 manage_bookshelf_tag，不要只说“我先看看”却不调用工具。用户要求创建、修改或调试书源时，你要像一个小型书源 agent 一样闭环执行：新建书源先调用 create_book_source(save=false) 生成草稿；修改已有书源先调用 get_book_source 读取完整 JSON；缺少页面结构时调用 fetch_source_html 获取搜索页、详情页、目录页或正文页 HTML；每次调试失败后都调用 update_book_source(save=false) 按日志和 HTML 修正规则，可传 patch，也可直接传 ruleToc/ruleContent/searchUrl 等字段；再调用 debug_book_source 调试，优先使用用户给出的详情页 URL、目录 URL、正文 URL 或关键词；最多循环 3 次。不要在第一次调试前询问“是否继续”，也不要只输出未经调试的 JSON。只有搜索、详情、目录、正文主要链路通过，或达到 3 次仍失败时，才给出最终结果和剩余失败点。只有用户明确要求保存、导入或完成时，才调用 update_book_source(save=true) 或 create_book_source(save=true) 写入本地书源库。用户要求整理书架时，顶层书架使用分组，分组内的小分类使用书籍标签；未分标签的书按“全部”处理。批量设置标签、重命名标签、移动分组或删除分组前，先查询书架并给出方案，用户确认后再调用写入工具。任何情况下都不允许删除书籍。工具返回图片路径时直接展示已有图片；用户只要求查看、展示头像时不要调用生图工具，只有明确要求生成、重绘或重新生成时才生成图片。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:93: \"你是阅读应用内的 AI 助手。回答直接、准确、简洁。需要真实应用数据时必须优先调用工具，工具返回的数据优先级高于你的记忆，不允许编造工具未返回的结果。用户询问书架、书籍、作者、阅读记录、书籍简介、书源、分组、标签、分类方案时，必须先调用 "
+      ]
+    },
+    {
+      "zh": "正文优化绘制失败，已回退为直接绘制\\n${error.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AppConfig.kt:238: AppLog.put(\"正文优化绘制失败，已回退为直接绘制\\n${error.localizedMessage}\", error)"
+      ]
+    },
+    {
+      "zh": "读取 AI 聊天历史失败, 已清理历史\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AppConfig.kt:797: AppLog.put(\"读取 AI 聊天历史失败, 已清理历史\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "读取阅读问 AI 历史失败, 已清理历史\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "AppConfig.kt:861: AppLog.put(\"读取阅读问 AI 历史失败, 已清理历史\\n${it.localizedMessage}\", it)"
+      ]
+    },
+    {
+      "zh": "心道",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1215: \"thoughtCuePatterns\": [\"心道\", \"暗道\", \"想道\", \"心想\"],"
+      ]
+    },
+    {
+      "zh": "暗道",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1215: \"thoughtCuePatterns\": [\"心道\", \"暗道\", \"想道\", \"心想\"],"
+      ]
+    },
+    {
+      "zh": "想道",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1215: \"thoughtCuePatterns\": [\"心道\", \"暗道\", \"想道\", \"心想\"],"
+      ]
+    },
+    {
+      "zh": "心想",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1215: \"thoughtCuePatterns\": [\"心道\", \"暗道\", \"想道\", \"心想\"],"
+      ]
+    },
+    {
+      "zh": "吱呀",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "砰",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "咚",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "哐",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "啪",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "轰",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "咔嚓",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "咯吱",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "哗啦",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "嗡",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1221: \"吱呀\", \"砰\", \"咚\", \"哐\", \"啪\", \"轰\", \"咔嚓\", \"咯吱\", \"哗啦\", \"嗡\","
+      ]
+    },
+    {
+      "zh": "铃声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "脚步声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "敲门声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "开门声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "关门声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "枪声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "雷声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "风声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "雨声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1222: \"铃声\", \"脚步声\", \"敲门声\", \"开门声\", \"关门声\", \"枪声\", \"雷声\", \"风声\", \"雨声\""
+      ]
+    },
+    {
+      "zh": "心声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "名声",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "声音很",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "声音低",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "声音冷",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "声音沙哑",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1224: \"soundEffectExcludePatterns\": [\"心声\", \"名声\", \"声音很\", \"声音低\", \"声音冷\", \"声音沙哑\"],"
+      ]
+    },
+    {
+      "zh": "默认助手",
+      "en": "Default assistant",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:1712: name = config.name.ifBlank { \"默认助手\" },",
+        "AppConfig.kt:1734: name = \"默认助手\","
+      ],
+      "key": "svc_default_assistant"
+    },
+    {
+      "zh": "从旧版单文本 Skill 配置迁移",
+      "en": "Migrated from the legacy single-text Skill config",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:2053: description = \"从旧版单文本 Skill 配置迁移\","
+      ],
+      "key": "svc_migrated_from_legacy_single_text"
+    },
+    {
+      "zh": "当前没有配置菜单区域,自动恢复中间区域为菜单.",
+      "en": "No menu area is configured; the middle area was restored as the menu automatically.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AppConfig.kt:2899: appCtx.toastOnUi(\"当前没有配置菜单区域,自动恢复中间区域为菜单.\")"
+      ],
+      "key": "svc_no_menu_area_configured_middle"
+    },
+    {
+      "zh": "默认模板",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "CoverHtmlTemplateConfig.kt:41: name = \"默认模板\","
+      ]
+    },
+    {
+      "zh": "数据必须为Json格式",
+      "en": "Data must be in JSON format",
+      "count": 4,
+      "risk": 0,
+      "samples": [
+        "BookSearchWebSocket.kt:56: send(\"数据必须为Json格式\")",
+        "RssSourceDebugWebSocket.kt:50: send(\"数据必须为Json格式\")",
+        "BookSourceDebugWebSocket.kt:50: send(\"数据必须为Json格式\")"
+      ],
+      "key": "svc_data_must_be_json_format"
+    },
+    {
+      "zh": "调试结束",
+      "en": "",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "RssSourceDebugWebSocket.kt:51: close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, \"调试结束\", false)",
+        "RssSourceDebugWebSocket.kt:60: close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, \"调试结束\", false)",
+        "RssSourceDebugWebSocket.kt:90: close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, \"调试结束\", false)"
+      ]
+    }
+  ]
+}

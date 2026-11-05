@@ -4,6 +4,8 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Entity(
     tableName = "read_aloud_bgm_tracks",
@@ -46,13 +48,13 @@ data class ReadAloudBgmTrack(
 ) {
     fun displayName(): String = name.ifBlank {
         fileName.ifBlank {
-            if (normalizedAssetType() == TYPE_SFX) "未命名音效" else "未命名音乐"
+            if (normalizedAssetType() == TYPE_SFX) appCtx.getString(R.string.misc_untitled_sound_effect) else appCtx.getString(R.string.misc_untitled_music)
         }
     }
 
     fun normalizedAssetType(): String = normalizeAssetType(assetType)
 
-    fun assetTypeLabel(): String = if (normalizedAssetType() == TYPE_SFX) "音效" else "配乐"
+    fun assetTypeLabel(): String = if (normalizedAssetType() == TYPE_SFX) appCtx.getString(R.string.ra_cfg_sound_effect) else appCtx.getString(R.string.ra_cfg_background_score)
 
     companion object {
         const val TYPE_BGM = "bgm"

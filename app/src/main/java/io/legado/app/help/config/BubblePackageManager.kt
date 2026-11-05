@@ -1,6 +1,7 @@
 package io.legado.app.help.config
 
 import androidx.annotation.Keep
+import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.utils.FileUtils
@@ -92,7 +93,7 @@ object BubblePackageManager {
 
     fun builtinConfig(): Config {
         return Config(
-            name = "内置段评气泡",
+            name = appCtx.getString(R.string.builtin_bubble_package),
             dirName = BUILTIN_DIR_NAME,
             svgTemplate = defaultSvgTemplate(),
             sizeScale = 1f,

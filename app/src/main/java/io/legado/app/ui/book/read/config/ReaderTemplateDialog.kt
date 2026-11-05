@@ -71,6 +71,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.io.File
+import splitties.init.appCtx
 
 class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
     override val maxSheetHeightFraction = .9f
@@ -496,7 +497,7 @@ class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
                 R.string.reader_template_scroll_author_help,
                 R.string.reader_template_javascript_help
             ).joinToString("\n\n") { getString(it) } + "\n\n" + getString(R.string.reader_assets_hint) +
-                "\n可在编辑页直接选择字体和背景，或从素材库复制图片地址、字体 CSS 放入页面代码。",
+                appCtx.getString(R.string.ui_book_nchoose_fonts_backgrounds_editor_or),
             showNegative = false,
             messageInContent = true,
             onPositive = {}

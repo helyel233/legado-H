@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
+import splitties.init.appCtx
 
 class BookshelfViewModel(application: Application) : BaseViewModel(application) {
     val addBookProgressLiveData = MutableLiveData(-1)
@@ -114,7 +115,7 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
             if (successCount > 0) {
                 context.toastOnUi(R.string.success)
             } else {
-                context.toastOnUi("添加网址失败")
+                context.toastOnUi(appCtx.getString(R.string.ui_main_failed_add_url))
             }
         }.onError {
             AppLog.put("添加网址出错\n${it.localizedMessage}", it, true)
@@ -148,7 +149,7 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
         }.onSuccess {
             success(it)
         }.onError {
-            context.toastOnUi("导出书籍出错\n${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_main_failed_export_books_n, it.localizedMessage))
         }
     }
 

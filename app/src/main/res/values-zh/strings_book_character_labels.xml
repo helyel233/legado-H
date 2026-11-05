@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bchar_label_protagonist">主角</string>
+    <string name="bchar_label_important_character">重要角色</string>
+    <string name="bchar_label_minor_character">普通角色</string>
+    <string name="bchar_label_male">男</string>
+    <string name="bchar_label_female">女</string>
+</resources>

@@ -109,6 +109,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import splitties.init.appCtx
 
 /**
  * 书源管理界面
@@ -989,7 +990,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             groups.forEach { group ->
                 if (group.contains("失效") && searchQueryState.value.isEmpty()) {
                     updateSearchQuery("失效")
-                    toastOnUi("发现有失效书源，已为您自动筛选！")
+                    toastOnUi(appCtx.getString(R.string.ui_book_broken_sources_were_found_filtered))
                 }
             }
         }

@@ -85,6 +85,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 
 class BookInfoComposeActivity :
     VMBaseActivity<ViewBinding, BookInfoViewModel>(
@@ -515,7 +516,7 @@ class BookInfoComposeActivity :
                 } else {
                     //没有在读：丢弃 TextFile 单例，下次打开时用新编码重建（避免复用旧 charset 字段）
                     TextFile.clear()
-                    toastOnUi("已切换编码：$charset")
+                    toastOnUi(appCtx.getString(R.string.ui_book_encoding_switched, charset))
                 }
                 updateUiState()
             }

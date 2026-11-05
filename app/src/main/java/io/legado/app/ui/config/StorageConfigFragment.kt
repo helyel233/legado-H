@@ -35,11 +35,11 @@ class StorageConfigFragment : ComposeSettingFragment() {
                     items = listOf(
                         SettingActionSpec(
                             key = PreferKey.defaultBookTreeUri,
-                            title = getString(R.string.book_tree_uri_t),
-                            summary = AppConfig.defaultBookTreeUri ?: getString(R.string.book_tree_uri_s),
+                            title = str(R.string.book_tree_uri_t),
+                            summary = AppConfig.defaultBookTreeUri ?: str(R.string.book_tree_uri_s),
                             onClick = {
                                 localBookTreeSelect.launch {
-                                    title = getString(R.string.select_book_folder)
+                                    title = str(R.string.select_book_folder)
                                     mode = HandleFileContract.DIR_SYS
                                 }
                             }
@@ -47,30 +47,30 @@ class StorageConfigFragment : ComposeSettingFragment() {
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.storage_cleanup_actions_section),
+                    title = str(R.string.storage_cleanup_actions_section),
                     items = listOf(
                         switch(
                             key = PreferKey.autoClearExpired,
-                            title = getString(R.string.auto_clear_expired),
-                            summary = getString(R.string.auto_clear_expired_summary),
+                            title = str(R.string.auto_clear_expired),
+                            summary = str(R.string.auto_clear_expired_summary),
                             defaultValue = true
                         ),
                         SettingActionSpec(
                             key = PreferKey.cleanCache,
-                            title = getString(R.string.clear_cache),
-                            summary = getString(R.string.clear_cache_summary),
+                            title = str(R.string.clear_cache),
+                            summary = str(R.string.clear_cache_summary),
                             onClick = ::clearCache
                         ),
                         SettingActionSpec(
                             key = PreferKey.clearWebViewData,
-                            title = getString(R.string.clear_webview_data),
-                            summary = getString(R.string.clear_webview_data_summary),
+                            title = str(R.string.clear_webview_data),
+                            summary = str(R.string.clear_webview_data_summary),
                             onClick = ::clearWebViewData
                         ),
                         SettingActionSpec(
                             key = PreferKey.shrinkDatabase,
-                            title = getString(R.string.shrink_database),
-                            summary = getString(R.string.shrink_database_summary),
+                            title = str(R.string.shrink_database),
+                            summary = str(R.string.shrink_database_summary),
                             onClick = ::shrinkDatabase
                         )
                     )
@@ -81,30 +81,30 @@ class StorageConfigFragment : ComposeSettingFragment() {
 
     private fun clearCache() {
         showComposeConfirmDialog(
-            title = getString(R.string.clear_cache),
-            message = getString(R.string.sure_del),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
+            title = str(R.string.clear_cache),
+            message = str(R.string.sure_del),
+            positiveText = str(android.R.string.ok),
+            negativeText = str(R.string.no),
             onPositive = { viewModel.clearCache() }
         )
     }
 
     private fun shrinkDatabase() {
         showComposeConfirmDialog(
-            title = getString(R.string.sure),
-            message = getString(R.string.shrink_database),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
+            title = str(R.string.sure),
+            message = str(R.string.shrink_database),
+            positiveText = str(android.R.string.ok),
+            negativeText = str(R.string.no),
             onPositive = { viewModel.shrinkDatabase() }
         )
     }
 
     private fun clearWebViewData() {
         showComposeConfirmDialog(
-            title = getString(R.string.clear_webview_data),
-            message = getString(R.string.sure_del),
-            positiveText = getString(android.R.string.ok),
-            negativeText = getString(R.string.no),
+            title = str(R.string.clear_webview_data),
+            message = str(R.string.sure_del),
+            positiveText = str(android.R.string.ok),
+            negativeText = str(R.string.no),
             onPositive = { viewModel.clearWebViewData() }
         )
     }

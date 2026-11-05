@@ -154,7 +154,7 @@ object Restore {
             if (it is CancellationException) {
                 throw it
             }
-            appCtx.toastOnUi("恢复备份出错\n${it.localizedMessage}")
+            appCtx.toastOnUi(appCtx.getString(R.string.svc_failed_restore_backup_n, it.localizedMessage))
             AppLog.put("恢复备份出错\n${it.localizedMessage}", it)
         }
     }
@@ -195,7 +195,7 @@ object Restore {
                 try {
                     restore(path)
                 } catch (e: Throwable) {
-                    snapshot.rollback("恢复过程异常: ${e.localizedMessage}")
+                    snapshot.rollback(appCtx.getString(R.string.misc_restore_failed_2, e.localizedMessage))
                     throw e
                 } finally {
                     snapshot.delete()
@@ -299,18 +299,18 @@ object Restore {
         }?.let { ruleFile ->
             runCatching {
                 require(ruleFile.length() <= DirectLinkUpload.MAX_RULE_JSON_BYTES.toLong()) {
-                    "备份中的直链上传规则超过大小限制"
+                    appCtx.getString(R.string.svc_direct_link_upload_rule_backup)
                 }
                 ruleFile.readText(Charsets.UTF_8)
             }
                 .mapCatching { json -> DirectLinkUpload.importRule(json).getOrThrow() }
                 .onFailure { error ->
                     AppLog.put(
-                        "备份中的直链上传规则无效，已保留当前配置\n" +
+                        appCtx.getString(R.string.svc_direct_link_upload_rule_backup_2) +
                             (error.localizedMessage ?: "未知错误"),
                         error
                     )
-                    appCtx.toastOnUi("备份中的直链上传规则无效，已保留当前配置")
+                    appCtx.toastOnUi(appCtx.getString(R.string.svc_direct_link_upload_rule_backup_3))
                 }
         }
         //恢复主题配置
@@ -551,7 +551,7 @@ object Restore {
                         id = 0L,
                         fromCharacterId = fromId,
                         toCharacterId = toId,
-                        relationName = relation.relationName.ifBlank { "关系" },
+                        relationName = relation.relationName.ifBlank { appCtx.getString(R.string.bchar_relation) },
                         updatedAt = relation.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis()
                     )
                     val exists = appDb.bookCharacterDao.getRelation(
@@ -581,7 +581,7 @@ object Restore {
             }
         }.onFailure {
             AppLog.put("恢复定时任务出错\n${it.localizedMessage}", it)
-            appCtx.toastOnUi("恢复定时任务失败，已保留当前任务")
+            appCtx.toastOnUi(appCtx.getString(R.string.svc_failed_restore_scheduled_tasks_current))
         }
     }
 
@@ -688,7 +688,7 @@ object Restore {
             }
         } catch (e: Exception) {
             AppLog.put("$fileName\n读取解析出错\n${e.localizedMessage}", e)
-            appCtx.toastOnUi("$fileName\n读取文件出错\n${e.localizedMessage}")
+            appCtx.toastOnUi(appCtx.getString(R.string.misc_nfailed_read_file_n, fileName, e.localizedMessage))
         }
         return null
     }
@@ -734,7 +734,7 @@ object Restore {
             }
         } catch (e: Exception) {
             AppLog.put("$fileName\n读取解析出错\n${e.localizedMessage}", e)
-            appCtx.toastOnUi("$fileName\n读取文件出错\n${e.localizedMessage}")
+            appCtx.toastOnUi(appCtx.getString(R.string.misc_nfailed_read_file_n, fileName, e.localizedMessage))
         }
     }
 
@@ -742,7 +742,7 @@ object Restore {
         file: File,
         onError: (Int, Throwable) -> Unit = { index, error ->
             AppLog.put(
-                "bookshelf.json 第${index + 1}项读取失败\n${error.localizedMessage}",
+                appCtx.getString(R.string.misc_bookshelf_json_item_could_not, index + 1, error.localizedMessage),
                 error
             )
         },

@@ -42,6 +42,7 @@ import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import java.io.File
+import splitties.init.appCtx
 
 
 class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
@@ -127,7 +128,7 @@ class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
             } else {
                 val file = fileAdapter.selectFile
                 if (file == null) {
-                    toastOnUi("请选择文件")
+                    toastOnUi(appCtx.getString(R.string.misc_please_select_file))
                 } else {
                     setResultData(file.path)
                     dismissAllowingStateLoss()
@@ -140,13 +141,13 @@ class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
         when (item?.itemId) {
             R.id.menu_create -> alert(R.string.create_folder) {
                 val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                    editView.hint = "文件夹名"
+                    editView.hint = appCtx.getString(R.string.misc_folder_name)
                 }
                 customView { alertBinding.root }
                 okButton {
                     val text = alertBinding.editView.text?.toString()
                     if (text.isNullOrBlank()) {
-                        toastOnUi("文件夹名不能为空")
+                        toastOnUi(appCtx.getString(R.string.misc_folder_name_cannot_be_empty))
                     } else {
                         viewModel.createFolder(text.trim())
                     }

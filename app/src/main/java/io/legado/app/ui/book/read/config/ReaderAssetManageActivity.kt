@@ -58,6 +58,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import splitties.init.appCtx
 
 /** One shared library, with optional image/font picker modes used by both editors. */
 class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>() {
@@ -145,7 +146,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, 10, 0, R.string.reader_assets_import_folder)
-        menu.add(0, 11, 1, "刷新")
+        menu.add(0, 11, 1, appCtx.getString(R.string.refresh))
         menu.add(0, 12, 2, R.string.help)
         return super.onCompatCreateOptionsMenu(menu)
     }
@@ -182,17 +183,17 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
     private fun importOne(uri: Uri) = work {
         val asset = withContext(Dispatchers.IO) { ReaderAssets.importUri(uri) }
         changed()
-        if (pickKind.isNotBlank()) select(asset) else toastOnUi("已导入：${asset.name}")
+        if (pickKind.isNotBlank()) select(asset) else toastOnUi(appCtx.getString(R.string.ui_book_imported, asset.name))
     }
 
     private fun importFolder() {
         if (!canInteract) return
-        if (navigation.isEmpty()) { toastOnUi("请先打开一个来源文件夹"); return }
+        if (navigation.isEmpty()) { toastOnUi(appCtx.getString(R.string.ui_book_open_source_folder_first)); return }
         val files = filteredEntries().mapNotNull { it.local }.filterNot { it.isDir }
         if (files.isEmpty()) { toastOnUi(R.string.reader_assets_search_empty); return }
-        if (files.size > 100) { toastOnUi("一次最多导入 100 个素材，请搜索后分批导入"); return }
+        if (files.size > 100) { toastOnUi(appCtx.getString(R.string.ui_book_import_at_most_100_assets)); return }
         showComposeConfirmDialog(getString(R.string.reader_assets_import_folder),
-            getString(R.string.reader_assets_import_folder_hint) + "\n\n${files.size} 个文件", onPositive = { work {
+            getString(R.string.reader_assets_import_folder_hint) + appCtx.getString(R.string.ui_book_n_n_files, files.size), onPositive = { work {
                 val failures = arrayListOf<String>()
                 val count = withContext(Dispatchers.IO) {
                     files.count { file -> runCatching { ReaderAssets.importUri(file.uri) }
@@ -200,7 +201,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
                 }
                 changed()
                 showComposeConfirmDialog(getString(R.string.reader_assets_import),
-                    "已导入或合并 $count 个素材" + if (failures.isEmpty()) "" else "\n\n" + failures.take(10).joinToString("\n"),
+                    appCtx.getString(R.string.ui_book_assets_imported_or_merged, count) + if (failures.isEmpty()) "" else "\n\n" + failures.take(10).joinToString("\n"),
                     showNegative = false, onPositive = {})
             } })
     }
@@ -227,7 +228,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
 
     private fun select(asset: ReaderAsset) {
         if (pickKind.isBlank()) { copyReference(asset); return }
-        if (pickKind != "any" && asset.kind != pickKind) { toastOnUi("请选择${if (pickKind == "font") "字体" else "图片"}素材"); return }
+        if (pickKind != "any" && asset.kind != pickKind) { toastOnUi(appCtx.getString(R.string.i18n_final_select_asset_kind, appCtx.getString(if (pickKind == "font") R.string.i18n_final_font else R.string.i18n_final_image))); return }
         setResult(RESULT_OK, Intent().putExtra("assetId", asset.id).putExtra("kind", asset.kind))
         finish()
     }
@@ -348,7 +349,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
             listOf(btnImport, btnFolder, btnDefault, btnUp).forEach { it.isEnabled = canInteract }
             btnUp.visibility = if (navigation.isEmpty()) View.GONE else View.VISIBLE
             tvHint.setText(if (filter == "folder") R.string.reader_assets_folder_hint else R.string.reader_assets_hint)
-            tvSummary.text = if (busy || loading) getString(R.string.reader_assets_busy) else navigation.lastOrNull()?.let { "${it.name} · ${entries.size} 项" }
+            tvSummary.text = if (busy || loading) getString(R.string.reader_assets_busy) else navigation.lastOrNull()?.let { appCtx.getString(R.string.ui_book_items, it.name, entries.size) }
                 ?: "${entries.size} 项 · 素材库 ${Formatter.formatFileSize(this@ReaderAssetManageActivity, library.assets.sumOf { it.size })}"
             tvEmpty.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
             tvEmpty.setText(when {
@@ -405,8 +406,8 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
                     asset != null -> listOf(if (asset.id == intent.getStringExtra("selectedId")) getString(R.string.reader_assets_current) else asset.extension.uppercase(),
                         if (asset.kind == "image") "${asset.width} × ${asset.height}" else getString(R.string.reader_assets_fonts),
                         Formatter.formatFileSize(this@ReaderAssetManageActivity, asset.size)).joinToString(" · ")
-                    entry.isFolder -> if (entry.folder != null) "本地来源 · 点击浏览" else "子文件夹"
-                    else -> "待导入 · " + Formatter.formatFileSize(this@ReaderAssetManageActivity, entry.local?.size ?: 0)
+                    entry.isFolder -> if (entry.folder != null) appCtx.getString(R.string.ui_book_local_source_tap_browse) else appCtx.getString(R.string.sub_dir)
+                    else -> appCtx.getString(R.string.i18n_final_pending_import, Formatter.formatFileSize(this@ReaderAssetManageActivity, entry.local?.size ?: 0))
                 }
                 tvPreview.visibility = if (isFont) View.VISIBLE else View.GONE
                 ivPreview.visibility = if (isFont) View.GONE else View.VISIBLE
@@ -425,7 +426,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
                     it.typeface = this@ReaderAssetManageActivity.uiTypeface()
                 }
                 btnUse.setTextColor(accentColor); btnMore.setTextColor(primaryTextColor)
-                btnUse.text = when { entry.isFolder -> "打开"; entry.local != null -> "导入"; pickKind.isNotBlank() -> getString(R.string.reader_assets_select); else -> getString(R.string.reader_assets_use) }
+                btnUse.text = when { entry.isFolder -> appCtx.getString(R.string.open); entry.local != null -> appCtx.getString(R.string.import_str); pickKind.isNotBlank() -> getString(R.string.reader_assets_select); else -> getString(R.string.reader_assets_use) }
                 btnMore.visibility = if (entry.local != null) View.GONE else View.VISIBLE
                 btnUse.setOnClickListener {
                     if (canInteract) when { entry.isFolder -> openFolder(entry); entry.local != null -> importOne(entry.local.uri); asset != null -> select(asset) }

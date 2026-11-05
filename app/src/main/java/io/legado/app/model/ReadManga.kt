@@ -44,6 +44,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.min
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Suppress("MemberVisibilityCanBePrivate")
 object ReadManga : CoroutineScope by MainScope() {
@@ -207,7 +209,7 @@ object ReadManga : CoroutineScope by MainScope() {
     suspend fun contentLoadFinish(
         chapter: BookChapter,
         content: String?,
-        errorMsg: String = "加载内容失败",
+        errorMsg: String = appCtx.getString(R.string.misc_failed_load_content),
         canceled: Boolean = false
     ) {
         removeLoading(chapter.index)
@@ -221,12 +223,12 @@ object ReadManga : CoroutineScope by MainScope() {
                     return
                 }
                 if (content.isEmpty() && !chapter.isVolume) {
-                    mCallback?.loadFail("正文内容为空")
+                    mCallback?.loadFail(appCtx.getString(R.string.misc_chapter_content_empty))
                     return
                 }
                 val mangaChapter = getManageChapter(chapter, content)
                 if (mangaChapter.imageCount == 0 && !chapter.isVolume) {
-                    mCallback?.loadFail("正文没有图片")
+                    mCallback?.loadFail(appCtx.getString(R.string.misc_no_images_this_chapter))
                     return
                 }
                 curMangaChapter = mangaChapter
@@ -474,7 +476,7 @@ object ReadManga : CoroutineScope by MainScope() {
                 contentLoadFinish(chapter, null, canceled = true)
             })
         } else {
-            contentLoadFinish(chapter, null, "加载内容失败 没有书源")
+            contentLoadFinish(chapter, null, appCtx.getString(R.string.misc_failed_load_content_no_book))
         }
     }
 
@@ -642,9 +644,9 @@ object ReadManga : CoroutineScope by MainScope() {
         if (imageCount == 0 && chapter.isVolume) {
             pages.add(ReaderLoading(chapter.index, -1, chapter.title, true))
         } else {
-            pages.add(ReaderLoading(chapter.index, -1, "阅读 ${chapter.title}"))
+            pages.add(ReaderLoading(chapter.index, -1, appCtx.getString(R.string.misc_reading, chapter.title)))
             pages.addAll(list)
-            pages.add(ReaderLoading(chapter.index, imageCount, "已读完 ${chapter.title}"))
+            pages.add(ReaderLoading(chapter.index, imageCount, appCtx.getString(R.string.misc_finished, chapter.title)))
         }
 
         return MangaChapter(chapter, pages, imageCount)

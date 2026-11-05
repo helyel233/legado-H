@@ -24,6 +24,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
+import splitties.init.appCtx
 
 /**
  * 本地朗读
@@ -150,7 +151,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             pauseReadAloud(abandonFocus = false)
             postReadAloudPlaybackPhase(
                 ReadAloudPlaybackState.PHASE_PAUSED,
-                message = "朗读内容为空",
+                message = appCtx.getString(R.string.misc_read_aloud_content_empty),
                 playing = false
             )
             return
@@ -454,7 +455,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             postReadAloudPlaybackPhase(
                 ReadAloudPlaybackState.PHASE_ERROR,
                 cueIndex = cueIndex,
-                message = "TTS错误 $errorCode"
+                message = appCtx.getString(R.string.misc_tts_error, errorCode)
             )
             LogUtils.d(
                 TAG,
@@ -477,7 +478,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             postReadAloudPlaybackPhase(
                 ReadAloudPlaybackState.PHASE_ERROR,
                 cueIndex = cueIndex,
-                message = "TTS错误"
+                message = appCtx.getString(R.string.misc_tts_error_2)
             )
             LogUtils.d(TAG, "onError nowSpeak:$nowSpeak pageIndex:$pageIndex s:$s")
             finishUtteranceAndRefill(ref)

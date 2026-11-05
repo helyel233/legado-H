@@ -6,6 +6,8 @@ import androidx.room.Ignore
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import kotlinx.parcelize.IgnoredOnParcel
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Entity(
     tableName = "rssArticles",

@@ -7,6 +7,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.parcelize.Parcelize
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Parcelize
 @Entity(
@@ -55,5 +57,5 @@ data class BookCharacterRelation(
     var updatedAt: Long = System.currentTimeMillis()
 ) : Parcelable {
 
-    fun displayName(): String = relationName.ifBlank { relationType.ifBlank { "关系" } }
+    fun displayName(): String = relationName.ifBlank { relationType.ifBlank { appCtx.getString(R.string.bchar_relation) } }
 }

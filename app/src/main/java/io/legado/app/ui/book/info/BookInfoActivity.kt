@@ -165,6 +165,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 
 class BookInfoActivity :
     VMBaseActivity<ActivityBookInfoBinding, BookInfoViewModel>(toolBarTheme = Theme.Dark, showOpenMenuIcon = false),
@@ -452,7 +453,7 @@ class BookInfoActivity :
             tvAiImagesSummary.text = if (preview.count == 0) {
                 getString(R.string.book_info_component_ai_images_hint)
             } else {
-                "共 ${preview.count} 张相关图片，点击查看完整图库"
+                appCtx.getString(R.string.ui_book_related_images_tap_open_full, preview.count)
             }
             tvAiImagesEmpty.isVisible = false
             aiImagesPreviewScroll.isVisible = images.isNotEmpty()
@@ -1786,8 +1787,8 @@ class BookInfoActivity :
             BookCloudEntryMode.LIBRARY_CHAPTER -> getString(R.string.book_cloud_library_chapter_mode)
         }
         val summary = when (mode) {
-            BookCloudEntryMode.CACHE_PACKAGE -> "从云端备份包上传、下载、用缓存入架"
-            BookCloudEntryMode.LIBRARY_CHAPTER -> "阅读页显示云按钮，按当前章节切换书库正文"
+            BookCloudEntryMode.CACHE_PACKAGE -> appCtx.getString(R.string.ui_book_upload_download_cloud_backup_packages)
+            BookCloudEntryMode.LIBRARY_CHAPTER -> appCtx.getString(R.string.ui_book_show_cloud_button_reading_page)
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1871,7 +1872,7 @@ class BookInfoActivity :
         }.show()
 
         fun reload() {
-            summaryView.text = "正在读取《${targetBook.name}》的云端备份..."
+            summaryView.text = appCtx.getString(R.string.ui_book_reading_cloud_backup, targetBook.name)
             listLayout.removeAllViews()
             lifecycleScope.launch {
                 val result = runCatching {
@@ -1896,12 +1897,12 @@ class BookInfoActivity :
     ) {
         listLayout.removeAllViews()
         if (items.isEmpty()) {
-            summaryView.text = "未找到《${targetBook.name}》的本地或云端备份"
+            summaryView.text = appCtx.getString(R.string.ui_book_no_local_or_cloud_backup, targetBook.name)
             return
         }
         val localCount = items.sumOf { if (it.localCachedCount > 0) 1 else 0 }
         val remoteCount = items.sumOf { if (it.hasRemoteCache()) 1 else 0 }
-        summaryView.text = "共 ${items.size} 个来源，本地 $localCount 个，云端 $remoteCount 个"
+        summaryView.text = appCtx.getString(R.string.ui_book_sources_local_cloud, items.size, localCount, remoteCount)
         items.forEach { item ->
             listLayout.addView(createBookCloudBackupRow(item, reload))
         }
@@ -1945,10 +1946,10 @@ class BookInfoActivity :
                 addView(createBookCloudBackupAction(getString(R.string.cache_manage_upload), item.localCachedCount > 0) {
                     selectBookCloudBackupSyncStrategy(R.string.cache_manage_upload_strategy_title) { strategy ->
                         runBookCloudBackupAction(
-                            message = "正在上传云端备份...",
+                            message = appCtx.getString(R.string.ui_book_uploading_cloud_backup),
                             block = { cacheManageViewModel.uploadCacheItem(item, strategy) }
                         ) {
-                            toastOnUi("云端备份已上传")
+                            toastOnUi(appCtx.getString(R.string.ui_book_cloud_backup_uploaded))
                             reload()
                         }
                     }
@@ -1956,7 +1957,7 @@ class BookInfoActivity :
                 addView(createBookCloudBackupAction(getString(R.string.action_download), item.hasRemoteCache()) {
                     selectBookCloudBackupSyncStrategy(R.string.cache_manage_download_strategy_title) { strategy ->
                         runBookCloudBackupAction(
-                            message = "正在下载云端备份...",
+                            message = appCtx.getString(R.string.ui_book_downloading_cloud_backup),
                             block = { cacheManageViewModel.downloadRemoteCache(item, strategy) }
                         ) {
                             toastOnUi(R.string.cache_manage_download_success)
@@ -1970,7 +1971,7 @@ class BookInfoActivity :
                         return@createBookCloudBackupAction
                     }
                     runBookCloudBackupAction(
-                        message = "正在应用本地缓存...",
+                        message = appCtx.getString(R.string.ui_book_applying_local_cache),
                         block = { cacheManageViewModel.restoreCacheToBookshelf(item) }
                     ) { success ->
                         toastOnUi(

@@ -1,5 +1,22 @@
 # 更新日志
 
+## 1.24.1 版（2026-11-05）
+
+本版把「设置搜索索引」从解析遗留 XML 偏好改为直接由 Compose 设置 spec 生成，并据此补齐大量此前完全搜不到的设置项；同时把多个混在阅读 / 界面设置里的域拆成独立二级页，删除失去存在意义的 15 个遗留 XML 偏好文件，并做了一次死代码清理与 i18n 模块化拆分。
+
+### 新增 / 重构
+
+- **设置搜索索引重构（spec 驱动）**：`SettingsSearchIndex` 不再解析 `res/xml/pref_*.xml`，改为遍历各二级设置页的 `SettingItemSpec` 生成索引——新增设置项自动可搜、`searchKeys` 别名（如「沉浸」「EPUB」）随之进搜索范围，索引完整性由编译器保证。据此补齐一批此前完全游离于搜索之外的项：朗读弹窗四大 Tab 内的多角色 / 配乐 / 提示词 / 发言人等 30+ 项（带 key 命中后由 AudioConfigFragment 重开弹窗并切到对应 Tab）、菜单编辑 / 高亮规则 / 段落规则、书架设置、评论设置、发现 / 订阅页模式、以及归拢后的页面布局设置。
+- **独立设置页拆分**：新增 `BookshelfSettingsFragment`（把原散在阅读设置的「书架启动 5 项」与书架页弹窗的「显示 13 项」合并到同一书架域）、`AudioConfigFragment`（朗读与音频，从阅读页菜单 / 弹窗提到一级）、`CommentConfigFragment`（评论抓取从高级设置拆为独立二级页）、`MangaVideoConfigFragment`（漫画与视频）、`PageLayoutConfigFragment`（归拢发现页布局 / 订阅列数 / 首页布局三处分散的同语义设置）。
+- **删除遗留 XML 偏好文件**：删除 15 个 `pref_config_*.xml` 与 `pref_main.xml`。这些 XML 早已不是页面本体（设置页全部是 Compose spec），只剩「给搜索提供标题」一个用途；索引改为 spec 生成后它们失去存在意义，删之避免「spec 加了但 XML 没加 → 搜不到 / 删了但 XML 留着 → 死结果」的双写漂移。
+
+### 修复 / 优化
+
+- **A 层死代码清理**：删除零引用的死键 `PreferKey.cacheManage` / `updateSourceStrategy`；删除 5 个零引用的遗留字符串分类名；修正拼写错误的 `editTemeAuto` → `editThemeAuto`（保留原字符串值，零数据迁移）；封面硬编码的裸字符串 key 改回 `PreferKey` 常量。
+- **发现 / 订阅页模式归位**：`DISCOVERY_SUBSCRIPTION_CONFIG` 从「界面设置 › 模板」上提到「内容与规则」一级，ownerKey 随之改，避免语义错位。
+- **i18n 模块化拆分**：新增 40+ 个按模块拆分的 `strings_*` 资源文件（便于分模块翻译与审阅），并配套 `tools/i18n_batch.py` 批处理与 `i18n_batches/`。
+- **一级行 RowSpec 收敛**：一级行 key 与 ConfigTag 双轨收敛为统一 `RowSpec` 驱动（`buildSections` 与 `handleRowClick` 同一列表），移动页面时不再需要四处手工同步映射。
+
 ## 1.23.2 版（2026-11-01）
 
 本版修复一处重建 / 切主题时偶发的崩溃：离屏书架 Fragment 的 View 已被 ViewPager2 销毁，却仍被 `MainActivity` 反向调用 `upSort()` 而抛 `IllegalStateException`。

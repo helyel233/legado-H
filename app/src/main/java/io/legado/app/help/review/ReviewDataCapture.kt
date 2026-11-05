@@ -24,6 +24,8 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** idea_comment 协议适配器。只识别已验证的段评协议，域名由实际评论地址提供。 */
 internal object ReviewDataCapture {
@@ -150,7 +152,7 @@ internal object ReviewDataCapture {
         var pageCount = 0
         while (true) {
             check(!ReviewPaginationPolicy.isOverLimit(++pageCount)) {
-                "段评分页超过上限(${ReviewPaginationPolicy.MAX_PAGES})"
+                appCtx.getString(R.string.misc_chapter_review_pagination_exceeds_limit, ReviewPaginationPolicy.MAX_PAGES)
             }
             check(cursors.add(cursor)) { "段评游标循环: $cursor" }
             val response = fetch(false, mapOf("api" to "1", "cursor" to cursor,
@@ -188,7 +190,7 @@ internal object ReviewDataCapture {
             var replyPageCount = 0
             while (true) {
                 check(!ReviewPaginationPolicy.isOverLimit(++replyPageCount)) {
-                    "楼中楼分页超过上限(${ReviewPaginationPolicy.MAX_PAGES})"
+                    appCtx.getString(R.string.misc_reply_pagination_exceeds_limit, ReviewPaginationPolicy.MAX_PAGES)
                 }
                 check(seenCursors.add(offset)) { "楼中楼游标循环: $offset" }
                 val response = fetch(true, mapOf("reply_api" to "1",
@@ -216,7 +218,7 @@ internal object ReviewDataCapture {
                 val doc = Jsoup.parse("<!doctype html><html><head><meta charset='utf-8'></head><body></body></html>", url)
                 doc.body().attr("data-review-protocol", "idea_comment")
                 doc.head().appendElement("style").text("body{font-family:sans-serif;padding:16px}article{border-bottom:1px solid #ccc;padding:12px}p{white-space:pre-wrap;overflow-wrap:anywhere}.avatar{width:36px;height:36px;border-radius:50%}.comment-image{max-width:100%}.replies{margin-left:24px}small{opacity:.7}")
-                doc.body().appendElement("h2").text("段评")
+                doc.body().appendElement("h2").text(appCtx.getString(R.string.review))
                 doc.body().appendElement("blockquote").text(sourceText)
                 items.forEachIndexed { index, item ->
                     val comment = item.getAsJsonObject("comment")

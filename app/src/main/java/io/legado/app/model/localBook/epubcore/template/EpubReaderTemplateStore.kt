@@ -1,5 +1,6 @@
 package io.legado.app.model.localBook.epubcore.template
 
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
@@ -7,6 +8,7 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import splitties.init.appCtx
 import java.io.File
+import io.legado.app.R
 
 object EpubReaderTemplateStore {
     const val fileName = "readerTemplates.json"
@@ -58,17 +60,17 @@ object EpubReaderTemplateStore {
     }
 
     private fun isScrolling(id: String): Boolean =
-        appCtx.getPrefBoolean("readerTemplateScroll." + id, id == doraemonScrollId)
+        appCtx.getPrefBoolean(PreferKey.readerTemplateScrollPrefix + id, id == doraemonScrollId)
 
     private fun rememberType(template: EpubReaderTemplate) {
         if (isScrolling(template.id) != template.isScrolling) {
-            appCtx.putPrefBoolean("readerTemplateScroll." + template.id, template.isScrolling)
+            appCtx.putPrefBoolean(PreferKey.readerTemplateScrollPrefix + template.id, template.isScrolling)
         }
     }
 
     @Synchronized
     fun savePageAnimation(id: String, animation: Int?) {
-        val template = requireNotNull(resolve(id)) { "模板不存在" }
+        val template = requireNotNull(resolve(id)) { appCtx.getString(R.string.misc_template_not_found) }
         if (template.isScrolling) return
         pageAnimations.select(id, animation)
     }
@@ -100,7 +102,7 @@ object EpubReaderTemplateStore {
     fun save(template: EpubReaderTemplate): EpubReaderTemplate = repository.save(template).also(::rememberType)
     @Synchronized
     fun importJson(raw: String, asCopy: Boolean = true): EpubReaderTemplate = repository.importJson(raw, asCopy).also(::rememberType)
-    fun exportJson(id: String): String = requireNotNull(resolve(id)) { "模板不存在：" + id }.toJson()
+    fun exportJson(id: String): String = requireNotNull(resolve(id)) { appCtx.getString(R.string.misc_template_not_found_2) + id }.toJson()
     fun copyOf(template: EpubReaderTemplate): EpubReaderTemplate = copyReaderTemplate(template)
 
     /** Selection and deletion use the same lock, so a late selection cannot restore a deleted ID. */

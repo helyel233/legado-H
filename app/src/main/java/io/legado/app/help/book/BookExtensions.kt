@@ -35,6 +35,7 @@ import java.time.Period.between
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
+import io.legado.app.R
 
 
 val Book.isAudio: Boolean
@@ -146,7 +147,7 @@ fun Book.getLocalUri(): Uri {
         val treeUri = defaultBookDir.toUri()
         val treeFileDoc = FileDoc.fromUri(treeUri, true)
         if (!treeFileDoc.exists()) {
-            appCtx.toastOnUi("书籍保存目录失效，请重新设置！")
+            appCtx.toastOnUi(appCtx.getString(R.string.misc_book_storage_directory_invalid_please))
         } else {
             val fileDoc = treeFileDoc.find(originName, 5, 100)
             if (fileDoc != null) {

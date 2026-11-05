@@ -46,6 +46,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 聚合主页 ViewModel
@@ -638,7 +640,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     val lastState = states[globalId] as? ModuleLoadState.Loaded ?: return@update states
                     states + (globalId to lastState.copy(isLoadingMore = false))
                 }
-                _effects.tryEmit(HomepageEffect.ShowSnackbar("加载更多失败: ${e.message}"))
+                _effects.tryEmit(HomepageEffect.ShowSnackbar(appCtx.getString(R.string.ui_main_failed_load_more, e.message)))
             }
         }
     }
@@ -1060,7 +1062,7 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     it.customSetId == existing.customSetId && it.id != existing.id
                 }
                 if (siblings.any { isInfinite(it.type) }) {
-                    _effects.tryEmit(HomepageEffect.ShowSnackbar("每个集只能有一个无限流模块"))
+                    _effects.tryEmit(HomepageEffect.ShowSnackbar(appCtx.getString(R.string.ui_main_each_collection_can_contain_only)))
                     return@launch
                 }
             }

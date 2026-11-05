@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.viewpager.widget.ViewPager
 import io.legado.app.utils.startActivity
+import splitties.init.appCtx
 
 class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewModel>(),
     VariableDialog.Callback {
@@ -484,11 +485,11 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         lifecycleScope.launch {
             val source = viewModel.rssSource
             if (source == null) {
-                toastOnUi("源不存在")
+                toastOnUi(appCtx.getString(R.string.ui_main_source_not_found))
                 return@launch
             }
             val comment =
-                source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")
+                source.getDisplayVariableComment(appCtx.getString(R.string.ui_main_source_variables_can_be_read))
             val variable = withContext(Dispatchers.IO) { source.getVariable() }
             showDialogFragment(
                 VariableDialog(

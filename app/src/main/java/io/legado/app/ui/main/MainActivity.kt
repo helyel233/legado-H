@@ -142,6 +142,7 @@ import io.legado.app.utils.dpToPx
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.time.Duration.Companion.hours
+import splitties.init.appCtx
 
 /**
  * 主界面
@@ -202,10 +203,20 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     companion object {
         private const val EXTRA_TARGET_PAGE = "targetPage"
         private const val TARGET_BOOKSHELF = "bookshelf"
+        private const val TARGET_HOMEPAGE = "homepage"
+        private const val TARGET_EXPLORE = "explore"
+        private const val TARGET_RSS = "rss"
 
-        fun openBookshelf(context: Context) {
+        fun openBookshelf(context: Context) = openMainPage(context, TARGET_BOOKSHELF)
+
+        /** 「页面布局」设置页的三个互链入口：跳到对应 Tab，用户仍可在该页菜单切换同一项。 */
+        fun openHomepage(context: Context) = openMainPage(context, TARGET_HOMEPAGE)
+        fun openExplore(context: Context) = openMainPage(context, TARGET_EXPLORE)
+        fun openRss(context: Context) = openMainPage(context, TARGET_RSS)
+
+        private fun openMainPage(context: Context, target: String) {
             context.startActivity(Intent(context, MainActivity::class.java).apply {
-                putExtra(EXTRA_TARGET_PAGE, TARGET_BOOKSHELF)
+                putExtra(EXTRA_TARGET_PAGE, target)
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -636,11 +647,21 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun handleTargetIntent(intent: Intent?) {
-        if (intent?.getStringExtra(EXTRA_TARGET_PAGE) != TARGET_BOOKSHELF) return
-        intent.removeExtra(EXTRA_TARGET_PAGE)
-        binding.viewPagerMain.post {
-            openBookshelfPage()
+        val safeIntent = intent ?: return
+        val target = safeIntent.getStringExtra(EXTRA_TARGET_PAGE) ?: return
+        safeIntent.removeExtra(EXTRA_TARGET_PAGE)
+        // 书架跳转保留原有专用路径；其余三个 Tab 走按 fragmentId 定位的通用路径
+        if (target == TARGET_BOOKSHELF) {
+            binding.viewPagerMain.post { openBookshelfPage() }
+            return
         }
+        val fragmentId = when (target) {
+            TARGET_HOMEPAGE -> idHomepage
+            TARGET_EXPLORE -> idExplore
+            TARGET_RSS -> idRss
+            else -> return
+        }
+        binding.viewPagerMain.post { openPageAt(fragmentId) }
     }
 
     private fun openBookshelfPage() = binding.run {
@@ -648,6 +669,19 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         pagePosition = position
         viewPagerMain.setCurrentItem(position, false)
         bottomNavigationView.menu.findItem(R.id.menu_bookshelf)?.isChecked = true
+        updateSideNavigationItems()
+        if (isSidebarMode() && sideNavigationOpen) {
+            closeSideNavigation()
+        }
+    }
+
+    private fun openPageAt(fragmentId: Int) = binding.run {
+        val position = realPositions.take(bottomMenuCount).indexOf(fragmentId)
+        // 目标 Tab 被底部导航隐藏时不强行跳转
+        if (position < 0) return@run
+        pagePosition = position
+        viewPagerMain.setCurrentItem(position, false)
+        bottomNavigationView.menu.findItem(getBottomNavigationItemId(position))?.isChecked = true
         updateSideNavigationItems()
         if (isSidebarMode() && sideNavigationOpen) {
             closeSideNavigation()
@@ -2303,10 +2337,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 append(summary)
                 append("\n\n")
             }
-            append("可复制诊断信息反馈问题，或查看完整崩溃日志。")
+            append(appCtx.getString(R.string.ui_main_copy_diagnostic_info_report_issue))
         }
         alert(getString(R.string.draw), message) {
-            neutralButton("复制诊断信息") { copyDiagnosticReport() }
+            neutralButton(appCtx.getString(R.string.ui_main_copy_diagnostic_info)) { copyDiagnosticReport() }
             yesButton {
                 showDialogFragment<CrashLogsDialog>()
             }
@@ -2347,9 +2381,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                             }
                             showComposeConfirmDialog(
                                 title = getString(R.string.restore),
-                                message = "检测到资源文件包，是否一并恢复字体、背景图等资源？",
-                                positiveText = "全部恢复",
-                                negativeText = "仅主包",
+                                message = appCtx.getString(R.string.ui_main_resource_package_was_detected_restore),
+                                positiveText = appCtx.getString(R.string.ui_main_restore_all),
+                                negativeText = appCtx.getString(R.string.ui_main_main_package_only),
                                 onPositive = {
                                     viewModel.restoreWebDav(lastBackupFile.displayName, assetsNames)
                                 },

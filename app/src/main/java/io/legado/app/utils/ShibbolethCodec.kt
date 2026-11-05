@@ -2,6 +2,8 @@ package io.legado.app.utils
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlin.random.Random
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * Codec for the clipboard import codes used by Luoyacheng/legado-E.

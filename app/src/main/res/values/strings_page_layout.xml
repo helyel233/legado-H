@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="page_layout_settings_title">Page layout</string>
+    <string name="page_layout_settings_summary">Discovery, subscription and homepage layouts in one place</string>
+    <string name="page_layout_section">Layout and columns</string>
+    <string name="page_layout_column">%1$d column(s)</string>
+    <string name="page_layout_rss_columns">Subscription columns</string>
+    <string name="page_layout_homepage">Homepage layout</string>
+    <string name="page_layout_discovery_summary">Also switchable from the Discovery page menu; applies to the modern Discovery page</string>
+    <string name="page_layout_rss_summary">Also switchable from the Subscription menu; applies to the classic Subscription page</string>
+    <string name="page_layout_homepage_summary">Also switchable from the Homepage menu</string>
+    <string name="page_layout_links_section">Go to the page</string>
+    <string name="page_layout_goto_explore">Open Discovery</string>
+    <string name="page_layout_goto_rss">Open Subscription</string>
+    <string name="page_layout_goto_homepage">Open Homepage</string>
+    <string name="page_layout_goto_summary">Open the tab, where the same setting can also be switched from its menu</string>
+</resources>

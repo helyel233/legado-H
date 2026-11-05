@@ -56,6 +56,8 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.min
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Suppress("MemberVisibilityCanBePrivate")
 open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(application) {
@@ -565,7 +567,7 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
         }.onSuccess {
             onSuccess.invoke(it.first, it.second, it.third)
         }.onError {
-            context.toastOnUi("自动换源失败\n${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_auto_source_switch_failed_n, it.localizedMessage))
         }
     }
 

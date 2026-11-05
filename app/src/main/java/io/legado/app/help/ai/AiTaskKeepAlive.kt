@@ -7,6 +7,7 @@ import io.legado.app.utils.startForegroundServiceCompat
 import splitties.init.appCtx
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
 
 object AiTaskKeepAlive {
 
@@ -42,7 +43,7 @@ object AiTaskKeepAlive {
         get() = activeTaskSnapshot().size
 
     val title: String
-        get() = latestTask()?.title ?: "AI任务处理中"
+        get() = latestTask()?.title ?: appCtx.getString(R.string.ai_state_ai_task_progress)
 
     val content: String
         get() = latestTask()?.displayText ?: title
@@ -76,7 +77,7 @@ object AiTaskKeepAlive {
         val taskId = UUID.randomUUID().toString()
         activeTasks[taskId] = TaskState(
             id = taskId,
-            title = title.ifBlank { "AI任务处理中" },
+            title = title.ifBlank { appCtx.getString(R.string.ai_state_ai_task_progress) },
             content = cleanContent(content),
             kind = kind
         )
@@ -121,10 +122,10 @@ object AiTaskKeepAlive {
 
     private fun jobTitle(job: AiAgentJob): String {
         return when (job.type) {
-            AiAgentJob.TYPE_READ_AI -> "阅读页问AI"
-            AiAgentJob.TYPE_ROLE_ASSIGN -> "角色分配中"
-            AiAgentJob.TYPE_AUDIO_ASSIGN -> "智能音频处理中"
-            else -> "AI回复生成中"
+            AiAgentJob.TYPE_READ_AI -> appCtx.getString(R.string.ai_state_ask_ai_reading_page)
+            AiAgentJob.TYPE_ROLE_ASSIGN -> appCtx.getString(R.string.ai_state_assigning_roles)
+            AiAgentJob.TYPE_AUDIO_ASSIGN -> appCtx.getString(R.string.ai_state_processing_smart_audio)
+            else -> appCtx.getString(R.string.ui_main_generating_ai_reply_2)
         }
     }
 

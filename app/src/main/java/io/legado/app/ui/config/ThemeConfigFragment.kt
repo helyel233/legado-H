@@ -12,7 +12,6 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.config.EpubLoadingTemplateStore
 import io.legado.app.help.config.MainBottomNavConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.ui.config.compose.ComposeSettingFragment
@@ -40,12 +39,12 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
             titleRes = titleRes,
             sections = listOf(
                 SettingSectionSpec(
-                    title = getString(R.string.theme_category_status_bar),
+                    title = str(R.string.theme_category_status_bar),
                     items = listOf(
                         SettingChoiceSpec(
                             key = PreferKey.launcherIcon,
-                            title = getString(R.string.change_icon),
-                            summary = getString(R.string.change_icon_summary),
+                            title = str(R.string.change_icon),
+                            summary = str(R.string.change_icon_summary),
                             options = iconOptions(),
                             selectedValue = stringSetting(PreferKey.launcherIcon, DEFAULT_LAUNCHER_ICON),
                             visible = Build.VERSION.SDK_INT >= 26,
@@ -53,8 +52,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.mainTransparentStatusBar,
-                            title = getString(R.string.main_immersion_status_bar),
-                            summary = getString(R.string.main_status_bar_immersion),
+                            title = str(R.string.main_immersion_status_bar),
+                            summary = str(R.string.main_status_bar_immersion),
                             checked = booleanSetting(PreferKey.mainTransparentStatusBar, false),
                             onCheckedChange = {
                                 updateBooleanSetting(PreferKey.mainTransparentStatusBar, it)
@@ -62,8 +61,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         SettingSwitchSpec(
                             key = PreferKey.immersiveManageBar,
-                            title = getString(R.string.manage_bar_immersion),
-                            summary = getString(R.string.manage_bar_immersion_summary),
+                            title = str(R.string.manage_bar_immersion),
+                            summary = str(R.string.manage_bar_immersion_summary),
                             checked = booleanSetting(PreferKey.immersiveManageBar, true),
                             onCheckedChange = {
                                 updateBooleanSetting(PreferKey.immersiveManageBar, it)
@@ -72,12 +71,12 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                     )
                 ),
                 SettingSectionSpec(
-                    title = getString(R.string.theme_category_navigation),
+                    title = str(R.string.theme_category_navigation),
                     items = listOf(
                         SettingSwitchSpec(
                             key = KEY_HOMEPAGE_VISIBLE,
-                            title = getString(R.string.homepage),
-                            summary = getString(R.string.homepage_switch_summary),
+                            title = str(R.string.homepage),
+                            summary = str(R.string.homepage_switch_summary),
                             checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_HOMEPAGE),
                             onCheckedChange = { checked ->
                                 MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_HOMEPAGE, checked)
@@ -87,8 +86,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         SettingSwitchSpec(
                             key = KEY_STATS_VISIBLE,
-                            title = getString(R.string.side_nav_stats),
-                            summary = getString(R.string.stats_switch_summary),
+                            title = str(R.string.side_nav_stats),
+                            summary = str(R.string.stats_switch_summary),
                             checked = MainBottomNavConfig.isVisible(MainBottomNavConfig.KEY_READ_RECORD),
                             onCheckedChange = { checked ->
                                 MainBottomNavConfig.setVisible(MainBottomNavConfig.KEY_READ_RECORD, checked)
@@ -98,78 +97,55 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                         ),
                         SettingActionSpec(
                             key = KEY_NAVIGATION_BAR_MANAGE,
-                            title = getString(R.string.navigation_bar_manage),
-                            summary = getString(R.string.navigation_bar_manage_summary),
+                            navigates = true,
+                            title = str(R.string.navigation_bar_manage),
+                            summary = str(R.string.navigation_bar_manage_summary),
                             onClick = { startActivity<NavigationBarManageActivity>() }
                         ),
                         SettingActionSpec(
                             key = KEY_TOP_BAR_MANAGE,
-                            title = getString(R.string.top_bar_manage),
-                            summary = getString(R.string.top_bar_manage_summary),
-                            onClick = { startActivity<TopBarManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = KEY_DISCOVERY_SUBSCRIPTION_SETTINGS,
-                            title = getString(R.string.discovery_subscription_settings_title),
-                            summary = getString(R.string.discovery_subscription_settings_summary),
                             navigates = true,
-                            onClick = {
-                                startActivity<ConfigActivity> {
-                                    putExtra("configTag", ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG)
-                                }
-                            }
+                            title = str(R.string.top_bar_manage),
+                            summary = str(R.string.top_bar_manage_summary),
+                            onClick = { startActivity<TopBarManageActivity>() }
                         )
                     )
                 ),
+                // 「外观」区只留改「长什么样」的素材入口：主题包、书籍详情、气泡。
+                // 模板类（加载画面、分享样式）和页面形态（发现/订阅版本）另起一区，
+                // 它们改的是「某一屏的内容结构」，不是全局外观
                 SettingSectionSpec(
-                    title = getString(R.string.theme_category_appearance),
+                    title = str(R.string.theme_category_appearance),
                     items = listOf(
                         SettingActionSpec(
                             key = KEY_THEME_MANAGE,
-                            title = getString(R.string.theme_list),
-                            summary = getString(R.string.theme_list_summary),
+                            navigates = true,
+                            title = str(R.string.theme_list),
+                            summary = str(R.string.theme_list_summary),
                             onClick = { startActivity<ThemeManageActivity>() }
                         ),
                         SettingActionSpec(
                             key = KEY_BOOK_INFO_MANAGE,
-                            title = getString(R.string.book_info_manage),
-                            summary = getString(R.string.book_info_manage_summary),
+                            navigates = true,
+                            title = str(R.string.book_info_manage),
+                            summary = str(R.string.book_info_manage_summary),
                             onClick = { startActivity<BookInfoManageActivity>() }
                         ),
                         SettingActionSpec(
                             key = KEY_BUBBLE_MANAGE,
-                            title = getString(R.string.bubble_manage),
-                            summary = getString(R.string.bubble_manage_summary),
-                            onClick = { startActivity<BubbleManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = KEY_EPUB_LOADING_TEMPLATES,
-                            title = getString(R.string.epub_loading_templates),
-                            summary = getString(R.string.epub_loading_selected,
-                                EpubLoadingTemplateStore.selected(requireContext()).name),
-                            searchKeys = listOf("EPUB", "正文加载", "加载模板", "加载画面"),
-                            onClick = { startActivity<EpubLoadingTemplateManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = KEY_SHARE_NOTE_TEMPLATE_MANAGE,
-                            title = getString(R.string.share_note_template_manage),
-                            summary = getString(R.string.share_note_template_manage_summary),
-                            searchKeys = listOf("分享模板", "摘录模板", "笔记模板", "正文分享"),
-                            onClick = { startActivity<ShareNoteTemplateManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = ConfigTag.COVER_CONFIG,
-                            title = getString(R.string.cover_config),
-                            summary = getString(R.string.cover_config_summary),
                             navigates = true,
-                            onClick = {
-                                startActivity<ConfigActivity> {
-                                    putExtra("configTag", ConfigTag.COVER_CONFIG)
-                                }
-                            }
+                            title = str(R.string.bubble_manage),
+                            summary = str(R.string.bubble_manage_summary),
+                            onClick = { startActivity<BubbleManageActivity>() }
                         )
+                        // 封面设置不再重复挂在这里：它已经是「我的」页的一级行，
+                        // 同一个 ConfigTag 两个入口只会让用户纠结该从哪进
                     )
                 )
+                // 「模板」区已清空：
+                //  · EPUB 加载模板 / 分享笔记模板 → 阅读设置「阅读模板」区（它们改的是正文加载与分享）
+                //  · 发现/订阅页模式 → 「内容与规则」一级行（它改的是内容呈现）
+                // 界面设置自此回归纯外观，不再混入正文档与内容页形态
             )
         )
     }
@@ -177,7 +153,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.theme_config, menu)
         updateThemeModeMenu(menu)
-        menu.applyTint(requireContext())
+        menu.applyTint(ctx)
     }
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -185,7 +161,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
             R.id.menu_theme_mode -> {
                 AppConfig.isNightTheme = !AppConfig.isNightTheme
                 menuItem.setIcon(themeModeIconRes())
-                ThemeConfig.applyDayNight(requireContext())
+                ThemeConfig.applyDayNight(ctx)
                 return true
             }
         }
@@ -218,8 +194,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     private fun iconOptions(): List<SettingChoiceOption> {
-        val entries = resources.getStringArray(R.array.icon_names)
-        val values = resources.getStringArray(R.array.icons)
+        val entries = ctx.resources.getStringArray(R.array.icon_names)
+        val values = ctx.resources.getStringArray(R.array.icons)
         return values.mapIndexed { index, value ->
             SettingChoiceOption(
                 value = value,
@@ -239,11 +215,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
         private const val KEY_HOMEPAGE_VISIBLE = "homepage_visible"
         private const val KEY_STATS_VISIBLE = "stats_visible"
         private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
-        private const val KEY_DISCOVERY_SUBSCRIPTION_SETTINGS = "discoverySubscriptionSettings"
         private const val KEY_TOP_BAR_MANAGE = "top_bar_manage"
         private const val KEY_BOOK_INFO_MANAGE = "book_info_manage"
         private const val KEY_BUBBLE_MANAGE = "bubble_manage"
-        private const val KEY_SHARE_NOTE_TEMPLATE_MANAGE = "share_note_template_manage"
-        private const val KEY_EPUB_LOADING_TEMPLATES = "epub_loading_templates"
     }
 }

@@ -14,6 +14,8 @@ import io.legado.app.utils.writeToOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.legado.app.R
+import splitties.init.appCtx
 
 class AllBookmarkViewModel(application: Application) : BaseViewModel(application) {
 
@@ -32,7 +34,7 @@ class AllBookmarkViewModel(application: Application) : BaseViewModel(application
         }.onError {
             AppLog.put("导出失败\n${it.localizedMessage}", it, true)
         }.onSuccess {
-            context.toastOnUi("导出成功")
+            context.toastOnUi(appCtx.getString(R.string.export_success))
         }
     }
 
@@ -53,14 +55,14 @@ class AllBookmarkViewModel(application: Application) : BaseViewModel(application
                         outputStream.write("## ${it.bookName} ${it.bookAuthor}\n\n".toByteArray())
                     }
                     outputStream.write("#### ${it.chapterName}\n\n".toByteArray())
-                    outputStream.write("###### 原文\n ${it.bookText}\n\n".toByteArray())
-                    outputStream.write("###### 摘要\n ${it.content}\n\n".toByteArray())
+                    outputStream.write(appCtx.getString(R.string.misc_original_n_n_n, it.bookText).toByteArray())
+                    outputStream.write(appCtx.getString(R.string.misc_summary_n_n_n, it.content).toByteArray())
                 }
             }
         }.onError {
             AppLog.put("导出失败\n${it.localizedMessage}", it, true)
         }.onSuccess {
-            context.toastOnUi("导出成功")
+            context.toastOnUi(appCtx.getString(R.string.export_success))
         }
     }
 

@@ -159,7 +159,7 @@ internal object CacheNotificationBridge {
         val completed = (progress?.current ?: completedChapters(task).toLong()).toInt()
         val total = (progress?.total ?: task.units.size.toLong()).toInt()
         return Presentation(
-            title = "缓存正文",
+            title = appCtx.getString(R.string.svc_caching_content),
             text = "${displayUnitText(task, progress)}  ${chapterText(completed, total)}",
             progress = chapterProgress(total, completed),
         )
@@ -172,7 +172,7 @@ internal object CacheNotificationBridge {
         val downloadedBytes = progress?.current ?: 0L
         val totalBytes = progress?.total
         return Presentation(
-            title = if (task.kind == CacheKind.VIDEO) "缓存视频" else "缓存音频",
+            title = if (task.kind == CacheKind.VIDEO) appCtx.getString(R.string.svc_caching_video) else appCtx.getString(R.string.svc_caching_audio),
             text = "${displayUnitText(task, progress)}  " +
                 "${formatBytes(downloadedBytes)} / ${totalBytes?.let(::formatBytes) ?: "?"} " +
                 chapterText(completedChapters(task), task.units.size),
@@ -188,10 +188,10 @@ internal object CacheNotificationBridge {
         val total = progress?.total?.toInt()
         val failed = progress?.failed?.toInt() ?: 0
         val chapters = reviewChapterProgress(task)
-        val snapshotText = total?.let { "$completed/$it" } ?: "处理中"
+        val snapshotText = total?.let { "$completed/$it" } ?: appCtx.getString(R.string.svc_progress)
         return Presentation(
-            title = "缓存评论",
-            text = "${displayUnitText(task, progress)}  快照：$snapshotText  失败：$failed  " +
+            title = appCtx.getString(R.string.menu_sync_cache_review),
+            text = appCtx.getString(R.string.svc_snapshot_failed, displayUnitText(task, progress), snapshotText, failed) +
                 chapterText(chapters.completed, chapters.total),
             progress = total?.let { chapterProgress(it, completed) }
                 ?: Progress(max = 0, current = 0, indeterminate = true),
@@ -206,10 +206,10 @@ internal object CacheNotificationBridge {
         val total = progress?.total?.toInt()
         val failed = progress?.failed?.toInt() ?: 0
         val chapters = ttsChapterProgress(task)
-        val unitText = total?.let { "$completed/$it" } ?: "处理中"
+        val unitText = total?.let { "$completed/$it" } ?: appCtx.getString(R.string.svc_progress)
         return Presentation(
-            title = "缓存TTS音频",
-            text = "${displayUnitText(task, progress)}  单元：$unitText  失败：$failed  " +
+            title = appCtx.getString(R.string.svc_caching_tts_audio),
+            text = appCtx.getString(R.string.svc_units_failed, displayUnitText(task, progress), unitText, failed) +
                 chapterText(chapters.completed, chapters.total),
             progress = total?.let { chapterProgress(it, completed) }
                 ?: Progress(max = 0, current = 0, indeterminate = true),
@@ -314,11 +314,11 @@ internal object CacheNotificationBridge {
                     it.status == CacheUnitStatus.RUNNING ||
                     it.status == CacheUnitStatus.REVIEW_ELIGIBLE
             }?.key
-            ?: return "当前章节：无"
+            ?: return appCtx.getString(R.string.svc_current_chapter_none)
         val chapter = appDb.bookChapterDao.getChapter(task.bookUrl, unit.chapterIndex)
         return chapter?.title?.takeIf { it.isNotBlank() }?.let { title ->
-            "第${unit.chapterIndex + 1}章 $title"
-        } ?: "第${unit.chapterIndex + 1}章"
+            appCtx.getString(R.string.svc_chapter, unit.chapterIndex + 1, title)
+        } ?: appCtx.getString(R.string.svc_chapter_2, unit.chapterIndex + 1)
     }
 
     /** REVIEW owns its eligible chapter set, so both numerator and denominator come from it. */
@@ -337,7 +337,7 @@ internal object CacheNotificationBridge {
         )
     }
 
-    private fun chapterText(current: Int, total: Int): String = "$current/${total}章"
+    private fun chapterText(current: Int, total: Int): String = appCtx.getString(R.string.svc_chapters, current, total)
 
     private fun formatBytes(bytes: Long): String = ConvertUtils.formatFileSize(bytes.coerceAtLeast(0L))
 

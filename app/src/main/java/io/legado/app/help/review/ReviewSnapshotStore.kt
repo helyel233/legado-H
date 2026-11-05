@@ -12,6 +12,8 @@ import io.legado.app.utils.MD5Utils
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
+import io.legado.app.R
+import splitties.init.appCtx
 
 /**
  * 评论页快照实体：一章的某个评论按钮对应一份“真实评论页”网页快照。
@@ -764,7 +766,7 @@ object ReviewSnapshotStore {
         val chapterUrls = chapters.mapNotNullTo(linkedSetOf()) { chapter ->
             chapter.url.trim().takeIf(String::isNotBlank) ?: run {
                 onIssue(
-                    "第${chapter.index + 1}章 ${chapter.title}",
+                    appCtx.getString(R.string.misc_chapter_4, chapter.index + 1, chapter.title),
                     IllegalArgumentException("评论导出章节缺少 chapterUrl"),
                 )
                 null
@@ -800,7 +802,7 @@ object ReviewSnapshotStore {
                 }
             }
         }.toList()
-        if (sources.isEmpty()) return "没有已缓存的评论快照"
+        if (sources.isEmpty()) return appCtx.getString(R.string.misc_no_cached_review_snapshot)
         check(targetDir.isDirectory || targetDir.mkdirs()) {
             "无法创建评论快照导出目录: ${targetDir.absolutePath}"
         }

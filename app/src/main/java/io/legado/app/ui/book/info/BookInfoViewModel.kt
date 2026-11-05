@@ -49,6 +49,7 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
+import splitties.init.appCtx
 
 class BookInfoViewModel(application: Application) : BaseViewModel(application) {
     val bookData = MutableLiveData<Book>()
@@ -413,7 +414,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         execute {
             webFiles.clear()
             val fileNameNoExtension = if (book.author.isBlank()) book.name
-            else "${book.name} 作者：${book.author}"
+            else appCtx.getString(R.string.ui_book_author, book.name, book.author)
             book.downloadUrls!!.map {
                 val analyzeUrl = AnalyzeUrl(
                     it, source = bookSource,
@@ -431,7 +432,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             context.toastOnUi("LoadWebFileError\n${it.localizedMessage}")
         }.onSuccess {
             webFiles.addAll(it)
-            book.latestChapterTitle = "已下载"
+            book.latestChapterTitle = appCtx.getString(R.string.ui_book_downloaded)
             bookData.postValue(book)
             chapterListData.postValue(emptyList())
             tocLoadTracker.complete(request, book.bookUrl, 0)
@@ -724,7 +725,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         }.onSuccess {
             context.toastOnUi(R.string.clear_cache_success)
         }.onError {
-            context.toastOnUi("清理缓存出错\n${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_failed_clear_cache_n, it.localizedMessage))
         }
     }
 

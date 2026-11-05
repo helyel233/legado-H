@@ -21,6 +21,8 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiBookCharacterTool {
 
@@ -346,7 +348,7 @@ object AiBookCharacterTool {
                             listOf(
                                 io.legado.app.help.readaloud.speech.SpeechCatalogGroup(
                                     groupId = "default",
-                                    groupName = "默认",
+                                    groupName = appCtx.getString(R.string.text_default),
                                     items = listOf(
                                         io.legado.app.help.readaloud.speech.SpeechSpeaker(
                                             speakerName = httpTts.name.ifBlank { "HTTP TTS" },
@@ -408,14 +410,14 @@ object AiBookCharacterTool {
             put("engines", JSONArray().apply {
                 put(JSONObject().apply {
                     put("id", "system_default")
-                    put("name", "系统默认")
+                    put("name", appCtx.getString(R.string.ra_cfg_system_default))
                     put("engineType", SpeechRoute.ENGINE_SYSTEM)
                     put("engineValue", "")
                     put("speakerGroups", JSONArray().put(JSONObject().apply {
                         put("groupId", "default")
-                        put("groupName", "默认")
+                        put("groupName", appCtx.getString(R.string.text_default))
                         put("items", JSONArray().put(JSONObject().apply {
-                            put("speakerName", "系统默认")
+                            put("speakerName", appCtx.getString(R.string.ra_cfg_system_default))
                             put("toneID", "")
                             put("tags", JSONArray())
                         }))
@@ -720,7 +722,7 @@ object AiBookCharacterTool {
         val fromId = resolveCharacterId(args, "fromCharacterId", "fromName", characters)
         val toId = resolveCharacterId(args, "toCharacterId", "toName", characters)
         if (fromId == null || toId == null || fromId == toId) {
-            return@withContext errorJson("请选择两个不同角色")
+            return@withContext errorJson(appCtx.getString(R.string.bchar_select_two_different_characters))
         }
         val relationId = args?.optLong("relationId", 0L) ?: 0L
         val old = relationId.takeIf { it > 0 }?.let { appDb.bookCharacterDao.getRelation(it) }
@@ -732,7 +734,7 @@ object AiBookCharacterTool {
             toCharacterId = toId,
             relationName = args?.optString("relationName")?.trim()?.ifBlank { null }
                 ?: old?.relationName
-                ?: "关系",
+                ?: appCtx.getString(R.string.bchar_relation),
             relationType = optText(args, "relationType") ?: old?.relationType.orEmpty(),
             description = optText(args, "description") ?: old?.description.orEmpty(),
             strength = (args?.takeIf { it.has("strength") }?.optInt("strength") ?: old?.strength ?: 50)
@@ -1021,7 +1023,7 @@ object AiBookCharacterTool {
                 val engineName = obj.optString("engineName").trim()
                 val speakerName = obj.optString("speakerName").trim()
                     .ifBlank { engineName }
-                    .ifBlank { if (engineType == SpeechRoute.ENGINE_SYSTEM) "系统默认" else "HTTP TTS" }
+                    .ifBlank { if (engineType == SpeechRoute.ENGINE_SYSTEM) appCtx.getString(R.string.ra_cfg_system_default) else "HTTP TTS" }
                 add(
                     ReadAloudSpeakerGroupItem(
                         groupId = groupId,
@@ -1090,7 +1092,7 @@ object AiBookCharacterTool {
 
     private fun buildCharacterAvatarPrompt(character: BookCharacter): String {
         return buildList {
-            add("为小说角色生成一张角色头像，头像构图，清晰，适合角色资料卡。")
+            add(appCtx.getString(R.string.bchar_generate_clear_well_framed_character))
             add("角色名：${character.displayName()}")
             character.genderLabel().takeIf { it != "未知" }?.let { add("性别：$it") }
             BookCharacterProfileMeta.ageOf(character).takeIf { it.isNotBlank() }?.let { add("年纪：$it") }

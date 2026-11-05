@@ -4,6 +4,7 @@ import android.graphics.Color
 import androidx.annotation.RawRes
 import androidx.core.graphics.ColorUtils
 import io.legado.app.R
+import splitties.init.appCtx
 
 /** Loading has its own composition and typography, independent of the book's page template. */
 data class EpubLoadingTemplate(
@@ -46,18 +47,24 @@ data class EpubLoadingTemplate(
             Palette(it[0], it[1], it[2], it[3], it[4], it[5])
         }
 
-        val builtins: List<EpubLoadingTemplate> = listOf(
+        // Lazy getter: appCtx must already be initialized when the labels are read,
+        // so a static initializer must not resolve string resources at class load.
+        val builtins: List<EpubLoadingTemplate> get() = listOf(
             EpubLoadingTemplate(
-                id = "builtin.loading_botanical", name = "山茶花",
-                description = "山茶、枝叶与奶油色的花笺",
-                scene = Scene.BOTANICAL, eyebrow = "A LETTER IN BLOOM", caption = "把片刻留白，交给一场盛开。",
+                id = "builtin.loading_botanical",
+                name = appCtx.getString(R.string.builtin_epub_loading_botanical),
+                description = appCtx.getString(R.string.builtin_epub_loading_botanical_desc),
+                scene = Scene.BOTANICAL, eyebrow = "A LETTER IN BLOOM",
+                caption = appCtx.getString(R.string.builtin_epub_loading_botanical_caption),
                 day = colors("#FBF3E8", "#F3E3DA", "#493D48", "#7E686D", "#B25F74", "#859D87"),
                 night = colors("#201B25", "#2E2330", "#E5D5D9", "#BCA1AE", "#D191A2", "#879C8F")
             ),
             EpubLoadingTemplate(
-                id = "builtin.loading_aurora", name = "极光航迹",
-                description = "极光光带、群山与远行的坐标",
-                scene = Scene.AURORA, eyebrow = "SOMEWHERE BEYOND", caption = "下一段旅程，从这一页出发。",
+                id = "builtin.loading_aurora",
+                name = appCtx.getString(R.string.builtin_epub_loading_aurora),
+                description = appCtx.getString(R.string.builtin_epub_loading_aurora_desc),
+                scene = Scene.AURORA, eyebrow = "SOMEWHERE BEYOND",
+                caption = appCtx.getString(R.string.builtin_epub_loading_aurora_caption),
                 titleFont = "sans-serif-light", titleSize = 30f,
                 day = colors("#071F2B", "#123D49", "#ECF4E9", "#A4C8C7", "#A5E6CA", "#87A7EB"),
                 night = colors("#06151E", "#0D2C35", "#D3E5DC", "#8AAEB0", "#84C2AD", "#7788BD")

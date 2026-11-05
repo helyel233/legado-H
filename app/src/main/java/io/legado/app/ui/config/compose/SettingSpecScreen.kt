@@ -1,8 +1,11 @@
 package io.legado.app.ui.config.compose
 
 import android.view.View
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -23,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -36,11 +40,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +55,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
+import kotlin.math.abs
 import io.legado.app.R
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.widget.ModernActionPopup
@@ -94,8 +103,21 @@ fun SettingSpecScreen(
     val density = LocalDensity.current
     val targetTitleOffsetPx = with(density) { 38.dp.roundToPx() }
     val targetRowOffsetPx = with(density) { 72.dp.roundToPx() }
+    // 目标行的实测位置：行高随摘要行数（1~3 行）和滑杆行变化，按固定 72dp 估算必然对不准，
+    // 所以先滚到估算位置，再按实测差值校正一次
+    var listTopPx by remember { mutableStateOf(0f) }
+    var targetRowTopPx by remember { mutableStateOf<Float?>(null) }
+    // 命中行高亮：从搜索结果跳进来时，用户需要一眼看到「就是这一项」，
+    // 尤其 switch/滑杆这类点击后不弹窗、界面上没有任何变化的行
+    var highlightKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(highlightKey) {
+        if (highlightKey == null) return@LaunchedEffect
+        delay(1600)
+        highlightKey = null
+    }
     LaunchedEffect(scrollTargetKey, sections) {
         val targetKey = scrollTargetKey?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        targetRowTopPx = null
         var targetSectionIndex = -1
         var targetRowIndex = -1
         sections.forEachIndexed { sectionIndex, section ->
@@ -113,6 +135,17 @@ fun SettingSpecScreen(
             val scrollOffset = targetRowIndex * targetRowOffsetPx +
                 if (section.title.isNullOrBlank()) 0 else targetTitleOffsetPx
             listState.animateScrollToItem(targetSectionIndex, scrollOffset)
+            // 先点亮高亮再校正：目标行只有处于高亮态才会回报实测位置
+            highlightKey = targetKey
+            // 动画结束后目标行可能已经不在组合里（滚过头），所以每帧重新取实测位置，
+            // 收敛不了就退回估算值，不阻塞 onTargetReady
+            repeat(2) {
+                withFrameNanos { }
+                val rowTop = targetRowTopPx ?: return@repeat
+                val delta = rowTop - listTopPx - targetRowOffsetPx
+                if (abs(delta) < 2f) return@repeat
+                listState.scrollBy(delta)
+            }
             onTargetReady(targetKey)
         } else {
             onTargetMissing()
@@ -127,6 +160,7 @@ fun SettingSpecScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.page)
+                .onGloballyPositioned { listTopPx = it.positionInWindow().y }
                 .navigationBarsPadding(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -143,6 +177,8 @@ fun SettingSpecScreen(
                     // 带 targetKey 进来说明是要定位到某一项，此时所有分区必须展开，
                     // 否则目标项根本不在列表里，定位会静默失败
                     forceExpanded = !scrollTargetKey.isNullOrBlank(),
+                    highlightKey = highlightKey,
+                    onTargetRowPositioned = { targetRowTopPx = it },
                     onItemClick = onItemClick
                 )
             }
@@ -157,6 +193,8 @@ private fun SettingSectionPanel(
     panelRadiusPx: Float,
     drawPanelImage: Boolean,
     forceExpanded: Boolean,
+    highlightKey: String?,
+    onTargetRowPositioned: (Float) -> Unit,
     onItemClick: (SettingItemSpec) -> Unit
 ) {
     val context = LocalContext.current
@@ -213,6 +251,9 @@ private fun SettingSectionPanel(
                     panelRadiusPx = panelRadiusPx,
                     showDivider = index != section.items.lastIndex,
                     isLast = index == section.items.lastIndex,
+                    isHighlighted = highlightKey != null &&
+                        (item.key == highlightKey || highlightKey in item.searchKeys),
+                    onTargetPositioned = onTargetRowPositioned,
                     onItemClick = onItemClick
                 )
             }
@@ -227,6 +268,8 @@ private fun SettingRow(
     panelRadiusPx: Float,
     showDivider: Boolean,
     isLast: Boolean,
+    isHighlighted: Boolean,
+    onTargetPositioned: (Float) -> Unit,
     onItemClick: (SettingItemSpec) -> Unit
 ) {
     if (item is SettingSliderSpec) {
@@ -235,10 +278,16 @@ private fun SettingRow(
             colors = colors,
             panelRadiusPx = panelRadiusPx,
             showDivider = showDivider,
-            isLast = isLast
+            isLast = isLast,
+            isHighlighted = isHighlighted,
+            onTargetPositioned = onTargetPositioned
         )
         return
     }
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (isHighlighted) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isHighlighted) 120 else 700)
+    )
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val dialogStyle = rememberAppDialogStyle()
@@ -267,13 +316,17 @@ private fun SettingRow(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 60.dp)
+            .onGloballyPositioned { coords ->
+                if (isHighlighted) onTargetPositioned(coords.positionInWindow().y)
+            }
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = colors.rowPressed,
                 dividerColor = colors.divider,
                 showDivider = showDivider,
                 radiusPx = panelRadiusPx,
-                isLast = isLast
+                isLast = isLast,
+                highlightColor = colors.accent.copy(alpha = 0.14f * highlightAlpha)
             )
             .settingRowClick(
                 item = item,
@@ -378,6 +431,18 @@ private fun Modifier.settingRowClick(
     interactionSource: MutableInteractionSource,
     onItemClick: (SettingItemSpec) -> Unit
 ): Modifier {
+    // 开关行用 toggleable 而不是 clickable(role=Switch)：前者会把「已开启/已关闭」
+    // 一起交给无障碍服务，后者只播报控件类型，用户听不出当前状态
+    if (item is SettingSwitchSpec) {
+        return toggleable(
+            value = item.checked,
+            enabled = item.enabled,
+            interactionSource = interactionSource,
+            indication = null,
+            role = Role.Switch,
+            onValueChange = item.onCheckedChange
+        )
+    }
     val action = item as? SettingActionSpec
     val onLongClick = action?.onLongClick
     return if (onLongClick != null) {
@@ -415,21 +480,31 @@ private fun SettingSliderRow(
     colors: AppSettingPalette,
     panelRadiusPx: Float,
     showDivider: Boolean,
-    isLast: Boolean
+    isLast: Boolean,
+    isHighlighted: Boolean,
+    onTargetPositioned: (Float) -> Unit
 ) {
     val palette = rememberAppDialogStyle().toMiuixPalette()
     val sliderValue = item.value.coerceIn(item.valueRange)
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (isHighlighted) 1f else 0f,
+        animationSpec = tween(durationMillis = if (isHighlighted) 120 else 700)
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 72.dp)
+            .onGloballyPositioned { coords ->
+                if (isHighlighted) onTargetPositioned(coords.positionInWindow().y)
+            }
             .appSettingRowDecoration(
                 pressed = false,
                 pressedColor = colors.rowPressed,
                 dividerColor = colors.divider,
                 showDivider = showDivider,
                 radiusPx = panelRadiusPx,
-                isLast = isLast
+                isLast = isLast,
+                highlightColor = colors.accent.copy(alpha = 0.14f * highlightAlpha)
             )
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {

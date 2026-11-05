@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -668,6 +669,9 @@ fun AppSettingSectionTitle(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                // 不标 Button 时 TalkBack 只念「文本」，用户不知道可点；
+                // 展开/收起状态由行尾文字表达，这里补的是可交互语义
+                role = Role.Button,
                 onClick = onToggle
             )
             .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 8.dp)
@@ -746,7 +750,12 @@ fun Modifier.appSettingRowDecoration(
     isFirst: Boolean = false,
     isLast: Boolean,
     danger: Boolean = false,
-    dangerColor: Color = Color.Transparent
+    dangerColor: Color = Color.Transparent,
+    /**
+     * 从搜索结果深链跳进来时，给目标行打的临时底色。
+     * 传 Color.Transparent 表示不高亮；透明度由调用方做动画，这里只负责绘制。
+     */
+    highlightColor: Color = Color.Transparent
 ): Modifier {
     return drawWithCache {
         val path = Path()
@@ -774,11 +783,20 @@ fun Modifier.appSettingRowDecoration(
         } else {
             null
         }
+        val highlightPaint = if (highlightColor.alpha > 0f) {
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = highlightColor.toArgb()
+            }
+        } else {
+            null
+        }
         val dividerInset = 16.dp.toPx()
         onDrawBehind {
-            if (dangerPaint != null || pressedPaint != null) {
+            if (dangerPaint != null || pressedPaint != null || highlightPaint != null) {
                 drawIntoCanvas { canvas ->
                     val nativeCanvas = canvas.nativeCanvas
+                    highlightPaint?.let { nativeCanvas.drawPath(path, it) }
                     dangerPaint?.let { nativeCanvas.drawPath(path, it) }
                     pressedPaint?.let { nativeCanvas.drawPath(path, it) }
                 }

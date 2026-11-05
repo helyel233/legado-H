@@ -41,6 +41,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import splitties.init.appCtx
 
 /**
  * 辅助按键配置
@@ -114,7 +115,7 @@ class KeyboardAssistsConfig(private val callBack: CallBack) : BaseDialogFragment
 
     private fun editKey(keyboardAssist: KeyboardAssist?) {
         alert {
-            setTitle("辅助按键")
+            setTitle(appCtx.getString(R.string.ui_main_auxiliary_keys))
             val alertBinding = DialogMultipleEditTextBinding.inflate(layoutInflater).apply {
                 layout1.hint = "key"
                 edit1.setText(keyboardAssist?.key)

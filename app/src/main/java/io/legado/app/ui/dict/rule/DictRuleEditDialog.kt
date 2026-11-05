@@ -39,6 +39,7 @@ import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.*
+import splitties.init.appCtx
 
 class DictRuleEditDialog() : ComposeDialogFragment() {
 
@@ -237,7 +238,7 @@ class DictRuleEditDialog() : ComposeDialogFragment() {
         fun pasteRule(success: (DictRule) -> Unit) {
             val text = context.getClipText()
             if (text.isNullOrBlank()) {
-                context.toastOnUi("剪贴板没有内容")
+                context.toastOnUi(appCtx.getString(R.string.misc_clipboard_empty))
                 return
             }
             execute {
@@ -245,7 +246,7 @@ class DictRuleEditDialog() : ComposeDialogFragment() {
             }.onSuccess {
                 success.invoke(it)
             }.onError {
-                context.toastOnUi("格式不对")
+                context.toastOnUi(appCtx.getString(R.string.wrong_format))
             }
         }
 

@@ -5,6 +5,8 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.character.BookCharacterProfileMeta
 import org.json.JSONArray
 import org.json.JSONObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class SpeechSpeaker(
     val speakerName: String = "",
@@ -101,7 +103,7 @@ data class SpeechRoute(
                 return SpeechRoute(
                     engineType = ENGINE_SYSTEM,
                     engineValue = "",
-                    speakerName = "系统默认",
+                    speakerName = appCtx.getString(R.string.ra_cfg_system_default),
                     source = SOURCE_MANUAL
                 )
             }
@@ -126,7 +128,7 @@ data class SpeechRoute(
                     SpeechRoute(
                         engineType = ENGINE_SYSTEM,
                         engineValue = raw,
-                        speakerName = obj.optString("title").ifBlank { "系统默认" },
+                        speakerName = obj.optString("title").ifBlank { appCtx.getString(R.string.ra_cfg_system_default) },
                         source = SOURCE_MANUAL
                     )
                 }
@@ -134,7 +136,7 @@ data class SpeechRoute(
                 SpeechRoute(
                     engineType = ENGINE_SYSTEM,
                     engineValue = raw,
-                    speakerName = "系统默认",
+                    speakerName = appCtx.getString(R.string.ra_cfg_system_default),
                     source = SOURCE_MANUAL
                 )
             )
@@ -211,7 +213,7 @@ object SpeechVoiceCatalogParser {
             }
         }
         if (flatItems.isNotEmpty()) {
-            groups.add(0, SpeechCatalogGroup(groupName = "默认", items = flatItems))
+            groups.add(0, SpeechCatalogGroup(groupName = appCtx.getString(R.string.text_default), items = flatItems))
         }
         return groups
     }

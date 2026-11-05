@@ -1,0 +1,897 @@
+{
+  "prefix": "ai_tool",
+  "resource": "strings_ai_tools.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/help/ai/AiToolRegistry.kt"
+  ],
+  "entries": [
+    {
+      "zh": "查询书架书籍",
+      "en": "Query bookshelf books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:215: \"query_bookshelf\" to \"查询书架书籍\","
+      ],
+      "key": "ai_tool_query_bookshelf_books"
+    },
+    {
+      "zh": "读取书籍详情",
+      "en": "Read book details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:216: \"get_bookshelf_book_info\" to \"读取书籍详情\","
+      ],
+      "key": "ai_tool_read_book_details"
+    },
+    {
+      "zh": "管理书架分组",
+      "en": "Manage bookshelf groups",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:217: \"manage_bookshelf_group\" to \"管理书架分组\","
+      ],
+      "key": "ai_tool_manage_bookshelf_groups"
+    },
+    {
+      "zh": "管理书架标签",
+      "en": "Manage bookshelf tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:218: \"manage_bookshelf_tag\" to \"管理书架标签\","
+      ],
+      "key": "ai_tool_manage_bookshelf_tags"
+    },
+    {
+      "zh": "设置书籍分组",
+      "en": "Set book group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:219: \"set_bookshelf_book_group\" to \"设置书籍分组\","
+      ],
+      "key": "ai_tool_set_book_group"
+    },
+    {
+      "zh": "设置书籍标签",
+      "en": "Set book tags",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:220: \"set_bookshelf_book_tags\" to \"设置书籍标签\","
+      ],
+      "key": "ai_tool_set_book_tags"
+    },
+    {
+      "zh": "查询阅读记录",
+      "en": "Query reading records",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:221: \"query_read_records\" to \"查询阅读记录\","
+      ],
+      "key": "ai_tool_query_reading_records"
+    },
+    {
+      "zh": "读取章节目录",
+      "en": "Read chapter list",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:222: \"list_book_chapters\" to \"读取章节目录\","
+      ],
+      "key": "ai_tool_read_chapter_list"
+    },
+    {
+      "zh": "搜索章节正文",
+      "en": "Search chapter content",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:223: \"search_book_chapter_content\" to \"搜索章节正文\","
+      ],
+      "key": "ai_tool_search_chapter_content"
+    },
+    {
+      "zh": "读取章节正文",
+      "en": "Read chapter content",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:224: \"read_book_chapter_content\" to \"读取章节正文\","
+      ],
+      "key": "ai_tool_read_chapter_content"
+    },
+    {
+      "zh": "列出书源",
+      "en": "List book sources",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:225: \"list_book_sources\" to \"列出书源\","
+      ],
+      "key": "ai_tool_list_book_sources"
+    },
+    {
+      "zh": "搜索书源内容",
+      "en": "Search book source content",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:226: \"search_book_source\" to \"搜索书源内容\","
+      ],
+      "key": "ai_tool_search_book_source_content"
+    },
+    {
+      "zh": "创建书源",
+      "en": "Create book source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:227: \"create_book_source\" to \"创建书源\","
+      ],
+      "key": "ai_tool_create_book_source"
+    },
+    {
+      "zh": "读取书源详情",
+      "en": "Read book source details",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:228: \"get_book_source\" to \"读取书源详情\","
+      ],
+      "key": "ai_tool_read_book_source_details"
+    },
+    {
+      "zh": "更新书源",
+      "en": "Update book source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:229: \"update_book_source\" to \"更新书源\","
+      ],
+      "key": "ai_tool_update_book_source"
+    },
+    {
+      "zh": "抓取网页源码",
+      "en": "Fetch page source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:230: \"fetch_source_html\" to \"抓取网页源码\","
+      ],
+      "key": "ai_tool_fetch_page_source"
+    },
+    {
+      "zh": "调试书源规则",
+      "en": "Debug book source rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:231: \"debug_book_source\" to \"调试书源规则\","
+      ],
+      "key": "ai_tool_debug_book_source_rules"
+    },
+    {
+      "zh": "阅读网络请求",
+      "en": "Reading network request",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:232: \"reading_ajax\" to \"阅读网络请求\","
+      ],
+      "key": "ai_tool_reading_network_request"
+    },
+    {
+      "zh": "阅读 WebView",
+      "en": "Reading WebView",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:233: \"reading_webview\" to \"阅读 WebView\","
+      ],
+      "key": "ai_tool_reading_webview"
+    },
+    {
+      "zh": "抓包网络请求",
+      "en": "Capture network requests",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:234: \"capture_web_requests\" to \"抓包网络请求\","
+      ],
+      "key": "ai_tool_capture_network_requests"
+    },
+    {
+      "zh": "联网搜索",
+      "en": "Web search",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:235: \"search_web_tavily\" to \"联网搜索\",",
+        "AiToolRegistry.kt:312: \"search_web_tavily\" to \"联网搜索\","
+      ],
+      "key": "ai_tool_web_search"
+    },
+    {
+      "zh": "生成图片",
+      "en": "Generate image",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:236: \"generate_image\" to \"生成图片\","
+      ],
+      "key": "ai_tool_generate_image"
+    },
+    {
+      "zh": "读取角色资料",
+      "en": "Read character profiles",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:237: \"list_book_characters\" to \"读取角色资料\","
+      ],
+      "key": "ai_tool_read_character_profiles"
+    },
+    {
+      "zh": "新增或更新角色",
+      "en": "Add or update character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:238: \"upsert_book_character\" to \"新增或更新角色\","
+      ],
+      "key": "ai_tool_add_or_update_character"
+    },
+    {
+      "zh": "删除角色",
+      "en": "Delete character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:239: \"delete_book_character\" to \"删除角色\","
+      ],
+      "key": "bchar_delete_character"
+    },
+    {
+      "zh": "读取角色关系网",
+      "en": "Read character relationships",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:240: \"list_book_character_relations\" to \"读取角色关系网\","
+      ],
+      "key": "ai_tool_read_character_relationships"
+    },
+    {
+      "zh": "新增或更新角色关系",
+      "en": "Add or update character relation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:241: \"upsert_book_character_relation\" to \"新增或更新角色关系\","
+      ],
+      "key": "ai_tool_add_or_update_character_relation"
+    },
+    {
+      "zh": "删除角色关系",
+      "en": "Delete character relation",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:242: \"delete_book_character_relation\" to \"删除角色关系\","
+      ],
+      "key": "ai_tool_delete_character_relation"
+    },
+    {
+      "zh": "读取 AI 图片库",
+      "en": "Read AI image gallery",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:243: \"list_ai_gallery_images\" to \"读取 AI 图片库\","
+      ],
+      "key": "ai_tool_read_ai_image_gallery"
+    },
+    {
+      "zh": "设置角色图库头像",
+      "en": "Set gallery avatar for character",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:244: \"set_book_character_avatar_from_gallery\" to \"设置角色图库头像\","
+      ],
+      "key": "ai_tool_set_gallery_avatar_character"
+    },
+    {
+      "zh": "生成角色头像",
+      "en": "Generate character avatar",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:245: \"generate_book_character_avatar\" to \"生成角色头像\","
+      ],
+      "key": "bchar_generate_character_avatar"
+    },
+    {
+      "zh": "读取配音目录",
+      "en": "Read voice catalog",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:246: \"list_speech_catalogs\" to \"读取配音目录\","
+      ],
+      "key": "ai_tool_read_voice_catalog"
+    },
+    {
+      "zh": "设置角色配音",
+      "en": "Set character voice",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:247: \"assign_character_speech_route\" to \"设置角色配音\","
+      ],
+      "key": "ai_tool_set_character_voice"
+    },
+    {
+      "zh": "批量分配角色配音",
+      "en": "Batch assign character voices",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:248: \"batch_assign_character_speech_routes\" to \"批量分配角色配音\","
+      ],
+      "key": "ai_tool_batch_assign_character_voices"
+    },
+    {
+      "zh": "清空角色配音",
+      "en": "Clear character voices",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:249: \"clear_character_speech_routes\" to \"清空角色配音\","
+      ],
+      "key": "ai_tool_clear_character_voices"
+    },
+    {
+      "zh": "读取发言人分组",
+      "en": "Read speaker groups",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:250: \"list_speech_voice_groups\" to \"读取发言人分组\","
+      ],
+      "key": "ai_tool_read_speaker_groups"
+    },
+    {
+      "zh": "新增或更新发言人分组",
+      "en": "Add or update speaker group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:251: \"upsert_speech_voice_group\" to \"新增或更新发言人分组\","
+      ],
+      "key": "ai_tool_add_or_update_speaker_group"
+    },
+    {
+      "zh": "删除发言人分组",
+      "en": "Delete speaker group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:252: \"delete_speech_voice_group\" to \"删除发言人分组\","
+      ],
+      "key": "ai_tool_delete_speaker_group"
+    },
+    {
+      "zh": "读取朗读配乐曲库",
+      "en": "Read read-aloud score library",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:253: \"list_read_aloud_bgm_catalog\" to \"读取朗读配乐曲库\","
+      ],
+      "key": "ai_tool_read_read_aloud_score_library"
+    },
+    {
+      "zh": "分配朗读配乐范围",
+      "en": "Assign score ranges",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:254: \"assign_read_aloud_bgm_ranges\" to \"分配朗读配乐范围\","
+      ],
+      "key": "ai_tool_assign_score_ranges"
+    },
+    {
+      "zh": "读取世界书",
+      "en": "Read world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:255: \"list_world_books\" to \"读取世界书\","
+      ],
+      "key": "ai_tool_read_world_book"
+    },
+    {
+      "zh": "新增或更新世界书",
+      "en": "Add or update world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:256: \"upsert_world_book\" to \"新增或更新世界书\","
+      ],
+      "key": "ai_tool_add_or_update_world_book"
+    },
+    {
+      "zh": "删除世界书",
+      "en": "Delete world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:257: \"delete_world_book\" to \"删除世界书\","
+      ],
+      "key": "ai_tool_delete_world_book"
+    },
+    {
+      "zh": "新增或更新世界书条目",
+      "en": "Add or update world book entry",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:258: \"upsert_world_book_entry\" to \"新增或更新世界书条目\","
+      ],
+      "key": "ai_tool_add_or_update_world_book_2"
+    },
+    {
+      "zh": "删除世界书条目",
+      "en": "Delete world book entry",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:259: \"delete_world_book_entry\" to \"删除世界书条目\","
+      ],
+      "key": "ai_tool_delete_world_book_entry"
+    },
+    {
+      "zh": "读取世界书启用",
+      "en": "Read enabled world books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:260: \"list_world_book_bindings\" to \"读取世界书启用\","
+      ],
+      "key": "ai_tool_read_enabled_world_books"
+    },
+    {
+      "zh": "启用世界书",
+      "en": "Enable world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:261: \"upsert_world_book_binding\" to \"启用世界书\","
+      ],
+      "key": "ai_tool_enable_world_book"
+    },
+    {
+      "zh": "移除世界书启用",
+      "en": "Disable world book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:262: \"delete_world_book_binding\" to \"移除世界书启用\","
+      ],
+      "key": "ai_tool_disable_world_book"
+    },
+    {
+      "zh": "导入世界书 JSON",
+      "en": "Import world book JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:263: \"import_world_book_json\" to \"导入世界书 JSON\","
+      ],
+      "key": "ai_tool_import_world_book_json"
+    },
+    {
+      "zh": "导出世界书 JSON",
+      "en": "Export world book JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:264: \"export_world_book_json\" to \"导出世界书 JSON\","
+      ],
+      "key": "ai_tool_export_world_book_json"
+    },
+    {
+      "zh": "读取应用设置",
+      "en": "Read app settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:265: \"get_app_settings\" to \"读取应用设置\","
+      ],
+      "key": "ai_tool_read_app_settings"
+    },
+    {
+      "zh": "修改应用设置",
+      "en": "Change app settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:266: \"set_app_setting\" to \"修改应用设置\","
+      ],
+      "key": "ai_tool_change_app_settings"
+    },
+    {
+      "zh": "批量修改设置",
+      "en": "Batch change settings",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:267: \"set_app_settings_batch\" to \"批量修改设置\","
+      ],
+      "key": "ai_tool_batch_change_settings"
+    },
+    {
+      "zh": "工作区：列出文件",
+      "en": "Workspace: list files",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:268: \"workspace_list_files\" to \"工作区：列出文件\","
+      ],
+      "key": "ai_tool_workspace_list_files"
+    },
+    {
+      "zh": "工作区：读取文件",
+      "en": "Workspace: read file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:269: \"workspace_read_file\" to \"工作区：读取文件\","
+      ],
+      "key": "ai_tool_workspace_read_file"
+    },
+    {
+      "zh": "工作区：按行读取",
+      "en": "Workspace: read lines",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:270: \"workspace_read_lines\" to \"工作区：按行读取\","
+      ],
+      "key": "ai_tool_workspace_read_lines"
+    },
+    {
+      "zh": "工作区：正则读取",
+      "en": "Workspace: regex read",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:271: \"workspace_read_matches\" to \"工作区：正则读取\","
+      ],
+      "key": "ai_tool_workspace_regex_read"
+    },
+    {
+      "zh": "工作区：正则搜索",
+      "en": "Workspace: regex search",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:272: \"workspace_search_files\" to \"工作区：正则搜索\","
+      ],
+      "key": "ai_tool_workspace_regex_search"
+    },
+    {
+      "zh": "工作区：保存输入为文件",
+      "en": "Workspace: save input as file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:273: \"workspace_save_input_file\" to \"工作区：保存输入为文件\","
+      ],
+      "key": "ai_tool_workspace_save_input_as_file"
+    },
+    {
+      "zh": "工作区：写入文件",
+      "en": "Workspace: write file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:274: \"workspace_write_file\" to \"工作区：写入文件\","
+      ],
+      "key": "ai_tool_workspace_write_file"
+    },
+    {
+      "zh": "工作区：编辑文件",
+      "en": "Workspace: edit file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:275: \"workspace_edit_file\" to \"工作区：编辑文件\","
+      ],
+      "key": "ai_tool_workspace_edit_file"
+    },
+    {
+      "zh": "工作区：精确替换",
+      "en": "Workspace: exact replace",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:276: \"workspace_replace_text\" to \"工作区：精确替换\","
+      ],
+      "key": "ai_tool_workspace_exact_replace"
+    },
+    {
+      "zh": "工作区：正则替换",
+      "en": "Workspace: regex replace",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:277: \"workspace_replace_regex\" to \"工作区：正则替换\","
+      ],
+      "key": "ai_tool_workspace_regex_replace"
+    },
+    {
+      "zh": "工作区：行号编辑",
+      "en": "Workspace: edit by line number",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:278: \"workspace_edit_lines\" to \"工作区：行号编辑\","
+      ],
+      "key": "ai_tool_workspace_edit_by_line_number"
+    },
+    {
+      "zh": "工作区：插入文本",
+      "en": "Workspace: insert text",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:279: \"workspace_insert_text\" to \"工作区：插入文本\","
+      ],
+      "key": "ai_tool_workspace_insert_text"
+    },
+    {
+      "zh": "工作区：查看差异",
+      "en": "Workspace: view diff",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:280: \"workspace_diff_file\" to \"工作区：查看差异\","
+      ],
+      "key": "ai_tool_workspace_view_diff"
+    },
+    {
+      "zh": "工作区：删除文件",
+      "en": "Workspace: delete file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:281: \"workspace_delete_file\" to \"工作区：删除文件\","
+      ],
+      "key": "ai_tool_workspace_delete_file"
+    },
+    {
+      "zh": "工作区：列出备份",
+      "en": "Workspace: list backups",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:282: \"workspace_list_backups\" to \"工作区：列出备份\","
+      ],
+      "key": "ai_tool_workspace_list_backups"
+    },
+    {
+      "zh": "工作区：创建备份",
+      "en": "Workspace: create backup",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:283: \"workspace_create_backup\" to \"工作区：创建备份\","
+      ],
+      "key": "ai_tool_workspace_create_backup"
+    },
+    {
+      "zh": "工作区：恢复备份",
+      "en": "Workspace: restore backup",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:284: \"workspace_restore_backup\" to \"工作区：恢复备份\","
+      ],
+      "key": "ai_tool_workspace_restore_backup"
+    },
+    {
+      "zh": "工作区：导入书源",
+      "en": "Workspace: import book source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:285: \"workspace_import_book_source\" to \"工作区：导入书源\","
+      ],
+      "key": "ai_tool_workspace_import_book_source"
+    },
+    {
+      "zh": "工作区：创建书源文件",
+      "en": "Workspace: create book source file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:286: \"workspace_create_book_source_file\" to \"工作区：创建书源文件\","
+      ],
+      "key": "ai_tool_workspace_create_book_source_file"
+    },
+    {
+      "zh": "工作区：调试书源",
+      "en": "Workspace: debug book source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:287: \"workspace_debug_book_source\" to \"工作区：调试书源\","
+      ],
+      "key": "ai_tool_workspace_debug_book_source"
+    },
+    {
+      "zh": "工作区：应用书源",
+      "en": "Workspace: apply book source",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:288: \"workspace_apply_book_source\" to \"工作区：应用书源\""
+      ],
+      "key": "ai_tool_workspace_apply_book_source"
+    },
+    {
+      "zh": "书架",
+      "en": "Bookshelf",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:292: \"query_bookshelf\" to \"书架\",",
+        "AiToolRegistry.kt:293: \"get_bookshelf_book_info\" to \"书架\",",
+        "AiToolRegistry.kt:294: \"manage_bookshelf_group\" to \"书架\","
+      ],
+      "key": "bookshelf"
+    },
+    {
+      "zh": "阅读",
+      "en": "Reading",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:299: \"list_book_chapters\" to \"阅读\",",
+        "AiToolRegistry.kt:300: \"search_book_chapter_content\" to \"阅读\",",
+        "AiToolRegistry.kt:301: \"read_book_chapter_content\" to \"阅读\","
+      ],
+      "key": "app_launcher_name"
+    },
+    {
+      "zh": "书源",
+      "en": "Book sources",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:302: \"list_book_sources\" to \"书源\",",
+        "AiToolRegistry.kt:303: \"search_book_source\" to \"书源\",",
+        "AiToolRegistry.kt:304: \"create_book_source\" to \"书源\","
+      ],
+      "key": "book_source"
+    },
+    {
+      "zh": "阅读网络",
+      "en": "Reading network",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:309: \"reading_ajax\" to \"阅读网络\",",
+        "AiToolRegistry.kt:310: \"reading_webview\" to \"阅读网络\",",
+        "AiToolRegistry.kt:311: \"capture_web_requests\" to \"阅读网络\","
+      ],
+      "key": "ai_tool_reading_network"
+    },
+    {
+      "zh": "AI 生图",
+      "en": "AI image",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:313: \"generate_image\" to \"AI 生图\","
+      ],
+      "key": "ai_tool_ai_image"
+    },
+    {
+      "zh": "角色资料",
+      "en": "Characters",
+      "count": 8,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:314: \"list_book_characters\" to \"角色资料\",",
+        "AiToolRegistry.kt:315: \"upsert_book_character\" to \"角色资料\",",
+        "AiToolRegistry.kt:316: \"delete_book_character\" to \"角色资料\","
+      ],
+      "key": "bchar_character_profile"
+    },
+    {
+      "zh": "AI 图片库",
+      "en": "AI gallery",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:320: \"list_ai_gallery_images\" to \"AI 图片库\","
+      ],
+      "key": "ai_tool_ai_gallery"
+    },
+    {
+      "zh": "角色配音",
+      "en": "Character voices",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:323: \"list_speech_catalogs\" to \"角色配音\",",
+        "AiToolRegistry.kt:324: \"assign_character_speech_route\" to \"角色配音\",",
+        "AiToolRegistry.kt:325: \"batch_assign_character_speech_routes\" to \"角色配音\","
+      ],
+      "key": "bchar_character_voice"
+    },
+    {
+      "zh": "智能配乐",
+      "en": "Smart score",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:330: \"list_read_aloud_bgm_catalog\" to \"智能配乐\",",
+        "AiToolRegistry.kt:331: \"assign_read_aloud_bgm_ranges\" to \"智能配乐\","
+      ],
+      "key": "ra_bgm"
+    },
+    {
+      "zh": "世界书",
+      "en": "World book",
+      "count": 10,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:332: \"list_world_books\" to \"世界书\",",
+        "AiToolRegistry.kt:333: \"upsert_world_book\" to \"世界书\",",
+        "AiToolRegistry.kt:334: \"delete_world_book\" to \"世界书\","
+      ],
+      "key": "ai_tool_world_book"
+    },
+    {
+      "zh": "设置",
+      "en": "Settings",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:342: \"get_app_settings\" to \"设置\",",
+        "AiToolRegistry.kt:343: \"set_app_setting\" to \"设置\",",
+        "AiToolRegistry.kt:344: \"set_app_settings_batch\" to \"设置\","
+      ],
+      "key": "setting"
+    },
+    {
+      "zh": "MCP 工具",
+      "en": "MCP tools",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:370: name.startsWith(\"mcp_\") -> \"MCP 工具\""
+      ],
+      "key": "ai_tool_mcp_tools"
+    },
+    {
+      "zh": "其他",
+      "en": "Other",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiToolRegistry.kt:371: else -> nativeToolGroups[name] ?: \"其他\""
+      ],
+      "key": "discover_group_other"
+    }
+  ]
+}

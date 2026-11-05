@@ -42,6 +42,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 object CacheBook {
 
@@ -407,7 +409,7 @@ object CacheBook {
                 //出现错误等待一秒后重新加入待下载列表
                 delay(1000)
                 onPostError(chapter, it)
-                downloadFinish(chapter, "获取正文失败\n${it.localizedMessage}")
+                downloadFinish(chapter, appCtx.getString(R.string.misc_failed_load_content_n_3, it.localizedMessage))
             }.onCancel {
                 onCancel(chapterIndex)
                 downloadFinish(chapter, "download canceled", canceled = true)
@@ -454,7 +456,7 @@ object CacheBook {
                 onError(chapter, e)
                 ReadBook.downloadFailChapters.merge(chapter.index, 1, Int::plus)
                 if (failOnError) throw e
-                return "获取正文失败\n${e.localizedMessage}"
+                return appCtx.getString(R.string.misc_failed_load_content_n_4, e.localizedMessage)
             } finally {
                 postEvent(EventBus.UP_DOWNLOAD, book.bookUrl)
             }
@@ -540,7 +542,7 @@ object CacheBook {
                 } else {
                     onError(chapter, sourceError)
                     ReadBook.downloadFailChapters.merge(chapter.index, 1, Int::plus)
-                    downloadFinish(chapter, "获取正文失败\n${sourceError.localizedMessage}", resetPageOffset)
+                    downloadFinish(chapter, appCtx.getString(R.string.misc_failed_load_content_n_5, sourceError.localizedMessage), resetPageOffset)
                 }
             }.onCancel {
                 onCancel(chapter.index)

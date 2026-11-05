@@ -1,0 +1,643 @@
+{
+  "prefix": "i18n_final",
+  "resource": "strings_i18n_final.xml",
+  "applied": "manual",
+  "note": "R57 final pass: 56 A-class occurrences hand-edited in Kotlin; resources are Android positional templates (%N$s), not raw Kotlin literals. Re-running `apply` is intentionally not supported for this batch.",
+  "files": [
+    "app/src/main/java/io/legado/app/data/entities/BookChapter.kt",
+    "app/src/main/java/io/legado/app/data/entities/ReadMenuCustomButton.kt",
+    "app/src/main/java/io/legado/app/help/AppFont.kt",
+    "app/src/main/java/io/legado/app/help/book/ContentProcessor.kt",
+    "app/src/main/java/io/legado/app/help/book/highlight/HighlightImport.kt",
+    "app/src/main/java/io/legado/app/help/book/highlight/HighlightPackageParser.kt",
+    "app/src/main/java/io/legado/app/help/readaloud/speech/SpeechVoiceCatalogRepository.kt",
+    "app/src/main/java/io/legado/app/model/AutoTaskProtocol.kt",
+    "app/src/main/java/io/legado/app/model/debug/DebugCategory.kt",
+    "app/src/main/java/io/legado/app/model/debug/DebugLevel.kt",
+    "app/src/main/java/io/legado/app/receiver/SharedReceiverActivity.kt",
+    "app/src/main/java/io/legado/app/service/DownloadService.kt",
+    "app/src/main/java/io/legado/app/ui/about/UpdateAcceleratorDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/character/BookCharacterEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/EffectiveReplacesDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/AiReadAloudUsageRecordActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HighlightRuleManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HttpTtsEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReaderAssetManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeakerGroupManageDialog.kt",
+    "app/src/main/java/io/legado/app/ui/browser/WebViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/code/CodeEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/code/CodeEditViewModel.kt",
+    "app/src/main/java/io/legado/app/ui/config/ComposeDirectLinkUploadDialog.kt",
+    "app/src/main/java/io/legado/app/ui/main/ai/compose/AiChatScreen.kt",
+    "app/src/main/java/io/legado/app/ui/main/explore/DiscoverySuiteManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/replace/edit/ReplaceEditActivity.kt",
+    "app/src/main/java/io/legado/app/ui/video/VideoPlayerActivity.kt"
+  ],
+  "entries": [
+    {
+      "zh": "暂无播放地址",
+      "en": "No playable URL",
+      "key": "i18n_final_no_play_url",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_no_play_url"
+      ]
+    },
+    {
+      "zh": "复制失败：%1$s",
+      "en": "Copy failed: %1$s",
+      "key": "i18n_final_copy_failed",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_copy_failed"
+      ]
+    },
+    {
+      "zh": "规则格式不正确",
+      "en": "Invalid rule format",
+      "key": "i18n_final_rule_invalid",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_rule_invalid"
+      ]
+    },
+    {
+      "zh": "格式不对：%1$s",
+      "en": "Invalid format: %1$s",
+      "key": "i18n_final_import_format_invalid",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_import_format_invalid"
+      ]
+    },
+    {
+      "zh": "规则校验失败",
+      "en": "Rule validation failed",
+      "key": "i18n_final_rule_validation_failed",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_rule_validation_failed"
+      ]
+    },
+    {
+      "zh": "保存失败：%1$s",
+      "en": "Save failed: %1$s",
+      "key": "i18n_final_save_failed",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_save_failed"
+      ]
+    },
+    {
+      "zh": "书源教程",
+      "en": "Book source tutorial",
+      "key": "i18n_final_book_source_tutorial",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_book_source_tutorial"
+      ]
+    },
+    {
+      "zh": "订阅源教程",
+      "en": "RSS source tutorial",
+      "key": "i18n_final_rss_tutorial",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_rss_tutorial"
+      ]
+    },
+    {
+      "zh": "js教程",
+      "en": "JS tutorial",
+      "key": "i18n_final_js_tutorial",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_js_tutorial"
+      ]
+    },
+    {
+      "zh": "正则教程",
+      "en": "Regex tutorial",
+      "key": "i18n_final_regex_tutorial",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_regex_tutorial"
+      ]
+    },
+    {
+      "zh": "markdown不需要格式化",
+      "en": "Markdown does not need formatting",
+      "key": "i18n_final_markdown_no_format",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_markdown_no_format"
+      ]
+    },
+    {
+      "zh": "代理模板支持 ${url} 占位符。未填写占位符时，会自动把原始 GitHub 地址拼到代理地址后面。",
+      "en": "Proxy templates support the ${url} placeholder. If omitted, the original GitHub URL is appended to the proxy address.",
+      "key": "i18n_final_proxy_template_hint",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_proxy_template_hint"
+      ]
+    },
+    {
+      "zh": "保存图片失败:%1$s",
+      "en": "Failed to save image: %1$s",
+      "key": "i18n_final_save_image_failed",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_save_image_failed"
+      ]
+    },
+    {
+      "zh": "角色名：%1$s",
+      "en": "Character name: %1$s",
+      "key": "i18n_final_character_name",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_character_name"
+      ]
+    },
+    {
+      "zh": "未命名角色",
+      "en": "Unnamed character",
+      "key": "i18n_final_unnamed_character",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_unnamed_character"
+      ]
+    },
+    {
+      "zh": "繁简转换",
+      "en": "Simplified/Traditional conversion",
+      "key": "i18n_final_cn_convert",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_cn_convert"
+      ]
+    },
+    {
+      "zh": "发言人可填 [{\"speakerName\":\"晓晓\",\"toneID\":\"xxx\"}]，也可用 [{\"groupName\":\"女声\",\"items\":[...]}] 分组；情绪字段使用 emotionName / emotionTag。",
+      "en": "Speakers can be set as [{\"speakerName\":\"Xiaoxiao\",\"toneID\":\"xxx\"}], or grouped as [{\"groupName\":\"Female\",\"items\":[...]}]; emotion fields use emotionName / emotionTag.",
+      "key": "i18n_final_speaker_hint",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_speaker_hint"
+      ]
+    },
+    {
+      "zh": "高亮规则.red",
+      "en": "highlight_rules.red",
+      "key": "i18n_final_highlight_rules_file",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_highlight_rules_file"
+      ]
+    },
+    {
+      "zh": "请选择%1$s素材",
+      "en": "Please select %1$s assets",
+      "key": "i18n_final_select_asset_kind",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_select_asset_kind"
+      ]
+    },
+    {
+      "zh": "字体",
+      "en": "font",
+      "key": "i18n_final_font",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_font"
+      ]
+    },
+    {
+      "zh": "图片",
+      "en": "image",
+      "key": "i18n_final_image",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_image"
+      ]
+    },
+    {
+      "zh": "待导入 · %1$s",
+      "en": "Pending import · %1$s",
+      "key": "i18n_final_pending_import",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_pending_import"
+      ]
+    },
+    {
+      "zh": "总 %1$s",
+      "en": "Total %1$s",
+      "key": "i18n_final_total_tokens",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_total_tokens"
+      ]
+    },
+    {
+      "zh": "%1$s 个发言人 · %2$s",
+      "en": "%1$s speakers · %2$s",
+      "key": "i18n_final_speaker_group_summary",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_speaker_group_summary"
+      ]
+    },
+    {
+      "zh": "已启用",
+      "en": "Enabled",
+      "key": "i18n_final_enabled",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_enabled"
+      ]
+    },
+    {
+      "zh": "已停用",
+      "en": "Disabled",
+      "key": "i18n_final_disabled",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_disabled"
+      ]
+    },
+    {
+      "zh": "当前 %1$sx，仅增强套件页面板不透明度",
+      "en": "Current %1$sx; affects the enhanced suite panel opacity only",
+      "key": "i18n_final_opacity_hint",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_opacity_hint"
+      ]
+    },
+    {
+      "zh": "自动播放语音：%1$s",
+      "en": "Auto-play speech: %1$s",
+      "key": "i18n_final_auto_speak",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_auto_speak"
+      ]
+    },
+    {
+      "zh": "开",
+      "en": "On",
+      "key": "i18n_final_on",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_on"
+      ]
+    },
+    {
+      "zh": "关",
+      "en": "Off",
+      "key": "i18n_final_off",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_off"
+      ]
+    },
+    {
+      "zh": "分享文本_%1$s",
+      "en": "Shared text %1$s",
+      "key": "i18n_final_shared_text_name",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_shared_text_name"
+      ]
+    },
+    {
+      "zh": "refreshToc 缺少 bookUrl",
+      "en": "refreshToc: missing bookUrl",
+      "key": "i18n_final_refresh_toc_missing_book_url",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_refresh_toc_missing_book_url"
+      ]
+    },
+    {
+      "zh": "refreshToc 未找到书籍",
+      "en": "refreshToc: book not found",
+      "key": "i18n_final_refresh_toc_book_not_found",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_refresh_toc_book_not_found"
+      ]
+    },
+    {
+      "zh": "通知: %1$s",
+      "en": "Notification: %1$s",
+      "key": "i18n_final_notify_result",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_notify_result"
+      ]
+    },
+    {
+      "zh": "插入%1$s",
+      "en": "%1$s inserted",
+      "key": "i18n_final_inserted",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_inserted"
+      ]
+    },
+    {
+      "zh": "删除%1$s",
+      "en": "%1$s removed",
+      "key": "i18n_final_removed",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_removed"
+      ]
+    },
+    {
+      "zh": "重排",
+      "en": "Reordered",
+      "key": "i18n_final_reordered",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_reordered"
+      ]
+    },
+    {
+      "zh": "重复身份%1$s",
+      "en": "%1$s duplicate IDs",
+      "key": "i18n_final_duplicate_ids",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_duplicate_ids"
+      ]
+    },
+    {
+      "zh": "已排队缓存%1$s",
+      "en": "%1$s queued for caching",
+      "key": "i18n_final_queued_cache",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_queued_cache"
+      ]
+    },
+    {
+      "zh": "网络",
+      "en": "Network",
+      "key": "i18n_final_debug_category_network",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_debug_category_network"
+      ]
+    },
+    {
+      "zh": "规则",
+      "en": "Rules",
+      "key": "i18n_final_debug_category_rule",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_debug_category_rule"
+      ]
+    },
+    {
+      "zh": "崩溃",
+      "en": "Crash",
+      "key": "i18n_final_debug_category_crash",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_debug_category_crash"
+      ]
+    },
+    {
+      "zh": "阅读器",
+      "en": "Reader",
+      "key": "i18n_final_debug_category_reader",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_debug_category_reader"
+      ]
+    },
+    {
+      "zh": "警告",
+      "en": "Warning",
+      "key": "i18n_final_debug_level_warn",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_debug_level_warn"
+      ]
+    },
+    {
+      "zh": "%1$s，%2$ss后重试(%3$s/%4$s)",
+      "en": "%1$s, retrying in %2$ss (%3$s/%4$s)",
+      "key": "i18n_final_download_retry",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_download_retry"
+      ]
+    },
+    {
+      "zh": "%1$s替换出错",
+      "en": "Failed to apply replacement rule %1$s",
+      "key": "i18n_final_replace_error",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_replace_error"
+      ]
+    },
+    {
+      "zh": "自定义按键",
+      "en": "Custom button",
+      "key": "i18n_final_custom_button",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_custom_button"
+      ]
+    },
+    {
+      "zh": "字体引用",
+      "en": "Font reference",
+      "key": "i18n_final_font_reference",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_font_reference"
+      ]
+    },
+    {
+      "zh": "替换净化: 规则 %1$s 替换出错",
+      "en": "Purify: rule %1$s failed",
+      "key": "i18n_final_replace_purify_error",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_replace_purify_error"
+      ]
+    },
+    {
+      "zh": "简繁转换出错",
+      "en": "Chinese conversion failed",
+      "key": "i18n_final_cn_convert_error",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_cn_convert_error"
+      ]
+    },
+    {
+      "zh": "第 %1$s 条未导入：%2$s",
+      "en": "Item %1$s was not imported: %2$s",
+      "key": "i18n_final_item_not_imported",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_item_not_imported"
+      ]
+    },
+    {
+      "zh": "导入 %1$s 条，重复 %2$s 条",
+      "en": "Imported %1$s, %2$s duplicates",
+      "key": "i18n_final_import_summary",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_import_summary"
+      ]
+    },
+    {
+      "zh": "，未导入文件 %1$s 个",
+      "en": ", %1$s files skipped",
+      "key": "i18n_final_import_skipped_files",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_import_skipped_files"
+      ]
+    },
+    {
+      "zh": "%1$s 个发言人",
+      "en": "%1$s speakers",
+      "key": "i18n_final_speaker_count",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_speaker_count"
+      ]
+    },
+    {
+      "zh": "%1$s 个情绪",
+      "en": "%1$s emotions",
+      "key": "i18n_final_emotion_count",
+      "count": 1,
+      "risk": 0,
+      "force": false,
+      "samples": [
+        "R57 final pass (manual Kotlin edit) -> i18n_final_emotion_count"
+      ]
+    }
+  ]
+}

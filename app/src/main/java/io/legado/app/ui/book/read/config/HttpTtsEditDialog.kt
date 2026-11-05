@@ -68,6 +68,7 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
+import splitties.init.appCtx
 
 class HttpTtsEditDialog() : BaseDialogFragment(0) {
 
@@ -136,7 +137,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
         if (!validate(tts)) return
         viewModel.save(tts) {
             dismissAllowingStateLoss()
-            toastOnUi("保存成功")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_saved))
         }
     }
 
@@ -144,7 +145,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
         val tts = draft.toHttpTts(viewModel.id)
         if (!validate(tts)) return
         if (tts.loginUrl.isNullOrBlank()) {
-            toastOnUi("登录url不能为空")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_login_url_cannot_be_empty))
             return
         }
         viewModel.save(tts) {
@@ -157,7 +158,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
 
     private fun validate(httpTTS: HttpTTS): Boolean {
         if (httpTTS.name.isBlank()) {
-            toastOnUi("名称不能为空")
+            toastOnUi(appCtx.getString(R.string.auto_task_name_required))
             return false
         }
         fun validJsonCatalog(value: String): Boolean {
@@ -165,11 +166,11 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
             return text.isBlank() || text.isJsonArray() || text.isJsonObject()
         }
         if (!validJsonCatalog(httpTTS.speakersJson)) {
-            toastOnUi("发言人列表 JSON 必须是数组或对象")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_speaker_list_json_must_be))
             return false
         }
         if (!validJsonCatalog(httpTTS.emotionsJson)) {
-            toastOnUi("情绪列表 JSON 必须是数组或对象")
+            toastOnUi(appCtx.getString(R.string.ra_cfg_emotion_list_json_must_be))
             return false
         }
         return true
@@ -221,16 +222,16 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
 }
 
 private enum class HttpTtsField(val label: String) {
-    Name("名称"),
-    Speakers("发言人列表 JSON"),
-    Emotions("情绪列表 JSON"),
+    Name(appCtx.getString(R.string.name)),
+    Speakers(appCtx.getString(R.string.ra_cfg_speaker_list_json)),
+    Emotions(appCtx.getString(R.string.ra_cfg_emotion_list_json)),
     Url("url"),
     ContentType("Content-Type"),
-    ConcurrentRate("并发率"),
-    SynthesisThreadCount("生成线程数"),
-    LoginUrl("登录 URL"),
-    LoginUi("登录 UI"),
-    LoginCheckJs("登录检测 JS"),
+    ConcurrentRate(appCtx.getString(R.string.auto_task_concurrent_rate)),
+    SynthesisThreadCount(appCtx.getString(R.string.ra_cfg_generation_threads)),
+    LoginUrl(appCtx.getString(R.string.ra_cfg_login_url)),
+    LoginUi(appCtx.getString(R.string.ra_cfg_login_ui)),
+    LoginCheckJs(appCtx.getString(R.string.ra_cfg_login_detection_js)),
     Header("Header"),
     JsLib("jsLib")
 }
@@ -344,27 +345,27 @@ private fun HttpTtsEditScreen(
             Column(modifier = Modifier.fillMaxSize().padding(16.dp).imePadding()) {
             Row {
                 Text(
-                    text = "HTTP 朗读规则",
+                    text = appCtx.getString(R.string.ra_cfg_http_read_aloud_rules),
                     color = colors.text,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = onFullEdit) { Text("全屏", color = colors.accent) }
-                TextButton(onClick = onSave) { Text("保存", color = colors.accent) }
-                TextButton(onClick = onClose) { Text("关闭", color = colors.subText) }
+                TextButton(onClick = onFullEdit) { Text(appCtx.getString(R.string.full_screen), color = colors.accent) }
+                TextButton(onClick = onSave) { Text(appCtx.getString(R.string.action_save), color = colors.accent) }
+                TextButton(onClick = onClose) { Text(appCtx.getString(R.string.jf_convert_o), color = colors.subText) }
             }
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()).padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                HeaderAction("登录", colors, onLogin)
-                HeaderAction("复制", colors, onCopy)
-                HeaderAction("粘贴", colors, onPaste)
-                HeaderAction("登录头", colors, onShowLoginHeader)
-                HeaderAction("清登录头", colors, onClearLoginHeader)
-                HeaderAction("日志", colors, onLog)
-                HeaderAction("帮助", colors, onHelp)
+                HeaderAction(appCtx.getString(R.string.login), colors, onLogin)
+                HeaderAction(appCtx.getString(R.string.ra_cfg_copy), colors, onCopy)
+                HeaderAction(appCtx.getString(R.string.ra_cfg_paste), colors, onPaste)
+                HeaderAction(appCtx.getString(R.string.login_header), colors, onShowLoginHeader)
+                HeaderAction(appCtx.getString(R.string.ra_cfg_clear_login_headers), colors, onClearLoginHeader)
+                HeaderAction(appCtx.getString(R.string.log), colors, onLog)
+                HeaderAction(appCtx.getString(R.string.help), colors, onHelp)
             }
             Column(
                 modifier = Modifier
@@ -378,7 +379,7 @@ private fun HttpTtsEditScreen(
                 EditField(HttpTtsField.Emotions, draft.emotionsJson, { onDraftChange(draft.copy(emotionsJson = it)) }, onFocus, minLines = 3)
                 SelectionContainer {
                     Text(
-                        text = "发言人可填 [{\"speakerName\":\"晓晓\",\"toneID\":\"xxx\"}]，也可用 [{\"groupName\":\"女声\",\"items\":[...]}] 分组；情绪字段使用 emotionName / emotionTag。",
+                        text = appCtx.getString(R.string.i18n_final_speaker_hint),
                         color = colors.subText,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -435,8 +436,8 @@ private fun EditField(
             },
         shape = RoundedCornerShape(LocalContext.current.composeActionRadius()),
         supportingText = when (field) {
-            HttpTtsField.Speakers -> ({ Text("可为空；为空时该 HTTP TTS 会作为普通发言人使用。", color = colors.subText) })
-            HttpTtsField.Emotions -> ({ Text("可为空；填写后角色和快捷选择可选默认情绪。", color = colors.subText) })
+            HttpTtsField.Speakers -> ({ Text(appCtx.getString(R.string.ra_cfg_optional_when_empty_this_http), color = colors.subText) })
+            HttpTtsField.Emotions -> ({ Text(appCtx.getString(R.string.ra_cfg_optional_when_set_characters_quick), color = colors.subText) })
             else -> null
         }
     )

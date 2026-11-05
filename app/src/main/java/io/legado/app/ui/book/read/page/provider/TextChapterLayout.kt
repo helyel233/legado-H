@@ -107,6 +107,8 @@ import org.jsoup.nodes.TextNode
 import io.legado.app.help.book.usesDirectReader
 import io.legado.app.help.book.highlight.HighlightRules
 import io.legado.app.help.book.highlight.NativeHighlights
+import io.legado.app.R
+import splitties.init.appCtx
 
 class TextChapterLayout(
     scope: CoroutineScope,
@@ -453,7 +455,7 @@ class TextChapterLayout(
                     val contentEnd = text.lastIndexOf("<")
                     if (contentStart >= 0 && contentEnd > contentStart) {
                         if (book.isEpub && AppConfig.useEpubCore) {
-                            setTypeEpubDiagnosticPage("旧 EPUB 缓存仍是 usehtml，请重新打开或刷新章节缓存", text.take(180))
+                            setTypeEpubDiagnosticPage(appCtx.getString(R.string.ui_book_old_epub_cache_still_uses), text.take(180))
                             return@forEachIndexed
                         }
                         setTypeHtml(imageStyle, book, text.substring(contentStart + 1, contentEnd))
@@ -1039,7 +1041,7 @@ class TextChapterLayout(
             prepareNextPageIfNeed()
         }
         val message = buildString {
-            append("EPUB 原生排版失败")
+            append(appCtx.getString(R.string.ui_book_epub_native_layout_failed))
             append("\n")
             append(reason)
             if (detail.isNotBlank()) {

@@ -24,6 +24,7 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import splitties.init.appCtx
 
 /**
  * 起效的替换规则
@@ -33,7 +34,7 @@ class EffectiveReplacesDialog : BaseDialogFragment(R.layout.dialog_recycler_view
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by activityViewModels<ReadBookViewModel>()
     private val adapter by lazy { ReplaceAdapter(requireContext()) }
-    private val chineseConvert by lazy { ReplaceRule(0, "繁简转换") }
+    private val chineseConvert by lazy { ReplaceRule(0, appCtx.getString(R.string.i18n_final_cn_convert)) }
 
     private var isEdit = false
 

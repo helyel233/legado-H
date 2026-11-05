@@ -6,6 +6,8 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class LibraryCloudSession(
     val config: LibraryContainerConfig?,
@@ -335,7 +337,7 @@ data class LibraryCloudSession(
         suspend fun open(book: Book, config: LibraryContainerConfig?): LibraryCloudSession {
             if (config == null) return LibraryCloudSession(null, book, LibraryCloudState.DISABLED)
             if (!NetworkUtils.isAvailable()) {
-                return LibraryCloudSession(config, book, LibraryCloudState.ERROR, errorMessage = "网络不可用")
+                return LibraryCloudSession(config, book, LibraryCloudState.ERROR, errorMessage = appCtx.getString(R.string.misc_network_unavailable))
             }
             return LibraryCloudSession(config, book, LibraryCloudState.READY)
         }

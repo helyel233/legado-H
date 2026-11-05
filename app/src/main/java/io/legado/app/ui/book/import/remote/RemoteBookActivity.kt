@@ -30,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import java.io.File
+import splitties.init.appCtx
 
 /**
  * 展示远程书籍
@@ -245,7 +246,7 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
     }
 
     override fun addToBookShelfAgain(remoteBook: RemoteBook) {
-        alert(getString(R.string.sure), "是否重新加入书架？") {
+        alert(getString(R.string.sure), appCtx.getString(R.string.ui_book_add_bookshelf_again)) {
             yesButton {
                 binding.refreshProgressBar.isAutoLoading = true
                 viewModel.addToBookshelf(hashSetOf(remoteBook)) {

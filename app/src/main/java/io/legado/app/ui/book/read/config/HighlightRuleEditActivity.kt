@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
+import splitties.init.appCtx
 
 class HighlightRuleEditActivity : BaseActivity<ActivityHighlightRuleEditBinding>() {
     override val binding by viewBinding(ActivityHighlightRuleEditBinding::inflate)
@@ -64,9 +65,9 @@ class HighlightRuleEditActivity : BaseActivity<ActivityHighlightRuleEditBinding>
     }
     private val editingId get() = intent.getStringExtra("id")
     private val types = listOf("textColor", "background", "underline", "doubleLine", "wavyLine", "strikethrough")
-    private val typeLabels = listOf("文字上色", "背景上色", "下划线", "双下划线", "波浪线", "删除线")
+    private val typeLabels = listOf("文字上色", appCtx.getString(R.string.ui_book_background_color), appCtx.getString(R.string.ui_book_underline), appCtx.getString(R.string.ui_book_double_underline), appCtx.getString(R.string.ui_book_wavy_line), appCtx.getString(R.string.ui_book_strikethrough))
     private val colors = listOf("accent", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "brown", "gray")
-    private val colorLabels = listOf("阅读强调色", "红色", "橙色", "黄色", "绿色", "青色", "蓝色", "紫色", "粉色", "棕色", "灰色")
+    private val colorLabels = listOf("阅读强调色", appCtx.getString(R.string.ui_book_red), appCtx.getString(R.string.ui_book_orange), appCtx.getString(R.string.ui_book_yellow), appCtx.getString(R.string.ui_book_green), appCtx.getString(R.string.ui_book_cyan), appCtx.getString(R.string.ui_book_blue), appCtx.getString(R.string.ui_book_purple), appCtx.getString(R.string.ui_book_pink), appCtx.getString(R.string.ui_book_brown), appCtx.getString(R.string.ui_book_gray))
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         if (pendingFont == null) pendingFont = savedInstanceState?.getString("pendingFont")
@@ -181,12 +182,12 @@ class HighlightRuleEditActivity : BaseActivity<ActivityHighlightRuleEditBinding>
             }
             val font = names.first ?: when {
                 fontId != null -> getString(R.string.reader_assets_missing)
-                Regex("(?i)font-family\\s*:").containsMatchIn(css) && !css.contains("reeden-font:", true) -> "自定义 CSS 字体"
+                Regex("(?i)font-family\\s*:").containsMatchIn(css) && !css.contains("reeden-font:", true) -> appCtx.getString(R.string.ui_book_custom_css_font)
                 else -> getString(R.string.reader_assets_follow_font)
             }
             binding.btnFont.text = getString(R.string.reader_assets_picker_label, getString(R.string.reader_assets_font_label), font)
             binding.btnImage.text = getString(R.string.reader_assets_picker_label, getString(R.string.reader_assets_background_label),
-                names.second ?: if (imageId == null) getString(R.string.reader_assets_no_image) else "原规则背景")
+                names.second ?: if (imageId == null) getString(R.string.reader_assets_no_image) else appCtx.getString(R.string.ui_book_original_rule_background))
         }
     }
 
@@ -251,8 +252,8 @@ class HighlightRuleEditActivity : BaseActivity<ActivityHighlightRuleEditBinding>
         if (value.enabled && invalid != null) { toastOnUi(invalid); return }
         if (!value.global && value.bookUrl == null) { toastOnUi(R.string.highlight_rule_bind_hint); return }
         val warnings = value.importWarning.split("；").filter { it.startsWith("背景图片未导入") } +
-            listOfNotNull(invalid?.let { "表达式不可用：" + it },
-                if (value.styleCssText.contains("reeden-font:", true)) "未附带 Reeden 字体，使用当前阅读字体" else null)
+            listOfNotNull(invalid?.let { appCtx.getString(R.string.misc_invalid_expression) + it },
+                if (value.styleCssText.contains("reeden-font:", true)) appCtx.getString(R.string.ui_book_no_reeden_font_attached_using) else null)
         saving = true
         updateEnabled()
         lifecycleScope.launch {

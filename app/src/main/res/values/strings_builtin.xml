@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Display names of built-in entities. The persisted ids stay unchanged;
+         only these labels follow the UI locale. -->
+    <string name="builtin_speaker_default">Default speaker</string>
+    <string name="builtin_epub_loading_botanical">Camellia</string>
+    <string name="builtin_epub_loading_botanical_desc">Camellias, leaves and cream-colored letter paper</string>
+    <string name="builtin_epub_loading_botanical_caption">Leave a quiet moment to a bloom.</string>
+    <string name="builtin_epub_loading_aurora">Aurora Trail</string>
+    <string name="builtin_epub_loading_aurora_desc">Aurora bands, mountains and the coordinates of a journey</string>
+    <string name="builtin_epub_loading_aurora_caption">The next journey starts on this page.</string>
+    <string name="builtin_bubble_package">Built-in paragraph bubble</string>
+    <string name="builtin_kit_floating_no_search">Floating bottom bar without search</string>
+    <string name="builtin_kit_floating_no_search_summary">Floating bottom bar (search hidden) + search in the top bar</string>
+    <string name="builtin_cover_template_default">Default template</string>
+</resources>

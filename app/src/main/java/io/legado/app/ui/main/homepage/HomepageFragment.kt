@@ -13,6 +13,7 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
+import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
@@ -28,6 +29,7 @@ import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.dpToPx
+import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
@@ -189,6 +191,16 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
                 viewModel.setPreloadMode(newMode)
                 item.isChecked = newMode == 1
             }
+        }
+    }
+
+    override fun observeLiveBus() {
+        super.observeLiveBus()
+        // 「页面布局」设置页改了首页布局后，借 ViewModel 的 configVersion 重发 uiState，
+        // 让 upLayoutMode() 按新值切换混合列表 / 分源Tab
+        observeEvent<String>(EventBus.UP_PAGE_LAYOUT) {
+            if (!isAdded || view == null) return@observeEvent
+            viewModel.setLayoutMode(AppConfig.homepageLayoutMode)
         }
     }
 

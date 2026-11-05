@@ -32,6 +32,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import io.legado.app.R
 
 object AppearanceKitManager {
 
@@ -64,8 +65,8 @@ object AppearanceKitManager {
         return listOf(
             AppearanceKit(
                 id = KIT_FLOATING,
-                name = "悬浮底栏",
-                summary = "悬浮底栏 + 默认顶栏",
+                name = appCtx.getString(R.string.bottom_bar_layout_floating),
+                summary = appCtx.getString(R.string.main_layout_preset_default_summary),
                 type = AppearanceKitType.BUILTIN,
                 binding = KitBinding(
                     preset = MainLayoutPresetConfig.PRESET_DEFAULT,
@@ -74,8 +75,8 @@ object AppearanceKitManager {
             ),
             AppearanceKit(
                 id = KIT_FLOATING_NO_SEARCH,
-                name = "无搜索悬浮底栏",
-                summary = "悬浮底栏(隐藏搜索) + 顶栏显示搜索",
+                name = appCtx.getString(R.string.builtin_kit_floating_no_search),
+                summary = appCtx.getString(R.string.builtin_kit_floating_no_search_summary),
                 type = AppearanceKitType.BUILTIN,
                 binding = KitBinding(
                     preset = MainLayoutPresetConfig.PRESET_DEFAULT,
@@ -84,15 +85,15 @@ object AppearanceKitManager {
             ),
             AppearanceKit(
                 id = KIT_REGULAR,
-                name = "常规底栏",
-                summary = "常规底栏 + 常规顶栏",
+                name = appCtx.getString(R.string.bottom_bar_layout_standard),
+                summary = appCtx.getString(R.string.main_layout_preset_regular_summary),
                 type = AppearanceKitType.BUILTIN,
                 binding = KitBinding(preset = MainLayoutPresetConfig.PRESET_REGULAR)
             ),
             AppearanceKit(
                 id = KIT_SIDEBAR,
-                name = "侧边栏",
-                summary = "侧边栏 + 默认顶栏",
+                name = appCtx.getString(R.string.bottom_bar_layout_sidebar),
+                summary = appCtx.getString(R.string.main_layout_preset_sidebar_summary),
                 type = AppearanceKitType.BUILTIN,
                 binding = KitBinding(preset = MainLayoutPresetConfig.PRESET_SIDEBAR)
             )
@@ -116,9 +117,9 @@ object AppearanceKitManager {
                     id = "theme:${name}",
                     name = name,
                     summary = when {
-                        hasDay && hasNight -> "已导入日间 / 夜间界面主题"
-                        hasNight -> "已导入夜间界面主题"
-                        else -> "已导入日间界面主题"
+                        hasDay && hasNight -> appCtx.getString(R.string.svc_day_night_themes_imported)
+                        hasNight -> appCtx.getString(R.string.svc_night_theme_imported)
+                        else -> appCtx.getString(R.string.svc_day_theme_imported)
                     },
                     type = AppearanceKitType.IMPORTED_THEME,
                     binding = KitBinding().apply {
@@ -356,7 +357,7 @@ object AppearanceKitManager {
             themes = ThemePackageManager.loadLocalOnly(isNight)
                 .filter { it.source != ThemePackageManager.Source.BUILTIN }
                 .map { ComponentRef(it.dirName, it.packageInfo.name) },
-            topBars = listOf(ComponentRef(TopBarConfig.DEFAULT_DIR_NAME, "默认顶栏")) +
+            topBars = listOf(ComponentRef(TopBarConfig.DEFAULT_DIR_NAME, appCtx.getString(R.string.top_bar_style_default))) +
                 TopBarConfig.loadLocalOnlyForKit(isNight)
                     .filter { it.dirName != TopBarConfig.DEFAULT_DIR_NAME }
                     .map { ComponentRef(it.dirName, it.config.name) },
@@ -402,7 +403,7 @@ object AppearanceKitManager {
             exportCoverCollections(packageDir, components)
             val manifest = AppearanceKitPackage(
                 id = UUID.randomUUID().toString(),
-                name = "应用主题",
+                name = appCtx.getString(R.string.appearance_kit_manage),
                 version = kitVersion,
                 exportedAt = System.currentTimeMillis(),
                 binding = currentBinding(context),
@@ -471,7 +472,7 @@ object AppearanceKitManager {
             saveOrReplaceKit(
                 StoredAppearanceKit(
                     id = manifest.id.ifBlank { "kit_${manifest.name.normalizeFileName()}_${System.currentTimeMillis()}" },
-                    name = manifest.name.ifBlank { "应用主题" },
+                    name = manifest.name.ifBlank { appCtx.getString(R.string.appearance_kit_manage) },
                     previewPath = manifest.previewPath,
                     binding = finalBinding,
                     importedAt = System.currentTimeMillis(),
@@ -597,7 +598,7 @@ object AppearanceKitManager {
     private fun createKitFromImportResult(result: ThemePackageManager.ThemeImportResult): StoredAppearanceKit? {
         if (result.themes.isEmpty()) return null
         val name = result.sourceName.ifBlank {
-            result.themes.first().packageInfo.name.ifBlank { "应用主题" }
+            result.themes.first().packageInfo.name.ifBlank { appCtx.getString(R.string.appearance_kit_manage) }
         }
         val binding = KitBinding()
         result.themes.forEach {
@@ -862,16 +863,16 @@ data class StoredAppearanceKit(
 ) {
     fun toAppearanceKit(): AppearanceKit {
         val parts = listOfNotNull(
-            binding.dayTheme?.let { "日间主题" },
-            binding.nightTheme?.let { "夜间主题" },
-            binding.dayNavigationBar?.let { "底栏" } ?: binding.nightNavigationBar?.let { "底栏" },
-            binding.dayTopBar?.let { "顶栏" } ?: binding.nightTopBar?.let { "顶栏" },
-            binding.dayCoverCollection?.let { "封面" } ?: binding.nightCoverCollection?.let { "封面" }
+            binding.dayTheme?.let { appCtx.getString(R.string.theme_day) },
+            binding.nightTheme?.let { appCtx.getString(R.string.theme_night) },
+            binding.dayNavigationBar?.let { appCtx.getString(R.string.package_sync_task_type_navigation_bar) } ?: binding.nightNavigationBar?.let { appCtx.getString(R.string.package_sync_task_type_navigation_bar) },
+            binding.dayTopBar?.let { appCtx.getString(R.string.package_sync_task_type_top_bar) } ?: binding.nightTopBar?.let { appCtx.getString(R.string.package_sync_task_type_top_bar) },
+            binding.dayCoverCollection?.let { appCtx.getString(R.string.img_cover) } ?: binding.nightCoverCollection?.let { appCtx.getString(R.string.img_cover) }
         ).distinct()
         return AppearanceKit(
             id = id,
             name = name,
-            summary = if (parts.isEmpty()) "应用后缺失组件将恢复默认" else parts.joinToString(" / "),
+            summary = if (parts.isEmpty()) appCtx.getString(R.string.svc_missing_components_will_reset_default) else parts.joinToString(" / "),
             type = AppearanceKitType.IMPORTED_THEME,
             binding = binding,
             previewPath = previewPath

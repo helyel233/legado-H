@@ -1,0 +1,1882 @@
+{
+  "prefix": "ra_cfg",
+  "resource": "strings_ra_config.xml",
+  "files": [
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadAloudBgmManageActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeakerGroupManageDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/AiReadAloudUsageRecordActivity.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/HttpTtsEditDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeakEngineDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/SpeechVoiceRoutePicker.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/BgTextConfigDialog.kt",
+    "app/src/main/java/io/legado/app/ui/book/read/config/ReadAloudDialog.kt"
+  ],
+  "entries": [
+    {
+      "zh": "正在导入${currentAssetLabel}…",
+      "en": "Importing %1$s…",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:76: setImporting(true, \"正在导入${currentAssetLabel}…\")"
+      ]
+    },
+    {
+      "zh": "导入完成",
+      "en": "Import complete",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:83: toastOnUi(\"导入完成\")"
+      ]
+    },
+    {
+      "zh": "导入失败",
+      "en": "Import failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:86: toastOnUi(it.localizedMessage ?: \"导入失败\")"
+      ]
+    },
+    {
+      "zh": "正在批量导入${currentAssetLabel}…",
+      "en": "Batch importing %1$s…",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:96: setImporting(true, \"正在批量导入${currentAssetLabel}…\")"
+      ]
+    },
+    {
+      "zh": "已导入 $success 个${currentAssetLabel}",
+      "en": "Imported %1$s %2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:111: toastOnUi(\"已导入 $success 个${currentAssetLabel}\")"
+      ]
+    },
+    {
+      "zh": "批量导入失败",
+      "en": "Batch import failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:114: toastOnUi(it.localizedMessage ?: \"批量导入失败\")"
+      ]
+    },
+    {
+      "zh": "已导出${currentAssetLabel} ZIP",
+      "en": "Exported %1$s ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:130: toastOnUi(\"已导出${currentAssetLabel} ZIP\")"
+      ]
+    },
+    {
+      "zh": "智能音频",
+      "en": "Smart audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:146: titleBar.title = \"智能音频\""
+      ]
+    },
+    {
+      "zh": "配乐",
+      "en": "Background score",
+      "count": 4,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:152: btnDay.text = \"配乐\"",
+        "ReadAloudBgmManageActivity.kt:402: \"配乐\"",
+        "AiReadAloudUsageRecordActivity.kt:123: AiReadAloudUsageRecord.TYPE_BGM to \"配乐\","
+      ]
+    },
+    {
+      "zh": "音效",
+      "en": "Sound effect",
+      "count": 4,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:153: btnNight.text = \"音效\"",
+        "ReadAloudBgmManageActivity.kt:400: \"音效\"",
+        "AiReadAloudUsageRecordActivity.kt:124: AiReadAloudUsageRecord.TYPE_SFX to \"音效\","
+      ]
+    },
+    {
+      "zh": "导入",
+      "en": "Import",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:167: menu.add(0, MENU_IMPORT, 0, \"导入\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)",
+        "SpeakEngineDialog.kt:501: SmallEngineAction(\"导入\", onImport, colors)"
+      ]
+    },
+    {
+      "zh": "导出 ZIP",
+      "en": "Export ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:168: menu.add(0, MENU_EXPORT_PACKAGE, 1, \"导出 ZIP\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)"
+      ]
+    },
+    {
+      "zh": "新增分组",
+      "en": "New group",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:169: menu.add(0, MENU_ADD_GROUP, 2, \"新增分组\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)",
+        "ReadAloudBgmManageActivity.kt:242: \"新增分组\",",
+        "ReadAloudBgmManageActivity.kt:416: alert(if (group == null) \"新增分组\" else \"编辑分组\") {"
+      ]
+    },
+    {
+      "zh": "管理分组",
+      "en": "Manage groups",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:170: menu.add(0, MENU_MANAGE_GROUPS, 3, \"管理分组\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)",
+        "ReadAloudBgmManageActivity.kt:243: \"管理分组\"",
+        "ReadAloudBgmManageActivity.kt:453: selector(\"管理分组\", managedGroups.map { it.displayName() }) { _, index ->"
+      ]
+    },
+    {
+      "zh": "批量分组",
+      "en": "Batch grouping",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:190: addView(batchActionButton(\"批量分组\") { moveSelected() })"
+      ]
+    },
+    {
+      "zh": "删除",
+      "en": "Delete",
+      "count": 7,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:191: addView(batchActionButton(\"删除\") { deleteSelected() })",
+        "ReadAloudBgmManageActivity.kt:800: selector(track.displayName(), listOf(\"编辑标签\", \"默认音量\", \"移动分组\", \"删除\")) { _, index ->",
+        "SpeakerGroupManageDialog.kt:595: SpeakerSubActionButton(\"删除\", colors, Modifier.weight(1f), danger = true) {"
+      ],
+      "force": true
+    },
+    {
+      "zh": "取消选择",
+      "en": "Clear selection",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:192: addView(batchActionButton(\"取消选择\") {"
+      ]
+    },
+    {
+      "zh": "正在导入，请稍候",
+      "en": "Importing, please wait",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:232: toastOnUi(importingText.ifBlank { \"正在导入，请稍候\" })"
+      ]
+    },
+    {
+      "zh": "导入智能音频",
+      "en": "Import smart audio",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:236: \"导入智能音频\","
+      ]
+    },
+    {
+      "zh": "批量导入${currentAssetLabel}",
+      "en": "Batch import %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:238: \"批量导入${currentAssetLabel}\","
+      ]
+    },
+    {
+      "zh": "导入单个${currentAssetLabel}",
+      "en": "Import one %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:239: \"导入单个${currentAssetLabel}\","
+      ]
+    },
+    {
+      "zh": "导入配乐 ZIP",
+      "en": "Import score ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:240: \"导入配乐 ZIP\","
+      ]
+    },
+    {
+      "zh": "导入音效 ZIP",
+      "en": "Import sound-effect ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:241: \"导入音效 ZIP\","
+      ]
+    },
+    {
+      "zh": "导入${currentAssetLabel}",
+      "en": "Import %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:250: title = \"导入${currentAssetLabel}\""
+      ]
+    },
+    {
+      "zh": "导入${assetLabel(pendingPackageAssetType)} ZIP",
+      "en": "Import %1$s ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:266: title = \"导入${assetLabel(pendingPackageAssetType)} ZIP\""
+      ]
+    },
+    {
+      "zh": "导入${label} ZIP",
+      "en": "Import %1$s ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:275: \"导入${label} ZIP\","
+      ]
+    },
+    {
+      "zh": "清空旧${label}并导入",
+      "en": "Clear existing %1$s and import",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:277: \"清空旧${label}并导入\","
+      ]
+    },
+    {
+      "zh": "追加导入",
+      "en": "Append import",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:278: \"追加导入\""
+      ]
+    },
+    {
+      "zh": "正在导入${label} ZIP…",
+      "en": "Importing %1$s ZIP…",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:283: setImporting(true, \"正在导入${label} ZIP…\")"
+      ]
+    },
+    {
+      "zh": "已导入 $count 个${label}",
+      "en": "Imported %1$s %2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:296: toastOnUi(\"已导入 $count 个${label}\")"
+      ]
+    },
+    {
+      "zh": "音频包导入失败",
+      "en": "Audio package import failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:299: toastOnUi(it.localizedMessage ?: \"音频包导入失败\")"
+      ]
+    },
+    {
+      "zh": "正在处理，请稍候",
+      "en": "Processing, please wait",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:307: toastOnUi(importingText.ifBlank { \"正在处理，请稍候\" })"
+      ]
+    },
+    {
+      "zh": "正在整理${label} ZIP…",
+      "en": "Preparing %1$s ZIP…",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:313: setImporting(true, \"正在整理${label} ZIP…\")"
+      ]
+    },
+    {
+      "zh": "导出${label} ZIP",
+      "en": "Export %1$s ZIP",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:323: title = \"导出${label} ZIP\""
+      ]
+    },
+    {
+      "zh": "${label}包_${System.currentTimeMillis()}.zip",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:325: \"${label}包_${System.currentTimeMillis()}.zip\","
+      ]
+    },
+    {
+      "zh": "${label} ZIP 导出失败",
+      "en": "%1$s ZIP export failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:331: toastOnUi(it.localizedMessage ?: \"${label} ZIP 导出失败\")"
+      ]
+    },
+    {
+      "zh": "正在导入…",
+      "en": "Importing…",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:347: importingText.ifBlank { \"正在导入…\" }",
+        "ReadAloudBgmManageActivity.kt:389: binding.tvSummary.text = if (value) text.ifBlank { \"正在导入…\" } else binding.tvSummary.text"
+      ]
+    },
+    {
+      "zh": "暂无音效。导入短音频并添加标签后，AI 可以为开门、脚步、撞击等候选事件选择音效。",
+      "en": "No sound effects yet. Import short clips and add tags so AI can pick sounds for events like doors, footsteps and impacts.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:350: \"暂无音效。导入短音频并添加标签后，AI 可以为开门、脚步、撞击等候选事件选择音效。\""
+      ]
+    },
+    {
+      "zh": "暂无配乐。导入音乐后，AI 可以按段落范围选择配乐。",
+      "en": "No background score yet. Import music so AI can choose a score for paragraph ranges.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:352: \"暂无配乐。导入音乐后，AI 可以按段落范围选择配乐。\""
+      ]
+    },
+    {
+      "zh": "${tracks.size} 个${currentAssetLabel} · ${groups.size.coerceAtLeast(1)} 个分组 · 已选 ${selectedIds.size}",
+      "en": "%1$s %2$s · %3$s groups · %4$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:355: \"${tracks.size} 个${currentAssetLabel} · ${groups.size.coerceAtLeast(1)} 个分组 · 已选 ${selectedIds.size}\""
+      ]
+    },
+    {
+      "zh": "分组名称",
+      "en": "Group name",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:412: editView.hint = \"分组名称\"",
+        "SpeakerGroupManageDialog.kt:661: label = { Text(\"分组名称\") },"
+      ]
+    },
+    {
+      "zh": "编辑分组",
+      "en": "Edit group",
+      "count": 3,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:416: alert(if (group == null) \"新增分组\" else \"编辑分组\") {",
+        "ReadAloudBgmManageActivity.kt:455: selector(group.displayName(), listOf(\"编辑分组\", \"删除分组\")) { _, action ->",
+        "SpeakerGroupManageDialog.kt:657: Text(if (group == null) \"新建分组\" else \"编辑分组\", color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)"
+      ],
+      "force": true
+    },
+    {
+      "zh": "分组名称不能为空",
+      "en": "Group name cannot be empty",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:421: toastOnUi(\"分组名称不能为空\")",
+        "SpeakerGroupManageDialog.kt:153: toastOnUi(\"分组名称不能为空\")",
+        "SpeakerGroupManageDialog.kt:324: requireContext().toastOnUi(\"分组名称不能为空\")"
+      ]
+    },
+    {
+      "zh": "暂无分组",
+      "en": "No groups",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:450: toastOnUi(\"暂无分组\")"
+      ]
+    },
+    {
+      "zh": "删除分组",
+      "en": "Delete group",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:455: selector(group.displayName(), listOf(\"编辑分组\", \"删除分组\")) { _, action ->",
+        "ReadAloudBgmManageActivity.kt:469: alert(\"删除分组\") {",
+        "SpeakerGroupManageDialog.kt:958: Text(\"删除分组\", color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "默认分组不能删除",
+      "en": "The default group cannot be deleted",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:466: toastOnUi(\"默认分组不能删除\")"
+      ]
+    },
+    {
+      "zh": "确定删除“${group.displayName()}”？组内${currentAssetLabel}会移回默认分组，本地文件不会删除。",
+      "en": "Delete \"%1$s\"? %2$s in this group will move back to the default group. Local files are kept.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:470: setMessage(\"确定删除“${group.displayName()}”？组内${currentAssetLabel}会移回默认分组，本地文件不会删除。\")"
+      ]
+    },
+    {
+      "zh": "无法读取音频文件",
+      "en": "Cannot read audio file",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:492: } ?: error(\"无法读取音频文件\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "无法读取音频包",
+      "en": "Cannot read audio package",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:580: } ?: error(\"无法读取音频包\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "音频包内没有可导入的音频",
+      "en": "No importable audio in the package",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:581: if (imported == 0) error(\"音频包内没有可导入的音频\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "暂无可导出的${assetLabel(normalizedType)}",
+      "en": "No %1$s to export",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:588: if (exportTracks.isEmpty()) error(\"暂无可导出的${assetLabel(normalizedType)}\")"
+      ]
+    },
+    {
+      "zh": "没有可导出的本地音频文件",
+      "en": "No local audio files to export",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:591: if (entries.isEmpty()) error(\"没有可导出的本地音频文件\")"
+      ],
+      "force": true
+    },
+    {
+      "zh": "默认分组",
+      "en": "Default group",
+      "count": 18,
+      "risk": 7,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:620: ?.takeUnless { it == \"默认分组\" }",
+        "ReadAloudBgmManageActivity.kt:621: ?: \"默认分组\"",
+        "ReadAloudBgmManageActivity.kt:712: .ifBlank { \"默认分组\" }"
+      ]
+    },
+    {
+      "zh": "音频包配置文件过大",
+      "en": "Audio package config file is too large",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:692: require(total <= maxBytes) { \"音频包配置文件过大\" }"
+      ],
+      "force": true
+    },
+    {
+      "zh": "编辑标签",
+      "en": "Edit tags",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:800: selector(track.displayName(), listOf(\"编辑标签\", \"默认音量\", \"移动分组\", \"删除\")) { _, index ->",
+        "ReadAloudBgmManageActivity.kt:816: alert(\"编辑标签\") {"
+      ],
+      "force": true
+    },
+    {
+      "zh": "默认音量",
+      "en": "Default volume",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:800: selector(track.displayName(), listOf(\"编辑标签\", \"默认音量\", \"移动分组\", \"删除\")) { _, index ->"
+      ]
+    },
+    {
+      "zh": "移动分组",
+      "en": "Move to group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:800: selector(track.displayName(), listOf(\"编辑标签\", \"默认音量\", \"移动分组\", \"删除\")) { _, index ->"
+      ]
+    },
+    {
+      "zh": "标签用逗号分隔，例如 紧张,日常,战斗",
+      "en": "Separate tags with commas, e.g. tense,daily,battle",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:812: editView.hint = \"标签用逗号分隔，例如 紧张,日常,战斗\""
+      ]
+    },
+    {
+      "zh": "${track.assetTypeLabel()}默认音量",
+      "en": "%1$s default volume",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:838: .setTitle(\"${track.assetTypeLabel()}默认音量\")"
+      ]
+    },
+    {
+      "zh": "请先长按选择${currentAssetLabel}",
+      "en": "Long-press to select %1$s first",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:859: toastOnUi(\"请先长按选择${currentAssetLabel}\")",
+        "ReadAloudBgmManageActivity.kt:882: toastOnUi(\"请先长按选择${currentAssetLabel}\")"
+      ]
+    },
+    {
+      "zh": "选择分组",
+      "en": "Select group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:868: selector(\"选择分组\", options.map { it.displayName() }) { _, index ->"
+      ]
+    },
+    {
+      "zh": "删除${currentAssetLabel}",
+      "en": "Delete %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:889: alert(\"删除${currentAssetLabel}\") {"
+      ]
+    },
+    {
+      "zh": "确定删除选中的 ${ids.size} 个${currentAssetLabel}？文件也会从本地移除。",
+      "en": "Delete %1$s selected %2$s? Local files will be removed too.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:890: setMessage(\"确定删除选中的 ${ids.size} 个${currentAssetLabel}？文件也会从本地移除。\")"
+      ]
+    },
+    {
+      "zh": "${row.count} 个${currentAssetLabel}",
+      "en": "%1$s %2$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:1135: add(\"${row.count} 个${currentAssetLabel}\")"
+      ]
+    },
+    {
+      "zh": "已选 ${row.selectedCount}",
+      "en": "%1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:1136: if (row.selectedCount > 0) add(\"已选 ${row.selectedCount}\")"
+      ]
+    },
+    {
+      "zh": "音量 ${(track.defaultVolume * 100).toInt().coerceIn(0, 100)}%",
+      "en": "Volume %1$s%",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudBgmManageActivity.kt:1159: add(\"音量 ${(track.defaultVolume * 100).toInt().coerceIn(0, 100)}%\")"
+      ]
+    },
+    {
+      "zh": "读取发言人分组失败",
+      "en": "Failed to load speaker groups",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:125: .catch { toastOnUi(it.localizedMessage ?: \"读取发言人分组失败\") }",
+        "SpeakerGroupManageDialog.kt:296: .catch { requireContext().toastOnUi(it.localizedMessage ?: \"读取发言人分组失败\") }"
+      ]
+    },
+    {
+      "zh": "请先选择发言人",
+      "en": "Select a speaker first",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:209: toastOnUi(\"请先选择发言人\")",
+        "SpeakerGroupManageDialog.kt:383: requireContext().toastOnUi(\"请先选择发言人\")"
+      ]
+    },
+    {
+      "zh": "已添加 ${newItems.size} 个发言人",
+      "en": "%1$s speakers added",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:229: toastOnUi(\"已添加 ${newItems.size} 个发言人\")",
+        "SpeakerGroupManageDialog.kt:406: requireContext().toastOnUi(\"已添加 ${newItems.size} 个发言人\")"
+      ]
+    },
+    {
+      "zh": "发言人管理",
+      "en": "Speaker management",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:470: Text(\"发言人管理\", color = colors.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "多角色自动分配会优先使用这里启用的发言人",
+      "en": "Multi-role auto-assignment prefers the speakers enabled here",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:472: \"多角色自动分配会优先使用这里启用的发言人\","
+      ]
+    },
+    {
+      "zh": "关闭",
+      "en": "Close",
+      "count": 7,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:478: TextButton(onClick = actions::close) { Text(\"关闭\", color = colors.subText) }",
+        "SpeakerGroupManageDialog.kt:721: TextButton(onClick = onDismiss) { Text(\"关闭\", color = colors.subText) }",
+        "HttpTtsEditDialog.kt:355: TextButton(onClick = onClose) { Text(\"关闭\", color = colors.subText) }"
+      ]
+    },
+    {
+      "zh": "新建分组",
+      "en": "New group",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:484: SpeakerActionButton(\"新建分组\", colors, modifier = Modifier.weight(1f), onClick = actions::openNewGroupEditor)",
+        "SpeakerGroupManageDialog.kt:657: Text(if (group == null) \"新建分组\" else \"编辑分组\", color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "暂无发言人分组",
+      "en": "No speaker groups",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:488: Text(\"暂无发言人分组\", color = colors.subText, fontSize = 14.sp)"
+      ]
+    },
+    {
+      "zh": "${items.size} 个失效发言人 · 不参与自动分配",
+      "en": "%1$s invalid speakers · excluded from auto-assignment",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:557: \"${items.size} 个失效发言人 · 不参与自动分配\""
+      ]
+    },
+    {
+      "zh": "${items.size} 个发言人 · ${if (group.enabled) ",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:559: \"${items.size} 个发言人 · ${if (group.enabled) \"已启用\" else \"已停用\"}\""
+      ]
+    },
+    {
+      "zh": "没有被标记失效的发言人",
+      "en": "No speakers marked invalid",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:576: if (invalidGroup) \"没有被标记失效的发言人\" else \"这个分组还没有发言人\","
+      ]
+    },
+    {
+      "zh": "这个分组还没有发言人",
+      "en": "This group has no speakers yet",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:576: if (invalidGroup) \"没有被标记失效的发言人\" else \"这个分组还没有发言人\","
+      ]
+    },
+    {
+      "zh": "还有 ${items.size - 8} 个发言人未展开",
+      "en": "%1$s more speakers collapsed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:586: Text(\"还有 ${items.size - 8} 个发言人未展开\", color = colors.subText, fontSize = 11.sp)"
+      ]
+    },
+    {
+      "zh": "添加发言人",
+      "en": "Add speaker",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:592: SpeakerActionButton(\"添加发言人\", colors, Modifier.weight(1f)) { actions.openSpeakerPicker(group) }",
+        "SpeakerGroupManageDialog.kt:718: Text(\"添加发言人\", color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)"
+      ]
+    },
+    {
+      "zh": "重命名",
+      "en": "Rename",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:593: SpeakerSubActionButton(\"重命名\", colors, Modifier.weight(1f)) { actions.openGroupEditor(group) }"
+      ]
+    },
+    {
+      "zh": "已失效",
+      "en": "Invalid",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:623: \"已失效\".takeIf { blocked },"
+      ]
+    },
+    {
+      "zh": "移除",
+      "en": "Remove",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:634: TextButton(onClick = onDelete) { Text(\"移除\", color = colors.danger, fontSize = 12.sp) }"
+      ]
+    },
+    {
+      "zh": "启用分组",
+      "en": "Enable group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:666: Text(\"启用分组\", color = colors.text, fontSize = 14.sp, modifier = Modifier.weight(1f))"
+      ]
+    },
+    {
+      "zh": "取消",
+      "en": "Cancel",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:674: SpeakerSubActionButton(\"取消\", colors, Modifier.weight(1f), onClick = onDismiss)",
+        "SpeakerGroupManageDialog.kt:820: SpeakerSubActionButton(\"取消\", colors, Modifier.weight(1f), onClick = onDismiss)",
+        "SpeakerGroupManageDialog.kt:961: SpeakerSubActionButton(\"取消\", colors, Modifier.weight(1f), onClick = onDismiss)"
+      ]
+    },
+    {
+      "zh": "保存",
+      "en": "Save",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:675: SpeakerActionButton(\"保存\", colors, Modifier.weight(1f)) { onSave(name, enabled) }",
+        "HttpTtsEditDialog.kt:354: TextButton(onClick = onSave) { Text(\"保存\", color = colors.accent) }"
+      ]
+    },
+    {
+      "zh": "搜索发言人 / 分组 / toneID",
+      "en": "Search speaker / group / toneID",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:742: label = { Text(\"搜索发言人 / 分组 / toneID\") },"
+      ]
+    },
+    {
+      "zh": "没有匹配的发言人",
+      "en": "No matching speakers",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:759: Text(\"没有匹配的发言人\", color = colors.subText, fontSize = 14.sp)"
+      ]
+    },
+    {
+      "zh": "添加 ${selectedKeys.size}",
+      "en": "Add %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:821: SpeakerActionButton(\"添加 ${selectedKeys.size}\", colors, Modifier.weight(1f)) {"
+      ]
+    },
+    {
+      "zh": "已展开",
+      "en": "Expanded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:875: add(if (expanded) \"已展开\" else \"已收起\")"
+      ]
+    },
+    {
+      "zh": "已收起",
+      "en": "Collapsed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:875: add(if (expanded) \"已展开\" else \"已收起\")"
+      ]
+    },
+    {
+      "zh": "已选 $selectedCount",
+      "en": "%1$s selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:877: if (selectedCount > 0) add(\"已选 $selectedCount\")"
+      ]
+    },
+    {
+      "zh": "取消全选",
+      "en": "Deselect all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:891: if (allSelected) \"取消全选\" else \"全选\","
+      ]
+    },
+    {
+      "zh": "全选",
+      "en": "Select all",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:891: if (allSelected) \"取消全选\" else \"全选\",",
+        "AiReadAloudUsageRecordActivity.kt:60: btnAdd.text = \"全选\""
+      ]
+    },
+    {
+      "zh": "已在组内",
+      "en": "Already in group",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:937: Text(\"已在组内\", color = colors.subText, fontSize = 11.sp)"
+      ]
+    },
+    {
+      "zh": "确定删除“${group.displayName()}”？不会删除原始 TTS 引擎。",
+      "en": "Delete \"%1$s\"? The original TTS engine is kept.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:959: Text(\"确定删除“${group.displayName()}”？不会删除原始 TTS 引擎。\", color = colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "系统默认",
+      "en": "System default",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:1083: ?: if (engine.engineType == SpeechRoute.ENGINE_SYSTEM) \"系统默认\" else \"默认分组\"",
+        "SpeakEngineDialog.kt:400: text = speechRouteSummary(currentRoute, groups, defaultText = \"系统默认\"),"
+      ]
+    },
+    {
+      "zh": "${options.size} 个发言人",
+      "en": "%1$s speakers",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakerGroupManageDialog.kt:1088: add(\"${options.size} 个发言人\")"
+      ]
+    },
+    {
+      "zh": "消耗记录",
+      "en": "Usage records",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:58: titleBar.title = \"消耗记录\""
+      ]
+    },
+    {
+      "zh": "类型筛选",
+      "en": "Filter by type",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:75: menu.add(0, MENU_FILTER_TYPE, 0, \"类型筛选\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)",
+        "AiReadAloudUsageRecordActivity.kt:129: title = \"类型筛选\","
+      ]
+    },
+    {
+      "zh": "当前书/全部",
+      "en": "Current book / all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:76: menu.add(0, MENU_FILTER_BOOK, 1, \"当前书/全部\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)"
+      ]
+    },
+    {
+      "zh": "删除选中",
+      "en": "Delete selected",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:77: menu.add(0, MENU_DELETE_SELECTED, 2, \"删除选中\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)"
+      ]
+    },
+    {
+      "zh": "清空全部",
+      "en": "Clear all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:78: menu.add(0, MENU_CLEAR_ALL, 3, \"清空全部\").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)"
+      ]
+    },
+    {
+      "zh": "全部类型",
+      "en": "All types",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:114: val typeText = typeLabel(typeFilter).takeIf { typeFilter.isNotBlank() } ?: \"全部类型\""
+      ]
+    },
+    {
+      "zh": "当前书",
+      "en": "Current book",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:115: val bookText = if (currentBookOnly) \"当前书\" else \"全部书籍\""
+      ]
+    },
+    {
+      "zh": "全部书籍",
+      "en": "All books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:115: val bookText = if (currentBookOnly) \"当前书\" else \"全部书籍\""
+      ]
+    },
+    {
+      "zh": "$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput · 总 $total · 已选 ${selectedIds.size}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:116: binding.tvSummary.text = \"$typeText · $bookText · ${records.size} 条 · 输入 $totalInput · 缓存 $totalCached · 输出 $totalOutput"
+      ]
+    },
+    {
+      "zh": "全部",
+      "en": "All",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:121: \"\" to \"全部\",",
+        "AiReadAloudUsageRecordActivity.kt:338: else -> \"全部\""
+      ],
+      "force": true
+    },
+    {
+      "zh": "多角色",
+      "en": "Multi-role",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:122: AiReadAloudUsageRecord.TYPE_ROLE to \"多角色\",",
+        "AiReadAloudUsageRecordActivity.kt:334: AiReadAloudUsageRecord.TYPE_ROLE -> \"多角色\""
+      ],
+      "force": true
+    },
+    {
+      "zh": "音频分析",
+      "en": "Audio analysis",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:125: AiReadAloudUsageRecord.TYPE_AUDIO to \"音频分析\"",
+        "AiReadAloudUsageRecordActivity.kt:337: AiReadAloudUsageRecord.TYPE_AUDIO -> \"音频分析\""
+      ],
+      "force": true
+    },
+    {
+      "zh": "请先长按选择记录",
+      "en": "Long-press to select records first",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:158: toastOnUi(\"请先长按选择记录\")"
+      ]
+    },
+    {
+      "zh": "删除记录",
+      "en": "Delete records",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:163: title = \"删除记录\","
+      ]
+    },
+    {
+      "zh": "确定删除选中的 ${ids.size} 条消耗记录？",
+      "en": "Delete %1$s selected usage records?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:164: message = \"确定删除选中的 ${ids.size} 条消耗记录？\","
+      ]
+    },
+    {
+      "zh": "清空记录",
+      "en": "Clear records",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:189: title = \"清空记录\","
+      ]
+    },
+    {
+      "zh": "确定清空所有朗读 AI 消耗记录？",
+      "en": "Clear all read-aloud AI usage records?",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:190: message = \"确定清空所有朗读 AI 消耗记录？\","
+      ]
+    },
+    {
+      "zh": "未知章节",
+      "en": "Unknown chapter",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:296: add(record.chapterTitle.ifBlank { record.bookName.ifBlank { \"未知章节\" } })"
+      ]
+    },
+    {
+      "zh": "输入 ${record.inputTokens}",
+      "en": "Input %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:299: add(\"输入 ${record.inputTokens}\")"
+      ]
+    },
+    {
+      "zh": "缓存 ${record.cachedInputTokens}",
+      "en": "Cache %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:300: if (record.cachedInputTokens > 0) add(\"缓存 ${record.cachedInputTokens}\")"
+      ]
+    },
+    {
+      "zh": "输出 ${record.outputTokens}",
+      "en": "Output %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:301: add(\"输出 ${record.outputTokens}\")"
+      ]
+    },
+    {
+      "zh": "总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:302: add(\"总 ${record.totalTokens.takeIf { it > 0 } ?: (record.inputTokens + record.outputTokens)}\")"
+      ]
+    },
+    {
+      "zh": "成功",
+      "en": "Success",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:342: AiReadAloudUsageRecord.STATUS_SUCCESS -> \"成功\""
+      ]
+    },
+    {
+      "zh": "失败",
+      "en": "Failed",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:343: AiReadAloudUsageRecord.STATUS_FAILED -> \"失败\""
+      ]
+    },
+    {
+      "zh": "缓存",
+      "en": "Cache",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:344: AiReadAloudUsageRecord.STATUS_CACHE -> \"缓存\""
+      ]
+    },
+    {
+      "zh": "未知",
+      "en": "Unknown",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "AiReadAloudUsageRecordActivity.kt:345: else -> status.ifBlank { \"未知\" }"
+      ]
+    },
+    {
+      "zh": "保存成功",
+      "en": "Saved",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:139: toastOnUi(\"保存成功\")"
+      ]
+    },
+    {
+      "zh": "登录url不能为空",
+      "en": "Login URL cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:147: toastOnUi(\"登录url不能为空\")"
+      ]
+    },
+    {
+      "zh": "名称不能为空",
+      "en": "Name cannot be empty",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:160: toastOnUi(\"名称不能为空\")"
+      ]
+    },
+    {
+      "zh": "发言人列表 JSON 必须是数组或对象",
+      "en": "Speaker list JSON must be an array or an object",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:168: toastOnUi(\"发言人列表 JSON 必须是数组或对象\")"
+      ]
+    },
+    {
+      "zh": "情绪列表 JSON 必须是数组或对象",
+      "en": "Emotion list JSON must be an array or an object",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:172: toastOnUi(\"情绪列表 JSON 必须是数组或对象\")"
+      ]
+    },
+    {
+      "zh": "名称",
+      "en": "Name",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:224: Name(\"名称\"),"
+      ]
+    },
+    {
+      "zh": "发言人列表 JSON",
+      "en": "Speaker list JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:225: Speakers(\"发言人列表 JSON\"),"
+      ]
+    },
+    {
+      "zh": "情绪列表 JSON",
+      "en": "Emotion list JSON",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:226: Emotions(\"情绪列表 JSON\"),"
+      ]
+    },
+    {
+      "zh": "并发率",
+      "en": "Concurrency rate",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:229: ConcurrentRate(\"并发率\"),"
+      ]
+    },
+    {
+      "zh": "生成线程数",
+      "en": "Generation threads",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:230: SynthesisThreadCount(\"生成线程数\"),"
+      ]
+    },
+    {
+      "zh": "登录 URL",
+      "en": "Login URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:231: LoginUrl(\"登录 URL\"),"
+      ]
+    },
+    {
+      "zh": "登录 UI",
+      "en": "Login UI",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:232: LoginUi(\"登录 UI\"),"
+      ]
+    },
+    {
+      "zh": "登录检测 JS",
+      "en": "Login detection JS",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:233: LoginCheckJs(\"登录检测 JS\"),"
+      ]
+    },
+    {
+      "zh": "HTTP 朗读规则",
+      "en": "HTTP read-aloud rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:347: text = \"HTTP 朗读规则\","
+      ]
+    },
+    {
+      "zh": "全屏",
+      "en": "Full screen",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:353: TextButton(onClick = onFullEdit) { Text(\"全屏\", color = colors.accent) }"
+      ]
+    },
+    {
+      "zh": "登录",
+      "en": "Login",
+      "count": 3,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:361: HeaderAction(\"登录\", colors, onLogin)",
+        "SpeakEngineDialog.kt:608: onLogin?.let { InlineEngineAction(\"登录\", colors.accent, it) }",
+        "SpeakEngineDialog.kt:664: DetailEngineAction(\"登录\", colors.accent) { actions.login(group) }"
+      ]
+    },
+    {
+      "zh": "复制",
+      "en": "Copy",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:362: HeaderAction(\"复制\", colors, onCopy)"
+      ]
+    },
+    {
+      "zh": "粘贴",
+      "en": "Paste",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:363: HeaderAction(\"粘贴\", colors, onPaste)"
+      ]
+    },
+    {
+      "zh": "登录头",
+      "en": "Login headers",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:364: HeaderAction(\"登录头\", colors, onShowLoginHeader)"
+      ]
+    },
+    {
+      "zh": "清登录头",
+      "en": "Clear login headers",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:365: HeaderAction(\"清登录头\", colors, onClearLoginHeader)"
+      ]
+    },
+    {
+      "zh": "日志",
+      "en": "Logs",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:366: HeaderAction(\"日志\", colors, onLog)"
+      ]
+    },
+    {
+      "zh": "帮助",
+      "en": "Help",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:367: HeaderAction(\"帮助\", colors, onHelp)"
+      ]
+    },
+    {
+      "zh": "发言人可填 [{\\\"speakerName\\\":\\\"晓晓\\\",\\\"toneID\\\":\\\"xxx\\\"}]，也可用 [{\\\"groupName\\\":\\\"女声\\\",\\\"items\\\":[...]}] 分组；情绪字段使用 emotionName / emotionTag。",
+      "en": "",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:381: text = \"发言人可填 [{\\\"speakerName\\\":\\\"晓晓\\\",\\\"toneID\\\":\\\"xxx\\\"}]，也可用 [{\\\"groupName\\\":\\\"女声\\\",\\\"items\\\":[...]}] 分组；情绪字段使用 emoti"
+      ]
+    },
+    {
+      "zh": "可为空；为空时该 HTTP TTS 会作为普通发言人使用。",
+      "en": "Optional. When empty, this HTTP TTS works as a normal speaker.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:438: HttpTtsField.Speakers -> ({ Text(\"可为空；为空时该 HTTP TTS 会作为普通发言人使用。\", color = colors.subText) })"
+      ]
+    },
+    {
+      "zh": "可为空；填写后角色和快捷选择可选默认情绪。",
+      "en": "Optional. When set, characters and quick selection can use a default emotion.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "HttpTtsEditDialog.kt:439: HttpTtsField.Emotions -> ({ Text(\"可为空；填写后角色和快捷选择可选默认情绪。\", color = colors.subText) })"
+      ]
+    },
+    {
+      "zh": "朗读引擎界面获取数据失败\\n${it.localizedMessage}",
+      "en": "",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "SpeakEngineDialog.kt:165: .catch { AppLog.put(\"朗读引擎界面获取数据失败\\n${it.localizedMessage}\", it) }"
+      ]
+    },
+    {
+      "zh": "${result.characterCount} 个角色",
+      "en": "%1$s characters",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:224: if (result.characterCount > 0) add(\"${result.characterCount} 个角色\")"
+      ]
+    },
+    {
+      "zh": "${result.bookCount} 本书",
+      "en": "%1$s books",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:225: if (result.bookCount > 0) add(\"${result.bookCount} 本书\")"
+      ]
+    },
+    {
+      "zh": "${result.speakerGroupItemCount} 个发言人分组条目",
+      "en": "%1$s speaker group items",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:226: if (result.speakerGroupItemCount > 0) add(\"${result.speakerGroupItemCount} 个发言人分组条目\")"
+      ]
+    },
+    {
+      "zh": "通用朗读引擎",
+      "en": "Generic read-aloud engine",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:227: if (result.globalCleared) add(\"通用朗读引擎\")"
+      ]
+    },
+    {
+      "zh": "已清理 $message 的失效朗读配置",
+      "en": "Cleared invalid read-aloud config for %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:229: appContext.toastOnUi(\"已清理 $message 的失效朗读配置\")"
+      ]
+    },
+    {
+      "zh": "朗读引擎",
+      "en": "Read-aloud engine",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:391: text = \"朗读引擎\","
+      ]
+    },
+    {
+      "zh": "选择发言人",
+      "en": "Select speaker",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:442: title = \"选择发言人\","
+      ]
+    },
+    {
+      "zh": "新增",
+      "en": "Add",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:500: SmallEngineAction(\"新增\", onAdd, colors)"
+      ]
+    },
+    {
+      "zh": "导出全部",
+      "en": "Export all",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:502: SmallEngineAction(\"导出全部\", onExportAll, colors)"
+      ]
+    },
+    {
+      "zh": "清缓存",
+      "en": "Clear cache",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:503: SmallEngineAction(\"清缓存\", onClearCache, colors)"
+      ]
+    },
+    {
+      "zh": "导入朗读规则",
+      "en": "Import read-aloud rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:525: text = \"导入朗读规则\","
+      ]
+    },
+    {
+      "zh": "默认规则",
+      "en": "Default rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:533: ImportChoiceRow(\"默认规则\", \"导入内置 HTTP TTS 规则\", colors, onDefault)"
+      ]
+    },
+    {
+      "zh": "导入内置 HTTP TTS 规则",
+      "en": "Import built-in HTTP TTS rules",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:533: ImportChoiceRow(\"默认规则\", \"导入内置 HTTP TTS 规则\", colors, onDefault)"
+      ]
+    },
+    {
+      "zh": "本地导入",
+      "en": "Import from device",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:534: ImportChoiceRow(\"本地导入\", \"从本机 txt/json 文件导入\", colors, onLocal)"
+      ]
+    },
+    {
+      "zh": "从本机 txt/json 文件导入",
+      "en": "Import from a local txt/json file",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:534: ImportChoiceRow(\"本地导入\", \"从本机 txt/json 文件导入\", colors, onLocal)"
+      ]
+    },
+    {
+      "zh": "在线导入",
+      "en": "Import online",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:535: ImportChoiceRow(\"在线导入\", \"通过 URL 导入朗读规则\", colors, onOnline)"
+      ]
+    },
+    {
+      "zh": "通过 URL 导入朗读规则",
+      "en": "Import read-aloud rules from a URL",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:535: ImportChoiceRow(\"在线导入\", \"通过 URL 导入朗读规则\", colors, onOnline)"
+      ]
+    },
+    {
+      "zh": "当前",
+      "en": "Current",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:586: Text(\"当前\", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)",
+        "SpeechVoiceRoutePicker.kt:358: text = if (selected) \"当前\" else trailing,"
+      ]
+    },
+    {
+      "zh": "${explicitCount}发言人",
+      "en": "%1$s speakers",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:596: InfoPill(\"${explicitCount}发言人\", colors)"
+      ]
+    },
+    {
+      "zh": "${group.emotions.size}情绪",
+      "en": "%1$s emotions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:599: InfoPill(\"${group.emotions.size}情绪\", colors)"
+      ]
+    },
+    {
+      "zh": "编辑",
+      "en": "Edit",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:609: onEdit?.let { InlineEngineAction(\"编辑\", colors.accent, it) }",
+        "SpeakEngineDialog.kt:667: DetailEngineAction(\"编辑\", colors.accent) { actions.editHttpTts(it.id) }"
+      ]
+    },
+    {
+      "zh": "导出",
+      "en": "Export",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:610: onExport?.let { InlineEngineAction(\"导出\", colors.accent, it) }"
+      ]
+    },
+    {
+      "zh": "暂无朗读引擎",
+      "en": "No read-aloud engines",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:647: Text(\"暂无朗读引擎\", color = colors.subText, fontSize = 14.sp)",
+        "SpeechVoiceRoutePicker.kt:172: Text(\"暂无朗读引擎\", color = colors.subText, fontSize = 14.sp)"
+      ]
+    },
+    {
+      "zh": "发言人列表",
+      "en": "Speaker list",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:673: \"发言人列表\","
+      ]
+    },
+    {
+      "zh": "情绪",
+      "en": "Emotions",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:692: \"情绪\","
+      ]
+    },
+    {
+      "zh": "选择此引擎后，普通朗读会使用该引擎；角色配音可在角色编辑页按发言人单独指定。",
+      "en": "Once selected, normal read-aloud uses this engine. Character voices can be set per speaker on the character edit page.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeakEngineDialog.kt:716: text = \"选择此引擎后，普通朗读会使用该引擎；角色配音可在角色编辑页按发言人单独指定。\","
+      ]
+    },
+    {
+      "zh": "使用默认朗读引擎",
+      "en": "Use default read-aloud engine",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:124: defaultText: String = \"使用默认朗读引擎\""
+      ]
+    },
+    {
+      "zh": "系统 TTS",
+      "en": "System TTS",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:138: SpeechRoute.ENGINE_SYSTEM -> \"系统 TTS\""
+      ]
+    },
+    {
+      "zh": "默认朗读",
+      "en": "Default read-aloud",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:139: else -> \"默认朗读\""
+      ]
+    },
+    {
+      "zh": "发言人",
+      "en": "Speaker",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:190: trailing = \"发言人\","
+      ]
+    },
+    {
+      "zh": "搜索发言人 / toneID / 情绪",
+      "en": "Search speaker / toneID / emotion",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:233: Text(\"搜索发言人 / toneID / 情绪\", color = colors.subText, fontSize = 13.sp)"
+      ]
+    },
+    {
+      "zh": "无情绪",
+      "en": "No emotion",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:253: text = \"无情绪\","
+      ]
+    },
+    {
+      "zh": "选择",
+      "en": "Select",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:283: trailing = if (option.explicitSpeaker) \"选择\" else \"默认\","
+      ]
+    },
+    {
+      "zh": "默认",
+      "en": "Default",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:283: trailing = if (option.explicitSpeaker) \"选择\" else \"默认\","
+      ]
+    },
+    {
+      "zh": "登录 / 刷新授权",
+      "en": "Login / refresh authorization",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "SpeechVoiceRoutePicker.kt:299: text = \"登录 / 刷新授权\","
+      ]
+    },
+    {
+      "zh": "网络导入",
+      "en": "Import from network",
+      "count": 1,
+      "risk": 1,
+      "samples": [
+        "BgTextConfigDialog.kt:130: private val importFormNet = \"网络导入\""
+      ]
+    },
+    {
+      "zh": "文字",
+      "en": "Text",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:255: text = ReadBookConfig.durConfig.name.ifBlank { \"文字\" },"
+      ]
+    },
+    {
+      "zh": "实线",
+      "en": "Solid line",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:333: ReaderOption(\"1\", \"实线\"),"
+      ]
+    },
+    {
+      "zh": "虚线",
+      "en": "Dashed line",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:334: ReaderOption(\"2\", \"虚线\")"
+      ]
+    },
+    {
+      "zh": "选择预设布局",
+      "en": "Choose a preset layout",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:730: showComposeChoiceListDialog(\"选择预设布局\", layoutNames) { i ->"
+      ]
+    },
+    {
+      "zh": "数量已是最少, 不能删除.",
+      "en": "Minimum count reached; cannot delete.",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:803: toastOnUi(\"数量已是最少, 不能删除.\")"
+      ]
+    },
+    {
+      "zh": "导出成功, 文件名为 $exportFileName",
+      "en": "Export succeeded: %1$s",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:858: toastOnUi(\"导出成功, 文件名为 $exportFileName\")"
+      ]
+    },
+    {
+      "zh": "导出失败:${it.localizedMessage}",
+      "en": "Export failed: %1$s",
+      "count": 2,
+      "risk": 1,
+      "samples": [
+        "BgTextConfigDialog.kt:861: AppLog.put(\"导出失败:${it.localizedMessage}\", it)",
+        "BgTextConfigDialog.kt:862: longToast(\"导出失败:${it.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "输入地址",
+      "en": "Enter address",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:881: title = \"输入地址\","
+      ]
+    },
+    {
+      "zh": "导入失败:${it.localizedMessage}",
+      "en": "Import failed: %1$s",
+      "count": 2,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:907: longToast(\"导入失败:${it.localizedMessage}\")",
+        "BgTextConfigDialog.kt:921: longToast(\"导入失败:${it.localizedMessage}\")"
+      ]
+    },
+    {
+      "zh": "导入成功",
+      "en": "Import succeeded",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:918: toastOnUi(\"导入成功\")"
+      ]
+    },
+    {
+      "zh": "下载图片中...",
+      "en": "Downloading image...",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:929: appCtx.toastOnUi(\"下载图片中...\")"
+      ]
+    },
+    {
+      "zh": "设定成功",
+      "en": "Setting saved",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "BgTextConfigDialog.kt:960: appCtx.toastOnUi(\"设定成功\")"
+      ]
+    },
+    {
+      "zh": "保存设定时间成功！",
+      "en": "Timer saved",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudDialog.kt:132: toastOnUi(\"保存设定时间成功！\")"
+      ]
+    },
+    {
+      "zh": "$it 分钟",
+      "en": "%1$s min",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudDialog.kt:136: val timeKeys = times.map { \"$it 分钟\" }"
+      ]
+    },
+    {
+      "zh": "设定时间",
+      "en": "Set timer",
+      "count": 1,
+      "risk": 0,
+      "samples": [
+        "ReadAloudDialog.kt:137: showComposeChoiceListDialog(\"设定时间\", timeKeys) { index ->"
+      ]
+    }
+  ]
+}

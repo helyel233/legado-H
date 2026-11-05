@@ -6,6 +6,8 @@ import io.legado.app.data.entities.ReadAloudSpeakerGroup
 import io.legado.app.data.entities.ReadAloudSpeakerGroupItem
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.utils.GSON
+import io.legado.app.R
+import splitties.init.appCtx
 
 data class ManagedSpeechVoiceGroup(
     val group: ReadAloudSpeakerGroup,
@@ -72,7 +74,7 @@ object SpeechVoiceGroupRepository {
         return itemKey(item) in invalidRouteKeys()
     }
 
-    fun markInvalidRoute(route: SpeechRoute?, reason: String = "自动标记失效"): Boolean {
+    fun markInvalidRoute(route: SpeechRoute?, reason: String = appCtx.getString(R.string.misc_automatically_marked_as_broken)): Boolean {
         if (route == null || !route.isConfigured) return false
         return markInvalidItem(
             ReadAloudSpeakerGroupItem(
@@ -90,14 +92,14 @@ object SpeechVoiceGroupRepository {
 
     fun markInvalidItems(
         items: List<ReadAloudSpeakerGroupItem>,
-        reason: String = "自动标记失效"
+        reason: String = appCtx.getString(R.string.misc_automatically_marked_as_broken)
     ): Int {
         return items.count { markInvalidItem(it, reason) }
     }
 
     fun markInvalidItem(
         item: ReadAloudSpeakerGroupItem,
-        reason: String = "自动标记失效"
+        reason: String = appCtx.getString(R.string.misc_automatically_marked_as_broken)
     ): Boolean {
         if (item.engineType.isBlank()) return false
         val key = itemKey(item)
@@ -174,9 +176,9 @@ object SpeechVoiceGroupRepository {
         return ReadAloudSpeakerGroupItem(
             groupId = groupId,
             engineType = SpeechRoute.ENGINE_SYSTEM,
-            engineValue = GSON.toJson(SelectItem("系统默认", "")),
-            engineName = "系统默认",
-            speakerName = "系统默认",
+            engineValue = GSON.toJson(SelectItem(appCtx.getString(R.string.ra_cfg_system_default), "")),
+            engineName = appCtx.getString(R.string.ra_cfg_system_default),
+            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
             sortOrder = sortOrder,
             createdAt = now,
             updatedAt = now

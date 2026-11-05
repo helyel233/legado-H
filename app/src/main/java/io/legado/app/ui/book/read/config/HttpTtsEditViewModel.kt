@@ -15,6 +15,8 @@ import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
+import io.legado.app.R
+import splitties.init.appCtx
 
 class HttpTtsEditViewModel(app: Application) : BaseViewModel(app) {
 
@@ -65,7 +67,7 @@ class HttpTtsEditViewModel(app: Application) : BaseViewModel(app) {
     fun importFromClip(onSuccess: (httpTTS: HttpTTS) -> Unit) {
         val text = context.getClipText()
         if (text.isNullOrBlank()) {
-            context.toastOnUi("剪贴板为空")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_clipboard_empty))
         } else {
             importSource(text, onSuccess)
         }

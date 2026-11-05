@@ -2,6 +2,8 @@ package io.legado.app.help.book.highlight
 
 import androidx.annotation.Keep
 import java.util.UUID
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Images are content-addressed files, never base64 fields in the rule index. */
 @Keep
@@ -28,7 +30,7 @@ data class HighlightRule(
     val imageHeight: Int = 0,
     val importWarning: String = ""
 ) {
-    fun displayName(): String = name.ifBlank { keyword.take(60).ifBlank { "标题高亮" } }
+    fun displayName(): String = name.ifBlank { keyword.take(60).ifBlank { appCtx.getString(R.string.misc_title_highlight) } }
     fun appliesTo(url: String, styled: Boolean): Boolean =
         enabled && (global || bookUrl == url) && (!styled || applyToStyledBooks)
 }

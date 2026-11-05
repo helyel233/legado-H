@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import io.legado.app.R
+import splitties.init.appCtx
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppDialogStyle
@@ -171,7 +172,7 @@ class BubbleEditDialog : ComposeDialogFragment() {
         ): BubbleEditDialog {
             return BubbleEditDialog().apply {
                 arguments = Bundle().apply {
-                    putString(ARG_TITLE, if (isAdd) "添加" else "编辑")
+                    putString(ARG_TITLE, if (isAdd) appCtx.getString(R.string.add) else appCtx.getString(R.string.edit))
                     putString(ARG_NAME, config.name)
                     putString(ARG_SVG, config.svgTemplate)
                     putFloat(ARG_SIZE_SCALE, config.sizeScale)
@@ -234,13 +235,13 @@ private fun BubbleEditContent(
                         name = it
                         onNameChanged(it)
                     },
-                    label = "名称",
+                    label = stringResource(R.string.name),
                     style = style
                 )
 
                 // Size scale row
                 EditOptionRow(
-                    title = "大小倍率",
+                    title = stringResource(R.string.bubble_size_scale),
                     value = sizeScaleDisplay,
                     style = style,
                     onClick = onOpenSizeScalePicker
@@ -248,7 +249,7 @@ private fun BubbleEditContent(
 
                 // Color rows
                 ColorOptionRow(
-                    title = "日间常规色",
+                    title = stringResource(R.string.bubble_day_normal),
                     colorHex = dayNormal ?: BubblePackageManager.DEFAULT_NORMAL_COLOR,
                     style = style,
                     onClick = {
@@ -259,7 +260,7 @@ private fun BubbleEditContent(
                     }
                 )
                 ColorOptionRow(
-                    title = "日间强调色",
+                    title = stringResource(R.string.bubble_day_emphasis),
                     colorHex = dayEmphasis ?: BubblePackageManager.DEFAULT_EMPHASIS_COLOR,
                     style = style,
                     onClick = {
@@ -270,7 +271,7 @@ private fun BubbleEditContent(
                     }
                 )
                 ColorOptionRow(
-                    title = "夜间常规色",
+                    title = stringResource(R.string.bubble_night_normal),
                     colorHex = nightNormal ?: BubblePackageManager.DEFAULT_NORMAL_COLOR,
                     style = style,
                     onClick = {
@@ -281,7 +282,7 @@ private fun BubbleEditContent(
                     }
                 )
                 ColorOptionRow(
-                    title = "夜间强调色",
+                    title = stringResource(R.string.bubble_night_emphasis),
                     colorHex = nightEmphasis ?: BubblePackageManager.DEFAULT_EMPHASIS_COLOR,
                     style = style,
                     onClick = {
@@ -294,8 +295,8 @@ private fun BubbleEditContent(
 
                 // SVG template row
                 EditOptionRow(
-                    title = "SVG 模板",
-                    value = "点击编辑，支持 \${color} 和 \${num}",
+                    title = stringResource(R.string.bubble_svg_template),
+                    value = stringResource(R.string.bubble_svg_edit_hint),
                     style = style,
                     onClick = onOpenSvgEditor
                 )

@@ -15,6 +15,7 @@ import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import splitties.init.appCtx
+import io.legado.app.R
 
 /**
  * 离线评论回放会话：无头 WebView 打开真实评论页（带书源 cookie/UA），
@@ -64,7 +65,7 @@ class ReviewReplaySession(
                     super.onReceivedError(view, request, error)
                     if (request?.isForMainFrame == true && !pageFailed.isCompleted) {
                         pageFailed.complete(
-                            "页面加载失败 code=${error?.errorCode} ${error?.description}"
+                            appCtx.getString(R.string.misc_page_failed_load_code, error?.errorCode, error?.description)
                         )
                     }
                 }
@@ -86,14 +87,14 @@ class ReviewReplaySession(
             if (kind == PendingReviewComment.KIND_CHAPTER) {
                 val tabOpened = evaluate(webView, chapterTabJs())
                 if (tabOpened != "true") {
-                    return@withContext ReplayResult(false, "无法定位章评入口，无法回放章评")
+                    return@withContext ReplayResult(false, appCtx.getString(R.string.misc_cannot_locate_chapter_review_entry))
                 }
                 delay(CHAPTER_TAB_WAIT_MS)
             }
 
             val submitted = evaluate(webView, fillAndSubmitJs())
             if (submitted != "true") {
-                return@withContext ReplayResult(false, "无法定位评论输入框或发表按钮，页面结构可能已变化")
+                return@withContext ReplayResult(false, appCtx.getString(R.string.misc_cannot_locate_review_input_box))
             }
 
             val deadline = System.currentTimeMillis() + RESULT_TIMEOUT_MS
@@ -112,7 +113,7 @@ class ReviewReplaySession(
                 }
                 delay(RESULT_POLL_INTERVAL_MS)
             }
-            ReplayResult(false, "发送结果未返回（超时）")
+            ReplayResult(false, appCtx.getString(R.string.misc_no_send_result_returned_timeout))
         } finally {
             webView.destroy()
         }
@@ -132,11 +133,11 @@ class ReviewReplaySession(
             val json = org.json.JSONObject(body)
             val ok = json.optBoolean("ok", false)
             val message = json.optString("message", "").ifBlank {
-                if (ok) "发表成功" else "发送失败（响应无说明）"
+                if (ok) appCtx.getString(R.string.misc_posted_successfully) else appCtx.getString(R.string.misc_send_failed_no_details_response)
             }
             ReplayResult(ok, message, json.optString("response", "").take(200))
         } catch (e: Exception) {
-            ReplayResult(false, "回放结果解析失败：${e.localizedMessage}")
+            ReplayResult(false, appCtx.getString(R.string.misc_failed_parse_replay_result, e.localizedMessage))
         }
     }
 

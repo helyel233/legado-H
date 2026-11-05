@@ -38,6 +38,7 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.coroutineContext
+import splitties.init.appCtx
 
 /**
  * 图片/评论点击统一入口。
@@ -637,7 +638,7 @@ object BookImgClick {
                     )
                 ) {
                     AppLog.put(
-                        "评论网络打开失败，已回退本地快照\n${error.localizedMessage}",
+                        appCtx.getString(R.string.misc_failed_open_reviews_online_fell, error.localizedMessage),
                         error
                     )
                 } else {

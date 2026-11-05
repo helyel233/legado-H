@@ -151,8 +151,13 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.WELCOME_CONFIG -> replaceFragment(configTag, WelcomeConfigFragment::class.java)
             ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG ->
                 replaceFragment(configTag, DiscoverySubscriptionConfigFragment::class.java)
-            ConfigTag.DISCOVERY_CONFIG -> replaceFragment(configTag, DiscoveryConfigFragment::class.java)
-            ConfigTag.SUBSCRIPTION_CONFIG -> replaceFragment(configTag, SubscriptionConfigFragment::class.java)
+            ConfigTag.COMMENT_CONFIG -> replaceFragment(configTag, CommentConfigFragment::class.java)
+            ConfigTag.BOOKSHELF_CONFIG -> replaceFragment(configTag, BookshelfSettingsFragment::class.java)
+            ConfigTag.AUDIO_CONFIG -> replaceFragment(configTag, AudioConfigFragment::class.java)
+            ConfigTag.MANGA_VIDEO_CONFIG ->
+                replaceFragment(configTag, MangaVideoConfigFragment::class.java)
+            ConfigTag.PAGE_LAYOUT_CONFIG ->
+                replaceFragment(configTag, PageLayoutConfigFragment::class.java)
             else -> finish()
         }
     }
@@ -171,26 +176,44 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
      * 顶栏副标题显示「这一页是从哪个一级分类进来的」，是设置页父子体系的可见线索。
      * 只列父级、不含页面自身（自身已经是标题），避免重复。
      * 新增 ConfigTag 时记得在这里补一条，否则该页顶栏会没有路径提示。
+     *
+     * 这里的父级名必须与 [MyFragment.buildSections] 里的分区标题**同源**：
+     * 用的是同一批 string 资源，而不是另起一套名字。改分区名时若漏改这里，
+     * 顶栏会出现「阅读」而页面实际挂在「阅读与界面」下的割裂感。
      */
     private fun breadcrumbOf(configTag: String?): String? {
         val parents = when (configTag) {
-            ConfigTag.READING_CONFIG -> listOf(R.string.config_category_reading)
+            ConfigTag.READING_CONFIG -> listOf(R.string.config_category_reading_ui)
             ConfigTag.NETWORK_CONFIG -> listOf(R.string.config_category_network_sync)
-            ConfigTag.STORAGE_CONFIG -> listOf(R.string.config_category_data_device)
+            ConfigTag.STORAGE_CONFIG -> listOf(R.string.config_category_data_tools)
             ConfigTag.ADVANCED_CONFIG -> listOf(R.string.config_category_advanced)
             ConfigTag.NETWORK_DNS_CONFIG ->
                 listOf(R.string.config_category_network_sync, R.string.network_setting)
 
+            // 主题模式已上提到一级行，界面设置/封面/欢迎页都归属「阅读与界面」
             ConfigTag.THEME_CONFIG,
             ConfigTag.COVER_CONFIG,
-            ConfigTag.WELCOME_CONFIG -> listOf(R.string.config_category_appearance)
+            ConfigTag.WELCOME_CONFIG -> listOf(R.string.config_category_reading_ui)
 
             ConfigTag.AI_CONFIG -> listOf(R.string.config_category_ai_automation)
             ConfigTag.BACKUP_CONFIG -> listOf(R.string.config_category_network_sync)
-            ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
-            ConfigTag.DISCOVERY_CONFIG,
-            ConfigTag.SUBSCRIPTION_CONFIG ->
-                listOf(R.string.config_category_appearance, R.string.theme_setting)
+            // 发现/订阅页设置已上提为「内容与规则」下的一级行，不再是界面设置的下一层
+            ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG ->
+                listOf(R.string.config_category_content)
+
+            // 发现/订阅/首页三处布局归拢为「内容与规则」下的独立页
+            ConfigTag.PAGE_LAYOUT_CONFIG ->
+                listOf(R.string.config_category_content)
+
+            // 评论抓取已从高级设置拆出，作为「高级与关于」下的独立二级页
+            ConfigTag.COMMENT_CONFIG -> listOf(R.string.config_category_advanced)
+
+            // 书架设置从阅读设置拆出，归属「阅读与界面」
+            ConfigTag.BOOKSHELF_CONFIG -> listOf(R.string.config_category_reading_ui)
+
+            // 朗读与音频、漫画与视频同属「读起来是什么样」，都挂在「阅读与界面」下
+            ConfigTag.AUDIO_CONFIG,
+            ConfigTag.MANGA_VIDEO_CONFIG -> listOf(R.string.config_category_reading_ui)
 
             else -> return null
         }

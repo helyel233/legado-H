@@ -3,6 +3,8 @@ package io.legado.app.help.reader
 import com.google.gson.JsonElement
 import com.google.gson.stream.JsonWriter
 import java.util.Base64
+import io.legado.app.R
+import splitties.init.appCtx
 
 /** Optional resources in RED01; old Reeden fields and the gzip JSON container stay intact. */
 object ReaderAssetJsonCodec {
@@ -34,7 +36,7 @@ object ReaderAssetJsonCodec {
         var total = 0L
         writer.beginArray()
         ids.forEach { id ->
-            val payload = requireNotNull(resource(id)) { "引用的素材已丢失，请重新导入后再导出：$id" }
+            val payload = requireNotNull(resource(id)) { appCtx.getString(R.string.misc_referenced_asset_missing_re_import, id) }
             require(payload.id == id) { "素材标识不一致" }
             payload.validate()
             total += payload.bytes.size

@@ -34,6 +34,7 @@ import splitties.init.appCtx
 import java.io.File
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import io.legado.app.R
 
 object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
 
@@ -236,7 +237,7 @@ object AiChatSpeechPlayer : TextToSpeech.OnInitListener {
             }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
-            SpeechVoiceGroupRepository.markInvalidRoute(route, reason = "AI 聊天合成失败")
+            SpeechVoiceGroupRepository.markInvalidRoute(route, reason = appCtx.getString(R.string.ui_main_ai_chat_synthesis_failed))
             AppLog.put("AI 聊天 TTS 合成失败\n${throwable.localizedMessage}", throwable)
             HttpSynthesisResult(fallbackRoute = fallbackRoute(route), error = throwable)
         }

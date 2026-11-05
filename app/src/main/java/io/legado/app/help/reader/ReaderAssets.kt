@@ -12,6 +12,7 @@ import io.legado.app.utils.openInputStream
 import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.File
+import io.legado.app.R
 
 /** Images and fonts shared by highlights and page templates, always served locally. */
 object ReaderAssets {
@@ -30,15 +31,15 @@ object ReaderAssets {
     fun addFolder(uri: Uri): ReaderAssetFolder {
         requireLocal(uri)
         val folder = FileDoc.fromUri(uri, true)
-        requireNotNull(folder.list()) { "无法读取文件夹，请重新选择并授予读取权限" }
-        return store.addFolder(folder.name.ifBlank { "素材文件夹" }, folder.uri.toString())
+        requireNotNull(folder.list()) { appCtx.getString(R.string.misc_cannot_read_this_folder_please) }
+        return store.addFolder(folder.name.ifBlank { appCtx.getString(R.string.misc_asset_folder) }, folder.uri.toString())
     }
 
     fun browse(folder: FileDoc): List<FileDoc> {
         requireLocal(folder.uri)
         val entries = requireNotNull(folder.list { file ->
             file.isDir || file.name.substringAfterLast('.', "").lowercase() in extensions
-        }) { "无法读取文件夹，请重新选择并授予读取权限" }
+        }) { appCtx.getString(R.string.misc_cannot_read_this_folder_please) }
         require(entries.size <= 5000) { "此文件夹包含超过 5000 个素材，请选择较小的子文件夹" }
         return entries.sortedWith(compareBy<FileDoc> { !it.isDir }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lib_cloud_delete_hint">请输入 %1$s</string>
+    <string name="lib_cloud_delete_retry">请输入 %1$s 后再确认</string>
+    <string name="lib_cloud_delete_message">将删除云端章节：%1$s\n请输入“%2$s”确认。</string>
+</resources>

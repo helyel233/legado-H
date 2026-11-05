@@ -56,6 +56,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.showDialogFragment
+import splitties.init.appCtx
 
 /**
  * 导入替换规则弹出窗口
@@ -262,12 +263,12 @@ class ImportReplaceRuleDialog() : ComposeDialogFragment(),
                                     "${item.name}(${item.group})"
                                 }
                                 val stateText = when {
-                                    localRule == null -> "新增"
+                                    localRule == null -> appCtx.getString(R.string.auto_task_import_new)
                                     item.pattern != localRule.pattern
                                             || item.replacement != localRule.replacement
                                             || item.isRegex != localRule.isRegex
-                                            || item.scope != localRule.scope -> "更新"
-                                    else -> "已有"
+                                            || item.scope != localRule.scope -> appCtx.getString(R.string.auto_task_import_update)
+                                    else -> appCtx.getString(R.string.ui_main_added)
                                 }
                                 ImportSourceItemRow(
                                     name = nameText,

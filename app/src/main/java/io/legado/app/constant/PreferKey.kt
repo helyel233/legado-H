@@ -11,7 +11,8 @@ object PreferKey {
     const val videoSetting = "videoSetting"
     const val editTheme = "editTheme"
     const val editThemeDark = "editThemeDark"
-    const val editTemeAuto = "editTemeAuto"
+    // 常量名修正拼写；字符串值保持 "editTemeAuto" 不变，避免老用户主题设置丢失
+    const val editThemeAuto = "editTemeAuto"
     const val showUnread = "showUnread"
     const val showReadProgress = "showReadProgress"
     const val showBooknameLayout = "showBooknameLayout"
@@ -425,6 +426,16 @@ object PreferKey {
     const val streamReadAloudAudio = "streamReadAloudAudio"
     const val pauseReadAloudWhilePhoneCalls = "pauseReadAloudWhilePhoneCalls"
     const val readAloudByMediaButton = "readAloudByMediaButton"
+
+    /**
+     * 媒体键的三个行为开关必须同域定义，否则两处各写裸字符串容易漏改：
+     * - [mediaButtonOnExit] 退出朗读时媒体键的行为
+     * - [mediaButtonPerNext] 媒体键是否按句翻（朗读配置「基础」组）
+     * - [readAloudByMediaButton] 媒体键是否控制朗读（高级设置）
+     * 三者的字符串值不可改，改了会让老用户的设置丢失。
+     */
+    const val mediaButtonOnExit = "mediaButtonOnExit"
+    const val mediaButtonPerNext = "mediaButtonPerNext"
     const val showMangaUi = "showMangaUi"
     const val disableMangaScale = "disableMangaScale"
     const val disableMangaPageAnim = "disableMangaPageAnim"
@@ -501,4 +512,48 @@ object PreferKey {
     const val homepagePreload = "homepagePreload"
     const val showLocalBookIcon = "showLocalBookIcon"
     const val rssNoImgIframe = "rssNoImgIframe"
+
+    // 评论抓取（ReviewDownloadConfig）。
+    // 这 22 个键原本只以裸字符串活在 help/review/ReviewDownloadConfig.kt 里，
+    // 反向审计「哪些偏好键没进 PreferKey」时永远漏掉它们。字符串值保持原样，
+    // 不产生迁移；语义与默认值仍由 ReviewDownloadConfig 的枚举统一管。
+    const val reviewDownloadEngine = "reviewDownloadEngine"
+    const val reviewDownloadBackoff = "reviewDownloadBackoff"
+    const val reviewDownloadReuseReplies = "reviewDownloadReuseReplies"
+    const val reviewDownloadReuseResources = "reviewDownloadReuseResources"
+    const val reviewDownloadRequireAvatars = "reviewDownloadRequireAvatars"
+    const val reviewDownloadRequireImages = "reviewDownloadRequireImages"
+    const val reviewDownloadRequireCss = "reviewDownloadRequireCss"
+    const val reviewDownloadRequireFonts = "reviewDownloadRequireFonts"
+    const val reviewDownloadDataConcurrency = "reviewDownloadDataConcurrency"
+    const val reviewDownloadReplyConcurrency = "reviewDownloadReplyConcurrency"
+    const val reviewDownloadResourceConcurrency = "reviewDownloadResourceConcurrency"
+    const val reviewDownloadPageConcurrency = "reviewDownloadPageConcurrency"
+    const val reviewDownloadHeavyConcurrency = "reviewDownloadHeavyConcurrency"
+    const val reviewDownloadPageSize = "reviewDownloadPageSize"
+    const val reviewDownloadReplySize = "reviewDownloadReplySize"
+    const val reviewDownloadStableInterval = "reviewDownloadStableInterval"
+    const val reviewDownloadStableRounds = "reviewDownloadStableRounds"
+    const val reviewDownloadPageTimeout = "reviewDownloadPageTimeout"
+    const val reviewDownloadDataTimeout = "reviewDownloadDataTimeout"
+    const val reviewDownloadResourceTimeout = "reviewDownloadResourceTimeout"
+    const val reviewDownloadRetries = "reviewDownloadRetries"
+    const val reviewDownloadRetryInterval = "reviewDownloadRetryInterval"
+
+    // 反向审计收尾：下面这些键此前只以裸字符串存在，靠人记不靠谱，改名时也搜不到引用
+    const val brightnessAuto = "brightnessAuto"
+    const val importBookPath = "importBookPath"
+    const val searchScope = "searchScope"
+    const val searchGroup = "searchGroup"
+    const val disableReturnKey = "disableReturnKey"
+    const val autoUpdateVariant = "autoUpdateVariant"
+
+    /**
+     * EPUB 排版下同一项要存两份（默认排版 / EPUB 排版），拼接前缀区分。
+     * 值里带结尾的点，拼法固定为「前缀 + 原键」。
+     */
+    const val epubLayoutPrefix = "epubLayout."
+
+    /** 阅读模板的滚动模式按模板 id 逐条保存，前缀 + id 组成完整键名。 */
+    const val readerTemplateScrollPrefix = "readerTemplateScroll."
 }

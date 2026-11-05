@@ -14,6 +14,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
 import kotlin.coroutines.coroutineContext
+import io.legado.app.R
+import splitties.init.appCtx
 
 object AiBookSourceTool {
 
@@ -366,7 +368,7 @@ object AiBookSourceTool {
         val source = resolveSource(args, allowDbLookup = true) ?: return@coroutineScope error("未找到书源")
         val key = args?.optString("key").orEmpty()
             .ifBlank { source.ruleSearch?.checkKeyWord.orEmpty() }
-            .ifBlank { "我的" }
+            .ifBlank { appCtx.getString(R.string.my) }
         val timeoutMs = (args?.optLong("timeoutMs", 45_000L) ?: 45_000L)
             .coerceIn(10_000L, 90_000L)
         val logs = arrayListOf<String>()

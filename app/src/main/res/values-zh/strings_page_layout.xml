@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="page_layout_settings_title">页面布局</string>
+    <string name="page_layout_settings_summary">发现页 / 订阅 / 首页的布局与列数，一处配置</string>
+    <string name="page_layout_section">布局与列数</string>
+    <string name="page_layout_column">%1$d 列</string>
+    <string name="page_layout_rss_columns">订阅列数</string>
+    <string name="page_layout_homepage">首页布局</string>
+    <string name="page_layout_discovery_summary">也可在发现页菜单切换；仅现代发现页生效</string>
+    <string name="page_layout_rss_summary">也可在订阅页菜单切换；仅经典订阅页生效</string>
+    <string name="page_layout_homepage_summary">也可在首页菜单切换</string>
+    <string name="page_layout_links_section">前往对应页面</string>
+    <string name="page_layout_goto_explore">打开发现页</string>
+    <string name="page_layout_goto_rss">打开订阅页</string>
+    <string name="page_layout_goto_homepage">打开首页</string>
+    <string name="page_layout_goto_summary">打开对应标签页，也可在该页菜单切换同一项</string>
+</resources>

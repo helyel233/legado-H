@@ -148,6 +148,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
+import splitties.init.appCtx
 
 @Immutable
 data class BookInfoChapterUi(
@@ -683,20 +684,20 @@ private fun BookInfoQuickActionItem.toQuickActionUi(
     if (!enabled) return null
     return when (type) {
         BookInfoQuickActionType.SOURCE -> BookInfoQuickActionUi(
-            label = alias.ifBlank { "书源" },
+            label = alias.ifBlank { appCtx.getString(R.string.book_source) },
             value = state.originName.cleanBookInfoValue(),
             previewType = BookInfoMetricPreviewType.Source,
             onClick = actions.onChangeSource
         )
         BookInfoQuickActionType.TOC -> BookInfoQuickActionUi(
-            label = alias.ifBlank { "目录" },
+            label = alias.ifBlank { appCtx.getString(R.string.chapter_list) },
             value = if (state.chapterCount > 0) "${state.chapterCount}" else stringResource(R.string.view_toc),
-            suffix = if (state.chapterCount > 0) "章" else "",
+            suffix = if (state.chapterCount > 0) appCtx.getString(R.string.chapter) else "",
             previewType = BookInfoMetricPreviewType.Toc,
             onClick = actions.onOpenToc
         )
         BookInfoQuickActionType.GALLERY -> BookInfoQuickActionUi(
-            label = alias.ifBlank { "图库" },
+            label = alias.ifBlank { appCtx.getString(R.string.gallery) },
             value = if (state.aiImageCount > 0) "${state.aiImageCount}" else stringResource(R.string.ai_image_gallery_empty),
             previewType = BookInfoMetricPreviewType.Gallery,
             onClick = actions.onOpenAiGallery
@@ -958,10 +959,10 @@ private fun BookInfoSourcePreview(
     state: BookInfoUiState,
     style: BookInfoComposeStyle
 ) {
-    BookInfoPreviewTitle("书源详情", style)
-    BookInfoPreviewLine("书源", state.originName.cleanBookInfoValue(), style)
-    BookInfoPreviewLine("书名", state.name, style)
-    BookInfoPreviewLine("作者", state.author, style)
+    BookInfoPreviewTitle(appCtx.getString(R.string.ui_book_source_details), style)
+    BookInfoPreviewLine(appCtx.getString(R.string.book_source), state.originName.cleanBookInfoValue(), style)
+    BookInfoPreviewLine(appCtx.getString(R.string.book_name), state.name, style)
+    BookInfoPreviewLine(appCtx.getString(R.string.author), state.author, style)
 }
 
 @Composable
@@ -969,10 +970,10 @@ private fun BookInfoTocMetricPreview(
     state: BookInfoUiState,
     style: BookInfoComposeStyle
 ) {
-    BookInfoPreviewTitle("目录预览", style)
+    BookInfoPreviewTitle(appCtx.getString(R.string.ui_book_contents_preview), style)
     val currentTitle = state.currentChapterTitle.ifBlank { state.tocText.cleanBookInfoValue() }
     if (currentTitle.isNotBlank()) {
-        BookInfoPreviewLine("当前", currentTitle, style)
+        BookInfoPreviewLine(appCtx.getString(R.string.default_version), currentTitle, style)
     }
     val chapters = state.currentChapterPreview.ifEmpty { state.chapterPreview.take(8) }
     if (chapters.isEmpty()) {
@@ -1015,7 +1016,7 @@ private fun BookInfoGalleryMetricPreview(
     style: BookInfoComposeStyle,
     contentReady: Boolean
 ) {
-    BookInfoPreviewTitle("图库预览", style)
+    BookInfoPreviewTitle(appCtx.getString(R.string.ui_book_gallery_preview), style)
     if (state.aiImagePaths.isEmpty()) {
         Text(
             text = stringResource(R.string.ai_image_gallery_empty),
@@ -1024,7 +1025,7 @@ private fun BookInfoGalleryMetricPreview(
         )
     } else {
         Text(
-            text = "共 ${state.aiImageCount} 张",
+            text = appCtx.getString(R.string.ui_book_images, state.aiImageCount),
             color = style.colors.secondaryText,
             fontSize = 12.5.sp
         )
@@ -1208,9 +1209,9 @@ private fun BookInfoMoreActionSheet(
                     //本地 txt 自动探测编码不可靠（GBK/UTF-8 混排等），给手动切换入口
                     BookInfoMoreActionItem(
                         text = if (state.charset.isBlank()) {
-                            "切换编码"
+                            appCtx.getString(R.string.ui_book_switch_encoding)
                         } else {
-                            "切换编码（${state.charset}）"
+                            appCtx.getString(R.string.ui_book_switch_encoding_2, state.charset)
                         },
                         style = style
                     ) {
@@ -1317,7 +1318,7 @@ private fun BookInfoCloudEntrySelectorDialog(
         )
         BookInfoCloudEntryModeRow(
             title = stringResource(R.string.book_cloud_cache_package_mode),
-            summary = "从云端备份包上传、下载、用缓存入架",
+            summary = appCtx.getString(R.string.ui_book_upload_download_cloud_backup_packages),
             checked = state.cloudEntryMode == BookCloudEntryMode.CACHE_PACKAGE,
             style = style
         ) {
@@ -1326,7 +1327,7 @@ private fun BookInfoCloudEntrySelectorDialog(
         }
         BookInfoCloudEntryModeRow(
             title = stringResource(R.string.book_cloud_library_chapter_mode),
-            summary = "阅读页显示云按钮，按当前章节切换书库正文",
+            summary = appCtx.getString(R.string.ui_book_show_cloud_button_reading_page),
             checked = state.cloudEntryMode == BookCloudEntryMode.LIBRARY_CHAPTER,
             style = style
         ) {
@@ -1354,13 +1355,13 @@ private fun BookInfoCharsetSelectorDialog(
 ) {
     BookInfoCenterDialog(onDismiss = onDismiss, style = style) {
         Text(
-            text = "切换编码",
+            text = appCtx.getString(R.string.ui_book_switch_encoding),
             color = style.colors.primaryText,
             fontSize = 19.sp,
             fontWeight = FontWeight.SemiBold
         )
         Text(
-            text = "自动探测可能误判（GBK/UTF-8 混排等），乱码时逐个尝试",
+            text = appCtx.getString(R.string.ui_book_auto_detection_can_be_wrong),
             color = style.colors.secondaryText,
             fontSize = 12.sp
         )
@@ -1628,9 +1629,9 @@ private fun BookInfoQuickActionEditRow(
 @Composable
 private fun BookInfoQuickActionType.editorTitle(): String {
     return when (this) {
-        BookInfoQuickActionType.SOURCE -> "书源"
-        BookInfoQuickActionType.TOC -> "目录"
-        BookInfoQuickActionType.GALLERY -> "图库"
+        BookInfoQuickActionType.SOURCE -> appCtx.getString(R.string.book_source)
+        BookInfoQuickActionType.TOC -> appCtx.getString(R.string.chapter_list)
+        BookInfoQuickActionType.GALLERY -> appCtx.getString(R.string.gallery)
         BookInfoQuickActionType.GROUP -> stringResource(R.string.group)
         BookInfoQuickActionType.CLOUD -> stringResource(R.string.book_cloud_entry_mode)
         BookInfoQuickActionType.CUSTOM_BUTTON -> stringResource(R.string.custom_button)
@@ -1643,9 +1644,9 @@ private fun BookInfoQuickActionType.editorTitle(): String {
 @Composable
 private fun BookInfoQuickActionType.defaultAliasPlaceholder(): String {
     return when (this) {
-        BookInfoQuickActionType.SOURCE -> "书源"
-        BookInfoQuickActionType.TOC -> "目录"
-        BookInfoQuickActionType.GALLERY -> "图库"
+        BookInfoQuickActionType.SOURCE -> appCtx.getString(R.string.book_source)
+        BookInfoQuickActionType.TOC -> appCtx.getString(R.string.chapter_list)
+        BookInfoQuickActionType.GALLERY -> appCtx.getString(R.string.gallery)
         BookInfoQuickActionType.GROUP -> stringResource(R.string.group)
         BookInfoQuickActionType.CLOUD -> stringResource(R.string.book_cloud_entry_mode)
         BookInfoQuickActionType.CUSTOM_BUTTON -> stringResource(R.string.custom_button)

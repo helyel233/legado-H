@@ -7,6 +7,8 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.parcelize.Parcelize
+import io.legado.app.R
+import splitties.init.appCtx
 
 @Parcelize
 @Entity(
@@ -38,7 +40,7 @@ data class ReadMenuCustomButton(
     var updateTime: Long = System.currentTimeMillis()
 ) : Parcelable {
 
-    fun displayName(): String = name.ifBlank { "自定义按键" }
+    fun displayName(): String = name.ifBlank { appCtx.getString(R.string.i18n_final_custom_button) }
 
     fun validTimeout(): Long = timeoutMillisecond.takeIf { it > 0 }
         ?: C.DEFAULT_MAX_SEEK_TO_PREVIOUS_POSITION_MS

@@ -62,6 +62,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import splitties.init.appCtx
 
 /**
  * 阅读界面数据处理
@@ -242,7 +243,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             LocalBook.getBookInputStream(book)
             return true
         } catch (e: Throwable) {
-            ReadBook.upMsg("打开本地书籍出错: ${e.localizedMessage}")
+            ReadBook.upMsg(appCtx.getString(R.string.ui_book_failed_open_local_book, e.localizedMessage))
             if (e is SecurityException || e is FileNotFoundException) {
                 permissionDenialLiveData.postValue(0)
             }
@@ -260,7 +261,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             return true
         } catch (e: Throwable) {
             currentCoroutineContext().ensureActive()
-            ReadBook.upMsg("详情页出错: ${e.localizedMessage}")
+            ReadBook.upMsg(appCtx.getString(R.string.ui_book_detail_page_error, e.localizedMessage))
             return false
         }
     }
@@ -288,11 +289,11 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         //每 1% 都 upMsg 会触发一次正文视图更新，解析大文件时会明显重排，
                         //这里按 5% 节流（最多约 20 次）
                         if (percent % 5 == 0 || percent >= 99) {
-                            ReadBook.upMsg("正在解析目录 $percent%")
+                            ReadBook.upMsg(appCtx.getString(R.string.ui_book_parsing_contents, percent))
                         }
                     },
                     onCharsetSuspect = {
-                        context.toastOnUi("检测到文件编码可能不正确，如乱码可在阅读菜单中切换编码")
+                        context.toastOnUi(appCtx.getString(R.string.ui_book_file_encoding_may_be_wrong))
                     }
                 ).let {
                     appDb.runInTransaction {
@@ -473,7 +474,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             } else if (progress.durChapterIndex < book.simulatedTotalChapterNum()) {
                 ReadBook.setProgress(progress)
                 AppLog.put("自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}")
-                context.toastOnUi("已同步最新阅读进度")
+                context.toastOnUi(appCtx.getString(R.string.ui_book_reading_progress_synced))
             }
         }
     }
@@ -545,7 +546,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 ReadBook.upMsg(null)
             }.catch {
                 AppLog.put("自动换源失败\n${it.localizedMessage}", it)
-                context.toastOnUi("自动换源失败\n${it.localizedMessage}")
+                context.toastOnUi(appCtx.getString(R.string.ui_book_auto_source_switch_failed_n, it.localizedMessage))
             }.collect()
         }
     }
@@ -778,7 +779,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             }
         }.onError {
             AppLog.put("保存图片出错\n${it.localizedMessage}", it)
-            context.toastOnUi("保存图片出错\n${it.localizedMessage}")
+            context.toastOnUi(appCtx.getString(R.string.ui_book_failed_save_image_n, it.localizedMessage))
         }
     }
 

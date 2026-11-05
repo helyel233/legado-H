@@ -18,6 +18,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import io.legado.app.R
 
 object AiWorkspaceTool {
 
@@ -691,7 +692,7 @@ object AiWorkspaceTool {
             ?: return@coroutineScope error("invalid book source file")
         val key = args.optString("key")
             .ifBlank { source.ruleSearch?.checkKeyWord.orEmpty() }
-            .ifBlank { "我的" }
+            .ifBlank { appCtx.getString(R.string.my) }
         val timeoutMs = args.optLong("timeoutMs", 45_000L).coerceIn(10_000L, 90_000L)
         val logs = arrayListOf<String>()
         val finished = CompletableDeferred<Int>()

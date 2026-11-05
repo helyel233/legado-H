@@ -175,7 +175,7 @@ class ReplaceEditActivity :
 
     override fun helpActions(): List<SelectItem<String>> {
         return arrayListOf(
-            SelectItem("正则教程", "regexHelp")
+            SelectItem(getString(R.string.i18n_final_regex_tutorial), "regexHelp")
         )
     }
 

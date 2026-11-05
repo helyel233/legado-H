@@ -22,6 +22,7 @@ import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.InputStream
 import kotlin.math.ceil
+import io.legado.app.R
 
 
 class PdfFile(var book: Book) {
@@ -211,7 +212,7 @@ class PdfFile(var book: Book) {
                     val chapter = BookChapter()
                     chapter.index = it
                     chapter.bookUrl = book.bookUrl
-                    chapter.title = "分段_${it}"
+                    chapter.title = appCtx.getString(R.string.misc_segment, it)
                     chapter.url = "pdf_${it}"
                     chapterList.add(chapter)
                 }
@@ -247,7 +248,7 @@ class PdfFile(var book: Book) {
     private fun upBookInfo() {
         if (pdfRenderer == null) {
             pFile = null
-            book.intro = "书籍导入异常"
+            book.intro = appCtx.getString(R.string.misc_book_import_failed)
         } else {
             upBookCover()
             if (book.name.isEmpty()) {
