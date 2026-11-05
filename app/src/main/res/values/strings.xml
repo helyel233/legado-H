@@ -3484,4 +3484,9 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="ra_preprocess_saved">Pre-processing rules saved</string>
     <string name="ra_quote_rules_summary">Quote &amp; sentence rules · %1$s pairs</string>
     <string name="ra_thought_cues_summary">Inner-monologue cues · %1$s</string>
+
+    <!-- 发现页经典模式加载状态机降级文案 -->
+    <string name="discovery_empty_no_sources">No book sources. Tap to go to source management</string>
+    <string name="discovery_empty_all_failed">All book sources are unavailable. Tap to manage sources, or pull down to retry</string>
+    <string name="discovery_error_widget_failed">Failed to load, tap to retry</string>
 </resources>

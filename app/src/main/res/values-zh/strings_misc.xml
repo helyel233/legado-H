@@ -219,4 +219,30 @@
     <string name="misc_http_tts_deleted">HTTP TTS 已删除</string>
     <string name="misc_speaker_no_longer_available">发言人已失效</string>
     <string name="misc_automatically_marked_as_broken">自动标记失效</string>
+
+    <!-- 通用异常映射层（UiErrorMapper）默认文案 -->
+    <string name="error_network">网络不可用，请检查网络连接</string>
+    <string name="error_timeout">请求超时，请重试</string>
+    <string name="error_source_invalid">书源不可用，请更换或检查书源</string>
+    <string name="error_parse_format">数据格式解析失败</string>
+    <string name="error_file_io">读取文件失败</string>
+    <string name="error_file_unsupported">不支持的文件格式</string>
+    <string name="error_no_data">暂无数据</string>
+    <string name="error_load_failed_retry">加载失败，点击重试</string>
+
+    <!-- 相对时间本地化（数值换算不变，仅文案外置） -->
+    <string name="time_ago_seconds">%1$d秒前</string>
+    <string name="time_ago_minutes">%1$d分钟前</string>
+    <string name="time_ago_hours">%1$d小时前</string>
+    <string name="time_ago_days">%1$d天前</string>
+    <string name="time_ago_weeks">%1$d周前</string>
+    <string name="time_ago_months">%1$d月前</string>
+    <string name="time_ago_years">%1$d年前</string>
+    <string name="time_later_seconds">%1$d秒后</string>
+    <string name="time_later_minutes">%1$d分钟后</string>
+    <string name="time_later_hours">%1$d小时后</string>
+    <string name="time_later_days">%1$d天后</string>
+    <string name="time_later_weeks">%1$d周后</string>
+    <string name="time_later_months">%1$d月后</string>
+    <string name="time_later_years">%1$d年后</string>
 </resources>

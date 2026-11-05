@@ -219,4 +219,30 @@
     <string name="misc_http_tts_deleted">HTTP TTS deleted</string>
     <string name="misc_speaker_no_longer_available">Speaker no longer available</string>
     <string name="misc_automatically_marked_as_broken">Automatically marked as broken</string>
+
+    <!-- 通用异常映射层（UiErrorMapper）默认文案 -->
+    <string name="error_network">Network unavailable, please check your connection</string>
+    <string name="error_timeout">Request timed out, please try again</string>
+    <string name="error_source_invalid">Book source unavailable, please change or check the source</string>
+    <string name="error_parse_format">Failed to parse data format</string>
+    <string name="error_file_io">Failed to read file</string>
+    <string name="error_file_unsupported">Unsupported file format</string>
+    <string name="error_no_data">No data available</string>
+    <string name="error_load_failed_retry">Failed to load, tap to retry</string>
+
+    <!-- 相对时间本地化（数值换算不变，仅文案外置；英文 ago 后置 / in 前置） -->
+    <string name="time_ago_seconds">%1$d seconds ago</string>
+    <string name="time_ago_minutes">%1$d minutes ago</string>
+    <string name="time_ago_hours">%1$d hours ago</string>
+    <string name="time_ago_days">%1$d days ago</string>
+    <string name="time_ago_weeks">%1$d weeks ago</string>
+    <string name="time_ago_months">%1$d months ago</string>
+    <string name="time_ago_years">%1$d years ago</string>
+    <string name="time_later_seconds">in %1$d seconds</string>
+    <string name="time_later_minutes">in %1$d minutes</string>
+    <string name="time_later_hours">in %1$d hours</string>
+    <string name="time_later_days">in %1$d days</string>
+    <string name="time_later_weeks">in %1$d weeks</string>
+    <string name="time_later_months">in %1$d months</string>
+    <string name="time_later_years">in %1$d years</string>
 </resources>

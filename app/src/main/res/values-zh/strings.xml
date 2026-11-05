@@ -3413,4 +3413,9 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="public_web_relay_config_error">配置错误：%1$s</string>
     <string name="public_web_relay_failed">连接失败：%1$s</string>
     <string name="public_web_relay_invalid_config">公网访问配置无效</string>
+
+    <!-- 发现页经典模式加载状态机降级文案 -->
+    <string name="discovery_empty_no_sources">暂无书源，点击前往书源管理</string>
+    <string name="discovery_empty_all_failed">书源暂不可用，点击管理书源，或下拉重试</string>
+    <string name="discovery_error_widget_failed">加载失败，点击重试</string>
 </resources>
