@@ -61,8 +61,13 @@ object ExploreGlassBackdrop {
     private const val GLASS_LEVEL_BLUR_DP = 18f
     private const val STACK_BLUR_DENSITY_FACTOR = 1.4f
 
-    /** 背景位图相对屏幕的降采样比例，配合模糊抹平高频纹理（布纹/细线条）保留大块明暗。 */
-    private const val DOWNSCALE = 6f
+    /**
+     * 背景位图相对屏幕的降采样比例。
+     * 值越小采样越细、越接近原图，能有效减少降采样导致的摩尔纹/色块，
+     * 代价是构建位图变大、软件模糊耗时上升（构建已放 IO 线程且仅首次 miss 时执行一次）。
+     * 屏幕等效模糊半径由 [backdrop] 的 radius 公式按 DOWNSCALE 反比例换算，故改此值不改变观感强度。
+     */
+    private const val DOWNSCALE = 3f
 
     private data class BackdropCache(
         val key: String,
@@ -111,6 +116,10 @@ object ExploreGlassBackdrop {
         onReady: (Bitmap?) -> Unit
     ): Bitmap? {
         val state = MainThemeBackgroundState.from(context)
+        // 动图壁纸（gif/webp）由背景层 ComposeThemeImage 逐帧播放，而 buildBitmap 用
+        // BitmapFactory.decodeFile 只能取首帧：若照常采样会产生「壁纸在动、玻璃静止」的错乱。
+        // 故动图壁纸直接返回 null，走纯 shell 实底（玻璃层不再采样静止帧），与背景层动画脱钩。
+        if (state.file != null && state.animated) return null
         val metrics = context.resources.displayMetrics
         val targetW = max(64, (metrics.widthPixels / DOWNSCALE).toInt())
         val targetH = max(64, (metrics.heightPixels / DOWNSCALE).toInt())
