@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant U as 用户
+    participant F as ExploreFragment
+    participant A as ExploreAdapter
+    participant B as ExploreGlassBackdrop
+    participant G as FrostedGlassDrawable
+    participant S as BookSourceExtensions
+    participant M as DiscoveryErrorMapper
+
+    U->>F: 进入发现页 / 下拉刷新
+    F->>F: upExploreData(searchKey)（debounce 合并）
+    F->>A: setItems(list, diff)
+    A->>A: convert(holder,binding,item)
+    A->>B: rowBackground(host, level)
+    B-->>A: FrostedGlassDrawable（位置缓存驱动）
+    Note over B,G: miss 时 IO 异步 decode+blur，按 key 去重
+    A->>S: loadExploreKinds(source) [IO，在途去重]
+    S-->>A: List<ExploreKind>（缓存/JS求值/ERROR条目）
+    alt 解析失败
+        S->>S: 构造 ERROR: 条目（错误码+摘要，非堆栈）
+        A->>A: upKindList 行内展示可点击错误摘要
+    end
+    alt 数据为空
+        F->>F: 计算 DiscoveryLoadState=Empty(hasSources)
+        F-->>U: 「暂无书源/书源暂不可用」+ 去书源管理/重试
+    else 加载异常
+        F->>M: map(throwable)
+        F-->>U: 非技术文案 + 重试
+    end
+    A-->>U: 渲染行

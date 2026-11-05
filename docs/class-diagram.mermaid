@@ -1,0 +1,104 @@
+classDiagram
+    class DiscoveryErrorType {
+        <<enum>>
+        NETWORK
+        TIMEOUT
+        SOURCE_INVALID
+        NO_DATA
+        UNKNOWN
+    }
+
+    class DiscoveryErrorMapper {
+        <<object>>
+        +fun map(throwable: Throwable): DiscoveryErrorType
+        +fun message(type: DiscoveryErrorType, context: Context): String
+        +fun messageFor(throwable: Throwable, context: Context): String
+    }
+
+    class DiscoveryTimeout {
+        <<object>>
+        +const SUITE_TARGET_LOAD_TIMEOUT_MS: Long
+        +const MODERN_PAGE_LOAD_TIMEOUT_MS: Long
+        +suspend fun orTimeout(timeoutMs: Long, block: suspend () -> T): Result~T~
+    }
+
+    class DiscoveryLoadState {
+        <<sealed>>
+    }
+    class DiscoveryLoadLoading
+    class DiscoveryLoadSuccess {
+        +val itemCount: Int
+        +val allFailed: Boolean
+    }
+    class DiscoveryLoadEmpty {
+        +val hasSources: Boolean
+    }
+    class DiscoveryLoadError {
+        +val type: DiscoveryErrorType
+        +val retry: () -> Unit
+    }
+
+    class DiscoveryModeSnapshot {
+        +val classic: ClassicViewState?
+        +val modern: ModernViewState?
+        +val suite: SuiteViewState?
+    }
+    class ClassicViewState {
+        +val scrollPosition: Int
+        +val expandedSourceUrl: String?
+    }
+    class ModernViewState {
+        +val selectedSourceUrl: String?
+        +val selectedTagIndex: Int
+        +val scrollPosition: Int
+    }
+    class SuiteViewState {
+        +val selectedSuiteId: String
+        +val scrollPosition: Int
+    }
+    class DiscoveryModeSnapshotStore {
+        <<object>>
+        +fun saveClassic(state: ClassicViewState)
+        +fun restoreClassic(): ClassicViewState?
+        +fun saveModern(state: ModernViewState)
+        +fun restoreModern(): ModernViewState?
+        +fun saveSuite(state: SuiteViewState)
+        +fun restoreSuite(): SuiteViewState?
+    }
+
+    class ExploreFragment {
+        +applyDiscoveryMode(loadData: Boolean)
+        +upExploreData(searchKey: String?)
+        +loadDiscoverBooks(reset: Boolean)
+        +loadSuiteTargetPage(source, tagUrl, page): List
+        +stopModernMode()
+        +stopSuiteMode()
+    }
+    class ExploreAdapter {
+        +convert(holder, binding, item, payloads)
+        +upKindList(binding, item, kinds, exIndex)
+        +refreshExplore(source, position, binding)
+    }
+    class FrostedGlassDrawable {
+        +draw(canvas: Canvas)
+        +onPositionChanged(left, top)
+        -location: IntArray
+        -shaderMatrix: Matrix
+    }
+
+    DiscoveryLoadState <|-- DiscoveryLoadLoading
+    DiscoveryLoadState <|-- DiscoveryLoadSuccess
+    DiscoveryLoadState <|-- DiscoveryLoadEmpty
+    DiscoveryLoadState <|-- DiscoveryLoadError
+    DiscoveryLoadError --> DiscoveryErrorType
+    DiscoveryErrorMapper --> DiscoveryErrorType
+    DiscoveryModeSnapshot --> ClassicViewState
+    DiscoveryModeSnapshot --> ModernViewState
+    DiscoveryModeSnapshot --> SuiteViewState
+    DiscoveryModeSnapshotStore --> DiscoveryModeSnapshot
+    ExploreFragment --> DiscoveryLoadState
+    ExploreFragment --> DiscoveryErrorMapper
+    ExploreFragment --> DiscoveryTimeout
+    ExploreFragment --> DiscoveryModeSnapshotStore
+    ExploreFragment --> ExploreAdapter
+    ExploreAdapter --> FrostedGlassDrawable
