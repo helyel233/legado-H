@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.explore
 
+import android.app.ActivityManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -16,6 +17,9 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.widget.NestedScrollView
+import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -60,10 +64,14 @@ object ExploreGlassBackdrop {
     private val pendingCallbacks = HashMap<String, ArrayList<(Bitmap?) -> Unit>>()
 
     fun level(context: Context): Int {
-        if (AppConfig.isEInkMode) return 0
+        // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
+        if (AppConfig.isEInkMode || isLowRamDevice(context)) return 0
         return context.getPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(), LEVEL_DEFAULT)
             .coerceIn(0, 100)
     }
+
+    private fun isLowRamDevice(context: Context): Boolean =
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
 
     /** 返回毛玻璃行背景；level<=0 或无法构建时返回 null，调用方保留默认透明背景。 */
     fun rowBackground(host: View, level: Int): Drawable? {
@@ -80,6 +88,7 @@ object ExploreGlassBackdrop {
             //主线程只查缓存；miss 时异步构建（decode+软件模糊较重，避免主线程卡顿/ANR），
             //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
             drawable.updateBackdrop(backdrop(context, glassLevel, drawable::updateBackdrop))
+            GlassPositionTracker.attach(host, drawable)
         }
     }
 
@@ -251,6 +260,8 @@ private class FrostedGlassDrawable(
     private val rootLocation = IntArray(2)
     private val rect = RectF()
     private var shader: BitmapShader? = null
+    private var cachedLocation: IntArray? = null
+    private var locationSampled = false
 
     /** 模糊背景位图；缓存未命中时先为空，异步构建完成后由 [updateBackdrop] 回填。 */
     private var backdrop: Bitmap? = null
@@ -262,6 +273,32 @@ private class FrostedGlassDrawable(
         shader = null
         glassPaint.shader = null
         invalidateSelf()
+    }
+
+    /**
+     * 布局 / 滚动回调驱动的位置缓存：只有位置真正变化才重算 shader matrix，
+     * 避免 draw() 里逐帧 getLocationOnScreen。
+     */
+    fun onPositionChanged(left: Int, top: Int, rootLeft: Int, rootTop: Int) {
+        location[0] = left
+        location[1] = top
+        rootLocation[0] = rootLeft
+        rootLocation[1] = rootTop
+        val cached = cachedLocation
+        if (cached != null && cached[0] == left && cached[1] == top) return
+        cachedLocation = intArrayOf(left, top)
+        locationSampled = true
+        invalidateSelf()
+    }
+
+    /** 位置失效后，draw 内惰性采样一次当前屏幕位置。 */
+    private fun ensureLocationSampled() {
+        if (locationSampled && cachedLocation != null) return
+        host.getLocationOnScreen(location)
+        val root = host.rootView
+        root.getLocationOnScreen(rootLocation)
+        cachedLocation = intArrayOf(location[0], location[1])
+        locationSampled = true
     }
 
     init {
@@ -299,8 +336,7 @@ private class FrostedGlassDrawable(
         if (b != null && !b.isRecycled && b.width > 0 && b.height > 0) {
             val root = host.rootView
             if (root.width > 0 && root.height > 0) {
-                host.getLocationOnScreen(location)
-                root.getLocationOnScreen(rootLocation)
+                ensureLocationSampled()
                 val scaleX = b.width / root.width.toFloat()
                 val scaleY = b.height / root.height.toFloat()
                 shaderMatrix.setScale(scaleX, scaleY)
@@ -346,5 +382,107 @@ private class FrostedGlassDrawable(
         tintPaint.colorFilter = colorFilter
         shellPaint.colorFilter = colorFilter
         strokePaint.colorFilter = colorFilter
+    }
+}
+
+/**
+ * 把 [FrostedGlassDrawable] 挂到 host 的布局 / 滚动 / attach 回调上，
+ * 用「位置缓存 + 变化才重算」替代 draw() 里的逐帧 getLocationOnScreen。
+ * 视图脱离窗口时自动解绑，避免泄漏。
+ */
+private object GlassPositionTracker {
+
+    private const val TAG_KEY = 0x5F_4753_50
+
+    fun attach(host: View, drawable: FrostedGlassDrawable) {
+        // 行复用会反复设置新背景，先把上一次挂接的 tracker 解绑，避免回调累积/泄漏
+        (host.getTag(TAG_KEY) as? TrackerBinding)?.detach(host)
+        val binding = TrackerBinding(host, drawable)
+        host.setTag(TAG_KEY, binding)
+        binding.attach()
+        if (host.isAttachedToWindow) {
+            binding.onViewAttachedToWindow(host)
+        }
+    }
+
+    private class TrackerBinding(
+        private val host: View,
+        private val drawable: FrostedGlassDrawable
+    ) : View.OnAttachStateChangeListener, View.OnLayoutChangeListener {
+        private var scrollTarget: View? = null
+
+        fun attach() {
+            host.addOnAttachStateChangeListener(this)
+            host.addOnLayoutChangeListener(this)
+        }
+
+        fun detach(v: View) {
+            v.removeOnAttachStateChangeListener(this)
+            v.removeOnLayoutChangeListener(this)
+            onViewDetachedFromWindow(v)
+        }
+
+        override fun onViewAttachedToWindow(v: View) {
+            scrollTarget = nearestScrollableAncestor(v)
+            when (val target = scrollTarget) {
+                is RecyclerView -> target.addOnScrollListener(scrollListener)
+                is NestedScrollView -> target.setOnScrollChangeListener(scrollChangeListener)
+            }
+            updatePosition(v)
+        }
+
+        override fun onViewDetachedFromWindow(v: View) {
+            when (val target = scrollTarget) {
+                is RecyclerView -> target.removeOnScrollListener(scrollListener)
+                is NestedScrollView -> target.setOnScrollChangeListener(null as NestedScrollView.OnScrollChangeListener?)
+            }
+            scrollTarget = null
+        }
+
+        override fun onLayoutChange(
+            v: View,
+            left: Int,
+            top: Int,
+            right: Int,
+            bottom: Int,
+            oldLeft: Int,
+            oldTop: Int,
+            oldRight: Int,
+            oldBottom: Int
+        ) {
+            updatePosition(v)
+        }
+
+        private val scrollListener = object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                updatePosition(host)
+            }
+        }
+
+        private val scrollChangeListener =
+            NestedScrollView.OnScrollChangeListener { _, _, _, _, _ ->
+                updatePosition(host)
+            }
+
+        private fun updatePosition(v: View) {
+            val root = v.rootView
+            if (v.width <= 0 || v.height <= 0 || root.width <= 0 || root.height <= 0) return
+            val location = IntArray(2)
+            val rootLocation = IntArray(2)
+            v.getLocationOnScreen(location)
+            root.getLocationOnScreen(rootLocation)
+            drawable.onPositionChanged(location[0], location[1], rootLocation[0], rootLocation[1])
+        }
+    }
+
+    private fun nearestScrollableAncestor(view: View): View? {
+        var parent = view.parent
+        while (parent is ViewGroup) {
+            when (parent) {
+                is RecyclerView, is NestedScrollView -> return parent
+            }
+            parent = parent.parent
+        }
+        return null
     }
 }

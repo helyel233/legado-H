@@ -62,6 +62,7 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.databinding.ItemFilletCompleteTextBinding
 import io.legado.app.databinding.ItemFilletSelectorSingleBinding
 import io.legado.app.databinding.ItemFilletTextBinding
@@ -94,10 +95,13 @@ import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.book.explore.ExploreShowBookCallback
 import io.legado.app.ui.book.explore.ExploreShowWaterfallAdapter
 import io.legado.app.ui.book.SearchBookOpenHelper
+import io.legado.app.ui.book.source.manage.BookSourceActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.login.SourceLoginJsExtensions
+import io.legado.app.ui.common.UiErrorMapper
+import io.legado.app.ui.common.UiErrorType
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.video.VideoBookPreloader
 import io.legado.app.ui.widget.ModernActionPopup
@@ -219,6 +223,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private val composeSuiteWidgetBooks = mutableStateMapOf<String, List<SearchBook>>()
     private val composeSuiteRankedWidgetBooks = mutableStateMapOf<String, Map<String, List<SearchBook>>>()
     private val composeSuiteLoadingWidgets = mutableStateMapOf<String, Boolean>()
+    private val composeSuiteFailedWidgets = mutableStateMapOf<String, Boolean>()
+    private val suiteFailedReasonType = hashMapOf<String, UiErrorType>()
     private val suiteWidgetSignatures = hashMapOf<String, String>()
     private val suiteRandomDecks = hashMapOf<String, SuiteRandomDeck>()
     private val suitePreparedRandomBatches = hashMapOf<String, SuitePreparedBatch>()
@@ -248,6 +254,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
+    private var classicDiscoveryErrorState: ClassicDiscoverErrorState? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
@@ -332,6 +339,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     loadingWidgetIds = composeSuiteLoadingWidgets
                         .filterValues { it }
                         .keys,
+                    failedWidgetIds = composeSuiteFailedWidgets
+                        .filterValues { it }
+                        .keys,
+                    failedWidgetTypes = suiteFailedReasonType,
                     scrollToTopSignal = composeSuiteScrollToTopSignal.intValue,
                     onSearchClick = { SearchActivity.start(requireContext(), key = null) },
                     onSuiteClick = ::openSuiteManagePage,
@@ -499,6 +510,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     private fun clearSuiteRuntimeState() {
         composeSuiteLoadingWidgets.clear()
+        composeSuiteFailedWidgets.clear()
+        suiteFailedReasonType.clear()
         composeSuiteWidgetBooks.clear()
         composeSuiteRankedWidgetBooks.clear()
         suiteWidgetSignatures.clear()
@@ -562,6 +575,12 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         suiteWidgetSignatures.keys
             .filterNot { it in widgetIds }
             .forEach { suiteWidgetSignatures.remove(it) }
+        composeSuiteFailedWidgets.keys
+            .filterNot { it in widgetIds }
+            .forEach { composeSuiteFailedWidgets.remove(it) }
+        suiteFailedReasonType.keys
+            .filterNot { it in widgetIds }
+            .forEach { suiteFailedReasonType.remove(it) }
         synchronized(suiteRandomDecks) {
             suiteRandomDecks.keys
                 .filterNot { it in widgetIds }
@@ -586,6 +605,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     composeSuiteWidgetBooks[widget.id] = emptyList()
                     composeSuiteRankedWidgetBooks.remove(widget.id)
                     suiteWidgetSignatures[widget.id] = signature
+                    composeSuiteFailedWidgets.remove(widget.id)
+                    suiteFailedReasonType.remove(widget.id)
                     true
                 }
                 suiteWidgetSignatures[widget.id] == signature &&
@@ -617,6 +638,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     composeSuiteWidgetBooks[widget.id] = emptyList()
                     composeSuiteRankedWidgetBooks.remove(widget.id)
                     suiteWidgetSignatures[widget.id] = widget.cacheSignature()
+                    composeSuiteFailedWidgets.remove(widget.id)
+                    suiteFailedReasonType.remove(widget.id)
                     return@withPermit
                 }
                 composeSuiteLoadingWidgets[widget.id] = true
@@ -627,11 +650,19 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                         throw e
                     } catch (e: Throwable) {
                         AppLog.put("套件发现排行榜控件加载失败", e)
+                        suiteFailedReasonType[widget.id] = UiErrorMapper.classify(e)
                         emptyMap()
                     }
                     if (!isCurrentSuiteWidget(widget)) {
                         composeSuiteLoadingWidgets[widget.id] = false
                         return@async
+                    }
+                    if (rankedBooks.isEmpty()) {
+                        composeSuiteFailedWidgets[widget.id] = true
+                        suiteFailedReasonType.putIfAbsent(widget.id, UiErrorType.NO_DATA)
+                    } else {
+                        composeSuiteFailedWidgets.remove(widget.id)
+                        suiteFailedReasonType.remove(widget.id)
                     }
                     composeSuiteRankedWidgetBooks[widget.id] = rankedBooks
                     composeSuiteWidgetBooks[widget.id] = rankedBooks.values.flatten()
@@ -647,11 +678,19 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     throw e
                 } catch (e: Throwable) {
                     AppLog.put("套件发现控件加载失败", e)
+                    suiteFailedReasonType[widget.id] = UiErrorMapper.classify(e)
                     emptyList()
                 }
                 if (!isCurrentSuiteWidget(widget)) {
                     composeSuiteLoadingWidgets[widget.id] = false
                     return@async
+                }
+                if (books.isEmpty()) {
+                    composeSuiteFailedWidgets[widget.id] = true
+                    suiteFailedReasonType.putIfAbsent(widget.id, UiErrorType.NO_DATA)
+                } else {
+                    composeSuiteFailedWidgets.remove(widget.id)
+                    suiteFailedReasonType.remove(widget.id)
                 }
                 composeSuiteWidgetBooks[widget.id] = books
                 suiteWidgetSignatures[widget.id] = widget.cacheSignature()
@@ -940,16 +979,24 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     ): List<SearchBook> {
         return suiteTargetLoadSemaphore.withPermit {
             try {
-                WebBook.exploreBookAwait(
-                    source,
-                    tagUrl,
-                    page,
-                    WebViewPool.Scope.DISCOVERY
-                )
+                val books = withTimeoutOrNull(SUITE_TARGET_LOAD_TIMEOUT_MS) {
+                    WebBook.exploreBookAwait(
+                        source,
+                        tagUrl,
+                        page,
+                        WebViewPool.Scope.DISCOVERY
+                    )
+                }
+                if (books == null) {
+                    AppLog.put("套件发现加载分类超时", NoStackTraceException("套件发现加载分类超时"))
+                    emptyList()
+                } else {
+                    books
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                AppLog.put("濂椾欢鍙戠幇鍔犺浇鍒嗙被澶辫触", e)
+                AppLog.put("套件发现加载分类失败", e)
                 emptyList()
             }
         }
@@ -1021,7 +1068,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     emptyMap()
                 }
                 if (!isCurrentSuiteWidget(widget)) return@launch
-                if (rankedBooks.isNotEmpty()) {
+                if (rankedBooks.isEmpty()) {
+                    composeSuiteFailedWidgets[widget.id] = true
+                } else {
+                    composeSuiteFailedWidgets.remove(widget.id)
                     composeSuiteRankedWidgetBooks[widget.id] = rankedBooks
                     composeSuiteWidgetBooks[widget.id] = rankedBooks.values.flatten()
                     suiteWidgetSignatures[widget.id] = widget.cacheSignature()
@@ -1059,7 +1109,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 emptyList()
             }
             if (!isCurrentSuiteWidget(widget)) return@launch
-            if (books.isNotEmpty()) {
+            if (books.isEmpty()) {
+                composeSuiteFailedWidgets[widget.id] = true
+            } else {
+                composeSuiteFailedWidgets.remove(widget.id)
                 composeSuiteWidgetBooks[widget.id] = books
                 suiteWidgetSignatures[widget.id] = widget.cacheSignature()
                 prefetchSuiteCovers(books)
@@ -2278,7 +2331,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 renderDiscoverDialogKinds(itemBinding, source, kinds, dialog)
             }.onFailure {
                 AppLog.put("完整发现刷新失败", it)
-                context?.toastOnUi(it.localizedMessage ?: getString(R.string.unknown_error))
+                context?.toastOnUi(UiErrorMapper.messageFor(it).text)
             }
         }
     }
@@ -2853,7 +2906,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 loadDiscoverKindsAndDefault()
             }.onFailure {
                 AppLog.put("刷新发现分类失败", it)
-                context?.toastOnUi(it.localizedMessage ?: getString(R.string.unknown_error))
+                context?.toastOnUi(UiErrorMapper.messageFor(it).text)
             }
             binding.swipeRefreshLayout.isRefreshing = false
         }
@@ -3423,7 +3476,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 }
             }.onFailure {
                 AppLog.put("发现标签按钮执行失败", it)
-                context?.toastOnUi(it.localizedMessage ?: getString(R.string.unknown_error))
+                context?.toastOnUi(UiErrorMapper.messageFor(it).text)
             }
         }
     }
@@ -3516,17 +3569,26 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             binding.pbDiscoverLoading.visible()
             try {
                 val newBooks = withContext(IO) {
-                    WebBook.exploreBookAwait(
-                        source,
-                        url,
-                        pageToLoad,
-                        WebViewPool.Scope.DISCOVERY
-                    )
+                    withTimeoutOrNull(MODERN_PAGE_LOAD_TIMEOUT_MS) {
+                        WebBook.exploreBookAwait(
+                            source,
+                            url,
+                            pageToLoad,
+                            WebViewPool.Scope.DISCOVERY
+                        )
+                    }
                 }
                 if (!isAdded || requestVersion != discoverRequestVersion || url != discoverCurrentUrl) {
                     return@launch
                 }
-                if (newBooks.isEmpty()) {
+                if (newBooks == null) {
+                    // 超时按失败处理：非技术文案，且保证 discoverLoading 在 finally 复位
+                    discoverHasMore = false
+                    if (discoverBooks.isEmpty()) {
+                        binding.tvDiscoverEmpty.text = UiErrorMapper.message(UiErrorType.TIMEOUT).text
+                        binding.tvDiscoverEmpty.visible()
+                    }
+                } else if (newBooks.isEmpty()) {
                     discoverHasMore = false
                     if (discoverBooks.isEmpty()) {
                         binding.tvDiscoverEmpty.text = getString(R.string.explore_empty)
@@ -3574,7 +3636,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 }
                 AppLog.put("发现页面加载失败", e)
                 if (discoverBooks.isEmpty()) {
-                    binding.tvDiscoverEmpty.text = e.localizedMessage ?: getString(R.string.unknown_error)
+                    binding.tvDiscoverEmpty.text = UiErrorMapper.messageFor(e).text
                     binding.tvDiscoverEmpty.visible()
                 }
             } finally {
@@ -3644,10 +3706,34 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 AppDatabase.BOOK_SOURCE_TABLE_NAME
             ).catch {
                 AppLog.put("发现页面更新数据出错", it)
+                if (usingClassicDiscovery()) {
+                    classicDiscoveryErrorState = ClassicDiscoverErrorState(
+                        message = UiErrorMapper.messageFor(it).text,
+                        showManageButton = false,
+                        retry = { upExploreData(searchKey) }
+                    )
+                    renderClassicDiscoverErrorState()
+                }
             }.conflate().flowOn(IO).collect {
                 binding.swipeRefreshLayout.isRefreshing = false
-                binding.tvEmptyMsg.isGone = it.isNotEmpty() || (searchView?.query?.isNotEmpty() == true)
                 adapter.setItems(it, diffItemCallBack)
+                if (it.isNotEmpty()) {
+                    classicDiscoveryErrorState = null
+                    binding.tvEmptyMsg.gone()
+                } else if (usingClassicDiscovery()) {
+                    val hasSources = searchKey.isNullOrBlank() && withContext(IO) {
+                        appDb.bookSourceDao.allCount() > 0
+                    }
+                    classicDiscoveryErrorState = ClassicDiscoverErrorState(
+                        message = getString(
+                            if (hasSources) R.string.discovery_empty_all_failed
+                            else R.string.discovery_empty_no_sources
+                        ),
+                        showManageButton = true,
+                        retry = { upExploreData(searchKey) }
+                    )
+                    renderClassicDiscoverErrorState()
+                }
                 delay(DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS)
             }
         }
@@ -3666,11 +3752,43 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 refreshClassicRowTheme()
             }
         }
+        // 「页面布局」设置页改了发现页布局后，现代模式按新值切换列表/瀑布流/网格；
+        // onResume 兜底重读保证漏订阅/进程切换后仍最终一致
+        observeEvent<String>(EventBus.UP_PAGE_LAYOUT) {
+            if (!isAdded || view == null) return@observeEvent
+            if (usingModernDiscovery) {
+                applyDiscoverBookLayout()
+            }
+        }
     }
 
     private fun refreshClassicRowTheme() {
         binding.swipeRefreshLayout.setColorSchemeColors(accentColor)
         adapter.notifyDataSetChanged()
+    }
+
+    private fun usingClassicDiscovery(): Boolean {
+        return !usingModernDiscovery && !usingSuiteDiscovery
+    }
+
+    private fun renderClassicDiscoverErrorState() {
+        val state = classicDiscoveryErrorState
+        if (state == null) {
+            binding.tvEmptyMsg.gone()
+            binding.tvEmptyMsg.setOnClickListener(null)
+            binding.tvEmptyMsg.isClickable = false
+            return
+        }
+        binding.tvEmptyMsg.text = state.message
+        binding.tvEmptyMsg.visible()
+        binding.tvEmptyMsg.isClickable = true
+        binding.tvEmptyMsg.setOnClickListener {
+            if (state.showManageButton) {
+                startActivity<BookSourceActivity>()
+            } else {
+                state.retry()
+            }
+        }
     }
 
     override fun onResume() {
@@ -3937,6 +4055,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         private const val SUITE_COVER_THUMB_HEIGHT = 320
         private const val SUITE_SINGLE_COVER_PRELOAD_TIMEOUT_MS = 1000L
         private const val SUITE_VISIBLE_COVER_PRELOAD_TIMEOUT_MS = 1800L
+        private const val SUITE_TARGET_LOAD_TIMEOUT_MS = 8_000L
+        private const val MODERN_PAGE_LOAD_TIMEOUT_MS = 10_000L
     }
 
 }
@@ -3978,6 +4098,12 @@ private data class SuiteRankedPagingState(
     @Volatile var nextPage: Int = 2,
     @Volatile var loading: Boolean = false,
     @Volatile var exhausted: Boolean = false
+)
+
+private data class ClassicDiscoverErrorState(
+    val message: String,
+    val showManageButton: Boolean,
+    val retry: () -> Unit
 )
 
 private data class ModernDiscoverResultCache(

@@ -20,6 +20,7 @@ import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.readText
 import io.legado.app.utils.splitNotBlank
+import io.legado.app.ui.common.UiErrorMapper
 import splitties.init.appCtx
 
 class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
@@ -85,7 +86,7 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
         execute {
             importAwait(text.trim())
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            errorLiveData.postValue(UiErrorMapper.messageFor(it).text)
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()

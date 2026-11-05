@@ -10,6 +10,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.model.VideoPlay
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.utils.toastOnUi
 
@@ -90,7 +91,7 @@ class VideoPlayerViewModel(application: Application) : BaseViewModel(application
             }
         }.onError {
             AppLog.put("${source.getTag()}: ${it.localizedMessage}", it)
-            context.toastOnUi("$name click error\n${it.localizedMessage}")
+            context.toastOnUi(UiErrorMapper.messageFor(it).text)
         }
     }
 }

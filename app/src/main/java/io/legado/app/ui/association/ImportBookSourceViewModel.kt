@@ -19,6 +19,7 @@ import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.model.RuleUpdate
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -226,7 +227,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
             conflictRefreshTokens.remove(index)
             pendingConflictIndicesState.value = pendingConflictIndicesState.value - index
             conflictRefreshErrorsState.value = conflictRefreshErrorsState.value + (
-                index to (it.localizedMessage ?: context.getString(R.string.unknown_error))
+                index to UiErrorMapper.messageFor(it).text
             )
         }.start()
     }
@@ -282,7 +283,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
             }
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            errorLiveData.postValue(UiErrorMapper.messageFor(it).text)
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()

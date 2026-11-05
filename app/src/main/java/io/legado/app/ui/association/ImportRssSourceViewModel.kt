@@ -27,6 +27,7 @@ import io.legado.app.utils.isUri
 import io.legado.app.utils.jsonPath
 import io.legado.app.utils.readText
 import io.legado.app.utils.splitNotBlank
+import io.legado.app.ui.common.UiErrorMapper
 import splitties.init.appCtx
 
 class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
@@ -115,7 +116,7 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
         execute {
             importSourceAwait(text)
         }.onError {
-            errorLiveData.postValue("ImportError:${it.localizedMessage}")
+            errorLiveData.postValue(UiErrorMapper.messageFor(it).text)
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()

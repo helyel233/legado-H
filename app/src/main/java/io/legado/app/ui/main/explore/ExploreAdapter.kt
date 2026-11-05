@@ -53,13 +53,14 @@ import io.legado.app.utils.setSelectionSafely
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.visible
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import splitties.views.onLongClick
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.set
@@ -84,6 +85,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     private var scrollTo = -1
     private var lastClickTime: Long = 0
     private val sourceKinds = ConcurrentHashMap<String, List<ExploreKind>>()
+    private val inFlightKinds = ConcurrentHashMap<String, CompletableDeferred<List<ExploreKind>>>()
+    private val inFlightViewNames = ConcurrentHashMap<String, CompletableDeferred<String?>>()
     private var saveInfoMapJob: Job? = null
 
     override fun getViewBinding(parent: ViewGroup): ItemFindBookBinding {
@@ -534,15 +537,28 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     private suspend fun evalUiJs(jsStr: String, source: BookSource?, infoMap: InfoMap): String? {
         val source = source ?: return null
-        return try {
-            runScriptWithContext {
-                source.evalJS(jsStr) {
-                    put("infoMap", infoMap)
-                }.toString()
+        val cacheKey = "${source.bookSourceUrl}\u001F$jsStr"
+        inFlightViewNames[cacheKey]?.let { return it.await() }
+        val deferred = CompletableDeferred<String?>()
+        val prev = inFlightViewNames.putIfAbsent(cacheKey, deferred)
+        if (prev != null) {
+            return prev.await()
+        }
+        try {
+            val result = try {
+                runScriptWithContext {
+                    source.evalJS(jsStr) {
+                        put("infoMap", infoMap)
+                    }.toString()
+                }
+            } catch (e: Exception) {
+                AppLog.put(source.getTag() + " exploreUi err:" + (e.localizedMessage ?: e.toString()), e)
+                null
             }
-        } catch (e: Exception) {
-            AppLog.put(source.getTag() + " exploreUi err:" + (e.localizedMessage ?: e.toString()), e)
-            null
+            deferred.complete(result)
+            return result
+        } finally {
+            inFlightViewNames.remove(cacheKey)
         }
     }
 
@@ -741,17 +757,47 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     }
 
     private suspend fun loadExploreKinds(source: BookSourcePart): List<ExploreKind> {
-        sourceKinds[source.bookSourceUrl]?.takeIf { it.isNotEmpty() }?.let {
+        val url = source.bookSourceUrl
+        sourceKinds[url]?.takeIf { it.isNotEmpty() }?.let {
             return it
         }
-        val kinds = source.exploreKinds()
-        if (kinds.isNotEmpty()) {
-            sourceKinds[source.bookSourceUrl] = kinds
-            return kinds
+        // 同源已有在途求值：等待它完成，避免行复用导致的重复 JS 求值
+        val existing = inFlightKinds[url]
+        if (existing != null) {
+            return try {
+                existing.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                // 求值失败的在途任务会让等待者直接吃异常；缓存为空时重新尝试一次
+                sourceKinds[url]?.takeIf { it.isNotEmpty() } ?: emptyList()
+            }
         }
-        source.clearExploreKindsCache()
-        return source.exploreKinds().also {
-            sourceKinds[source.bookSourceUrl] = it
+        val deferred = CompletableDeferred<List<ExploreKind>>()
+        val prev = inFlightKinds.putIfAbsent(url, deferred)
+        if (prev != null) {
+            return try {
+                prev.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                sourceKinds[url]?.takeIf { it.isNotEmpty() } ?: emptyList()
+            }
+        }
+        try {
+            var kinds = source.exploreKinds()
+            if (kinds.isEmpty()) {
+                source.clearExploreKindsCache()
+                kinds = source.exploreKinds()
+            }
+            sourceKinds[url] = kinds
+            deferred.complete(kinds)
+            return kinds
+        } catch (t: Throwable) {
+            deferred.completeExceptionally(t)
+            throw t
+        } finally {
+            inFlightKinds.remove(url)
         }
     }
 

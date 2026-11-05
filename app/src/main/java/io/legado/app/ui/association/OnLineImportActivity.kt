@@ -11,6 +11,7 @@ import io.legado.app.databinding.ActivityTranslucenceBinding
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.autoTask.ImportAutoTaskDialog
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -174,7 +175,7 @@ class OnLineImportActivity :
                 } else {
                     finallyDialog(
                         getString(R.string.error),
-                        error.localizedMessage ?: getString(R.string.unknown_error)
+                        UiErrorMapper.messageFor(error).text
                     )
                 }
             }
@@ -244,7 +245,7 @@ class OnLineImportActivity :
                 discardPendingDownload(download, finishActivity = false)
                 finallyDialog(
                     getString(R.string.error),
-                    error.localizedMessage ?: getString(R.string.unknown_error)
+                    UiErrorMapper.messageFor(error).text
                 )
             }
         }
@@ -365,7 +366,7 @@ class OnLineImportActivity :
             } catch (error: Throwable) {
                 finallyDialog(
                     getString(R.string.error),
-                    error.localizedMessage ?: getString(R.string.unknown_error)
+                    UiErrorMapper.messageFor(error).text
                 )
             } finally {
                 download.close()

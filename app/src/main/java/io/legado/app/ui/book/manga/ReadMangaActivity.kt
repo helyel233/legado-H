@@ -256,13 +256,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         // 要按新值重刷。事件在阅读页不在前台时由 EventBus 延迟到 onResume 投递，
         // 正好对应「去设置改完再切回来」的路径
         observeEvent<String>(EventBus.UP_MANGA_DISPLAY) {
-            mAdapter.enableMangaEInk(AppConfig.enableMangaEInk, AppConfig.mangaEInkThreshold)
-            mAdapter.enableGray(AppConfig.enableMangaGray)
-            mMenu?.findItem(R.id.menu_epaper_manga)?.isChecked = AppConfig.enableMangaEInk
-            mMenu?.findItem(R.id.menu_gray_manga)?.isChecked = AppConfig.enableMangaGray
-            mMenu?.findItem(R.id.menu_epaper_manga_setting)?.isVisible = AppConfig.enableMangaEInk
-            mMenu?.findItem(R.id.menu_hide_manga_title)?.isChecked = AppConfig.hideMangaTitle
-            ReadManga.loadContent()
+            applyMangaDisplaySettings(reloadContent = true)
         }
     }
 
@@ -440,6 +434,20 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         }
         if (enableAutoScroll) {
             mScrollTimer.isEnabled = true
+        }
+        // 兜底重读：UP_MANGA_DISPLAY 事件为主通道，这里保证漏订阅/进程切换后显示参数仍最新
+        applyMangaDisplaySettings(reloadContent = false)
+    }
+
+    private fun applyMangaDisplaySettings(reloadContent: Boolean) {
+        mAdapter.enableMangaEInk(AppConfig.enableMangaEInk, AppConfig.mangaEInkThreshold)
+        mAdapter.enableGray(AppConfig.enableMangaGray)
+        mMenu?.findItem(R.id.menu_epaper_manga)?.isChecked = AppConfig.enableMangaEInk
+        mMenu?.findItem(R.id.menu_gray_manga)?.isChecked = AppConfig.enableMangaGray
+        mMenu?.findItem(R.id.menu_epaper_manga_setting)?.isVisible = AppConfig.enableMangaEInk
+        mMenu?.findItem(R.id.menu_hide_manga_title)?.isChecked = AppConfig.hideMangaTitle
+        if (reloadContent) {
+            ReadManga.loadContent()
         }
     }
 

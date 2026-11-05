@@ -9,6 +9,7 @@ import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.externalCache
 import okhttp3.MediaType.Companion.toMediaType
@@ -29,9 +30,7 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
         }.onSuccess {
             success.invoke(it)
         }.onError {
-            errorLive.postValue(
-                it.localizedMessage ?: context.getString(R.string.unknown_error)
-            )
+            errorLive.postValue(UiErrorMapper.messageFor(it).text)
         }
     }
 
@@ -48,9 +47,7 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
         }.onSuccess {
             success.invoke(it)
         }.onError {
-            errorLive.postValue(
-                it.localizedMessage ?: context.getString(R.string.unknown_error)
-            )
+            errorLive.postValue(UiErrorMapper.messageFor(it).text)
         }
     }
 
@@ -70,7 +67,7 @@ class OnLineImportViewModel(app: Application) : BaseAssociationViewModel(app) {
         }.onError {
             finally.invoke(
                 context.getString(R.string.error),
-                it.localizedMessage ?: context.getString(R.string.unknown_error)
+                UiErrorMapper.messageFor(it).text
             )
         }
     }

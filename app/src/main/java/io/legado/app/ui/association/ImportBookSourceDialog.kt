@@ -44,6 +44,7 @@ import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.config.AppConfig
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
 import io.legado.app.ui.widget.compose.AppDialogSize
@@ -461,8 +462,7 @@ class ImportBookSourceDialog() : ComposeDialogFragment(),
                                     },
                                     onError = { error ->
                                         waitDialog.dismiss()
-                                        val detail = error.localizedMessage
-                                            ?: getString(R.string.unknown_error)
+                                        val detail = UiErrorMapper.messageFor(error).text
                                         importErrorMsg = appCtx.getString(R.string.ui_main_import_failed, detail)
                                     }
                                 )

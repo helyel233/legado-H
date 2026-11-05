@@ -135,6 +135,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         if (usingModernRss != AppConfig.modernRssPage) {
             applyRssMode()
         }
+        // 兜底重读：UP_PAGE_LAYOUT 事件为主通道，这里保证漏订阅/进程切换后切回订阅页仍按最新列数
+        applyRssSourceLayout()
         if (pendingRenderCurrentSort && usingModernRss) {
             binding.root.post {
                 if (pendingRenderCurrentSort) {

@@ -17,6 +17,7 @@ import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.book.read.config.HighlightRuleManageActivity
 import io.legado.app.utils.FileUtils
@@ -174,8 +175,8 @@ class FileAssociationActivity :
                 finish()
             }.onFailure {
                 binding.rotateLoading.gone()
-                val msg = "导入气泡失败\n${it.localizedMessage}"
-                AppLog.put(msg, it)
+                val msg = UiErrorMapper.messageFor(it).text
+                AppLog.put("导入气泡失败\n${it.localizedMessage}", it)
                 toastOnUi(msg)
                 handler.postDelayed(2000) {
                     finish()
@@ -272,8 +273,8 @@ class FileAssociationActivity :
                     }
 
                     else -> {
-                        val msg = "导入书籍失败\n${it.localizedMessage}"
-                        AppLog.put(msg, it)
+                        val msg = UiErrorMapper.messageFor(it).text
+                        AppLog.put("导入书籍失败\n${it.localizedMessage}", it)
                         toastOnUi(msg)
                         handler.postDelayed(2000) {
                             finish()

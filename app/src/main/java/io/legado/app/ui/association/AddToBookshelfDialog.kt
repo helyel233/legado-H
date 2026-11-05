@@ -20,6 +20,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.info.BookInfoNavigator
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.fromJsonObject
@@ -142,7 +143,7 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
                 throw NoStackTraceException("未找到匹配书源")
             }.onError {
                 AppLog.put("添加书籍 $bookUrl 出错", it)
-                loadErrorLiveData.postValue(it.localizedMessage)
+                loadErrorLiveData.postValue(UiErrorMapper.messageFor(it).text)
             }.onSuccess {
                 book = it
                 success.invoke(it)

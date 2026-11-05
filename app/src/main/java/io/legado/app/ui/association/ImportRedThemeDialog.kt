@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ImportResult
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
 import io.legado.app.ui.widget.compose.AppDialogSize
@@ -85,7 +86,7 @@ class ImportRedThemeDialog() : ComposeDialogFragment() {
             }.onSuccess { result ->
                 message = "${getString(R.string.import_str)}: ${result.total}"
             }.onFailure {
-                message = it.localizedMessage ?: getString(R.string.wrong_format)
+                message = UiErrorMapper.messageFor(it).text
             }
             finished = true
         }

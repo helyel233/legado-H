@@ -175,6 +175,14 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 兜底重读：UP_PAGE_LAYOUT 事件为主通道，这里保证漏订阅/进程切换后切回首页仍按最新布局
+        if (viewModel.uiState.value.layoutMode != AppConfig.homepageLayoutMode) {
+            viewModel.setLayoutMode(AppConfig.homepageLayoutMode)
+        }
+    }
+
     override fun onCompatCreateOptionsMenu(menu: android.view.Menu) {
         super.onCompatCreateOptionsMenu(menu)
         menuInflater.inflate(R.menu.menu_homepage, menu)

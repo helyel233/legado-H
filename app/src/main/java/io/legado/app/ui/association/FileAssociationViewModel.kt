@@ -9,6 +9,7 @@ import io.legado.app.constant.AppPattern.bookFileRegex
 import io.legado.app.data.entities.Book
 import io.legado.app.help.book.highlight.HighlightImport
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.utils.*
 import io.legado.app.utils.compress.ZipUtils
 
@@ -57,9 +58,9 @@ class FileAssociationViewModel(application: Application) : BaseAssociationViewMo
             }
         }.onError {
             it.printOnDebug()
-            val msg = "无法打开文件\n${it.localizedMessage}"
+            val msg = UiErrorMapper.messageFor(it).text
             errorLive.postValue(msg)
-            AppLog.put(msg, it)
+            AppLog.put("无法打开文件", it)
         }
     }
 

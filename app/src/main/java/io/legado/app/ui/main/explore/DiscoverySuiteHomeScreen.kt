@@ -64,6 +64,8 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
+import io.legado.app.ui.common.UiErrorMapper
+import io.legado.app.ui.common.UiErrorType
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
@@ -88,6 +90,8 @@ fun DiscoverySuiteHomeScreen(
     widgetBooks: Map<String, List<SearchBook>>,
     rankedWidgetBooks: Map<String, Map<String, List<SearchBook>>>,
     loadingWidgetIds: Set<String>,
+    failedWidgetIds: Set<String>,
+    failedWidgetTypes: Map<String, UiErrorType>,
     scrollToTopSignal: Int,
     onSearchClick: () -> Unit,
     onSuiteClick: () -> Unit,
@@ -188,6 +192,8 @@ fun DiscoverySuiteHomeScreen(
                                         books = widgetBooks[widget.id].orEmpty(),
                                         rankedBooks = rankedWidgetBooks[widget.id].orEmpty(),
                                         isLoading = widget.id in loadingWidgetIds,
+                                        isFailed = widget.id in failedWidgetIds,
+                                        errorType = failedWidgetTypes[widget.id],
                                         renderConfig = renderConfig,
                                         onBookClick = onBookClick,
                                         onBookPreview = onBookPreview,
@@ -420,6 +426,8 @@ private fun DiscoverySuiteWidgetSection(
     books: List<SearchBook>,
     rankedBooks: Map<String, List<SearchBook>>,
     isLoading: Boolean,
+    isFailed: Boolean,
+    errorType: UiErrorType?,
     renderConfig: BookshelfListRenderConfig,
     onBookClick: (SearchBook) -> Unit,
     onBookPreview: (SearchBook, Rect?) -> Unit,
@@ -487,7 +495,9 @@ private fun DiscoverySuiteWidgetSection(
                 }
             }
             widget.type == DiscoverySuiteWidgetType.RankedList.value -> {
-                if (widget.targets.isEmpty()) {
+                if (isFailed && rankedBooks.isEmpty()) {
+                    DiscoverySuiteWidgetRetryCard(errorType = errorType, renderConfig = renderConfig, onRetry = { onRefreshWidget(widget) })
+                } else if (widget.targets.isEmpty()) {
                     Text(
                         text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
                         fontSize = 14.sp,
@@ -521,6 +531,11 @@ private fun DiscoverySuiteWidgetSection(
                 fontFamily = palette.bodyFontFamily,
                 color = palette.secondaryText,
                 style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
+            )
+            isFailed && books.isEmpty() -> DiscoverySuiteWidgetRetryCard(
+                errorType = errorType,
+                renderConfig = renderConfig,
+                onRetry = { onRefreshWidget(widget) }
             )
             books.isEmpty() -> Text(
                 text = LocalContext.current.getString(R.string.discovery_suite_widget_pending),
@@ -1168,6 +1183,45 @@ private fun DiscoverySuiteFlippingCoverBookItem(
         fragment = fragment,
         lifecycle = lifecycle
     )
+}
+
+@Composable
+private fun DiscoverySuiteWidgetRetryCard(
+    errorType: UiErrorType?,
+    renderConfig: BookshelfListRenderConfig,
+    onRetry: () -> Unit
+) {
+    val palette = renderConfig.palette
+    val context = LocalContext.current
+    val text = remember(errorType) {
+        if (errorType != null) {
+            UiErrorMapper.message(errorType).text
+        } else {
+            context.getString(R.string.discovery_error_widget_failed)
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .appSettingPanelBackground(
+                normalColor = palette.rowColor,
+                panelImage = renderConfig.panelImage,
+                borderColor = palette.borderColor,
+                radiusPx = palette.panelRadiusPx
+            )
+            .clickable(onClick = onRetry),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = palette.bodyFontFamily,
+            color = palette.secondaryText,
+            style = TextStyle(shadow = imageBgTextShadow(palette.secondaryText))
+        )
+    }
 }
 
 @Composable
