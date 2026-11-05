@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.25.2 · 2026/11/05**
+
+- 发现页毛玻璃降采样提精度(6→3)减摩尔纹/色块(观感强度不变，耗时略升但仅首次构建)；动图(gif/webp)壁纸玻璃脱节降级(取样首帧改走纯shell实底，与背景层动画脱钩)
+
 **vH.1.25.1 · 2026/11/05**
 
 - 体验优化 P0/P1/P2 落地：全应用异常去技术化(UiErrorMapper 非技术文案+四态降级:无书源/全失效/网络/超时)、相对时间本地化(14中英模板/英文复数)、发现页经典主线程减负(重活在IO/在途去重/毛玻璃位置缓存/低内存降级)、现代套件超时兜底(withTimeoutOrNull包withPermit不饿死并发)、三形态交叉淡入(260ms)+进程内滚动快照恢复、设置搜索别名(searchKeys)互链、玻璃/背景衬底统一(imageBgAdaptiveScrim)、书架项复用统一衬底；修复错误分类顺序(FileNotFoundException先于IOException/确定性失败不重试)、经典发现空态语义(无匹配不再误报暂无书源)、滚动恢复加固(首帧(0,0)不覆盖快照)、玻璃监听防泄漏(GlassPositionTracker uninstall旧目标/仅清自带监听)、evalUiJs去重键含infoMap、设置搜索CI门禁(verify.yml)
