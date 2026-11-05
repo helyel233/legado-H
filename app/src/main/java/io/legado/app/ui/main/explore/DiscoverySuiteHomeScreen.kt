@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,10 +78,17 @@ import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.image.CoverImageView
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
 import splitties.init.appCtx
 
 private const val BOOK_COVER_ASPECT_RATIO = 0.75f
 private val DiscoverySuiteEmphasizedEasing = CubicBezierEasing(0.20f, 0.00f, 0.00f, 1.00f)
+
+/** 套件发现首页的进程内滚动位置快照（落盘数据走 DiscoverySuitePageSnapshot，此处仅浏览位置）。 */
+data class SuiteScrollPosition(
+    val firstVisibleItemIndex: Int = 0,
+    val firstVisibleItemScrollOffset: Int = 0
+)
 
 @Composable
 fun DiscoverySuiteHomeScreen(
@@ -105,7 +113,9 @@ fun DiscoverySuiteHomeScreen(
     onCanScrollBackwardChanged: (Boolean) -> Unit,
     fragment: Fragment,
     lifecycle: Lifecycle,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollPosition: SuiteScrollPosition? = null,
+    onScrollPositionChanged: (SuiteScrollPosition) -> Unit = {}
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -134,6 +144,22 @@ fun DiscoverySuiteHomeScreen(
                 listState.animateScrollToItem(0)
             }
         }
+    }
+    // 持续上报滚动位置（含滚回顶部后的 (0,0)），供 Fragment 侧保存进程内快照。
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            onScrollPositionChanged(SuiteScrollPosition(index, offset))
+        }
+    }
+    // 独立恢复：等待列表项就绪后再 scrollToItem，避免空列表越界导致恢复丢失。
+    LaunchedEffect(scrollPosition) {
+        val target = scrollPosition ?: return@LaunchedEffect
+        if (target.firstVisibleItemIndex <= 0) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.totalItemsCount }
+            .first { it > target.firstVisibleItemIndex }
+        listState.scrollToItem(target.firstVisibleItemIndex, target.firstVisibleItemScrollOffset)
     }
     var previewState by remember { mutableStateOf<SearchBookPreviewState?>(null) }
     val onBookPreview: (SearchBook, Rect?) -> Unit = { book, bounds ->

@@ -28,6 +28,8 @@ class StableLiquidGlassView @JvmOverloads constructor(
     private var boundSource: ViewGroup? = null
     private var glass: LiquidGlass? = null
     private var config: Config? = null
+    // 单帧内重复 rebuild 只排队一次，避免配置持续失败时堆积大量 post 与反复 removeView
+    private var rebuildPending = false
 
     private var cornerRadius = 40f.dpToPx()
     private var refractionHeight = 20f.dpToPx()
@@ -174,6 +176,17 @@ class StableLiquidGlassView @JvmOverloads constructor(
         applyConfig()
     }
 
+    /** 同一时刻只允许一个待执行的玻璃重建任务，防止异常兜底被反复触发导致 post 队列堆积。 */
+    private fun postRebuild(source: ViewGroup) {
+        if (rebuildPending) return
+        rebuildPending = true
+        post {
+            rebuildPending = false
+            if (!isAttachedToWindow || sampleSource !== source) return@post
+            ensureGlass()
+        }
+    }
+
     private fun applyConfig() {
         val source = sampleSource
         if (!isAttachedToWindow || source == null) return
@@ -193,7 +206,7 @@ class StableLiquidGlassView @JvmOverloads constructor(
     private fun rebuildGlass(source: ViewGroup) {
         removeGlass()
         sampleSource = source
-        post { ensureGlass() }
+        postRebuild(source)
     }
 
     private fun removeGlass() {

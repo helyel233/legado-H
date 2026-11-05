@@ -36,16 +36,49 @@ fun imageBgTextShadow(textColor: Color): Shadow? {
     return adaptiveTextShadow(textColor)
 }
 
+// 深浅色自适应投影/衬底的统一参数：浅色文字配黑影、深色文字配白影；
+// 衬底与投影取反向色，保证任意壁纸明暗下文字都有可读的边界。全站引用这一份口径。
+private const val SHADOW_OFFSET_X = 1f
+private const val SHADOW_OFFSET_Y = 1f
+private const val SHADOW_BLUR_RADIUS = 4f
+private const val LIGHT_TEXT_SHADOW_ALPHA = 0.7f
+private const val DARK_TEXT_SHADOW_ALPHA = 0.75f
+private const val LIGHT_TEXT_SCRIM_ALPHA = 0.45f
+private const val DARK_TEXT_SCRIM_ALPHA = 0.55f
+
 private fun adaptiveTextShadow(textColor: Color): Shadow =
     if (textColor.luminance() > 0.5f) {
-        Shadow(color = Color.Black.copy(alpha = 0.7f), offset = Offset(1f, 1f), blurRadius = 4f)
+        Shadow(
+            color = Color.Black.copy(alpha = LIGHT_TEXT_SHADOW_ALPHA),
+            offset = Offset(SHADOW_OFFSET_X, SHADOW_OFFSET_Y),
+            blurRadius = SHADOW_BLUR_RADIUS
+        )
     } else {
-        Shadow(color = Color.White.copy(alpha = 0.75f), offset = Offset(1f, 1f), blurRadius = 4f)
+        Shadow(
+            color = Color.White.copy(alpha = DARK_TEXT_SHADOW_ALPHA),
+            offset = Offset(SHADOW_OFFSET_X, SHADOW_OFFSET_Y),
+            blurRadius = SHADOW_BLUR_RADIUS
+        )
     }
+
+/**
+ * 背景图模式下、按文字明暗自适应的半透明衬底：浅字配深衬底、深字配浅衬底。
+ * 与 [adaptiveTextShadow] 共用同一份深浅自适应口径；未开背景图时返回 [Color.Transparent]。
+ */
+@Composable
+fun imageBgAdaptiveScrim(textColor: Color): Color {
+    if (!rememberHasUsableBgImage()) return Color.Transparent
+    return if (textColor.luminance() > 0.5f) {
+        Color.Black.copy(alpha = LIGHT_TEXT_SCRIM_ALPHA)
+    } else {
+        Color.White.copy(alpha = DARK_TEXT_SCRIM_ALPHA)
+    }
+}
 
 /**
  * 背景图模式下的行/卡半透明衬底色（未开背景图时返回 [Color.Transparent]）。
  * [baseColor] 传入主题行色（如 palette.row / settings.row，已经 UiCorner.surfaceColor 调透明度）。
+ * 需要按文字色自适应的场景改用 [imageBgAdaptiveScrim]。
  */
 fun imageBgScrimColor(hasBgImage: Boolean, baseColor: Color): Color =
     if (hasBgImage) baseColor else Color.Transparent

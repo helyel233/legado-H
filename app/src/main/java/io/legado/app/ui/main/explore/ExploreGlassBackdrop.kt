@@ -48,6 +48,19 @@ object ExploreGlassBackdrop {
     /** 未设置时的默认毛玻璃强度。 */
     const val LEVEL_DEFAULT = 60
 
+    /**
+     * 发现页玻璃参数的统一描述（与主界面底栏口径对齐，仅统一常量/描述，不改第三方渲染）：
+     * - 强度映射：底栏 bottomBarOpacityLevel 为 level/200（上限 0.5），这里复用同一档位；
+     * - 模糊：底栏 frosted 同款 `blurRadius(dp) = 12 + glassLevel * 18`，
+     *   折算为位图像素时再除以 [DOWNSCALE]（GPU 高斯→stackBlur 等效系数 1.4）。
+     * - shell/tint/描边：与 MainActivity.createLiquidGlassShellDrawable 同构，见
+     *   [FrostedGlassDrawable] 的常量说明。
+     */
+    private const val GLASS_LEVEL_DIVISOR = 200f
+    private const val BASE_BLUR_DP = 12f
+    private const val GLASS_LEVEL_BLUR_DP = 18f
+    private const val STACK_BLUR_DENSITY_FACTOR = 1.4f
+
     /** 背景位图相对屏幕的降采样比例，配合模糊抹平高频纹理（布纹/细线条）保留大块明暗。 */
     private const val DOWNSCALE = 6f
 
@@ -77,8 +90,8 @@ object ExploreGlassBackdrop {
     fun rowBackground(host: View, level: Int): Drawable? {
         if (level <= 0) return null
         val context = host.context
-        // 与底栏 bottomBarOpacityLevel 同映射（level/200，上限 0.5），观感与底栏一致
-        val glassLevel = level.coerceIn(0, 100) / 200f
+        // 与底栏 bottomBarOpacityLevel 同映射（level/GLASS_LEVEL_DIVISOR，上限 0.5），观感与底栏一致
+        val glassLevel = level.coerceIn(0, 100) / GLASS_LEVEL_DIVISOR
         return FrostedGlassDrawable(
             host = host,
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
@@ -115,14 +128,15 @@ object ExploreGlassBackdrop {
         synchronized(this) {
             cache?.takeIf { it.key == key }?.let { return it.bitmap }
         }
-        // 底栏 frosted 同款模糊强度：blurRadius(dp) = 12 + glassLevel * 18。
-        // 折算为位图像素：屏幕等效半径 ≈ dp*密度*1.4（GPU 高斯→stackBlur 等效系数），
+        // 底栏 frosted 同款模糊强度：blurRadius(dp) = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP。
+        // 折算为位图像素：屏幕等效半径 ≈ dp*密度*STACK_BLUR_DENSITY_FACTOR（GPU 高斯→stackBlur 等效系数），
         // 再除以降采样比例。模糊必须抹平壁纸高频纹理避免摩尔纹，同时保留大块明暗。
         // 固定用纯软件模糊：不依赖 renderscript toolkit 的 native 库。
         val density = metrics.density
-        val blurDp = 12f + glassLevel * 18f
-        val radius = (state.blur / DOWNSCALE + blurDp * density * 1.4f / DOWNSCALE)
-            .toInt().coerceIn(3, 25)
+        val blurDp = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP
+        val radius = (
+            state.blur / DOWNSCALE + blurDp * density * STACK_BLUR_DENSITY_FACTOR / DOWNSCALE
+            ).toInt().coerceIn(3, 25)
         synchronized(this) {
             val stale = cache?.bitmap
             pendingCallbacks.getOrPut(key) { ArrayList() }.add(onReady)
@@ -237,6 +251,21 @@ private class FrostedGlassDrawable(
     baseColor: Int
 ) : Drawable() {
 
+    companion object {
+        // 发现页玻璃参数统一描述（与底栏 createLiquidGlassShellDrawable 同构，仅统一常量口径）
+        private const val TINT_BASE_ALPHA = 0.05f
+        private const val TINT_LEVEL_ALPHA = 0.10f
+        private const val SHELL_STROKE_BASE_ALPHA = 0.18f
+        private const val SHELL_STROKE_LEVEL_ALPHA = 0.16f
+        private const val SHELL_STROKE_MAX_ALPHA = 0.42f
+        private const val SHELL_CENTER_BASE_ALPHA = 0.10f
+        private const val SHELL_CENTER_LEVEL_ALPHA = 1.6f
+        private const val SHELL_CENTER_MAX_ALPHA = 0.88f
+        private const val SHELL_START_MAX_ALPHA = 0.94f
+        private const val SHELL_END_MAX_ALPHA = 0.80f
+        private const val SHELL_GRADIENT_SPREAD = 0.08f
+    }
+
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val shellPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -249,9 +278,14 @@ private class FrostedGlassDrawable(
     private val surfaceColor =
         if (AppColorUtils.isColorLight(baseColor)) Color.WHITE else Color.rgb(22, 24, 28)
 
+    // 与 MainActivity.createLiquidGlassShellDrawable 同构的参数口径：
+    // - 描边 alpha 与底栏 strokeAlpha 相同（0.18 + glassLevel * 0.16，上限 0.42）；
+    // - tint 为 LiquidGlass 白色弱着色（0.05 + glassLevel * 0.10）；
+    // - shell 垂直渐变上深下浅，中心随强度提升，最终叠加接近实底。
     private val tintBaseAlpha =
-        ((0.05f + glassLevel * 0.10f).coerceIn(0f, 1f) * 255).toInt()
-    private val strokeBaseRatio = (0.18f + glassLevel * 0.16f).coerceIn(0f, 0.42f)
+        ((TINT_BASE_ALPHA + glassLevel * TINT_LEVEL_ALPHA).coerceIn(0f, 1f) * 255).toInt()
+    private val strokeBaseRatio =
+        (SHELL_STROKE_BASE_ALPHA + glassLevel * SHELL_STROKE_LEVEL_ALPHA).coerceIn(0f, SHELL_STROKE_MAX_ALPHA)
     private var shellShaderCache: LinearGradient? = null
     private var shellShaderHeight = -1
     private var alphaFactor = 1f
@@ -310,11 +344,12 @@ private class FrostedGlassDrawable(
     private fun shellShader(height: Int): LinearGradient {
         val cached = shellShaderCache
         if (cached != null && shellShaderHeight == height) return cached
-        // 滑杆直接对应遮盖度：100% 时壳层中心 ≈0.88（叠加后接近实底），
+        // 滑杆直接对应遮盖度：100% 时壳层中心 ≈SHELL_CENTER_MAX_ALPHA（叠加后接近实底），
         // 60% ≈0.58，低档仅轻磨砂；上深下浅保留底栏同款垂直渐变。
-        val centerAlpha = (0.10f + glassLevel * 1.6f).coerceIn(0f, 0.88f)
-        val startAlpha = (centerAlpha + 0.08f).coerceIn(0f, 0.94f)
-        val endAlpha = (centerAlpha - 0.08f).coerceIn(0f, 0.80f)
+        val centerAlpha = (SHELL_CENTER_BASE_ALPHA + glassLevel * SHELL_CENTER_LEVEL_ALPHA)
+            .coerceIn(0f, SHELL_CENTER_MAX_ALPHA)
+        val startAlpha = (centerAlpha + SHELL_GRADIENT_SPREAD).coerceIn(0f, SHELL_START_MAX_ALPHA)
+        val endAlpha = (centerAlpha - SHELL_GRADIENT_SPREAD).coerceIn(0f, SHELL_END_MAX_ALPHA)
         return LinearGradient(
             0f, 0f, 0f, height.toFloat(),
             intArrayOf(
@@ -360,7 +395,7 @@ private class FrostedGlassDrawable(
             shellPaint.alpha = (255 * alphaFactor).toInt()
             canvas.drawRoundRect(rect, radiusPx, radiusPx, shellPaint)
         }
-        // 描边
+        // 描边（与底栏 strokeAlpha 同口径，见 companion 常量）
         canvas.drawRoundRect(rect, radiusPx, radiusPx, strokePaint)
     }
 

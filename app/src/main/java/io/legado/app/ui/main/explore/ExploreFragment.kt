@@ -1,5 +1,8 @@
 package io.legado.app.ui.main.explore
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.database.sqlite.SQLiteBlobTooBigException
@@ -24,6 +27,7 @@ import android.widget.AutoCompleteTextView
 import android.view.SubMenu
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
@@ -237,6 +241,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var composeDiscoverCanScrollBackward = false
     private var composeSuiteCanScrollBackward = false
     private var composeDiscoverBooksSignature = ""
+    // 现代/套件形态离开前的浏览位置（进程内快照，不落盘；经典沿用顶层 classicLastScrollPosition）
+    private var modernScrollPosition: DiscoverScrollPosition? = null
+    private var suiteScrollPosition: SuiteScrollPosition? = null
     private val blockedButtonActions = hashMapOf<String, MutableSet<String>>()
     private var selectedDiscoverSourcePart: BookSourcePart? = null
     private var selectedDiscoverSource: BookSource? = null
@@ -255,6 +262,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
     private var classicDiscoveryErrorState: ClassicDiscoverErrorState? = null
+    private var modeCrossfadeAnimator: ValueAnimator? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
@@ -318,6 +326,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     onBookClick = ::showBookInfo,
                     onLoadMore = { loadDiscoverBooks(reset = false) },
                     onCanScrollBackwardChanged = { composeDiscoverCanScrollBackward = it },
+                    scrollPosition = modernScrollPosition,
+                    onScrollPositionChanged = { modernScrollPosition = it },
                     fragment = this@ExploreFragment,
                     lifecycle = viewLifecycleOwner.lifecycle
                 )
@@ -354,6 +364,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     onHorizontalLoadMore = ::loadMoreSuiteHorizontalWidget,
                     onRankedLoadMore = ::loadMoreSuiteRankedWidget,
                     onCanScrollBackwardChanged = { composeSuiteCanScrollBackward = it },
+                    scrollPosition = suiteScrollPosition,
+                    onScrollPositionChanged = { suiteScrollPosition = it },
                     fragment = this@ExploreFragment,
                     lifecycle = viewLifecycleOwner.lifecycle
                 )
@@ -378,38 +390,111 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         val mode = AppConfig.discoveryPageMode
         val modern = mode == AppConfig.DISCOVERY_PAGE_MODE_MODERN
         val suite = mode == AppConfig.DISCOVERY_PAGE_MODE_SUITE
+        val wasClassic = usingClassicDiscovery()
+        val modeChanged = discoveryPageMode != mode || (!modern && !suite) != wasClassic
         discoveryPageMode = mode
         usingModernDiscovery = modern
         usingSuiteDiscovery = suite
-        binding.titleBar.isGone = modern || suite
-        binding.llModernDiscovery.isVisible = modern
-        binding.composeDiscoverySuite.isVisible = suite
-        binding.rvFind.isGone = modern || suite
-        binding.tvEmptyMsg.isGone = modern || suite
-        searchView?.isGone = modern || suite
-        if (modern) {
-            binding.topBar.post {
-                updateModernTopBarOverlay()
-            }
-        }
         if (!loadData) {
+            binding.titleBar.isGone = modern || suite
+            binding.llModernDiscovery.isVisible = modern
+            binding.composeDiscoverySuite.isVisible = suite
+            binding.rvFind.isGone = modern || suite
+            binding.tvEmptyMsg.isGone = modern || suite
+            searchView?.isGone = modern || suite
+            if (modern) {
+                binding.topBar.post {
+                    updateModernTopBarOverlay()
+                }
+            }
             activity?.invalidateOptionsMenu()
             return
         }
-        if (modern) {
-            exploreFlowJob?.cancel()
-            stopSuiteMode()
-            initModernMode()
-        } else if (suite) {
-            exploreFlowJob?.cancel()
-            stopModernMode()
-            initSuiteMode()
-        } else {
-            stopSuiteMode()
-            stopModernMode()
-            initClassicMode()
+        val targetView = when {
+            modern -> binding.llModernDiscovery
+            suite -> binding.composeDiscoverySuite
+            else -> binding.rvFind
         }
-        activity?.invalidateOptionsMenu()
+        val performSwitch = {
+            // 离开经典形态前记住浏览位置与展开源，返回时 initClassicMode 恢复
+            if (wasClassic) {
+                classicRememberViewPosition()
+            }
+            // 先收起上一形态并清运行时，再初始化目标形态，避免上一形态控件残留
+            if (modern) {
+                exploreFlowJob?.cancel()
+                stopSuiteMode()
+                initModernMode()
+            } else if (suite) {
+                exploreFlowJob?.cancel()
+                stopModernMode()
+                initSuiteMode()
+            } else {
+                stopSuiteMode()
+                stopModernMode()
+                initClassicMode()
+            }
+            activity?.invalidateOptionsMenu()
+            if (modern) {
+                binding.topBar.post {
+                    updateModernTopBarOverlay()
+                }
+            }
+        }
+        if (!modeChanged || AppConfig.isEInkMode) {
+            binding.titleBar.alpha = 1f
+            binding.llModernDiscovery.alpha = 1f
+            binding.composeDiscoverySuite.alpha = 1f
+            binding.rvFind.alpha = 1f
+            binding.titleBar.isGone = modern || suite
+            binding.llModernDiscovery.isVisible = modern
+            binding.composeDiscoverySuite.isVisible = suite
+            binding.rvFind.isGone = modern || suite
+            binding.tvEmptyMsg.isGone = modern || suite
+            searchView?.isGone = modern || suite
+            performSwitch()
+            return
+        }
+        modeCrossfadeAnimator?.cancel()
+        modeCrossfadeAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = DISCOVERY_MODE_CROSSFADE_MS
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { animator ->
+                val t = animator.animatedValue as Float
+                // 交叉淡入：旧形态 1→0，新形态 0→1，切换期间两者都可见、无空白帧
+                applyModeViewAlpha(targetView, t, modern, suite)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    binding.titleBar.isGone = modern || suite
+                    binding.llModernDiscovery.isVisible = modern
+                    binding.composeDiscoverySuite.isVisible = suite
+                    binding.rvFind.isGone = modern || suite
+                    binding.tvEmptyMsg.isGone = modern || suite
+                    searchView?.isGone = modern || suite
+                    applyModeViewAlpha(targetView, 1f, modern, suite)
+                    performSwitch()
+                }
+            })
+            start()
+        }
+    }
+
+    /** 切换动画期间同时控制三形态容器的 alpha 与可见性，目标形态淡入、旧形态淡出。 */
+    private fun applyModeViewAlpha(targetView: View, t: Float, modern: Boolean, suite: Boolean) {
+        val clamped = t.coerceIn(0f, 1f)
+        binding.llModernDiscovery.alpha = if (modern) clamped else (1f - clamped)
+        binding.composeDiscoverySuite.alpha = if (suite) clamped else (1f - clamped)
+        binding.rvFind.alpha = if (!modern && !suite) clamped else (1f - clamped)
+        // 淡出/淡入过程中让目标形态保持可见，alpha 表达过渡；结束后统一收敛可见性
+        if (clamped > 0f) targetView.isVisible = true
+        binding.llModernDiscovery.isVisible = modern || (clamped > 0f && binding.llModernDiscovery.alpha > 0f)
+        binding.composeDiscoverySuite.isVisible = suite || (clamped > 0f && binding.composeDiscoverySuite.alpha > 0f)
+        binding.rvFind.isVisible = (!modern && !suite) || (clamped > 0f && binding.rvFind.alpha > 0f)
+        // 顶栏在切换到现代/套件时随内容一起淡出，经典恢复时淡入；
+        // 动画期间按 alpha 显隐，避免经典返回时顶栏从头到尾保持 gone
+        binding.titleBar.alpha = if (modern || suite) (1f - clamped) else clamped
+        binding.titleBar.isVisible = binding.titleBar.alpha > 0f
     }
 
     private fun currentDiscoverScrollTarget(): View? {
@@ -3849,6 +3934,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             //onPause 不总是先于视图销毁（如 recreate 路径差异），兜底再记一次
             classicRememberViewPosition()
         }
+        modeCrossfadeAnimator?.cancel()
+        modeCrossfadeAnimator = null
         stopModernMode()
         stopSuiteMode()
         WebViewPool.destroyScope(WebViewPool.Scope.DISCOVERY)
@@ -4057,6 +4144,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         private const val SUITE_VISIBLE_COVER_PRELOAD_TIMEOUT_MS = 1800L
         private const val SUITE_TARGET_LOAD_TIMEOUT_MS = 8_000L
         private const val MODERN_PAGE_LOAD_TIMEOUT_MS = 10_000L
+        private const val DISCOVERY_MODE_CROSSFADE_MS = 260L
     }
 
 }

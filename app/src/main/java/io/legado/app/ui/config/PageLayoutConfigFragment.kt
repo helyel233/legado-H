@@ -48,7 +48,18 @@ class PageLayoutConfigFragment : ComposeSettingFragment() {
                             onSelected = {
                                 AppConfig.discoveryPageLayout = it.toIntOrNull() ?: 1
                             },
-                            searchKeys = listOf("布局", "layout", "瀑布流", "网格", "发现页")
+                            searchKeys = listOf(
+                                "布局",
+                                "layout",
+                                "瀑布流",
+                                "网格",
+                                "发现页",
+                                "套件",
+                                "形态",
+                                "discovery",
+                                "waterfall",
+                                "grid"
+                            )
                         ),
                         SettingChoiceSpec(
                             key = PreferKey.rssSourceLayout,

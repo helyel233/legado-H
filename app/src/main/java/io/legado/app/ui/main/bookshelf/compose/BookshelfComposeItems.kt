@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -41,11 +40,11 @@ import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.titleTextColor
+import io.legado.app.ui.widget.compose.imageBgAdaptiveScrim
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isUri
 import io.legado.app.utils.toTimeAgo
@@ -284,18 +283,7 @@ fun BookshelfGridItem(
         if (showBookName == 0) {
             // 自定义背景图下主题文字色直接压图难分辨：背景图模式时给标签加自适应衬底条
             // （浅色文字配深衬底、深色文字配浅衬底）；无背景图时不加，普通主题观感不变
-            val hasBgImage = remember(context, themeSignature) {
-                ThemeConfig.hasUsableBgImage(context)
-            }
-            val scrimColor = if (hasBgImage) {
-                if (titleColor.luminance() > 0.5f) {
-                    Color.Black.copy(alpha = 0.45f)
-                } else {
-                    Color.White.copy(alpha = 0.55f)
-                }
-            } else {
-                Color.Transparent
-            }
+            val scrimColor = imageBgAdaptiveScrim(titleColor)
             Text(
                 text = item.displayName,
                 modifier = Modifier

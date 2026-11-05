@@ -1071,6 +1071,7 @@
     <string name="show_discovery">显示发现</string>
     <string name="modern_discovery_page">发现页模式</string>
     <string name="modern_discovery_page_summary">选择经典、新版或套件发现页。</string>
+    <string name="discovery_mode_summary">当前：%1$s。布局（列表/瀑布流/网格）仅在新版发现页生效。</string>
     <string name="discovery_settings_title">发现页管理</string>
     <string name="discovery_settings_summary">配置发现页入口与页面样式。</string>
     <string name="subscription_settings_title">订阅页管理</string>

@@ -32,10 +32,13 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
                                 valuesRes = R.array.discovery_page_mode_values
                             ),
                             selectedValue = discoveryMode,
-                            summary = pageModeLabel(
-                                entriesRes = R.array.discovery_page_mode_entries,
-                                valuesRes = R.array.discovery_page_mode_values,
-                                selectedValue = discoveryMode
+                            summary = str(
+                                R.string.discovery_mode_summary,
+                                pageModeLabel(
+                                    entriesRes = R.array.discovery_page_mode_entries,
+                                    valuesRes = R.array.discovery_page_mode_values,
+                                    selectedValue = discoveryMode
+                                )
                             ),
                             onSelected = {
                                 AppConfig.discoveryPageMode = it
@@ -43,7 +46,12 @@ class DiscoverySubscriptionConfigFragment : ComposeSettingFragment() {
                             searchKeys = listOf(
                                 PreferKey.discoveryPageMode,
                                 PreferKey.modernDiscoveryPage,
-                                KEY_SEARCH_JUMP_DISCOVERY_MODE
+                                KEY_SEARCH_JUMP_DISCOVERY_MODE,
+                                "套件",
+                                "形态",
+                                "suite",
+                                "mode",
+                                "发现页样式"
                             )
                         )
                     )

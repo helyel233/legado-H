@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -54,6 +55,13 @@ import io.legado.app.ui.widget.compose.SearchBookListItem
 import io.legado.app.ui.widget.compose.SearchBookPreviewOverlay
 import io.legado.app.ui.widget.compose.SearchBookPreviewState
 import io.legado.app.ui.widget.image.CoverImageView
+import kotlinx.coroutines.flow.first
+
+/** 现代发现列表的进程内滚动位置快照（与套件/经典快照并列，仅进程内、不落盘）。 */
+data class DiscoverScrollPosition(
+    val firstVisibleItemIndex: Int = 0,
+    val firstVisibleItemScrollOffset: Int = 0
+)
 
 @Composable
 fun ExploreModernListScreen(
@@ -70,7 +78,9 @@ fun ExploreModernListScreen(
     onCanScrollBackwardChanged: (Boolean) -> Unit,
     fragment: Fragment,
     lifecycle: Lifecycle,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollPosition: DiscoverScrollPosition? = null,
+    onScrollPositionChanged: (DiscoverScrollPosition) -> Unit = {}
 ) {
     if (layoutMode == 3) {
         ExploreModernGridScreen(
@@ -84,7 +94,9 @@ fun ExploreModernListScreen(
             onCanScrollBackwardChanged = onCanScrollBackwardChanged,
             fragment = fragment,
             lifecycle = lifecycle,
-            modifier = modifier
+            modifier = modifier,
+            scrollPosition = scrollPosition,
+            onScrollPositionChanged = onScrollPositionChanged
         )
         return
     }
@@ -122,6 +134,22 @@ fun ExploreModernListScreen(
                 listState.animateScrollToItem(0)
             }
         }
+    }
+    // 持续上报滚动位置（含滚回顶部后的 (0,0)），供 Fragment 侧保存进程内快照。
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            onScrollPositionChanged(DiscoverScrollPosition(index, offset))
+        }
+    }
+    // 独立恢复：等待列表项就绪后再 scrollToItem，避免空列表越界导致恢复丢失。
+    LaunchedEffect(scrollPosition) {
+        val target = scrollPosition ?: return@LaunchedEffect
+        if (target.firstVisibleItemIndex <= 0) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.totalItemsCount }
+            .first { it > target.firstVisibleItemIndex }
+        listState.scrollToItem(target.firstVisibleItemIndex, target.firstVisibleItemScrollOffset)
     }
 
     Box(
@@ -211,7 +239,9 @@ private fun ExploreModernGridScreen(
     onCanScrollBackwardChanged: (Boolean) -> Unit,
     fragment: Fragment,
     lifecycle: Lifecycle,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollPosition: DiscoverScrollPosition? = null,
+    onScrollPositionChanged: (DiscoverScrollPosition) -> Unit = {}
 ) {
     val gridState = rememberLazyGridState()
     val topPadding = with(LocalDensity.current) { topPaddingPx.toDp() }
@@ -245,6 +275,20 @@ private fun ExploreModernGridScreen(
                 gridState.animateScrollToItem(0)
             }
         }
+    }
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            onScrollPositionChanged(DiscoverScrollPosition(index, offset))
+        }
+    }
+    LaunchedEffect(scrollPosition) {
+        val target = scrollPosition ?: return@LaunchedEffect
+        if (target.firstVisibleItemIndex <= 0) return@LaunchedEffect
+        snapshotFlow { gridState.layoutInfo.totalItemsCount }
+            .first { it > target.firstVisibleItemIndex }
+        gridState.scrollToItem(target.firstVisibleItemIndex, target.firstVisibleItemScrollOffset)
     }
 
     Box(

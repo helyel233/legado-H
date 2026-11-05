@@ -83,6 +83,13 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # 设置搜索映射与 R58/R59 资源英化门禁：新增设置项必须进搜索索引（无死结果），
+      # 新增/改动 values/ 文案必须英化且占位符与 values-zh 对齐，否则直接拦下合并。
+      - name: Settings mapping and resource checks
+        run: |
+          python3 tools/check_settings_mapping.py
+          python3 tools/check_r58_resources.py
+
       # lint 目前只是报告，不拦人：这个仓库存量告警不少，先让结果跑出来看看，
       # 等告警清到可控范围再改成阻塞。
       - name: Lint (report only)
