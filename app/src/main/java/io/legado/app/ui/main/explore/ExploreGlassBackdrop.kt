@@ -324,6 +324,55 @@ internal fun exploreSolidShellColor(baseColor: Int, iconOpacity: Int): Int =
     )
 
 /**
+ * 发现页无玻璃档实底壳层的**全部构造参数**（纯 JVM 可测）。
+ *
+ * [ExploreGlassBackdrop.solidShellDrawable] 只收集 Android 侧参数（主题底色、图标包
+ * 描边、圆角、描边宽度），经 [withExploreSolidShellSpec] 拿到这份规格后逐字段交给
+ * [GlassMaterialPreset.createSolidShellDrawable]。颜色决策完全收敛到纯函数，Android
+ * 薄映射里不再有任何可漏传或可改写的「是否强制不透明」实参。
+ */
+internal data class ExploreSolidShellSpec(
+    val fillColor: Int,
+    val borderColor: Int?,
+    val cornerRadiusPx: Float,
+    val oval: Boolean,
+    val strokeWidthPx: Int
+)
+
+/** 纯 JVM：把主题底色与图标包 opacity 换算成强制不透明的完整构造规格。 */
+internal fun resolveExploreSolidShellSpec(
+    baseColor: Int,
+    iconOpacity: Int,
+    borderColor: Int?,
+    cornerRadiusPx: Float,
+    strokeWidthPx: Int
+): ExploreSolidShellSpec = ExploreSolidShellSpec(
+    fillColor = exploreSolidShellColor(baseColor, iconOpacity),
+    borderColor = borderColor,
+    cornerRadiusPx = cornerRadiusPx,
+    oval = false,
+    strokeWidthPx = strokeWidthPx
+)
+
+/**
+ * 生产与单测共用的唯一出口：算出规格后交给 [factory]。
+ * 生产侧 factory 构造 GradientDrawable；纯 JVM 单测注入 `{ it }` 直接拿回规格，
+ * 从而锁住「发现页实底最终传给构造实现的是 alpha=255 的填充色」这条实参链路。
+ */
+internal fun <T> withExploreSolidShellSpec(
+    baseColor: Int,
+    iconOpacity: Int,
+    borderColor: Int?,
+    cornerRadiusPx: Float,
+    strokeWidthPx: Int,
+    factory: (ExploreSolidShellSpec) -> T
+): T = factory(
+    resolveExploreSolidShellSpec(
+        baseColor, iconOpacity, borderColor, cornerRadiusPx, strokeWidthPx
+    )
+)
+
+/**
  * 「行可见度」标定：底栏整条（数百 dp 宽、背后有 StableLiquidGlassView 先做一次
  * 模糊/着色）的 shell/tint/rim 绝对值只有 0.02~0.32；照搬到只有一行文字高、
  * 直接采样位图的发现页行上，两档之间与滑杆两端的差别都低于可分辨阈值
@@ -552,8 +601,9 @@ object ExploreGlassBackdrop {
      * 1.25.5 把图标包 `config.opacity`（内置默认 76、Config 默认 72）直接传给
      * [GlassMaterialPreset.createSolidShellDrawable]，经 `solidOpacity` 得到
      * 0.72~0.76 的 alpha，行背景仍然透出壁纸——这正是真机反馈的「无玻璃没变成
-     * 不透明纯色块」。这里由纯函数 [exploreSolidShellColor] 把 alpha 钉死为 1（255），
-     * Android 层只把结果颜色交给填充色重载；底栏仍走原 `solidOpacity`，观感逐值不变。
+     * 不透明纯色块」。这里只收集 Android 侧参数，颜色与全部构造规格统一由
+     * [withExploreSolidShellSpec] 产出（填充色 alpha 钉死为 255），函数体只做
+     * 字段展开交给填充色重载；底栏仍走原 `solidOpacity`，观感逐值不变。
      * 底色、圆角与描边依旧复用同一实现，不另写一份 drawable。
      */
     private fun solidShellDrawable(context: Context): GradientDrawable {
@@ -561,15 +611,21 @@ object ExploreGlassBackdrop {
         val borderColor = navConfig.borderColor?.let {
             AppColorUtils.withAlpha(it, navConfig.borderAlpha.coerceIn(0, 100) / 100f)
         }
-        return GlassMaterialPreset.createSolidShellDrawable(
-            fillColor = exploreSolidShellColor(
-                ThemeStore.bottomBackground(context), navConfig.opacity
-            ),
+        return withExploreSolidShellSpec(
+            baseColor = ThemeStore.bottomBackground(context),
+            iconOpacity = navConfig.opacity,
             borderColor = borderColor,
             cornerRadiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
-            oval = false,
             strokeWidthPx = 1.dpToPx()
-        )
+        ) { spec ->
+            GlassMaterialPreset.createSolidShellDrawable(
+                fillColor = spec.fillColor,
+                borderColor = spec.borderColor,
+                cornerRadiusPx = spec.cornerRadiusPx,
+                oval = spec.oval,
+                strokeWidthPx = spec.strokeWidthPx
+            )
+        }
     }
 
     /** 返回毛玻璃行背景；level<=0 / 设备降级时返回 null，调用方保留默认透明背景。 */
