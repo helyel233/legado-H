@@ -6,8 +6,15 @@
     <string name="explore_glass_section_effect">Glass effect</string>
     <string name="explore_glass_section_advanced">Rendering and compatibility</string>
 
-    <string name="explore_glass_enabled">Enable Explore glass</string>
-    <string name="explore_glass_enabled_summary">Source rows fall back to the plain transparent background; e-ink and low-memory devices always disable it</string>
+    <string name="explore_glass_effect_mode">Material style</string>
+    <string name="explore_glass_effect_mode_summary">Picking a style applies a whole preset; the sliders below fine-tune on top of it</string>
+    <string name="explore_glass_effect_mode_following">Following the bottom bar material (%1$s); turn off Follow bottom bar to choose a style here</string>
+    <string name="explore_glass_mode_none">No glass</string>
+    <string name="explore_glass_mode_glass">Transparent glass</string>
+    <string name="explore_glass_mode_frosted">Frosted glass</string>
+
+    <string name="explore_glass_follow_bottom_bar">Follow bottom bar material</string>
+    <string name="explore_glass_follow_bottom_bar_summary">Use the bottom bar Solid / Glass / Frosted glass style directly; the style chosen here is ignored. Solid maps to No glass</string>
 
     <string name="explore_glass_level">Glass strength</string>
     <string name="explore_glass_level_summary">Same setting as Explore glass in theme editing, stored separately for day and night; 0 turns the effect off</string>
@@ -31,5 +38,21 @@
     <string name="explore_glass_animated_solid_summary">When enabled, animated wallpapers are not sampled as a still first frame; disable it to accept a static glass frame</string>
 
     <string name="explore_glass_restore_defaults">Restore defaults</string>
-    <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including day and night glass strength</string>
+    <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including the material style and day / night glass strength</string>
+
+    <string-array name="explore_glass_mode_entries">
+        <item>No glass</item>
+        <item>Transparent glass</item>
+        <item>Frosted glass</item>
+    </string-array>
+    <string-array name="explore_glass_mode_values">
+        <item>none</item>
+        <item>glass</item>
+        <item>frosted</item>
+    </string-array>
+    <string-array name="explore_glass_mode_descriptions">
+        <item>Source rows use the plain transparent background; always the case on e-ink and low-memory devices</item>
+        <item>Light blur and thin scrim let the wallpaper show through, with the edge stroke outlining the glass; text contrast is slightly lower</item>
+        <item>Default look, with the strongest blur and scrim for maximum text legibility</item>
+    </string-array>
 </resources>

@@ -276,8 +276,16 @@ object PreferKey {
     /**
      * 发现页毛玻璃的细项设置。总强度仍走 [themeExploreGlassBlur] 的日夜间分离键，
      * 下面这些是全局倍率/开关（不区分日夜间），与 frostedGlassLevel 等全局 UI 键同体系。
+     *
+     * [exploreGlassEnabled] 是 1.25.4 的旧总开关，1.25.5 起由 [exploreGlassEffectMode]
+     * 的「无玻璃」档承担关闭职责；旧值仍被读取用于平滑迁移（见 resolveExploreGlassMode），
+     * 只是不再出现在设置页 UI 上，避免两个控件控制同一件事。
      */
     const val exploreGlassEnabled = "exploreGlassEnabled"
+    /** 三档材质：none / glass / frosted，默认 frosted。 */
+    const val exploreGlassEffectMode = "exploreGlassEffectMode"
+    /** 开启后忽略本页档位，直接映射底栏 bottomBarEffectMode。 */
+    const val exploreGlassFollowBottomBar = "exploreGlassFollowBottomBar"
     const val exploreGlassBlurScale = "exploreGlassBlurScale"
     const val exploreGlassShellScale = "exploreGlassShellScale"
     const val exploreGlassTintScale = "exploreGlassTintScale"

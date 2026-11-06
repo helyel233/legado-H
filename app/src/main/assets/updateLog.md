@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.25.5 · 2026/11/06**
+
+- 发现页毛玻璃新增与底栏对齐的三档材质自动预设：无玻璃(书源名行回到透明背景) / 透明玻璃(模糊0.55、遮盖0.40、着色0.45、描边1.25，壁纸清晰透出) / 磨砂玻璃(默认，系数全1即1.25.3观感)；选一档自动套用整组系数，四个倍率滑杆在系数之上继续微调、切档不清空微调值，系数按底栏 glass 与 frosted 的公式差异折算且发现页无折射层故用更强描边替代。进阶区新增「跟随底栏材质」(默认关)，开启后直接把 bottomBarEffectMode 映射为 none/glass/frosted 并置灰本页档位行，原档位保留、关闭即恢复；1.25.4 独立总开关从 UI 移除由无玻璃档承担关闭职责，旧值仍读取迁移(未设档位且旧开关 false → 无玻璃，显式选档优先)。档位解析与预设系数抽纯函数，scaledGlassParam 加 factor 默认参、exploreHardwareBlurPx 加 presetFactor 默认参，系数同时作用于硬件 RenderEffect 半径/软件 stackBlur 半径/shell-tint-stroke 三处 alpha，config.mode 进底图缓存 key 与 configSignature 保证换档重建底图并返回发现页即重绑；降级矩阵不变。四处映射校验 PASS，参数单测 11 例全过，BUILD SUCCESSFUL in 3m 55s，无新增告警
+
 **vH.1.25.4 · 2026/11/06**
 
 - 「我的 › 内容与规则」新增「发现页毛玻璃」直达入口与独立设置页(9 项，整页进设置搜索、进阶分区默认折叠)：总开关、玻璃强度(与编辑主题页共用日夜间键)、模糊程度/底色遮盖/白色着色/边缘描边四个 0-200 倍率滑杆、硬件真高斯(API31+)、动图壁纸使用纯色底、恢复默认；倍率默认 100 即 1.25.3 观感，经纯函数限幅守住各维度 alpha 上限，模糊倍率同时作用于 RenderEffect 与 stackBlur 并纳入底图缓存 key；configSignature 汇总全部参数，返回发现页自动重绑行背景。四处映射校验 PASS，参数单测 6 例全过，BUILD SUCCESSFUL

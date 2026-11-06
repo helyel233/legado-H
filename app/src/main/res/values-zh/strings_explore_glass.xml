@@ -6,8 +6,15 @@
     <string name="explore_glass_section_effect">玻璃效果</string>
     <string name="explore_glass_section_advanced">渲染与兼容</string>
 
-    <string name="explore_glass_enabled">启用发现页毛玻璃</string>
-    <string name="explore_glass_enabled_summary">关闭后书源名行使用默认透明背景；墨水屏与低内存设备始终自动关闭</string>
+    <string name="explore_glass_effect_mode">材质样式</string>
+    <string name="explore_glass_effect_mode_summary">选一档即自动套用整组参数；下方滑杆在此基础上继续微调</string>
+    <string name="explore_glass_effect_mode_following">正在跟随底栏材质（当前：%1$s），关闭「跟随底栏材质」后可自行选档</string>
+    <string name="explore_glass_mode_none">无玻璃</string>
+    <string name="explore_glass_mode_glass">透明玻璃</string>
+    <string name="explore_glass_mode_frosted">磨砂玻璃</string>
+
+    <string name="explore_glass_follow_bottom_bar">跟随底栏材质</string>
+    <string name="explore_glass_follow_bottom_bar_summary">开启后直接套用底栏的常规 / 玻璃 / 磨砂玻璃档位，本页档位暂时不生效；常规对应无玻璃</string>
 
     <string name="explore_glass_level">玻璃强度</string>
     <string name="explore_glass_level_summary">与「编辑主题」里的「发现页毛玻璃效果」是同一项，按日间/夜间分别保存；0 为关闭</string>
@@ -31,5 +38,21 @@
     <string name="explore_glass_animated_solid_summary">开启时动图壁纸不采样静止首帧，避免「壁纸在动、玻璃不动」；关闭后可接受静止首帧玻璃</string>
 
     <string name="explore_glass_restore_defaults">恢复默认</string>
-    <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括玻璃强度的日间与夜间取值</string>
+    <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括材质档位与玻璃强度的日间、夜间取值</string>
+
+    <string-array name="explore_glass_mode_entries">
+        <item>无玻璃</item>
+        <item>透明玻璃</item>
+        <item>磨砂玻璃</item>
+    </string-array>
+    <string-array name="explore_glass_mode_values">
+        <item>none</item>
+        <item>glass</item>
+        <item>frosted</item>
+    </string-array>
+    <string-array name="explore_glass_mode_descriptions">
+        <item>书源名行使用默认透明背景，不绘制玻璃；墨水屏与低内存设备始终如此</item>
+        <item>轻模糊、薄遮盖，壁纸清晰透出，靠边缘描边勾出玻璃轮廓；文字对比度会略降</item>
+        <item>默认口径，模糊与遮盖最充分，文字与壁纸分离最彻底</item>
+    </string-array>
 </resources>
