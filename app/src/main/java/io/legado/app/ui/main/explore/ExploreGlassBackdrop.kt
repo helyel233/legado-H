@@ -147,35 +147,114 @@ internal data class ExploreGlassConfig(
     val animatedSolid: Boolean
 )
 
+/**
+ * 发现页毛玻璃全部偏好键名的**唯一声明处**。
+ *
+ * [readExploreGlassConfig] 只通过这些成员访问键，设置页恢复默认与即时重绑监听的
+ * 键集合都由它派生；新增设置项必须在这里登记，否则读不到也写不进。
+ * 纯 JVM 单测用记录型 [ExploreGlassPrefSource] 反向断言「实际读过的键 ⊆ 监听集合」。
+ */
+internal object ExploreGlassConfigKeys {
+    val legacyEnabled = PreferKey.exploreGlassEnabled
+    val effectMode = PreferKey.exploreGlassEffectMode
+    val followBottomBar = PreferKey.exploreGlassFollowBottomBar
+    val levelDay = PreferKey.themeExploreGlassBlur
+    val levelNight = PreferKey.themeExploreGlassBlurN
+    val blurScale = PreferKey.exploreGlassBlurScale
+    val shellScale = PreferKey.exploreGlassShellScale
+    val tintScale = PreferKey.exploreGlassTintScale
+    val strokeScale = PreferKey.exploreGlassStrokeScale
+    val hardwareBlur = PreferKey.exploreGlassHardwareBlur
+    val animatedSolid = PreferKey.exploreGlassAnimatedSolid
+    val bottomBarMode = PreferKey.bottomBarEffectMode
+    val frostedLevel = PreferKey.frostedGlassLevel
+    val liquidLevel = PreferKey.liquidGlassLevel
+
+    /** 本设置页写入 /「恢复默认」清除的键（含旧总开关与日夜间强度两键）。 */
+    val settingKeys: Set<String> = setOf(
+        legacyEnabled, effectMode, followBottomBar,
+        levelDay, levelNight,
+        blurScale, shellScale, tintScale, strokeScale,
+        hardwareBlur, animatedSolid
+    )
+
+    /** 底栏联动键：档位由 AppConfig 读，两个强度由 [GlassMaterialPreset.current] 读。 */
+    val bottomBarKeys: Set<String> = setOf(bottomBarMode, frostedLevel, liquidLevel)
+}
+
+/**
+ * 设置页写入 / 清除的键，是 [EXPLORE_GLASS_PREF_KEYS] 的来源之一。
+ * 与渲染层读取键共用 [ExploreGlassConfigKeys] 的唯一声明，两处清单不再各自手写。
+ */
+internal val EXPLORE_GLASS_SETTING_KEYS: Set<String> = ExploreGlassConfigKeys.settingKeys
+
+/** 底栏联动键，读取发生在 [readExploreGlassConfig] 之外，显式补进监听集合。 */
+internal val EXPLORE_GLASS_BOTTOM_BAR_KEYS: Set<String> = ExploreGlassConfigKeys.bottomBarKeys
+
+/**
+ * 偏好读取的最小抽象：[readExploreGlassConfig] 的每个键访问都经过它，
+ * 纯 JVM 单测可注入记录型实现，反查渲染层究竟读了哪些键。
+ */
+internal interface ExploreGlassPrefSource {
+    fun boolean(key: String, default: Boolean): Boolean
+    fun int(key: String, default: Int): Int
+    fun string(key: String): String?
+}
+
+private class ContextExploreGlassPrefSource(
+    private val context: Context
+) : ExploreGlassPrefSource {
+    override fun boolean(key: String, default: Boolean): Boolean =
+        context.getPrefBoolean(key, default)
+
+    override fun int(key: String, default: Int): Int =
+        context.getPrefInt(key, default)
+
+    override fun string(key: String): String? =
+        context.getPrefString(key)
+}
+
 /** 集中读取一次偏好，避免每行 bind 时散落多次 SharedPreferences 访问。 */
-internal fun readExploreGlassConfig(context: Context): ExploreGlassConfig {
-    val legacyEnabled = context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
-    val followBottomBar = context.getPrefBoolean(PreferKey.exploreGlassFollowBottomBar, false)
+internal fun readExploreGlassConfig(context: Context): ExploreGlassConfig =
+    readExploreGlassConfig(
+        source = ContextExploreGlassPrefSource(context),
+        levelKey = ThemeRuntimeKeys.themeExploreGlassBlur(),
+        bottomBarMode = AppConfig.bottomBarEffectMode
+    )
+
+/**
+ * 纯 JVM 可测的读取逻辑。[levelKey] 是日夜间分离强度键（调用方按当前主题给出
+ * `levelDay` / `levelNight` 之一），[bottomBarMode] 来自 AppConfig
+ * （读 [ExploreGlassConfigKeys.bottomBarMode]）。所有键名取自 [ExploreGlassConfigKeys]，
+ * 单测据此反向校验键集合，新增键漏登记会立刻暴露。
+ */
+internal fun readExploreGlassConfig(
+    source: ExploreGlassPrefSource,
+    levelKey: String,
+    bottomBarMode: String
+): ExploreGlassConfig {
+    val keys = ExploreGlassConfigKeys
+    val legacyEnabled = source.boolean(keys.legacyEnabled, true)
+    val followBottomBar = source.boolean(keys.followBottomBar, false)
     return ExploreGlassConfig(
         mode = resolveExploreGlassMode(
-            context.getPrefString(PreferKey.exploreGlassEffectMode),
+            source.string(keys.effectMode),
             legacyEnabled,
             followBottomBar,
-            AppConfig.bottomBarEffectMode
+            bottomBarMode
         ),
         followBottomBar = followBottomBar,
-        level = context.getPrefInt(
-            ThemeRuntimeKeys.themeExploreGlassBlur(), ExploreGlassBackdrop.LEVEL_DEFAULT
-        ).coerceIn(0, 100),
-        blurPercent = context.getPrefInt(
-            PreferKey.exploreGlassBlurScale, EXPLORE_GLASS_SCALE_DEFAULT
-        ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
-        shellPercent = context.getPrefInt(
-            PreferKey.exploreGlassShellScale, EXPLORE_GLASS_SCALE_DEFAULT
-        ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
-        tintPercent = context.getPrefInt(
-            PreferKey.exploreGlassTintScale, EXPLORE_GLASS_SCALE_DEFAULT
-        ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
-        strokePercent = context.getPrefInt(
-            PreferKey.exploreGlassStrokeScale, EXPLORE_GLASS_SCALE_DEFAULT
-        ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
-        hardwareBlur = context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true),
-        animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true)
+        level = source.int(levelKey, ExploreGlassBackdrop.LEVEL_DEFAULT).coerceIn(0, 100),
+        blurPercent = source.int(keys.blurScale, EXPLORE_GLASS_SCALE_DEFAULT)
+            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+        shellPercent = source.int(keys.shellScale, EXPLORE_GLASS_SCALE_DEFAULT)
+            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+        tintPercent = source.int(keys.tintScale, EXPLORE_GLASS_SCALE_DEFAULT)
+            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+        strokePercent = source.int(keys.strokeScale, EXPLORE_GLASS_SCALE_DEFAULT)
+            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+        hardwareBlur = source.boolean(keys.hardwareBlur, true),
+        animatedSolid = source.boolean(keys.animatedSolid, true)
     )
 }
 
@@ -221,6 +300,28 @@ internal fun exploreHardwareBlurPx(
  */
 internal fun exploreGlassRimAlpha(dispersion: Float): Float =
     (dispersion * 0.5f).coerceIn(0f, 0.24f)
+
+/**
+ * 发现页「无玻璃」档实底壳层是否强制完全不透明（纯 JVM 决策，可单测）。
+ *
+ * 底栏 solid 档不经过这个决策，仍按图标包 `config.opacity` 半透明；只有发现页
+ * 书源名行要求一块不透壁纸的纯色块。把这个布尔值抽成具名决策点，是为了让
+ * [exploreSolidShellColor] 与单测都能锁住它——将来若改成 false，实底口径单测立刻失败。
+ */
+internal fun exploreSolidShellForcesOpaque(): Boolean = true
+
+/**
+ * 发现页无玻璃档的最终填充色（纯 JVM，无 Context / Drawable / 资源依赖）。
+ *
+ * 把上述决策、图标包 opacity 与主题底色一次性换算成 ARGB。
+ * [ExploreGlassBackdrop.solidShellDrawable] 只把这个结果交给
+ * [GlassMaterialPreset.createSolidShellDrawable] 的填充色重载做薄映射，
+ * 不再在 Android 侧自己决定不透明度；删掉或绕过这个决策都会让单测失败。
+ */
+internal fun exploreSolidShellColor(baseColor: Int, iconOpacity: Int): Int =
+    GlassMaterialPreset.solidColor(
+        baseColor, iconOpacity, exploreSolidShellForcesOpaque()
+    )
 
 /**
  * 「行可见度」标定：底栏整条（数百 dp 宽、背后有 StableLiquidGlassView 先做一次
@@ -302,27 +403,16 @@ internal fun resolveExploreGlassRenderParams(
 }
 
 /**
- * 影响发现页行观感的偏好键全集。`ExploreFragment` 用它注册即时重绑监听：
- * 只靠 `onResume` + [ExploreGlassBackdrop.configSignature] 时，设置页在另一个
- * Activity、发现页又处于 STARTED（非 RESUMED）状态，改动可能无法在返回时重绑；
- * 偏好一变就直接刷新经典行背景，返回发现页即为新观感。
+ * 影响发现页行观感的偏好键全集：由 [EXPLORE_GLASS_SETTING_KEYS]（渲染层实际读取、
+ * 设置页实际写入的键）加上 [EXPLORE_GLASS_BOTTOM_BAR_KEYS]（联动时另读的档位与
+ * 两个强度键）派生，不再手写第二份清单，新增键漏加监听的路径被单测反向断言堵住。
+ *
+ * `ExploreFragment` 用它注册即时重绑监听：只靠 `onResume` +
+ * [ExploreGlassBackdrop.configSignature] 时，设置页在另一个 Activity、发现页又处于
+ * STARTED（非 RESUMED）状态，改动可能无法在返回时重绑；偏好一变就直接刷新经典行背景。
  */
-internal val EXPLORE_GLASS_PREF_KEYS: Set<String> = setOf(
-    PreferKey.exploreGlassEnabled,
-    PreferKey.exploreGlassEffectMode,
-    PreferKey.exploreGlassFollowBottomBar,
-    PreferKey.exploreGlassBlurScale,
-    PreferKey.exploreGlassShellScale,
-    PreferKey.exploreGlassTintScale,
-    PreferKey.exploreGlassStrokeScale,
-    PreferKey.exploreGlassHardwareBlur,
-    PreferKey.exploreGlassAnimatedSolid,
-    PreferKey.themeExploreGlassBlur,
-    PreferKey.themeExploreGlassBlurN,
-    PreferKey.bottomBarEffectMode,
-    PreferKey.frostedGlassLevel,
-    PreferKey.liquidGlassLevel
-)
+internal val EXPLORE_GLASS_PREF_KEYS: Set<String> =
+    EXPLORE_GLASS_SETTING_KEYS + EXPLORE_GLASS_BOTTOM_BAR_KEYS
 
 /**
  * 发现页书源名行的毛玻璃背景。
@@ -345,9 +435,10 @@ internal val EXPLORE_GLASS_PREF_KEYS: Set<String> = setOf(
  * （[GlassPositionTracker]）与同一套 shell/tint/描边参数，保证降级时观感连续。
  *
  * 材质三档（自动预设，取值与底栏 bottomBarEffectMode 完全一致，见 [GlassMaterialPreset]）：
- * - **无玻璃 [EXPLORE_GLASS_MODE_SOLID]**：走 [GlassMaterialPreset.createSolidShellDrawable]
- *   并强制 `forceOpaque=true`，得到贴主题底色、alpha=255 的纯色块；不受图标包 opacity、
- *   玻璃强度、墨水屏/低内存降级影响，也不再透出壁纸；
+ * - **无玻璃 [EXPLORE_GLASS_MODE_SOLID]**：由纯函数 [exploreSolidShellColor] 把
+ *   [GlassMaterialPreset.createSolidShellDrawable] 填充色重载的入参钉成 alpha=255，
+ *   得到贴主题底色、完全不透明的纯色块；不受图标包 opacity、玻璃强度、墨水屏/低内存
+ *   降级影响，也不再透出壁纸；
  * - **透明玻璃 [EXPLORE_GLASS_MODE_GLASS]**：取 glass 档整组参数（`8 + l*10`dp 模糊、
  *   `0.02 + l*0.05` 着色、更强色散/折射），行上表现为更薄遮盖 + 更亮边缘高光；
  * - **磨砂玻璃 [EXPLORE_GLASS_MODE_FROSTED]**：取 frosted 档整组参数（`12 + l*18`dp 模糊、
@@ -461,8 +552,8 @@ object ExploreGlassBackdrop {
      * 1.25.5 把图标包 `config.opacity`（内置默认 76、Config 默认 72）直接传给
      * [GlassMaterialPreset.createSolidShellDrawable]，经 `solidOpacity` 得到
      * 0.72~0.76 的 alpha，行背景仍然透出壁纸——这正是真机反馈的「无玻璃没变成
-     * 不透明纯色块」。这里传 `forceOpaque=true` 把 alpha 钉死为 1（255）；
-     * 底栏的调用点不传该参数，仍走原 `solidOpacity`，观感逐值不变。
+     * 不透明纯色块」。这里由纯函数 [exploreSolidShellColor] 把 alpha 钉死为 1（255），
+     * Android 层只把结果颜色交给填充色重载；底栏仍走原 `solidOpacity`，观感逐值不变。
      * 底色、圆角与描边依旧复用同一实现，不另写一份 drawable。
      */
     private fun solidShellDrawable(context: Context): GradientDrawable {
@@ -471,13 +562,13 @@ object ExploreGlassBackdrop {
             AppColorUtils.withAlpha(it, navConfig.borderAlpha.coerceIn(0, 100) / 100f)
         }
         return GlassMaterialPreset.createSolidShellDrawable(
-            baseColor = ThemeStore.bottomBackground(context),
-            opacity = navConfig.opacity,
+            fillColor = exploreSolidShellColor(
+                ThemeStore.bottomBackground(context), navConfig.opacity
+            ),
             borderColor = borderColor,
             cornerRadiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             oval = false,
-            strokeWidthPx = 1.dpToPx(),
-            forceOpaque = true
+            strokeWidthPx = 1.dpToPx()
         )
     }
 
@@ -487,10 +578,20 @@ object ExploreGlassBackdrop {
         val config = readExploreGlassConfig(context)
         // 无玻璃档是纯实底，没有模糊/位图采样开销，墨水屏与低内存设备也必须
         // 保持「不透明纯色块」（放在设备降级判定之前）。强度 0 同样不改变它。
-        if (config.mode == EXPLORE_GLASS_MODE_SOLID) return solidShellDrawable(context)
+        // 所有非玻璃分支都主动解绑上一份 tracker，避免切档后监听与旧 drawable 滞留。
+        if (config.mode == EXPLORE_GLASS_MODE_SOLID) {
+            GlassPositionTracker.detach(host)
+            return solidShellDrawable(context)
+        }
         // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
-        if (AppConfig.isEInkMode || isLowRamDevice(context)) return null
-        if (config.level <= 0) return null
+        if (AppConfig.isEInkMode || isLowRamDevice(context)) {
+            GlassPositionTracker.detach(host)
+            return null
+        }
+        if (config.level <= 0) {
+            GlassPositionTracker.detach(host)
+            return null
+        }
         val material = exploreGlassMaterial(config)
         val render = resolveExploreGlassRenderParams(config, material)
         val useHardware = supportsHardwareBlur() && config.hardwareBlur
@@ -1053,13 +1154,28 @@ private object GlassPositionTracker {
 
     fun attach(host: View, drawable: FrostedGlassDrawable) {
         // 行复用会反复设置新背景，先把上一次挂接的 tracker 解绑，避免回调累积/泄漏
-        (host.getTag(TAG_KEY) as? TrackerBinding)?.detach(host)
+        detach(host)
         val binding = TrackerBinding(host, drawable)
         host.setTag(TAG_KEY, binding)
         binding.attach()
         if (host.isAttachedToWindow) {
             binding.onViewAttachedToWindow(host)
         }
+    }
+
+    /**
+     * 显式解绑：切到无玻璃档 / 降级分支时不会再走 [attach]，若不处理，上一份
+     * [TrackerBinding]（含 host 的 attach/layout 监听、RecyclerView / NestedScrollView
+     * 滚动监听与旧 drawable 引用）会滞留在 tag 里直到 View detach 或切回玻璃档。
+     *
+     * 复用 [TrackerBinding.detach] 这条既有的 View-detach 路径，不注册任何新监听、
+     * 不新增对象引用，还顺手清掉 tag 释放旧 drawable；重复调用是 no-op
+     * （[TrackerBinding.uninstallScrollTarget] 本身幂等）。玻璃档 attach 仍会先
+     * detach 再挂新 binding，行为逐值不变。
+     */
+    fun detach(host: View) {
+        (host.getTag(TAG_KEY) as? TrackerBinding)?.detach(host)
+        host.setTag(TAG_KEY, null)
     }
 
     private class TrackerBinding(

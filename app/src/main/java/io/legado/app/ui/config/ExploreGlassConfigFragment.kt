@@ -16,6 +16,7 @@ import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_SOLID
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_DEFAULT
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_MAX
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_MIN
+import io.legado.app.ui.main.explore.EXPLORE_GLASS_SETTING_KEYS
 import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.removePref
@@ -209,19 +210,11 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
     )
 
     private companion object {
-        /** 恢复默认时清除的键：全局细项 + 档位/联动 + 强度的日间与夜间两个键。 */
-        val resetKeys = listOf(
-            PreferKey.exploreGlassEnabled,
-            PreferKey.exploreGlassEffectMode,
-            PreferKey.exploreGlassFollowBottomBar,
-            PreferKey.exploreGlassBlurScale,
-            PreferKey.exploreGlassShellScale,
-            PreferKey.exploreGlassTintScale,
-            PreferKey.exploreGlassStrokeScale,
-            PreferKey.exploreGlassHardwareBlur,
-            PreferKey.exploreGlassAnimatedSolid,
-            PreferKey.themeExploreGlassBlur,
-            PreferKey.themeExploreGlassBlurN
-        )
+        /**
+         * 恢复默认时清除的键：与渲染层读取键、即时重绑监听键共用
+         * [EXPLORE_GLASS_SETTING_KEYS] 这一份来源（全局细项 + 档位/联动 +
+         * 强度的日间与夜间两个键），新增设置项不会漏清、也不会漏监听。
+         */
+        val resetKeys: List<String> = EXPLORE_GLASS_SETTING_KEYS.toList()
     }
 }

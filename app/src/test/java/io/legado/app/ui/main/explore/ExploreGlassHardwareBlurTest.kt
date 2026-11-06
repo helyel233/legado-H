@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.explore
 
 import io.legado.app.constant.PreferKey
+import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.ui.main.GlassMaterialPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,6 +53,26 @@ class ExploreGlassHardwareBlurTest {
             strokePercent = strokePercent
         )
         return resolveExploreGlassRenderParams(config, exploreGlassMaterial(config, 0f))
+    }
+
+    /** 记录渲染层真正读过的每一个偏好键，用于反向断言监听集合是否漏键。 */
+    private class TrackingPrefSource : ExploreGlassPrefSource {
+        val readKeys = linkedSetOf<String>()
+
+        override fun boolean(key: String, default: Boolean): Boolean {
+            readKeys += key
+            return default
+        }
+
+        override fun int(key: String, default: Int): Int {
+            readKeys += key
+            return default
+        }
+
+        override fun string(key: String): String? {
+            readKeys += key
+            return null
+        }
     }
 
     @Test
@@ -413,5 +434,97 @@ class ExploreGlassHardwareBlurTest {
             PreferKey.frostedGlassLevel,
             PreferKey.liquidGlassLevel
         ).forEach { key -> assertTrue("$key 未进入即时重绑键集合", key in EXPLORE_GLASS_PREF_KEYS) }
+    }
+
+    /**
+     * 收尾加固 a：实底不透明的「决策 + 实参链路」由纯函数产出，不再只是单测里
+     * 直接调 GlassMaterialPreset.solidColor 自证。生产侧 solidShellDrawable() 只能
+     * 拿 exploreSolidShellColor() 的结果交给填充色重载，翻转决策或漏接都会失败。
+     */
+    @Test
+    fun exploreSolidShellDecisionProducesOpaqueColorAndKeepsBottomBarOpacity() {
+        assertTrue(exploreSolidShellForcesOpaque())
+
+        // 图标包 opacity 取 0 / 内置默认 76 / Config 默认 72 / 100 / 越界脏值，
+        // 实底档一律是 alpha=255，且 RGB 保持主题底色
+        listOf(-5, 0, 1, 72, 76, 100, 999).forEach { iconOpacity ->
+            val fill = exploreSolidShellColor(0x0012_3456, iconOpacity)
+            assertEquals("iconOpacity=$iconOpacity 的实底 alpha", 255, fill ushr 24)
+            assertEquals("iconOpacity=$iconOpacity 的实底 RGB", 0x12_3456, fill and 0x00ff_ffff)
+        }
+        // 主题底色自身带半透明 alpha 时同样钉成 255
+        val translucentBase = 0x8012_3456.toInt()
+        assertEquals(255, exploreSolidShellColor(translucentBase, 72) ushr 24)
+        assertEquals(0x12_3456, exploreSolidShellColor(translucentBase, 72) and 0x00ff_ffff)
+
+        // 决策必须真的透到共用构造入口：两者产出的填充色逐位一致
+        assertEquals(
+            GlassMaterialPreset.solidColor(0x0012_3456, 72, exploreSolidShellForcesOpaque()),
+            exploreSolidShellColor(0x0012_3456, 72)
+        )
+
+        // 底栏 false 路径逐值不变：0.72 / 0.76 口径与 alpha 183 / 193
+        assertEquals(0.72f, GlassMaterialPreset.solidAlpha(72, false), 0.0001f)
+        assertEquals(0.76f, GlassMaterialPreset.solidAlpha(76, false), 0.0001f)
+        assertEquals(183, GlassMaterialPreset.solidColor(0x0012_3456, 72, false) ushr 24)
+        assertEquals(193, GlassMaterialPreset.solidColor(0x0012_3456, 76, false) ushr 24)
+    }
+
+    /**
+     * 收尾加固 b：反向断言「渲染层实际读取键」与「设置页写入/清除键」全部 ⊆
+     * 即时重绑监听集合。先前的正向手写清单在新增键漏加监听时不会失败，这里从
+     * TrackingPrefSource 实际记录反查，且验证集合没有凭空多出无来源的键。
+     */
+    @Test
+    fun everyActuallyReadOrWrittenPrefKeyIsCoveredByRebindListener() {
+        val source = TrackingPrefSource()
+        // 日间、夜间两个强度键都要真的走一遍读取链路
+        listOf(
+            ExploreGlassConfigKeys.levelDay,
+            ExploreGlassConfigKeys.levelNight
+        ).forEach { levelKey ->
+            val config = readExploreGlassConfig(
+                source = source,
+                levelKey = levelKey,
+                bottomBarMode = GlassMaterialPreset.GLASS
+            )
+            assertEquals(ExploreGlassBackdrop.LEVEL_DEFAULT, config.level)
+        }
+        assertTrue(ExploreGlassConfigKeys.levelDay in source.readKeys)
+        assertTrue(ExploreGlassConfigKeys.levelNight in source.readKeys)
+
+        // 静态兜底：生产侧 ThemeRuntimeKeys.themeExploreGlassBlur() 的日夜解析结果，
+        // 必须逐值等于本处显式声明的两键，且两键都在监听集合里。显式传 isNight
+        // 实参，绕开其 AppConfig.isNightTheme 默认值，保证这条断言在纯 JVM 下可跑。
+        assertEquals(
+            ExploreGlassConfigKeys.levelDay, ThemeRuntimeKeys.themeExploreGlassBlur(false)
+        )
+        assertEquals(
+            ExploreGlassConfigKeys.levelNight, ThemeRuntimeKeys.themeExploreGlassBlur(true)
+        )
+        listOf(
+            ThemeRuntimeKeys.themeExploreGlassBlur(false),
+            ThemeRuntimeKeys.themeExploreGlassBlur(true)
+        ).forEach { key -> assertTrue("$key 未进入即时重绑键集合", key in EXPLORE_GLASS_PREF_KEYS) }
+
+        // 反向断言：实际读过 / 设置页写入的键一个都不能漏监听
+        val missingRead = source.readKeys - EXPLORE_GLASS_PREF_KEYS
+        assertTrue("实际读取键漏进监听集合：$missingRead", missingRead.isEmpty())
+        val missingWrite = EXPLORE_GLASS_SETTING_KEYS - EXPLORE_GLASS_PREF_KEYS
+        assertTrue("设置页写入键漏进监听集合：$missingWrite", missingWrite.isEmpty())
+
+        // 监听集合必须正好由「写入/读取键 + 底栏联动键」派生，不多不少
+        assertEquals(
+            EXPLORE_GLASS_SETTING_KEYS + EXPLORE_GLASS_BOTTOM_BAR_KEYS,
+            EXPLORE_GLASS_PREF_KEYS
+        )
+        assertEquals(
+            EXPLORE_GLASS_BOTTOM_BAR_KEYS,
+            EXPLORE_GLASS_PREF_KEYS - source.readKeys - EXPLORE_GLASS_SETTING_KEYS
+        )
+        // 底栏档位与两个强度键虽不经 readExploreGlassConfig，也必须被监听覆盖
+        assertTrue(PreferKey.bottomBarEffectMode in EXPLORE_GLASS_PREF_KEYS)
+        assertTrue(PreferKey.frostedGlassLevel in EXPLORE_GLASS_PREF_KEYS)
+        assertTrue(PreferKey.liquidGlassLevel in EXPLORE_GLASS_PREF_KEYS)
     }
 }

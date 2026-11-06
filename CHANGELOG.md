@@ -18,13 +18,22 @@
 - 降级矩阵不变：玻璃档强度 0 / 墨水屏 / 低内存仍回原透明背景；动图壁纸、API 21–30、RenderEffect 异常、非硬件 Canvas、位图缺失等分支照旧；仅「无玻璃」档不再被设备级降级改回透明。
 - 成对中英文文案：三档逐档说明与四个倍率滑杆摘要同步改为「经书源名行标定后的原值」，并如实说明无玻璃档为不透明纯色块。
 
+### 收尾加固（QA 独立回归后）
+
+QA 对 1.25.6 三项修复独立回归判定 NoOne（修复链路闭合、红线未回归、零新增测试失败），本轮不改已验证的观感方案与双管线降级矩阵，只补三处工程防护：
+
+- **实底不透明的决策与实参链路上锁**：新增纯 JVM 纯函数 `exploreSolidShellForcesOpaque()` / `exploreSolidShellColor()`，把「发现页无玻璃档强制完全不透明」从 Android 侧调用点的布尔实参变成具名可测决策；`GlassMaterialPreset` 新增只接收**已算好填充色**的 `createSolidShellDrawable` 重载作为唯一构造实现，原重载委托到它（底栏两个实底壳层调用点与 `MainActivity` 零改动，仍走默认 `forceOpaque=false`、逐值不变）。生产侧 `solidShellDrawable()` 只能把 `exploreSolidShellColor()` 的结果交给填充色重载，Android 层只做 Drawable 薄映射。新增 1 条单测锁住决策为 true、7 组图标包 opacity 与底色自带半透明 alpha 时填充色恒 alpha=255 且 RGB 不变，并同时锁住底栏 false 路径的 0.72 / 0.76 与 183 / 193。
+- **偏好键改为单一来源 + 反向断言**：新增 `ExploreGlassConfigKeys` 作为发现页毛玻璃全部键名的唯一声明处；`readExploreGlassConfig` 抽出可注入 `ExploreGlassPrefSource` 的纯 JVM 重载，生产侧仍按当前主题给出日夜间强度键、按 `AppConfig` 给出底栏档位。`EXPLORE_GLASS_SETTING_KEYS`（设置页「恢复默认」`resetKeys` 直接使用）、`EXPLORE_GLASS_BOTTOM_BAR_KEYS` 与 `EXPLORE_GLASS_PREF_KEYS`（即时重绑监听）三处集合全部由它派生，不再各写一份清单。新增 1 条反向断言单测：用记录型 `TrackingPrefSource` 跑日夜两条读取链路，断言所有实际读取键、设置页写入键 ⊆ 监听集合，监听集合恰好等于「写入键 + 底栏联动键」，并用 `ThemeRuntimeKeys.themeExploreGlassBlur(false/true)` 静态兜底两键映射；将来新增影响观感的键却漏登记会直接失败。
+- **切档 / 降级时的位置监听显式解绑**：`GlassPositionTracker` 新增 `detach(host)`，复用既有 `TrackerBinding.detach` 的 View-detach 路径（移除 attach / layout 监听、卸载 RecyclerView / NestedScrollView 滚动监听、清空 tag 释放旧 drawable 引用），在 `solid` 档、墨水屏 / 低内存降级、强度 0 三个不会走 `attach` 的分支 return 前调用。不注册任何新监听、不新增对象引用，重复调用是 no-op；玻璃档 `attach` 仍是先 detach 再挂新 binding，行为逐值不变。这是 1.25.6「落盘即重绑」提高切档频率后对基线既有短期滞留的最小改动兜底，未改动降级矩阵。
+
 ### 验证
 
 - `./gradlew --stop` 后统一用 `GRADLE_OPTS="-Xmx4g -XX:MaxMetaspaceSize=1g" ./gradlew --no-daemon <task>` 运行（`-Xmx4g` 不能作为 Gradle CLI 参数直接传，gradle.properties 的 `org.gradle.jvmargs` 已含同值）。
 - `tools/check_settings_mapping.py`：PASS，17 个 ConfigTag 全覆盖、零断链、分区归属一致（改动前后各跑一次）。
 - `:app:compileAppDebugKotlin`：`BUILD SUCCESSFUL`（首轮 `in 4m 52s`、定稿复验 `in 5m 20s`，43 actionable tasks: 14 executed, 29 up-to-date）；仅既有告警（含 `ExploreGlassBackdrop.getOpacity()` 弃用告警），无新增告警；`DnsBenchmarkLiveTest` 未出现编译阻断。
-- `:app:testAppDebugUnitTest`：两轮改动后运行分别为 `1991 tests completed, 48 failed, 3 skipped` 与 `1991 tests completed, 51 failed, 3 skipped`，任务均报 FAILED——失败全部是本仓库基线既有的 Robolectric / `appCtx` 未初始化问题（`ClassNotFoundException: android.app.ActivityThread`、`appCtx has not been initialized!`），集中在阅读资源、朗读、气泡、EPUB 共 19 个测试类，与本次改动无关。为确认这一点，把改动 `git stash` 后在未修改的 HEAD(6a5785cae) 跑同一命令：`1985 tests completed, 51 failed, 3 skipped`，同样是那 19 个类。即：改动只多了 6 条用例、没有新增失败用例（失败数 48~51 是这批 Robolectric 用例本身的波动），`ExploreGlassHardwareBlurTest` 的 XML 报告为 `tests="18" failures="0" errors="0"`，18/18 全过。
-- 纯函数单测由 12 条补到 18 条，新增覆盖：实底档 alpha=255 且底栏口径不变、两档渲染参数可辨差、四个滑杆逐项进入渲染并限幅、主强度单调影响着色/壳层/高光/模糊、即时重绑键集合完整。
+- `:app:testAppDebugUnitTest`（收尾加固前的两轮全量运行）：分别为 `1991 tests completed, 48 failed, 3 skipped` 与 `1991 tests completed, 51 failed, 3 skipped`，任务均报 FAILED——失败全部是本仓库基线既有的 Robolectric / `appCtx` 未初始化问题（`ClassNotFoundException: android.app.ActivityThread`、`appCtx has not been initialized!`），集中在阅读资源、朗读、气泡、EPUB 共 19 个测试类，与本次改动无关。为确认这一点，把改动 `git stash` 后在未修改的 HEAD(6a5785cae) 跑同一命令：`1985 tests completed, 51 failed, 3 skipped`，同样是那 19 个类。即：改动只多了 6 条用例、没有新增失败用例（失败数 48~51 是这批 Robolectric 用例本身的波动），`ExploreGlassHardwareBlurTest` 的 XML 报告为 `tests="18" failures="0" errors="0"`，18/18 全过。
+- 纯函数单测由 12 条补到 20 条（含收尾加固 2 条），新增覆盖：实底档 alpha=255 且底栏口径不变、两档渲染参数可辨差、四个滑杆逐项进入渲染并限幅、主强度单调影响着色/壳层/高光/模糊、即时重绑键集合完整，以及实底不透明决策链路与偏好键反向断言。
+- 收尾加固复验：`:app:compileAppDebugKotlin` → `BUILD SUCCESSFUL`（增量复验，无新增告警）；`:app:testAppDebugUnitTest --tests "io.legado.app.ui.main.explore.ExploreGlassHardwareBlurTest"` → `BUILD SUCCESSFUL`，XML 报告 `tests="20" failures="0" errors="0" skipped="0"`；`python3 tools/check_settings_mapping.py` → PASS（17 个 ConfigTag / 17 覆盖 / 零断链）。全量单测未重跑（QA 已用 worktree 做过 base..HEAD 对照，48 个失败为零新增基线问题）。
 - **边界**：本环境无法真机 / GPU 观感验证；以上仅为编译、纯函数单测与静态校验结果，运行时观感仍需用户真机复核。
 
 ## 1.25.5 版（2026-11-06）

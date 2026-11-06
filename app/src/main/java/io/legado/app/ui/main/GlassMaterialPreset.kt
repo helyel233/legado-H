@@ -142,11 +142,31 @@ object GlassMaterialPreset {
     }
 
     /**
+     * 实底壳层唯一的构造实现：接收**已算好**的填充色，只做 Android Drawable 薄映射。
+     *
+     * 填充色由纯函数 [solidColor] 产出（底栏走 `forceOpaque=false`，发现页无玻璃档
+     * 走 `forceOpaque=true`），这样「是否强制不透明」的决策留在纯 JVM 可测的一侧，
+     * 不会因为调用点少传一个实参就悄悄退化成半透明。
+     */
+    fun createSolidShellDrawable(
+        fillColor: Int,
+        borderColor: Int?,
+        cornerRadiusPx: Float,
+        oval: Boolean,
+        strokeWidthPx: Int
+    ): GradientDrawable = GradientDrawable().apply {
+        shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
+        if (!oval) this.cornerRadius = cornerRadiusPx
+        setColor(fillColor)
+        borderColor?.let { setStroke(strokeWidthPx, it) }
+    }
+
+    /**
      * 无玻璃档（底栏 solid）的统一实底壳层：底色取 bottomBackground，不透明度取
      * 底栏图标包 config.opacity，描边取 config.borderColor/borderAlpha（未配置则不描边）。
-     * 底栏的常规/实底壳层与发现页的无玻璃档共用此实现。
-     * [forceOpaque] 只由发现页「无玻璃」档传 true（见 [solidAlpha]）；底栏所有
-     * 调用点都不传，走默认 false，公式与 1.25.5 逐值一致、观感不变。
+     * 底栏的常规/实底壳层与发现页的无玻璃档共用同一个构造实现。
+     * [forceOpaque] 默认 false，底栏所有调用点都不传，公式与 1.25.5 逐值一致、观感不变；
+     * 发现页改用上面的填充色重载，由纯函数算出强制不透明的颜色后传入。
      */
     fun createSolidShellDrawable(
         baseColor: Int,
@@ -156,10 +176,11 @@ object GlassMaterialPreset {
         oval: Boolean,
         strokeWidthPx: Int,
         forceOpaque: Boolean = false
-    ): GradientDrawable = GradientDrawable().apply {
-        shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
-        if (!oval) this.cornerRadius = cornerRadiusPx
-        setColor(solidColor(baseColor, opacity, forceOpaque))
-        borderColor?.let { setStroke(strokeWidthPx, it) }
-    }
+    ): GradientDrawable = createSolidShellDrawable(
+        fillColor = solidColor(baseColor, opacity, forceOpaque),
+        borderColor = borderColor,
+        cornerRadiusPx = cornerRadiusPx,
+        oval = oval,
+        strokeWidthPx = strokeWidthPx
+    )
 }
