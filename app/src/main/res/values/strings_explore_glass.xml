@@ -1,24 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="explore_glass_settings_title">Explore glass</string>
-    <string name="explore_glass_settings_summary">Material presets, fine-tuning and rendering for classic Explore source rows</string>
+    <string name="explore_glass_settings_title">Global glass effect</string>
+    <string name="explore_glass_settings_summary">Material presets, fine-tuning and rendering for the glass on the top bar and Explore page</string>
 
     <string name="explore_glass_section_effect">Glass effect</string>
     <string name="explore_glass_section_advanced">Rendering and compatibility</string>
 
     <string name="explore_glass_effect_mode">Material style</string>
     <string name="explore_glass_effect_mode_summary">Shares the exact Solid / Glass / Frosted glass presets with the bottom bar; the sliders below fine-tune those preset values</string>
-    <string name="explore_glass_effect_mode_following">Following the bottom bar material (%1$s); turn off Follow bottom bar to choose a style here</string>
     <string name="explore_glass_mode_none">No glass</string>
     <string name="explore_glass_mode_glass">Transparent glass</string>
     <string name="explore_glass_mode_frosted">Frosted glass</string>
 
-    <string name="explore_glass_follow_bottom_bar">Follow bottom bar material</string>
-    <string name="explore_glass_follow_bottom_bar_summary">Uses the bottom bar preset verbatim, including its strength; the style and strength here are ignored. Solid maps to No glass</string>
-
     <string name="explore_glass_level">Glass strength</string>
-    <string name="explore_glass_level_summary">Same setting as Explore glass in theme editing, stored separately for day and night; 0 turns the glass off (No glass style is unaffected)</string>
-    <string name="explore_glass_level_following">Following the bottom bar material: strength also comes from the bottom bar. Turn off Follow bottom bar to adjust it here</string>
+    <string name="explore_glass_level_summary">Global glass strength is stored separately for day and night; 0 turns the glass off (No glass style is unaffected)</string>
 
     <string name="explore_glass_blur_scale">Blur amount</string>
     <string name="explore_glass_blur_scale_summary">100 keeps this style\'s calibrated row value, 0 is weakest, 200 doubles it; applies to both hardware Gaussian and software blur</string>

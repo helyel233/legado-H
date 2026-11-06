@@ -1,0 +1,60 @@
+classDiagram
+    class GlassMaterialPreset {
+        <<object 唯一参数源·不修改>>
+        +params(mode, glassLevel, fallbackBoost) Params
+        +current(mode) Params
+        +opacityLevel(value) Float
+        +solidColor(baseColor, opacity, forceOpaque) Int
+    }
+    class ExploreGlassBackdrop {
+        <<object>>
+        +resolveExploreGlassMode(rawMode, legacyEnabled) String
+        +readExploreGlassConfig(context) ExploreGlassConfig
+        +exploreGlassMaterial(config, fallbackBoost) Params
+        +configSignature(context) String
+        +migrateLegacyExploreGlassFollow(context)
+    }
+    class ExploreGlassConfig {
+        +mode: String
+        +level: Int
+        +blurPercent: Int
+        +shellPercent: Int
+        +tintPercent: Int
+        +strokePercent: Int
+        +hardwareBlur: Boolean
+        +animatedSolid: Boolean
+    }
+    class MainTopBarView {
+        +setBackdropBlur(source: ViewGroup?)
+        +supportsBackdropBlur() Boolean
+        -backdropGlass: StableLiquidGlassView
+        -topBarGlassSpec(params, density) TopBarGlassSpec?
+    }
+    class TopBarGlassSpec {
+        +blurPx: Float
+        +tintAlpha: Float
+        +dispersion: Float
+        +refractionHeightPx: Float
+        +refractionOffsetPx: Float
+    }
+    class StableLiquidGlassView {
+        +setBlurRadius(px)
+        +setTintAlpha(alpha)
+        +setDispersion(d)
+        +setRefractionHeight(px)
+        +setRefractionOffset(px)
+        +setCornerRadius(px)
+        +bind(source)
+    }
+    class ThemeConfig_Config {
+        -exploreGlassBlur: Int? ~~已删除~~
+        +toMap() Map
+    }
+    class NavigationBarIconConfig_Config {
+        -effectMode: String ~~已删除~~
+    }
+    ExploreGlassBackdrop --> GlassMaterialPreset : 预设复用
+    ExploreGlassBackdrop *-- ExploreGlassConfig : 产出快照
+    MainTopBarView --> GlassMaterialPreset : current(mode)
+    MainTopBarView ..> TopBarGlassSpec : 纯函数换算
+    MainTopBarView --> StableLiquidGlassView : setter 注入

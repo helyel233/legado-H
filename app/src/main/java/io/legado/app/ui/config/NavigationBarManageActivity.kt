@@ -445,7 +445,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                 isNightMode = isNightMode,
                 layoutMode = AppConfig.bottomBarLayoutMode,
                 sidebarGravity = AppConfig.bottomBarSidebarGravity,
-                effectMode = AppConfig.bottomBarEffectMode,
                 opacity = if (AppConfig.bottomBarEffectMode == "frosted") AppConfig.frostedGlassLevel else AppConfig.liquidGlassLevel
             ),
             NavigationBarIconConfig.Source.LOCAL,
@@ -504,7 +503,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
 
     private fun buildEditView(): LinearLayout {
         val config = pendingConfig!!
-        normalizeStandardBottomConfig(config)
         val currentEntry = editingEntry
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -525,29 +523,11 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                         2 -> "sidebar"
                         else -> "floating"
                     }
-                    normalizeStandardBottomConfig(config)
                     refreshEditDialog()
                 }
             })
             if (config.layoutMode != "sidebar") {
                 if (config.layoutMode == "floating") {
-                    addView(optionRow(getString(R.string.bottom_bar_material_mode), effectModeLabel(config.effectMode)) {
-                        selector(
-                            getString(R.string.bottom_bar_material_mode),
-                            listOf(
-                                getString(R.string.bottom_bar_effect_solid),
-                                getString(R.string.bottom_bar_effect_glass),
-                                getString(R.string.bottom_bar_effect_frosted)
-                            )
-                        ) { _, index ->
-                            config.effectMode = when (index) {
-                                0 -> "solid"
-                                2 -> "frosted"
-                                else -> "glass"
-                            }
-                            refreshEditDialog()
-                        }
-                    })
                     addView(optionRow(
                         getString(R.string.search),
                         getString(if (config.hideSearchInFloatingStyle) R.string.disabled else R.string.enabled)
@@ -673,12 +653,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         )
         pendingBottomWallpaperCropRequest = request
         cropBottomWallpaper.launch(request.params)
-    }
-
-    private fun normalizeStandardBottomConfig(config: NavigationBarIconConfig.Config) {
-        if (config.layoutMode == "standard") {
-            config.effectMode = "solid"
-        }
     }
 
     private fun optionRow(title: String, value: String, onClick: () -> Unit): View {
@@ -858,7 +832,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
 
     private fun saveEditingPackage() {
         val config = pendingConfig ?: return
-        normalizeStandardBottomConfig(config)
         val name = editingDialog?.findViewWithTag<EditText>("name")?.text?.toString()?.trim().orEmpty()
         lifecycleScope.launch {
             kotlin.runCatching {
@@ -1080,14 +1053,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         return false
     }
 
-    private fun effectModeLabel(value: String): String {
-        return when (value) {
-            "solid" -> getString(R.string.bottom_bar_effect_solid)
-            "frosted" -> getString(R.string.bottom_bar_effect_frosted)
-            else -> getString(R.string.bottom_bar_effect_glass)
-        }
-    }
-
     private fun layoutModeLabel(value: String): String {
         return when (value) {
             "sidebar" -> getString(R.string.bottom_bar_layout_sidebar)
@@ -1107,10 +1072,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
     private fun entryInfo(entry: NavigationBarIconConfig.Entry): String {
         return buildString {
             append(layoutModeLabel(entry.config.layoutMode))
-            if (entry.config.layoutMode == "floating") {
-                append(" \u00B7 ")
-                append(effectModeLabel(entry.config.effectMode))
-            }
             if (entry.config.layoutMode != "sidebar") {
                 append(" \u00B7 ")
                 append(getString(R.string.bottom_bar_opacity))

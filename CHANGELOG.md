@@ -1,5 +1,28 @@
 # 更新日志
 
+## 1.25.7 版（2026-11-06）
+
+本版把分散在三处、各写各参数的毛玻璃彻底收拢为「全局毛玻璃效果」单一来源：顶栏 `MainTopBarView` 首次真正接入全局 `GlassMaterialPreset`（此前是硬编码 18dp / 0.10 固定值、不跟随任何设置），「跟随底栏材质」开关废弃并一次性迁移固化。三处（顶栏 / 底栏 / 发现页）现在只读同一份 `GlassMaterialPreset` 参数表，双管线（硬件 `RenderEffect` + 软件 `stackBlur`）降级矩阵不变。无新增用户可见开关，无新增依赖。
+
+### 重构
+
+- **顶栏毛玻璃接入全局预设**：`MainTopBarView.setBackdropBlur` 原先写死 `blurRadius=18dp / tintAlpha=0.10 / dispersion=0.10 / refractionHeight=14dp / refractionOffset=26dp`，与「全局毛玻璃效果」设置完全无关。新增纯函数 `topBarGlassSpec`：solid 档返回 `null`（不激活玻璃层，由顶栏既有实底分支兜底），glass/frosted 档与 `GlassMaterialPreset` 逐值 1:1（dp 乘屏幕密度、tint/dispersion 无量纲直传），不重定义任何公式；顶栏样式签名 `topBarGlassSignature` 纳入档位与日夜间两个全局强度键，保证「全局改档 / 改强度 → 返回主界面 → 顶栏即时生效」。圆角仍取 `TopBarConfig`，与材质无关。
+- **废弃「跟随底栏材质」开关**：设置页移除该开关与其联动逻辑（`ExploreGlassConfigFragment` 删 10 行相关 `SettingSwitchSpec`、`enabled` 置灰、跟随态 summary 分支）；`resolveExploreGlassMode` / `readExploreGlassConfig` / `exploreGlassMaterial` / `configSignature` / 底图缓存 key 全部去掉 `followBottomBar` / `bottomBarMode` 入参，渲染路径不再有 follow 分支。`MainActivity.onActivityCreated` 启动即调用一次性幂等迁移 `migrateLegacyExploreGlassFollow`：旧键 `exploreGlassFollowBottomBar=true` 的用户，把底栏当前档位与强度（frosted→frostedGlassLevel / 否则 liquidGlassLevel）双固化到显式 `exploreGlassEffectMode` + 日夜间 `themeExploreGlassBlur/N` 两键，再删旧键、写 `exploreGlassFollowMigrated` 标记；`false`/缺失则不动任何值。迁移早于任何 UI/渲染读取，首帧即用固化后的档位与强度。
+- **旧包 JSON 字段废弃**：`ThemeConfig.Config.exploreGlassBlur`、`NavigationBarIconConfig.Config.effectMode` 标记废弃（Gson 对未知字段静默忽略，导出侧 `toMap` 不再含该字段，不写读取兼容 / 回写代码）；`NavigationBarManageActivity` / `ThemeManageActivity` 删除两处手写玻璃配置（-39 / -49 行），毛玻璃完全收拢为全局设置，不再随主题包 / 底栏包导入导出。
+
+### 设置页归域
+
+- 「我的 › 发现页毛玻璃」→「**全局毛玻璃效果**」，摘要改为「调整顶栏与发现页毛玻璃的材质预设、微调与渲染方式」；`ConfigActivity` 归类从「内容与规则」上提到「阅读与界面」，`MyFragment` 入口从「内容与规则」区挪到「界面域」尾部（与主题、封面同组）；中英文案成对更新，删「跟随底栏材质」相关 4 条字符串。
+
+### 纯函数化与单测
+
+- 新增 `ExploreGlassPrefStore` 偏好读写最小抽象（可注入内存实现）+ `migrateExploreGlassFollowLocked` 纯函数（迁移逻辑纯 JVM 可测，逐值断言双固化与幂等）；`TopBarGlassSpecTest`（4 例）锁住顶栏参数与预设 1:1、solid 返回 null、density 线性换算。`ExploreGlassHardwareBlurTest` 移除 follow 相关断言并新增迁移锁口断言；`resolveExploreGlassMode` 7 组既有解析断言改为无 follow 入参签名。编译无新增告警，全量单测与 1.25.6 同样为基线既有 Robolectric / `appCtx` 环境问题（本版零新增失败用例）。
+- 新增 `docs/glass-refactor-class-diagram.mermaid`（类图）、`docs/glass-refactor-sequence-diagram.mermaid`（迁移时序）、`docs/system_design.md`（全局毛玻璃效果系统设计），记录三处共用单一来源的架构与迁移契约。
+
+### 验证
+
+- 构建即编译（`build-signed.sh` / `assembleAppDebug`），正确性由构建保证；本次改动已纳入双包版本 `H.1.25.7`（versionCode 29862273，严格大于 1.25.6 的 29862272）。
+
 ## 1.25.6 版（2026-11-06）
 
 本版修复 1.25.5 真机反馈的三条发现页毛玻璃缺陷：「无玻璃」档仍是半透明、透明玻璃与磨砂玻璃看不出差别、主强度与四个倍率滑杆改完返回发现页没有观感变化。三档材质仍只有 `GlassMaterialPreset` 一份参数来源，底栏 `MainActivity` 的调用点与取值公式逐值未动；发现页只补「行可见度标定」与「设置落盘即重绑」，双管线与降级矩阵保持完整。需说明的是：行可见度标定是两档共用的一组增益，故发现页最终绘制值不再与底栏逐值相等，但三档取值唯一来源仍是同一份预设，也不是按档位分支的系数表。

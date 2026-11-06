@@ -287,8 +287,13 @@ object PreferKey {
      * 1.25.5 的旧值 none 由 resolveExploreGlassMode 归一为 solid，避免升级后出现无效档。
      */
     const val exploreGlassEffectMode = "exploreGlassEffectMode"
-    /** 开启后档位与强度都取底栏当前预设（GlassMaterialPreset.current）。 */
+    /**
+     * 1.25.x 已废弃：跟随底栏材质的开关已从设置页移除，本常量仅供
+     * 一次性迁移（migrateLegacyExploreGlassFollow）读取，禁止新增业务引用。
+     */
     const val exploreGlassFollowBottomBar = "exploreGlassFollowBottomBar"
+    /** 跟随底栏一次性迁移的幂等标记键（迁移完成后恒为 true）。 */
+    const val exploreGlassFollowMigrated = "exploreGlassFollowMigrated"
     const val exploreGlassBlurScale = "exploreGlassBlurScale"
     const val exploreGlassShellScale = "exploreGlassShellScale"
     const val exploreGlassTintScale = "exploreGlassTintScale"

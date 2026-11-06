@@ -1,24 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="explore_glass_settings_title">发现页毛玻璃</string>
-    <string name="explore_glass_settings_summary">调整经典发现页书源名行的材质预设、微调与渲染方式</string>
+    <string name="explore_glass_settings_title">全局毛玻璃效果</string>
+    <string name="explore_glass_settings_summary">调整顶栏与发现页毛玻璃的材质预设、微调与渲染方式</string>
 
     <string name="explore_glass_section_effect">玻璃效果</string>
     <string name="explore_glass_section_advanced">渲染与兼容</string>
 
     <string name="explore_glass_effect_mode">材质样式</string>
     <string name="explore_glass_effect_mode_summary">与底栏「常规 / 玻璃 / 磨砂玻璃」共用同一套预设参数；下方滑杆仅在该档原值上微调</string>
-    <string name="explore_glass_effect_mode_following">正在跟随底栏材质（当前：%1$s），关闭「跟随底栏材质」后可自行选档</string>
     <string name="explore_glass_mode_none">无玻璃</string>
     <string name="explore_glass_mode_glass">透明玻璃</string>
     <string name="explore_glass_mode_frosted">磨砂玻璃</string>
 
-    <string name="explore_glass_follow_bottom_bar">跟随底栏材质</string>
-    <string name="explore_glass_follow_bottom_bar_summary">开启后档位与强度都直接取底栏当前预设，本页档位与强度滑杆暂时不生效；常规对应无玻璃</string>
-
     <string name="explore_glass_level">玻璃强度</string>
-    <string name="explore_glass_level_summary">与「编辑主题」里的「发现页毛玻璃效果」是同一项，按日间/夜间分别保存；玻璃档 0 为关闭，无玻璃档不受影响</string>
-    <string name="explore_glass_level_following">正在跟随底栏材质，强度也取底栏的磨砂/玻璃强度值；关闭「跟随底栏材质」后可自行调整</string>
+    <string name="explore_glass_level_summary">全局玻璃强度按日间/夜间分别保存；玻璃档 0 为关闭，无玻璃档不受影响</string>
 
     <string name="explore_glass_blur_scale">模糊程度</string>
     <string name="explore_glass_blur_scale_summary">100 为该档预设经书源名行标定后的原值，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>

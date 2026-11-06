@@ -97,6 +97,7 @@ import io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1
 import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
 import io.legado.app.ui.main.ai.AiChatActivity
 import io.legado.app.ui.main.explore.ExploreFragment
+import io.legado.app.ui.main.explore.migrateLegacyExploreGlassFollow
 import io.legado.app.ui.main.homepage.HomepageFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.readrecord.ReadRecordFragment
@@ -334,6 +335,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        // 1.25.x「跟随底栏材质」旧键的一次性迁移（幂等）：必须早于任何 UI/渲染读取，
+        // 保证首帧即用固化后的档位与强度（onActivityCreated 是本 Activity onCreate 链路的应用入口）。
+        migrateLegacyExploreGlassFollow(this)
         setupMainBackgroundLayer()
         upBottomMenu()
         initView()

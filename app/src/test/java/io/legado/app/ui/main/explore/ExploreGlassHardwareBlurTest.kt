@@ -27,7 +27,6 @@ class ExploreGlassHardwareBlurTest {
     private val expectedReadKeys = setOf(
         PreferKey.exploreGlassEnabled,
         PreferKey.exploreGlassEffectMode,
-        PreferKey.exploreGlassFollowBottomBar,
         PreferKey.themeExploreGlassBlur,
         PreferKey.themeExploreGlassBlurN,
         PreferKey.exploreGlassBlurScale,
@@ -48,11 +47,9 @@ class ExploreGlassHardwareBlurTest {
 
     private fun glassConfig(
         mode: String = EXPLORE_GLASS_MODE_GLASS,
-        level: Int = 60,
-        followBottomBar: Boolean = false
+        level: Int = 60
     ) = ExploreGlassConfig(
         mode = mode,
-        followBottomBar = followBottomBar,
         level = level,
         blurPercent = EXPLORE_GLASS_SCALE_DEFAULT,
         shellPercent = EXPLORE_GLASS_SCALE_DEFAULT,
@@ -201,61 +198,141 @@ class ExploreGlassHardwareBlurTest {
 
     @Test
     fun modeResolutionCoversDefaultsLegacyAndDirtyValues() {
+        // 显式档位优先：未存档位 → 默认磨砂
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
-            resolveExploreGlassMode(null, true, false, "glass")
+            resolveExploreGlassMode(null, true)
         )
         assertEquals(
             EXPLORE_GLASS_MODE_SOLID,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, false, "frosted")
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true)
         )
         assertEquals(
             EXPLORE_GLASS_MODE_GLASS,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_GLASS, true, false, "solid")
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_GLASS, true)
         )
         // 1.25.5 存的 none 归一到 solid
         assertEquals(
             EXPLORE_GLASS_MODE_SOLID,
-            resolveExploreGlassMode("none", true, false, "frosted")
+            resolveExploreGlassMode("none", true)
         )
         // 1.25.4 旧总开关关闭且从未设过档位 → 迁移成无玻璃
         assertEquals(
             EXPLORE_GLASS_MODE_SOLID,
-            resolveExploreGlassMode(null, false, false, "frosted")
+            resolveExploreGlassMode(null, false)
         )
+        // 显式档位优先级不变：即便旧总开关为 false 也尊重显式档位
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_FROSTED, false, false, "solid")
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_FROSTED, false)
         )
+        // 脏值回退默认
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
-            resolveExploreGlassMode("ultra", true, false, "glass")
+            resolveExploreGlassMode("ultra", true)
         )
     }
 
+    /** 迁移用例的内存偏好存储：记录每一步写入，供逐值断言。 */
+    private class MemoryPrefStore : ExploreGlassPrefStore {
+        val values = linkedMapOf<String, Any>()
+        val removed = linkedSetOf<String>()
+
+        override fun getBoolean(key: String, default: Boolean): Boolean =
+            values[key] as? Boolean ?: default
+
+        override fun putBoolean(key: String, value: Boolean) {
+            values[key] = value
+        }
+
+        override fun putString(key: String, value: String) {
+            values[key] = value
+        }
+
+        override fun putInt(key: String, value: Int) {
+            values[key] = value
+        }
+
+        override fun remove(key: String) {
+            values.remove(key)
+            removed += key
+        }
+    }
+
+    /** 迁移用 1：follow=true → 档位与强度双固化，随后移除旧键并写迁移标记。 */
     @Test
-    fun followBottomBarMapsThreeModesAndOverridesStoredMode() {
+    fun migrationSolidifiesModeAndStrengthWhenFollowEnabled() {
+        val store = MemoryPrefStore().apply {
+            putBoolean(PreferKey.exploreGlassFollowBottomBar, true)
+            putString(PreferKey.exploreGlassEffectMode, EXPLORE_GLASS_MODE_SOLID)
+            putInt(PreferKey.themeExploreGlassBlur, 10)
+            putInt(PreferKey.themeExploreGlassBlurN, 20)
+        }
+        migrateExploreGlassFollowLocked(store, "glass", frostedLevel = 70, liquidLevel = 68)
+        // 档位固化：底栏档位覆写本页档位
         assertEquals(
-            EXPLORE_GLASS_MODE_SOLID,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_FROSTED, true, true, "solid")
+            GlassMaterialPreset.GLASS,
+            store.values[PreferKey.exploreGlassEffectMode]
         )
-        assertEquals(
-            EXPLORE_GLASS_MODE_GLASS,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, true, "glass")
-        )
-        assertEquals(
-            EXPLORE_GLASS_MODE_FROSTED,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, true, "frosted")
-        )
-        assertEquals(
-            EXPLORE_GLASS_MODE_GLASS,
-            resolveExploreGlassMode(null, true, true, "unknown")
-        )
+        // 强度双固化：日/夜两个强度键都写为底栏对应强度（glass → liquidGlassLevel）
+        assertEquals(68, store.values[PreferKey.themeExploreGlassBlur])
+        assertEquals(68, store.values[PreferKey.themeExploreGlassBlurN])
+        // 旧键移除、幂等标记写入
+        assertTrue(PreferKey.exploreGlassFollowBottomBar in store.removed)
+        assertEquals(true, store.values[PreferKey.exploreGlassFollowMigrated])
+    }
+
+    /** 迁移用 2：follow=false / 缺失 → 不动任何值，仅移除旧键并写迁移标记。 */
+    @Test
+    fun migrationKeepsValuesWhenFollowDisabled() {
+        val store = MemoryPrefStore().apply {
+            putBoolean(PreferKey.exploreGlassFollowBottomBar, false)
+            putString(PreferKey.exploreGlassEffectMode, EXPLORE_GLASS_MODE_FROSTED)
+            putInt(PreferKey.themeExploreGlassBlur, 42)
+            putInt(PreferKey.themeExploreGlassBlurN, 43)
+        }
+        migrateExploreGlassFollowLocked(store, "solid", frostedLevel = 70, liquidLevel = 68)
+        assertEquals(EXPLORE_GLASS_MODE_FROSTED, store.values[PreferKey.exploreGlassEffectMode])
+        assertEquals(42, store.values[PreferKey.themeExploreGlassBlur])
+        assertEquals(43, store.values[PreferKey.themeExploreGlassBlurN])
+        assertTrue(PreferKey.exploreGlassFollowBottomBar in store.removed)
+        assertEquals(true, store.values[PreferKey.exploreGlassFollowMigrated])
+
+        // 旧键完全缺失的全新安装同样只写标记
+        val fresh = MemoryPrefStore()
+        migrateExploreGlassFollowLocked(fresh, "frosted", 70, 68)
+        assertTrue(fresh.values.keys.none { it != PreferKey.exploreGlassFollowMigrated })
+    }
+
+    /** 迁移用 3：幂等——标记存在后二次调用是 no-op。 */
+    @Test
+    fun migrationIsIdempotentViaMarkerKey() {
+        val store = MemoryPrefStore().apply {
+            putBoolean(PreferKey.exploreGlassFollowBottomBar, true)
+            putString(PreferKey.exploreGlassEffectMode, EXPLORE_GLASS_MODE_GLASS)
+            putBoolean(PreferKey.exploreGlassFollowMigrated, true)
+        }
+        migrateExploreGlassFollowLocked(store, "solid", 70, 68)
+        // 档位保持原值，旧键也未被移除
+        assertEquals(EXPLORE_GLASS_MODE_GLASS, store.values[PreferKey.exploreGlassEffectMode])
+        assertTrue(PreferKey.exploreGlassFollowBottomBar !in store.removed)
+    }
+
+    /** 迁移用 4：底栏档位非法（脏值）时回退默认 frosted，强度随之取 frostedGlassLevel。 */
+    @Test
+    fun migrationFallsBackToFrostedOnInvalidBottomBarMode() {
+        val store = MemoryPrefStore().apply {
+            putBoolean(PreferKey.exploreGlassFollowBottomBar, true)
+        }
+        migrateExploreGlassFollowLocked(store, "ultra", frostedLevel = 70, liquidLevel = 68)
+        assertEquals(EXPLORE_GLASS_MODE_FROSTED, store.values[PreferKey.exploreGlassEffectMode])
+        assertEquals(70, store.values[PreferKey.themeExploreGlassBlur])
+        assertEquals(70, store.values[PreferKey.themeExploreGlassBlurN])
     }
 
     @Test
     fun exploreMaterialReadsSharedPresetWithLocalStrength() {
-        // 未跟随底栏：公式/壳层/描边取共享预设，强度按本页 60 → 0.3 映射
+        // 公式/壳层/描边取共享预设，强度按本页 60 → 0.3 映射（恒走本页强度，无跟随分支）
         val material = exploreGlassMaterial(glassConfig(level = 60), 0f)
         val expected = GlassMaterialPreset.params(EXPLORE_GLASS_MODE_GLASS, 0.3f, 0f)
         assertEquals(0.3f, material.glassLevel, 0.001f)
@@ -504,8 +581,7 @@ class ExploreGlassHardwareBlurTest {
         ).forEach { levelKey ->
             val config = readExploreGlassConfig(
                 source = source,
-                levelKey = levelKey,
-                bottomBarMode = GlassMaterialPreset.GLASS
+                levelKey = levelKey
             )
             assertEquals(ExploreGlassBackdrop.LEVEL_DEFAULT, config.level)
         }

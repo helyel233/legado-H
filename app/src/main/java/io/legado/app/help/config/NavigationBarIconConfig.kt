@@ -103,11 +103,12 @@ object NavigationBarIconConfig {
 
     @Keep
     data class Config(
+        // 旧包 JSON 里的 effectMode 字段已废弃（材质档收拢为全局设置 bottomBarEffectMode）：
+        // Gson 对未知字段静默忽略，不写读取兼容 / 回写代码；导出侧不再写该字段。
         var name: String,
         var isNightMode: Boolean,
         var layoutMode: String = "floating",
         var sidebarGravity: String = "start",
-        var effectMode: String = "glass",
         var opacity: Int = 72,
         var updatedAt: Long = System.currentTimeMillis(),
         var sidebarBackgroundPath: String? = null,
@@ -227,7 +228,6 @@ object NavigationBarIconConfig {
         select(entry)
         AppConfig.bottomBarLayoutMode = config.layoutMode
         AppConfig.bottomBarSidebarGravity = config.sidebarGravity
-        AppConfig.bottomBarEffectMode = config.effectMode
         AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
         AppConfig.liquidGlassLevel = config.opacity
         AppConfig.frostedGlassLevel = config.opacity
@@ -245,7 +245,6 @@ object NavigationBarIconConfig {
         val config = normalizeConfig(currentEntry(isNight).config)
         AppConfig.bottomBarLayoutMode = config.layoutMode
         AppConfig.bottomBarSidebarGravity = config.sidebarGravity
-        AppConfig.bottomBarEffectMode = config.effectMode
         AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
         AppConfig.liquidGlassLevel = config.opacity
         AppConfig.frostedGlassLevel = config.opacity
@@ -269,7 +268,6 @@ object NavigationBarIconConfig {
                 isNightMode = isNight,
                 layoutMode = "standard",
                 sidebarGravity = "start",
-                effectMode = "solid",
                 opacity = 76,
                 updatedAt = 0L
             ),
@@ -326,7 +324,6 @@ object NavigationBarIconConfig {
             name = name,
             layoutMode = source.layoutMode,
             sidebarGravity = source.sidebarGravity,
-            effectMode = source.effectMode,
             opacity = source.opacity.coerceIn(0, 100),
             wallpaperPath = normalizeWallpaperPath(source.wallpaperPath, dir),
             borderAlpha = source.borderAlpha.coerceIn(0, 100),
@@ -442,7 +439,6 @@ object NavigationBarIconConfig {
                 name = name,
                 isNightMode = isNightMode,
                 layoutMode = "floating",
-                effectMode = "glass",
                 opacity = opacity.coerceIn(0, 100),
                 icons = icons
             )
@@ -715,7 +711,6 @@ object NavigationBarIconConfig {
                 isNightMode = isNight,
                 layoutMode = layoutMode,
                 sidebarGravity = "start",
-                effectMode = if (layoutMode == "standard") "solid" else "glass",
                 opacity = 76,
                 hideSearchInFloatingStyle = layoutMode == "floating" && MainLayoutPresetConfig.floatingBottomBarHideSearch(),
                 updatedAt = 0L
@@ -1318,10 +1313,6 @@ object NavigationBarIconConfig {
         val sidebarGravity = runCatching { config.sidebarGravity }.getOrNull()
             ?.takeIf { it in setOf("start", "end") }
             ?: "start"
-        val effectMode = runCatching { config.effectMode }.getOrNull()
-            ?.takeIf { it in setOf("solid", "glass", "frosted") }
-            ?: "glass"
-        val resolvedEffectMode = if (layoutMode == "standard") "solid" else effectMode
         val icons = runCatching { config.icons }.getOrNull() ?: linkedMapOf()
         val sidebarBackgroundPath = runCatching { config.sidebarBackgroundPath }.getOrNull()
         val wallpaperPath = runCatching { config.wallpaperPath }.getOrNull()
@@ -1329,7 +1320,6 @@ object NavigationBarIconConfig {
         val hideSearchInFloatingStyle = runCatching { config.hideSearchInFloatingStyle }.getOrDefault(false)
         config.layoutMode = layoutMode
         config.sidebarGravity = sidebarGravity
-        config.effectMode = resolvedEffectMode
         config.opacity = config.opacity.coerceIn(0, 100)
         config.sidebarBackgroundPath = sidebarBackgroundPath
         config.wallpaperPath = wallpaperPath?.takeIf { it.isNotBlank() }
@@ -1423,7 +1413,6 @@ object NavigationBarIconConfig {
             Config(
                 name = customName,
                 isNightMode = isNight,
-                effectMode = AppConfig.bottomBarEffectMode,
                 opacity = if (AppConfig.bottomBarEffectMode == "frosted") AppConfig.frostedGlassLevel else AppConfig.liquidGlassLevel,
                 icons = icons
             )

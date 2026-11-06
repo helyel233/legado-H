@@ -3,7 +3,6 @@ package io.legado.app.ui.config
 import android.os.Build
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
-import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
@@ -22,17 +21,15 @@ import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.removePref
 
 /**
- * 「我的 › 发现页毛玻璃」：三档材质预设 + 各视觉维度微调 + 渲染开关，集中在一页。
+ * 「全局毛玻璃效果」：三档材质预设 + 各视觉维度微调 + 渲染开关，集中在一页。
  *
  * 材质样式（无玻璃 / 透明玻璃 / 磨砂玻璃）与底栏 solid/glass/frosted 是同一套自动档：
  * 选一档即套用 GlassMaterialPreset 里该档的完整参数（模糊、着色、壳层、描边、
  * 色散/折射），下面四个倍率滑杆在预设原值之上继续微调，切档不清空微调值。
- * 「跟随底栏材质」开启时档位与强度都取底栏当前预设，本页档位保留但不生效。
+ * 顶栏毛玻璃与发现页行渲染共用本页的档位与强度设置；1.25.x 的「跟随底栏材质」
+ * 开关已移除，升级用户由启动时的一次性迁移固化档位与强度。
  * 1.25.4 的独立总开关已从 UI 移除，由「无玻璃」档承担关闭职责；旧值仍被读取迁移，
  * 避免升级后原本关闭毛玻璃的用户被默认档重新打开。
- *
- * 与编辑主题页的「发现页毛玻璃效果」共用同一个日夜间分离的强度键
- * （[ThemeRuntimeKeys.themeExploreGlassBlur]），两处入口写同一份数据。
  *
  * 注意：构建搜索索引时会 new 一个未 attach 的实例调 [buildSpec]，
  * 因此 [buildPageSpec] 只依赖 [ctx] 与静态常量，不碰 Activity / View / 生命周期。
@@ -43,13 +40,10 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
 
     override fun buildPageSpec(): SettingPageSpec {
         // 空串代表「从未存过档位」，让 resolveExploreGlassMode 能执行旧总开关迁移。
-        // 这里与渲染层调用同一个纯函数，保证设置页显示的档位就是发现页实际生效的档位。
+        // 这里与渲染层调用同一个纯函数，保证设置页显示的档位就是实际生效的档位。
         val storedMode = stringSetting(PreferKey.exploreGlassEffectMode, "")
         val legacyEnabled = booleanSetting(PreferKey.exploreGlassEnabled, true)
-        val followBottomBar = booleanSetting(PreferKey.exploreGlassFollowBottomBar, false)
-        val mode = resolveExploreGlassMode(
-            storedMode, legacyEnabled, followBottomBar, AppConfig.bottomBarEffectMode
-        )
+        val mode = resolveExploreGlassMode(storedMode, legacyEnabled)
         val slidersEnabled = mode != EXPLORE_GLASS_MODE_SOLID
         val descriptions = ctx.resources.getStringArray(R.array.explore_glass_mode_descriptions)
         val options = choiceOptionList(
@@ -57,7 +51,6 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
         ).mapIndexed { index, option ->
             option.copy(description = descriptions.getOrNull(index))
         }
-        val modeLabel = options.firstOrNull { it.value == mode }?.label?.toString() ?: mode
         val hardwareSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         return SettingPageSpec(
             titleRes = titleRes,
@@ -68,37 +61,27 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
                         SettingChoiceSpec(
                             key = PreferKey.exploreGlassEffectMode,
                             title = str(R.string.explore_glass_effect_mode),
-                            summary = if (followBottomBar) {
-                                str(R.string.explore_glass_effect_mode_following, modeLabel)
-                            } else str(R.string.explore_glass_effect_mode_summary),
+                            summary = str(R.string.explore_glass_effect_mode_summary),
                             options = options,
                             selectedValue = mode,
-                            enabled = !followBottomBar,
                             onSelected = {
                                 updateStringSetting(PreferKey.exploreGlassEffectMode, it)
                             },
                             searchKeys = listOf(
                                 "材质", "无玻璃", "透明玻璃", "磨砂玻璃", "自动档",
-                                "预设", "跟随底栏", "glass mode", "frosted", "solid"
+                                "预设", "毛玻璃", "glass mode", "frosted", "solid"
                             )
                         ),
                         SettingSliderSpec(
                             key = ThemeRuntimeKeys.themeExploreGlassBlur(),
                             title = str(R.string.explore_glass_level),
-                            summary = if (followBottomBar) {
-                                // 跟随时强度也取底栏的 frostedGlassLevel / liquidGlassLevel，
-                                // 本滑杆不参与计算，置灰并如实说明，避免显示一个无效的数值。
-                                str(R.string.explore_glass_level_following)
-                            } else str(R.string.explore_glass_level_summary),
+                            summary = str(R.string.explore_glass_level_summary),
                             value = intSetting(
                                 ThemeRuntimeKeys.themeExploreGlassBlur(),
                                 ExploreGlassBackdrop.LEVEL_DEFAULT
                             ).coerceIn(0, 100),
                             valueRange = 0..100,
-                            // 跟随底栏开启时强度逐值取 frostedGlassLevel / liquidGlassLevel，
-                            // 本页强度不参与计算，置灰是如实反映联动关系（不是「滑杆失效」）；
-                            // 四个倍率滑杆仍生效，关掉跟随即恢复本页强度。
-                            enabled = slidersEnabled && !followBottomBar,
+                            enabled = slidersEnabled,
                             valueFormatter = { "$it%" },
                             onValueChange = {
                                 updateIntSetting(ThemeRuntimeKeys.themeExploreGlassBlur(), it)
@@ -163,16 +146,6 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
                             },
                             searchKeys = listOf("动图", "gif", "webp", "壁纸", "首帧")
                         ),
-                        SettingSwitchSpec(
-                            key = PreferKey.exploreGlassFollowBottomBar,
-                            title = str(R.string.explore_glass_follow_bottom_bar),
-                            summary = str(R.string.explore_glass_follow_bottom_bar_summary),
-                            checked = followBottomBar,
-                            onCheckedChange = {
-                                updateBooleanSetting(PreferKey.exploreGlassFollowBottomBar, it)
-                            },
-                            searchKeys = listOf("跟随底栏", "联动", "自动", "底栏材质", "sync")
-                        ),
                         SettingActionSpec(
                             key = PreferKey.exploreGlassRestoreDefaults,
                             title = str(R.string.explore_glass_restore_defaults),
@@ -212,7 +185,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
     private companion object {
         /**
          * 恢复默认时清除的键：与渲染层读取键、即时重绑监听键共用
-         * [EXPLORE_GLASS_SETTING_KEYS] 这一份来源（全局细项 + 档位/联动 +
+         * [EXPLORE_GLASS_SETTING_KEYS] 这一份来源（全局细项 + 档位 +
          * 强度的日间与夜间两个键），新增设置项不会漏清、也不会漏监听。
          */
         val resetKeys: List<String> = EXPLORE_GLASS_SETTING_KEYS.toList()

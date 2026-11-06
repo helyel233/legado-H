@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant App as MainActivity.onCreate
+    participant M as migrateLegacyExploreGlassFollow
+    participant P as SharedPreferences
+    participant S as 全局设置页(ExploreGlassConfigFragment)
+    participant EF as ExploreFragment/BookshelfFragment1
+    participant TB as MainTopBarView
+    participant GP as GlassMaterialPreset
+    participant GV as StableLiquidGlassView
+
+    App->>M: 启动调用(一次性)
+    M->>P: 读 exploreGlassFollowMigrated
+    alt follow=true 且未迁移
+        M->>P: effectMode=bottomBarEffectMode(校验)
+        M->>P: themeExploreGlassBlur(+N)=底栏强度
+        M->>P: remove(follow) 写迁移标记
+    else 否则
+        M->>P: 仅写迁移标记
+    end
+
+    Note over S: 用户在「阅读与界面›全局毛玻璃效果」改档/强度
+    S->>P: put(exploreGlassEffectMode / themeExploreGlassBlur(N))
+    P-->>EF: EXPLORE_GLASS_PREF_KEYS 即时监听 → 发现页重绑
+
+    EF->>EF: onResume
+    EF->>TB: setBackdropBlur(采样源)
+    TB->>TB: resolveExploreGlassMode(档位)
+    alt mode==solid
+        TB->>GV: visibility=GONE, bind(null)
+        TB->>TB: 实底: ColorDrawable(backgroundColor) 既有分支
+    else glass/frosted
+        TB->>GP: current(mode)
+        GP-->>TB: Params(blurDp,tint,disp,refH,refO)
+        TB->>TB: topBarGlassSpec(params,density)
+        TB->>GV: setBlurRadius/setTintAlpha/setDispersion/setRefractionHeight/setRefractionOffset
+        TB->>GV: bind(采样源)
+    end

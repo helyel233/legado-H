@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import io.legado.app.R
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.theme.TopBarSearchStyle
@@ -34,11 +35,47 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.ui.widget.compose.ComposeThemeImageLayer
 import io.legado.app.ui.widget.compose.ComposeThemeImageCrop
 import io.legado.app.ui.widget.compose.ComposeThemeImageState
 import io.legado.app.utils.ImageTypeUtils
 import io.legado.app.utils.StatusBarInsetAware
+import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.getPrefString
+
+/**
+ * 顶栏毛玻璃一档的最终像素参数（与底栏 StableLiquidGlassView 的注入口径一一对应）。
+ * dp 值已按屏幕密度换算为像素；tintAlpha / dispersion 是无量纲值直传。
+ */
+internal data class TopBarGlassSpec(
+    val blurPx: Float,
+    val tintAlpha: Float,
+    val dispersion: Float,
+    val refractionHeightPx: Float,
+    val refractionOffsetPx: Float
+)
+
+/**
+ * 顶栏毛玻璃参数换算（纯 JVM 函数，可直接单测）：
+ * solid 档返回 null（不激活玻璃层，走既有实底兜底分支）；glass/frosted 档与
+ * [GlassMaterialPreset] 预设 1:1，不重定义任何公式——
+ * 共享毛玻璃新增作用域一律复用 [GlassMaterialPreset]，禁止新增独立参数键。
+ */
+internal fun topBarGlassSpec(
+    params: GlassMaterialPreset.Params,
+    density: Float
+): TopBarGlassSpec? = when (params.mode) {
+    GlassMaterialPreset.SOLID -> null
+    else -> TopBarGlassSpec(
+        blurPx = params.blurDp * density,
+        tintAlpha = params.tintAlpha,
+        dispersion = params.dispersion,
+        refractionHeightPx = params.refractionHeightDp * density,
+        refractionOffsetPx = params.refractionOffsetDp * density
+    )
+}
 
 class MainTopBarView @JvmOverloads constructor(
     context: Context,
@@ -227,22 +264,36 @@ class MainTopBarView @JvmOverloads constructor(
 
     /**
      * 覆盖式宿主(列表滚到顶栏下方)在 API>=33 时,用背景毛玻璃做实底,避免透明顶栏透出滚动的列表。
+     * 材质档与参数取自「全局毛玻璃效果」设置（与底栏、发现页共用 [GlassMaterialPreset]）：
+     * solid 档不激活玻璃层,由 applyDefaultStyle/applyRegularStyle 的实底分支兜住；
+     * glass/frosted 档按预设参数注入（圆角仍取 TopBarConfig,与材质无关）。
      * @param source 列表容器(玻璃采样源);传 null 或低版本时关闭玻璃,改由宿主使用非覆盖布局兜底。
      */
     fun setBackdropBlur(source: ViewGroup?) {
         val active = source != null && supportsBackdropBlur()
         backdropGlassActive = active
         if (active) {
-            val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-            val radius = if (isRegularStyle()) TopBarConfig.cornerRadius(context, config) else 0f
-            backdropGlass.visibility = View.VISIBLE
-            backdropGlass.setCornerRadius(radius)
-            backdropGlass.setBlurRadius(18.dp.toFloat())
-            backdropGlass.setTintAlpha(0.10f)
-            backdropGlass.setDispersion(0.10f)
-            backdropGlass.setRefractionHeight(14.dp.toFloat())
-            backdropGlass.setRefractionOffset(26.dp.toFloat())
-            backdropGlass.bind(source)
+            val spec = topBarGlassSpec(
+                GlassMaterialPreset.current(resolvedTopBarGlassMode()),
+                resources.displayMetrics.density
+            )
+            if (spec != null) {
+                val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
+                val radius = if (isRegularStyle()) TopBarConfig.cornerRadius(context, config) else 0f
+                backdropGlass.visibility = View.VISIBLE
+                backdropGlass.setCornerRadius(radius)
+                backdropGlass.setBlurRadius(spec.blurPx)
+                backdropGlass.setTintAlpha(spec.tintAlpha)
+                backdropGlass.setDispersion(spec.dispersion)
+                backdropGlass.setRefractionHeight(spec.refractionHeightPx)
+                backdropGlass.setRefractionOffset(spec.refractionOffsetPx)
+                backdropGlass.bind(source)
+            } else {
+                // solid 档：不激活玻璃层,顶栏实底由既有 overlayOpaqueBackground 分支兜住
+                backdropGlassActive = false
+                backdropGlass.visibility = View.GONE
+                backdropGlass.bind(null)
+            }
         } else {
             backdropGlass.visibility = View.GONE
             backdropGlass.bind(null)
@@ -309,7 +360,8 @@ class MainTopBarView @JvmOverloads constructor(
     }
 
     private fun applyTopBarStyle(force: Boolean = false, resetFilters: Boolean = force) {
-        val signature = "${TopBarConfig.currentSignature(AppConfig.isNightTheme)}|$mode"
+        val signature =
+            "${TopBarConfig.currentSignature(AppConfig.isNightTheme)}|$mode|${topBarGlassSignature()}"
         if (!force && styleSignature == signature) return
         val signatureChanged = styleSignature != signature
         styleSignature = signature
@@ -352,6 +404,27 @@ class MainTopBarView @JvmOverloads constructor(
             this.height = height
         }
     }
+
+    /**
+     * 顶栏毛玻璃生效档位（与发现页/设置页同一解析函数）：显式档位优先，
+     * 旧总开关 false → solid，未设置回落默认 frosted。「跟随底栏」已废弃，
+     * 升级用户由启动一次性迁移固化为显式档位。
+     */
+    private fun resolvedTopBarGlassMode(): String = resolveExploreGlassMode(
+        context.getPrefString(PreferKey.exploreGlassEffectMode),
+        context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
+    )
+
+    /**
+     * 顶栏毛玻璃参数签名：档位与两个全局强度键（含日夜态）任一变化都会使样式缓存失效，
+     * 保证「全局改档/改强度 → 返回主界面 → 顶栏即时生效」；未变化则跳过重绑。
+     */
+    private fun topBarGlassSignature(): String = listOf(
+        resolvedTopBarGlassMode(),
+        AppConfig.frostedGlassLevel,
+        AppConfig.liquidGlassLevel,
+        AppConfig.isNightTheme
+    ).joinToString("|")
 
     private fun applyDefaultStyle() {
         contentLayout.layoutTransition = null

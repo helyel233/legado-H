@@ -1956,10 +1956,6 @@
     <string name="navigation_icon_select_file">选择导航栏图标</string>
     <string name="navigation_icon_decode_failed">图标解析失败，请使用 ico、svg、png、jpg 或 jpeg。</string>
     <string name="navigation_icon_search_ball">搜索/助手悬浮球图标</string>
-    <string name="bottom_bar_effect_solid">常规</string>
-    <string name="bottom_bar_effect_glass">玻璃</string>
-    <string name="bottom_bar_effect_frosted">磨砂玻璃</string>
-    <string name="bottom_bar_material_mode">材质样式</string>
     <string name="bottom_bar_layout_mode">底栏样式</string>
     <string name="bottom_bar_layout_floating">悬浮底栏</string>
     <string name="bottom_bar_layout_sidebar">侧边栏</string>
@@ -2143,7 +2139,6 @@
     <string name="theme_color_shelf">书架背景色</string>
     <string name="theme_card_shadow">卡片阴影</string>
     <string name="theme_card_background_blur">卡片模糊</string>
-<string name="theme_explore_glass_blur">发现页毛玻璃效果</string>
     <string name="theme_value_follow_default">跟随默认</string>
     <string name="theme_image_main_background">主界面背景</string>
     <string name="theme_image_book_info_background">详情页背景</string>

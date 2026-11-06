@@ -207,9 +207,9 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.PAGE_LAYOUT_CONFIG ->
                 listOf(R.string.config_category_content)
 
-            // 发现页毛玻璃与发现/订阅设置、页面布局同属「内容与规则」域
+            // 全局毛玻璃效果已上提为「阅读与界面」下的一级行，管的是界面外观不是内容域
             ConfigTag.EXPLORE_GLASS_CONFIG ->
-                listOf(R.string.config_category_content)
+                listOf(R.string.config_category_reading_ui)
 
             // 评论抓取已从高级设置拆出，作为「高级与关于」下的独立二级页
             ConfigTag.COMMENT_CONFIG -> listOf(R.string.config_category_advanced)

@@ -324,14 +324,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         R.string.page_layout_settings_summary,
                         R.drawable.ic_image
                     ),
-                    // 发现页毛玻璃原先只有一个强度滑杆藏在「编辑主题」里，细项无处可调；
-                    // 与发现/订阅设置、页面布局一起归到内容域，一站式调到各个视觉参数
-                    actionRow(
-                        ConfigTag.EXPLORE_GLASS_CONFIG,
-                        R.string.explore_glass_settings_title,
-                        R.string.explore_glass_settings_summary,
-                        R.drawable.ic_cfg_theme
-                    ),
                     actionRow(
                         "replaceManage", R.string.replace_purify,
                         R.string.replace_purify_desc, R.drawable.ic_cfg_replace
@@ -396,6 +388,14 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     actionRow(
                         ConfigTag.WELCOME_CONFIG, R.string.welcome_style,
                         R.string.welcome_style_summary, R.drawable.ic_screen
+                    ),
+                    // 全局毛玻璃效果管的是「读起来长什么样」（顶栏与发现页的玻璃材质），
+                    // 与主题、封面同属界面域；原先在「内容与规则」区，用户按外观诉求找不到。
+                    actionRow(
+                        ConfigTag.EXPLORE_GLASS_CONFIG,
+                        R.string.explore_glass_settings_title,
+                        R.string.explore_glass_settings_summary,
+                        R.drawable.ic_cfg_theme
                     )
                 )
             ),

@@ -41,6 +41,10 @@ import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.putPrefInt
+import io.legado.app.utils.putPrefString
+import io.legado.app.utils.removePref
 import io.legado.app.utils.stackBlurSoftware
 import java.io.File
 import kotlin.math.max
@@ -89,22 +93,18 @@ internal const val EXPLORE_GLASS_MODE_DEFAULT = EXPLORE_GLASS_MODE_FROSTED
 private const val LEGACY_MODE_NONE = "none"
 
 /**
- * 解析生效档位（纯函数，不依赖 Android 运行时，便于单测覆盖迁移与联动）：
- * 1. 「跟随底栏材质」开启时直接沿用底栏的档位字符串（两边是同一套取值）；
- * 2. 未开启跟随时，显式存的档位优先，旧值 `none` 归一到 `solid`；
- * 3. 从未存过档位时，1.25.4 的旧总开关 `exploreGlassEnabled=false` 迁移成「无玻璃」，
+ * 解析生效档位（纯函数，不依赖 Android 运行时，便于单测覆盖迁移）：
+ * 1. 显式存的档位优先，旧值 `none` 归一到 `solid`；
+ * 2. 从未存过档位时，1.25.4 的旧总开关 `exploreGlassEnabled=false` 迁移成「无玻璃」，
  *    否则回落到默认磨砂玻璃档。
+ * 1.25.x 的「跟随底栏材质」开关已移除：升级用户由启动时的一次性迁移
+ * [migrateLegacyExploreGlassFollow] 把底栏档位与强度固化为显式值，
+ * 渲染路径不再有 follow 参数。
  */
 internal fun resolveExploreGlassMode(
     rawMode: String?,
-    legacyEnabled: Boolean,
-    followBottomBar: Boolean,
-    bottomBarMode: String
+    legacyEnabled: Boolean
 ): String {
-    if (followBottomBar) {
-        return bottomBarMode.takeIf { it in GlassMaterialPreset.modes }
-            ?: EXPLORE_GLASS_MODE_GLASS
-    }
     val stored = rawMode
         ?.let { if (it == LEGACY_MODE_NONE) EXPLORE_GLASS_MODE_SOLID else it }
         ?.takeIf { it in GlassMaterialPreset.modes }
@@ -130,14 +130,13 @@ internal fun scaledGlassParam(
 }
 
 /**
- * 「我的 › 发现页毛玻璃」里各个设置项的一次性快照。
- * [mode] 是已解析的生效档位（含跟随底栏与旧开关迁移）；总强度 [level] 沿用
+ * 「全局毛玻璃效果」里各个设置项的一次性快照。
+ * [mode] 是已解析的生效档位（含旧开关迁移）；总强度 [level] 沿用
  * 日夜间分离的 themeExploreGlassBlur；其余都是全局倍率/开关，
  * 与 frostedGlassLevel 等全局 UI 键同体系，不参与主题包导入导出。
  */
 internal data class ExploreGlassConfig(
     val mode: String,
-    val followBottomBar: Boolean,
     val level: Int,
     val blurPercent: Int,
     val shellPercent: Int,
@@ -157,7 +156,6 @@ internal data class ExploreGlassConfig(
 internal object ExploreGlassConfigKeys {
     val legacyEnabled = PreferKey.exploreGlassEnabled
     val effectMode = PreferKey.exploreGlassEffectMode
-    val followBottomBar = PreferKey.exploreGlassFollowBottomBar
     val levelDay = PreferKey.themeExploreGlassBlur
     val levelNight = PreferKey.themeExploreGlassBlurN
     val blurScale = PreferKey.exploreGlassBlurScale
@@ -172,7 +170,7 @@ internal object ExploreGlassConfigKeys {
 
     /** 本设置页写入 /「恢复默认」清除的键（含旧总开关与日夜间强度两键）。 */
     val settingKeys: Set<String> = setOf(
-        legacyEnabled, effectMode, followBottomBar,
+        legacyEnabled, effectMode,
         levelDay, levelNight,
         blurScale, shellScale, tintScale, strokeScale,
         hardwareBlur, animatedSolid
@@ -218,32 +216,25 @@ private class ContextExploreGlassPrefSource(
 internal fun readExploreGlassConfig(context: Context): ExploreGlassConfig =
     readExploreGlassConfig(
         source = ContextExploreGlassPrefSource(context),
-        levelKey = ThemeRuntimeKeys.themeExploreGlassBlur(),
-        bottomBarMode = AppConfig.bottomBarEffectMode
+        levelKey = ThemeRuntimeKeys.themeExploreGlassBlur()
     )
 
 /**
  * 纯 JVM 可测的读取逻辑。[levelKey] 是日夜间分离强度键（调用方按当前主题给出
- * `levelDay` / `levelNight` 之一），[bottomBarMode] 来自 AppConfig
- * （读 [ExploreGlassConfigKeys.bottomBarMode]）。所有键名取自 [ExploreGlassConfigKeys]，
+ * `levelDay` / `levelNight` 之一）。所有键名取自 [ExploreGlassConfigKeys]，
  * 单测据此反向校验键集合，新增键漏登记会立刻暴露。
  */
 internal fun readExploreGlassConfig(
     source: ExploreGlassPrefSource,
-    levelKey: String,
-    bottomBarMode: String
+    levelKey: String
 ): ExploreGlassConfig {
     val keys = ExploreGlassConfigKeys
     val legacyEnabled = source.boolean(keys.legacyEnabled, true)
-    val followBottomBar = source.boolean(keys.followBottomBar, false)
     return ExploreGlassConfig(
         mode = resolveExploreGlassMode(
             source.string(keys.effectMode),
-            legacyEnabled,
-            followBottomBar,
-            bottomBarMode
+            legacyEnabled
         ),
-        followBottomBar = followBottomBar,
         level = source.int(levelKey, ExploreGlassBackdrop.LEVEL_DEFAULT).coerceIn(0, 100),
         blurPercent = source.int(keys.blurScale, EXPLORE_GLASS_SCALE_DEFAULT)
             .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
@@ -259,25 +250,94 @@ internal fun readExploreGlassConfig(
 }
 
 /**
- * 解析当前生效档位的完整材质参数（与底栏共用 [GlassMaterialPreset]）。
- * 未开启跟随时：模糊、着色、壳层、描边、色散、折射全取该档预设，强度由本页
- * 日夜间分离的 themeExploreGlassBlur 提供；
- * 开启跟随时：连强度也取底栏的 frostedGlassLevel / liquidGlassLevel，
- * 此时发现页与底栏用的是同一份逐值一致的预设。
+ * 解析当前生效档位的完整材质参数（与底栏共用 [GlassMaterialPreset]）：
+ * 模糊、着色、壳层、描边、色散、折射全取该档预设，强度由本页日夜间分离的
+ * themeExploreGlassBlur 提供。1.25.x 的「跟随底栏」分支已移除，升级用户由
+ * [migrateLegacyExploreGlassFollow] 在启动时固化档位与强度，此处恒走本页强度。
  */
 internal fun exploreGlassMaterial(
     config: ExploreGlassConfig,
     fallbackBoost: Float = GlassMaterialPreset.fallbackBoost()
 ): GlassMaterialPreset.Params =
-    if (config.followBottomBar) {
-        GlassMaterialPreset.current(config.mode)
-    } else {
-        GlassMaterialPreset.params(
-            config.mode,
-            GlassMaterialPreset.opacityLevel(config.level),
-            fallbackBoost
-        )
+    GlassMaterialPreset.params(
+        config.mode,
+        GlassMaterialPreset.opacityLevel(config.level),
+        fallbackBoost
+    )
+
+/**
+ * 迁移期间偏好读写的最小抽象：让一次性迁移逻辑可注入内存实现、纯 JVM 单测覆盖。
+ */
+internal interface ExploreGlassPrefStore {
+    fun getBoolean(key: String, default: Boolean): Boolean
+    fun putBoolean(key: String, value: Boolean)
+    fun putString(key: String, value: String)
+    fun putInt(key: String, value: Int)
+    fun remove(key: String)
+}
+
+private class ContextExploreGlassPrefStore(
+    private val context: Context
+) : ExploreGlassPrefStore {
+    override fun getBoolean(key: String, default: Boolean): Boolean =
+        context.getPrefBoolean(key, default)
+
+    override fun putBoolean(key: String, value: Boolean) =
+        context.putPrefBoolean(key, value)
+
+    override fun putString(key: String, value: String) =
+        context.putPrefString(key, value)
+
+    override fun putInt(key: String, value: Int) =
+        context.putPrefInt(key, value)
+
+    override fun remove(key: String) = context.removePref(key)
+}
+
+/**
+ * 1.25.x「跟随底栏材质」开关的一次性迁移核心（纯 JVM 可测，[migrateLegacyExploreGlassFollow]
+ * 是其 Context 包装）。规则（幂等）：
+ * 1. 迁移标记 [PreferKey.exploreGlassFollowMigrated] 已存在 → 直接返回；
+ * 2. 旧键 [PreferKey.exploreGlassFollowBottomBar] 为 false / 缺失 → 不动任何值；
+ * 3. 为 true → 把底栏当前状态**固化为显式档位 + 强度**（双固化）：
+ *    - 档位：`exploreGlassEffectMode = [bottomBarMode]`（校验 ∈ 预设档位，非法回退默认 frosted）；
+ *    - 强度：`themeExploreGlassBlur` 与 `themeExploreGlassBlurN` 同时写为底栏对应强度
+ *      （frosted → [frostedLevel]，否则 [liquidLevel]）。跟随期间这两个页面强度键
+ *      本来就不生效，覆写不会丢失任何用户可见状态；
+ * 4. 移除旧键并写迁移标记。
+ */
+internal fun migrateExploreGlassFollowLocked(
+    store: ExploreGlassPrefStore,
+    bottomBarMode: String,
+    frostedLevel: Int,
+    liquidLevel: Int
+) {
+    if (store.getBoolean(PreferKey.exploreGlassFollowMigrated, false)) return
+    val followEnabled = store.getBoolean(PreferKey.exploreGlassFollowBottomBar, false)
+    if (followEnabled) {
+        val resolvedMode = bottomBarMode.takeIf { it in GlassMaterialPreset.modes }
+            ?: EXPLORE_GLASS_MODE_DEFAULT
+        store.putString(PreferKey.exploreGlassEffectMode, resolvedMode)
+        val level = if (resolvedMode == EXPLORE_GLASS_MODE_FROSTED) frostedLevel else liquidLevel
+        store.putInt(PreferKey.themeExploreGlassBlur, level)
+        store.putInt(PreferKey.themeExploreGlassBlurN, level)
     }
+    store.remove(PreferKey.exploreGlassFollowBottomBar)
+    store.putBoolean(PreferKey.exploreGlassFollowMigrated, true)
+}
+
+/**
+ * 「跟随底栏材质」旧键的一次性迁移入口（由 MainActivity 启动时调用一次，早于任何 UI）。
+ * 底栏当前档位与强度来自全局偏好；档位非法值由 [migrateExploreGlassFollowLocked] 回退。
+ */
+internal fun migrateLegacyExploreGlassFollow(context: Context) {
+    migrateExploreGlassFollowLocked(
+        ContextExploreGlassPrefStore(context),
+        bottomBarMode = AppConfig.bottomBarEffectMode,
+        frostedLevel = AppConfig.frostedGlassLevel,
+        liquidLevel = AppConfig.liquidGlassLevel
+    )
+}
 
 /**
  * 硬件高斯半径的纯函数换算：输入是该档预设给出的 blurDp，不是发现页自行推算的公式。
@@ -413,7 +473,7 @@ internal data class ExploreGlassRenderParams(
 
 /**
  * 共享预设 + 本页强度 + 四个倍率滑杆 → 行渲染参数（纯函数，可直接单测）。
- * [material] 已含档位公式与强度映射（跟随底栏时含底栏强度），这里只做「行可见度」
+ * [material] 已含档位公式与强度映射，这里只做「行可见度」
  * 标定与滑杆缩放；四个滑杆分别落到 blurDp / shell 三色 / tintAlpha / strokeAlpha，
  * 100 = 该档标定后的原值，0 关闭该维度，200 加倍并在各层上限处限幅。
  */
@@ -495,8 +555,7 @@ internal val EXPLORE_GLASS_PREF_KEYS: Set<String> =
  * 三档的取值仍只有 [GlassMaterialPreset] 一份来源；[resolveExploreGlassRenderParams]
  * 只把共享预设按「一行文字高」的可见度标定成 [ExploreGlassRenderParams]，两档用同一组
  * 增益常量、差异完全来自预设自身，并在这里一次性把四个倍率滑杆落进最终绘制值。
- * 「跟随底栏材质」开启时档位与强度均取底栏（[GlassMaterialPreset.current]），
- * 本页存的档位保留但不生效。
+ * 1.25.x 的「跟随底栏材质」开关已移除（启动时一次性迁移固化档位与强度）。
  *
  * 降级矩阵（任一条命中都不留空白帧，也不退回未模糊的 raw）：
  * - 无玻璃档：完全不透明纯色块（不受玻璃强度 0 / 墨水屏 / 低内存影响）；
@@ -513,10 +572,9 @@ internal val EXPLORE_GLASS_PREF_KEYS: Set<String> =
  *   硬件管线仍可用 raw 由 GPU 出图。
  * 由于 [GlassBackdrop] 同时缓存两份底图，以上降级都能「当帧」完成，无需重新异步构建。
  *
- * 参数来源见 [readExploreGlassConfig]：未跟随底栏时，总强度（0-100）沿用日夜间分离的
- * themeExploreGlassBlur 并按 [GlassMaterialPreset.opacityLevel] 映射；跟随底栏时，
- * 强度也取底栏的 frostedGlassLevel / liquidGlassLevel。其余细项为全局倍率/开关，
- * 倍率默认 100 即取该档标定后的原值，0 为关闭该维度，200 为加倍，越界值钳到 [0, 200]。
+ * 参数来源见 [readExploreGlassConfig]：总强度（0-100）沿用日夜间分离的
+ * themeExploreGlassBlur 并按 [GlassMaterialPreset.opacityLevel] 映射。
+ * 其余细项为全局倍率/开关，倍率默认 100 即取该档标定后的原值，0 为关闭该维度，200 为加倍，越界值钳到 [0, 200]。
  * [EXPLORE_GLASS_PREF_KEYS] 汇总所有影响观感的键，供 ExploreFragment 注册即时重绑监听，
  * 与 [configSignature] 的 onResume 兜底一起保证「改完返回发现页即生效」。
  */
@@ -576,14 +634,15 @@ object ExploreGlassBackdrop {
      * 配置签名：任何影响观感的设置项变化都会改变它。
      * ExploreFragment 在 onResume 时用它做兜底重绑（另有 [EXPLORE_GLASS_PREF_KEYS]
      * 的即时偏好监听），因此新增细项后不必再逐个加监听——只要参数进快照，
-     * 返回发现页即生效。[ExploreGlassConfig.mode] 已包含「跟随底栏」的解析结果；
-     * 底栏的两个强度键在跟随时直接决定发现页的模糊与壳层，故无条件纳入，
-     * 避免只改底栏强度时不重绘。
+     * 返回发现页即生效。[ExploreGlassConfig.mode] 已含旧总开关的迁移结果；
+     * 底栏的两个强度键不参与发现页计算，但顶栏参数化接入同一预设（glass/frosted
+     * 档读 frostedGlassLevel / liquidGlassLevel），故无条件纳入，避免只改底栏
+     * 强度时不重绘。
      */
     fun configSignature(context: Context): String {
         val config = readExploreGlassConfig(context)
         return listOf(
-            config.mode, config.followBottomBar, config.level,
+            config.mode, config.level,
             config.blurPercent, config.shellPercent,
             config.tintPercent, config.strokePercent, config.hardwareBlur,
             config.animatedSolid, AppConfig.isNightTheme,
@@ -698,15 +757,12 @@ object ExploreGlassBackdrop {
             state.crop?.let { "${it.left},${it.top},${it.right},${it.bottom}" }.orEmpty(),
             AppConfig.isNightTheme,
             targetW,
-            // 行渲染口径的 blurDp 已含档位公式、强度（跟随底栏时含底栏强度）
+            // 行渲染口径的 blurDp 已含档位公式、强度
             // 与模糊倍率，是软件/硬件两条管线共同的采样半径来源；它决定
             // stackBlurSoftware 的 radius，必须纳入 key 才会重建底图。
             (render.blurDp * 1000).toInt(),
             config.blurPercent,
             config.mode,
-            config.followBottomBar,
-            AppConfig.frostedGlassLevel,
-            AppConfig.liquidGlassLevel,
             config.animatedSolid
         ).joinToString("|")
         synchronized(this) {
