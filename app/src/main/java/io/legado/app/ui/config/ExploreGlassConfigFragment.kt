@@ -94,6 +94,9 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
                                 ExploreGlassBackdrop.LEVEL_DEFAULT
                             ).coerceIn(0, 100),
                             valueRange = 0..100,
+                            // 跟随底栏开启时强度逐值取 frostedGlassLevel / liquidGlassLevel，
+                            // 本页强度不参与计算，置灰是如实反映联动关系（不是「滑杆失效」）；
+                            // 四个倍率滑杆仍生效，关掉跟随即恢复本页强度。
                             enabled = slidersEnabled && !followBottomBar,
                             valueFormatter = { "$it%" },
                             onValueChange = {

@@ -21,16 +21,16 @@
     <string name="explore_glass_level_following">正在跟随底栏材质，强度也取底栏的磨砂/玻璃强度值；关闭「跟随底栏材质」后可自行调整</string>
 
     <string name="explore_glass_blur_scale">模糊程度</string>
-    <string name="explore_glass_blur_scale_summary">100 为底栏该档预设原值，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>
+    <string name="explore_glass_blur_scale_summary">100 为该档预设经书源名行标定后的原值，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>
 
     <string name="explore_glass_shell_scale">底色遮盖</string>
-    <string name="explore_glass_shell_scale_summary">100 为底栏该档壳层原值，控制书源名行三色渐变的浓度，数值越大文字与壁纸分离越彻底</string>
+    <string name="explore_glass_shell_scale_summary">100 为该档预设经书源名行标定后的三色壳层原值，控制书源名行底色浓度，数值越大文字与壁纸分离越彻底</string>
 
     <string name="explore_glass_tint_scale">白色着色</string>
-    <string name="explore_glass_tint_scale_summary">100 为底栏该档着色原值，控制玻璃表面的白色弱着色，数值越大表面越亮</string>
+    <string name="explore_glass_tint_scale_summary">100 为该档预设经书源名行标定后的着色原值，控制玻璃表面的白色弱着色，数值越大表面越亮</string>
 
     <string name="explore_glass_stroke_scale">边缘描边</string>
-    <string name="explore_glass_stroke_scale_summary">100 为底栏该档描边原值，控制圆角边缘描边的明显程度，数值越大轮廓越清晰</string>
+    <string name="explore_glass_stroke_scale_summary">100 为该档预设经书源名行标定后的描边原值，控制圆角边缘描边的明显程度，数值越大轮廓越清晰</string>
 
     <string name="explore_glass_hardware_blur">硬件真高斯</string>
     <string name="explore_glass_hardware_blur_summary">Android 12 及以上可用；关闭后强制走已验证的软件模糊降级管线</string>
@@ -52,8 +52,8 @@
         <item>frosted</item>
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
-        <item>与底栏「常规」一致：书源名行使用同款实底壳层，不绘制玻璃；墨水屏与低内存设备仍回到默认透明背景</item>
-        <item>与底栏「玻璃」一致：8 + 强度 × 10dp 轻模糊、0.02 + 强度 × 0.05 弱着色，色散/折射更强、边缘高光更亮</item>
-        <item>与底栏「磨砂玻璃」一致：12 + 强度 × 18dp 模糊、0.05 + 强度 × 0.10 着色，壳层与描边取底栏同款</item>
+        <item>贴主题底色的完全不透明纯色块：不透壁纸、不绘制玻璃层；玻璃强度、墨水屏与低内存设置都不改变它</item>
+        <item>与底栏「玻璃」一致：8 + 强度 × 10dp 轻模糊、0.02 + 强度 × 0.05 弱着色，色散/折射更强；在书源名行上表现为更薄的底色遮盖、更亮的边缘高光</item>
+        <item>与底栏「磨砂玻璃」一致：12 + 强度 × 18dp 模糊、0.05 + 强度 × 0.10 着色；在书源名行上表现为更奶白厚实的底色遮盖、更柔和的边缘高光</item>
     </string-array>
 </resources>

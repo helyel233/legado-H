@@ -38,6 +38,22 @@ object GlassMaterialPreset {
     fun solidOpacity(value: Int): Float =
         (value.coerceIn(0, 100) / 100f).coerceIn(0f, 1f)
 
+    /**
+     * 实底壳层最终使用的 alpha（0-1）。
+     *
+     * 底栏走 [solidOpacity]（默认 `forceOpaque=false`），逐值保持 1.25.5 观感；
+     * 发现页「无玻璃」档要求「完全不透明的纯色块」，而图标包 `config.opacity`
+     * 默认只有 76（内置 default 为 76、Config 默认 72），直接复用会得到 0.72~0.76
+     * 的半透明壳层、仍透出壁纸，故发现页传 `forceOpaque=true` 把 alpha 钉死为 1。
+     * 纯函数，便于 JVM 单测锁住「实底档 alpha=255」与「底栏口径不变」两件事。
+     */
+    fun solidAlpha(opacity: Int, forceOpaque: Boolean = false): Float =
+        if (forceOpaque) 1f else solidOpacity(opacity)
+
+    /** 实底壳层最终填充色（纯函数，便于断言 alpha 分量为 255）。 */
+    fun solidColor(baseColor: Int, opacity: Int, forceOpaque: Boolean = false): Int =
+        ColorUtils.withAlpha(baseColor, solidAlpha(opacity, forceOpaque))
+
     /** API < 33 的壳层补偿，底栏既有逻辑；抽出来让发现页也走同一判定。 */
     fun fallbackBoost(): Float =
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) 0.08f else 0f
@@ -129,6 +145,8 @@ object GlassMaterialPreset {
      * 无玻璃档（底栏 solid）的统一实底壳层：底色取 bottomBackground，不透明度取
      * 底栏图标包 config.opacity，描边取 config.borderColor/borderAlpha（未配置则不描边）。
      * 底栏的常规/实底壳层与发现页的无玻璃档共用此实现。
+     * [forceOpaque] 只由发现页「无玻璃」档传 true（见 [solidAlpha]）；底栏所有
+     * 调用点都不传，走默认 false，公式与 1.25.5 逐值一致、观感不变。
      */
     fun createSolidShellDrawable(
         baseColor: Int,
@@ -136,11 +154,12 @@ object GlassMaterialPreset {
         borderColor: Int?,
         cornerRadiusPx: Float,
         oval: Boolean,
-        strokeWidthPx: Int
+        strokeWidthPx: Int,
+        forceOpaque: Boolean = false
     ): GradientDrawable = GradientDrawable().apply {
         shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
         if (!oval) this.cornerRadius = cornerRadiusPx
-        setColor(ColorUtils.withAlpha(baseColor, solidOpacity(opacity)))
+        setColor(solidColor(baseColor, opacity, forceOpaque))
         borderColor?.let { setStroke(strokeWidthPx, it) }
     }
 }

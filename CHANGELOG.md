@@ -1,5 +1,32 @@
 # 更新日志
 
+## 1.25.6 版（2026-11-06）
+
+本版修复 1.25.5 真机反馈的三条发现页毛玻璃缺陷：「无玻璃」档仍是半透明、透明玻璃与磨砂玻璃看不出差别、主强度与四个倍率滑杆改完返回发现页没有观感变化。三档材质仍只有 `GlassMaterialPreset` 一份参数来源，底栏 `MainActivity` 的调用点与取值公式逐值未动；发现页只补「行可见度标定」与「设置落盘即重绑」，双管线与降级矩阵保持完整。
+
+### 修复
+
+- **无玻璃档改为完全不透明的纯色块**：1.25.5 把图标包 `config.opacity`（内置 default 76、`Config` 默认 72）原样传给 `createSolidShellDrawable`，经 `solidOpacity` 得 0.72~0.76 的 alpha，行背景仍透出壁纸。新增 `GlassMaterialPreset.solidAlpha/solidColor` 与 `forceOpaque` 参数（默认 false），发现页「无玻璃」档传 true，把填充色 alpha 钉死为 255；底栏两个实底壳层调用点都不传该参数，逐值保持 1.25.5 观感。同时把实底判定提到墨水屏 / 低内存降级之前：实底不采样、不模糊，这些设备上也仍是一块纯色。
+- **透明玻璃 / 磨砂玻璃肉眼可辨**：1.25.5 删掉系数体系后，两档在行上只剩「模糊半径 11 vs 17.4dp」（无壁纸时底图是纯色、模糊不产生可见差异）、「白色着色 9 vs 20/255」与「边缘高光 35 vs 17/255」这类低于可分辨阈值的差别，而且壳层三色与描边两档同值。新增纯函数 `resolveExploreGlassRenderParams`：仍只读共享预设，统一按「一行文字高」标定可见度（两档共用同一组增益常量，差异完全来自预设自身的 blurDp / tintAlpha / dispersion / refractionHeightDp），并用预设的 tintAlpha 派生壳层厚度差。结果：磨砂档更奶白厚实（着色 61/255、壳层中心约 0.40），透明玻璃档更透且边缘高光更亮（着色 27/255、亮边 62/255），模糊、壳层、着色、高光至少四处真实生效。硬件 `RenderEffect` 半径与软件 `stackBlurSoftware` 半径都改读同一份 `ExploreGlassRenderParams.blurDp`，底图缓存 key 随之更新。
+- **主强度与四个倍率滑杆即时生效**：`FrostedGlassDrawable` 原先在类内散落缩放调用，且刷新只靠 `ExploreFragment.onResume` 比较 `configSignature`——设置页在独立 Activity、发现页处于 STARTED 时这条链路不可靠。现在四个倍率与强度全部在 `resolveExploreGlassRenderParams` 里一次落到最终绘制值（绘制层只读结果）；`ExploreFragment` 用 `EXPLORE_GLASS_PREF_KEYS` 注册偏好监听，滑杆落盘当下就合并成一次 `notifyDataSetChanged()` 重绑行背景，`onResume` 签名比较保留为兜底。跟随底栏开启时主强度滑杆仍按设计置灰（强度取底栏），四个倍率滑杆继续生效。
+
+### 实现要点
+
+- 新增 `ExploreGlassRenderParams` / `resolveExploreGlassRenderParams`（纯函数）与 `ExploreGlassBackdrop.exploreSoftwareBlurRadius`（纯函数）；`FrostedGlassDrawable` 由「共享预设 + 配置」两个入参收敛为一份 `render`，绘制层不再自行推算任何观感参数。
+- `GlassMaterialPreset` 只新增 `solidAlpha` / `solidColor` 与带默认值的 `forceOpaque`；`params()` / `shellAlphas()` / `opacityLevel()` / `current()` 与底栏全部调用点未改，底栏观感不变。
+- `EXPLORE_GLASS_PREF_KEYS` 汇总 14 个影响行观感的键（含日夜间强度、跟随开关、底栏档位与两个强度键），监听在视图创建时注册、`onDestroyView` 注销并移除在途回调，无生命周期泄漏；滑杆连续拖动用 `removeCallbacks + post` 合并成一次重绑。
+- 降级矩阵不变：玻璃档强度 0 / 墨水屏 / 低内存仍回原透明背景；动图壁纸、API 21–30、RenderEffect 异常、非硬件 Canvas、位图缺失等分支照旧；仅「无玻璃」档不再被设备级降级改回透明。
+- 成对中英文文案：三档逐档说明与四个倍率滑杆摘要同步改为「经书源名行标定后的原值」，并如实说明无玻璃档为不透明纯色块。
+
+### 验证
+
+- `./gradlew --stop` 后统一用 `GRADLE_OPTS="-Xmx4g -XX:MaxMetaspaceSize=1g" ./gradlew --no-daemon <task>` 运行（`-Xmx4g` 不能作为 Gradle CLI 参数直接传，gradle.properties 的 `org.gradle.jvmargs` 已含同值）。
+- `tools/check_settings_mapping.py`：PASS，17 个 ConfigTag 全覆盖、零断链、分区归属一致（改动前后各跑一次）。
+- `:app:compileAppDebugKotlin`：`BUILD SUCCESSFUL`（首轮 `in 4m 52s`、定稿复验 `in 5m 20s`，43 actionable tasks: 14 executed, 29 up-to-date）；仅既有告警（含 `ExploreGlassBackdrop.getOpacity()` 弃用告警），无新增告警；`DnsBenchmarkLiveTest` 未出现编译阻断。
+- `:app:testAppDebugUnitTest`：两轮改动后运行分别为 `1991 tests completed, 48 failed, 3 skipped` 与 `1991 tests completed, 51 failed, 3 skipped`，任务均报 FAILED——失败全部是本仓库基线既有的 Robolectric / `appCtx` 未初始化问题（`ClassNotFoundException: android.app.ActivityThread`、`appCtx has not been initialized!`），集中在阅读资源、朗读、气泡、EPUB 共 19 个测试类，与本次改动无关。为确认这一点，把改动 `git stash` 后在未修改的 HEAD(6a5785cae) 跑同一命令：`1985 tests completed, 51 failed, 3 skipped`，同样是那 19 个类。即：改动只多了 6 条用例、没有新增失败用例（失败数 48~51 是这批 Robolectric 用例本身的波动），`ExploreGlassHardwareBlurTest` 的 XML 报告为 `tests="18" failures="0" errors="0"`，18/18 全过。
+- 纯函数单测由 12 条补到 18 条，新增覆盖：实底档 alpha=255 且底栏口径不变、两档渲染参数可辨差、四个滑杆逐项进入渲染并限幅、主强度单调影响着色/壳层/高光/模糊、即时重绑键集合完整。
+- **边界**：本环境无法真机 / GPU 观感验证；以上仅为编译、纯函数单测与静态校验结果，运行时观感仍需用户真机复核。
+
 ## 1.25.5 版（2026-11-06）
 
 本版给「我的 › 发现页毛玻璃」补上与底栏**逐值一致**的三档材质自动预设，并把 1.25.4 的独立总开关收敛为「无玻璃」档。三档不是「在发现页原有观感上乘系数」，而是与底栏 `solid / glass / frosted` 共用同一份参数表 `GlassMaterialPreset`：模糊、着色、色散、折射、壳层三色、描边与强度键全部取同一实现。默认档为磨砂玻璃。

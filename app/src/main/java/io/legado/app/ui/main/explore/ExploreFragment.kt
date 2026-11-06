@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.database.sqlite.SQLiteBlobTooBigException
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
@@ -122,6 +123,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.applyStatusBarPadding
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.fromJsonObject
@@ -258,6 +260,38 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var discoverSourceVersion = 0L
     private var lastExploreGlassSignature = ""
     private var lastExploreNightMode = AppConfig.isNightTheme
+
+    /**
+     * 发现页毛玻璃设置项落盘即重绑经典行背景。
+     *
+     * 设置页是独立 Activity，且 ViewPager 用 BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT——
+     * 改设置时本 Fragment 往往只是 STARTED，返回时 onResume 的签名比较是唯一触发点，
+     * 一旦生命周期路径没走到（或返回后先看到旧帧）滑杆就像没生效。这里在偏好变更的
+     * 当下就刷新，onResume 的 [ExploreGlassBackdrop.configSignature] 比较保留为兜底。
+     */
+    private val exploreGlassRefreshRunnable = Runnable {
+        if (isAdded && view != null && !usingModernDiscovery && !usingSuiteDiscovery) {
+            lastExploreGlassSignature = ExploreGlassBackdrop.configSignature(requireContext())
+            refreshClassicRowTheme()
+        }
+    }
+
+    private val exploreGlassPrefListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            // key 为 null 是部分 API 对 clear()/remove() 的批量通知形态，一并兜底重绑；
+            // 「恢复默认」在低版本上不逐键回调时也仍能刷新
+            val affectsRows = key == null || key in EXPLORE_GLASS_PREF_KEYS
+            if (affectsRows && isAdded && view != null &&
+                !usingModernDiscovery && !usingSuiteDiscovery
+            ) {
+                // 拖动滑杆会连续写入，removeCallbacks + post 合并成一次重绑
+                view?.let { host ->
+                    host.removeCallbacks(exploreGlassRefreshRunnable)
+                    host.post(exploreGlassRefreshRunnable)
+                }
+            }
+        }
+
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
     private var discoverDefaultFiltersAppliedKey: String? = null
@@ -373,6 +407,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         }
         applyDiscoveryMode(loadData = false)
         scheduleDiscoveryWarmup()
+        // 视图创建期间就注册，覆盖「设置页在前台、发现页仅 STARTED」的改动窗口
+        appCtx.defaultSharedPreferences
+            .registerOnSharedPreferenceChangeListener(exploreGlassPrefListener)
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu) {
@@ -3948,6 +3985,9 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         stopModernMode()
         stopSuiteMode()
         WebViewPool.destroyScope(WebViewPool.Scope.DISCOVERY)
+        view?.removeCallbacks(exploreGlassRefreshRunnable)
+        appCtx.defaultSharedPreferences
+            .unregisterOnSharedPreferenceChangeListener(exploreGlassPrefListener)
         oldModeInitialized = false
         modernModeInitialized = false
         groupsMenu = null

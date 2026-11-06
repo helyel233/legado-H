@@ -223,6 +223,108 @@ internal fun exploreGlassRimAlpha(dispersion: Float): Float =
     (dispersion * 0.5f).coerceIn(0f, 0.24f)
 
 /**
+ * 「行可见度」标定：底栏整条（数百 dp 宽、背后有 StableLiquidGlassView 先做一次
+ * 模糊/着色）的 shell/tint/rim 绝对值只有 0.02~0.32；照搬到只有一行文字高、
+ * 直接采样位图的发现页行上，两档之间与滑杆两端的差别都低于可分辨阈值
+ * （1.25.5 真机回归：透明玻璃/磨砂玻璃看起来一样、滑杆像没生效）。
+ *
+ * 这里**不新增第三套预设、也不按档位乘系数**：两档用的仍是 [GlassMaterialPreset]
+ * 输出的同一组 [GlassMaterialPreset.Params]，只统一放大到「行」上可见的区间
+ * （增益是两档共用的常量，差异因此完全来自预设自身的 blurDp / tintAlpha /
+ * dispersion / refractionHeightDp）。壳层的额外厚度也由预设的 tintAlpha 派生，
+ * 磨砂档 tintAlpha 更高 → 行更「奶白」，透明玻璃档更透、边缘高光更亮。
+ */
+private const val ROW_TINT_GAIN = 3f
+private const val ROW_SHELL_GAIN = 1.6f
+private const val ROW_RIM_GAIN = 1.8f
+private const val ROW_SCRIM_FROM_TINT = 3f
+private const val ROW_TINT_BASELINE = 0.02f
+private const val ROW_MAX_TINT = 0.45f
+private const val ROW_MAX_SHELL = 0.94f
+private const val ROW_MAX_RIM = 0.45f
+private const val ROW_MAX_STROKE = 0.42f
+
+/**
+ * 一行书源名最终绘制时的全部可变量。由 [resolveExploreGlassRenderParams] 一次算出，
+ * 硬件管线（[exploreHardwareBlurPx]）、软件管线（[ExploreGlassBackdrop.exploreSoftwareBlurRadius]）、
+ * tint / shell / rim / 描边全部只读它，保证四个倍率滑杆**确实进入绘制计算**，
+ * 而不是只进 [ExploreGlassBackdrop.configSignature]；纯数据类便于确定性单测。
+ */
+internal data class ExploreGlassRenderParams(
+    val blurDp: Float,
+    val tintAlpha: Float,
+    val shellStart: Float,
+    val shellCenter: Float,
+    val shellEnd: Float,
+    val strokeAlpha: Float,
+    val rimAlpha: Float,
+    val rimBandDp: Float
+)
+
+/**
+ * 共享预设 + 本页强度 + 四个倍率滑杆 → 行渲染参数（纯函数，可直接单测）。
+ * [material] 已含档位公式与强度映射（跟随底栏时含底栏强度），这里只做「行可见度」
+ * 标定与滑杆缩放；四个滑杆分别落到 blurDp / shell 三色 / tintAlpha / strokeAlpha，
+ * 100 = 该档标定后的原值，0 关闭该维度，200 加倍并在各层上限处限幅。
+ */
+internal fun resolveExploreGlassRenderParams(
+    config: ExploreGlassConfig,
+    material: GlassMaterialPreset.Params
+): ExploreGlassRenderParams {
+    // 预设里磨砂档的 tintAlpha 明显高于玻璃档；用这个差值派生壳层厚度差，
+    // 不在发现页另立「档位系数表」，差异仍只来自共享预设的取值。
+    val scrimBoost = (material.tintAlpha - ROW_TINT_BASELINE)
+        .coerceAtLeast(0f) * ROW_SCRIM_FROM_TINT
+    return ExploreGlassRenderParams(
+        blurDp = scaledGlassParam(material.blurDp, config.blurPercent),
+        tintAlpha = scaledGlassParam(
+            material.tintAlpha * ROW_TINT_GAIN, config.tintPercent, ROW_MAX_TINT
+        ),
+        shellStart = scaledGlassParam(
+            material.shell.start * ROW_SHELL_GAIN + scrimBoost,
+            config.shellPercent, ROW_MAX_SHELL
+        ),
+        shellCenter = scaledGlassParam(
+            material.shell.center * ROW_SHELL_GAIN + scrimBoost,
+            config.shellPercent, ROW_MAX_SHELL
+        ),
+        shellEnd = scaledGlassParam(
+            material.shell.end * ROW_SHELL_GAIN + scrimBoost,
+            config.shellPercent, ROW_MAX_SHELL
+        ),
+        strokeAlpha = scaledGlassParam(
+            material.shell.stroke, config.strokePercent, ROW_MAX_STROKE
+        ),
+        rimAlpha = (exploreGlassRimAlpha(material.dispersion) * ROW_RIM_GAIN)
+            .coerceIn(0f, ROW_MAX_RIM),
+        rimBandDp = material.refractionHeightDp
+    )
+}
+
+/**
+ * 影响发现页行观感的偏好键全集。`ExploreFragment` 用它注册即时重绑监听：
+ * 只靠 `onResume` + [ExploreGlassBackdrop.configSignature] 时，设置页在另一个
+ * Activity、发现页又处于 STARTED（非 RESUMED）状态，改动可能无法在返回时重绑；
+ * 偏好一变就直接刷新经典行背景，返回发现页即为新观感。
+ */
+internal val EXPLORE_GLASS_PREF_KEYS: Set<String> = setOf(
+    PreferKey.exploreGlassEnabled,
+    PreferKey.exploreGlassEffectMode,
+    PreferKey.exploreGlassFollowBottomBar,
+    PreferKey.exploreGlassBlurScale,
+    PreferKey.exploreGlassShellScale,
+    PreferKey.exploreGlassTintScale,
+    PreferKey.exploreGlassStrokeScale,
+    PreferKey.exploreGlassHardwareBlur,
+    PreferKey.exploreGlassAnimatedSolid,
+    PreferKey.themeExploreGlassBlur,
+    PreferKey.themeExploreGlassBlurN,
+    PreferKey.bottomBarEffectMode,
+    PreferKey.frostedGlassLevel,
+    PreferKey.liquidGlassLevel
+)
+
+/**
  * 发现页书源名行的毛玻璃背景。
  *
  * 取主界面背景图层（与主题背景同一文件/裁剪/模糊设置）生成一张按屏幕对齐的降采样底图，
@@ -243,20 +345,21 @@ internal fun exploreGlassRimAlpha(dispersion: Float): Float =
  * （[GlassPositionTracker]）与同一套 shell/tint/描边参数，保证降级时观感连续。
  *
  * 材质三档（自动预设，取值与底栏 bottomBarEffectMode 完全一致，见 [GlassMaterialPreset]）：
- * - **无玻璃 [EXPLORE_GLASS_MODE_SOLID]**：走 [GlassMaterialPreset.createSolidShellDrawable]，
- *   即底栏 solid 档同款实底壳层（bottomBackground + config.opacity + 描边），不再是透明背景；
+ * - **无玻璃 [EXPLORE_GLASS_MODE_SOLID]**：走 [GlassMaterialPreset.createSolidShellDrawable]
+ *   并强制 `forceOpaque=true`，得到贴主题底色、alpha=255 的纯色块；不受图标包 opacity、
+ *   玻璃强度、墨水屏/低内存降级影响，也不再透出壁纸；
  * - **透明玻璃 [EXPLORE_GLASS_MODE_GLASS]**：取 glass 档整组参数（`8 + l*10`dp 模糊、
- *   `0.02 + l*0.05` 着色、更强色散/折射，以及由此派生的边缘高光）；
+ *   `0.02 + l*0.05` 着色、更强色散/折射），行上表现为更薄遮盖 + 更亮边缘高光；
  * - **磨砂玻璃 [EXPLORE_GLASS_MODE_FROSTED]**：取 frosted 档整组参数（`12 + l*18`dp 模糊、
- *   `0.05 + l*0.10` 着色、更弱色散/折射）。
- * 两档的壳层三色与描边 alpha 均由 [GlassMaterialPreset.shellAlphas] 提供，与底栏
- * createLiquidGlassShellDrawable 逐值一致；发现页不再自行推算基础值，也不再用
- * 「系数」在既有观感上缩放。四个倍率滑杆只在该档预设值之上微调。
+ *   `0.05 + l*0.10` 着色、更弱色散/折射），行上表现为更奶白的厚遮盖。
+ * 三档的取值仍只有 [GlassMaterialPreset] 一份来源；[resolveExploreGlassRenderParams]
+ * 只把共享预设按「一行文字高」的可见度标定成 [ExploreGlassRenderParams]，两档用同一组
+ * 增益常量、差异完全来自预设自身，并在这里一次性把四个倍率滑杆落进最终绘制值。
  * 「跟随底栏材质」开启时档位与强度均取底栏（[GlassMaterialPreset.current]），
  * 本页存的档位保留但不生效。
  *
  * 降级矩阵（任一条命中都不留空白帧，也不退回未模糊的 raw）：
- * - 无玻璃档：优先返回底栏同款实底壳层（不受玻璃强度 0 影响）；
+ * - 无玻璃档：完全不透明纯色块（不受玻璃强度 0 / 墨水屏 / 低内存影响）；
  * - 玻璃档 level<=0 / 墨水屏 / 低内存：返回 null，用原透明背景；
  * - 动图壁纸且「使用纯色底」开启：`backdrop()` 返回 null，玻璃层不采样，
  *   只留 tint/shell/描边纯实底；关闭该开关才允许采样静止首帧；
@@ -273,12 +376,27 @@ internal fun exploreGlassRimAlpha(dispersion: Float): Float =
  * 参数来源见 [readExploreGlassConfig]：未跟随底栏时，总强度（0-100）沿用日夜间分离的
  * themeExploreGlassBlur 并按 [GlassMaterialPreset.opacityLevel] 映射；跟随底栏时，
  * 强度也取底栏的 frostedGlassLevel / liquidGlassLevel。其余细项为全局倍率/开关，
- * 倍率默认 100 即取该档预设原值，0 为关闭该维度，200 为加倍，越界值钳到 [0, 200]。
+ * 倍率默认 100 即取该档标定后的原值，0 为关闭该维度，200 为加倍，越界值钳到 [0, 200]。
+ * [EXPLORE_GLASS_PREF_KEYS] 汇总所有影响观感的键，供 ExploreFragment 注册即时重绑监听，
+ * 与 [configSignature] 的 onResume 兜底一起保证「改完返回发现页即生效」。
  */
 object ExploreGlassBackdrop {
 
     /** 未设置时的默认毛玻璃强度。 */
     const val LEVEL_DEFAULT = 60
+
+    /**
+     * 软件管线 `stackBlurSoftware` 的位图像素半径（纯函数，便于单测）。
+     * 输入是 [ExploreGlassRenderParams.blurDp]（已含档位预设与模糊倍率），
+     * 与硬件管线读的是同一个值，避免两条管线各算一套导致改滑杆只生效一半。
+     */
+    fun exploreSoftwareBlurRadius(
+        blurDp: Float,
+        stateBlur: Int,
+        density: Float
+    ): Int = (
+        stateBlur / DOWNSCALE + blurDp * density * STACK_BLUR_DENSITY_FACTOR / DOWNSCALE
+        ).toInt().coerceIn(3, 25)
 
     /**
      * 软件模糊位图半径的换算系数：GPU 高斯半径 → stackBlurSoftware 等效半径的 1.4 倍，
@@ -316,10 +434,11 @@ object ExploreGlassBackdrop {
 
     /**
      * 配置签名：任何影响观感的设置项变化都会改变它。
-     * ExploreFragment 在 onResume 时用它判断是否刷新经典行背景，
-     * 因此新增细项后不必再逐个加监听——只要参数进快照，返回发现页即生效。
-     * [ExploreGlassConfig.mode] 已包含「跟随底栏」的解析结果；底栏的两个强度键在
-     * 跟随时直接决定发现页的模糊与壳层，故无条件纳入，避免只改底栏强度时不重绘。
+     * ExploreFragment 在 onResume 时用它做兜底重绑（另有 [EXPLORE_GLASS_PREF_KEYS]
+     * 的即时偏好监听），因此新增细项后不必再逐个加监听——只要参数进快照，
+     * 返回发现页即生效。[ExploreGlassConfig.mode] 已包含「跟随底栏」的解析结果；
+     * 底栏的两个强度键在跟随时直接决定发现页的模糊与壳层，故无条件纳入，
+     * 避免只改底栏强度时不重绘。
      */
     fun configSignature(context: Context): String {
         val config = readExploreGlassConfig(context)
@@ -337,8 +456,14 @@ object ExploreGlassBackdrop {
         (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
 
     /**
-     * 无玻璃档：返回底栏 solid 档同款实底壳层，而不是默认透明背景。
-     * 底色、不透明度、描边与底栏 createSolidBottomShellDrawable 共用同一实现。
+     * 无玻璃档：完全不透明的纯色块（贴主题底色），不再是半透明壳层。
+     *
+     * 1.25.5 把图标包 `config.opacity`（内置默认 76、Config 默认 72）直接传给
+     * [GlassMaterialPreset.createSolidShellDrawable]，经 `solidOpacity` 得到
+     * 0.72~0.76 的 alpha，行背景仍然透出壁纸——这正是真机反馈的「无玻璃没变成
+     * 不透明纯色块」。这里传 `forceOpaque=true` 把 alpha 钉死为 1（255）；
+     * 底栏的调用点不传该参数，仍走原 `solidOpacity`，观感逐值不变。
+     * 底色、圆角与描边依旧复用同一实现，不另写一份 drawable。
      */
     private fun solidShellDrawable(context: Context): GradientDrawable {
         val navConfig = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
@@ -351,39 +476,41 @@ object ExploreGlassBackdrop {
             borderColor = borderColor,
             cornerRadiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             oval = false,
-            strokeWidthPx = 1.dpToPx()
+            strokeWidthPx = 1.dpToPx(),
+            forceOpaque = true
         )
     }
 
     /** 返回毛玻璃行背景；level<=0 / 设备降级时返回 null，调用方保留默认透明背景。 */
     fun rowBackground(host: View): Drawable? {
         val context = host.context
+        val config = readExploreGlassConfig(context)
+        // 无玻璃档是纯实底，没有模糊/位图采样开销，墨水屏与低内存设备也必须
+        // 保持「不透明纯色块」（放在设备降级判定之前）。强度 0 同样不改变它。
+        if (config.mode == EXPLORE_GLASS_MODE_SOLID) return solidShellDrawable(context)
         // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
         if (AppConfig.isEInkMode || isLowRamDevice(context)) return null
-        val config = readExploreGlassConfig(context)
-        // 无玻璃档与底栏 solid 一样不依赖玻璃强度：先返回实底壳层，强度 0 也不改变它。
-        if (config.mode == EXPLORE_GLASS_MODE_SOLID) return solidShellDrawable(context)
         if (config.level <= 0) return null
         val material = exploreGlassMaterial(config)
+        val render = resolveExploreGlassRenderParams(config, material)
         val useHardware = supportsHardwareBlur() && config.hardwareBlur
         return FrostedGlassDrawable(
             host = host,
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             baseColor = ThemeStore.bottomBackground(context),
-            config = config,
-            material = material,
+            render = render,
             useHardware = useHardware,
             hardwareBlurPx = if (useHardware) {
+                // render.blurDp 已含模糊倍率，这里用默认 100 避免二次缩放
                 exploreHardwareBlurPx(
-                    material.blurDp, context.resources.displayMetrics.density,
-                    config.blurPercent
+                    render.blurDp, context.resources.displayMetrics.density
                 )
             } else 0f
         ).also { drawable ->
             //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
             //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
             drawable.updateBackdrop(
-                backdrop(context, config, material, drawable::updateBackdrop)
+                backdrop(context, config, render, drawable::updateBackdrop)
             )
             GlassPositionTracker.attach(host, drawable)
         }
@@ -392,7 +519,7 @@ object ExploreGlassBackdrop {
     private fun backdrop(
         context: Context,
         config: ExploreGlassConfig,
-        material: GlassMaterialPreset.Params,
+        render: ExploreGlassRenderParams,
         onReady: (GlassBackdrop?) -> Unit
     ): GlassBackdrop? {
         val state = MainThemeBackgroundState.from(context)
@@ -414,10 +541,10 @@ object ExploreGlassBackdrop {
             state.crop?.let { "${it.left},${it.top},${it.right},${it.bottom}" }.orEmpty(),
             AppConfig.isNightTheme,
             targetW,
-            // blurDp 来自共享预设，已含档位公式与强度（跟随底栏时含底栏强度）。
-            // 它决定软件模糊 radius，必须纳入 key 才会重建底图；换档、改强度、
-            // 改模糊倍率都会改变这个值或下面几项。
-            (material.blurDp * 1000).toInt(),
+            // 行渲染口径的 blurDp 已含档位公式、强度（跟随底栏时含底栏强度）
+            // 与模糊倍率，是软件/硬件两条管线共同的采样半径来源；它决定
+            // stackBlurSoftware 的 radius，必须纳入 key 才会重建底图。
+            (render.blurDp * 1000).toInt(),
             config.blurPercent,
             config.mode,
             config.followBottomBar,
@@ -428,15 +555,13 @@ object ExploreGlassBackdrop {
         synchronized(this) {
             cache?.takeIf { it.key == key }?.let { return it.backdrop }
         }
-        // 模糊强度直接取该档预设的 blurDp（玻璃档 8+l*10、磨砂档 12+l*18），
-        // 再乘用户的模糊倍率。折算为位图像素：屏幕等效半径 ≈ dp*密度*
+        // 模糊强度取行渲染口径的 blurDp（预设 blurDp × 模糊倍率，玻璃档更轻、
+        // 磨砂档更重）。折算为位图像素：屏幕等效半径 ≈ dp*密度*
         // STACK_BLUR_DENSITY_FACTOR（GPU 高斯→stackBlur 等效系数），再除以降采样比例。
         // 固定用纯软件模糊：不依赖 renderscript toolkit 的 native 库。
-        val density = metrics.density
-        val blurDp = scaledGlassParam(material.blurDp, config.blurPercent)
-        val radius = (
-            state.blur / DOWNSCALE + blurDp * density * STACK_BLUR_DENSITY_FACTOR / DOWNSCALE
-            ).toInt().coerceIn(3, 25)
+        val radius = exploreSoftwareBlurRadius(
+            render.blurDp, state.blur, metrics.density
+        )
         synchronized(this) {
             val stale = cache?.backdrop
             pendingCallbacks.getOrPut(key) { ArrayList() }.add(onReady)
@@ -548,28 +673,23 @@ object ExploreGlassBackdrop {
 
 /**
  * 单个书源名行的毛玻璃背景，与底栏（StableLiquidGlassView + shell overlay）同一套材质：
- * 1. 玻璃层：按行当前屏幕位置采样模糊壁纸，半径取 [GlassMaterialPreset.Params.blurDp]；
- * 2. tint 层：底栏 LiquidGlass 同款白色弱着色，alpha 取 [GlassMaterialPreset.Params.tintAlpha]；
- * 3. shell 层：底栏 createLiquidGlassShellDrawable 同款三色垂直渐变 + 描边，
- *    alpha 取 [GlassMaterialPreset.ShellAlphas]（夜间 rgb(22,24,28)、日间白）；
+ * 1. 玻璃层：按行当前屏幕位置采样模糊壁纸，半径取 [ExploreGlassRenderParams.blurDp]；
+ * 2. tint 层：底栏 LiquidGlass 同款白色弱着色，alpha 取行标定后的 tintAlpha；
+ * 3. shell 层：底栏 createLiquidGlassShellDrawable 同款三色垂直渐变 + 描边；
  * 4. rim 层：由该档色散/折射派生的上下边缘高光，补回底栏玻璃的边缘体积感。
+ *
+ * 所有可变量都从 [render] 这一份 [resolveExploreGlassRenderParams] 的产物读取，
+ * 不再在类内散落 `scaledGlassParam` 调用：四个倍率滑杆与强度/档位是否真的生效，
+ * 由纯函数单测直接锁住，绘制层只负责把结果画出来。
  */
 private class FrostedGlassDrawable(
     private val host: View,
     private val radiusPx: Float,
     baseColor: Int,
-    private val config: ExploreGlassConfig,
-    private val material: GlassMaterialPreset.Params,
+    private val render: ExploreGlassRenderParams,
     private val useHardware: Boolean,
     private val hardwareBlurPx: Float
 ) : Drawable() {
-
-    companion object {
-        /** 描边 alpha 上限沿用底栏 createLiquidGlassShellDrawable 的 0.42。 */
-        private const val STROKE_MAX_ALPHA = 0.42f
-        /** 壳层与着色的 alpha 上限，防止倍率拉到 200 时越界。 */
-        private const val LAYER_MAX_ALPHA = 1f
-    }
 
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -584,11 +704,9 @@ private class FrostedGlassDrawable(
     private val surfaceColor =
         if (AppColorUtils.isColorLight(baseColor)) Color.WHITE else Color.rgb(22, 24, 28)
 
-    // 基础值全部来自共享预设（与底栏逐值一致），倍率滑杆只在其上做线性缩放。
-    private val tintBaseAlpha =
-        (scaledGlassParam(material.tintAlpha, config.tintPercent, LAYER_MAX_ALPHA) * 255).toInt()
-    private val strokeBaseRatio =
-        scaledGlassParam(material.shell.stroke, config.strokePercent, STROKE_MAX_ALPHA)
+    // 全部来自行渲染口径；倍率滑杆已在 resolveExploreGlassRenderParams 中逐项生效。
+    private val tintBaseAlpha = (render.tintAlpha * 255).toInt()
+    private val strokeBaseRatio = render.strokeAlpha
     private var shellShaderCache: LinearGradient? = null
     private var shellShaderHeight = -1
     private var rimShaderCache: LinearGradient? = null
@@ -670,17 +788,14 @@ private class FrostedGlassDrawable(
     private fun shellShader(height: Int): LinearGradient {
         val cached = shellShaderCache
         if (cached != null && shellShaderHeight == height) return cached
-        // 三色 alpha 直接取共享预设（与底栏 createLiquidGlassShellDrawable 逐值一致），
-        // 只乘「底色遮盖」滑杆倍率；上深下浅的垂直渐变同样来自底栏。
-        val start = scaledGlassParam(material.shell.start, config.shellPercent, LAYER_MAX_ALPHA)
-        val center = scaledGlassParam(material.shell.center, config.shellPercent, LAYER_MAX_ALPHA)
-        val end = scaledGlassParam(material.shell.end, config.shellPercent, LAYER_MAX_ALPHA)
+        // 三色 alpha 取行渲染口径（共享预设经行可见度标定 + 底色遮盖滑杆）；
+        // 上深下浅的垂直渐变同样来自底栏。
         return LinearGradient(
             0f, 0f, 0f, height.toFloat(),
             intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, start),
-                AppColorUtils.withAlpha(surfaceColor, center),
-                AppColorUtils.withAlpha(surfaceColor, end)
+                AppColorUtils.withAlpha(surfaceColor, render.shellStart),
+                AppColorUtils.withAlpha(surfaceColor, render.shellCenter),
+                AppColorUtils.withAlpha(surfaceColor, render.shellEnd)
             ),
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
@@ -694,14 +809,14 @@ private class FrostedGlassDrawable(
      * 底栏 LiquidGlass 在边缘产生折射/色散高光；行渲染器没有该 shader，
      * 用同一预设的 dispersion（亮度）与 refractionHeightDp（高光带宽度）生成
      * 上下边缘高光，使透明玻璃档的亮边明显强于磨砂玻璃档。
-     * 参数来源是共享预设，不是在发现页既有观感上手工调系数。
+     * 参数来源是共享预设经行可见度标定后的值，不是在发现页另立系数表。
      */
     private fun rimShader(height: Int): LinearGradient {
         val cached = rimShaderCache
         if (cached != null && rimShaderHeight == height) return cached
-        val topAlpha = exploreGlassRimAlpha(material.dispersion)
+        val topAlpha = render.rimAlpha
         val bottomAlpha = topAlpha * 0.5f
-        val bandPx = material.refractionHeightDp.dpToPx().coerceAtMost(height / 2f)
+        val bandPx = render.rimBandDp.dpToPx().coerceAtMost(height / 2f)
         val stop = (bandPx / height).coerceIn(0.01f, 0.45f)
         return LinearGradient(
             0f, 0f, 0f, height.toFloat(),
