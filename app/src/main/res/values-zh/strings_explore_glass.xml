@@ -1,35 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="explore_glass_settings_title">发现页毛玻璃</string>
-    <string name="explore_glass_settings_summary">调整经典发现页书源名行的模糊、着色、遮盖与渲染方式</string>
+    <string name="explore_glass_settings_summary">调整经典发现页书源名行的材质预设、微调与渲染方式</string>
 
     <string name="explore_glass_section_effect">玻璃效果</string>
     <string name="explore_glass_section_advanced">渲染与兼容</string>
 
     <string name="explore_glass_effect_mode">材质样式</string>
-    <string name="explore_glass_effect_mode_summary">选一档即自动套用整组参数；下方滑杆在此基础上继续微调</string>
+    <string name="explore_glass_effect_mode_summary">与底栏「常规 / 玻璃 / 磨砂玻璃」共用同一套预设参数；下方滑杆仅在该档原值上微调</string>
     <string name="explore_glass_effect_mode_following">正在跟随底栏材质（当前：%1$s），关闭「跟随底栏材质」后可自行选档</string>
     <string name="explore_glass_mode_none">无玻璃</string>
     <string name="explore_glass_mode_glass">透明玻璃</string>
     <string name="explore_glass_mode_frosted">磨砂玻璃</string>
 
     <string name="explore_glass_follow_bottom_bar">跟随底栏材质</string>
-    <string name="explore_glass_follow_bottom_bar_summary">开启后直接套用底栏的常规 / 玻璃 / 磨砂玻璃档位，本页档位暂时不生效；常规对应无玻璃</string>
+    <string name="explore_glass_follow_bottom_bar_summary">开启后档位与强度都直接取底栏当前预设，本页档位与强度滑杆暂时不生效；常规对应无玻璃</string>
 
     <string name="explore_glass_level">玻璃强度</string>
-    <string name="explore_glass_level_summary">与「编辑主题」里的「发现页毛玻璃效果」是同一项，按日间/夜间分别保存；0 为关闭</string>
+    <string name="explore_glass_level_summary">与「编辑主题」里的「发现页毛玻璃效果」是同一项，按日间/夜间分别保存；玻璃档 0 为关闭，无玻璃档不受影响</string>
+    <string name="explore_glass_level_following">正在跟随底栏材质，强度也取底栏的磨砂/玻璃强度值；关闭「跟随底栏材质」后可自行调整</string>
 
     <string name="explore_glass_blur_scale">模糊程度</string>
-    <string name="explore_glass_blur_scale_summary">100 为默认口径，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>
+    <string name="explore_glass_blur_scale_summary">100 为底栏该档预设原值，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>
 
     <string name="explore_glass_shell_scale">底色遮盖</string>
-    <string name="explore_glass_shell_scale_summary">控制书源名行渐变实底的浓度，数值越大文字与壁纸分离越彻底</string>
+    <string name="explore_glass_shell_scale_summary">100 为底栏该档壳层原值，控制书源名行三色渐变的浓度，数值越大文字与壁纸分离越彻底</string>
 
     <string name="explore_glass_tint_scale">白色着色</string>
-    <string name="explore_glass_tint_scale_summary">控制玻璃表面的白色弱着色，数值越大表面越亮</string>
+    <string name="explore_glass_tint_scale_summary">100 为底栏该档着色原值，控制玻璃表面的白色弱着色，数值越大表面越亮</string>
 
     <string name="explore_glass_stroke_scale">边缘描边</string>
-    <string name="explore_glass_stroke_scale_summary">控制圆角边缘描边的明显程度，数值越大轮廓越清晰</string>
+    <string name="explore_glass_stroke_scale_summary">100 为底栏该档描边原值，控制圆角边缘描边的明显程度，数值越大轮廓越清晰</string>
 
     <string name="explore_glass_hardware_blur">硬件真高斯</string>
     <string name="explore_glass_hardware_blur_summary">Android 12 及以上可用；关闭后强制走已验证的软件模糊降级管线</string>
@@ -46,13 +47,13 @@
         <item>磨砂玻璃</item>
     </string-array>
     <string-array name="explore_glass_mode_values">
-        <item>none</item>
+        <item>solid</item>
         <item>glass</item>
         <item>frosted</item>
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
-        <item>书源名行使用默认透明背景，不绘制玻璃；墨水屏与低内存设备始终如此</item>
-        <item>轻模糊、薄遮盖，壁纸清晰透出，靠边缘描边勾出玻璃轮廓；文字对比度会略降</item>
-        <item>默认口径，模糊与遮盖最充分，文字与壁纸分离最彻底</item>
+        <item>与底栏「常规」一致：书源名行使用同款实底壳层，不绘制玻璃；墨水屏与低内存设备仍回到默认透明背景</item>
+        <item>与底栏「玻璃」一致：8 + 强度 × 10dp 轻模糊、0.02 + 强度 × 0.05 弱着色，色散/折射更强、边缘高光更亮</item>
+        <item>与底栏「磨砂玻璃」一致：12 + 强度 × 18dp 模糊、0.05 + 强度 × 0.10 着色，壳层与描边取底栏同款</item>
     </string-array>
 </resources>

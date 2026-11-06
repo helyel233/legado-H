@@ -1,108 +1,161 @@
 package io.legado.app.ui.main.explore
 
+import io.legado.app.ui.main.GlassMaterialPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 毛玻璃参数的确定性单测。
+ * 毛玻璃三档材质与半径口径的确定性单测。
  *
- * 半径、倍率与材质档位系数是核心参数：口径错（误乘软件管线的 1.4 等效系数、
- * 漏乘 density、限幅失效、倍率越界、默认档系数不为 1、旧开关迁移丢失、跟随底栏
- * 映射错档）都不会导致编译失败，只会让观感或低端 GPU 开销悄悄偏离，
- * 故抽成纯函数后用确定性断言锁住，不依赖真机与运行时推断。
+ * 上一版把三档做成「在发现页既有观感上乘系数」，与底栏预设并不一致；现在底栏和
+ * 发现页都从 [GlassMaterialPreset] 取同一组参数。口径错（档位公式写反、误乘
+ * 软件管线的 1.4 等效系数、漏乘 density、限幅失效、跟随档位解析错、旧值迁移丢失）
+ * 都不会导致编译失败，只会让观感或低端 GPU 开销悄悄偏离，故用确定性断言锁住，
+ * 不依赖真机与运行时推断。
  */
 class ExploreGlassHardwareBlurTest {
 
+    private fun glassConfig(
+        mode: String = EXPLORE_GLASS_MODE_GLASS,
+        level: Int = 60,
+        followBottomBar: Boolean = false
+    ) = ExploreGlassConfig(
+        mode = mode,
+        followBottomBar = followBottomBar,
+        level = level,
+        blurPercent = EXPLORE_GLASS_SCALE_DEFAULT,
+        shellPercent = EXPLORE_GLASS_SCALE_DEFAULT,
+        tintPercent = EXPLORE_GLASS_SCALE_DEFAULT,
+        strokePercent = EXPLORE_GLASS_SCALE_DEFAULT,
+        hardwareBlur = true,
+        animatedSolid = true
+    )
+
     @Test
-    fun frostedBlurFollowsDensityLinearly() {
-        // glassLevel=0（关闭档）→ blurDp=12；density=2 → 24px
-        assertEquals(24f, exploreHardwareBlurPx(0f, 2f), 0.001f)
-        // glassLevel=0.5（设置滑杆 100 档）→ blurDp=12+9=21；density=2 → 42px
-        assertEquals(42f, exploreHardwareBlurPx(0.5f, 2f), 0.001f)
-        // glassLevel=0.3（默认 60 档）→ blurDp=17.4；density=3 → 52.2px
-        assertEquals(52.2f, exploreHardwareBlurPx(0.3f, 3f), 0.001f)
+    fun glassPresetMatchesBottomBarFormulaExactly() {
+        // 底栏 MainActivity.setupLiquidGlass 的 glass 档：level=bottomBarOpacityLevel(68)=0.34
+        val p = GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 0.34f)
+        assertEquals(11.4f, p.blurDp, 0.001f)              // 8 + 0.34*10
+        assertEquals(0.037f, p.tintAlpha, 0.001f)          // 0.02 + 0.34*0.05
+        assertEquals(0.2816f, p.dispersion, 0.001f)        // 0.20 + 0.34*0.24
+        assertEquals(26.08f, p.refractionHeightDp, 0.001f) // 22 + 0.34*12
+        assertEquals(50.16f, p.refractionOffsetDp, 0.001f) // 42 + 0.34*24
+        assertEquals(0.2344f, p.shell.start, 0.001f)
+        assertEquals(0.1408f, p.shell.center, 0.001f)
+        assertEquals(0.114f, p.shell.end, 0.001f)
+        assertEquals(0.2344f, p.shell.stroke, 0.001f)
     }
 
     @Test
-    fun doesNotApplySoftwareStackBlurFactor() {
-        // 若误乘软件管线的 1.4 等效系数，12dp@3x 会变成 50.4px 而非 36px
-        assertEquals(36f, exploreHardwareBlurPx(0f, 3f), 0.001f)
-        assertEquals(63f, exploreHardwareBlurPx(0.5f, 3f), 0.001f)
+    fun frostedPresetMatchesBottomBarFormulaExactly() {
+        // frosted 档：level=bottomBarOpacityLevel(70)=0.35
+        val p = GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 0.35f)
+        assertEquals(18.3f, p.blurDp, 0.001f)              // 12 + 0.35*18
+        assertEquals(0.085f, p.tintAlpha, 0.001f)          // 0.05 + 0.35*0.10
+        assertEquals(0.142f, p.dispersion, 0.001f)         // 0.10 + 0.35*0.12
+        assertEquals(16.8f, p.refractionHeightDp, 0.001f)  // 14 + 0.35*8
+        assertEquals(31.6f, p.refractionOffsetDp, 0.001f)  // 26 + 0.35*16
+        assertEquals(0.236f, p.shell.start, 0.001f)
+        assertEquals(0.142f, p.shell.center, 0.001f)
+        assertEquals(0.115f, p.shell.end, 0.001f)
+        assertEquals(0.236f, p.shell.stroke, 0.001f)
     }
 
     @Test
-    fun radiusClampsToSupportedRange() {
-        // density 为 0 / 强度为负 → 仍守住下限 1px，不把 0 半径交给 RenderEffect
-        assertEquals(1f, exploreHardwareBlurPx(0f, 0f), 0.001f)
-        assertEquals(1f, exploreHardwareBlurPx(-1f, 0.01f), 0.001f)
-        // 超大密度 / 超量程强度 → 仍守住上限 80px，避免低端 GPU 开销陡增
-        assertEquals(80f, exploreHardwareBlurPx(0.5f, 100f), 0.001f)
-        assertEquals(80f, exploreHardwareBlurPx(10f, 3f), 0.001f)
+    fun glassAndFrostedAreDistinctMaterialsNotScaledCopies() {
+        val glass = GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 0.3f)
+        val frosted = GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 0.3f)
+        assertTrue(glass.blurDp < frosted.blurDp)
+        assertTrue(glass.tintAlpha < frosted.tintAlpha)
+        assertTrue(glass.dispersion > frosted.dispersion)
+        assertTrue(glass.refractionHeightDp > frosted.refractionHeightDp)
+        assertTrue(glass.refractionOffsetDp > frosted.refractionOffsetDp)
+        // 底栏对两档用的是同一套壳层/描边公式，旧实现给透明玻璃乘 0.40/1.25 是错的。
+        assertEquals(frosted.shell.start, glass.shell.start, 0.001f)
+        assertEquals(frosted.shell.center, glass.shell.center, 0.001f)
+        assertEquals(frosted.shell.end, glass.shell.end, 0.001f)
+        assertEquals(frosted.shell.stroke, glass.shell.stroke, 0.001f)
     }
 
     @Test
-    fun radiusIsMonotonicInGlassLevel() {
-        var previous = 0f
-        var level = 0f
-        while (level <= 0.5f) {
-            val current = exploreHardwareBlurPx(level, 2f)
-            assertTrue(current >= previous)
-            previous = current
-            level += 0.05f
-        }
+    fun shellAlphasMatchBottomBarFallbackAndSelectedBoost() {
+        val normal = GlassMaterialPreset.shellAlphas(0.34f, 0.08f)
+        assertEquals(0.3144f, normal.start, 0.001f)
+        assertEquals(0.1928f, normal.center, 0.001f)
+        assertEquals(0.15f, normal.end, 0.001f)
+        // 描边不含 fallbackBoost
+        assertEquals(0.2344f, normal.stroke, 0.001f)
+
+        val selected = GlassMaterialPreset.shellAlphas(0.34f, 0.08f, 0.05f)
+        assertEquals(0.3644f, selected.start, 0.001f)
+        assertEquals(0.2428f, selected.center, 0.001f)
+        assertEquals(0.20f, selected.end, 0.001f)
+        assertEquals(0.2844f, selected.stroke, 0.001f)
+
+        // 异常强度下各上限仍生效
+        val capped = GlassMaterialPreset.shellAlphas(10f, 0.08f)
+        assertEquals(0.44f, capped.start, 0.001f)
+        assertEquals(0.32f, capped.center, 0.001f)
+        assertEquals(0.26f, capped.end, 0.001f)
+        assertEquals(0.42f, capped.stroke, 0.001f)
     }
 
     @Test
-    fun scaleParamKeepsDefaultAndClampsOutOfRange() {
-        // 设置项默认 100 必须原样返回 1.25.3 既有口径，不能改变默认观感
-        assertEquals(0.5f, scaledGlassParam(0.5f, 100), 0.001f)
-        assertEquals(0f, scaledGlassParam(0.5f, 0), 0.001f)
-        assertEquals(1f, scaledGlassParam(0.5f, 200), 0.001f)
-        // 备份恢复写入越界值时先钳到 [0, 200]，避免 alpha 越界或负倍率
-        assertEquals(1f, scaledGlassParam(0.5f, 999), 0.001f)
-        assertEquals(0f, scaledGlassParam(0.5f, -50), 0.001f)
-        // 各维度自身的上限（描边 0.42 / shell 0.88 / tint 1）仍须守住
-        assertEquals(0.42f, scaledGlassParam(0.34f, 200, 0.42f), 0.001f)
-        assertEquals(0.88f, scaledGlassParam(1.6f, 100, 0.88f), 0.001f)
+    fun dispersionAndOpacityConversionsClamp() {
+        assertEquals(0.48f, GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 10f).dispersion, 0.001f)
+        assertEquals(0.28f, GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 10f).dispersion, 0.001f)
+
+        assertEquals(0f, GlassMaterialPreset.opacityLevel(0), 0.001f)
+        assertEquals(0.25f, GlassMaterialPreset.opacityLevel(50), 0.001f)
+        assertEquals(0.5f, GlassMaterialPreset.opacityLevel(100), 0.001f)
+        assertEquals(0.5f, GlassMaterialPreset.opacityLevel(999), 0.001f)
+        assertEquals(0f, GlassMaterialPreset.opacityLevel(-5), 0.001f)
+
+        assertEquals(0.72f, GlassMaterialPreset.solidOpacity(72), 0.001f)
+        assertEquals(1f, GlassMaterialPreset.solidOpacity(150), 0.001f)
+        assertEquals(0f, GlassMaterialPreset.solidOpacity(-5), 0.001f)
     }
 
     @Test
-    fun hardwareBlurRespectsBlurPercent() {
-        // glassLevel=0、density=2：12dp → 24px；0 倍率受 1px 下限保护，200 倍率得 48px
-        assertEquals(1f, exploreHardwareBlurPx(0f, 2f, 0), 0.001f)
-        assertEquals(24f, exploreHardwareBlurPx(0f, 2f, 100), 0.001f)
-        assertEquals(48f, exploreHardwareBlurPx(0f, 2f, 200), 0.001f)
-        // 倍率再大也不能突破 80px 上限
-        assertEquals(80f, exploreHardwareBlurPx(0.5f, 100f, 200), 0.001f)
+    fun modeValuesMatchBottomBarAndLegacyNoneIsMigrated() {
+        assertEquals("solid", GlassMaterialPreset.SOLID)
+        assertEquals("glass", GlassMaterialPreset.GLASS)
+        assertEquals("frosted", GlassMaterialPreset.FROSTED)
+        assertEquals(setOf("solid", "glass", "frosted"), GlassMaterialPreset.modes)
+        assertEquals(GlassMaterialPreset.SOLID, EXPLORE_GLASS_MODE_SOLID)
+        assertEquals(GlassMaterialPreset.GLASS, EXPLORE_GLASS_MODE_GLASS)
+        assertEquals(GlassMaterialPreset.FROSTED, EXPLORE_GLASS_MODE_FROSTED)
     }
 
     @Test
     fun modeResolutionCoversDefaultsLegacyAndDirtyValues() {
-        // 从未设置档位：默认磨砂玻璃，不受底栏当前档位影响（未开启跟随）
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
             resolveExploreGlassMode(null, true, false, "glass")
         )
         assertEquals(
-            EXPLORE_GLASS_MODE_NONE,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_NONE, true, false, "frosted")
+            EXPLORE_GLASS_MODE_SOLID,
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, false, "frosted")
         )
         assertEquals(
             EXPLORE_GLASS_MODE_GLASS,
             resolveExploreGlassMode(EXPLORE_GLASS_MODE_GLASS, true, false, "solid")
         )
-        // 1.25.4 旧总开关关闭且从未设过档位 → 迁移成无玻璃，升级后不会莫名重新开启
+        // 1.25.5 存的 none 归一到 solid
         assertEquals(
-            EXPLORE_GLASS_MODE_NONE,
+            EXPLORE_GLASS_MODE_SOLID,
+            resolveExploreGlassMode("none", true, false, "frosted")
+        )
+        // 1.25.4 旧总开关关闭且从未设过档位 → 迁移成无玻璃
+        assertEquals(
+            EXPLORE_GLASS_MODE_SOLID,
             resolveExploreGlassMode(null, false, false, "frosted")
         )
-        // 用户在本页显式选档后以显式档位为准，旧开关不再否决
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
             resolveExploreGlassMode(EXPLORE_GLASS_MODE_FROSTED, false, false, "solid")
         )
-        // 备份恢复写入脏值时回落到默认档，不出现「半档」状态
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
             resolveExploreGlassMode("ultra", true, false, "glass")
@@ -112,18 +165,17 @@ class ExploreGlassHardwareBlurTest {
     @Test
     fun followBottomBarMapsThreeModesAndOverridesStoredMode() {
         assertEquals(
-            EXPLORE_GLASS_MODE_NONE,
+            EXPLORE_GLASS_MODE_SOLID,
             resolveExploreGlassMode(EXPLORE_GLASS_MODE_FROSTED, true, true, "solid")
         )
         assertEquals(
             EXPLORE_GLASS_MODE_GLASS,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_NONE, true, true, "glass")
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, true, "glass")
         )
         assertEquals(
             EXPLORE_GLASS_MODE_FROSTED,
-            resolveExploreGlassMode(EXPLORE_GLASS_MODE_NONE, true, true, "frosted")
+            resolveExploreGlassMode(EXPLORE_GLASS_MODE_SOLID, true, true, "frosted")
         )
-        // 底栏未知取值按玻璃兜底，不能解析成无玻璃（会让整页玻璃消失）
         assertEquals(
             EXPLORE_GLASS_MODE_GLASS,
             resolveExploreGlassMode(null, true, true, "unknown")
@@ -131,53 +183,59 @@ class ExploreGlassHardwareBlurTest {
     }
 
     @Test
-    fun presetsKeepFrostedAsIdentity() {
-        val frosted = exploreGlassPreset(EXPLORE_GLASS_MODE_FROSTED)
-        assertEquals(1f, frosted.blurFactor, 0.001f)
-        assertEquals(1f, frosted.shellFactor, 0.001f)
-        assertEquals(1f, frosted.tintFactor, 0.001f)
-        assertEquals(1f, frosted.strokeFactor, 0.001f)
-
-        val glass = exploreGlassPreset(EXPLORE_GLASS_MODE_GLASS)
-        assertEquals(0.55f, glass.blurFactor, 0.001f)
-        assertEquals(0.40f, glass.shellFactor, 0.001f)
-        assertEquals(0.45f, glass.tintFactor, 0.001f)
-        assertEquals(1.25f, glass.strokeFactor, 0.001f)
-        // 透明玻璃必须「更透」：模糊/遮盖/着色更弱，仅描边更强
-        assertTrue(glass.blurFactor < frosted.blurFactor)
-        assertTrue(glass.shellFactor < frosted.shellFactor)
-        assertTrue(glass.tintFactor < frosted.tintFactor)
-        assertTrue(glass.strokeFactor > frosted.strokeFactor)
-
-        val none = exploreGlassPreset(EXPLORE_GLASS_MODE_NONE)
-        assertEquals(0f, none.blurFactor, 0.001f)
-        assertEquals(0f, none.shellFactor, 0.001f)
-        assertEquals(0f, none.tintFactor, 0.001f)
-        assertEquals(0f, none.strokeFactor, 0.001f)
-        // 未知档位按磨砂玻璃处理
-        assertEquals(1f, exploreGlassPreset("dirty").blurFactor, 0.001f)
+    fun exploreMaterialReadsSharedPresetWithLocalStrength() {
+        // 未跟随底栏：公式/壳层/描边取共享预设，强度按本页 60 → 0.3 映射
+        val material = exploreGlassMaterial(glassConfig(level = 60), 0f)
+        val expected = GlassMaterialPreset.params(EXPLORE_GLASS_MODE_GLASS, 0.3f, 0f)
+        assertEquals(0.3f, material.glassLevel, 0.001f)
+        assertEquals(expected.blurDp, material.blurDp, 0.001f)
+        assertEquals(expected.tintAlpha, material.tintAlpha, 0.001f)
+        assertEquals(expected.shell.center, material.shell.center, 0.001f)
+        assertEquals(expected.shell.stroke, material.shell.stroke, 0.001f)
     }
 
     @Test
-    fun presetFactorScalesButStillClamps() {
-        assertEquals(0.275f, scaledGlassParam(0.5f, 100, 1f, 0.55f), 0.001f)
-        // 描边 1.25 倍 + 滑杆 200% 仍守住 0.42 上限
-        assertEquals(0.42f, scaledGlassParam(0.34f, 200, 0.42f, 1.25f), 0.001f)
-        // 负系数钳到 0，负基础值也不会被放大成正 alpha
-        assertEquals(0f, scaledGlassParam(0.5f, 100, 1f, -1f), 0.001f)
-        assertEquals(0f, scaledGlassParam(-0.5f, 100, 1f, 0.55f), 0.001f)
-        // 缺省 factor=1 时口径与 1.25.4 完全一致
-        assertEquals(0.5f, scaledGlassParam(0.5f, 100, 1f), 0.001f)
+    fun hardwareBlurUsesPresetBlurDpAndClamps() {
+        // glass 档 11.4dp、frosted 档 18.3dp：半径直接来自预设，不再自行推算公式
+        assertEquals(22.8f, exploreHardwareBlurPx(11.4f, 2f), 0.001f)
+        assertEquals(36.6f, exploreHardwareBlurPx(18.3f, 2f), 0.001f)
+        // 不乘软件管线的 1.4 等效系数
+        assertEquals(36f, exploreHardwareBlurPx(12f, 3f), 0.001f)
+        // 倍率 0 仍守住 1px 下限，200 倍率线性加倍
+        assertEquals(1f, exploreHardwareBlurPx(11.4f, 2f, 0), 0.001f)
+        assertEquals(45.6f, exploreHardwareBlurPx(11.4f, 2f, 200), 0.001f)
+        // 上下限
+        assertEquals(1f, exploreHardwareBlurPx(11.4f, 0f), 0.001f)
+        assertEquals(80f, exploreHardwareBlurPx(11.4f, 100f, 200), 0.001f)
+        // 同一强度下透明玻璃档必须比磨砂档更轻
+        assertTrue(
+            exploreHardwareBlurPx(
+                GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 0.3f).blurDp, 2f
+            ) < exploreHardwareBlurPx(
+                GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 0.3f).blurDp, 2f
+            )
+        )
     }
 
     @Test
-    fun hardwareBlurRespectsPresetFactor() {
-        // glassLevel=0、density=2：磨砂档 24px；透明玻璃档 24*0.55=13.2px
-        assertEquals(24f, exploreHardwareBlurPx(0f, 2f, 100, 1f), 0.001f)
-        assertEquals(13.2f, exploreHardwareBlurPx(0f, 2f, 100, 0.55f), 0.001f)
-        // 系数 0 仍守住 1px 下限，不把 0 半径交给 RenderEffect
-        assertEquals(1f, exploreHardwareBlurPx(0f, 2f, 100, 0f), 0.001f)
-        // 系数放大也不越 80px 上限
-        assertEquals(80f, exploreHardwareBlurPx(0.5f, 100f, 200, 1.25f), 0.001f)
+    fun scaleParamKeepsPresetValueAndClampsOutOfRange() {
+        assertEquals(0.5f, scaledGlassParam(0.5f, 100), 0.001f)
+        assertEquals(0f, scaledGlassParam(0.5f, 0), 0.001f)
+        assertEquals(1f, scaledGlassParam(0.5f, 200), 0.001f)
+        assertEquals(1f, scaledGlassParam(0.5f, 999), 0.001f)
+        assertEquals(0f, scaledGlassParam(0.5f, -50), 0.001f)
+        assertEquals(0.42f, scaledGlassParam(0.34f, 200, 0.42f), 0.001f)
+        assertEquals(0.88f, scaledGlassParam(1.6f, 100, 0.88f), 0.001f)
+    }
+
+    @Test
+    fun rimHighlightFollowsPresetDispersion() {
+        val glass = GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 0.3f)
+        val frosted = GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 0.3f)
+        assertTrue(exploreGlassRimAlpha(glass.dispersion) > exploreGlassRimAlpha(frosted.dispersion))
+        assertEquals(0.136f, exploreGlassRimAlpha(glass.dispersion), 0.001f)
+        assertEquals(0.068f, exploreGlassRimAlpha(frosted.dispersion), 0.001f)
+        assertEquals(0.24f, exploreGlassRimAlpha(10f), 0.001f)
+        assertEquals(0f, exploreGlassRimAlpha(-1f), 0.001f)
     }
 }

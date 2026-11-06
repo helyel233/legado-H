@@ -2,30 +2,28 @@
 
 ## 1.25.5 版（2026-11-06）
 
-本版给「我的 › 发现页毛玻璃」补上与底栏一致的三档材质自动预设，并把 1.25.4 的独立总开关收敛为「无玻璃」档。默认档是磨砂玻璃，四组系数全为 1，观感与 1.25.4 / 1.25.3 保持一致。
+本版给「我的 › 发现页毛玻璃」补上与底栏**逐值一致**的三档材质自动预设，并把 1.25.4 的独立总开关收敛为「无玻璃」档。三档不是「在发现页原有观感上乘系数」，而是与底栏 `solid / glass / frosted` 共用同一份参数表 `GlassMaterialPreset`：模糊、着色、色散、折射、壳层三色、描边与强度键全部取同一实现。默认档为磨砂玻璃。
 
 ### 新增
 
-- **三档材质自动预设**：无玻璃 / 透明玻璃 / 磨砂玻璃，对齐底栏 `solid / glass / frosted` 的划分。选一档即自动套用整组基础系数，四个倍率滑杆在系数之上继续微调，切档不清空手动微调值。
-  - 无玻璃：书源名行回到默认透明背景；
-  - 透明玻璃：模糊 0.55 / 遮盖 0.40 / 着色 0.45 / 描边 1.25，壁纸清晰透出，靠边缘描边勾出玻璃轮廓；
-  - 磨砂玻璃：四系数全 1，即 1.25.3 以来的默认口径。
-  系数按底栏 `glass` 与 `frosted` 的既有公式差异折算（`(8+l*10)/(12+l*18)≈0.55`、`(0.02+l*0.05)/(0.05+l*0.10)≈0.45`）；发现页没有折射层，用更强的描边替代体积感。
-- **跟随底栏材质**：进阶区开关，默认关闭。开启后把底栏 `bottomBarEffectMode` 直接映射为 none/glass/frosted（常规 → 无玻璃），本页档位行显示当前联动档位并置灰；本页存的原档位保留，关掉跟随即恢复。
+- **共享单一来源 `GlassMaterialPreset`**：把 `MainActivity.setupLiquidGlass()` 与 `createLiquidGlassShellDrawable()` 里分散的三档公式抽成纯函数，底栏改为调用它，发现页每档预设也取它，杜绝两处硬编码漂移。玻璃档 `8+l*10`dp / `0.02+l*0.05` 着色 / 色散 `0.20+l*0.24` / 折射 `22+l*12`dp；磨砂档 `12+l*18`dp / `0.05+l*0.10` / 色散 `0.10+l*0.12` / 折射 `14+l*8`dp；壳层三色与描边 alpha 两档同式。强度映射 `level/200`（上限 0.5），磨砂档读 `frostedGlassLevel`、玻璃档读 `liquidGlassLevel`。
+- **三档材质**：无玻璃（`solid`）走底栏同款实底壳层（bottomBackground + config.opacity + 描边），不再是透明背景；透明玻璃（`glass`）取底栏玻璃档的轻模糊/弱着色/强色散，边缘高光由该档 dispersion 与折射高度派生（行渲染器没有折射 shader）；磨砂玻璃（`frosted`）取底栏磨砂档的强模糊与同款壳层/描边。两档的壳层与描边 alpha 与底栏逐值一致，不再另设系数。
+- **跟随底栏材质**：进阶区开关，默认关闭。开启后档位与强度都取底栏当前预设（`GlassMaterialPreset.current`），本页档位行显示当前联动档位并置灰，强度滑杆也置灰；本页存的原档位保留，关掉跟随即恢复。
 - **旧总开关平滑迁移**：1.25.4 的独立「启用发现页毛玻璃」开关从 UI 移除，避免两个控件控制同一件事；旧值仍被读取——从未设置过档位且旧开关为 false 的用户自动落到「无玻璃」，升级后不会被默认档重新打开；显式选档优先于旧开关。
 - **成对中英文文案**：三档标签、逐档说明（选择弹窗内展示）、跟随开关文案与联动态提示。
 
 ### 实现要点
 
-- 新增 `exploreGlassEffectMode` / `exploreGlassFollowBottomBar` 两个全局偏好键，仍不进 `ThemeRuntimeKeys` 与 `BackupConfig.themePrefKeys`，备份全量导出自动覆盖。
-- 档位解析 `resolveExploreGlassMode` 与预设系数 `exploreGlassPreset` 均为不依赖 Android 运行时的纯函数；`scaledGlassParam` 增加 `factor` 默认参（缺省 1）、`exploreHardwareBlurPx` 增加 `presetFactor` 默认参（缺省 1），既有调用与单测口径不变。
-- 档位系数同时作用于硬件 `RenderEffect` 半径、软件 `stackBlurSoftware` 半径与 shell/tint/stroke 三处 alpha；`config.mode` 纳入底图缓存 key 与 `configSignature()`，换档会重建底图并在返回发现页时重绑行背景；跟随底栏时底栏档位变化同样会改变签名。
-- 降级矩阵不变：无玻璃 / 强度 0 / 墨水屏 / 低内存返回原透明背景；动图壁纸、API 21–30、RenderEffect 异常、非硬件画布等仍按 1.25.3 既有规则兜底。
+- 新增 `exploreGlassEffectMode` / `exploreGlassFollowBottomBar` 两个全局偏好键，仍不进 `ThemeRuntimeKeys` 与 `BackupConfig.themePrefKeys`，备份全量导出自动覆盖。档位值改用 `solid / glass / frosted`（与底栏同值），1.25.5 早期存的 `none` 由 `resolveExploreGlassMode` 归一为 `solid`。
+- `MainActivity` 的模糊/着色/色散/折射/壳层/实底壳层全部改为调用共享对象，公式逐值未变（底栏观感不变）；两个不透明度换算也收敛到共享实现。发现页删除系数体系，`exploreGlassMaterial()` 产出共享 `Params`，硬件 `RenderEffect` 半径、软件 `stackBlurSoftware` 半径、tint / shell 三色 / 描边全部由它驱动；`exploreHardwareBlurPx` 改为接收预设的 `blurDp`，不再自行推算公式。
+- 四个倍率滑杆只在预设原值之上线性缩放，100 = 预设原值、0 关闭该维度、200 加倍，切档不清空微调值。
+- 底图缓存 key 纳入 `Params.blurDp`、档位、跟随态与底栏两个强度键；`configSignature()` 同样纳入，底栏改档或改强度后返回发现页即重绑行背景。
+- 降级矩阵不变：强度 0 / 墨水屏 / 低内存返回原透明背景；动图壁纸、API 21–30、RenderEffect 异常、非硬件画布等仍按 1.25.3 既有规则兜底。
 
 ### 验证
 
 - `tools/check_settings_mapping.py`：17 个 ConfigTag 全覆盖、零断链、分区归属一致，PASS。
-- `:app:testAppDebugUnitTest`：`BUILD SUCCESSFUL in 3m 55s`，毛玻璃参数单测 11 个用例全过（新增档位解析、旧开关迁移、跟随映射、预设系数、factor 限幅、硬件半径系数共 5 组断言）；仅剩 1.25.2 基线既有的 `getOpacity()` 弃用告警，无新增告警。
+- `:app:testAppDebugUnitTest`：两轮均通过（首轮 `BUILD SUCCESSFUL in 5m 22s`、定稿复验 `in 4m 59s`），毛玻璃参数单测 12 个用例全过（覆盖底栏两档公式逐值、壳层补偿与选中增强、档位/强度换算与限幅、旧值与跟随解析、共享预设接线、硬件半径与边缘高光）；仅剩 1.25.2 基线既有的 `getOpacity()` 弃用告警，无新增告警。
 
 ## 1.25.4 版（2026-11-06）
 

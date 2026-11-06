@@ -1618,50 +1618,27 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomNavigationGlassView.visibility = android.view.View.VISIBLE
             bottomNavigationIndicatorGlassView.visibility = android.view.View.VISIBLE
             searchButtonGlassView.visibility = if (standardMode) android.view.View.GONE else android.view.View.VISIBLE
-            val glassLevel = when (effectMode) {
-                "frosted" -> bottomBarOpacityLevel(AppConfig.frostedGlassLevel)
-                else -> bottomBarOpacityLevel(AppConfig.liquidGlassLevel)
-            }
-            val frostedMode = effectMode == "frosted"
-            val blurRadius = if (frostedMode) {
-                (12f + glassLevel * 18f).dpToPx()
-            } else {
-                (8f + glassLevel * 10f).dpToPx()
-            }
-            val tintAlpha = if (frostedMode) {
-                0.05f + glassLevel * 0.10f
-            } else {
-                0.02f + glassLevel * 0.05f
-            }
-            val dispersion = if (frostedMode) {
-                (0.10f + glassLevel * 0.12f).coerceAtMost(0.28f)
-            } else {
-                (0.20f + glassLevel * 0.24f).coerceAtMost(0.48f)
-            }
-            val refractionHeight = if (frostedMode) {
-                (14f + glassLevel * 8f).dpToPx()
-            } else {
-                (22f + glassLevel * 12f).dpToPx()
-            }
-            val refractionOffset = if (frostedMode) {
-                (26f + glassLevel * 16f).dpToPx()
-            } else {
-                (42f + glassLevel * 24f).dpToPx()
-            }
+            // 三档材质的唯一参数来源；发现页「跟随底栏材质」复用同一份预设。
+            val material = GlassMaterialPreset.current(effectMode)
+            val blurRadius = material.blurDp.dpToPx()
+            val tintAlpha = material.tintAlpha
+            val dispersion = material.dispersion
+            val refractionHeight = material.refractionHeightDp.dpToPx()
+            val refractionOffset = material.refractionOffsetDp.dpToPx()
             bottomNavigationShellOverlay.background = createLiquidGlassShellDrawable(
-                glassLevel = glassLevel,
+                material = material,
                 cornerRadius = bottomPillRadius,
                 oval = false,
                 selected = false
             )
             searchButtonShellOverlay.background = createLiquidGlassShellDrawable(
-                glassLevel = glassLevel,
+                material = material,
                 cornerRadius = searchPillRadius,
                 oval = true,
                 selected = false
             )
             bottomNavigationIndicatorOverlay.background = createLiquidGlassShellDrawable(
-                glassLevel = glassLevel,
+                material = material,
                 cornerRadius = indicatorPillRadius,
                 oval = false,
                 selected = true
@@ -1791,28 +1768,26 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun createSolidBottomShellDrawable(cornerRadius: Float, oval: Boolean): GradientDrawable {
         val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-        val baseColor = bottomBackground
-        val alpha = standardBottomBarOpacityLevel(config.opacity)
-        return GradientDrawable().apply {
-            shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
-            if (!oval) {
-                this.cornerRadius = cornerRadius
-            }
-            setColor(AppColorUtils.withAlpha(baseColor, alpha))
-            bottomBarBorderColor(config)?.let { setStroke(1.dpToPx(), it) }
-        }
+        return GlassMaterialPreset.createSolidShellDrawable(
+            baseColor = bottomBackground,
+            opacity = config.opacity,
+            borderColor = bottomBarBorderColor(config),
+            cornerRadiusPx = cornerRadius,
+            oval = oval,
+            strokeWidthPx = 1.dpToPx()
+        )
     }
 
     private fun createStandardBottomShellDrawable(): Drawable {
         val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-        val baseColor = bottomBackground
-        val alpha = standardBottomBarOpacityLevel(config.opacity)
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 0f
-            setColor(AppColorUtils.withAlpha(baseColor, alpha))
-            bottomBarBorderColor(config)?.let { setStroke(1.dpToPx(), it) }
-        }
+        return GlassMaterialPreset.createSolidShellDrawable(
+            baseColor = bottomBackground,
+            opacity = config.opacity,
+            borderColor = bottomBarBorderColor(config),
+            cornerRadiusPx = 0f,
+            oval = false,
+            strokeWidthPx = 1.dpToPx()
+        )
     }
 
     private fun renderStandardBottomWallpaper() = binding.run {
@@ -1834,13 +1809,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun bottomBarOpacityLevel(value: Int): Float {
-        return (value.coerceIn(0, 100) / 200f).coerceIn(0f, 0.5f)
-    }
-
-    private fun standardBottomBarOpacityLevel(value: Int): Float {
-        return (value.coerceIn(0, 100) / 100f).coerceIn(0f, 1f)
-    }
+    /** 实底档不透明度；与 GlassMaterialPreset 共用同一换算，避免底栏/发现页漂移。 */
+    private fun standardBottomBarOpacityLevel(value: Int): Float =
+        GlassMaterialPreset.solidOpacity(value)
 
     private fun createEInkBottomShellDrawable(cornerRadius: Float, oval: Boolean): GradientDrawable {
         val baseColor = bottomBackground
@@ -1990,7 +1961,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun createLiquidGlassShellDrawable(
-        glassLevel: Float,
+        material: GlassMaterialPreset.Params,
         cornerRadius: Float,
         oval: Boolean,
         selected: Boolean
@@ -1998,18 +1969,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val baseColor = bottomBackground
         val isLight = AppColorUtils.isColorLight(baseColor)
         val surfaceColor = if (isLight) Color.WHITE else Color.rgb(22, 24, 28)
-        val fallbackBoost = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) 0.08f else 0f
-        val startAlpha = (0.18f + glassLevel * 0.16f + fallbackBoost).coerceIn(0f, 0.44f)
-        val centerAlpha = (0.10f + glassLevel * 0.12f + fallbackBoost * 0.65f).coerceIn(0f, 0.32f)
-        val endAlpha = (0.08f + glassLevel * 0.10f + fallbackBoost * 0.45f).coerceIn(0f, 0.26f)
-        val selectedBoost = if (selected) 0.05f else 0f
-        val strokeAlpha = (0.18f + glassLevel * 0.16f + selectedBoost).coerceIn(0f, 0.42f)
+        // 壳层 alpha 与发现页共用同一纯函数；selectedBoost 是底栏指示器专属的选中态增强。
+        val shell = GlassMaterialPreset.shellAlphas(
+            material.glassLevel,
+            GlassMaterialPreset.fallbackBoost(),
+            if (selected) 0.05f else 0f
+        )
         return GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, startAlpha + selectedBoost),
-                AppColorUtils.withAlpha(surfaceColor, centerAlpha + selectedBoost),
-                AppColorUtils.withAlpha(surfaceColor, endAlpha + selectedBoost)
+                AppColorUtils.withAlpha(surfaceColor, shell.start),
+                AppColorUtils.withAlpha(surfaceColor, shell.center),
+                AppColorUtils.withAlpha(surfaceColor, shell.end)
             )
         ).apply {
             shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
@@ -2018,7 +1989,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             }
             setStroke(
                 1.dpToPx(),
-                bottomBarBorderColor() ?: AppColorUtils.withAlpha(surfaceColor, strokeAlpha)
+                bottomBarBorderColor() ?: AppColorUtils.withAlpha(surfaceColor, shell.stroke)
             )
         }
     }

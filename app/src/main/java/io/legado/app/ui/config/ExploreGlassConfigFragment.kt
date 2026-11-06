@@ -12,7 +12,7 @@ import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSliderSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
-import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_NONE
+import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_SOLID
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_DEFAULT
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_MAX
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_MIN
@@ -23,9 +23,10 @@ import io.legado.app.utils.removePref
 /**
  * 「我的 › 发现页毛玻璃」：三档材质预设 + 各视觉维度微调 + 渲染开关，集中在一页。
  *
- * 材质样式（无玻璃 / 透明玻璃 / 磨砂玻璃）是对齐底栏 solid/glass/frosted 的自动档：
- * 选一档即套用整组基础系数，下面四个倍率滑杆在系数之上继续微调，切档不清空微调值。
- * 「跟随底栏材质」开启时档位由底栏决定，本页存的档位保留但不生效。
+ * 材质样式（无玻璃 / 透明玻璃 / 磨砂玻璃）与底栏 solid/glass/frosted 是同一套自动档：
+ * 选一档即套用 GlassMaterialPreset 里该档的完整参数（模糊、着色、壳层、描边、
+ * 色散/折射），下面四个倍率滑杆在预设原值之上继续微调，切档不清空微调值。
+ * 「跟随底栏材质」开启时档位与强度都取底栏当前预设，本页档位保留但不生效。
  * 1.25.4 的独立总开关已从 UI 移除，由「无玻璃」档承担关闭职责；旧值仍被读取迁移，
  * 避免升级后原本关闭毛玻璃的用户被默认档重新打开。
  *
@@ -48,7 +49,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
         val mode = resolveExploreGlassMode(
             storedMode, legacyEnabled, followBottomBar, AppConfig.bottomBarEffectMode
         )
-        val slidersEnabled = mode != EXPLORE_GLASS_MODE_NONE
+        val slidersEnabled = mode != EXPLORE_GLASS_MODE_SOLID
         val descriptions = ctx.resources.getStringArray(R.array.explore_glass_mode_descriptions)
         val options = choiceOptionList(
             R.array.explore_glass_mode_entries, R.array.explore_glass_mode_values
@@ -83,13 +84,17 @@ class ExploreGlassConfigFragment : ComposeSettingFragment() {
                         SettingSliderSpec(
                             key = ThemeRuntimeKeys.themeExploreGlassBlur(),
                             title = str(R.string.explore_glass_level),
-                            summary = str(R.string.explore_glass_level_summary),
+                            summary = if (followBottomBar) {
+                                // 跟随时强度也取底栏的 frostedGlassLevel / liquidGlassLevel，
+                                // 本滑杆不参与计算，置灰并如实说明，避免显示一个无效的数值。
+                                str(R.string.explore_glass_level_following)
+                            } else str(R.string.explore_glass_level_summary),
                             value = intSetting(
                                 ThemeRuntimeKeys.themeExploreGlassBlur(),
                                 ExploreGlassBackdrop.LEVEL_DEFAULT
                             ).coerceIn(0, 100),
                             valueRange = 0..100,
-                            enabled = slidersEnabled,
+                            enabled = slidersEnabled && !followBottomBar,
                             valueFormatter = { "$it%" },
                             onValueChange = {
                                 updateIntSetting(ThemeRuntimeKeys.themeExploreGlassBlur(), it)

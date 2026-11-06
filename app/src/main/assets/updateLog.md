@@ -6,7 +6,7 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 **vH.1.25.5 · 2026/11/06**
 
-- 发现页毛玻璃新增与底栏对齐的三档材质自动预设：无玻璃(书源名行回到透明背景) / 透明玻璃(模糊0.55、遮盖0.40、着色0.45、描边1.25，壁纸清晰透出) / 磨砂玻璃(默认，系数全1即1.25.3观感)；选一档自动套用整组系数，四个倍率滑杆在系数之上继续微调、切档不清空微调值，系数按底栏 glass 与 frosted 的公式差异折算且发现页无折射层故用更强描边替代。进阶区新增「跟随底栏材质」(默认关)，开启后直接把 bottomBarEffectMode 映射为 none/glass/frosted 并置灰本页档位行，原档位保留、关闭即恢复；1.25.4 独立总开关从 UI 移除由无玻璃档承担关闭职责，旧值仍读取迁移(未设档位且旧开关 false → 无玻璃，显式选档优先)。档位解析与预设系数抽纯函数，scaledGlassParam 加 factor 默认参、exploreHardwareBlurPx 加 presetFactor 默认参，系数同时作用于硬件 RenderEffect 半径/软件 stackBlur 半径/shell-tint-stroke 三处 alpha，config.mode 进底图缓存 key 与 configSignature 保证换档重建底图并返回发现页即重绑；降级矩阵不变。四处映射校验 PASS，参数单测 11 例全过，BUILD SUCCESSFUL in 3m 55s，无新增告警
+- 发现页毛玻璃新增与底栏逐值一致的三档材质自动预设：三档不是在发现页既有观感上乘系数，而是新增共享单一来源 GlassMaterialPreset，把 MainActivity.setupLiquidGlass / createLiquidGlassShellDrawable 里分散的公式抽成纯函数，底栏与发现页都从它取值(玻璃档 8+l*10dp / 0.02+l*0.05 着色 / 强色散折射，磨砂档 12+l*18dp / 0.05+l*0.10 着色，壳层三色与描边两档同式，强度映射 level/200 且磨砂读 frostedGlassLevel、玻璃读 liquidGlassLevel)。无玻璃(solid)走底栏同款实底壳层而非透明背景，透明玻璃(glass)取轻模糊/弱着色/由 dispersion 与折射高度派生的边缘高光(行渲染器无折射 shader)，磨砂玻璃(frosted,默认)取强模糊与同款壳层描边；档位值改用 solid/glass/frosted 且旧值 none 归一为 solid，1.25.4 旧总开关关闭仍迁移到无玻璃。进阶区「跟随底栏材质」开启后档位与强度都取底栏当前预设(GlassMaterialPreset.current)，本页档位行与强度滑杆置灰，原档位保留、关闭即恢复；四个倍率滑杆 100=该档预设原值、只在预设值之上线性缩放、切档不清空微调值。发现页删除系数体系，exploreGlassMaterial 产出共享 Params 统一驱动硬件 RenderEffect 半径/软件 stackBlur 半径/tint-shell 三色-stroke，exploreHardwareBlurPx 改为接收预设 blurDp；Params.blurDp、跟随态与底栏两个强度键进底图缓存 key 与 configSignature，底栏改档或改强度返回发现页即重绑；降级矩阵不变。四处映射校验 PASS，参数单测 12 例全过，两轮 BUILD SUCCESSFUL(5m22s / 4m59s)，无新增告警
 
 **vH.1.25.4 · 2026/11/06**
 

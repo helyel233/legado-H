@@ -282,9 +282,12 @@ object PreferKey {
      * 只是不再出现在设置页 UI 上，避免两个控件控制同一件事。
      */
     const val exploreGlassEnabled = "exploreGlassEnabled"
-    /** 三档材质：none / glass / frosted，默认 frosted。 */
+    /**
+     * 三档材质，取值与底栏 bottomBarEffectMode 一致：solid / glass / frosted，默认 frosted。
+     * 1.25.5 的旧值 none 由 resolveExploreGlassMode 归一为 solid，避免升级后出现无效档。
+     */
     const val exploreGlassEffectMode = "exploreGlassEffectMode"
-    /** 开启后忽略本页档位，直接映射底栏 bottomBarEffectMode。 */
+    /** 开启后档位与强度都取底栏当前预设（GlassMaterialPreset.current）。 */
     const val exploreGlassFollowBottomBar = "exploreGlassFollowBottomBar"
     const val exploreGlassBlurScale = "exploreGlassBlurScale"
     const val exploreGlassShellScale = "exploreGlassShellScale"
