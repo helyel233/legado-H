@@ -100,11 +100,10 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.run {
-            // 书源名行毛玻璃背景：强度由主题「发现页毛玻璃效果」控制，0 为透明原样
-            llTitle.background = ExploreGlassBackdrop.rowBackground(
-                llTitle,
-                ExploreGlassBackdrop.level(context)
-            ) ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
+            // 书源名行毛玻璃背景：参数由「我的 › 发现页毛玻璃」与编辑主题页共同控制，
+            // 总开关关闭 / 强度为 0 / 设备降级时返回 null，保留默认透明背景
+            llTitle.background = ExploreGlassBackdrop.rowBackground(llTitle)
+                ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
             if (holder.layoutPosition == itemCount - 1) {
                 root.setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
             } else {

@@ -256,7 +256,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var selectedDiscoverUrlIndex = -1
     private var discoverRequestVersion = 0L
     private var discoverSourceVersion = 0L
-    private var lastExploreGlassLevel = Int.MIN_VALUE
+    private var lastExploreGlassSignature = ""
     private var lastExploreNightMode = AppConfig.isNightTheme
     private var discoveryModeLoaded = false
     private var modernTopOverlaySpace = -1
@@ -3895,10 +3895,12 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             refreshSuiteConfig()
         }
         if (!usingModernDiscovery && !usingSuiteDiscovery) {
-            // 毛玻璃强度在编辑主题中调整后，返回发现页时刷新行背景
-            val glassLevel = ExploreGlassBackdrop.level(requireContext())
-            if (glassLevel != lastExploreGlassLevel) {
-                lastExploreGlassLevel = glassLevel
+            // 毛玻璃任一设置项（总开关/强度/四个倍率/渲染管线/动图降级）在
+            // 「我的 › 发现页毛玻璃」或编辑主题页调整后，返回发现页时刷新行背景。
+            // 用配置签名而非单一强度值，新增细项不必再逐个补监听。
+            val glassSignature = ExploreGlassBackdrop.configSignature(requireContext())
+            if (glassSignature != lastExploreGlassSignature) {
+                lastExploreGlassSignature = glassSignature
                 refreshClassicRowTheme()
             }
             // 系统日/夜切换发生在页面后台时（recreate 可能未生效），回到页面后补刷

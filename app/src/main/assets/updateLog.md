@@ -4,6 +4,10 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.25.4 · 2026/11/06**
+
+- 「我的 › 内容与规则」新增「发现页毛玻璃」直达入口与独立设置页(9 项，整页进设置搜索、进阶分区默认折叠)：总开关、玻璃强度(与编辑主题页共用日夜间键)、模糊程度/底色遮盖/白色着色/边缘描边四个 0-200 倍率滑杆、硬件真高斯(API31+)、动图壁纸使用纯色底、恢复默认；倍率默认 100 即 1.25.3 观感，经纯函数限幅守住各维度 alpha 上限，模糊倍率同时作用于 RenderEffect 与 stackBlur 并纳入底图缓存 key；configSignature 汇总全部参数，返回发现页自动重绑行背景。四处映射校验 PASS，参数单测 6 例全过，BUILD SUCCESSFUL
+
 **vH.1.25.3 · 2026/11/05**
 
 - 发现页毛玻璃「治本」：API 31+ 改用 RenderEffect 硬件真高斯(独立 RenderNode 只模糊玻璃层，不糊书源名文字/箭头；半径对齐底栏 frosted 12+level*18dp 并限幅 1..80px)，既有 stackBlur 软件管线完整保留为降级基线；新增双份底图缓存 GlassBackdrop(raw/blurred)，硬件失败当帧零等待降级(不闪实底、不透清晰壁纸)，level<=0/墨水屏/低内存/动图壁纸/API 21-30/非硬件 Canvas/RenderEffect 异常逐项兜底；硬件层录制与 Canvas save/restore 改 try/finally 闭合防同帧错位，setColorFilter 补 invalidateSelf；半径换算抽纯函数并补 4 条 JUnit 单测(密度换算/不误乘1.4/限幅/单调性)，修复 DnsBenchmarkLiveTest 既有编译错误恢复单测源码集编译；零新增依赖，API 21-30 行为不变

@@ -7,9 +7,9 @@ import org.junit.Test
 /**
  * 硬件管线高斯半径的口径单测。
  *
- * 半径是本次治本的核心参数：口径错（误乘软件管线的 1.4 等效系数、漏乘 density、
- * 限幅失效）都不会导致编译失败，只会让观感或低端 GPU 开销悄悄偏离，故抽成纯函数后
- * 用确定性断言锁住，不依赖真机与运行时推断。
+ * 半径与倍率是毛玻璃的核心参数：口径错（误乘软件管线的 1.4 等效系数、漏乘 density、
+ * 限幅失效、倍率越界）都不会导致编译失败，只会让观感或低端 GPU 开销悄悄偏离，
+ * 故抽成纯函数后用确定性断言锁住，不依赖真机与运行时推断。
  */
 class ExploreGlassHardwareBlurTest {
 
@@ -50,5 +50,29 @@ class ExploreGlassHardwareBlurTest {
             previous = current
             level += 0.05f
         }
+    }
+
+    @Test
+    fun scaleParamKeepsDefaultAndClampsOutOfRange() {
+        // 设置项默认 100 必须原样返回 1.25.3 既有口径，不能改变默认观感
+        assertEquals(0.5f, scaledGlassParam(0.5f, 100), 0.001f)
+        assertEquals(0f, scaledGlassParam(0.5f, 0), 0.001f)
+        assertEquals(1f, scaledGlassParam(0.5f, 200), 0.001f)
+        // 备份恢复写入越界值时先钳到 [0, 200]，避免 alpha 越界或负倍率
+        assertEquals(1f, scaledGlassParam(0.5f, 999), 0.001f)
+        assertEquals(0f, scaledGlassParam(0.5f, -50), 0.001f)
+        // 各维度自身的上限（描边 0.42 / shell 0.88 / tint 1）仍须守住
+        assertEquals(0.42f, scaledGlassParam(0.34f, 200, 0.42f), 0.001f)
+        assertEquals(0.88f, scaledGlassParam(1.6f, 100, 0.88f), 0.001f)
+    }
+
+    @Test
+    fun hardwareBlurRespectsBlurPercent() {
+        // glassLevel=0、density=2：12dp → 24px；0 倍率受 1px 下限保护，200 倍率得 48px
+        assertEquals(1f, exploreHardwareBlurPx(0f, 2f, 0), 0.001f)
+        assertEquals(24f, exploreHardwareBlurPx(0f, 2f, 100), 0.001f)
+        assertEquals(48f, exploreHardwareBlurPx(0f, 2f, 200), 0.001f)
+        // 倍率再大也不能突破 80px 上限
+        assertEquals(80f, exploreHardwareBlurPx(0.5f, 100f, 200), 0.001f)
     }
 }

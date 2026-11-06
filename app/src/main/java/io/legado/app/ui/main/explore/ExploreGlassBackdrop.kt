@@ -26,6 +26,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeRuntimeKeys
@@ -33,6 +34,7 @@ import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.ui.main.MainThemeBackgroundState
 import io.legado.app.ui.widget.compose.ComposeThemeImageCrop
 import io.legado.app.utils.ColorUtils as AppColorUtils
+import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.stackBlurSoftware
 import java.io.File
@@ -55,8 +57,8 @@ private data class GlassBackdrop(
 
 /**
  * 硬件模糊是否可用：`RenderEffect.createBlurEffect` / `RenderNode.setRenderEffect`
- * 均为 API 31（Android 12）。墨水屏与低内存设备由 `ExploreGlassBackdrop.level()`
- * 返回 0 挡在门外，此处无需重复判断。
+ * 均为 API 31（Android 12）。墨水屏、低内存设备与总开关关闭由
+ * `ExploreGlassBackdrop.rowBackground()` 直接返回 null 挡在门外，此处无需重复判断。
  */
 private fun supportsHardwareBlur(): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -69,15 +71,75 @@ private const val GLASS_LEVEL_BLUR_DP = 18f
 private const val HARDWARE_BLUR_MIN_PX = 1f
 private const val HARDWARE_BLUR_MAX_PX = 80f
 
+/** 细项倍率滑杆范围：100 = 沿用 ②③ 既有口径，0 = 关闭该维度，200 = 加倍。 */
+internal const val EXPLORE_GLASS_SCALE_MIN = 0
+internal const val EXPLORE_GLASS_SCALE_DEFAULT = 100
+internal const val EXPLORE_GLASS_SCALE_MAX = 200
+
+/**
+ * 把「既有口径的基础值」按用户滑杆倍率缩放并限幅的纯函数（可直接单测）。
+ * percent=100 时原样返回基础值，因此新增设置项不改变既有默认观感；
+ * 越界值先钳到 [0, 200] 再计算，避免备份恢复写入异常值时 alpha 越界。
+ */
+internal fun scaledGlassParam(base: Float, percent: Int, upperBound: Float = Float.MAX_VALUE): Float {
+    val scale = percent.coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX) / 100f
+    return (base * scale).coerceIn(0f, upperBound)
+}
+
+/**
+ * 「我的 › 发现页毛玻璃」里各个设置项的一次性快照。
+ * 总强度 [level] 沿用日夜间分离的 themeExploreGlassBlur；其余都是全局倍率/开关，
+ * 与 frostedGlassLevel 等全局 UI 键同体系，不参与主题包导入导出。
+ */
+internal data class ExploreGlassConfig(
+    val enabled: Boolean,
+    val level: Int,
+    val blurPercent: Int,
+    val shellPercent: Int,
+    val tintPercent: Int,
+    val strokePercent: Int,
+    val hardwareBlur: Boolean,
+    val animatedSolid: Boolean
+)
+
+/** 集中读取一次偏好，避免每行 bind 时散落多次 SharedPreferences 访问。 */
+internal fun readExploreGlassConfig(context: Context): ExploreGlassConfig = ExploreGlassConfig(
+    enabled = context.getPrefBoolean(PreferKey.exploreGlassEnabled, true),
+    level = context.getPrefInt(
+        ThemeRuntimeKeys.themeExploreGlassBlur(), ExploreGlassBackdrop.LEVEL_DEFAULT
+    ).coerceIn(0, 100),
+    blurPercent = context.getPrefInt(
+        PreferKey.exploreGlassBlurScale, EXPLORE_GLASS_SCALE_DEFAULT
+    ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+    shellPercent = context.getPrefInt(
+        PreferKey.exploreGlassShellScale, EXPLORE_GLASS_SCALE_DEFAULT
+    ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+    tintPercent = context.getPrefInt(
+        PreferKey.exploreGlassTintScale, EXPLORE_GLASS_SCALE_DEFAULT
+    ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+    strokePercent = context.getPrefInt(
+        PreferKey.exploreGlassStrokeScale, EXPLORE_GLASS_SCALE_DEFAULT
+    ).coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+    hardwareBlur = context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true),
+    animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true)
+)
+
 /**
  * 硬件高斯半径的纯函数换算（不依赖 Android 运行时，可直接单测覆盖口径与限幅）：
- * `blurDp = 12 + glassLevel * 18`（与底栏 frosted 同口径），乘屏幕密度得屏幕像素，
+ * `blurDp = (12 + glassLevel * 18) * 用户模糊倍率`（底栏 frosted 同口径），乘屏幕密度得屏幕像素，
  * 再限幅到 [1, 80] px。**不乘**软件管线的 1.4 等效系数——那个系数是把 GPU 高斯
  * 折算成 stackBlur 半径用的，硬件管线用的就是 GPU 真高斯。
  * 上限防止超大半径在低端 GPU 上开销陡增，下限避免 0 半径触发 API 异常。
+ * blurPercent 缺省 100，保证既有两参调用与单测口径不变。
  */
-internal fun exploreHardwareBlurPx(glassLevel: Float, density: Float): Float {
-    val blurDp = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP
+internal fun exploreHardwareBlurPx(
+    glassLevel: Float,
+    density: Float,
+    blurPercent: Int = EXPLORE_GLASS_SCALE_DEFAULT
+): Float {
+    val blurDp = scaledGlassParam(
+        BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP, blurPercent
+    )
     return (blurDp * density).coerceIn(HARDWARE_BLUR_MIN_PX, HARDWARE_BLUR_MAX_PX)
 }
 
@@ -102,8 +164,9 @@ internal fun exploreHardwareBlurPx(glassLevel: Float, density: Float): Float {
  * （[GlassPositionTracker]）与同一套 shell/tint/描边参数，保证降级时观感连续。
  *
  * 降级矩阵（任一条命中都不留空白帧，也不退回未模糊的 raw）：
- * - level<=0 / 墨水屏 / 低内存：`level()` 返回 0，`rowBackground()` 返回 null，用原透明背景；
- * - 动图壁纸：`backdrop()` 返回 null，玻璃层不采样，只留 tint/shell/描边纯实底；
+ * - 总开关关闭 / level<=0 / 墨水屏 / 低内存：`rowBackground()` 返回 null，用原透明背景；
+ * - 动图壁纸且「使用纯色底」开启：`backdrop()` 返回 null，玻璃层不采样，
+ *   只留 tint/shell/描边纯实底；关闭该开关才允许采样静止首帧；
  * - API 21-30：不创建 [HardwareGlassLayer]，直接走软件管线；
  * - API 31+ 但 RenderEffect 构造失败：init 的 `runCatching` 得到 null，走软件管线；
  * - 非硬件加速 Canvas：当帧走软件管线，不置持久故障位（截图/软件 layer 是临时状态）；
@@ -114,8 +177,10 @@ internal fun exploreHardwareBlurPx(glassLevel: Float, density: Float): Float {
  *   硬件管线仍可用 raw 由 GPU 出图。
  * 由于 [GlassBackdrop] 同时缓存两份底图，以上降级都能「当帧」完成，无需重新异步构建。
  *
- * 强度（0-100）由主题设置「发现页毛玻璃效果」（themeExploreGlassBlur，日夜间分离）控制：
- * 0 为关闭（保留原透明背景），数值越大模糊与玻璃底色越明显。
+ * 参数来源见 [readExploreGlassConfig]：总强度（0-100）沿用日夜间分离的
+ * themeExploreGlassBlur（编辑主题页与「我的 › 发现页毛玻璃」写同一个键），
+ * 其余细项为全局倍率/开关。所有倍率默认 100，即不改变 1.25.3 的既有观感；
+ * 0 为关闭该维度，200 为加倍，越界值一律钳到 [0, 200]。
  */
 object ExploreGlassBackdrop {
 
@@ -153,36 +218,56 @@ object ExploreGlassBackdrop {
     private val inFlightKeys = HashSet<String>()
     private val pendingCallbacks = HashMap<String, ArrayList<(GlassBackdrop?) -> Unit>>()
 
+    /** 当前有效档位（含设备级强制降级），供外部查询。 */
     fun level(context: Context): Int {
-        // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
         if (AppConfig.isEInkMode || isLowRamDevice(context)) return 0
-        return context.getPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(), LEVEL_DEFAULT)
-            .coerceIn(0, 100)
+        val config = readExploreGlassConfig(context)
+        return if (config.enabled) config.level else 0
+    }
+
+    /**
+     * 配置签名：任何影响观感的设置项变化都会改变它。
+     * ExploreFragment 在 onResume 时用它判断是否刷新经典行背景，
+     * 因此新增细项后不必再逐个加监听——只要参数进快照，返回发现页即生效。
+     */
+    fun configSignature(context: Context): String {
+        val config = readExploreGlassConfig(context)
+        return listOf(
+            config.enabled, config.level, config.blurPercent, config.shellPercent,
+            config.tintPercent, config.strokePercent, config.hardwareBlur,
+            config.animatedSolid, AppConfig.isNightTheme
+        ).joinToString("|")
     }
 
     private fun isLowRamDevice(context: Context): Boolean =
         (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
 
-    /** 返回毛玻璃行背景；level<=0 或无法构建时返回 null，调用方保留默认透明背景。 */
-    fun rowBackground(host: View, level: Int): Drawable? {
-        if (level <= 0) return null
+    /** 返回毛玻璃行背景；关闭 / level<=0 / 设备降级时返回 null，调用方保留默认透明背景。 */
+    fun rowBackground(host: View): Drawable? {
         val context = host.context
+        // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
+        if (AppConfig.isEInkMode || isLowRamDevice(context)) return null
+        val config = readExploreGlassConfig(context)
+        if (!config.enabled || config.level <= 0) return null
         // 与底栏 bottomBarOpacityLevel 同映射（level/GLASS_LEVEL_DIVISOR，上限 0.5），观感与底栏一致
-        val glassLevel = level.coerceIn(0, 100) / GLASS_LEVEL_DIVISOR
-        val useHardware = supportsHardwareBlur()
+        val glassLevel = config.level / GLASS_LEVEL_DIVISOR
+        val useHardware = supportsHardwareBlur() && config.hardwareBlur
         return FrostedGlassDrawable(
             host = host,
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             glassLevel = glassLevel,
             baseColor = ThemeStore.bottomBackground(context),
+            config = config,
             useHardware = useHardware,
             hardwareBlurPx = if (useHardware) {
-                exploreHardwareBlurPx(glassLevel, context.resources.displayMetrics.density)
+                exploreHardwareBlurPx(
+                    glassLevel, context.resources.displayMetrics.density, config.blurPercent
+                )
             } else 0f
         ).also { drawable ->
             //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
             //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
-            drawable.updateBackdrop(backdrop(context, glassLevel, drawable::updateBackdrop))
+            drawable.updateBackdrop(backdrop(context, glassLevel, config, drawable::updateBackdrop))
             GlassPositionTracker.attach(host, drawable)
         }
     }
@@ -190,14 +275,16 @@ object ExploreGlassBackdrop {
     private fun backdrop(
         context: Context,
         glassLevel: Float,
+        config: ExploreGlassConfig,
         onReady: (GlassBackdrop?) -> Unit
     ): GlassBackdrop? {
         val state = MainThemeBackgroundState.from(context)
         // 动图壁纸（gif/webp）由背景层 ComposeThemeImage 逐帧播放，而 buildBitmap 用
         // BitmapFactory.decodeFile 只能取首帧：若照常采样会产生「壁纸在动、玻璃静止」的错乱。
-        // 故动图壁纸直接返回 null，走纯 shell 实底（玻璃层不再采样静止帧），与背景层动画脱钩。
+        // 默认返回 null 走纯 shell 实底（玻璃层不再采样静止帧），与背景层动画脱钩；
+        // 设置页关掉「动图壁纸使用纯色底」后，用户可接受静止首帧玻璃，此时照常构建。
         // 两条管线都基于这张静态底图，共用此降级判定。
-        if (state.file != null && state.animated) return null
+        if (state.file != null && state.animated && config.animatedSolid) return null
         val metrics = context.resources.displayMetrics
         val targetW = max(64, (metrics.widthPixels / DOWNSCALE).toInt())
         val targetH = max(64, (metrics.heightPixels / DOWNSCALE).toInt())
@@ -210,7 +297,11 @@ object ExploreGlassBackdrop {
             state.crop?.let { "${it.left},${it.top},${it.right},${it.bottom}" }.orEmpty(),
             AppConfig.isNightTheme,
             targetW,
-            (glassLevel * 40).toInt()
+            (glassLevel * 40).toInt(),
+            // 模糊倍率改变软件模糊 radius，必须纳入 key 才会重建底图；
+            // animatedSolid 决定动图壁纸是否走构建，避免两种模式复用同一份缓存。
+            config.blurPercent,
+            config.animatedSolid
         ).joinToString("|")
         synchronized(this) {
             cache?.takeIf { it.key == key }?.let { return it.backdrop }
@@ -220,7 +311,9 @@ object ExploreGlassBackdrop {
         // 再除以降采样比例。模糊必须抹平壁纸高频纹理避免摩尔纹，同时保留大块明暗。
         // 固定用纯软件模糊：不依赖 renderscript toolkit 的 native 库。
         val density = metrics.density
-        val blurDp = BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP
+        val blurDp = scaledGlassParam(
+            BASE_BLUR_DP + glassLevel * GLASS_LEVEL_BLUR_DP, config.blurPercent
+        )
         val radius = (
             state.blur / DOWNSCALE + blurDp * density * STACK_BLUR_DENSITY_FACTOR / DOWNSCALE
             ).toInt().coerceIn(3, 25)
@@ -345,6 +438,7 @@ private class FrostedGlassDrawable(
     private val radiusPx: Float,
     private val glassLevel: Float,
     baseColor: Int,
+    private val config: ExploreGlassConfig,
     private val useHardware: Boolean,
     private val hardwareBlurPx: Float
 ) : Drawable() {
@@ -380,10 +474,18 @@ private class FrostedGlassDrawable(
     // - 描边 alpha 与底栏 strokeAlpha 相同（0.18 + glassLevel * 0.16，上限 0.42）；
     // - tint 为 LiquidGlass 白色弱着色（0.05 + glassLevel * 0.10）；
     // - shell 垂直渐变上深下浅，中心随强度提升，最终叠加接近实底。
+    // 三者在基础值之上再乘设置页的倍率（默认 100 即原值），上限沿用各自既有边界，
+    // 避免用户把滑杆拉到 200 时 alpha 超过 1 或描边盖过文字。
     private val tintBaseAlpha =
-        ((TINT_BASE_ALPHA + glassLevel * TINT_LEVEL_ALPHA).coerceIn(0f, 1f) * 255).toInt()
+        (scaledGlassParam(
+            TINT_BASE_ALPHA + glassLevel * TINT_LEVEL_ALPHA, config.tintPercent, 1f
+        ) * 255).toInt()
     private val strokeBaseRatio =
-        (SHELL_STROKE_BASE_ALPHA + glassLevel * SHELL_STROKE_LEVEL_ALPHA).coerceIn(0f, SHELL_STROKE_MAX_ALPHA)
+        scaledGlassParam(
+            SHELL_STROKE_BASE_ALPHA + glassLevel * SHELL_STROKE_LEVEL_ALPHA,
+            config.strokePercent,
+            SHELL_STROKE_MAX_ALPHA
+        )
     private var shellShaderCache: LinearGradient? = null
     private var shellShaderHeight = -1
     private var alphaFactor = 1f
@@ -465,8 +567,11 @@ private class FrostedGlassDrawable(
         if (cached != null && shellShaderHeight == height) return cached
         // 滑杆直接对应遮盖度：100% 时壳层中心 ≈SHELL_CENTER_MAX_ALPHA（叠加后接近实底），
         // 60% ≈0.58，低档仅轻磨砂；上深下浅保留底栏同款垂直渐变。
-        val centerAlpha = (SHELL_CENTER_BASE_ALPHA + glassLevel * SHELL_CENTER_LEVEL_ALPHA)
-            .coerceIn(0f, SHELL_CENTER_MAX_ALPHA)
+        val centerAlpha = scaledGlassParam(
+            SHELL_CENTER_BASE_ALPHA + glassLevel * SHELL_CENTER_LEVEL_ALPHA,
+            config.shellPercent,
+            SHELL_CENTER_MAX_ALPHA
+        )
         val startAlpha = (centerAlpha + SHELL_GRADIENT_SPREAD).coerceIn(0f, SHELL_START_MAX_ALPHA)
         val endAlpha = (centerAlpha - SHELL_GRADIENT_SPREAD).coerceIn(0f, SHELL_END_MAX_ALPHA)
         return LinearGradient(

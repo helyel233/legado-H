@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="explore_glass_settings_title">发现页毛玻璃</string>
+    <string name="explore_glass_settings_summary">调整经典发现页书源名行的模糊、着色、遮盖与渲染方式</string>
+
+    <string name="explore_glass_section_effect">玻璃效果</string>
+    <string name="explore_glass_section_advanced">渲染与兼容</string>
+
+    <string name="explore_glass_enabled">启用发现页毛玻璃</string>
+    <string name="explore_glass_enabled_summary">关闭后书源名行使用默认透明背景；墨水屏与低内存设备始终自动关闭</string>
+
+    <string name="explore_glass_level">玻璃强度</string>
+    <string name="explore_glass_level_summary">与「编辑主题」里的「发现页毛玻璃效果」是同一项，按日间/夜间分别保存；0 为关闭</string>
+
+    <string name="explore_glass_blur_scale">模糊程度</string>
+    <string name="explore_glass_blur_scale_summary">100 为默认口径，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>
+
+    <string name="explore_glass_shell_scale">底色遮盖</string>
+    <string name="explore_glass_shell_scale_summary">控制书源名行渐变实底的浓度，数值越大文字与壁纸分离越彻底</string>
+
+    <string name="explore_glass_tint_scale">白色着色</string>
+    <string name="explore_glass_tint_scale_summary">控制玻璃表面的白色弱着色，数值越大表面越亮</string>
+
+    <string name="explore_glass_stroke_scale">边缘描边</string>
+    <string name="explore_glass_stroke_scale_summary">控制圆角边缘描边的明显程度，数值越大轮廓越清晰</string>
+
+    <string name="explore_glass_hardware_blur">硬件真高斯</string>
+    <string name="explore_glass_hardware_blur_summary">Android 12 及以上可用；关闭后强制走已验证的软件模糊降级管线</string>
+
+    <string name="explore_glass_animated_solid">动图壁纸使用纯色底</string>
+    <string name="explore_glass_animated_solid_summary">开启时动图壁纸不采样静止首帧，避免「壁纸在动、玻璃不动」；关闭后可接受静止首帧玻璃</string>
+
+    <string name="explore_glass_restore_defaults">恢复默认</string>
+    <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括玻璃强度的日间与夜间取值</string>
+</resources>

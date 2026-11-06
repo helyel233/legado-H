@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="explore_glass_settings_title">Explore glass</string>
+    <string name="explore_glass_settings_summary">Blur, tint, scrim and rendering for classic Explore source rows</string>
+
+    <string name="explore_glass_section_effect">Glass effect</string>
+    <string name="explore_glass_section_advanced">Rendering and compatibility</string>
+
+    <string name="explore_glass_enabled">Enable Explore glass</string>
+    <string name="explore_glass_enabled_summary">Source rows fall back to the plain transparent background; e-ink and low-memory devices always disable it</string>
+
+    <string name="explore_glass_level">Glass strength</string>
+    <string name="explore_glass_level_summary">Same setting as Explore glass in theme editing, stored separately for day and night; 0 turns the effect off</string>
+
+    <string name="explore_glass_blur_scale">Blur amount</string>
+    <string name="explore_glass_blur_scale_summary">100 is the default, 0 is weakest, 200 doubles it; applies to both hardware Gaussian and software blur</string>
+
+    <string name="explore_glass_shell_scale">Scrim opacity</string>
+    <string name="explore_glass_shell_scale_summary">Opacity of the gradient backing behind source names; higher values separate text from the wallpaper more strongly</string>
+
+    <string name="explore_glass_tint_scale">White tint</string>
+    <string name="explore_glass_tint_scale_summary">Strength of the faint white tint on the glass surface</string>
+
+    <string name="explore_glass_stroke_scale">Edge stroke</string>
+    <string name="explore_glass_stroke_scale_summary">Visibility of the rounded edge stroke; higher values make the outline clearer</string>
+
+    <string name="explore_glass_hardware_blur">Hardware Gaussian blur</string>
+    <string name="explore_glass_hardware_blur_summary">Available on Android 12 and above; disabling forces the verified software blur fallback</string>
+
+    <string name="explore_glass_animated_solid">Solid backdrop for animated wallpapers</string>
+    <string name="explore_glass_animated_solid_summary">When enabled, animated wallpapers are not sampled as a still first frame; disable it to accept a static glass frame</string>
+
+    <string name="explore_glass_restore_defaults">Restore defaults</string>
+    <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including day and night glass strength</string>
+</resources>

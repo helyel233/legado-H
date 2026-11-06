@@ -27,5 +27,6 @@ object ConfigTag {
     const val AUDIO_CONFIG = "audioConfig"
     const val MANGA_VIDEO_CONFIG = "mangaVideoConfig"
     const val PAGE_LAYOUT_CONFIG = "pageLayoutConfig"
+    const val EXPLORE_GLASS_CONFIG = "exploreGlassConfig"
 
 }

@@ -82,6 +82,10 @@ object SettingsSearchIndex {
         // 三项页面级布局原先分散在各 Tab 菜单、完全搜不到，归拢到独立二级页后整页进索引
         PageSource(ConfigTag.PAGE_LAYOUT_CONFIG, ConfigTag.PAGE_LAYOUT_CONFIG) {
             PageLayoutConfigFragment()
+        },
+        // 发现页毛玻璃的各个细项原先只有编辑主题页一个滑杆，整页进索引后可直接搜到
+        PageSource(ConfigTag.EXPLORE_GLASS_CONFIG, ConfigTag.EXPLORE_GLASS_CONFIG) {
+            ExploreGlassConfigFragment()
         }
     )
 

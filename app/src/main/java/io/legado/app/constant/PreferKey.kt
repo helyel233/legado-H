@@ -273,6 +273,19 @@ object PreferKey {
     const val themeCardBackgroundBlurN = "themeCardBackgroundBlurNight"
     const val themeExploreGlassBlur = "themeExploreGlassBlur"
     const val themeExploreGlassBlurN = "themeExploreGlassBlurNight"
+    /**
+     * 发现页毛玻璃的细项设置。总强度仍走 [themeExploreGlassBlur] 的日夜间分离键，
+     * 下面这些是全局倍率/开关（不区分日夜间），与 frostedGlassLevel 等全局 UI 键同体系。
+     */
+    const val exploreGlassEnabled = "exploreGlassEnabled"
+    const val exploreGlassBlurScale = "exploreGlassBlurScale"
+    const val exploreGlassShellScale = "exploreGlassShellScale"
+    const val exploreGlassTintScale = "exploreGlassTintScale"
+    const val exploreGlassStrokeScale = "exploreGlassStrokeScale"
+    const val exploreGlassHardwareBlur = "exploreGlassHardwareBlur"
+    const val exploreGlassAnimatedSolid = "exploreGlassAnimatedSolid"
+    /** 「恢复默认」动作行的稳定 key（只用于搜索深链定位，不存偏好值）。 */
+    const val exploreGlassRestoreDefaults = "exploreGlassRestoreDefaults"
     const val uiCornerSearchFollow = "uiCornerSearchFollow"
     const val uiCornerSearchFollowN = "uiCornerSearchFollowNight"
     const val uiCornerReplyFollow = "uiCornerReplyFollow"

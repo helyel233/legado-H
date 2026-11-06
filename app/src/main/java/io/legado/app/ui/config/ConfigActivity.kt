@@ -156,9 +156,11 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.AUDIO_CONFIG -> replaceFragment(configTag, AudioConfigFragment::class.java)
             ConfigTag.MANGA_VIDEO_CONFIG ->
                 replaceFragment(configTag, MangaVideoConfigFragment::class.java)
-            ConfigTag.PAGE_LAYOUT_CONFIG ->
-                replaceFragment(configTag, PageLayoutConfigFragment::class.java)
-            else -> finish()
+    ConfigTag.PAGE_LAYOUT_CONFIG ->
+        replaceFragment(configTag, PageLayoutConfigFragment::class.java)
+    ConfigTag.EXPLORE_GLASS_CONFIG ->
+        replaceFragment(configTag, ExploreGlassConfigFragment::class.java)
+    else -> finish()
         }
     }
 
@@ -203,6 +205,10 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
 
             // 发现/订阅/首页三处布局归拢为「内容与规则」下的独立页
             ConfigTag.PAGE_LAYOUT_CONFIG ->
+                listOf(R.string.config_category_content)
+
+            // 发现页毛玻璃与发现/订阅设置、页面布局同属「内容与规则」域
+            ConfigTag.EXPLORE_GLASS_CONFIG ->
                 listOf(R.string.config_category_content)
 
             // 评论抓取已从高级设置拆出，作为「高级与关于」下的独立二级页

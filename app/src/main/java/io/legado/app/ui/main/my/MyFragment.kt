@@ -241,7 +241,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ConfigTag.BOOKSHELF_CONFIG,
             ConfigTag.AUDIO_CONFIG,
             ConfigTag.MANGA_VIDEO_CONFIG,
-            ConfigTag.PAGE_LAYOUT_CONFIG -> startActivity<ConfigActivity> {
+            ConfigTag.PAGE_LAYOUT_CONFIG,
+            ConfigTag.EXPLORE_GLASS_CONFIG -> startActivity<ConfigActivity> {
                 putExtra("configTag", key)
             }
 
@@ -322,6 +323,14 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         R.string.page_layout_settings_title,
                         R.string.page_layout_settings_summary,
                         R.drawable.ic_image
+                    ),
+                    // 发现页毛玻璃原先只有一个强度滑杆藏在「编辑主题」里，细项无处可调；
+                    // 与发现/订阅设置、页面布局一起归到内容域，一站式调到各个视觉参数
+                    actionRow(
+                        ConfigTag.EXPLORE_GLASS_CONFIG,
+                        R.string.explore_glass_settings_title,
+                        R.string.explore_glass_settings_summary,
+                        R.drawable.ic_cfg_theme
                     ),
                     actionRow(
                         "replaceManage", R.string.replace_purify,
