@@ -1,5 +1,20 @@
 # 更新日志
 
+## 1.25.9 版（2026-11-07）
+
+本版修复 1.25.8 引入的**致命缺陷**：发现页书源名行误用了底栏同款 `StableLiquidGlassView`，把采样源绑定到列表 `RecyclerView` 自身（而玻璃视图本身就位于该 `RecyclerView` 的 item 内）。底层库每帧按采样源整树录制 `RenderNode`，行内使用时采样源与宿主互相嵌套绘制，导致 RenderNode 重入录制被 hwui 直接 abort——**切到发现页即 native 闪退，且 Java 侧无任何崩溃堆栈**。
+
+### 修复
+
+- **回退发现页行液态玻璃管线**：`ExploreAdapter` 不再在 `onBindViewHolder` 里装配 `StableLiquidGlassView`，书源名行恢复**静态模糊管线**（`ExploreGlassBackdrop.rowBackground`）作为唯一背景，固态档 / 强度 0 / 设备降级回落沿用既有逻辑；`item_find_book.xml` 从 `FrameLayout(StableLiquidGlassView + ll_title)` 改回原 `LinearLayout(ll_title)` 直接铺 `bg_find_book_group`。`ExploreGlassBackdrop` 中整条液态行管线（`supportsExploreLiquidPipeline` / `ExploreLiquidRowSpec` / `resolveExploreLiquidRowSpec` / `liquidRowParams` / `liquidRowShellDrawable` / `bindRowGlass` / `releaseRowGlass` / `detachRowGlassTracker`）一并删除。
+- **新增采样源合法性守卫（防回归）**：新增纯 JVM 文件 `LiquidGlassSourceGuard`，导出 `selfOrAncestorContains(self, target, parentOf, maxDepth=256)`——沿 parent 链向上（含自身）判定 `target` 是否为宿主的自身或祖先，命中即表示该采样源会让 `target.draw()` 重入录制，必须拒绝。`StableLiquidGlassView` 在 `bind` / `ensureGlass` / `applyConfig` 三条入口统一调用 `rejectIfAncestorSource`：采样源是自身或祖先时当场解绑并移除玻璃层（宁可不显示玻璃也不让进程 abort），覆盖「先绑合法源、之后视图被移到源内部」或「调用方绕过 `bind` 守卫」这类绕路。类注释明确标注「禁止用于 RecyclerView / ListView / ViewPager 的 item 内部」。
+
+### 单测
+
+- 删除 `ExploreGlassHardwareBlurTest` 中随液态行管线移除的 3 个断言（`liquidRowSpecMirrorsBottomBarParamsWithoutRowGains` / `liquidRowSpecMapsEveryScaleSlider` / `liquidPipelineGateFollowsApiAndStrength`）；新增 `LiquidGlassSourceGuardTest`（7 例）：直接/跨层祖先拒绝、自身即采样源拒绝、兄弟与子孙采样源放行、null 与断链终止、环状脏链在预算内终止且仍命中、256 深度预算对真实 View 树余量充足。编译无新增告警；全量单测零新增失败用例（基线 48 个失败均为既有 Robolectric / `appCtx` 环境问题）。
+
+> 说明：1.25.8 的「发现页行向底栏液态玻璃看齐」目标因底层库的录制模型与列表项结构天然不兼容而撤销，改由静态模糊管线承载行背景。底栏 / 顶栏的液态玻璃不受影响（采样源为与宿主平级的 `contentContainer`，符合守卫约束）。
+
 ## 1.25.8 版（2026-11-07）
 
 本版把发现页书源名行正式接入与底栏同款的液态玻璃管线（API 33+），并把底栏材质档位键彻底收拢为全局单一来源、新增全局描边色。发现页行、底栏、顶栏三处现在读同一份 `GlassMaterialPreset` 参数表与同一对液态强度键，强度在 API 33+ 上不再区分日夜间。无新增用户必知破坏性改动，升级用户由启动时幂等迁移固化旧底栏档位。

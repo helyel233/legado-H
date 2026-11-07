@@ -24,7 +24,6 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.RequiresApi
-import androidx.core.view.isVisible
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
@@ -36,7 +35,6 @@ import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.MainThemeBackgroundState
-import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.ui.widget.compose.ComposeThemeImageCrop
 import io.legado.app.utils.ColorUtils as AppColorUtils
 import io.legado.app.utils.dpToPx
@@ -564,61 +562,6 @@ internal fun resolveExploreGlassRenderParams(
 }
 
 /**
- * API 33+ 液态玻璃行管线是否可用（纯函数）：与底栏 / 顶栏同门槛——
- * 液态玻璃着色器（RuntimeShader）为 API 33。API < 33 保留静态模糊兜底管线，
- * 此时观感与底栏的差异属可接受降级。
- */
-internal fun supportsExploreLiquidPipeline(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
-    apiLevel >= Build.VERSION_CODES.TIRAMISU
-
-/**
- * API 33+ 液态行管线一行的全部注入参数。
- *
- * 与底栏 [io.legado.app.ui.widget.StableLiquidGlassView] 逐参数对应：
- * blur/refraction/dispersion/tint 进液态着色器，shell 三色 + stroke 进叠在玻璃层
- * 上方的壳层渐变（与底栏 shell overlay 同构）。**不叠加静态管线的行可见度增益**
- * （ROW_*GAIN），强度与壳层口径与底栏逐值一致，做到「发现页向底栏看齐」。
- */
-internal data class ExploreLiquidRowSpec(
-    val blurPx: Float,
-    val tintAlpha: Float,
-    val dispersion: Float,
-    val refractionHeightPx: Float,
-    val refractionOffsetPx: Float,
-    val shellStart: Float,
-    val shellCenter: Float,
-    val shellEnd: Float,
-    val strokeAlpha: Float,
-    val cornerRadiusPx: Float
-)
-
-/**
- * 共享预设 + 四个倍率滑杆 → 液态行参数（纯函数，可直接单测）。
- *
- * 四个倍率滑杆重新映射到液态组件：blurScale → 模糊半径倍率、tintScale → 着色、
- * shellScale → 壳层三色、strokeScale → 描边 alpha；色散 / 折射直取该档预设。
- * 强度由 [GlassMaterialPreset.current]（全局两个液态强度键）提供，与本页日夜间
- * 分离的 themeExploreGlassBlur 解耦——液态管线不区分日夜间。
- */
-internal fun resolveExploreLiquidRowSpec(
-    config: ExploreGlassConfig,
-    material: GlassMaterialPreset.Params,
-    density: Float,
-    cornerRadiusPx: Float
-): ExploreLiquidRowSpec = ExploreLiquidRowSpec(
-    blurPx = scaledGlassParam(material.blurDp, config.blurPercent) * density,
-    tintAlpha = scaledGlassParam(material.tintAlpha, config.tintPercent, 1f),
-    dispersion = material.dispersion,
-    refractionHeightPx = material.refractionHeightDp * density,
-    refractionOffsetPx = material.refractionOffsetDp * density,
-    shellStart = scaledGlassParam(material.shell.start, config.shellPercent, 1f),
-    shellCenter = scaledGlassParam(material.shell.center, config.shellPercent, 1f),
-    shellEnd = scaledGlassParam(material.shell.end, config.shellPercent, 1f),
-    strokeAlpha = scaledGlassParam(material.shell.stroke, config.strokePercent, 1f),
-    cornerRadiusPx = cornerRadiusPx
-)
-
-/**
  * 影响发现页行观感的偏好键全集：由 [EXPLORE_GLASS_SETTING_KEYS]（渲染层实际读取、
  * 设置页实际写入的键）加上 [EXPLORE_GLASS_BOTTOM_BAR_KEYS]（联动时另读的档位与
  * 两个强度键）派生，不再手写第二份清单，新增键漏加监听的路径被单测反向断言堵住。
@@ -743,8 +686,8 @@ object ExploreGlassBackdrop {
      * 的即时偏好监听），因此新增细项后不必再逐个加监听——只要参数进快照，
      * 返回发现页即生效。[ExploreGlassConfig.mode] 已含旧总开关与旧底栏档位键的
      * 迁移结果；描边色 raw 值纳入签名（颜色变化需重绑行背景）。
-     * 底栏的两个液态强度键不参与静态管线计算，但顶栏 / 液态行管线参数化接入
-     * 同一预设（glass/frosted 档读 frostedGlassLevel / liquidGlassLevel），
+     * 底栏的两个液态强度键不参与静态管线计算，但顶栏参数化接入同一预设
+     * （glass/frosted 档读 frostedGlassLevel / liquidGlassLevel），
      * 故无条件纳入，避免只改底栏强度时不重绘。
      */
     fun configSignature(context: Context): String {
@@ -798,101 +741,6 @@ object ExploreGlassBackdrop {
     /** 全局描边色（ARGB，未设置 / 脏值为 null = 不描边）。 */
     fun glassStrokeColor(context: Context): Int? =
         resolveGlassStrokeColor(context.getPrefString(PreferKey.glassStrokeColor))
-
-    /**
-     * API 33+ 液态行管线的参数解析：档位与强度都走 [GlassMaterialPreset.current]
-     * （与底栏逐值同源），四个倍率滑杆重映射到液态组件参数。
-     * 返回 null 表示该行走静态兜底管线（solid 档 / API < 33 / 墨水屏 / 低内存 /
-     * 液态强度为 0），调用方回落到 [rowBackground]。
-     */
-    internal fun liquidRowParams(host: View): ExploreLiquidRowSpec? {
-        if (!supportsExploreLiquidPipeline()) return null
-        val context = host.context
-        if (AppConfig.isEInkMode || isLowRamDevice(context)) return null
-        val config = readExploreGlassConfig(context)
-        if (config.mode == EXPLORE_GLASS_MODE_SOLID) return null
-        // 液态管线强度与底栏同源：GlassMaterialPreset.current 读全局两个强度键
-        val material = GlassMaterialPreset.current(config.mode)
-        if (material.glassLevel <= 0f) return null
-        return resolveExploreLiquidRowSpec(
-            config,
-            material,
-            density = context.resources.displayMetrics.density,
-            cornerRadiusPx = context.resources.getDimension(R.dimen.ui_panel_radius)
-        )
-    }
-
-    /**
-     * 液态行管线的壳层渐变（叠在 StableLiquidGlassView 之上）：
-     * 三色垂直渐变 + 描边与底栏 createLiquidGlassShellDrawable 同构；
-     * 全局描边色 [glassStrokeColor] 非空时覆盖默认的 shell.stroke 着色。
-     */
-    internal fun liquidRowShellDrawable(host: View, spec: ExploreLiquidRowSpec): GradientDrawable {
-        val baseColor = ThemeStore.bottomBackground(host.context)
-        val surfaceColor =
-            if (AppColorUtils.isColorLight(baseColor)) Color.WHITE else Color.rgb(22, 24, 28)
-        return GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, spec.shellStart),
-                AppColorUtils.withAlpha(surfaceColor, spec.shellCenter),
-                AppColorUtils.withAlpha(surfaceColor, spec.shellEnd)
-            )
-        ).apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = spec.cornerRadiusPx
-            setStroke(
-                1.dpToPx(),
-                glassStrokeColor(host.context)
-                    ?: AppColorUtils.withAlpha(surfaceColor, spec.strokeAlpha)
-            )
-        }
-    }
-
-    /**
-     * 把 [StableLiquidGlassView] 配置成液态行玻璃层：参数注入顺序与底栏
-     * MainActivity.setupLiquidGlassView 完全一致（同一参数集合，同一限幅路径），
-     * 采样源为发现页列表容器，与底栏绑定 contentContainer 的方式同构。
-     */
-    internal fun bindRowGlass(
-        view: StableLiquidGlassView,
-        spec: ExploreLiquidRowSpec,
-        source: ViewGroup?
-    ) {
-        if (source == null) {
-            releaseRowGlass(view)
-            return
-        }
-        view.isVisible = true
-        view.bind(source)
-        view.setCornerRadius(spec.cornerRadiusPx)
-        view.setRefractionHeight(spec.refractionHeightPx)
-        view.setRefractionOffset(spec.refractionOffsetPx)
-        view.setDispersion(spec.dispersion)
-        view.setBlurRadius(spec.blurPx)
-        view.setTintAlpha(spec.tintAlpha)
-        view.setTintColorRed(1f)
-        view.setTintColorGreen(1f)
-        view.setTintColorBlue(1f)
-        view.setDraggableEnabled(false)
-        view.setElasticEnabled(false)
-        view.setTouchEffectEnabled(false)
-        view.setPixelSafePillEnabled(false)
-        view.isClickable = false
-        view.isFocusable = false
-        view.invalidate()
-    }
-
-    /** 释放液态行玻璃层（切档 / 降级时调用；bind(null) 会解绑采样源并移除玻璃）。 */
-    internal fun releaseRowGlass(view: StableLiquidGlassView) {
-        view.bind(null)
-        view.isVisible = false
-    }
-
-    /** 静态管线的位置监听解绑：液态行管线不再使用位置跟踪，切管线时主动解绑旧监听。 */
-    fun detachRowGlassTracker(host: View) {
-        GlassPositionTracker.detach(host)
-    }
 
     /** 返回毛玻璃行背景；level<=0 / 设备降级时返回 null，调用方保留默认透明背景。 */
     fun rowBackground(host: View): Drawable? {

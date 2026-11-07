@@ -17,6 +17,17 @@ import io.legado.app.utils.dpToPx
  * The library's LiquidGlassView posts parameter updates that dereference an
  * internal glass field later. If the view detaches before that runnable runs,
  * the field becomes null and the app can crash or keep a stale bound state.
+ *
+ * ## 使用约束（违反会 native 崩溃，且 Java 侧无堆栈）
+ *
+ * - **禁止用于 `RecyclerView` / `ListView` / `ViewPager` 的 item 内部。** 底层库每帧
+ *   按**采样源整树**录制进一颗 `RenderNode`；行内使用会让采样源（列表）与宿主互相
+ *   嵌套绘制，导致 RenderNode 重入录制直接 abort，同时每帧 N 次全屏录制在性能上也
+ *   不成立。发现页书源名行因此固定使用静态模糊管线
+ *   （`ExploreGlassBackdrop.rowBackground`）。
+ * - **采样源必须是与宿主平级的背景节点**（兄弟节点，或至少不是宿主的祖先）。
+ *   底栏的 `contentContainer` 就是这种用法：[bind] 会拒绝把宿主祖先当作采样源，
+ *   见 [isAncestorOfHost] 与 `LiquidGlassSourceGuard.selfOrAncestorContains`。
  */
 class StableLiquidGlassView @JvmOverloads constructor(
     context: Context,
@@ -54,13 +65,46 @@ class StableLiquidGlassView @JvmOverloads constructor(
         applyRoundedOutline()
     }
 
+    /**
+     * 绑定采样源（必须是与本视图平级的背景节点）。
+     *
+     * [source] 为 null 表示解绑并移除玻璃层。若 [source] 是本视图**自身或祖先**，
+     * 直接拒绝绑定并解绑（不创建 LiquidGlass）：底栏库每帧 `beginRecording` 后调用
+     * `source.draw(canvas)`，祖先会把本视图再画一遍，进而重入 `drawRenderNode`
+     * → RenderNode 重入录制 → hwui abort（native crash，Java 无堆栈）。
+     */
     fun bind(source: ViewGroup?) {
         sampleSource = source
         if (source == null) {
             removeGlass()
             return
         }
+        if (rejectIfAncestorSource(source)) return
         ensureGlass()
+    }
+
+    /**
+     * 采样源是否为本视图自身或祖先（纯逻辑委托给
+     * `LiquidGlassSourceGuard.selfOrAncestorContains`，便于 JVM 单测）。
+     * 返回 true 时该采样源不可用。
+     */
+    internal fun isAncestorOfHost(source: ViewGroup): Boolean =
+        selfOrAncestorContains(
+            self = this,
+            target = source,
+            parentOf = { (it as? View)?.parent }
+        )
+
+    /**
+     * 采样源不合法时解绑并返回 true，调用方须立即 return。
+     * 集中一处是为了让 [bind] / [ensureGlass] / [applyConfig] 三条入口共享同一判定，
+     * 避免「先绑合法源、之后视图被移到源内部」这类绕开 [bind] 的路径漏防。
+     */
+    private fun rejectIfAncestorSource(source: ViewGroup): Boolean {
+        if (!isAncestorOfHost(source)) return false
+        sampleSource = null
+        removeGlass()
+        return true
     }
 
     fun setCornerRadius(value: Float) {
@@ -154,6 +198,10 @@ class StableLiquidGlassView @JvmOverloads constructor(
     private fun ensureGlass() {
         val source = sampleSource ?: return
         if (!isAttachedToWindow) return
+        // 绑定之后视图可能被重新挂到采样源内部（或调用方绕过了 bind 的守卫）：
+        // 一旦采样源变成祖先，再喂给 LiquidGlass 就会在下一帧 pre-draw 里重入录制，
+        // 就地解绑，宁可不显示玻璃也不让进程 abort。
+        if (rejectIfAncestorSource(source)) return
         if (glass == null) {
             val nextConfig = createConfig()
             val nextGlass = LiquidGlass(context, nextConfig)
@@ -190,6 +238,7 @@ class StableLiquidGlassView @JvmOverloads constructor(
     private fun applyConfig() {
         val source = sampleSource
         if (!isAttachedToWindow || source == null) return
+        if (rejectIfAncestorSource(source)) return
         if (glass == null) {
             ensureGlass()
             return
