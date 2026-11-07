@@ -2361,6 +2361,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.liquidGlassLevel, value.coerceIn(0, 100))
         }
 
+    /**
+     * 已废弃（1.25.8 起）：材质档位收拢为全局单一来源 PreferKey.exploreGlassEffectMode，
+     * 渲染层经 resolveExploreGlassMode / resolvedExploreGlassMode 读取，不再读本键。
+     * getter 仅保留给一次性迁移（migrateLegacyExploreGlassFollow 固化旧档位），
+     * setter 已无生产调用方，禁止新增业务引用。
+     */
+    @Deprecated("材质档位已收拢为全局 exploreGlassEffectMode，仅迁移链路可读")
     var bottomBarEffectMode: String
         get() = appCtx.getPrefString(PreferKey.bottomBarEffectMode, "glass")
             ?.takeIf { it in setOf("glass", "frosted", "solid") }

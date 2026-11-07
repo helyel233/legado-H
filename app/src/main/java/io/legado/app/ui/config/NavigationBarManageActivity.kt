@@ -31,10 +31,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.jaredrummler.android.colorpicker.ColorPickerDialog
-import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.EventBus
@@ -58,6 +55,7 @@ import io.legado.app.ui.book.cache.WebDavTaskStatus
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.image.ImageCropContract
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementListRow
@@ -86,7 +84,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), ColorPickerDialogListener {
+class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     override val binding by viewBinding(ActivityThemeManageBinding::inflate)
 
@@ -98,7 +96,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
     private var editingEntry: NavigationBarIconConfig.Entry? = null
     private var editingDialog: LinearLayout? = null
     private var pendingConfig: NavigationBarIconConfig.Config? = null
-    private var pendingColorTarget = 0
     private var pendingIconRequest: IconRequest? = null
     private var pendingSidebarBackgroundEntry: NavigationBarIconConfig.Entry? = null
     private var pendingBottomWallpaperCropRequest: ImageCropHelper.Request? = null
@@ -445,7 +442,11 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                 isNightMode = isNightMode,
                 layoutMode = AppConfig.bottomBarLayoutMode,
                 sidebarGravity = AppConfig.bottomBarSidebarGravity,
-                opacity = if (AppConfig.bottomBarEffectMode == "frosted") AppConfig.frostedGlassLevel else AppConfig.liquidGlassLevel
+                opacity = if (resolvedExploreGlassMode() == "frosted") {
+                    AppConfig.frostedGlassLevel
+                } else {
+                    AppConfig.liquidGlassLevel
+                }
             ),
             NavigationBarIconConfig.Source.LOCAL,
             ""
@@ -544,21 +545,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                 addView(optionRow(getString(R.string.bottom_bar_opacity), "${config.opacity}%") {
                     showAlphaPicker(getString(R.string.bottom_bar_opacity), config.opacity) {
                         config.opacity = it
-                    }
-                })
-                addView(optionRow(
-                    getString(R.string.bottom_bar_border_color),
-                    config.borderColor?.let(::colorLabel) ?: getString(R.string.disable)
-                ) {
-                    showOptionalColorSelector(
-                        getString(R.string.bottom_bar_border_color),
-                        config.borderColor,
-                        COLOR_BORDER
-                    )
-                })
-                addView(optionRow(getString(R.string.bottom_bar_border_alpha), "${config.borderAlpha}%") {
-                    showAlphaPicker(getString(R.string.bottom_bar_border_alpha), config.borderAlpha) {
-                        config.borderAlpha = it
                     }
                 })
             } else {
@@ -669,40 +655,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
                 apply(it.coerceIn(0, 100))
                 refreshEditDialog()
             }
-    }
-
-    private fun showOptionalColorSelector(title: String, color: Int?, target: Int) {
-        selector(title, listOf(getString(R.string.disable), getString(R.string.select_color))) { _, index ->
-            if (index == 0) {
-                if (target == COLOR_BORDER) {
-                    pendingConfig?.borderColor = null
-                }
-                refreshEditDialog()
-            } else {
-                showColorPicker(target, color ?: ContextCompat.getColor(this, R.color.accent))
-            }
-        }
-    }
-
-    private fun showColorPicker(target: Int, color: Int) {
-        pendingColorTarget = target
-        ColorPickerDialog.newBuilder()
-            .setDialogId(target)
-            .setColor(color)
-            .setShowAlphaSlider(false)
-            .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-            .show(this)
-    }
-
-    override fun onColorSelected(dialogId: Int, color: Int) {
-        if (dialogId == COLOR_BORDER) {
-            pendingConfig?.borderColor = color
-            refreshEditDialog()
-        }
-    }
-
-    override fun onDialogDismissed(dialogId: Int) {
-        pendingColorTarget = 0
     }
 
     private fun iconRow(item: NavigationBarIconConfig.NavItem): View {
@@ -1061,10 +1013,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         }
     }
 
-    private fun colorLabel(color: Int): String {
-        return "#${Integer.toHexString(color).takeLast(6).uppercase(Locale.ROOT)}"
-    }
-
     private fun wallpaperLabel(path: String?): String {
         return if (path.isNullOrBlank()) getString(R.string.theme_image_select) else getString(R.string.theme_image_selected)
     }
@@ -1114,7 +1062,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>(), 
         private const val MENU_CONTAINER = 0x5401
         private const val MENU_SYNC_TASKS = 0x5402
         const val requestSidebarBackground = 7001
-        const val COLOR_BORDER = 7002
         const val requestBottomWallpaper = 7003
         const val requestSingleIconBase = 7100
     }

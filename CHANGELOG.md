@@ -1,5 +1,27 @@
 # 更新日志
 
+## 1.25.8 版（2026-11-07）
+
+本版把发现页书源名行正式接入与底栏同款的液态玻璃管线（API 33+），并把底栏材质档位键彻底收拢为全局单一来源、新增全局描边色。发现页行、底栏、顶栏三处现在读同一份 `GlassMaterialPreset` 参数表与同一对液态强度键，强度在 API 33+ 上不再区分日夜间。无新增用户必知破坏性改动，升级用户由启动时幂等迁移固化旧底栏档位。
+
+### 新功能
+
+- **发现页书源名行液态玻璃管线（API 33+）**：与底栏同款 `StableLiquidGlassView`，参数集合与绑定方式逐参数对齐底栏 `setupLiquidGlassView`（blur / refraction / dispersion / tint 进液态着色器，壳层三色 + 描边进叠在玻璃层之上的壳层渐变）；布局 `item_find_book.xml` 改为 `FrameLayout` 容器包 `StableLiquidGlassView` + 原 `ll_title` 线性栏。`ExploreAdapter` 在 `onBindViewHolder` 调用 `liquidRowParams` 判定是否走液态：固态档 / API < 33 / 墨水屏 / 低内存 / 液态强度 0 一律回落静态模糊或无玻璃实底；采样源绑定发现页列表 `RecyclerView`，随适配器 attach/detach 生命周期维护，切档降级主动解绑旧位置监听。液态管线强度与底栏同源（`GlassMaterialPreset.current` 读全局两个液态强度键），做到「发现页行向底栏看齐」。
+- **全局描边色**：新增设置项「描边颜色」（`glassStrokeColor`，ARGB 十进制字符串，空 = 不描边），色板对话框取色，可覆盖默认「surfaceColor × strokeAlpha」着色；三档材质（含无玻璃实底壳层）与底栏壳层描边统一走该来源（非空时覆盖默认描边）。废弃底栏包 `borderColor` / `borderAlpha` 字段（Gson 静默忽略、导出不再写、不写兼容回写），移除 `bottom_bar_border_color` / `bottom_bar_border_alpha` 中英文案。
+
+### 重构
+
+- **底栏档位键收拢为全局单一来源**：`AppConfig.bottomBarEffectMode` 标记 `@Deprecated`（仅迁移链路可读，setter 无生产调用方）；`MainLayoutPresetConfig` 预设沿用「标准布局 → 无玻璃、其余 → 玻璃」旧语义、改写全局 `exploreGlassEffectMode`；`NavigationBarIconConfig` 用新增全局读取入口 `resolvedExploreGlassMode()` 取档位，移除包字段 `borderColor` / `borderAlpha` 全部读写；新增一次性幂等迁移 `migrateLegacyBottomBarEffectModeLocked`（旧 `bottomBarEffectMode` 写过但全局档位从未写过的老用户，把旧档位固化进全局档位，写 `exploreGlassModeUnifiedMigrated` 标记），由 `MainActivity` 启动时早于任何 UI 调用。评注 `resolvedExploreGlassMode()` 为全局档位唯一读取入口（显式档位 > 旧总开关 false → solid > 默认磨砂）。
+- **强度不再区分日夜间（液态管线）**：API 33+ 上强度滑杆同时写 `frostedGlassLevel` / `liquidGlassLevel`（同值），即时驱动底栏与发现页行；日夜间分离仅由静态兜底管线（API < 33）使用，summary 文案同步更新。
+
+### 纯函数化与单测
+
+- 新增 `resolvedExploreGlassMode()` / `resolveGlassStrokeColor()` / `supportsExploreLiquidPipeline()` / `ExploreLiquidRowSpec` + `resolveExploreLiquidRowSpec()` / `liquidRowParams()` / `liquidRowShellDrawable()` / `bindRowGlass()` / `releaseRowGlass()` / `detachRowGlassTracker()` / `glassStrokeColor()` 纯函数与液态行管线装配；`FrostedGlassDrawable` 与实底壳层新增 `strokeColor` 入参（全局描边色非空时覆盖默认描边，保留自身 alpha）。`ExploreGlassHardwareBlurTest` 新增 `migrateLegacyBottomBarEffectModeLocked`（双固化与幂等）、`resolvedExploreGlassMode`、`resolveGlassStrokeColor`、`supportsExploreLiquidPipeline`、`resolveExploreLiquidRowSpec`、`liquidRowParams`（API 门槛 / 固态档 / 降级 / 强度 0 回落）等断言（+159 行）。编译无新增告警，全量单测与 1.25.7 同为基线既有 Robolectric / `appCtx` 环境问题，本版零新增失败用例。
+
+### 验证
+
+- 构建即编译（`build-signed.sh` / `assembleAppDebug`），正确性由构建保证；本次改动已纳入双包版本 `H.1.25.8`（versionCode 29862274，严格大于 1.25.7 的 29862273）。
+
 ## 1.25.7 版（2026-11-06）
 
 本版把分散在三处、各写各参数的毛玻璃彻底收拢为「全局毛玻璃效果」单一来源：顶栏 `MainTopBarView` 首次真正接入全局 `GlassMaterialPreset`（此前是硬编码 18dp / 0.10 固定值、不跟随任何设置），「跟随底栏材质」开关废弃并一次性迁移固化。三处（顶栏 / 底栏 / 发现页）现在只读同一份 `GlassMaterialPreset` 参数表，双管线（硬件 `RenderEffect` + 软件 `stackBlur`）降级矩阵不变。无新增用户可见开关，无新增依赖。

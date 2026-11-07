@@ -2475,7 +2475,6 @@ Selected text or question:
     <string name="top_bar_wallpaper">Top bar wallpaper</string>
     <string name="top_bar_wallpaper_alpha">Wallpaper opacity</string>
     <string name="bottom_bar_wallpaper">Bottom bar wallpaper</string>
-    <string name="bottom_bar_border_alpha">Bottom bar border opacity</string>
     <string name="top_bar_tag_selected_color">Selected tag background</string>
     <string name="top_bar_tag_selected_alpha">Selected tag opacity</string>
     <string name="top_bar_filter_default">Filter bar default state</string>
@@ -2575,7 +2574,6 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="theme_image_panel_background_mode">Panel image mode</string>
     <string name="theme_panel_border_color">Panel border color</string>
     <string name="theme_panel_border_alpha">Border opacity</string>
-    <string name="bottom_bar_border_color">Bottom bar border color</string>
     <string name="top_bar_border_color">Top bar border color</string>
     <string name="select_color">Select color</string>
     <string name="theme_image_mode_crop">Crop fill</string>

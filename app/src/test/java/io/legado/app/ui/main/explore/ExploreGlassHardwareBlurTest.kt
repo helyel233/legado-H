@@ -4,6 +4,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.ui.main.GlassMaterialPreset
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,12 +34,13 @@ class ExploreGlassHardwareBlurTest {
         PreferKey.exploreGlassShellScale,
         PreferKey.exploreGlassTintScale,
         PreferKey.exploreGlassStrokeScale,
+        PreferKey.glassStrokeColor,
         PreferKey.exploreGlassHardwareBlur,
         PreferKey.exploreGlassAnimatedSolid
     )
 
+    /** 1.25.8 档位键统一后，底栏联动只剩两个液态强度键（bottomBarEffectMode 已废弃删除）。 */
     private val expectedBottomBarKeys = setOf(
-        PreferKey.bottomBarEffectMode,
         PreferKey.frostedGlassLevel,
         PreferKey.liquidGlassLevel
     )
@@ -55,6 +57,7 @@ class ExploreGlassHardwareBlurTest {
         shellPercent = EXPLORE_GLASS_SCALE_DEFAULT,
         tintPercent = EXPLORE_GLASS_SCALE_DEFAULT,
         strokePercent = EXPLORE_GLASS_SCALE_DEFAULT,
+        strokeColorRaw = null,
         hardwareBlur = true,
         animatedSolid = true
     )
@@ -240,6 +243,9 @@ class ExploreGlassHardwareBlurTest {
 
         override fun getBoolean(key: String, default: Boolean): Boolean =
             values[key] as? Boolean ?: default
+
+        override fun getString(key: String): String? =
+            values[key] as? String
 
         override fun putBoolean(key: String, value: Boolean) {
             values[key] = value
@@ -648,5 +654,156 @@ class ExploreGlassHardwareBlurTest {
         // 底栏走另一条入口、默认 forceOpaque=false，绝不能被发现页规格带成不透明
         assertEquals(183, GlassMaterialPreset.solidColor(0x0012_3456, 72) ushr 24)
         assertEquals(193, GlassMaterialPreset.solidColor(0x0012_3456, 76) ushr 24)
+    }
+
+    /**
+     * 真机缺陷 1（1.25.8）：底栏档位键统一为全局单一来源。
+     * 改过旧 bottomBarEffectMode 但从未写过全局档位的用户，升级时旧档位固化进
+     * exploreGlassEffectMode；写过全局档位（含跟随迁移固化）的用户不动任何值。
+     */
+    @Test
+    fun modeUnificationMigrationCopiesLegacyBottomBarModeOnlyOnce() {
+        // 用例 1：改过底栏档位 + 从未写过全局档位 → 固化
+        val legacy = MemoryPrefStore().apply {
+            putString(PreferKey.bottomBarEffectMode, "solid")
+        }
+        migrateLegacyBottomBarEffectModeLocked(legacy)
+        assertEquals(
+            EXPLORE_GLASS_MODE_SOLID,
+            legacy.values[PreferKey.exploreGlassEffectMode]
+        )
+        assertEquals(true, legacy.values[PreferKey.exploreGlassModeUnifiedMigrated])
+        // 旧键本身不删（常量保留 + 渲染不再读），避免误伤「迁移标记之外的原始状态」
+        assertTrue(PreferKey.bottomBarEffectMode !in legacy.removed)
+
+        // 非法旧档位经同一解析函数回退默认磨砂
+        val dirty = MemoryPrefStore().apply {
+            putString(PreferKey.bottomBarEffectMode, "ultra")
+        }
+        migrateLegacyBottomBarEffectModeLocked(dirty)
+        assertEquals(
+            EXPLORE_GLASS_MODE_FROSTED,
+            dirty.values[PreferKey.exploreGlassEffectMode]
+        )
+
+        // 用例 2：写过全局档位 → 不动任何值，仅写迁移标记
+        val explicit = MemoryPrefStore().apply {
+            putString(PreferKey.bottomBarEffectMode, "glass")
+            putString(PreferKey.exploreGlassEffectMode, EXPLORE_GLASS_MODE_FROSTED)
+        }
+        migrateLegacyBottomBarEffectModeLocked(explicit)
+        assertEquals(
+            EXPLORE_GLASS_MODE_FROSTED,
+            explicit.values[PreferKey.exploreGlassEffectMode]
+        )
+        assertEquals(true, explicit.values[PreferKey.exploreGlassModeUnifiedMigrated])
+
+        // 用例 3：幂等——标记存在后二次调用是 no-op
+        val idempotent = MemoryPrefStore().apply {
+            putString(PreferKey.bottomBarEffectMode, "solid")
+            putBoolean(PreferKey.exploreGlassModeUnifiedMigrated, true)
+        }
+        migrateLegacyBottomBarEffectModeLocked(idempotent)
+        assertTrue(PreferKey.exploreGlassEffectMode !in idempotent.values)
+    }
+
+    /** 全局描边色解析：空 / 未设置 / 脏值 → null（不描边），合法 ARGB 十进制 → 逐值。 */
+    @Test
+    fun glassStrokeColorResolutionKeepsNullableSemantics() {
+        assertNull(resolveGlassStrokeColor(null))
+        assertNull(resolveGlassStrokeColor(""))
+        assertNull(resolveGlassStrokeColor("   "))
+        assertNull(resolveGlassStrokeColor("not-a-color"))
+        assertNull(resolveGlassStrokeColor("0x7f00ff00"))
+        assertEquals(0x7f00_ff00, resolveGlassStrokeColor(0x7f00_ff00.toString()))
+        assertEquals(0x00ff_0000, resolveGlassStrokeColor("16711680"))
+        // 带前后空白的合法值同样可解析
+        assertEquals(12345, resolveGlassStrokeColor(" 12345 "))
+    }
+
+    /**
+     * 真机缺陷 2（1.25.8）：API 33+ 液态行管线与底栏逐值同源——
+     * 不叠加静态管线的行可见度增益，四个倍率滑杆重映射到液态组件参数。
+     */
+    @Test
+    fun liquidRowSpecMirrorsBottomBarParamsWithoutRowGains() {
+        val density = 3f
+        val material = GlassMaterialPreset.params(EXPLORE_GLASS_MODE_GLASS, 0.34f, 0f)
+        val spec = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_GLASS, level = 68), material, density, 12f
+        )
+        // 100 倍率 = 预设原值：与底栏 setupLiquidGlass 的注入口径逐值一致
+        assertEquals(material.blurDp * density, spec.blurPx, 0.001f)
+        assertEquals(material.tintAlpha, spec.tintAlpha, 0.0001f)
+        assertEquals(material.dispersion, spec.dispersion, 0.0001f)
+        assertEquals(material.refractionHeightDp * density, spec.refractionHeightPx, 0.001f)
+        assertEquals(material.refractionOffsetDp * density, spec.refractionOffsetPx, 0.001f)
+        assertEquals(material.shell.start, spec.shellStart, 0.0001f)
+        assertEquals(material.shell.center, spec.shellCenter, 0.0001f)
+        assertEquals(material.shell.end, spec.shellEnd, 0.0001f)
+        assertEquals(material.shell.stroke, spec.strokeAlpha, 0.0001f)
+        assertEquals(12f, spec.cornerRadiusPx, 0f)
+        // 关键差异：液态管线 tint 不吃 ROW_TINT_GAIN=3 的行标定增益
+        val staticRender = resolveExploreGlassRenderParams(
+            glassConfig(mode = EXPLORE_GLASS_MODE_GLASS, level = 68),
+            material
+        )
+        assertTrue(staticRender.tintAlpha > spec.tintAlpha)
+    }
+
+    /** 液态行管线上四个倍率滑杆各自落到对应组件参数，0 关闭、200 加倍并限幅。 */
+    @Test
+    fun liquidRowSpecMapsEveryScaleSlider() {
+        val density = 2f
+        val material = GlassMaterialPreset.params(EXPLORE_GLASS_MODE_FROSTED, 0.35f, 0f)
+        val base = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70), material, density, 12f
+        )
+        val blurOff = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70)
+                .copy(blurPercent = 0), material, density, 12f
+        )
+        val blurMax = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70)
+                .copy(blurPercent = 200), material, density, 12f
+        )
+        assertEquals(0f, blurOff.blurPx, 0.0001f)
+        assertEquals(material.blurDp * 2f * density, blurMax.blurPx, 0.001f)
+        assertEquals(base.tintAlpha, blurOff.tintAlpha, 0.0001f)
+
+        val tintMax = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70)
+                .copy(tintPercent = 200), material, density, 12f
+        )
+        // tint 上限 1：磨砂档 0.085 × 2 = 0.17 未触顶
+        assertEquals(material.tintAlpha * 2f, tintMax.tintAlpha, 0.0001f)
+        assertEquals(base.shellCenter, tintMax.shellCenter, 0.0001f)
+
+        val shellOff = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70)
+                .copy(shellPercent = 0), material, density, 12f
+        )
+        assertEquals(0f, shellOff.shellStart, 0.0001f)
+        assertEquals(0f, shellOff.shellCenter, 0.0001f)
+        assertEquals(0f, shellOff.shellEnd, 0.0001f)
+        assertEquals(base.strokeAlpha, shellOff.strokeAlpha, 0.0001f)
+
+        val strokeMax = resolveExploreLiquidRowSpec(
+            glassConfig(mode = EXPLORE_GLASS_MODE_FROSTED, level = 70)
+                .copy(strokePercent = 200), material, density, 12f
+        )
+        assertEquals(material.shell.stroke * 2f, strokeMax.strokeAlpha, 0.0001f)
+        assertEquals(base.shellStart, strokeMax.shellStart, 0.0001f)
+    }
+
+    /** 液态行管线门槛：API 33+；solid 档与液态强度 0 时不启用（纯函数可测的部分）。 */
+    @Test
+    fun liquidPipelineGateFollowsApiAndStrength() {
+        assertTrue(supportsExploreLiquidPipeline(33))
+        assertTrue(supportsExploreLiquidPipeline(34))
+        assertTrue(!supportsExploreLiquidPipeline(32))
+        // 强度 0 → GlassMaterialPreset.current 的 glassLevel 为 0，液态行管线不启用
+        val material = GlassMaterialPreset.params(EXPLORE_GLASS_MODE_GLASS, 0f, 0f)
+        assertEquals(0f, material.glassLevel, 0f)
     }
 }

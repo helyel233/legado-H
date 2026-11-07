@@ -13,7 +13,9 @@
     <string name="explore_glass_mode_frosted">磨砂玻璃</string>
 
     <string name="explore_glass_level">玻璃强度</string>
-    <string name="explore_glass_level_summary">全局玻璃强度按日间/夜间分别保存；玻璃档 0 为关闭，无玻璃档不受影响</string>
+    <string name="explore_glass_level_summary">全局玻璃强度；Android 13 及以上液态玻璃管线与底栏共用同一强度，不再区分日间/夜间；玻璃档 0 为关闭，无玻璃档不受影响</string>
+
+    <string name="explore_glass_stroke_color">描边颜色</string>
 
     <string name="explore_glass_blur_scale">模糊程度</string>
     <string name="explore_glass_blur_scale_summary">100 为该档预设经书源名行标定后的原值，0 最弱，200 加倍；同时作用于硬件真高斯与软件模糊</string>

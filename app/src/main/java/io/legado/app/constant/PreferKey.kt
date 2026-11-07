@@ -233,6 +233,12 @@ object PreferKey {
     const val autoReadSpeed = "autoReadSpeed"
     const val autoReadMode = "autoReadMode"
     const val barElevation = "barElevation"
+    /**
+     * 已废弃（1.25.8 起）：底栏材质档收拢为全局单一来源 [exploreGlassEffectMode]，
+     * 渲染层一律通过 resolveExploreGlassMode / resolvedExploreGlassMode 读取全局档位。
+     * 本常量仅供一次性迁移（migrateLegacyBottomBarEffectModeLocked）读取旧值，
+     * 禁止新增业务引用。
+     */
     const val bottomBarEffectMode = "bottomBarEffectMode"
     const val bottomBarLayoutMode = "bottomBarLayoutMode"
     const val bottomBarSidebarGravity = "bottomBarSidebarGravity"
@@ -283,7 +289,7 @@ object PreferKey {
      */
     const val exploreGlassEnabled = "exploreGlassEnabled"
     /**
-     * 三档材质，取值与底栏 bottomBarEffectMode 一致：solid / glass / frosted，默认 frosted。
+     * 三档材质唯一事实来源（底栏 / 发现页 / 顶栏共用）：solid / glass / frosted，默认 frosted。
      * 1.25.5 的旧值 none 由 resolveExploreGlassMode 归一为 solid，避免升级后出现无效档。
      */
     const val exploreGlassEffectMode = "exploreGlassEffectMode"
@@ -302,6 +308,16 @@ object PreferKey {
     const val exploreGlassAnimatedSolid = "exploreGlassAnimatedSolid"
     /** 「恢复默认」动作行的稳定 key（只用于搜索深链定位，不存偏好值）。 */
     const val exploreGlassRestoreDefaults = "exploreGlassRestoreDefaults"
+    /**
+     * 档位键统一的幂等标记键：1.25.8 起底栏不再读 bottomBarEffectMode，
+     * 老用户改过该键但从未写过 exploreGlassEffectMode 的，启动迁移时固化进全局档位。
+     */
+    const val exploreGlassModeUnifiedMigrated = "exploreGlassModeUnifiedMigrated"
+    /**
+     * 玻璃描边统一色（ARGB 十进制字符串）。空 / 未设置 = 不描边（沿用底栏包
+     * borderColor 字段的可空语义；该包字段已废弃删除，旧包 JSON 由 Gson 静默忽略）。
+     */
+    const val glassStrokeColor = "glassStrokeColor"
     const val uiCornerSearchFollow = "uiCornerSearchFollow"
     const val uiCornerSearchFollowN = "uiCornerSearchFollowNight"
     const val uiCornerReplyFollow = "uiCornerReplyFollow"

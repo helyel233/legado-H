@@ -8,7 +8,7 @@ import io.legado.app.utils.ColorUtils
 /**
  * 底栏与经典发现页共用的「三档材质预设」唯一来源。
  *
- * 三档取值与底栏 `bottomBarEffectMode` 完全一致：
+ * 三档取值与全局材质档位完全一致（resolveExploreGlassMode：solid / glass / frosted）：
  * [SOLID]（常规 / 无玻璃）、[GLASS]（玻璃 / 透明玻璃）、[FROSTED]（磨砂玻璃）。
  * 每档不是「在某种默认观感上乘系数」，而是下面这一整组独立参数：
  * 强度键、模糊半径、白色着色、色散、折射高度/偏移、壳层三色 alpha、描边 alpha。
@@ -130,7 +130,7 @@ object GlassMaterialPreset {
 
     /**
      * 底栏当前档位对应的完整预设：磨砂档读 frostedGlassLevel，其余读 liquidGlassLevel。
-     * 发现页「跟随底栏材质」开启时直接复用它，做到档位与强度都逐值一致。
+     * 发现页液态行管线（API 33+）与顶栏也复用它，做到档位与强度都逐值一致。
      */
     fun current(mode: String): Params {
         val levelValue = if (mode == FROSTED) {
@@ -163,7 +163,7 @@ object GlassMaterialPreset {
 
     /**
      * 无玻璃档（底栏 solid）的统一实底壳层：底色取 bottomBackground，不透明度取
-     * 底栏图标包 config.opacity，描边取 config.borderColor/borderAlpha（未配置则不描边）。
+     * 底栏图标包 config.opacity，描边取全局 glassStrokeColor（未配置则不描边）。
      * 底栏的常规/实底壳层与发现页的无玻璃档共用同一个构造实现。
      * [forceOpaque] 默认 false，底栏所有调用点都不传，公式与 1.25.5 逐值一致、观感不变；
      * 发现页改用上面的填充色重载，由纯函数算出强制不透明的颜色后传入。

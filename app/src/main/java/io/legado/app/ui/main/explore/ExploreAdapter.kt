@@ -18,6 +18,7 @@ import androidx.appcompat.widget.AppCompatSpinner
 import androidx.collection.LruCache
 import androidx.core.content.ContextCompat
 import androidx.core.view.children
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.flexbox.FlexboxLayout
 import com.script.rhino.runScriptWithContext
 import io.legado.app.R
@@ -76,6 +77,24 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
     private val textRecycler = arrayListOf<AutoCompleteTextView>()
     private val selectRecycler = arrayListOf<LinearLayout>()
 
+    /**
+     * API 33+ 液态行玻璃层的采样源：行玻璃与底栏玻璃绑定 contentContainer 同构，
+     * 这里绑定发现页列表容器。随 RecyclerView 的 attach/detach 生命周期维护。
+     */
+    private var attachedRecyclerView: RecyclerView? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        attachedRecyclerView = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        if (attachedRecyclerView === recyclerView) {
+            attachedRecyclerView = null
+        }
+    }
+
     private var exIndex = -1
     /** 展开行的源 URL：exIndex 会随数据集变化漂移，锚定/恢复都以它为准 */
     var expandedSourceUrl: String? = null
@@ -100,11 +119,26 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         payloads: MutableList<Any>
     ) {
         binding.run {
-            // 书源名行毛玻璃背景：三档材质与底栏共用同一套预设参数，
-            // 玻璃档强度为 0 / 设备降级时返回 null，保留默认透明背景；
-            // 无玻璃档返回底栏 solid 同款实底壳层，不受强度 0 影响，也不走这里的回退
-            llTitle.background = ExploreGlassBackdrop.rowBackground(llTitle)
-                ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
+            // 书源名行毛玻璃背景：
+            // - API 33+：与底栏同款 StableLiquidGlassView 液态管线（GlassMaterialPreset.current
+            //   同一档位与强度来源，观感向底栏看齐），llTitle 只叠底栏同构的壳层渐变 + 描边；
+            // - 兜底（solid 档 / API < 33 / 墨水屏 / 低内存 / 液态强度 0）：静态模糊管线
+            //   或无玻璃实底；两者都不可用时保留默认透明背景。
+            val liquidSpec = ExploreGlassBackdrop.liquidRowParams(llTitle)
+            if (liquidSpec != null) {
+                ExploreGlassBackdrop.detachRowGlassTracker(llTitle)
+                ExploreGlassBackdrop.bindRowGlass(
+                    exploreItemGlassView, liquidSpec, attachedRecyclerView
+                )
+                llTitle.background = ExploreGlassBackdrop.liquidRowShellDrawable(llTitle, liquidSpec)
+            } else {
+                ExploreGlassBackdrop.releaseRowGlass(exploreItemGlassView)
+                // 书源名行毛玻璃背景：三档材质与底栏共用同一套预设参数，
+                // 玻璃档强度为 0 / 设备降级时返回 null，保留默认透明背景；
+                // 无玻璃档返回底栏 solid 同款实底壳层，不受强度 0 影响，也不走这里的回退
+                llTitle.background = ExploreGlassBackdrop.rowBackground(llTitle)
+                    ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
+            }
             if (holder.layoutPosition == itemCount - 1) {
                 root.setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
             } else {

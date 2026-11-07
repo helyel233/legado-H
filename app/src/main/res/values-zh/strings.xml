@@ -2401,7 +2401,6 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="top_bar_wallpaper">顶栏壁纸</string>
     <string name="top_bar_wallpaper_alpha">壁纸不透明度</string>
     <string name="bottom_bar_wallpaper">底栏壁纸</string>
-    <string name="bottom_bar_border_alpha">底栏边框不透明度</string>
     <string name="top_bar_tag_selected_color">选中标签背景色</string>
     <string name="top_bar_tag_selected_alpha">选中标签不透明度</string>
     <string name="top_bar_filter_default">筛选栏默认状态</string>
@@ -2428,7 +2427,6 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="cache_manage_batch_upload_queued">已加入 %1$d 个上传任务</string>
     <string name="theme_panel_border_color">圆角卡片边框色</string>
     <string name="theme_panel_border_alpha">边框不透明度</string>
-    <string name="bottom_bar_border_color">底栏边框色</string>
     <string name="top_bar_border_color">顶栏边框色</string>
     <string name="select_color">选择颜色</string>
     <string name="paragraph_rule_manage">&#27573;&#33853;&#35268;&#21017;&#31649;&#29702;</string>

@@ -70,7 +70,12 @@ object MainLayoutPresetConfig {
         context.putPrefBoolean(PreferKey.floatingBottomBarHideSearch, false)
         AppConfig.bottomBarLayoutMode = bottomLayoutMode
         AppConfig.bottomBarSidebarGravity = "start"
-        AppConfig.bottomBarEffectMode = if (bottomLayoutMode == "standard") "solid" else "glass"
+        // 材质档位自 1.25.8 起收拢为全局单一键（底栏 / 发现页 / 顶栏共用）：
+        // 预设沿用「标准布局 → 无玻璃、其余 → 玻璃」的旧耦合语义，写入全局档位键
+        context.putPrefString(
+            PreferKey.exploreGlassEffectMode,
+            if (bottomLayoutMode == "standard") "solid" else "glass"
+        )
         if (bottomLayoutMode == "sidebar") {
             context.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }

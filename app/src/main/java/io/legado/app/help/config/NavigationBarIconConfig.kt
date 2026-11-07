@@ -25,6 +25,7 @@ import io.legado.app.help.AppCloudStorage
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getSecondaryTextColor
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -103,8 +104,9 @@ object NavigationBarIconConfig {
 
     @Keep
     data class Config(
-        // 旧包 JSON 里的 effectMode 字段已废弃（材质档收拢为全局设置 bottomBarEffectMode）：
-        // Gson 对未知字段静默忽略，不写读取兼容 / 回写代码；导出侧不再写该字段。
+        // 旧包 JSON 里的 effectMode / borderColor / borderAlpha 字段已废弃
+        // （材质档与描边色分别收拢为全局设置 exploreGlassEffectMode / glassStrokeColor）：
+        // Gson 对未知字段静默忽略，不写读取兼容 / 回写代码；导出侧不再写这些字段。
         var name: String,
         var isNightMode: Boolean,
         var layoutMode: String = "floating",
@@ -113,8 +115,6 @@ object NavigationBarIconConfig {
         var updatedAt: Long = System.currentTimeMillis(),
         var sidebarBackgroundPath: String? = null,
         var wallpaperPath: String? = null,
-        var borderColor: Int? = null,
-        var borderAlpha: Int = 100,
         var hideSearchInFloatingStyle: Boolean = false,
         var icons: MutableMap<String, String> = linkedMapOf()
     )
@@ -326,7 +326,6 @@ object NavigationBarIconConfig {
             sidebarGravity = source.sidebarGravity,
             opacity = source.opacity.coerceIn(0, 100),
             wallpaperPath = normalizeWallpaperPath(source.wallpaperPath, dir),
-            borderAlpha = source.borderAlpha.coerceIn(0, 100),
             updatedAt = System.currentTimeMillis(),
             icons = source.icons.toMutableMap()
         )
@@ -1316,14 +1315,12 @@ object NavigationBarIconConfig {
         val icons = runCatching { config.icons }.getOrNull() ?: linkedMapOf()
         val sidebarBackgroundPath = runCatching { config.sidebarBackgroundPath }.getOrNull()
         val wallpaperPath = runCatching { config.wallpaperPath }.getOrNull()
-        val borderAlpha = runCatching { config.borderAlpha }.getOrDefault(100).coerceIn(0, 100)
         val hideSearchInFloatingStyle = runCatching { config.hideSearchInFloatingStyle }.getOrDefault(false)
         config.layoutMode = layoutMode
         config.sidebarGravity = sidebarGravity
         config.opacity = config.opacity.coerceIn(0, 100)
         config.sidebarBackgroundPath = sidebarBackgroundPath
         config.wallpaperPath = wallpaperPath?.takeIf { it.isNotBlank() }
-        config.borderAlpha = borderAlpha
         config.hideSearchInFloatingStyle = layoutMode == "floating" && hideSearchInFloatingStyle
         config.icons = icons.toMutableMap()
         return config
@@ -1413,7 +1410,11 @@ object NavigationBarIconConfig {
             Config(
                 name = customName,
                 isNightMode = isNight,
-                opacity = if (AppConfig.bottomBarEffectMode == "frosted") AppConfig.frostedGlassLevel else AppConfig.liquidGlassLevel,
+                opacity = if (resolvedExploreGlassMode() == "frosted") {
+                    AppConfig.frostedGlassLevel
+                } else {
+                    AppConfig.liquidGlassLevel
+                },
                 icons = icons
             )
         )

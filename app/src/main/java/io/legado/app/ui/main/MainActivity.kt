@@ -98,6 +98,8 @@ import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
 import io.legado.app.ui.main.ai.AiChatActivity
 import io.legado.app.ui.main.explore.ExploreFragment
 import io.legado.app.ui.main.explore.migrateLegacyExploreGlassFollow
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
+import io.legado.app.ui.main.explore.resolveGlassStrokeColor
 import io.legado.app.ui.main.homepage.HomepageFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.readrecord.ReadRecordFragment
@@ -117,6 +119,7 @@ import io.legado.app.utils.getClipText
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setHuaweiDisplayCutoutShortEdgesCompat
@@ -189,6 +192,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         aiFloatingBall?.let { placeAiFloatingBall(it, animate = true, attached = true) }
     }
     private var bottomNavigationConfigSignature: String? = null
+    private var bottomNavigationGlassSignature: String? = null
     private var bottomNavigationInset = 0
     private val sidebarTouchSlop by lazy {
         ViewConfiguration.get(this).scaledTouchSlop
@@ -776,18 +780,38 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun refreshBottomNavigationConfig() {
         val signature = NavigationBarIconConfig.currentSignature(AppConfig.isNightTheme)
-        if (bottomNavigationConfigSignature == signature) {
-            return
+        val packageChanged = bottomNavigationConfigSignature != signature
+        if (packageChanged) {
+            bottomNavigationConfigSignature = signature
+            NavigationBarIconConfig.applyCurrentBottomConfig(AppConfig.isNightTheme)
+            applyBottomNavigationIcons()
+            applyBottomLayoutMode()
         }
-        bottomNavigationConfigSignature = signature
-        NavigationBarIconConfig.applyCurrentBottomConfig(AppConfig.isNightTheme)
-        applyBottomNavigationIcons()
-        applyBottomLayoutMode()
-        scheduleLiquidGlassWarmup()
-        binding.bottomNavigationView.doOnLayout {
-            updateBottomNavigationIndicator(animate = false)
+        // 全局毛玻璃签名（档位 + 两个液态强度键 + 描边色）：任一变化都重跑
+        // setupLiquidGlass()，保证「全局页改材质/强度/描边 → 返回主界面即生效」。
+        // 注意放在 applyCurrentBottomConfig 之后计算，签名与实际生效的键值一致。
+        val glassSignature = bottomBarGlassSignature()
+        val glassChanged = bottomNavigationGlassSignature != glassSignature
+        if (glassChanged) {
+            bottomNavigationGlassSignature = glassSignature
+        }
+        if (packageChanged || glassChanged) {
+            scheduleLiquidGlassWarmup()
+            if (packageChanged) {
+                binding.bottomNavigationView.doOnLayout {
+                    updateBottomNavigationIndicator(animate = false)
+                }
+            }
         }
     }
+
+    /** 影响底栏玻璃观感的全局键签名：档位、两个液态强度键与描边色。 */
+    private fun bottomBarGlassSignature(): String = listOf(
+        resolvedExploreGlassMode(),
+        AppConfig.frostedGlassLevel,
+        AppConfig.liquidGlassLevel,
+        appCtx.getPrefString(PreferKey.glassStrokeColor).orEmpty()
+    ).joinToString("|")
 
     private fun refreshMainTopBars(view: View) {
         if (view is MainTopBarView) {
@@ -1563,7 +1587,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 syncSearchButtonTint()
                 return
             }
-            val effectMode = AppConfig.bottomBarEffectMode
+            // 材质档位单一事实来源：与发现页 / 顶栏 / 设置页同一解析函数，
+            // 「全局毛玻璃效果」切档后底栏即时生效（旧 bottomBarEffectMode 已废弃）。
+            val effectMode = resolvedExploreGlassMode()
             if (standardMode) {
                 bottomNavigationGlassView.visibility = android.view.View.GONE
                 bottomNavigationIndicatorGlassView.visibility = android.view.View.GONE
@@ -1775,7 +1801,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         return GlassMaterialPreset.createSolidShellDrawable(
             baseColor = bottomBackground,
             opacity = config.opacity,
-            borderColor = bottomBarBorderColor(config),
+            borderColor = bottomBarBorderColor(),
             cornerRadiusPx = cornerRadius,
             oval = oval,
             strokeWidthPx = 1.dpToPx()
@@ -1787,7 +1813,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         return GlassMaterialPreset.createSolidShellDrawable(
             baseColor = bottomBackground,
             opacity = config.opacity,
-            borderColor = bottomBarBorderColor(config),
+            borderColor = bottomBarBorderColor(),
             cornerRadiusPx = 0f,
             oval = false,
             strokeWidthPx = 1.dpToPx()
@@ -1998,12 +2024,14 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun bottomBarBorderColor(
-        config: NavigationBarIconConfig.Config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
-    ): Int? {
-        val color = config.borderColor ?: return null
-        return AppColorUtils.withAlpha(color, config.borderAlpha.coerceIn(0, 100) / 100f)
-    }
+    /**
+     * 玻璃描边统一色：自 1.25.8 起收归全局设置 [PreferKey.glassStrokeColor]，
+     * 不再读底栏包 borderColor / borderAlpha（字段已废弃删除，旧包 JSON 由 Gson
+     * 静默忽略）。null = 未设置 → 实底壳层不描边、液态壳层回退 shell.stroke。
+     */
+    private fun bottomBarBorderColor(): Int? = resolveGlassStrokeColor(
+        appCtx.getPrefString(PreferKey.glassStrokeColor)
+    )
 
     private fun setupLiquidGlassView(
         liquidGlassView: StableLiquidGlassView,

@@ -13,7 +13,9 @@
     <string name="explore_glass_mode_frosted">Frosted glass</string>
 
     <string name="explore_glass_level">Glass strength</string>
-    <string name="explore_glass_level_summary">Global glass strength is stored separately for day and night; 0 turns the glass off (No glass style is unaffected)</string>
+    <string name="explore_glass_level_summary">Global glass strength; on Android 13 and above the liquid glass pipeline shares the bottom bar strength, so day / night values are not distinguished; 0 turns the glass off (No glass style is unaffected)</string>
+
+    <string name="explore_glass_stroke_color">Stroke colour</string>
 
     <string name="explore_glass_blur_scale">Blur amount</string>
     <string name="explore_glass_blur_scale_summary">100 keeps this style\'s calibrated row value, 0 is weakest, 200 doubles it; applies to both hardware Gaussian and software blur</string>
