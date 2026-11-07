@@ -13,6 +13,7 @@ import android.graphics.drawable.ColorDrawable
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Build
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -112,6 +113,7 @@ import io.legado.app.ui.video.VideoBookPreloader
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.RoundedTagBarView
 import io.legado.app.ui.widget.SourceSelectDialog
+import io.legado.app.ui.widget.shouldEnableTopBarBackdrop
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
@@ -1902,7 +1904,26 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun updateModernTopBarOverlay() {
-        if (!usingModernDiscovery || view == null) return
+        if (view == null) return
+        // 1.25.10 顶栏液态玻璃：采样源只能是顶栏的**兄弟子树** fl_discover_books（书网格容器）。
+        // 绝不能传 content_container / swipe_refresh_layout —— 顶栏在它们之内，
+        // 底层库每帧 target.draw() 会把顶栏（含玻璃层自己）再画一遍 → RenderNode 重入录制
+        // → hwui abort（1.25.8 同类 native 崩溃）。setBackdropBlur 内还有同一份守卫兜底。
+        // 只在 modern 布局（内容可滚到栏下）且有内容时启用；classic 布局顶栏在列表上方，
+        // 玻璃后面什么都没有，传 null 保持既有观感。
+        binding.topBar.setBackdropBlur(
+            if (shouldEnableTopBarBackdrop(
+                    overlayContent = usingModernDiscovery,
+                    sdkInt = Build.VERSION.SDK_INT,
+                    sourceAvailable = true
+                )
+            ) {
+                binding.flDiscoverBooks
+            } else {
+                null
+            }
+        )
+        if (!usingModernDiscovery) return
         val topSpace = binding.topBar.height
         // API>=33:顶栏背景毛玻璃,列表滚到栏下被磨砂;低版本:compose 列表内边距下移并裁剪,不滚到栏下。
         val canBlur = binding.topBar.supportsBackdropBlur()
@@ -1928,7 +1949,6 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 topSpace + 56.dpToPx()
             )
         }
-        binding.topBar.setBackdropBlur(null)
         binding.topBar.bringToFront()
     }
 

@@ -580,6 +580,14 @@ internal val EXPLORE_GLASS_PREF_KEYS: Set<String> =
  * 行背景按行在屏幕上的实时位置采样这张底图，滚动时随位置重新采样，
  * 得到「透出背后壁纸并磨砂」的玻璃观感，避免书源名与壁纸内容直接重合。
  *
+ * 1.25.10 起再增加**第三条、优先级最高**的管线（方案 A2，仅 API 33+）：
+ * [RowGlassLiquidRenderer] 用底栏那颗同一份 AGSL（MIT，已复制到
+ * `res/raw/glass_row_liquid.agsl`）在**已预模糊的 blurred 位图**上做真折射 + 色散。
+ * 它**不复用底层库的 Java 宿主**、不 `bind` 任何视图、不对任何 `View` 调
+ * `beginRecording` + `View.draw()`；录制内容永远只有我们自己画的一条 `drawRect`，
+ * 因此 1.25.8 的 RenderNode 重入录制崩溃（native abort）在本路径上结构性不存在。
+ * 该层失败或被降级时，下面两条既有管线**原样接管**，观感连续、不留空白帧。
+ *
  * 模糊有两条管线，按设备能力二选一（②③ 的软件管线始终保留，是硬件管线的降级基线）：
  * - **硬件管线（API 31+）**：底图不做软件模糊，改由 [HardwareGlassLayer] 把「玻璃层」
  *   录进一个独立 [RenderNode]，对其设置 [RenderEffect.createBlurEffect] 交给 GPU 做真高斯。
@@ -777,7 +785,23 @@ object ExploreGlassBackdrop {
                 exploreHardwareBlurPx(
                     render.blurDp, context.resources.displayMetrics.density
                 )
-            } else 0f
+            } else 0f,
+            material = material,
+            // 行内液态玻璃（1.25.10）只在「设备与偏好」层面判定一次；
+            // 「当帧」的三个事实（硬件加速 Canvas / 底图可用 / 持久故障位）交给
+            // rowLiquidDrawableNow 在 draw() 里逐帧判定，因此这里后两项传恒真值。
+            // 故障位传**进程级**那一位：AGSL 一旦失败过，之后重建的行也不必再建液态层。
+            useLiquid = rowLiquidCapability(
+                sdkInt = Build.VERSION.SDK_INT,
+                rowLiquidEnabled = ROW_LIQUID_ENABLED,
+                hardwareBlurPref = config.hardwareBlur,
+                isEInk = AppConfig.isEInkMode,
+                isLowRam = isLowRamDevice(context),
+                level = config.level,
+                canvasHardwareAccelerated = true,
+                backdropAvailable = true,
+                liquidFailed = RowLiquidRuntimeState.shaderFailed
+            ) == RowLiquidCapability.LIQUID
         ).also { drawable ->
             //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
             //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
@@ -942,10 +966,17 @@ object ExploreGlassBackdrop {
 
 /**
  * 单个书源名行的毛玻璃背景，与底栏（StableLiquidGlassView + shell overlay）同一套材质：
- * 1. 玻璃层：按行当前屏幕位置采样模糊壁纸，半径取 [ExploreGlassRenderParams.blurDp]；
+ * 0. 液态层（1.25.10，仅 API 33+）：[RowGlassLiquidRenderer] 的 AGSL 真折射 + 色散，
+ *    采样源是已预模糊的壁纸位图；不可用时下面 1 的三条既有分支原样接管；
+ * 1. 玻璃层：按行当前屏幕位置采样模糊壁纸，半径取 [ExploreGlassRenderParams.blurDp]
+ *    （硬件管线由 GPU 出真高斯，降级时用 IO 线程预模糊的位图）；
  * 2. tint 层：底栏 LiquidGlass 同款白色弱着色，alpha 取行标定后的 tintAlpha；
  * 3. shell 层：底栏 createLiquidGlassShellDrawable 同款三色垂直渐变 + 描边；
- * 4. rim 层：由该档色散/折射派生的上下边缘高光，补回底栏玻璃的边缘体积感。
+ * 4. rim 层：由该档色散/折射派生的上下边缘高光，补回底栏玻璃的边缘体积感；
+ * 5. 拟液态层（1.25.10，A1）：顶部高光带、底部厚度内阴影、两侧色散彩边，
+ *    参数来自纯函数 [rowRimSpectrum] / [rowChromaEdgeColors]，**只叠加不改既有公式**；
+ *    **只在本行没走成 A2 时才叠加**（见 [rowPseudoLiquidEnabled]），不与真折射重叠；
+ * 6. 描边层：全局 glassStrokeColor 或 surfaceColor×strokeAlpha。
  *
  * 所有可变量都从 [render] 这一份 [resolveExploreGlassRenderParams] 的产物读取，
  * 不再在类内散落 `scaledGlassParam` 调用：四个倍率滑杆与强度/档位是否真的生效，
@@ -959,7 +990,11 @@ private class FrostedGlassDrawable(
     /** 全局描边色（非空时覆盖默认的 surfaceColor×strokeAlpha 描边）。 */
     private val strokeColor: Int?,
     private val useHardware: Boolean,
-    private val hardwareBlurPx: Float
+    private val hardwareBlurPx: Float,
+    /** 该档材质预设：液态层（A2）与拟液态层（A1）都只从它取色散/折射，不另立系数。 */
+    private val material: GlassMaterialPreset.Params,
+    /** 是否尝试行内液态玻璃（A2）；为 false 时只走静态管线 + A1 拟液态层。 */
+    useLiquid: Boolean
 ) : Drawable() {
 
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -971,9 +1006,38 @@ private class FrostedGlassDrawable(
         strokeWidth = host.resources.displayMetrics.density
     }
 
+    // ---- 1.25.10 拟液态（A1）叠加层：顶部高光带 / 底部厚度内阴影 / 两侧色散彩边 ----
+    /** 顶部高光带：白色，向下渐变到透明。 */
+    private val spectrumTopPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** 底部厚度内阴影：黑色，向上渐变到透明。 */
+    private val spectrumShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** 暖侧色散彩边（描边，亚像素错位）。 */
+    private val chromaWarmPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = host.resources.displayMetrics.density
+    }
+    /** 冷侧色散彩边（描边，亚像素错位，方向相反）。 */
+    private val chromaCoolPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = host.resources.displayMetrics.density
+    }
+    private var topBandShaderCache: LinearGradient? = null
+    private var topBandShaderKey: String? = null
+    private var innerShadowShaderCache: LinearGradient? = null
+    private var innerShadowShaderKey: String? = null
+    private var rimSpectrumCache: RowRimSpectrum? = null
+    private var rimSpectrumHeight = -1
+
     /** 底栏 shell 同款表面色。 */
     private val surfaceColor =
         if (AppColorUtils.isColorLight(baseColor)) Color.WHITE else Color.rgb(22, 24, 28)
+
+    /**
+     * 色散彩边的基准色：优先用全局描边色（用户可选），否则用底栏同口径的表面色。
+     * 彩边颜色由 [rowChromaEdgeColors] 在这个基准上做饱和度/亮度偏移得出，
+     * 因此浅色 / 深色主题下都不会出现「一圈纯红纯蓝」。
+     */
+    private val chromaBaseColor: Int = strokeColor ?: surfaceColor
 
     // 全部来自行渲染口径；倍率滑杆已在 resolveExploreGlassRenderParams 中逐项生效。
     private val tintBaseAlpha = (render.tintAlpha * 255).toInt()
@@ -1003,6 +1067,22 @@ private class FrostedGlassDrawable(
     private var hardwareLayer: HardwareGlassLayer? = null
     private var hardwareFailed = false
 
+    /**
+     * 1.25.10 的行内液态玻璃层（AGSL 真折射+色散）。仅在 [useLiquid] 且 API 33+ 时创建，
+     * 创建本身失败（极少数 ROM 上 `RenderNode`/`RuntimeShader` 构造抛异常）只是让本行走
+     * 静态管线，不影响任何既有行为。`liquidFailed` 由渲染器自己持有的持久位管理。
+     */
+    private val liquidLayer: RowGlassLiquidRenderer? =
+        if (useLiquid && Build.VERSION.SDK_INT >= ROW_LIQUID_MIN_SDK) {
+            runCatching {
+                RowGlassLiquidRenderer(
+                    host.context, material, host.resources.displayMetrics.density
+                )
+            }.getOrNull()
+        } else {
+            null
+        }
+
     init {
         if (useHardware && supportsHardwareBlur() && hardwareBlurPx > 0f) {
             hardwareLayer = runCatching { HardwareGlassLayer(hardwareBlurPx) }.getOrNull()
@@ -1017,6 +1097,7 @@ private class FrostedGlassDrawable(
         shaderBitmap = null
         glassPaint.shader = null
         hardwareLayer?.reset()
+        liquidLayer?.reset()
         invalidateSelf()
     }
 
@@ -1121,29 +1202,57 @@ private class FrostedGlassDrawable(
     override fun draw(canvas: Canvas) {
         val bd = backdrop
         rect.set(bounds)
+        // A2 本帧是否真的画出了玻璃层：决定后面要不要叠 A1（拟液态只做兜底，不叠加在 A2 上）。
+        var drewLiquidGlass = false
         // 先筛掉已回收 / 空位图：两条管线各自取源，任一缺失都不允许透出清晰壁纸。
         val software = bd?.blurred?.takeIf { usable(it) }
         val raw = bd?.raw?.takeIf { usable(it) }
+        // 1.25.10 行内液态（A2）：只用已预模糊的 blurred 位图，不重新解码、不重新模糊，
+        // 当帧三条件（硬件加速 / 底图可用 / 无持久故障）由纯函数统一判定。
+        val liquid = liquidLayer?.takeIf {
+            rowLiquidDrawableNow(canvas.isHardwareAccelerated, software != null, it.liquidFailed)
+        }
         // 硬件管线需同时满足 API 31+、层创建成功、此前无持久故障、raw 底图可用。
         // raw 缺失时直接让位给软件管线：拿 blurred 去做 GPU 模糊会变成双重模糊。
+        // 液态层激活时同一笔玻璃由 shader 完成，硬件高斯层让位（否则重复出图）。
         val activeLayer = hardwareLayer?.takeIf {
-            !hardwareFailed && supportsHardwareBlur() && raw != null
+            liquid == null && !hardwareFailed && supportsHardwareBlur() && raw != null
         }
-        // 硬件激活时 glassBitmap 就是 raw，否则就是 software；两条分支各自用它采样。
-        val glassBitmap = if (activeLayer != null) raw else software
+        // 硬件激活时 glassBitmap 就是 raw，液态与软件分支用它自己的 blurred。
+        val glassBitmap = when {
+            liquid != null -> software
+            activeLayer != null -> raw
+            else -> software
+        }
         if (glassBitmap != null) {
             val root = host.rootView
             if (root.width > 0 && root.height > 0) {
                 ensureLocationSampled()
-                val scaleX = glassBitmap.width / root.width.toFloat()
-                val scaleY = glassBitmap.height / root.height.toFloat()
-                shaderMatrix.setScale(scaleX, scaleY)
-                shaderMatrix.postTranslate(
-                    -(location[0] - rootLocation[0]) * scaleX,
-                    -(location[1] - rootLocation[1]) * scaleY
+                // 采样矩阵：与软件 / 硬件 / 液态三条管线共用同一份口径（纯函数在
+                // RowGlassLiquidSpec.rowSampleTransform，行为与 1.25.9 的内联写法逐值一致）。
+                val transform = rowSampleTransform(
+                    bitmapWidth = glassBitmap.width,
+                    bitmapHeight = glassBitmap.height,
+                    rootWidth = root.width,
+                    rootHeight = root.height,
+                    locationX = location[0],
+                    locationY = location[1],
+                    rootX = rootLocation[0],
+                    rootY = rootLocation[1]
                 )
+                shaderMatrix.setScale(transform.scaleX, transform.scaleY)
+                shaderMatrix.postTranslate(transform.translateX, transform.translateY)
                 var drewGlass = false
-                if (activeLayer != null) {
+                if (liquid != null) {
+                    // 液态管线（1.25.10）：AGSL 真折射 + 色散，内容源是 blurred 壁纸位图。
+                    // 失败时渲染器自己置**进程级**故障位并返回 false，本帧立即走下面的静态分支。
+                    drewLiquidGlass = liquid.draw(
+                        canvas, glassBitmap, rect, radiusPx, shaderMatrix,
+                        glassPaint.alpha, glassPaint.colorFilter
+                    )
+                    drewGlass = drewLiquidGlass
+                }
+                if (!drewGlass && activeLayer != null) {
                     // 硬件管线：把这一层录进独立 RenderNode，GPU 做真高斯。
                     drewGlass = activeLayer.draw(
                         canvas, glassBitmap, rect, radiusPx, shaderMatrix,
@@ -1183,9 +1292,111 @@ private class FrostedGlassDrawable(
             rimPaint.shader = rimShader(shaderHeight)
             rimPaint.alpha = (255 * alphaFactor).toInt()
             canvas.drawRoundRect(rect, radiusPx, radiusPx, rimPaint)
+            // 1.25.10 拟液态叠加（A1）：顶部高光带 + 底部厚度内阴影 + 两侧色散彩边。
+            // **只在本行没走成 A2 时才叠加**（API<33 / A2 开关关 / A2 当帧失败），
+            // 这样 A1 才是真正的「兜底」：API33+ 且 A2 成功的行不会变成
+            // 「真折射 + 拟液态」的双重叠加（那会比底栏更重，也观察不到纯 A2 效果）。
+            // 判据用 rowPseudoLiquidEnabled 纯函数，两个编译期总闸正交。
+            if (rowPseudoLiquidEnabled(ROW_PSEUDO_LIQUID_ENABLED, drewLiquidGlass)) {
+                drawRimSpectrum(canvas, shaderHeight)
+            }
         }
         // 描边（与底栏 strokeAlpha 同口径）
         canvas.drawRoundRect(rect, radiusPx, radiusPx, strokePaint)
+    }
+
+    /**
+     * 拟液态叠加层（方案 A1）：**只在本行没走成 A2 时**才调用（API<33、A2 总闸关闭、
+     * 或 A2 当帧失败降级），是这些场景下行内唯一的「体积感 + 色散」来源。
+     *
+     * 三层都很廉价（两次圆角矩形渐变填充 + 两条描边），且参数全部来自纯函数
+     * [rowRimSpectrum] / [rowChromaEdgeColors]，本方法只负责把结果画出来：
+     * 1. 顶部高光带：白色，`topBandFraction` 高度内渐变到透明 → 「液面受光」；
+     * 2. 底部厚度内阴影：黑色，同宽度向上渐变到透明 → 「玻璃有厚度」；
+     * 3. 两侧色散彩边：暖 / 冷两色各一条，向相反方向错位 `chromaOffsetPx`（≤1px）。
+     */
+    private fun drawRimSpectrum(canvas: Canvas, height: Int) {
+        val heightPx = rect.height()
+        if (heightPx < 2f) return
+        val spectrum = rimSpectrum(height)
+        if (spectrum.topBandAlpha > 0f) {
+            spectrumTopPaint.shader = topBandShader(heightPx, spectrum)
+            spectrumTopPaint.alpha = (255 * alphaFactor).toInt()
+            canvas.drawRoundRect(rect, radiusPx, radiusPx, spectrumTopPaint)
+        }
+        if (spectrum.innerShadowAlpha > 0f) {
+            spectrumShadowPaint.shader = innerShadowShader(heightPx, spectrum)
+            spectrumShadowPaint.alpha = (255 * alphaFactor).toInt()
+            canvas.drawRoundRect(rect, radiusPx, radiusPx, spectrumShadowPaint)
+        }
+        val chromaAlpha = spectrum.chromaAlpha * alphaFactor
+        if (chromaAlpha > 0f) {
+            val edges = rowChromaEdgeColors(chromaBaseColor, material.dispersion, chromaAlpha)
+            chromaWarmPaint.color = edges.warmColor
+            chromaCoolPaint.color = edges.coolColor
+            val offset = spectrum.chromaOffsetPx
+            canvas.drawRoundRect(
+                rect.left - offset, rect.top, rect.right - offset, rect.bottom,
+                radiusPx, radiusPx, chromaWarmPaint
+            )
+            canvas.drawRoundRect(
+                rect.left + offset, rect.top, rect.right + offset, rect.bottom,
+                radiusPx, radiusPx, chromaCoolPaint
+            )
+        }
+    }
+
+    /** 拟液态参数按行高缓存：行高不变时（绝大多数帧）不重算任何浮点。 */
+    private fun rimSpectrum(height: Int): RowRimSpectrum {
+        val cached = rimSpectrumCache
+        if (cached != null && rimSpectrumHeight == height) return cached
+        return rowRimSpectrum(
+            dispersion = material.dispersion,
+            refractionHeightDp = material.refractionHeightDp,
+            rowHeightPx = height.toFloat(),
+            density = host.resources.displayMetrics.density
+        ).also {
+            rimSpectrumCache = it
+            rimSpectrumHeight = height
+        }
+    }
+
+    /** 顶部高光带：白色 → 透明的垂直渐变，高度 = 行高 × `topBandFraction`。 */
+    private fun topBandShader(heightPx: Float, spectrum: RowRimSpectrum): LinearGradient {
+        val key = "$heightPx|${spectrum.topBandAlpha}|${spectrum.topBandFraction}"
+        topBandShaderCache?.let { if (topBandShaderKey == key) return it }
+        val bandPx = (heightPx * spectrum.topBandFraction).coerceIn(1f, heightPx)
+        return LinearGradient(
+            0f, 0f, 0f, bandPx,
+            intArrayOf(
+                AppColorUtils.withAlpha(Color.WHITE, spectrum.topBandAlpha),
+                Color.TRANSPARENT
+            ),
+            null,
+            Shader.TileMode.CLAMP
+        ).also {
+            topBandShaderCache = it
+            topBandShaderKey = key
+        }
+    }
+
+    /** 底部厚度内阴影：透明 → 黑色的垂直渐变，高度 = [rowInnerShadowHeightPx]。 */
+    private fun innerShadowShader(heightPx: Float, spectrum: RowRimSpectrum): LinearGradient {
+        val key = "$heightPx|${spectrum.innerShadowAlpha}|${spectrum.topBandFraction}"
+        innerShadowShaderCache?.let { if (innerShadowShaderKey == key) return it }
+        val bandPx = rowInnerShadowHeightPx(heightPx, spectrum).coerceIn(1f, heightPx)
+        return LinearGradient(
+            0f, heightPx - bandPx, 0f, heightPx,
+            intArrayOf(
+                Color.TRANSPARENT,
+                AppColorUtils.withAlpha(Color.BLACK, spectrum.innerShadowAlpha)
+            ),
+            null,
+            Shader.TileMode.CLAMP
+        ).also {
+            innerShadowShaderCache = it
+            innerShadowShaderKey = key
+        }
     }
 
     override fun setAlpha(alpha: Int) {

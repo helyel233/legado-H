@@ -46,6 +46,47 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 
 /**
+ * 顶栏背景毛玻璃的 API 门槛（`RuntimeShader` / `createRuntimeShaderEffect` = API 33）。
+ * 与 [MainTopBarView.supportsBackdropBlur] 同一口径，抽成常量便于纯 JVM 单测锁定。
+ */
+internal const val TOP_BAR_BACKDROP_MIN_SDK: Int = 33
+
+/**
+ * 顶栏液态玻璃是否应当启用（纯 JVM 函数，可直接单测）。
+ *
+ * 三个条件缺一不可：
+ * 1. [overlayContent]：宿主使用**覆盖式**布局（列表可以滚到顶栏下方）。
+ *    classic 布局顶栏在列表上方，玻璃后面什么都没有，启用等于白付录制开销；
+ * 2. [sdkInt] ≥ [TOP_BAR_BACKDROP_MIN_SDK]：低版本没有 `RuntimeShader`，
+ *    由宿主既有的「非覆盖布局」兜底（见 `ExploreFragment.updateModernTopBarOverlay`）；
+ * 3. [sourceAvailable]：确实存在一个**合法采样源**（顶栏的兄弟子树）。
+ */
+internal fun shouldEnableTopBarBackdrop(
+    overlayContent: Boolean,
+    sdkInt: Int,
+    sourceAvailable: Boolean
+): Boolean = overlayContent && sourceAvailable && sdkInt >= TOP_BAR_BACKDROP_MIN_SDK
+
+/**
+ * 顶栏采样源是否合法（纯 JVM 函数）：**不能是宿主自身或祖先**。
+ *
+ * 与 `StableLiquidGlassView.rejectIfAncestorSource` 共用同一份守卫实现
+ * （[selfOrAncestorContains]）。顶栏在 `content_container → view_pager_main →
+ * fragment_explore → ll_modern_discovery` 之内，所以：
+ * - `content_container`、`swipe_refresh_layout`、`ll_modern_discovery` 都是**祖先** → 必须拒绝；
+ * - `fl_discover_books` / `view_pager_bookshelf` 才是**兄弟子树** → 唯一合法形态。
+ *
+ * 为什么祖先源一定会崩：底层库每帧 `node.beginRecording()` 后 `source.draw(canvas)`，
+ * 祖先会把顶栏（含玻璃层自己）再画一遍 → 玻璃层里 `drawRenderNode(node)` 在录制中重入
+ * → hwui 直接 abort（native crash，Java 侧无堆栈）。这正是 1.25.8 的崩溃形态。
+ */
+internal fun topBarLiquidSourceAllowed(
+    host: Any?,
+    source: Any?,
+    parentOf: (Any) -> Any?
+): Boolean = source != null && !selfOrAncestorContains(host, source, parentOf)
+
+/**
  * 顶栏毛玻璃一档的最终像素参数（与底栏 StableLiquidGlassView 的注入口径一一对应）。
  * dp 值已按屏幕密度换算为像素；tintAlpha / dispersion 是无量纲值直传。
  */
@@ -267,10 +308,23 @@ class MainTopBarView @JvmOverloads constructor(
      * 材质档与参数取自「全局毛玻璃效果」设置（与底栏、发现页共用 [GlassMaterialPreset]）：
      * solid 档不激活玻璃层,由 applyDefaultStyle/applyRegularStyle 的实底分支兜住；
      * glass/frosted 档按预设参数注入（圆角仍取 TopBarConfig,与材质无关）。
-     * @param source 列表容器(玻璃采样源);传 null 或低版本时关闭玻璃,改由宿主使用非覆盖布局兜底。
+     *
+     * **采样源约束（1.25.10 新增守卫）**：必须是与本视图**平级的背景子树**。
+     * 传本视图的自身或祖先会被 [topBarLiquidSourceAllowed] 拒掉并按 `null` 处理——
+     * 底层库每帧按采样源整树录制 `RenderNode`，祖先源会把顶栏（含玻璃层自己）再画一遍，
+     * 形成 RenderNode 重入录制，hwui 直接 abort（1.25.8 的同类 native 崩溃）。
+     * 合法调用点见 `ExploreFragment`（`fl_discover_books`）与
+     * `BookshelfFragment1`（`view_pager_bookshelf`）。
+     *
+     * @param source 列表容器(玻璃采样源，必须是宿主的兄弟子树);
+     *   传 null 或低版本时关闭玻璃,改由宿主使用非覆盖布局兜底。
      */
     fun setBackdropBlur(source: ViewGroup?) {
-        val active = source != null && supportsBackdropBlur()
+        // 守卫放在这一处：无论调用方传什么，非法采样源都不会被喂给底层库。
+        val safeSource = source?.takeIf {
+            topBarLiquidSourceAllowed(this, it) { node -> (node as? View)?.parent }
+        }
+        val active = safeSource != null && supportsBackdropBlur()
         backdropGlassActive = active
         if (active) {
             val spec = topBarGlassSpec(
@@ -287,7 +341,7 @@ class MainTopBarView @JvmOverloads constructor(
                 backdropGlass.setDispersion(spec.dispersion)
                 backdropGlass.setRefractionHeight(spec.refractionHeightPx)
                 backdropGlass.setRefractionOffset(spec.refractionOffsetPx)
-                backdropGlass.bind(source)
+                backdropGlass.bind(safeSource)
             } else {
                 // solid 档：不激活玻璃层,顶栏实底由既有 overlayOpaqueBackground 分支兜住
                 backdropGlassActive = false

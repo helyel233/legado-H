@@ -195,7 +195,12 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         fragmentMap.values.forEach { fragment ->
             fragment.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
         }
-        binding.topBar.setBackdropBlur(null)
+        // 1.25.10 顶栏液态玻璃：采样源取 view_pager_bookshelf —— 与 top_bar 在同一个
+        // ConstraintLayout 下**平级**，是唯一合法的「兄弟子树」形态。
+        // 绝不能传 Activity 的 content_container（那是顶栏的祖先），否则底层库在录制中
+        // 会重入绘制顶栏自身 → RenderNode 重入录制 → hwui abort（1.25.8 同类崩溃）。
+        // 非覆盖式布局（overlay=false）顶栏在内容上方，背后没有内容 → 保持 null。
+        binding.topBar.setBackdropBlur(if (overlay) binding.viewPagerBookshelf else null)
         binding.topBar.bringToFront()
     }
 

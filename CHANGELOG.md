@@ -1,5 +1,37 @@
 # 更新日志
 
+## 1.25.10 版（2026-11-07）
+
+本版把**发现页书源名行接入液态玻璃观感**，并首次**真正启用顶栏液态玻璃**。
+
+需要明确交代一句：**1.25.9 已回退 1.25.8 的行内液态管线**（1.25.8 把 `StableLiquidGlassView` 用在 `RecyclerView` 的 item 里，采样源是列表自身，导致切到发现页即 native 闪退），**本版是重新设计的安全方案**，不是把 1.25.8 拿回来：新的行内管线**完全不使用底层库的 Java 宿主**（不 `bind`、不 `beginRecording` 任何 `View`），只复用它的 AGSL 着色器源码（MIT），采样源是**一张已经算好的降采样壁纸位图**。录制的内容永远只有「我们自己画的一条 `drawRect`」，1.25.8 的崩溃路径在结构上不存在。
+
+### 新功能
+
+- **发现页书源名行接入液态玻璃观感（API 33+，真折射 + 色散）**：从依赖 `com.qmdeve.liquidglass:core:1.0.3` 的 AAR 内复制 AGSL 到 `app/src/main/res/raw/glass_row_liquid.agsl`（**保留上游 MIT 版权头并追加本项目改动说明**，着色器数学逐字节未改；来源与许可见 `docs/third-party/AndroidLiquidGlassView-MIT.md`），由新增的 `RowGlassLiquidRenderer` 通过 `RuntimeShader` + `RenderEffect.createRuntimeShaderEffect` 自行驱动：内容源是仓库里早就存在的降采样壁纸位图 `GlassBackdrop.blurred`（IO 线程构建、按 key 缓存，**不新增任何 Bitmap、不做 GPU→CPU 回读、不每帧 upload**），按行在窗口中的位置平移采样矩阵。玻璃层之外的 tint / shell 三色渐变 / rim 边光 / 描边**一行未改**，只在 `FrostedGlassDrawable.draw()` 里替换了「画玻璃层」那一笔。
+- **折射强度按行高标定（不沿用底栏全参数）**：底栏是一条 56dp 高的 pill，预设 `refractionHeightDp=22~34dp` 约等于半高；行只有 ~32-40dp 高，直接套用会让 `-sd < refractionHeight` 恒成立、整行落进 7-taps 折射带（表现为整行被拉花 + 满负荷取样）。新增纯函数 `rowRefractionBandPx`（`min(预设, 0.42×行高)`，0.42 与 `StableLiquidGlassView.effectiveRefractionHeight` 的 pixelSafePill 口径一致）与 `rowRefractionAmountPx`（`≤ 1.6×带宽`），`cornerRadii` / `depthEffect=0.3` / `chromaMultiplier=1` / `contrast=0` / `whitePoint=0` 与底栏逐值对齐；**着色器的 tintAlpha 恒传 0**（白色着色仍由既有 `tintPaint` 层负责，避免双重上色）。
+- **拟液态兜底（方案 A1，只在本行没走成 A2 时叠加）**：新增纯函数 `RowRimSpectrum` / `rowChromaEdgeColors`，在既有 rim 层之上**叠加**顶部高光带、底部厚度内阴影与两侧色散彩边（亚像素错位 ≤ 1px，颜色由全局描边色做饱和度/亮度偏移得出，浅色/深色主题下都不过曝）。叠加强度只由预设的 `dispersion` 派生，因此透明玻璃档明显强于磨砂档，**没有引入第二套档位系数表**，既有模糊公式与 `ROW_*GAIN` 口径零改动。适用场景是「API < 33」与「A2 当帧不可用/失败」；API 33+ 且 A2 成功的行不叠 A1（否则会比底栏更重，也观察不到纯 A2 效果）。
+- **顶栏液态玻璃启用**：`MainTopBarView.setBackdropBlur` 在 1.25.7 就已参数化，但两个宿主一直传 `null`（玻璃层恒 `GONE`）。本版在**覆盖式布局**下真正启用：发现页传 `fl_discover_books`、书架页传 `view_pager_bookshelf`。⚠ 关键约束：**采样源必须是顶栏的兄弟子树**——顶栏在 `content_container → view_pager_main → fragment_explore → ll_modern_discovery` 之内，把这些祖先（包括文档里一度写过的 `swipe_refresh_layout`，`top_bar` 也在它内部）当采样源会复现 1.25.8 的同类 native 崩溃；`setBackdropBlur` 内用 `LiquidGlassSourceGuard.selfOrAncestorContains` 同一份守卫再拦一次（纵深防御），非法源直接按 `null` 处理。classic 布局与 API < 33 保持 `null`（非覆盖布局兜底，观感不变）。
+
+### 降级与回滚
+
+- **四级降级矩阵**（纯函数 `rowLiquidCapability` / `rowLiquidDrawableNow`，逐条单测覆盖）：`SDK<33` → A1 静态管线；用户关掉「全局毛玻璃效果 → 硬件模糊」→ 静态管线；墨水屏 / 低内存 / 强度 0 → 与既有判定一致；**非硬件加速 Canvas（软件 layer / 截图）→ 当帧**退软件位图（不置持久故障位，下一帧自动恢复）；**AGSL 编译或绘制抛异常 → 置进程级故障位**，全进程退回静态管线（`try/catch` 兜住 `Throwable`，真正无声降级，日志全进程只打一条，不随行复用重试）。该故障位只在**进程内**持久——用户杀进程重开 App 会重新尝试 AGSL（若该机型确实编译不过，会很快再次置位、日志仍只打一条）；不写任何持久化存储，不跨升级残留。
+- **两个正交的编译期总闸**（不新增用户可见偏好键）：
+  | `ROW_LIQUID_ENABLED`（A2） | `ROW_PSEUDO_LIQUID_ENABLED`（A1） | 结果 |
+  |---|---|---|
+  | true（默认） | true（默认） | API 33+ 走 A2 真折射；API < 33 走 A1 拟液态 |
+  | **false** | true（默认） | **全设备纯 A1**——用户做「A2 开/关」观感对比的对照组 |
+  | false | false | **逐像素回到 1.25.9** 静态模糊渲染（最快回滚） |
+  A1 只在**本行没走成 A2** 时才叠加（`rowPseudoLiquidEnabled` 纯函数判定），因此 API 33+ 且 A2 成功的行不会有「真折射 + 拟液态」双重叠加。
+- **零新增用户可见偏好键**：按项目约定不新增独立参数键，`python3 tools/check_settings_mapping.py` 依然 PASS；运行期给用户的兜底开关复用既有的 `exploreGlassHardwareBlur`。彻底回滚把两个总闸都置 `false` 重新打包即可。
+- **无新增崩溃面**：本方案路径上没有对任何 `View` 的 `beginRecording` + `View.draw()`，没有调用 `com.qmdeve.liquidglass` 的 `LiquidGlass` / `bind`；底栏与顶栏的既有用法（兄弟子树采样源）不受影响。
+
+### 单测
+
+- 新增 4 个纯 JVM 测试文件、共 55 例：`RowGlassLiquidSpecTest`（27 例）锁行高带宽标定（36dp 行高 × 7 种密度）、位移 1.6 倍钳制、退化输入不为 0/负、uniform 与底栏逐值一致（`depthEffect=0.3` / `contrast=0` / `whitePoint=0` / `chromaMultiplier=1` / `tintAlpha=0` / `chromaticAberration=dispersion`）、采样矩阵与既有内联实现逐值一致；`RowGlassLiquidDrawDecisionTest`（9 例）锁绘制期三条件真值表、1536 种输入的全组合性质（**只有「全绿」那一格能得到液态**）、两个总闸默认都为 true、`ROW_PSEUDO_LIQUID_ENABLED=false` 时不叠 A1、以及「关 A2 不连带关 A1」的正交性；`RowRimSpectrumTest`（10 例）锁拟液态单调性、上限、彩边 ≤1px 与颜色通道不溢出；`TopBarLiquidSourceTest`（9 例）用真实层级复刻锁「采样源必须是宿主非祖先」不变量（`content_container` / `swipe_refresh_layout` / `ll_modern_discovery` 全部必须被拒）。既有 `ExploreGlassHardwareBlurTest`（26 例）、`LiquidGlassSourceGuardTest`（7 例）、`TopBarGlassSpecTest`（4 例）零改动零回退，本包 99 例全绿。
+
+> 前提交代：`ll_title` 背后**没有列表内容**（行与行不重叠），只有主题壁纸层，所以行内「真折射」折射的必然是壁纸——这与 1.25.8 用整树录制拿到的内容其实是同一个东西，但代价从「每帧 N 次全屏子树录制」降到「一条 drawRect + 共享静态纹理」。**主题壁纸为纯色底时，行内折射无高频内容可弯折，视觉增量 ≈ 0**（色散与边光也几乎无感），这是物理前提而非缺陷；顶栏在覆盖式布局下折射的是**真实滚动内容**，观感最明显。
+
 ## 1.25.9 版（2026-11-07）
 
 本版修复 1.25.8 引入的**致命缺陷**：发现页书源名行误用了底栏同款 `StableLiquidGlassView`，把采样源绑定到列表 `RecyclerView` 自身（而玻璃视图本身就位于该 `RecyclerView` 的 item 内）。底层库每帧按采样源整树录制 `RenderNode`，行内使用时采样源与宿主互相嵌套绘制，导致 RenderNode 重入录制被 hwui 直接 abort——**切到发现页即 native 闪退，且 Java 侧无任何崩溃堆栈**。
