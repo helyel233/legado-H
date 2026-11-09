@@ -16,7 +16,6 @@ import android.graphics.Shader
 import android.util.Log
 import androidx.annotation.RequiresApi
 import io.legado.app.R
-import io.legado.app.ui.main.GlassMaterialPreset
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -27,13 +26,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 复用底栏 `com.qmdeve.liquidglass` 那颗 AGSL（MIT，已复制到
  * `res/raw/glass_row_liquid.agsl`，数学逐字节未改），但**完全不用它的 Java 宿主**：
  *
- * 1. 内容源 = 仓库里早就有的降采样壁纸位图 `GlassBackdrop.blurred`
- *    （IO 线程构建、按 key 缓存，见 `ExploreGlassBackdrop.backdrop()`）；
+ * 1. 内容源 = 仓库里早就有的降采样壁纸位图 `GlassBackdrop.raw`（IO 线程构建、按 key
+ *    缓存，见 `ExploreGlassBackdrop.backdrop()`）；
  * 2. 把「按行位置对齐的壁纸矩形」录进**我们自己的一颗** [RenderNode]（一条
  *    `drawRect`，纳秒级）；
- * 3. 给这颗 node 设 [RenderEffect.createRuntimeShaderEffect]（AGSL 的 `content`
- *    uniform 由 RenderEffect 绑定为 node 内容——与底栏库的绑定方式完全相同）；
+ * 3. 给这颗 node 设 `createChainEffect(createRuntimeShaderEffect(...), createBlurEffect(...))`
+ *    ——与底栏库完全相同的「先着色器、后高斯」链路（见 [ensureEffect]）；
  * 4. `canvas.drawRenderNode(node)`，再剪到行圆角内。
+ *
+ * 1.25.11 起链路与材质参数都向底栏看齐：tint 由着色器负责（`style.tintAlpha`），
+ * 模糊由 GPU 对 raw 位图做真高斯（sigma = 该档 blurDp × density），不再使用
+ * 预先软件模糊的 `blurred` 位图（那会与主题背景模糊叠加成双倍模糊）。
  *
  * 折射带宽、位移量、uniform 全部来自纯函数 [rowLiquidUniforms]，因此
  * 「行高标定」「与底栏逐值对齐」都能在 JVM 单测里锁住。
@@ -64,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @RequiresApi(ROW_LIQUID_MIN_SDK)
 internal class RowGlassLiquidRenderer(
     private val context: Context,
-    private val material: GlassMaterialPreset.Params,
+    private val style: RowGlassLiquidStyle,
     private val density: Float
 ) {
 
@@ -109,6 +112,16 @@ internal class RowGlassLiquidRenderer(
     private var uniformSignature: String? = null
 
     /**
+     * RenderEffect 链的缓存键（shader / 内容位图 / 高斯 sigma）。
+     *
+     * 与底栏库同一策略：effect 只在参数真正变化时重建，静止帧只重录一条 `drawRect`。
+     * sigma 用容差比较，避免滑块微小抖动导致逐帧新建 effect。
+     */
+    private var effectShader: RuntimeShader? = null
+    private var effectBitmap: Bitmap? = null
+    private var effectBlurSigma: Float = -1f
+
+    /**
      * 持久故障位——**进程级**，见 [RowLiquidRuntimeState]。
      *
      * 故意不是实例字段：本类随 `onBindViewHolder` 反复重建（行复用），实例级故障位会让
@@ -123,16 +136,20 @@ internal class RowGlassLiquidRenderer(
         contentShader = null
         contentBitmap = null
         contentPaint.shader = null
+        effectShader = null
+        effectBitmap = null
+        effectBlurSigma = -1f
         renderNode.discardDisplayList()
         // RuntimeShader 与 uniform 不复位；**进程级故障位尤其不复位**——
         // 换一张壁纸不会让 AGSL 突然变得可编译，这里若清位就等于恢复「逐次 rebind 重试」。
     }
 
     /**
-     * 画玻璃层（真折射 + 色散边光）。
+     * 画玻璃层（真折射 + 色散边光 + GPU 高斯）。
      *
      * @param canvas 目标画布；非硬件加速时立即返回 false（当帧降级，不置故障位）
-     * @param bitmap 已预模糊的降采样壁纸（只用 `blurred`，不做双重模糊）
+     * @param bitmap 未预模糊的降采样壁纸（GPU 负责模糊，与底栏同一条链路）
+     * @param blurSigmaPx 高斯 sigma（像素）；≤ 0.01 时退化为「不额外模糊」
      * @param rect 行的绘制矩形（Drawable bounds，通常原点在 (0,0)）
      * @param cornerRadiusPx 行圆角
      * @param matrix 行局部坐标 → 位图坐标 的采样矩阵（来自纯函数
@@ -144,6 +161,7 @@ internal class RowGlassLiquidRenderer(
     fun draw(
         canvas: Canvas,
         bitmap: Bitmap,
+        blurSigmaPx: Float,
         rect: RectF,
         cornerRadiusPx: Float,
         matrix: Matrix,
@@ -160,6 +178,7 @@ internal class RowGlassLiquidRenderer(
             val activeShader = ensureShader(bitmap, matrix, width, height, cornerRadiusPx)
                 ?: return false
             applyUniforms(activeShader, width, height, cornerRadiusPx)
+            ensureEffect(activeShader, bitmap, blurSigmaPx)
 
             contentPaint.shader = contentShader
             contentPaint.alpha = alpha.coerceIn(0, 255)
@@ -200,10 +219,10 @@ internal class RowGlassLiquidRenderer(
     }
 
     /**
-     * 取（或惰性创建）RuntimeShader，并在需要时重建 RenderEffect。
+     * 取（或惰性创建）RuntimeShader。
      *
      * `RuntimeShader(String)` 会触发一次 AGSL 编译，因此在第一次真正绘制时才建，
-     * 后续复用同一个实例（uniform 变更不需要重建 shader，也不需要重建 effect）。
+     * 后续复用同一个实例（uniform 变更不需要重建 shader）。
      */
     private fun ensureShader(
         bitmap: Bitmap,
@@ -222,37 +241,58 @@ internal class RowGlassLiquidRenderer(
             return null
         }
         val nextShader = RuntimeShader(source)
-        // uniform 只需写一次「与渲染器无关的常量」；尺寸相关的每帧随 size 写入。
-        nextShader.setFloatUniform("offset", 0f, 0f)
-        // tint 由既有 tintPaint 层负责，着色器必须传 0（否则双重上色）。
-        nextShader.setFloatUniform(
-            "tintColor",
-            ROW_LIQUID_TINT_RED, ROW_LIQUID_TINT_GREEN, ROW_LIQUID_TINT_BLUE
-        )
-        nextShader.setFloatUniform("tintAlpha", ROW_LIQUID_TINT_ALPHA)
-        nextShader.setFloatUniform("contrast", ROW_LIQUID_CONTRAST)
-        nextShader.setFloatUniform("whitePoint", ROW_LIQUID_WHITE_POINT)
-        nextShader.setFloatUniform("chromaMultiplier", ROW_LIQUID_CHROMA_MULTIPLIER)
-        nextShader.setFloatUniform("depthEffect", ROW_LIQUID_DEPTH_EFFECT)
-        nextShader.setFloatUniform("chromaticAberration", material.dispersion)
-
         val nextContent = BitmapShader(
             bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP
         ).apply { setLocalMatrix(matrix) }
-
-        // effect 的 content 绑定在 node 的录制内容上（与底栏库同一机制，生产已验证）。
-        renderNode.setRenderEffect(
-            RenderEffect.createRuntimeShaderEffect(nextShader, "content")
-        )
-        renderNode.discardDisplayList()
 
         shader = nextShader
         contentShader = nextContent
         contentBitmap = bitmap
         uniformSignature = null
-        // cornerRadii 与折射带只在尺寸变化时重写，交给 applyUniforms 统一处理。
+        // effect 绑定的是旧的 shader 实例，换 shader 必须重建
+        effectShader = null
+        // 所有 uniform 交给 applyUniforms 统一写入（签名未变时不会重复写）
         applyUniforms(nextShader, width, height, cornerRadiusPx)
         return nextShader
+    }
+
+    /**
+     * 按底栏库同一条链路更新 RenderEffect：`createChainEffect(着色器, 高斯)`。
+     *
+     * 顺序必须与底层库一致（先着色器、后模糊）：底栏生产环境验证的就是这个顺序，
+     * 反过来会得到「先糊再折射」的不同观感。sigma 来自该档预设的 blurDp × density，
+     * 与底栏 `MainActivity.setupLiquidGlass()` 的换算完全相同；缓存键包含位图，
+     * 换壁纸/换行宽都会重建。
+     */
+    private fun ensureEffect(
+        target: RuntimeShader,
+        bitmap: Bitmap,
+        blurSigmaPx: Float
+    ) {
+        val sigma = blurSigmaPx.coerceAtLeast(0f)
+        if (effectShader === target && effectBitmap === bitmap &&
+            kotlin.math.abs(effectBlurSigma - sigma) <= 0.01f
+        ) {
+            return
+        }
+        val shaderEffect = RenderEffect.createRuntimeShaderEffect(target, "content")
+        val blurEffect = if (sigma > 0.01f) {
+            // CLAMP：行边缘采样越界时钳到边缘像素，避免出现暗边/透明边（与底栏库一致）
+            RenderEffect.createBlurEffect(sigma, sigma, Shader.TileMode.CLAMP)
+        } else {
+            null
+        }
+        renderNode.setRenderEffect(
+            if (blurEffect != null) {
+                RenderEffect.createChainEffect(shaderEffect, blurEffect)
+            } else {
+                shaderEffect
+            }
+        )
+        renderNode.discardDisplayList()
+        effectShader = target
+        effectBitmap = bitmap
+        effectBlurSigma = sigma
     }
 
     /**
@@ -260,6 +300,9 @@ internal class RowGlassLiquidRenderer(
      *
      * `cornerRadii` 是 float4：行是普通圆角矩形，四角半径相等，但必须**分别**传
      * （着色器用 `centeredCoord` 的符号选角，传错个数会直接被 Skia 拒绝）。
+     *
+     * tint / 色散 / 对比度等材质量也在这里统一写入：它们全部来自
+     * [RowGlassLiquidStyle]，与底栏同源，避免渲染器与纯函数层各自维护一套常量。
      */
     private fun applyUniforms(
         target: RuntimeShader,
@@ -268,7 +311,7 @@ internal class RowGlassLiquidRenderer(
         cornerRadiusPx: Float
     ) {
         val uniforms = rowLiquidUniforms(
-            material = material,
+            style = style,
             widthPx = width.toFloat(),
             heightPx = height.toFloat(),
             cornerRadiusPx = cornerRadiusPx,
@@ -276,7 +319,8 @@ internal class RowGlassLiquidRenderer(
         )
         val signature = uniforms.signature()
         if (signature == uniformSignature) return
-        target.setFloatUniform("size", width.toFloat(), height.toFloat())
+        target.setFloatUniform("size", uniforms.widthPx, uniforms.heightPx)
+        target.setFloatUniform("offset", uniforms.offsetXPx, uniforms.offsetYPx)
         target.setFloatUniform(
             "cornerRadii",
             uniforms.cornerRadiusPx, uniforms.cornerRadiusPx,
@@ -284,6 +328,16 @@ internal class RowGlassLiquidRenderer(
         )
         target.setFloatUniform("refractionHeight", uniforms.refractionHeightPx)
         target.setFloatUniform("refractionAmount", uniforms.refractionAmountPx)
+        target.setFloatUniform(
+            "tintColor",
+            ROW_LIQUID_TINT_RED, ROW_LIQUID_TINT_GREEN, ROW_LIQUID_TINT_BLUE
+        )
+        target.setFloatUniform("tintAlpha", uniforms.tintAlpha)
+        target.setFloatUniform("depthEffect", uniforms.depthEffect)
+        target.setFloatUniform("chromaticAberration", uniforms.chromaticAberration)
+        target.setFloatUniform("contrast", uniforms.contrast)
+        target.setFloatUniform("whitePoint", uniforms.whitePoint)
+        target.setFloatUniform("chromaMultiplier", uniforms.chromaMultiplier)
         uniformSignature = signature
     }
 

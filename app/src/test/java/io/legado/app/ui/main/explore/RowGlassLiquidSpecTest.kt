@@ -2,6 +2,7 @@ package io.legado.app.ui.main.explore
 
 import io.legado.app.ui.main.GlassMaterialPreset
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,6 +22,8 @@ class RowGlassLiquidSpecTest {
 
     private val glass = GlassMaterialPreset.params(GlassMaterialPreset.GLASS, 0.3f)
     private val frosted = GlassMaterialPreset.params(GlassMaterialPreset.FROSTED, 0.35f)
+    private val glassStyle = rowGlassLiquidStyle(glass)
+    private val frostedStyle = rowGlassLiquidStyle(frosted)
 
     // ---------------------------------------------------------------- 带宽标定
 
@@ -142,21 +145,22 @@ class RowGlassLiquidSpecTest {
         assertEquals(0f, ROW_LIQUID_CONTRAST, 0.000001f)
         assertEquals(0f, ROW_LIQUID_WHITE_POINT, 0.000001f)
         assertEquals(1f, ROW_LIQUID_CHROMA_MULTIPLIER, 0.000001f)
-        // tint 由既有 tintPaint 负责，着色器必须传 0，否则双重上色
-        assertEquals(0f, ROW_LIQUID_TINT_ALPHA, 0.000001f)
+        // 1.25.11 起 tint 由着色器负责（底栏同口径），不再钉成 0 + 额外 tintPaint
         assertEquals(1f, ROW_LIQUID_TINT_RED, 0.000001f)
         assertEquals(1f, ROW_LIQUID_TINT_GREEN, 0.000001f)
         assertEquals(1f, ROW_LIQUID_TINT_BLUE, 0.000001f)
+        // 描边上限与底栏 shellAlphas().stroke 的既有上限一致
+        assertEquals(0.42f, ROW_LIQUID_MAX_STROKE, 0.000001f)
     }
 
-    /** 整组 uniform 逐字段断言（含负位移、色散取预设、偏移恒 0）。 */
+    /** 整组 uniform 逐字段断言（含负位移、色散/着色取预设、偏移恒 0）。 */
     @Test
     fun uniformsAlignWithMaterialAndRowGeometry() {
         val density = 2.75f
         val widthPx = 992f
         val heightPx = 99f
         val radiusPx = 27.5f
-        val u = rowLiquidUniforms(glass, widthPx, heightPx, radiusPx, density)
+        val u = rowLiquidUniforms(glassStyle, widthPx, heightPx, radiusPx, density)
 
         assertEquals(widthPx, u.widthPx, 0.000001f)
         assertEquals(heightPx, u.heightPx, 0.000001f)
@@ -173,31 +177,122 @@ class RowGlassLiquidSpecTest {
         // 色散与底栏同源：直接取该档预设的 dispersion
         assertEquals(glass.dispersion, u.chromaticAberration, 0.000001f)
         assertEquals(0.272f, u.chromaticAberration, 0.001f)
+        // tint 与底栏同源：直接取该档预设的 tintAlpha（0.02 + 0.3*0.05 = 0.035）
+        assertEquals(glass.tintAlpha, u.tintAlpha, 0.000001f)
+        assertEquals(0.035f, u.tintAlpha, 0.000001f)
         assertEquals(0f, u.contrast, 0.000001f)
         assertEquals(0f, u.whitePoint, 0.000001f)
         assertEquals(1f, u.chromaMultiplier, 0.000001f)
     }
 
-    /** uniform 签名必须随尺寸/色散变化而变化，否则渲染器会错误复用旧的 RenderEffect。 */
+    /** 圆角超过行高一半时必须钳制（与 StableLiquidGlassView 的 effectiveShaderCornerRadius 同口径）。 */
+    @Test
+    fun cornerRadiusIsClampedToHalfRowHeight() {
+        val u = rowLiquidUniforms(glassStyle, 992f, 99f, 80f, 2.75f)
+        assertEquals(49.5f, u.cornerRadiusPx, 0.000001f)
+    }
+
+    /** uniform 签名必须随尺寸/色散/着色变化而变化，否则渲染器会错误复用过期的 uniform。 */
     @Test
     fun uniformsSignatureChangesWithGeometryAndDispersion() {
-        val base = rowLiquidUniforms(glass, 992f, 99f, 27.5f, 2.75f)
-        val same = rowLiquidUniforms(glass, 992f, 99f, 27.5f, 2.75f)
-        val otherHeight = rowLiquidUniforms(glass, 992f, 108f, 27.5f, 2.75f)
-        val otherMaterial = rowLiquidUniforms(frosted, 992f, 99f, 27.5f, 2.75f)
+        val base = rowLiquidUniforms(glassStyle, 992f, 99f, 27.5f, 2.75f)
+        val same = rowLiquidUniforms(glassStyle, 992f, 99f, 27.5f, 2.75f)
+        val otherHeight = rowLiquidUniforms(glassStyle, 992f, 108f, 27.5f, 2.75f)
+        val otherMaterial = rowLiquidUniforms(frostedStyle, 992f, 99f, 27.5f, 2.75f)
+        val otherTint = rowLiquidUniforms(
+            rowGlassLiquidStyle(glass, tintPercent = 150), 992f, 99f, 27.5f, 2.75f
+        )
         assertEquals(base.signature(), same.signature())
         assertTrue(base.signature() != otherHeight.signature())
         assertTrue(base.signature() != otherMaterial.signature())
+        assertTrue(base.signature() != otherTint.signature())
     }
 
     /** 磨砂档取值同样逐值可验：带宽/位移更小、色散更弱，差异全部来自预设。 */
     @Test
     fun frostedUniformsStayDistinctFromGlass() {
-        val g = rowLiquidUniforms(glass, 992f, 99f, 27.5f, 2.75f)
-        val f = rowLiquidUniforms(frosted, 992f, 99f, 27.5f, 2.75f)
-        // 两档在行高钳制后带宽相同（都撞到 0.42 上限），但色散不同
+        val g = rowLiquidUniforms(glassStyle, 992f, 99f, 27.5f, 2.75f)
+        val f = rowLiquidUniforms(frostedStyle, 992f, 99f, 27.5f, 2.75f)
+        // 两档在行高钳制后带宽相同（都撞到 0.42 上限），但色散/着色不同
         assertTrue(f.chromaticAberration < g.chromaticAberration)
+        assertTrue(f.tintAlpha > g.tintAlpha)
         assertEquals(frosted.dispersion, f.chromaticAberration, 0.000001f)
+        assertEquals(frosted.tintAlpha, f.tintAlpha, 0.000001f)
+    }
+
+    // ---------------------------------------------------------------- 与底栏 1:1 的液态口径
+
+    /**
+     * 滑杆为 100（默认）时，液态口径与底栏逐值一致——这是「同参数同观感」的根契约。
+     * 任何一处再乘行级增益，都会让发现页行比底栏更白/更厚，必须在这里被拦下。
+     */
+    @Test
+    fun liquidStyleIsOneToOneWithMaterialAtDefaultSliders() {
+        listOf(glass, frosted).forEach { material ->
+            val style = rowGlassLiquidStyle(material)
+            assertEquals(material.blurDp, style.blurDp, 0.000001f)
+            assertEquals(material.tintAlpha, style.tintAlpha, 0.000001f)
+            assertEquals(material.dispersion, style.dispersion, 0.000001f)
+            assertEquals(material.refractionHeightDp, style.refractionHeightDp, 0.000001f)
+            assertEquals(material.refractionOffsetDp, style.refractionOffsetDp, 0.000001f)
+            assertEquals(material.shell.start, style.shellStart, 0.000001f)
+            assertEquals(material.shell.center, style.shellCenter, 0.000001f)
+            assertEquals(material.shell.end, style.shellEnd, 0.000001f)
+            assertEquals(material.shell.stroke, style.strokeAlpha, 0.000001f)
+        }
+    }
+
+    /** 四个倍率滑杆只缩放各自维度；色散与折射几何不随滑杆变化。 */
+    @Test
+    fun liquidStyleScalesOnlySliderDimensions() {
+        val style = rowGlassLiquidStyle(
+            glass,
+            blurPercent = 50,
+            tintPercent = 200,
+            shellPercent = 150,
+            strokePercent = 50
+        )
+        assertEquals(glass.blurDp * 0.5f, style.blurDp, 0.000001f)
+        assertEquals(glass.tintAlpha * 2f, style.tintAlpha, 0.000001f)
+        assertEquals(glass.shell.start * 1.5f, style.shellStart, 0.000001f)
+        assertEquals(glass.shell.center * 1.5f, style.shellCenter, 0.000001f)
+        assertEquals(glass.shell.end * 1.5f, style.shellEnd, 0.000001f)
+        assertEquals(glass.shell.stroke * 0.5f, style.strokeAlpha, 0.000001f)
+        // 色散/折射几何由档位唯一决定
+        assertEquals(glass.dispersion, style.dispersion, 0.000001f)
+        assertEquals(glass.refractionHeightDp, style.refractionHeightDp, 0.000001f)
+        assertEquals(glass.refractionOffsetDp, style.refractionOffsetDp, 0.000001f)
+    }
+
+    /** 描边滑杆即使拉到 200% 也不能超过底栏上限 0.42。 */
+    @Test
+    fun liquidStyleCapsStrokeAtBottomBarLimit() {
+        val style = rowGlassLiquidStyle(glass, strokePercent = 200)
+        assertEquals(ROW_LIQUID_MAX_STROKE, style.strokeAlpha, 0.000001f)
+        assertTrue(style.strokeAlpha <= ROW_LIQUID_MAX_STROKE)
+    }
+
+    /**
+     * 液态成功 → tint/rim/A1 三层全部让位（画面 = 着色器 + shell + 描边，与底栏逐层一致）；
+     * 液态没成功 → tint/rim 保留，A1 按总闸兜底。
+     */
+    @Test
+    fun overlayPlanMatchesBottomBarLayering() {
+        val liquid = rowGlassOverlayPlan(liquidDrewGlass = true, pseudoLiquidEnabled = true)
+        assertFalse(liquid.drawTintLayer)
+        assertFalse(liquid.drawRimLayer)
+        assertFalse(liquid.drawPseudoLiquidLayer)
+
+        val fallback = rowGlassOverlayPlan(liquidDrewGlass = false, pseudoLiquidEnabled = true)
+        assertTrue(fallback.drawTintLayer)
+        assertTrue(fallback.drawRimLayer)
+        assertTrue(fallback.drawPseudoLiquidLayer)
+
+        // 静态路径下 A1 仍受自己的总闸控制
+        val pseudoOff = rowGlassOverlayPlan(liquidDrewGlass = false, pseudoLiquidEnabled = false)
+        assertTrue(pseudoOff.drawTintLayer)
+        assertTrue(pseudoOff.drawRimLayer)
+        assertFalse(pseudoOff.drawPseudoLiquidLayer)
     }
 
     // ---------------------------------------------------------------- 采样矩阵

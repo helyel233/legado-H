@@ -125,10 +125,7 @@ internal fun scaledGlassParam(
     base: Float,
     percent: Int,
     upperBound: Float = Float.MAX_VALUE
-): Float {
-    val scale = percent.coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX) / 100f
-    return (base * scale).coerceIn(0f, upperBound)
-}
+): Float = GlassMaterialPreset.scalePercent(base, percent).coerceIn(0f, upperBound)
 
 /**
  * 「全局毛玻璃效果」里各个设置项的一次性快照。
@@ -582,10 +579,13 @@ internal val EXPLORE_GLASS_PREF_KEYS: Set<String> =
  *
  * 1.25.10 起再增加**第三条、优先级最高**的管线（方案 A2，仅 API 33+）：
  * [RowGlassLiquidRenderer] 用底栏那颗同一份 AGSL（MIT，已复制到
- * `res/raw/glass_row_liquid.agsl`）在**已预模糊的 blurred 位图**上做真折射 + 色散。
+ * `res/raw/glass_row_liquid.agsl`）在**未预模糊的 raw 位图**上做真折射 + 色散，
+ * 并由 GPU 高斯完成模糊（`createChainEffect`，与底栏库同一顺序）。
  * 它**不复用底层库的 Java 宿主**、不 `bind` 任何视图、不对任何 `View` 调
  * `beginRecording` + `View.draw()`；录制内容永远只有我们自己画的一条 `drawRect`，
  * 因此 1.25.8 的 RenderNode 重入录制崩溃（native abort）在本路径上结构性不存在。
+ * 材质/壳层/描边取 [rowGlassLiquidStyle]（与底栏 1:1），独立的 tint/rim/A1
+ * 叠加层在液态成功时全部让位，保证「同参数 = 同观感」。
  * 该层失败或被降级时，下面两条既有管线**原样接管**，观感连续、不留空白帧。
  *
  * 模糊有两条管线，按设备能力二选一（②③ 的软件管线始终保留，是硬件管线的降级基线）：
@@ -772,12 +772,22 @@ object ExploreGlassBackdrop {
         }
         val material = exploreGlassMaterial(config)
         val render = resolveExploreGlassRenderParams(config, material)
+        // 液态路径与底栏 1:1：同一份预设 + 四个倍率滑杆，不乘行可见度增益。
+        // 静态降级路径仍使用上面的 render（行标定后的值），两条路径互不影响。
+        val liquidStyle = rowGlassLiquidStyle(
+            material = material,
+            blurPercent = config.blurPercent,
+            tintPercent = config.tintPercent,
+            shellPercent = config.shellPercent,
+            strokePercent = config.strokePercent
+        )
         val useHardware = supportsHardwareBlur() && config.hardwareBlur
         return FrostedGlassDrawable(
             host = host,
             radiusPx = context.resources.getDimension(R.dimen.ui_panel_radius),
             baseColor = ThemeStore.bottomBackground(context),
             render = render,
+            liquidStyle = liquidStyle,
             strokeColor = glassStrokeColor(context),
             useHardware = useHardware,
             hardwareBlurPx = if (useHardware) {
@@ -966,27 +976,29 @@ object ExploreGlassBackdrop {
 
 /**
  * 单个书源名行的毛玻璃背景，与底栏（StableLiquidGlassView + shell overlay）同一套材质：
- * 0. 液态层（1.25.10，仅 API 33+）：[RowGlassLiquidRenderer] 的 AGSL 真折射 + 色散，
- *    采样源是已预模糊的壁纸位图；不可用时下面 1 的三条既有分支原样接管；
+ * 0. 液态层（API 33+）：[RowGlassLiquidRenderer] 的 AGSL 真折射 + 色散 + GPU 高斯，
+ *    采样源是未预模糊的 raw 壁纸位图，tint 由着色器负责——与底栏的
+ *    「着色器 → 高斯 → shell → 描边」逐层一致；不可用时下面 1 的三条既有分支原样接管；
  * 1. 玻璃层：按行当前屏幕位置采样模糊壁纸，半径取 [ExploreGlassRenderParams.blurDp]
  *    （硬件管线由 GPU 出真高斯，降级时用 IO 线程预模糊的位图）；
- * 2. tint 层：底栏 LiquidGlass 同款白色弱着色，alpha 取行标定后的 tintAlpha；
- * 3. shell 层：底栏 createLiquidGlassShellDrawable 同款三色垂直渐变 + 描边；
- * 4. rim 层：由该档色散/折射派生的上下边缘高光，补回底栏玻璃的边缘体积感；
- * 5. 拟液态层（1.25.10，A1）：顶部高光带、底部厚度内阴影、两侧色散彩边，
- *    参数来自纯函数 [rowRimSpectrum] / [rowChromaEdgeColors]，**只叠加不改既有公式**；
- *    **只在本行没走成 A2 时才叠加**（见 [rowPseudoLiquidEnabled]），不与真折射重叠；
+ * 2. tint 层（仅静态降级）：底栏同款白色弱着色，alpha 取行标定后的 tintAlpha；
+ * 3. shell 层（两条路径都画）：底栏 createLiquidGlassShellDrawable 同款三色垂直渐变 + 描边；
+ *    液态成功时取 [RowGlassLiquidStyle]（1:1），静态时取行标定后的 [render]；
+ * 4. rim 层（仅静态降级）：由该档色散/折射派生的上下边缘高光；
+ * 5. 拟液态层（A1，仅静态降级）：顶部高光带、底部厚度内阴影、两侧色散彩边；
+ *    液态成功时三层全部让位（[rowGlassOverlayPlan]），避免比底栏更重；
  * 6. 描边层：全局 glassStrokeColor 或 surfaceColor×strokeAlpha。
  *
- * 所有可变量都从 [render] 这一份 [resolveExploreGlassRenderParams] 的产物读取，
- * 不再在类内散落 `scaledGlassParam` 调用：四个倍率滑杆与强度/档位是否真的生效，
- * 由纯函数单测直接锁住，绘制层只负责把结果画出来。
+ * 静态路径的可变量全部从 [render] 读取；液态路径全部从 [liquidStyle] 读取。
+ * 两条路径各自只有一份纯函数产物，绘制层只负责把结果画出来。
  */
 private class FrostedGlassDrawable(
     private val host: View,
     private val radiusPx: Float,
     baseColor: Int,
     private val render: ExploreGlassRenderParams,
+    /** 液态路径（A2）的绘制口径：与底栏 1:1，见 [rowGlassLiquidStyle]。 */
+    private val liquidStyle: RowGlassLiquidStyle,
     /** 全局描边色（非空时覆盖默认的 surfaceColor×strokeAlpha 描边）。 */
     private val strokeColor: Int?,
     private val useHardware: Boolean,
@@ -1043,10 +1055,11 @@ private class FrostedGlassDrawable(
     private val tintBaseAlpha = (render.tintAlpha * 255).toInt()
     private val strokeBaseRatio = render.strokeAlpha
     private var shellShaderCache: LinearGradient? = null
-    private var shellShaderHeight = -1
     private var rimShaderCache: LinearGradient? = null
     private var rimShaderHeight = -1
     private var alphaFactor = 1f
+    /** 最近一帧实际生效的描边 alpha（液态 1:1 或静态标定），供 setAlpha 联动。 */
+    private var activeStrokeAlpha = strokeBaseRatio
     private val shaderMatrix = Matrix()
     private val location = IntArray(2)
     private val rootLocation = IntArray(2)
@@ -1068,6 +1081,15 @@ private class FrostedGlassDrawable(
     private var hardwareFailed = false
 
     /**
+     * 1.25.11：液态路径的高斯 sigma，与底栏 `MainActivity.setupLiquidGlass()` 同一条
+     * 换算（blurDp × density，上限 [HARDWARE_BLUR_MAX_PX] 保护行级渲染）。静态路径
+     * 的 [hardwareBlurPx] 用的是行标定后的 blurDp，两者在模糊倍率 100 时逐值相同。
+     */
+    private val liquidBlurPx: Float = exploreHardwareBlurPx(
+        liquidStyle.blurDp, host.resources.displayMetrics.density, 100
+    )
+
+    /**
      * 1.25.10 的行内液态玻璃层（AGSL 真折射+色散）。仅在 [useLiquid] 且 API 33+ 时创建，
      * 创建本身失败（极少数 ROM 上 `RenderNode`/`RuntimeShader` 构造抛异常）只是让本行走
      * 静态管线，不影响任何既有行为。`liquidFailed` 由渲染器自己持有的持久位管理。
@@ -1076,7 +1098,7 @@ private class FrostedGlassDrawable(
         if (useLiquid && Build.VERSION.SDK_INT >= ROW_LIQUID_MIN_SDK) {
             runCatching {
                 RowGlassLiquidRenderer(
-                    host.context, material, host.resources.displayMetrics.density
+                    host.context, liquidStyle, host.resources.displayMetrics.density
                 )
             }.getOrNull()
         } else {
@@ -1130,19 +1152,25 @@ private class FrostedGlassDrawable(
     init {
         tintPaint.color = Color.WHITE
         tintPaint.alpha = tintBaseAlpha
-        applyStrokeColor(1f)
+        applyStrokeColor(1f, strokeBaseRatio)
     }
+
+    private var shellShaderKey: String? = null
 
     /**
      * 描边色：全局描边色非空时用它（保留其自身 alpha），否则回退
-     * surfaceColor × strokeAlpha 的底栏同口径着色。[factor] 为 Drawable alpha 系数。
+     * surfaceColor × [strokeAlpha] 的底栏同口径着色。[factor] 为 Drawable alpha 系数。
+     *
+     * [strokeAlpha] 由绘制路径决定：液态成功时取 [liquidStyle]（与底栏 1:1），
+     * 静态降级时取行标定后的 [render]；两套值都可能在同一实例里先后出现，
+     * 因此每次绘制前重设，不能只在 init 里定一次。
      */
-    private fun applyStrokeColor(factor: Float) {
+    private fun applyStrokeColor(factor: Float, strokeAlpha: Float) {
         val override = strokeColor
         strokePaint.color = if (override != null) {
             AppColorUtils.withAlpha(override and 0x00ff_ffff, (override ushr 24) / 255f * factor)
         } else {
-            AppColorUtils.withAlpha(surfaceColor, strokeBaseRatio * factor)
+            AppColorUtils.withAlpha(surfaceColor, strokeAlpha * factor)
         }
     }
 
@@ -1150,23 +1178,29 @@ private class FrostedGlassDrawable(
     private fun usable(bitmap: Bitmap): Boolean =
         !bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0
 
-    private fun shellShader(height: Int): LinearGradient {
+    private fun shellShader(
+        height: Int,
+        start: Float,
+        center: Float,
+        end: Float
+    ): LinearGradient {
+        val key = "$height|$start|$center|$end"
         val cached = shellShaderCache
-        if (cached != null && shellShaderHeight == height) return cached
-        // 三色 alpha 取行渲染口径（共享预设经行可见度标定 + 底色遮盖滑杆）；
+        if (cached != null && shellShaderKey == key) return cached
+        // 三色 alpha 取当前绘制路径的壳层口径（液态 = 底栏 1:1，静态 = 行标定）；
         // 上深下浅的垂直渐变同样来自底栏。
         return LinearGradient(
             0f, 0f, 0f, height.toFloat(),
             intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, render.shellStart),
-                AppColorUtils.withAlpha(surfaceColor, render.shellCenter),
-                AppColorUtils.withAlpha(surfaceColor, render.shellEnd)
+                AppColorUtils.withAlpha(surfaceColor, start),
+                AppColorUtils.withAlpha(surfaceColor, center),
+                AppColorUtils.withAlpha(surfaceColor, end)
             ),
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
         ).also {
             shellShaderCache = it
-            shellShaderHeight = height
+            shellShaderKey = key
         }
     }
 
@@ -1202,15 +1236,19 @@ private class FrostedGlassDrawable(
     override fun draw(canvas: Canvas) {
         val bd = backdrop
         rect.set(bounds)
-        // A2 本帧是否真的画出了玻璃层：决定后面要不要叠 A1（拟液态只做兜底，不叠加在 A2 上）。
+        // A2 本帧是否真的画出了玻璃层：决定后面要不要让位/叠加既有层。
         var drewLiquidGlass = false
         // 先筛掉已回收 / 空位图：两条管线各自取源，任一缺失都不允许透出清晰壁纸。
         val software = bd?.blurred?.takeIf { usable(it) }
         val raw = bd?.raw?.takeIf { usable(it) }
-        // 1.25.10 行内液态（A2）：只用已预模糊的 blurred 位图，不重新解码、不重新模糊，
-        // 当帧三条件（硬件加速 / 底图可用 / 无持久故障）由纯函数统一判定。
+        // 1.25.11 行内液态（A2）优先用 raw：高斯交给 GPU，与底栏「先着色器、后模糊」
+        // 完全同一条链路，也不再受主题背景模糊偏好的二次叠加影响。
+        // raw 不可用时退回已预模糊的 blurred，并关闭额外模糊（否则双重模糊）。
+        val liquidSource = raw ?: software
         val liquid = liquidLayer?.takeIf {
-            rowLiquidDrawableNow(canvas.isHardwareAccelerated, software != null, it.liquidFailed)
+            rowLiquidDrawableNow(
+                canvas.isHardwareAccelerated, liquidSource != null, it.liquidFailed
+            )
         }
         // 硬件管线需同时满足 API 31+、层创建成功、此前无持久故障、raw 底图可用。
         // raw 缺失时直接让位给软件管线：拿 blurred 去做 GPU 模糊会变成双重模糊。
@@ -1218,9 +1256,9 @@ private class FrostedGlassDrawable(
         val activeLayer = hardwareLayer?.takeIf {
             liquid == null && !hardwareFailed && supportsHardwareBlur() && raw != null
         }
-        // 硬件激活时 glassBitmap 就是 raw，液态与软件分支用它自己的 blurred。
+        // 硬件激活时 glassBitmap 就是 raw，液态用 raw 或降级后的 blurred，软件用它自己的 blurred。
         val glassBitmap = when {
-            liquid != null -> software
+            liquid != null -> liquidSource
             activeLayer != null -> raw
             else -> software
         }
@@ -1244,10 +1282,13 @@ private class FrostedGlassDrawable(
                 shaderMatrix.postTranslate(transform.translateX, transform.translateY)
                 var drewGlass = false
                 if (liquid != null) {
-                    // 液态管线（1.25.10）：AGSL 真折射 + 色散，内容源是 blurred 壁纸位图。
-                    // 失败时渲染器自己置**进程级**故障位并返回 false，本帧立即走下面的静态分支。
+                    // 液态管线：AGSL 真折射 + 色散 + GPU 高斯，tint 由着色器负责。
+                    // 失败时渲染器自己置**进程级**故障位并返回 false，本帧立即走静态分支。
                     drewLiquidGlass = liquid.draw(
-                        canvas, glassBitmap, rect, radiusPx, shaderMatrix,
+                        canvas, glassBitmap,
+                        // raw 走 GPU 高斯；只有退回 blurred 时才不额外模糊。
+                        if (raw != null) liquidBlurPx else 0f,
+                        rect, radiusPx, shaderMatrix,
                         glassPaint.alpha, glassPaint.colorFilter
                     )
                     drewGlass = drewLiquidGlass
@@ -1280,28 +1321,36 @@ private class FrostedGlassDrawable(
                 }
             }
         }
-        // tint（底栏 LiquidGlass 同款白色弱着色）
-        canvas.drawRoundRect(rect, radiusPx, radiusPx, tintPaint)
-        // shell 渐变实底（底栏 shell overlay 同款三色 alpha）
+        // 液态成功时，底栏没有的独立 tint / 边缘高光 / A1 层全部让位：
+        // 画面 = 着色器（含 tint）+ shell 渐变 + 描边，与底栏逐层一致。
+        val overlay = rowGlassOverlayPlan(drewLiquidGlass, ROW_PSEUDO_LIQUID_ENABLED)
+        if (overlay.drawTintLayer) {
+            // tint（静态降级路径的底栏同款白色弱着色）
+            canvas.drawRoundRect(rect, radiusPx, radiusPx, tintPaint)
+        }
         if (rect.height() >= 1f) {
             val shaderHeight = rect.height().toInt().coerceAtLeast(1)
-            shellPaint.shader = shellShader(shaderHeight)
+            val shellStart = if (drewLiquidGlass) liquidStyle.shellStart else render.shellStart
+            val shellCenter = if (drewLiquidGlass) liquidStyle.shellCenter else render.shellCenter
+            val shellEnd = if (drewLiquidGlass) liquidStyle.shellEnd else render.shellEnd
+            shellPaint.shader = shellShader(shaderHeight, shellStart, shellCenter, shellEnd)
             shellPaint.alpha = (255 * alphaFactor).toInt()
             canvas.drawRoundRect(rect, radiusPx, radiusPx, shellPaint)
-            // 由同一预设的色散/折射派生的边缘高光
-            rimPaint.shader = rimShader(shaderHeight)
-            rimPaint.alpha = (255 * alphaFactor).toInt()
-            canvas.drawRoundRect(rect, radiusPx, radiusPx, rimPaint)
-            // 1.25.10 拟液态叠加（A1）：顶部高光带 + 底部厚度内阴影 + 两侧色散彩边。
-            // **只在本行没走成 A2 时才叠加**（API<33 / A2 开关关 / A2 当帧失败），
-            // 这样 A1 才是真正的「兜底」：API33+ 且 A2 成功的行不会变成
-            // 「真折射 + 拟液态」的双重叠加（那会比底栏更重，也观察不到纯 A2 效果）。
-            // 判据用 rowPseudoLiquidEnabled 纯函数，两个编译期总闸正交。
-            if (rowPseudoLiquidEnabled(ROW_PSEUDO_LIQUID_ENABLED, drewLiquidGlass)) {
+            if (overlay.drawRimLayer) {
+                // 由同一预设的色散/折射派生的边缘高光（仅静态降级路径）
+                rimPaint.shader = rimShader(shaderHeight)
+                rimPaint.alpha = (255 * alphaFactor).toInt()
+                canvas.drawRoundRect(rect, radiusPx, radiusPx, rimPaint)
+            }
+            // A1 拟液态叠加：只在本行没走成 A2 时才叠加（真兜底，不与真折射重叠）
+            if (overlay.drawPseudoLiquidLayer) {
                 drawRimSpectrum(canvas, shaderHeight)
             }
         }
-        // 描边（与底栏 strokeAlpha 同口径）
+        // 描边：液态 = 底栏 1:1 的 strokeAlpha；静态 = 行标定后的值。
+        val strokeAlpha = if (drewLiquidGlass) liquidStyle.strokeAlpha else render.strokeAlpha
+        activeStrokeAlpha = strokeAlpha
+        applyStrokeColor(1f, strokeAlpha)
         canvas.drawRoundRect(rect, radiusPx, radiusPx, strokePaint)
     }
 
@@ -1405,7 +1454,7 @@ private class FrostedGlassDrawable(
             alphaFactor = factor
             glassPaint.alpha = (255 * factor).toInt()
             tintPaint.alpha = (tintBaseAlpha * factor).toInt()
-            applyStrokeColor(factor)
+            applyStrokeColor(factor, activeStrokeAlpha)
             invalidateSelf()
         }
     }

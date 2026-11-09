@@ -1,5 +1,26 @@
 # 更新日志
 
+## 1.25.11 版（2026-11-09）
+
+本版修复 1.25.10 发现页书源名行液态玻璃「同一档参数却比底栏更白、更厚」的观感不一致。根因有两处：着色器 tint 被钉成 0、改由行内额外 `tintPaint` 层负责并叠加行可见度增益（等于双重上色）；采样源用已预模糊的 `blurred` 位图，GPU 不再模糊，但主题背景模糊偏好仍会二次作用（等于双重模糊）。本版让液态路径与底栏逐层 1:1：着色器负责 tint、GPU 高斯负责模糊、tint/rim/A1 叠加层在液态成功时全部让位。静态降级管线（API < 33）保持原样，行可见度标定只服务于它。
+
+### 修复
+
+- **tint 交还给着色器**：`RowGlassLiquidUniforms` 新增 `tintAlpha`，取 `RowGlassLiquidStyle.tintAlpha`（= 该档预设 `tintAlpha` 经 tint 滑杆缩放），与底栏 `StableLiquidGlassView` 同口径；`ROW_LIQUID_TINT_ALPHA` 常量删除。液态成功时不再绘制行内 `tintPaint` 层，消除双重上色。
+- **模糊改为 GPU 真高斯，与底栏同一条链路**：采样源改用未预模糊的 `GlassBackdrop.raw`，`RenderEffect` 改为 `createChainEffect(createRuntimeShaderEffect(...), createBlurEffect(...))`（先着色器、后模糊，与底层库顺序一致），sigma = 该档 `blurDp × density`，上限沿用 `HARDWARE_BLUR_MAX_PX`；raw 不可用时退回 `blurred` 并令 sigma = 0，避免双重模糊。effect 以「shader 实例 + 位图 + sigma（0.01 容差）」为缓存键，静止帧只重录一条 `drawRect`。
+- **叠加层按路径让位**：新增纯函数 `rowGlassOverlayPlan(liquidDrewGlass, pseudoLiquidEnabled)`——液态成功时 tint / rim / A1 拟液态三层全部不画（画面 = 着色器含 tint + shell 渐变 + 描边，与底栏逐层一致）；未成功时三层按原静态逻辑兜底。shell 三色与描边 alpha 同样按路径取值（液态取 `liquidStyle`，静态取行标定后的 `render`），`shellShader` 缓存键纳入三色 alpha，描边每帧重设并记入 `activeStrokeAlpha` 供 `setAlpha` 联动。
+
+### 实现要点
+
+- 新增 `RowGlassLiquidStyle` 与纯函数 `rowGlassLiquidStyle(material, blur/tint/shell/strokePercent)`：只做「预设 × 四倍率滑杆」，**不乘** `ROW_TINT_GAIN / ROW_SHELL_GAIN / ROW_RIM_GAIN`（这些增益仅属于静态降级管线），滑杆为 100 时与底栏逐值相等；描边上限 `ROW_LIQUID_MAX_STROKE = 0.42`，与底栏 `shellAlphas().stroke` 的既有上限一致。
+- `GlassMaterialPreset` 新增纯函数 `scalePercent(base, percent)`（0–200 钳制）与 `scaled(params, ...)`；`scaledGlassParam` 改为委托 `scalePercent`，缩放口径收拢为单一来源。
+- `rowLiquidUniforms` 入参由 `Params` 改为 `RowGlassLiquidStyle`，圆角额外钳到行高一半（与 `StableLiquidGlassView.effectiveShaderCornerRadius` 同口径）；`offset` 与材质量（tint / 色散 / 对比度 / 白点 / 色度）统一在 `applyUniforms` 写入，uniform 签名纳入 `tintAlpha`。
+- 渲染器不再自行持有材质量；`ensureShader` 只建 shader 与内容 `BitmapShader`，effect 由 `ensureEffect` 独立维护，换 shader 时明确失效。
+
+### 单测
+
+`RowGlassLiquidSpecTest` 27 → 32 例：新增默认滑杆下液态口径与预设 9 项逐值 1:1、四个滑杆只缩放各自维度（色散/折射几何不参与）、描边上限 0.42、圆角钳到行高一半、签名随 tint 变化、液态成功时三层让位/失败时保留。新增 `GlassSurfaceScaleTest` 5 例：100% 恒等、各维度独立缩放、0% 关闭、越界钳制、`scalePercent` 契约。
+
 ## 1.25.10 版（2026-11-07）
 
 本版把**发现页书源名行接入液态玻璃观感**，并首次**真正启用顶栏液态玻璃**。

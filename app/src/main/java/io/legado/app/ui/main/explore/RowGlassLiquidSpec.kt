@@ -22,7 +22,8 @@ import kotlin.math.min
  *
  * 本方案**完全不复用底层库的 Java 宿主**，只复用它的 AGSL 源码（MIT，见
  * `res/raw/glass_row_liquid.agsl`），采样源是**一张已经算好的降采样壁纸位图**
- * （`GlassBackdrop.blurred`，IO 线程构建并按 key 缓存）。录制的内容永远是
+ * （`GlassBackdrop.raw`，IO 线程构建并按 key 缓存；模糊交给 GPU，与底栏同一条
+ * `createChainEffect(着色器, 高斯)` 链路）。录制的内容永远是
  * 「我们自己画的一条 `drawRect`」，不是任何 `View` 子树，因此
  * `RenderNode.beginRecording` + 对祖先 `View.draw()` 这条崩溃路径在结构上不存在。
  *
@@ -118,19 +119,104 @@ internal const val ROW_LIQUID_WHITE_POINT: Float = 0f
 internal const val ROW_LIQUID_CHROMA_MULTIPLIER: Float = 1f
 
 /**
- * 着色器自带的 tint 必须传 0。
+ * 着色器 tint 必须与底栏同口径：直接取该档预设的 `tintAlpha`（经 tint 滑杆缩放），
+ * 由着色器自己把白色混进内容。
  *
- * 行的白色着色由既有的 `tintPaint` 层负责（`render.tintAlpha` 已含
- * 「行可见度标定」与 tint 倍率滑杆）。若再让着色器混一次 tint，会变成**双重上色**，
- * 观感与滑杆标定全部失效——这是那种「编译通过、参数也对、但就是比底栏白一档」
- * 的隐蔽偏差，所以钉成常量并由单测断言。
+ * 1.25.10 曾把这里的 tint 钉成 0、改用行内额外的 `tintPaint` 层，并叠加 3× 行可见度
+ * 增益——结果是同一档参数下发现页行明显比底栏更白。1.25.11 起液态路径与底栏 1:1：
+ * 着色器负责 tint，额外的 tint/rim/A1 叠加层在液态成功时全部让位
+ * （见 [rowGlassOverlayPlan]），静态降级路径仍保留行可见度标定。
  */
-internal const val ROW_LIQUID_TINT_ALPHA: Float = 0f
-
-/** 着色器 tint 颜色（`tintAlpha=0` 时不影响输出，仍需传入合法的 float3）。 */
 internal const val ROW_LIQUID_TINT_RED: Float = 1f
 internal const val ROW_LIQUID_TINT_GREEN: Float = 1f
 internal const val ROW_LIQUID_TINT_BLUE: Float = 1f
+
+/**
+ * 行内液态路径的描边上限：与底栏 `shellAlphas().stroke` 的既有上限 `0.42` 逐值一致。
+ * 描边滑杆可以放大到 200%，但超过底栏上限后会变成「一圈实线」，不再像玻璃。
+ */
+internal const val ROW_LIQUID_MAX_STROKE: Float = 0.42f
+
+/**
+ * 液态行玻璃的最终绘制口径（纯数据）。
+ *
+ * 与底栏 `StableLiquidGlassView + shell overlay` **逐值 1:1**：同一份
+ * [GlassMaterialPreset.Params] 经四个倍率滑杆缩放后得到，不含任何行级增益。
+ * 滑杆为 100（默认）时，本类的每个字段都等于底栏同档实际使用的值。
+ */
+internal data class RowGlassLiquidStyle(
+    val blurDp: Float,
+    val tintAlpha: Float,
+    val dispersion: Float,
+    val refractionHeightDp: Float,
+    val refractionOffsetDp: Float,
+    val shellStart: Float,
+    val shellCenter: Float,
+    val shellEnd: Float,
+    val strokeAlpha: Float
+)
+
+/**
+ * 共享预设 + 四个倍率滑杆 → 液态行绘制口径（纯函数）。
+ *
+ * 刻意**不再乘** `ROW_TINT_GAIN / ROW_SHELL_GAIN / ROW_RIM_GAIN`：那些增益只服务于
+ * API < 33 的静态降级管线（[resolveExploreGlassRenderParams]），液态管线一旦也乘，
+ * 同一档参数下发现页行就会比底栏更白、更厚——这正是要修的观感不一致。
+ */
+internal fun rowGlassLiquidStyle(
+    material: GlassMaterialPreset.Params,
+    blurPercent: Int = 100,
+    tintPercent: Int = 100,
+    shellPercent: Int = 100,
+    strokePercent: Int = 100
+): RowGlassLiquidStyle {
+    val scaled = GlassMaterialPreset.scaled(
+        material, blurPercent, tintPercent, shellPercent, strokePercent
+    )
+    return RowGlassLiquidStyle(
+        blurDp = scaled.blurDp,
+        tintAlpha = scaled.tintAlpha,
+        dispersion = scaled.dispersion,
+        refractionHeightDp = scaled.refractionHeightDp,
+        refractionOffsetDp = scaled.refractionOffsetDp,
+        shellStart = scaled.shell.start,
+        shellCenter = scaled.shell.center,
+        shellEnd = scaled.shell.end,
+        strokeAlpha = scaled.shell.stroke.coerceIn(0f, ROW_LIQUID_MAX_STROKE)
+    )
+}
+
+/**
+ * 液态层成功出图后，既有叠加层各自是否还要画（纯函数）。
+ *
+ * 底栏只有「着色器（含 tint）+ shell 渐变 + 描边」，没有独立 tint/高光/A1 叠加层；
+ * 行若在液态成功后继续画这些层，就会比底栏更重。因此：
+ * - `liquidDrewGlass=true`：三层全部让位（画面 = 着色器 + shell + 描边）；
+ * - 否则：tint/rim 由静态管线保留，A1 仍按 [rowPseudoLiquidEnabled] 兜底。
+ */
+internal data class RowGlassOverlayPlan(
+    val drawTintLayer: Boolean,
+    val drawRimLayer: Boolean,
+    val drawPseudoLiquidLayer: Boolean
+)
+
+internal fun rowGlassOverlayPlan(
+    liquidDrewGlass: Boolean,
+    pseudoLiquidEnabled: Boolean
+): RowGlassOverlayPlan =
+    if (liquidDrewGlass) {
+        RowGlassOverlayPlan(
+            drawTintLayer = false,
+            drawRimLayer = false,
+            drawPseudoLiquidLayer = false
+        )
+    } else {
+        RowGlassOverlayPlan(
+            drawTintLayer = true,
+            drawRimLayer = true,
+            drawPseudoLiquidLayer = rowPseudoLiquidEnabled(pseudoLiquidEnabled, false)
+        )
+    }
 
 /** 折射带宽下限（像素）：0 会让 shader 内部 `d = ... / refractionHeight` 除零。 */
 private const val ROW_REFRACTION_BAND_MIN_PX = 1f
@@ -198,72 +284,78 @@ internal data class RowGlassLiquidUniforms(
     val depthEffect: Float,
     /** 色散强度：与底栏同源，直接取该档预设的 `dispersion`。 */
     val chromaticAberration: Float,
+    /** 白色 tint 的混入强度：与底栏同源，取 [RowGlassLiquidStyle.tintAlpha]。 */
+    val tintAlpha: Float,
     val contrast: Float,
     val whitePoint: Float,
     val chromaMultiplier: Float
 ) {
     /**
-     * uniform 的稳定签名：尺寸/位置/色散任一变化都会改变它。
-     * 渲染器用它判断「是否需要重建 RenderEffect 与重写 uniform」，
+     * uniform 的稳定签名：尺寸/位置/色散/着色任一变化都会改变它。
+     * 渲染器用它判断「是否需要重写 uniform」，
      * 避免逐帧 `setFloatUniform`（着色器 uniform 写入会触发 Skia 侧的状态失效）。
      */
     fun signature(): String = listOf(
         widthPx, heightPx, offsetXPx, offsetYPx, cornerRadiusPx,
         refractionHeightPx, refractionAmountPx,
-        depthEffect, chromaticAberration,
+        depthEffect, chromaticAberration, tintAlpha,
         contrast, whitePoint, chromaMultiplier
     ).joinToString("|")
 }
 
 /**
- * 由该档材质预设 + 行的实际像素尺寸算出整组 uniform（纯函数）。
+ * 由液态行绘制口径 + 行的实际像素尺寸算出整组 uniform（纯函数）。
  *
  * 逐值对齐底栏的地方：
  * - `depthEffect` = [ROW_LIQUID_DEPTH_EFFECT]（库 `Config` 默认 0.3）
  * - `contrast` / `whitePoint` / `chromaMultiplier` = 0 / 0 / 1
  *   （对应 `StableLiquidGlassView.overrides()` 的 `noFilter/contrast/whitePoint/chromaMultiplier`）
- * - `chromaticAberration` = `material.dispersion`（同一份 `GlassMaterialPreset` 取值）
+ * - `chromaticAberration` = `style.dispersion`（同一份 `GlassMaterialPreset` 取值）
+ * - `tintAlpha` = `style.tintAlpha`（底栏同样把 tint 交给着色器）
  *
- * 刻意与底栏不同、只允许在行内偏离的两处：
+ * 刻意与底栏不同、只允许在行内偏离的两处（几何标定，不是材质）：
  * - `refractionHeightPx` / `refractionAmountPx` 走**行高标定**（[rowRefractionBandPx] /
- *   [rowRefractionAmountPx]），这是决策 D2「按行高标定」的唯一落点；
- * - tint 不由着色器负责（`tintAlpha` 恒 0），交给既有 `tintPaint`。
+ *   [rowRefractionAmountPx]）：行只有 ~36dp 高，直接套 56dp pill 的折射带会整行落进
+ *   折射区。用的 0.42 上限正是底栏 `pixelSafePill` 的同一条安全规则；
+ * - `cornerRadiusPx` 额外钳到行高的一半（与 `StableLiquidGlassView` 的
+ *   `effectiveShaderCornerRadius` 同口径）。
  *
- * @param material 该档材质预设（调用方用 [GlassMaterialPreset.params] /
- *   [exploreGlassMaterial] 得到，本函数不改写其中任何公式）
+ * @param style 液态行绘制口径（[rowGlassLiquidStyle] 的产物，已含档位与滑杆）
  * @param widthPx 行宽（像素）
  * @param heightPx 行高（像素）
  * @param cornerRadiusPx 行圆角（像素）
  * @param density 屏幕密度
  */
 internal fun rowLiquidUniforms(
-    material: GlassMaterialPreset.Params,
+    style: RowGlassLiquidStyle,
     widthPx: Float,
     heightPx: Float,
     cornerRadiusPx: Float,
     density: Float
 ): RowGlassLiquidUniforms {
     val bandPx = rowRefractionBandPx(
-        presetHeightDp = material.refractionHeightDp,
+        presetHeightDp = style.refractionHeightDp,
         rowHeightPx = heightPx,
         density = density
     )
     val amountPx = rowRefractionAmountPx(
         bandPx = bandPx,
-        presetOffsetDp = material.refractionOffsetDp,
+        presetOffsetDp = style.refractionOffsetDp,
         density = density
     )
+    val safeHeight = heightPx.coerceAtLeast(0f)
     return RowGlassLiquidUniforms(
         widthPx = widthPx.coerceAtLeast(0f),
-        heightPx = heightPx.coerceAtLeast(0f),
+        heightPx = safeHeight,
         offsetXPx = 0f,
         offsetYPx = 0f,
-        cornerRadiusPx = cornerRadiusPx.coerceAtLeast(0f),
+        cornerRadiusPx = cornerRadiusPx.coerceIn(0f, safeHeight / 2f),
         refractionHeightPx = bandPx,
         // 负值 = 向内位移，见 rowRefractionAmountPx 的 kdoc
         refractionAmountPx = -amountPx,
         depthEffect = ROW_LIQUID_DEPTH_EFFECT,
-        chromaticAberration = material.dispersion,
+        chromaticAberration = style.dispersion,
+        tintAlpha = style.tintAlpha,
         contrast = ROW_LIQUID_CONTRAST,
         whitePoint = ROW_LIQUID_WHITE_POINT,
         chromaMultiplier = ROW_LIQUID_CHROMA_MULTIPLIER

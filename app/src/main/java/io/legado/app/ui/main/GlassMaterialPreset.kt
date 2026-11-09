@@ -129,6 +129,45 @@ object GlassMaterialPreset {
     }
 
     /**
+     * 倍率滑杆缩放（纯函数）：100 = 原值，0 = 关闭该维度，上限 200。
+     *
+     * 只缩放「用户可调」的模糊 / 着色 / 壳层 / 描边四个维度；[Params.dispersion] 与
+     * 折射几何不参与——它们由档位预设唯一决定，否则同一份材质在不同宿主上会出现
+     * 两套色散，正是「同参数观感不一致」的来源之一。
+     *
+     * 底栏 / 顶栏不经过这里（各滑杆视为 100，直接取 [params]），因此任何宿主只要
+     * 滑杆为 100 就与底栏逐值一致；发现页把四个倍率滑杆乘进来，不改写预设公式。
+     */
+    fun scalePercent(base: Float, percent: Int): Float =
+        base * (percent.coerceIn(0, 200) / 100f)
+
+    /**
+     * 按四个倍率滑杆缩放整档参数（纯函数）。
+     * 与 [params] 返回同一类型，调用方无需区分「预设值 / 滑杆后的值」。
+     */
+    fun scaled(
+        params: Params,
+        blurPercent: Int = 100,
+        tintPercent: Int = 100,
+        shellPercent: Int = 100,
+        strokePercent: Int = 100
+    ): Params = Params(
+        mode = params.mode,
+        glassLevel = params.glassLevel,
+        blurDp = scalePercent(params.blurDp, blurPercent),
+        tintAlpha = scalePercent(params.tintAlpha, tintPercent),
+        dispersion = params.dispersion,
+        refractionHeightDp = params.refractionHeightDp,
+        refractionOffsetDp = params.refractionOffsetDp,
+        shell = ShellAlphas(
+            start = scalePercent(params.shell.start, shellPercent),
+            center = scalePercent(params.shell.center, shellPercent),
+            end = scalePercent(params.shell.end, shellPercent),
+            stroke = scalePercent(params.shell.stroke, strokePercent)
+        )
+    )
+
+    /**
      * 底栏当前档位对应的完整预设：磨砂档读 frostedGlassLevel，其余读 liquidGlassLevel。
      * 发现页液态行管线（API 33+）与顶栏也复用它，做到档位与强度都逐值一致。
      */
