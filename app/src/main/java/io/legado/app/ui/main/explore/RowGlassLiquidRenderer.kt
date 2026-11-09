@@ -16,6 +16,7 @@ import android.graphics.Shader
 import android.util.Log
 import androidx.annotation.RequiresApi
 import io.legado.app.R
+import io.legado.app.ui.main.GlassMaterialPreset
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -29,14 +30,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 1. 内容源 = 仓库里早就有的降采样壁纸位图 `GlassBackdrop.raw`（IO 线程构建、按 key
  *    缓存，见 `ExploreGlassBackdrop.backdrop()`）；
  * 2. 把「按行位置对齐的壁纸矩形」录进**我们自己的一颗** [RenderNode]（一条
- *    `drawRect`，纳秒级）；
+ *    `drawRect`，纳秒级）。录制前必须 `setPosition(0, 0, w, h)`（[ensureNodePosition]）：
+ *    `beginRecording(w, h)` 只定录制画布大小，不定 node 包围盒；空包围盒时
+ *    `drawRenderNode` 会**静默不画**，是本层唯一「返回成功却不可见」的路径；
  * 3. 给这颗 node 设 `createChainEffect(createRuntimeShaderEffect(...), createBlurEffect(...))`
  *    ——与底栏库完全相同的「先着色器、后高斯」链路（见 [ensureEffect]）；
  * 4. `canvas.drawRenderNode(node)`，再剪到行圆角内。
  *
- * 1.25.11 起链路与材质参数都向底栏看齐：tint 由着色器负责（`style.tintAlpha`），
- * 模糊由 GPU 对 raw 位图做真高斯（sigma = 该档 blurDp × density），不再使用
- * 预先软件模糊的 `blurred` 位图（那会与主题背景模糊叠加成双倍模糊）。
+ * 1.25.12 起链路与材质参数都向底栏看齐：tint 由着色器负责（`material.tintAlpha`），
+ * 模糊由 GPU 对 raw 位图做真高斯（sigma = 该档 blurDp × density，与底栏同段限幅），
+ * 不再使用预先软件模糊的 `blurred` 位图（那会与主题背景模糊叠加成双倍模糊）。
  *
  * 折射带宽、位移量、uniform 全部来自纯函数 [rowLiquidUniforms]，因此
  * 「行高标定」「与底栏逐值对齐」都能在 JVM 单测里锁住。
@@ -67,7 +70,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @RequiresApi(ROW_LIQUID_MIN_SDK)
 internal class RowGlassLiquidRenderer(
     private val context: Context,
-    private val style: RowGlassLiquidStyle,
+    private val material: GlassMaterialPreset.Params,
     private val density: Float
 ) {
 
@@ -100,6 +103,13 @@ internal class RowGlassLiquidRenderer(
     }
 
     private val renderNode = RenderNode(NODE_NAME)
+
+    /**
+     * 最近一次写进 node 的包围盒尺寸（见 [ensureNodePosition]）。
+     * 位置只随行尺寸变化，静止帧不重复调用 `setPosition`。
+     */
+    private var nodeWidth = -1
+    private var nodeHeight = -1
 
     /** 录制内容用的 paint：只负责把「对齐好的壁纸」画进 node。 */
     private val contentPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -152,7 +162,7 @@ internal class RowGlassLiquidRenderer(
      * @param blurSigmaPx 高斯 sigma（像素）；≤ 0.01 时退化为「不额外模糊」
      * @param rect 行的绘制矩形（Drawable bounds，通常原点在 (0,0)）
      * @param cornerRadiusPx 行圆角
-     * @param matrix 行局部坐标 → 位图坐标 的采样矩阵（来自纯函数
+     * @param matrix 位图坐标 → 行局部坐标 的采样矩阵（来自纯函数
      *   [rowSampleTransform]，与软件/硬件管线共用同一份）
      * @param alpha Drawable alpha（0-255）
      * @param colorFilter Drawable colorFilter
@@ -175,6 +185,9 @@ internal class RowGlassLiquidRenderer(
         val height = rect.height().toInt()
         if (width <= 0 || height <= 0) return false
         return try {
+            // 必须先定包围盒：缺这一步 drawRenderNode 面对空 node 会**静默**不画，
+            // 却仍走完本函数返回 true，于是 tint 让位、行内只剩壳层与描边。
+            ensureNodePosition(width, height)
             val activeShader = ensureShader(bitmap, matrix, width, height, cornerRadiusPx)
                 ?: return false
             applyUniforms(activeShader, width, height, cornerRadiusPx)
@@ -216,6 +229,22 @@ internal class RowGlassLiquidRenderer(
             markFailed(throwable)
             false
         }
+    }
+
+    /**
+     * 把 node 位置钉成行矩形（`0, 0, width, height`），只在尺寸变化时调用。
+     *
+     * 与底栏库 `LiquidGlassimpl.onSizeChanged` 的 `node.setPosition(0, 0, w, h)` 同一步：
+     * `beginRecording(w, h)` 只设置录制画布大小，**不设置 node 位置**；位置为空时
+     * `drawRenderNode` 不抛异常、不画任何像素，是本类唯一会「成功但不可见」的路径。
+     * 包围盒本身由纯函数 [rowGlassNodeBounds] 产出，可在 JVM 单测里断言非空。
+     */
+    private fun ensureNodePosition(width: Int, height: Int) {
+        val bounds = rowGlassNodeBounds(width, height)
+        if (nodeWidth == bounds.right && nodeHeight == bounds.bottom) return
+        renderNode.setPosition(bounds.left, bounds.top, bounds.right, bounds.bottom)
+        nodeWidth = bounds.right
+        nodeHeight = bounds.bottom
     }
 
     /**
@@ -302,7 +331,7 @@ internal class RowGlassLiquidRenderer(
      * （着色器用 `centeredCoord` 的符号选角，传错个数会直接被 Skia 拒绝）。
      *
      * tint / 色散 / 对比度等材质量也在这里统一写入：它们全部来自
-     * [RowGlassLiquidStyle]，与底栏同源，避免渲染器与纯函数层各自维护一套常量。
+     * [GlassMaterialPreset.Params]，与底栏同源，避免渲染器与纯函数层各自维护一套常量。
      */
     private fun applyUniforms(
         target: RuntimeShader,
@@ -311,7 +340,7 @@ internal class RowGlassLiquidRenderer(
         cornerRadiusPx: Float
     ) {
         val uniforms = rowLiquidUniforms(
-            style = style,
+            material = material,
             widthPx = width.toFloat(),
             heightPx = height.toFloat(),
             cornerRadiusPx = cornerRadiusPx,

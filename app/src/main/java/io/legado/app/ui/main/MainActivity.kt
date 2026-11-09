@@ -93,10 +93,15 @@ import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.association.ImportTxtTocRuleDialog
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
+import io.legado.app.ui.glass.applyLiquidGlassSpec
+import io.legado.app.ui.glass.contentLiquidGlassSpec
+import io.legado.app.ui.glass.sidebarGlassFillYielded
+import io.legado.app.ui.glass.sidebarGlassSourceAllowed
 import io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1
 import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
 import io.legado.app.ui.main.ai.AiChatActivity
 import io.legado.app.ui.main.explore.ExploreFragment
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.migrateLegacyExploreGlassFollow
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.main.explore.resolveGlassStrokeColor
@@ -186,6 +191,23 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var sideNavigationBackgroundLoadingKey: String? = null
     private var sideNavigationBackgroundKey: String? = null
     private var sideNavigationBackgroundBitmap: Bitmap? = null
+    /** 侧边面板液态玻璃：采样源是兄弟子树 `content_container`，只在面板打开期间绑定。 */
+    private var sideNavigationGlassView: StableLiquidGlassView? = null
+    /** 玻璃之上的遮罩补偿层：面板外被 `sideNavigationScrim` 压暗多少，玻璃就补多少。 */
+    private var sideNavigationGlassScrim: View? = null
+    private var sideNavigationGlassActive = false
+
+    /** 玻璃层是否已测量：未测量前不让出面板底色（与阅读页底部菜单同一纪律）。 */
+    private val sideNavigationGlassYielded: Boolean
+        get() = sidebarGlassFillYielded(
+            active = sideNavigationGlassActive,
+            glassWidth = sideNavigationGlassView?.width ?: 0,
+            glassHeight = sideNavigationGlassView?.height ?: 0
+        )
+
+    /** 面板表面是否要让出实底：自定义侧边背景图或玻璃层接管时，面板与内容卡都改半透明。 */
+    private val sideNavigationTranslucentSurface: Boolean
+        get() = sideNavigationGlassYielded || binding.sideNavigationBackground.isVisible
     private var aiFloatingBall: FrameLayout? = null
     private var aiFloatingBallDragged = false
     private val aiFloatingBallAttachRunnable = Runnable {
@@ -211,6 +233,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         private const val TARGET_HOMEPAGE = "homepage"
         private const val TARGET_EXPLORE = "explore"
         private const val TARGET_RSS = "rss"
+
+        /** 侧边面板外侧的压暗量：scrim 用它，玻璃之上的补偿层也用它，两处必须同源。 */
+        private const val SIDEBAR_SCRIM_ALPHA = 0.42f
 
         fun openBookshelf(context: Context) = openMainPage(context, TARGET_BOOKSHELF)
 
@@ -587,6 +612,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         bottomNavigationView.setOnNavigationItemSelectedListener(this@MainActivity)
         bottomNavigationView.setOnNavigationItemReselectedListener(this@MainActivity)
         bindSideNavigationButtons()
+        setupSideNavigationGlass()
         bottomNavigationView.menu.findItem(getBottomNavigationItemId(initialPage))?.isChecked = true
         applyBottomNavigationIcons()
         searchButton.setOnClickListener {
@@ -805,11 +831,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    /** 影响底栏玻璃观感的全局键签名：档位、两个液态强度键与描边色。 */
+    /**
+     * 影响底栏玻璃观感的全局键签名：材质（档位 + 强度 + 四个倍率）与描边色。
+     * 材质签名取自 [GlassMaterialPreset.signature]，与顶栏 / 发现页同一口径，
+     * 新增可调维度时三处会一起感知，不会漏键。
+     */
     private fun bottomBarGlassSignature(): String = listOf(
-        resolvedExploreGlassMode(),
-        AppConfig.frostedGlassLevel,
-        AppConfig.liquidGlassLevel,
+        GlassMaterialPreset.signature(
+            GlassMaterialPreset.current(resolvedExploreGlassMode())
+        ),
         appCtx.getPrefString(PreferKey.glassStrokeColor).orEmpty()
     ).joinToString("|")
 
@@ -935,6 +965,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             applySideNavigationBackground()
             updateSideGoalHeader()
             updateSideNavigationItems()
+            if (sideNavigationOpen) refreshSideNavigationGlass() else deactivateSideNavigationGlass()
             placeSideNavigation(animate = false)
         } else {
             sideNavigationOpen = false
@@ -943,6 +974,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             sideNavigationScrim.animate().cancel()
             sideNavigationScrim.visibility = View.GONE
             sideNavigationPanel.visibility = View.GONE
+            deactivateSideNavigationGlass()
             bottomNavigationView.menu.findItem(getBottomNavigationItemId(pagePosition))?.isChecked = true
         }
     }
@@ -1349,11 +1381,14 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     .translationX(target)
                     .setDuration(220L)
                     .setInterpolator(bottomGlassPulseInterpolator)
+                    .withEndAction { if (!sideNavigationOpen) unbindSideNavigationGlass() }
                     .start()
             } else {
                 sideNavigationPanel.translationX = target
                 sideNavigationScrim.alpha = if (sideNavigationOpen) 1f else 0f
                 sideNavigationScrim.isVisible = sideNavigationOpen
+                sideNavigationGlassScrim?.alpha = if (sideNavigationOpen) 1f else 0f
+                if (!sideNavigationOpen) unbindSideNavigationGlass()
             }
         }
     }
@@ -1506,6 +1541,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun animateSideNavigationScrim(show: Boolean) = binding.run {
         sideNavigationScrim.animate().cancel()
+        val compensation = sideNavigationGlassScrim
+        compensation?.animate()?.cancel()
         if (show) {
             sideNavigationScrim.alpha = 0f
             sideNavigationScrim.isVisible = true
@@ -1514,6 +1551,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 .setDuration(180L)
                 .setInterpolator(bottomGlassPulseInterpolator)
                 .start()
+            compensation?.apply {
+                alpha = 0f
+                isVisible = true
+                animate()
+                    .alpha(1f)
+                    .setDuration(180L)
+                    .setInterpolator(bottomGlassPulseInterpolator)
+                    .start()
+            }
         } else {
             sideNavigationScrim.animate()
                 .alpha(0f)
@@ -1525,6 +1571,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     }
                 }
                 .start()
+            compensation?.apply {
+                animate()
+                    .alpha(0f)
+                    .setDuration(160L)
+                    .setInterpolator(bottomGlassPulseInterpolator)
+                    .withEndAction {
+                        if (!sideNavigationOpen) {
+                            isVisible = false
+                        }
+                    }
+                    .start()
+            }
         }
     }
 
@@ -1543,6 +1601,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             applySideNavigationEdge(sideNavigationGravity)
             binding.sideNavigationPanel.translationX = sideNavigationClosedOffset().toFloat()
             sideNavigationOpen = true
+            refreshSideNavigationGlass()
             placeSideNavigation(animate = true)
         }
     }
@@ -1552,6 +1611,125 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         sideNavigationOpen = false
         placeSideNavigation(animate = true)
         sideNavigationLockedGravity = null
+    }
+
+    /**
+     * 侧边面板的玻璃层与遮罩补偿层。
+     *
+     * 两层都插在面板最前面：绘制顺序为「面板底色 → 玻璃 → 遮罩补偿 → 面板内容」，
+     * 于是玻璃采到的是面板外侧那层真实内容，补偿层再把 `sideNavigationScrim`
+     * 对面板外的压暗量补回来，面板内外亮度一致。
+     */
+    private fun setupSideNavigationGlass() = binding.run {
+        if (sideNavigationGlassView != null) return
+        val glass = StableLiquidGlassView(this@MainActivity).apply {
+            visibility = View.GONE
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val compensation = View(this@MainActivity).apply {
+            setBackgroundColor(AppColorUtils.withAlpha(Color.BLACK, SIDEBAR_SCRIM_ALPHA))
+            alpha = 0f
+            visibility = View.GONE
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val params = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        sideNavigationPanel.addView(glass, 0, params)
+        sideNavigationPanel.addView(compensation, 1, FrameLayout.LayoutParams(params))
+        // 玻璃层首次由 GONE 转 VISIBLE 的那一帧还没测量：量到尺寸后再让出面板底色，
+        // 否则会露出一帧透明空面板（与阅读页底部菜单同一个失败形态）。
+        glass.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            if (view.width > 0 && view.height > 0 && sideNavigationGlassActive) {
+                applySideNavigationSurface()
+            }
+        }
+        sideNavigationGlassView = glass
+        sideNavigationGlassScrim = compensation
+    }
+
+    /**
+     * 按当前档位 / 设备能力决定侧边面板是否走液态玻璃，必须每次打开面板时调用。
+     *
+     * 返回 null（solid 档 / API<33 / 低内存 / 墨水屏 / 无采样源 / 自定义侧边背景图）
+     * 时保持面板原有实底，不做任何层叠改动。
+     */
+    private fun refreshSideNavigationGlass() {
+        val glass = sideNavigationGlassView ?: return
+        val customBackground = !NavigationBarIconConfig
+            .currentSidebarBackgroundPath(AppConfig.isNightTheme)
+            .isNullOrBlank()
+        val source = binding.contentContainer.takeIf {
+            it.isShown && it.width > 0 && it.height > 0
+        }
+        val spec = contentLiquidGlassSpec(
+            params = GlassMaterialPreset.current(resolvedExploreGlassMode()),
+            density = resources.displayMetrics.density,
+            sdkInt = Build.VERSION.SDK_INT,
+            sourceAvailable = sidebarGlassSourceAllowed(
+                hasCustomBackground = customBackground,
+                sourceAvailable = source != null
+            ),
+            isLowRam = ExploreGlassBackdrop.isLowRamDevice(this),
+            isEInk = AppConfig.isEInkMode
+        )
+        if (spec == null || source == null) {
+            deactivateSideNavigationGlass()
+            return
+        }
+        val newlyActive = !sideNavigationGlassActive
+        sideNavigationGlassActive = true
+        glass.setCornerRadius(0f)
+        glass.applyLiquidGlassSpec(spec)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            glass.foreground = createSideNavigationGlassEdgeDrawable()
+        }
+        glass.bind(source)
+        glass.visibility = View.VISIBLE
+        sideNavigationGlassScrim?.apply {
+            isVisible = true
+            // 与面板外的压暗保持同一时刻的同一量：打开过程中由 scrim 动画同步推进。
+            alpha = binding.sideNavigationScrim.alpha
+        }
+        if (newlyActive) {
+            // 面板底色 / 标题卡着色依赖激活态，首次激活时整体重算一次。
+            applySideNavigationSurface()
+        }
+    }
+
+    /** 回到实底面板：解绑采样源并隐藏玻璃与补偿层。 */
+    private fun deactivateSideNavigationGlass() {
+        val wasActive = sideNavigationGlassActive
+        sideNavigationGlassActive = false
+        sideNavigationGlassView?.apply {
+            bind(null)
+            // View.setForeground 是 API 23+；描边只在玻璃激活（API 33+）时设置过，
+            // 低版本上跳过清理即可，bind(null) 已移除玻璃层。
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                foreground = null
+            }
+            visibility = View.GONE
+        }
+        sideNavigationGlassScrim?.apply {
+            animate().cancel()
+            alpha = 0f
+            visibility = View.GONE
+        }
+        if (wasActive) applySideNavigationSurface()
+    }
+
+    /**
+     * 面板收起后解绑：底层库每帧把采样源整树录制进 `RenderNode`，
+     * 抽屉关闭时不应继续付出这份开销。
+     */
+    private fun unbindSideNavigationGlass() {
+        if (sideNavigationOpen) return
+        sideNavigationGlassView?.bind(null)
     }
 
     private fun setupLiquidGlass() {
@@ -1622,11 +1800,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 bottomNavigationIndicatorContainer.scaleY = 1f
                 bottomNavigationShellOverlay.background = createSolidBottomShellDrawable(
                     cornerRadius = bottomPillRadius,
-                    oval = false
+                    oval = false,
+                    forceOpaque = true
                 )
                 searchButtonShellOverlay.background = createSolidBottomShellDrawable(
                     cornerRadius = searchPillRadius,
-                    oval = true
+                    oval = true,
+                    forceOpaque = true
                 )
                 bottomNavigationView.setBackgroundColor(Color.TRANSPARENT)
                 if (!standardMode) searchButton.setBackgroundColor(Color.TRANSPARENT)
@@ -1796,12 +1976,30 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         return this?.constantState?.newDrawable()?.mutate() ?: this?.mutate()
     }
 
-    private fun createSolidBottomShellDrawable(cornerRadius: Float, oval: Boolean): GradientDrawable {
+    /**
+     * 实底壳层。[forceOpaque] = true 时填充色钉成 alpha=255 的主题包底栏色（无玻璃档）；
+     * false 保留图标包 opacity 的旧半透明口径（AI 悬浮球等非档位表面）。
+     */
+    private fun createSolidBottomShellDrawable(
+        cornerRadius: Float,
+        oval: Boolean,
+        forceOpaque: Boolean = false
+    ): GradientDrawable {
         val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
+        // 实底档没有着色器/模糊，底色又与发现页行背景逐值相同；未设置全局描边时必须
+        // 补一条对比色兜边，否则底栏浮在同色行上会完全失去轮廓（真机反馈）。
+        val borderColor = bottomBarBorderColor() ?: GlassMaterialPreset.solidShellStroke(
+            lightBase = AppColorUtils.isColorLight(bottomBackground)
+        )
         return GlassMaterialPreset.createSolidShellDrawable(
-            baseColor = bottomBackground,
-            opacity = config.opacity,
-            borderColor = bottomBarBorderColor(),
+            fillColor = if (forceOpaque) {
+                // 无玻璃档 = 完全不透明：底色就是主题包预设的「底栏色」。
+                // 图标包 opacity（默认 0.72~0.76）是旧半透明底栏口径，沿用会让壁纸透出。
+                GlassMaterialPreset.solidSurfaceFillColor(bottomBackground)
+            } else {
+                GlassMaterialPreset.solidColor(bottomBackground, config.opacity)
+            },
+            borderColor = borderColor,
             cornerRadiusPx = cornerRadius,
             oval = oval,
             strokeWidthPx = 1.dpToPx()
@@ -1865,14 +2063,26 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun createSideNavigationScrimDrawable(): GradientDrawable {
         return GradientDrawable().apply {
-            setColor(AppColorUtils.withAlpha(Color.BLACK, 0.42f))
+            setColor(AppColorUtils.withAlpha(Color.BLACK, SIDEBAR_SCRIM_ALPHA))
+        }
+    }
+
+    /** 玻璃面板没有面板底色可挂描边，边缘线改挂在玻璃层前景上。 */
+    private fun createSideNavigationGlassEdgeDrawable(): GradientDrawable {
+        val strokeColor = if (AppColorUtils.isColorLight(bottomBackground)) Color.BLACK else Color.WHITE
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 0f
+            setColor(Color.TRANSPARENT)
+            setStroke(1.dpToPx(), AppColorUtils.withAlpha(strokeColor, 0.12f))
         }
     }
 
     private fun createSideNavigationHeaderDrawable(): GradientDrawable {
         val baseColor = bottomBackground
         val isLight = AppColorUtils.isColorLight(baseColor)
-        val surface = if (binding.sideNavigationBackground.isVisible) {
+        val translucentSurface = sideNavigationTranslucentSurface
+        val surface = if (translucentSurface) {
             AppColorUtils.withAlpha(
                 if (AppConfig.isNightTheme) Color.BLACK else Color.WHITE,
                 if (AppConfig.isNightTheme) 0.20f else 0.42f
@@ -1892,7 +2102,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 1.dpToPx(),
                 AppColorUtils.withAlpha(
                     if (isLight) Color.BLACK else Color.WHITE,
-                    if (binding.sideNavigationBackground.isVisible) 0.06f else 0.10f
+                    if (translucentSurface) 0.06f else 0.10f
                 )
             )
         }
@@ -1914,12 +2124,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun createSideNavigationPanelDrawable(): GradientDrawable {
         val baseColor = bottomBackground
-        val hasWallpaper = binding.sideNavigationBackground.isVisible
+        val translucentSurface = sideNavigationTranslucentSurface
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 0f
-            setColor(if (hasWallpaper) Color.TRANSPARENT else baseColor)
-            if (hasWallpaper) {
+            setColor(if (translucentSurface) Color.TRANSPARENT else baseColor)
+            if (translucentSurface) {
                 setStroke(0, Color.TRANSPARENT)
             } else {
                 setStroke(
@@ -1937,7 +2147,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val baseColor = bottomBackground
         val isLight = AppColorUtils.isColorLight(baseColor)
         val fill = if (selected) {
-            if (binding.sideNavigationBackground.isVisible) {
+            if (sideNavigationTranslucentSurface) {
                 AppColorUtils.withAlpha(
                     if (AppConfig.isNightTheme) Color.BLACK else Color.WHITE,
                     if (AppConfig.isNightTheme) 0.18f else 0.34f
@@ -1999,18 +2209,23 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val baseColor = bottomBackground
         val isLight = AppColorUtils.isColorLight(baseColor)
         val surfaceColor = if (isLight) Color.WHITE else Color.rgb(22, 24, 28)
-        // 壳层 alpha 与发现页共用同一纯函数；selectedBoost 是底栏指示器专属的选中态增强。
-        val shell = GlassMaterialPreset.shellAlphas(
-            material.glassLevel,
-            GlassMaterialPreset.fallbackBoost(),
-            if (selected) 0.05f else 0f
-        )
+        // 壳层 alpha 直接取材质入口的最终值（已含强度、壳层/描边倍率与 API 33 以下的补偿），
+        // selectedBoost 是底栏指示器专属的选中态增强，叠加后仍受同一上限约束。
+        val shell = material.shell
+        val boost = if (selected) 0.05f else 0f
+        fun withBoost(base: Float, max: Float): Float = (base + boost).coerceAtMost(max)
         return GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
-                AppColorUtils.withAlpha(surfaceColor, shell.start),
-                AppColorUtils.withAlpha(surfaceColor, shell.center),
-                AppColorUtils.withAlpha(surfaceColor, shell.end)
+                AppColorUtils.withAlpha(
+                    surfaceColor, withBoost(shell.start, GlassMaterialPreset.MAX_SHELL_ALPHA)
+                ),
+                AppColorUtils.withAlpha(
+                    surfaceColor, withBoost(shell.center, GlassMaterialPreset.MAX_SHELL_ALPHA)
+                ),
+                AppColorUtils.withAlpha(
+                    surfaceColor, withBoost(shell.end, GlassMaterialPreset.MAX_SHELL_ALPHA)
+                )
             )
         ).apply {
             shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
@@ -2019,7 +2234,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             }
             setStroke(
                 1.dpToPx(),
-                bottomBarBorderColor() ?: AppColorUtils.withAlpha(surfaceColor, shell.stroke)
+                bottomBarBorderColor() ?: AppColorUtils.withAlpha(
+                    surfaceColor, withBoost(shell.stroke, GlassMaterialPreset.MAX_STROKE_ALPHA)
+                )
             )
         }
     }

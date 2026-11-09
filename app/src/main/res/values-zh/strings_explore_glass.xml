@@ -11,9 +11,21 @@
     <string name="explore_glass_mode_none">无玻璃</string>
     <string name="explore_glass_mode_glass">透明玻璃</string>
     <string name="explore_glass_mode_frosted">磨砂玻璃</string>
+    <string name="explore_glass_mode_custom">自定义</string>
 
     <string name="explore_glass_level">玻璃强度</string>
-    <string name="explore_glass_level_summary">全局玻璃强度；Android 13 及以上液态玻璃管线与底栏共用同一强度，不再区分日间/夜间；玻璃档 0 为关闭，无玻璃档不受影响</string>
+    <string name="explore_glass_level_summary">发现页书源名行、顶栏与底栏共用的全局强度；磨砂档读取自己的强度值。需要关闭玻璃请选「无玻璃」档</string>
+
+    <string name="explore_glass_preview_title">实时预览</string>
+    <string name="explore_glass_preview_stage_row">发现页书源名行</string>
+    <string name="explore_glass_preview_stage_bar">底栏</string>
+    <string name="explore_glass_preview_metrics">强度 %1$d%% · 模糊 %2$s dp · 着色 %3$s · 色散 %4$s · 壳层 %5$s/%6$s/%7$s · 描边 %8$s</string>
+    <string name="explore_glass_preview_pipeline">渲染管线：%1$s</string>
+    <string name="explore_glass_preview_pipeline_liquid">液态折射（AGSL + GPU 高斯）</string>
+    <string name="explore_glass_preview_pipeline_hardware">硬件真高斯（RenderEffect）</string>
+    <string name="explore_glass_preview_pipeline_software">软件模糊（预模糊位图）</string>
+    <string name="explore_glass_preview_pipeline_solid">无玻璃实底</string>
+    <string name="explore_glass_preview_pipeline_disabled">已降级为关闭（墨水屏 / 低内存）</string>
 
     <string name="explore_glass_stroke_color">描边颜色</string>
 
@@ -36,7 +48,7 @@
     <string name="explore_glass_animated_solid_summary">开启时动图壁纸不采样静止首帧，避免「壁纸在动、玻璃不动」；关闭后可接受静止首帧玻璃</string>
 
     <string name="explore_glass_restore_defaults">恢复默认</string>
-    <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括材质档位与玻璃强度的日间、夜间取值</string>
+    <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括材质档位与全局玻璃强度</string>
 
     <string-array name="explore_glass_mode_entries">
         <item>无玻璃</item>
@@ -50,7 +62,7 @@
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
         <item>贴主题底色的完全不透明纯色块：不透壁纸、不绘制玻璃层；玻璃强度、墨水屏与低内存设置都不改变它</item>
-        <item>与底栏「玻璃」一致：8 + 强度 × 10dp 轻模糊、0.02 + 强度 × 0.05 弱着色，色散/折射更强；在书源名行上表现为更薄的底色遮盖、更亮的边缘高光</item>
-        <item>与底栏「磨砂玻璃」一致：12 + 强度 × 18dp 模糊、0.05 + 强度 × 0.10 着色；在书源名行上表现为更奶白厚实的底色遮盖、更柔和的边缘高光</item>
+        <item>与底栏「玻璃」一致：3 + 强度 × 6dp 轻模糊、0.004 + 强度 × 0.02 近乎无色的着色，色散更强、折射更深；在书源名行上表现为更通透的玻璃层、更亮的边缘高光</item>
+        <item>与底栏「磨砂玻璃」一致：20 + 强度 × 24dp 强模糊、0.18 + 强度 × 0.20 奶白着色，色散收敛、折射更浅；在书源名行上表现为明显更白、更柔和且几乎不扭曲的磨砂遮盖</item>
     </string-array>
 </resources>

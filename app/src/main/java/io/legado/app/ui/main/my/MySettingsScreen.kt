@@ -44,7 +44,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
@@ -52,6 +57,7 @@ import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
 internal enum class MySettingsRowKind {
     Action,
@@ -138,6 +144,10 @@ internal fun MySettingsScreen(
 ) {
     val colors = rememberAppSettingPalette()
     val panelRadiusPx = colors.panelRadiusPx
+    // 壁纸模式下页面根背景必须透明（BaseFragment 已把宿主背景置空），否则玻璃采样的是
+    // 被页面盖住的壁纸；无背景图 / 墨水屏时保持主题页色，观感与之前逐值一致。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
     val query = remember(searchQuery) { searchQuery.trim() }
     val subSearchItems = remember(query) {
         if (query.isEmpty()) emptyList() else subSearchItemsProvider()
@@ -164,7 +174,7 @@ internal fun MySettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colors.page)
+                .background(glassPageBackgroundColor(colors.page, wallpaperVisible))
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -179,6 +189,7 @@ internal fun MySettingsScreen(
                         section = section,
                         colors = colors,
                         panelRadiusPx = panelRadiusPx,
+                        glassSignature = glassSignature,
                         searchQuery = searchQuery,
                         themeOptions = themeOptions,
                         themeModeValue = themeModeValue,
@@ -193,7 +204,8 @@ internal fun MySettingsScreen(
                     item("empty") {
                         EmptySettingsFrame(
                             colors = colors,
-                            panelRadiusPx = panelRadiusPx
+                            panelRadiusPx = panelRadiusPx,
+                            glassSignature = glassSignature
                         )
                     }
                 }
@@ -207,6 +219,7 @@ private fun SettingsSectionCard(
     section: VisibleSection,
     colors: AppSettingPalette,
     panelRadiusPx: Float,
+    glassSignature: String,
     searchQuery: String,
     themeOptions: List<MySettingsThemeOption>,
     themeModeValue: String,
@@ -220,57 +233,62 @@ private fun SettingsSectionCard(
     val panelImage = remember(context, panelRadiusPx, colors.themeSignature) {
         UiCorner.panelImageDrawable(context, panelRadiusPx)
     }
-    Column(
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = panelRadiusPx,
+        configSignature = glassSignature,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SettingsHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
-            )
+            .padding(horizontal = SettingsHorizontalPadding),
+        fallback = Modifier.appSettingPanelBackground(
+            normalColor = colors.row,
+            panelImage = panelImage,
+            borderColor = colors.border,
+            radiusPx = panelRadiusPx
+        )
     ) {
-        AppSettingSectionTitle(title = section.title, palette = colors)
-        section.rows.forEachIndexed { index, item ->
-            val isLastRowInSection = index == section.rows.lastIndex
-            val showDivider = !isLastRowInSection
-            when (item.row.kind) {
-                MySettingsRowKind.ThemeMode -> ThemeModeRow(
-                    item = item,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    searchQuery = searchQuery,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    options = themeOptions,
-                    selectedValue = themeModeValue,
-                    onSelect = onThemeModeSelect
-                )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AppSettingSectionTitle(title = section.title, palette = colors)
+            section.rows.forEachIndexed { index, item ->
+                val isLastRowInSection = index == section.rows.lastIndex
+                val showDivider = !isLastRowInSection
+                when (item.row.kind) {
+                    MySettingsRowKind.ThemeMode -> ThemeModeRow(
+                        item = item,
+                        colors = colors,
+                        panelRadiusPx = panelRadiusPx,
+                        searchQuery = searchQuery,
+                        isLast = isLastRowInSection,
+                        showDivider = showDivider,
+                        options = themeOptions,
+                        selectedValue = themeModeValue,
+                        onSelect = onThemeModeSelect
+                    )
 
-                MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
-                    item = item,
-                    state = autoTaskServiceState,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    searchQuery = searchQuery,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onCheckedChange = onAutoTaskServiceCheckedChange,
-                    onClick = onAutoTaskServiceClick
-                )
+                    MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
+                        item = item,
+                        state = autoTaskServiceState,
+                        colors = colors,
+                        panelRadiusPx = panelRadiusPx,
+                        searchQuery = searchQuery,
+                        isFirst = false,
+                        isLast = isLastRowInSection,
+                        showDivider = showDivider,
+                        onCheckedChange = onAutoTaskServiceCheckedChange,
+                        onClick = onAutoTaskServiceClick
+                    )
 
-                MySettingsRowKind.Action -> SettingsActionRow(
-                    item = item,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    searchQuery = searchQuery,
-                    isFirst = false,
-                    isLast = isLastRowInSection,
-                    showDivider = showDivider,
-                    onClick = { onRowClick(item.row.key, item.searchTarget) }
-                )
+                    MySettingsRowKind.Action -> SettingsActionRow(
+                        item = item,
+                        colors = colors,
+                        panelRadiusPx = panelRadiusPx,
+                        searchQuery = searchQuery,
+                        isFirst = false,
+                        isLast = isLastRowInSection,
+                        showDivider = showDivider,
+                        onClick = { onRowClick(item.row.key, item.searchTarget) }
+                    )
+                }
             }
         }
     }
@@ -552,39 +570,45 @@ private fun ServiceSwitchRow(
 @Composable
 private fun EmptySettingsFrame(
     colors: AppSettingPalette,
-    panelRadiusPx: Float
+    panelRadiusPx: Float,
+    glassSignature: String
 ) {
     val context = LocalContext.current
     val panelImage = remember(context, panelRadiusPx, colors.themeSignature) {
         UiCorner.panelImageDrawable(context, panelRadiusPx)
     }
-    Column(
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = panelRadiusPx,
+        configSignature = glassSignature,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SettingsHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
-            )
-    ) {
-        AppSettingSectionTitle(
-            title = context.getString(R.string.settings_search_results),
-            palette = colors
+            .padding(horizontal = SettingsHorizontalPadding),
+        fallback = Modifier.appSettingPanelBackground(
+            normalColor = colors.row,
+            panelImage = panelImage,
+            borderColor = colors.border,
+            radiusPx = panelRadiusPx
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 60.dp)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = context.getString(R.string.settings_search_empty),
-                color = colors.secondaryText,
-                fontSize = 14.sp
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AppSettingSectionTitle(
+                title = context.getString(R.string.settings_search_results),
+                palette = colors
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 60.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = context.getString(R.string.settings_search_empty),
+                    color = colors.secondaryText,
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }

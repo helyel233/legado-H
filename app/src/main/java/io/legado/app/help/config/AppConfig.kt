@@ -2361,6 +2361,36 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.liquidGlassLevel, value.coerceIn(0, 100))
         }
 
+    /*
+     * 全局毛玻璃的四个倍率（0-200，100 = 预设原值）。
+     * 1.25.12 起由 GlassMaterialPreset.current() 统一生效：底栏、顶栏、发现页行
+     * 读同一份「预设 × 倍率」结果。此前只有发现页行消费它们，所以同一档参数下
+     * 底栏与行必然不一致——倍率本身就是不一致的来源之一。
+     */
+    var exploreGlassBlurScale: Int
+        get() = appCtx.getPrefInt(PreferKey.exploreGlassBlurScale, 100).coerceIn(0, 200)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.exploreGlassBlurScale, value.coerceIn(0, 200))
+        }
+
+    var exploreGlassTintScale: Int
+        get() = appCtx.getPrefInt(PreferKey.exploreGlassTintScale, 100).coerceIn(0, 200)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.exploreGlassTintScale, value.coerceIn(0, 200))
+        }
+
+    var exploreGlassShellScale: Int
+        get() = appCtx.getPrefInt(PreferKey.exploreGlassShellScale, 100).coerceIn(0, 200)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.exploreGlassShellScale, value.coerceIn(0, 200))
+        }
+
+    var exploreGlassStrokeScale: Int
+        get() = appCtx.getPrefInt(PreferKey.exploreGlassStrokeScale, 100).coerceIn(0, 200)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.exploreGlassStrokeScale, value.coerceIn(0, 200))
+        }
+
     /**
      * 已废弃（1.25.8 起）：材质档位收拢为全局单一来源 PreferKey.exploreGlassEffectMode，
      * 渲染层经 resolveExploreGlassMode / resolvedExploreGlassMode 读取，不再读本键。

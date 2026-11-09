@@ -1,6 +1,7 @@
 package io.legado.app.ui.widget
 
 import android.content.Context
+import android.os.Build
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -38,6 +40,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect as ComposeRect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,8 +55,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.ui.glass.LiquidGlassSpec
+import io.legado.app.ui.glass.applyLiquidGlassSpec
+import io.legado.app.ui.glass.contentLiquidGlassSpec
+import io.legado.app.ui.glass.overlayGlassFillYielded
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.installViewTreeOwnersFrom
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
@@ -119,6 +130,36 @@ object ModernActionPopup {
         val fallbackHeightPx: Int
     )
 
+    /**
+     * 弹层的液态玻璃配置：材质参数 + 采样源。
+     *
+     * 弹层是同一窗口内的覆盖视图，面板背后就是活动内容本身，因此采样源取
+     * `android.R.id.content` 子树——覆盖视图挂在 `rootView` 上，与该子树是兄弟分支，
+     * 既不是玻璃宿主的祖先，也不会把弹层自己录进采样。
+     *
+     * 源不存在（例如锚点在独立 `PopupWindow` / 弹窗窗口里、或内容尚未布局）时返回
+     * null，弹层保持原有实底表面。
+     */
+    private data class PopupGlass(
+        val spec: LiquidGlassSpec,
+        val source: ViewGroup
+    )
+
+    private fun resolvePopupGlass(host: ViewGroup): PopupGlass? {
+        val source = host.findViewById<ViewGroup>(android.R.id.content)?.takeIf {
+            it !== host && it.isShown && it.width > 0 && it.height > 0
+        } ?: return null
+        val spec = contentLiquidGlassSpec(
+            params = GlassMaterialPreset.current(resolvedExploreGlassMode()),
+            density = host.resources.displayMetrics.density,
+            sdkInt = Build.VERSION.SDK_INT,
+            sourceAvailable = true,
+            isLowRam = ExploreGlassBackdrop.isLowRamDevice(host.context),
+            isEInk = AppConfig.isEInkMode
+        ) ?: return null
+        return PopupGlass(spec, source)
+    }
+
     fun show(
         anchor: View,
         actions: List<Action>,
@@ -181,11 +222,13 @@ object ModernActionPopup {
             anchorDetachListener = anchorDetachListener,
             hostDetachListener = hostDetachListener
         )
+        val glass = resolvePopupGlass(host)
         overlay.setContent {
             ModernActionPopupOverlay(
                 snapshot = snapshot,
                 actions = actions,
                 visible = visibleState.value,
+                glass = glass,
                 onDismiss = handle::dismiss
             )
         }
@@ -308,11 +351,13 @@ object ModernActionPopup {
             },
             hostDetachListener = hostDetachListener
         )
+        val glass = resolvePopupGlass(host)
         overlay.setContent {
             ModernActionPopupOverlay(
                 snapshot = snapshot,
                 actions = actions,
                 visible = visibleState.value,
+                glass = glass,
                 onDismiss = handle::dismiss
             )
         }
@@ -421,6 +466,7 @@ object ModernActionPopup {
         snapshot: AnchorSnapshot,
         actions: List<Action>,
         visible: Boolean,
+        glass: PopupGlass?,
         onDismiss: () -> Unit
     ) {
         val style = rememberAppDialogStyle()
@@ -439,6 +485,15 @@ object ModernActionPopup {
         val panelHeight = panelSize.height.takeIf { it > 0 } ?: snapshot.fallbackHeightPx
         val panelOffset = calculatePanelOffset(snapshot, panelWidth, panelHeight)
         val panelTransformOrigin = calculateTransformOrigin(snapshot, panelOffset, panelWidth, panelHeight)
+        // 玻璃层只在面板量到真实尺寸后出现；未测量前 Surface 保持实底，与阅读页菜单同一条纪律。
+        val glassLayer = if (
+            overlayGlassFillYielded(glass != null, panelSize.width, panelSize.height)
+        ) {
+            glass
+        } else {
+            null
+        }
+        val glassRadiusPx = with(density) { style.panelRadius.toPx() }
         val progress by animateFloatAsState(
             targetValue = if (visible) 1f else 0f,
             animationSpec = tween(
@@ -459,6 +514,34 @@ object ModernActionPopup {
                     }
                 }
         ) {
+            if (glassLayer != null) {
+                // 玻璃层与面板共用同一套 offset / 尺寸 / 弹出动画，两层必须逐帧同形，
+                // 否则会在缩放与淡入过程中出现玻璃与面板错位。
+                AndroidView(
+                    factory = { context ->
+                        StableLiquidGlassView(context).apply {
+                            isClickable = false
+                            isFocusable = false
+                            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            setCornerRadius(glassRadiusPx)
+                            applyLiquidGlassSpec(glassLayer.spec)
+                            bind(glassLayer.source)
+                        }
+                    },
+                    modifier = Modifier
+                        .offset { panelOffset }
+                        .width(with(density) { snapshot.fallbackWidthPx.toDp() })
+                        .height(with(density) { panelHeight.toDp() })
+                        .graphicsLayer {
+                            alpha = progress
+                            transformOrigin = panelTransformOrigin
+                            scaleX = 0.96f + 0.04f * progress
+                            scaleY = 0.96f + 0.04f * progress
+                            translationY = (if (panelOffset.y >= snapshot.anchorBottom) -6f else 6f) *
+                                (1f - progress)
+                        }
+                )
+            }
             CompositionLocalProvider(
                 LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
             ) {
@@ -483,7 +566,7 @@ object ModernActionPopup {
                             else Modifier
                         ),
                     shape = panelShape,
-                    color = style.surface,
+                    color = if (glassLayer != null) Color.Transparent else style.surface,
                     contentColor = style.primaryText,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp
@@ -525,7 +608,8 @@ object ModernActionPopup {
                                 enabled = action.enabled,
                                 description = action.description,
                                 leadingIconName = action.iconName,
-                                textAlign = TextAlign.Start
+                                textAlign = TextAlign.Start,
+                                translucentSurface = glassLayer != null
                             )
                         }
                     }

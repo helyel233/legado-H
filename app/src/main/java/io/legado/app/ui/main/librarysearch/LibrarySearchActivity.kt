@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -41,8 +42,14 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityLibrarySearchBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.imageBgTextShadow
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -79,49 +86,65 @@ private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
     val rebuilding by viewModel.rebuilding.collectAsStateWithLifecycle()
     val rebuildProgress by viewModel.rebuildProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // 壁纸模式下页面根背景必须透明（BaseActivity 已把根布局背景置空），否则输入框玻璃
+    // 采样的是被页面盖住的壁纸；无背景图 / 墨水屏时保持原 surface，观感与之前一致。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
+    val actionRadiusPx = with(LocalDensity.current) { style.actionRadius.toPx() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(style.surface)
+            .background(glassPageBackgroundColor(style.surface, wallpaperVisible))
             .padding(horizontal = 12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { viewModel.updateQuery(it) },
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = actionRadiusPx,
+                configSignature = glassSignature,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.library_search_hint)) },
-                singleLine = true,
-                shape = RoundedCornerShape(style.actionRadius),
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        Text(
-                            text = "✕",
-                            color = style.secondaryText,
-                            fontSize = 16.sp,
-                            modifier = Modifier
-                                .clickable { viewModel.updateQuery("") }
-                                .padding(8.dp)
-                        )
-                    }
-                },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = style.primaryText,
-                    unfocusedTextColor = style.primaryText,
-                    focusedContainerColor = style.fieldSurface,
-                    unfocusedContainerColor = style.fieldSurface,
-                    cursorColor = style.accent,
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent
+                fallback = Modifier.background(
+                    style.fieldSurface,
+                    RoundedCornerShape(style.actionRadius)
                 )
-            )
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { viewModel.updateQuery(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(stringResource(R.string.library_search_hint)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(style.actionRadius),
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            Text(
+                                text = "✕",
+                                color = style.secondaryText,
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .clickable { viewModel.updateQuery("") }
+                                    .padding(8.dp)
+                            )
+                        }
+                    },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = ImeAction.Search
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = style.primaryText,
+                        unfocusedTextColor = style.primaryText,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        cursorColor = style.accent,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    )
+                )
+            }
             if (searching || rebuilding) {
                 CircularProgressIndicator(
                     modifier = Modifier

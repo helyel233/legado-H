@@ -1,10 +1,21 @@
 package io.legado.app.ui.config.compose
 
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
 
 data class SettingPageSpec(
     @param:StringRes val titleRes: Int,
-    val sections: List<SettingSectionSpec>
+    val sections: List<SettingSectionSpec>,
+    /**
+     * 页面顶部的自定义区块（如「全局毛玻璃效果」的实时预览）。
+     * 它是纯展示内容，不参与搜索索引与定位：[findItem] 只扫描 [sections]。
+     * 放在 [sections] 之后保持既有位置实参调用点（如 NetworkDnsConfigFragment）不变。
+     */
+    val header: SettingHeaderSpec? = null
+)
+
+data class SettingHeaderSpec(
+    val content: @Composable () -> Unit
 )
 
 data class SettingSectionSpec(
@@ -52,6 +63,14 @@ data class SettingChoiceSpec(
     val selectedValue: String,
     val onSelected: (String) -> Unit,
     override val summary: CharSequence? = null,
+    /**
+     * 行尾胶囊的替代文案（不参与弹窗的勾选判定）。
+     *
+     * 用于「当前取值不在预设列表里」的场景：弹出的选项仍是 [options]，
+     * 但行尾显示自己算出的状态（例如毛玻璃页的「自定义」），
+     * 不需要为此新增一个可选值或偏好键。
+     */
+    val labelOverride: CharSequence? = null,
     override val visible: Boolean = true,
     override val enabled: Boolean = true,
     override val searchKeys: List<String> = emptyList()
@@ -60,7 +79,7 @@ data class SettingChoiceSpec(
         get() = options.firstOrNull { it.value == selectedValue }
 
     val selectedLabel: CharSequence
-        get() = selectedOption?.label ?: selectedValue
+        get() = labelOverride ?: selectedOption?.label ?: selectedValue
 }
 
 data class SettingSliderSpec(

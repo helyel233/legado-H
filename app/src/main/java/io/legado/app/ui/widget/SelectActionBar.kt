@@ -2,11 +2,14 @@ package io.legado.app.ui.widget
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.PorterDuff
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.PopupMenu
 import androidx.annotation.MenuRes
@@ -21,6 +24,8 @@ import io.legado.app.lib.theme.getSecondaryDisabledTextColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.transparentNavBar
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.visible
@@ -46,11 +51,25 @@ class SelectActionBar @JvmOverloads constructor(
     init {
         if (!isInEditMode) {
             val transparentNavBar = context.transparentNavBar
-            if (transparentNavBar) {
-                setBackgroundColor(Color.TRANSPARENT)
-            } else {
-                setBackgroundColor(context.bottomBackground)
+            // 与主界面底栏同一条玻璃管线（档位 / 强度 / 四档降级全部来自
+            // GlassMaterialPreset，经 GlassSurface 统一判定）。宿主页面均为
+            // imageBg=true 且底栏直接遮在列表上，属壁纸域。
+            // 返回 null = 设备降级或动图壁纸纯色底：保留原来的实色 / 透明兜底。
+            val glass = GlassSurface.panelBackground(this, GlassSamplingDomain.WALLPAPER)
+            when {
+                glass != null -> background = glass
+                transparentNavBar -> setBackgroundColor(Color.TRANSPARENT)
+                else -> setBackgroundColor(context.bottomBackground)
+            }
+            if (!transparentNavBar) {
                 elevation = context.elevation
+                // 玻璃 drawable 不提供轮廓；显式给圆角矩形轮廓，保留原有投影。
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        val radius = resources.getDimension(R.dimen.ui_panel_radius)
+                        outline.setRoundRect(0, 0, view.width, view.height, radius)
+                    }
+                }
             }
             binding.cbSelectedAll.setTextColor(primaryTextColor)
             binding.cbSelectedAll.typeface = context.uiTypeface()

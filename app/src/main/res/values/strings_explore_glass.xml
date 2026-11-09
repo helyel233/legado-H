@@ -11,9 +11,21 @@
     <string name="explore_glass_mode_none">No glass</string>
     <string name="explore_glass_mode_glass">Transparent glass</string>
     <string name="explore_glass_mode_frosted">Frosted glass</string>
+    <string name="explore_glass_mode_custom">Custom</string>
 
     <string name="explore_glass_level">Glass strength</string>
-    <string name="explore_glass_level_summary">Global glass strength; on Android 13 and above the liquid glass pipeline shares the bottom bar strength, so day / night values are not distinguished; 0 turns the glass off (No glass style is unaffected)</string>
+    <string name="explore_glass_level_summary">Global strength shared by the Explore rows, top bar and bottom bar; the frosted style reads its own value. Choose the No glass style to turn glass off</string>
+
+    <string name="explore_glass_preview_title">Live preview</string>
+    <string name="explore_glass_preview_stage_row">Explore row</string>
+    <string name="explore_glass_preview_stage_bar">Bottom bar</string>
+    <string name="explore_glass_preview_metrics">Strength %1$d%% · blur %2$s dp · tint %3$s · dispersion %4$s · shell %5$s/%6$s/%7$s · stroke %8$s</string>
+    <string name="explore_glass_preview_pipeline">Pipeline: %1$s</string>
+    <string name="explore_glass_preview_pipeline_liquid">liquid refraction (AGSL + GPU blur)</string>
+    <string name="explore_glass_preview_pipeline_hardware">hardware Gaussian (RenderEffect)</string>
+    <string name="explore_glass_preview_pipeline_software">software blur (pre-blurred bitmap)</string>
+    <string name="explore_glass_preview_pipeline_solid">no glass, opaque solid</string>
+    <string name="explore_glass_preview_pipeline_disabled">disabled (e-ink / low memory)</string>
 
     <string name="explore_glass_stroke_color">Stroke colour</string>
 
@@ -36,7 +48,7 @@
     <string name="explore_glass_animated_solid_summary">When enabled, animated wallpapers are not sampled as a still first frame; disable it to accept a static glass frame</string>
 
     <string name="explore_glass_restore_defaults">Restore defaults</string>
-    <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including the material style and day / night glass strength</string>
+    <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including the material style and the global glass strength</string>
 
     <string-array name="explore_glass_mode_entries">
         <item>No glass</item>
@@ -50,7 +62,7 @@
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
         <item>Fully opaque solid colour block in the theme background colour: no wallpaper shows through and no glass layer is drawn; glass strength, e-ink and low-memory settings do not change it</item>
-        <item>Matches the bottom bar Glass style: 8 + level x 10dp light blur, 0.02 + level x 0.05 faint tint, stronger dispersion/refraction; on the row this means a thinner scrim and a brighter edge highlight</item>
-        <item>Matches the bottom bar Frosted glass style: 12 + level x 18dp blur, 0.05 + level x 0.10 tint; on the row this means a milkier, thicker scrim and a softer edge highlight</item>
+        <item>Matches the bottom bar Glass style: 3 + level x 6dp light blur, 0.004 + level x 0.02 near-colourless tint, stronger dispersion and deeper refraction; on the row this means a clearer glass layer and a brighter edge highlight</item>
+        <item>Matches the bottom bar Frosted glass style: 20 + level x 24dp strong blur, 0.18 + level x 0.20 milky tint, restrained dispersion and shallower refraction; on the row this means a noticeably whiter, softer scrim that barely distorts</item>
     </string-array>
 </resources>

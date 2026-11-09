@@ -38,7 +38,8 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.filletControlBackground
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.widget.ModernActionPopup
@@ -105,8 +106,10 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
             // 无玻璃档返回底栏 solid 同款实底壳层，不受强度 0 影响，也不走这里的回退。
             // 注意：行内禁止使用 StableLiquidGlassView（每帧按采样源整树录制 RenderNode，
             // 行内绑定会让宿主 RecyclerView 重入录制直接 native 崩溃，见 1.25.9 修复）。
-            llTitle.background = ExploreGlassBackdrop.rowBackground(llTitle)
-                ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
+            llTitle.background = GlassSurface.rowBackground(
+                llTitle,
+                GlassSamplingDomain.WALLPAPER
+            ) ?: ContextCompat.getDrawable(context, R.drawable.bg_find_book_group)
             if (holder.layoutPosition == itemCount - 1) {
                 root.setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
             } else {
@@ -155,7 +158,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
             //解析不到分类时给一行提示，而不是无声的空白展开行（下拉刷新可重试）
             kotlin.runCatching {
                 recyclerFlexbox(flexbox)
-                val tv = ItemFilletTextBinding.inflate(inflater, flexbox, false).root
+                // 复用同一条创建路径，提示条也跟随材质，不会退化成硬编码纯色块
+                val tv = getFlexboxChild(flexbox)
                 flexbox.addView(tv)
                 flexbox.visible()
                 tv.text = context.getString(R.string.explore_kinds_empty)
@@ -588,7 +592,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         } else {
             recycler.removeLastElement()
         }).apply {
-            background = context.filletControlBackground()
+            applyGlassControlBackground()
         }
     }
 
@@ -599,7 +603,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         } else {
             textRecycler.removeLastElement()
         }).apply {
-            background = context.filletControlBackground()
+            applyGlassControlBackground()
         }
     }
 
@@ -610,8 +614,18 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         } else {
             selectRecycler.removeLastElement()
         }).apply {
-            background = context.filletControlBackground()
+            applyGlassControlBackground()
         }
+    }
+
+    /**
+     * 展开行内部小控件背景：与书源名行、底栏同一份材质与同一条降级矩阵
+     * （液态 / 硬件高斯 / 软件预模糊 / 实底），跟随三档预设与滑杆。
+     * 统一走 [GlassSurface.filletControlBackground]：设备降级（墨水屏 / 低内存）时
+     * 玻璃入口返回 null，回退主题纯色控件背景，行为与改造前一致。
+     */
+    private fun View.applyGlassControlBackground() {
+        background = GlassSurface.filletControlBackground(this, GlassSamplingDomain.WALLPAPER)
     }
 
     @Synchronized

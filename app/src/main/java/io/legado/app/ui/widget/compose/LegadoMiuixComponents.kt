@@ -613,7 +613,13 @@ fun LegadoMiuixChoiceRow(
     showSelectedMark: Boolean = true,
     enabled: Boolean = true,
     leadingIconName: String? = null,
-    textAlign: TextAlign = TextAlign.Center
+    textAlign: TextAlign = TextAlign.Center,
+    /**
+     * 行底色让位给所在面板的玻璃层：仅选中态保留强调色，未选中行完全透明。
+     * 只用于「面板本身已经是玻璃」的宿主（如 [io.legado.app.ui.widget.ModernActionPopup]），
+     * 其余弹窗保持默认实底行色。
+     */
+    translucentSurface: Boolean = false
 ) {
     val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
     val contentAlpha = if (enabled) 1f else 0.42f
@@ -625,7 +631,11 @@ fun LegadoMiuixChoiceRow(
             .defaultMinSize(minHeight = minHeight)
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(actionRadius),
-        color = if (selected) palette.accent.copy(alpha = 0.14f) else palette.surfaceVariant,
+        color = when {
+            selected -> palette.accent.copy(alpha = 0.14f)
+            translucentSurface -> Color.Transparent
+            else -> palette.surfaceVariant
+        },
         contentColor = if (selected) selectedColor else primaryColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp

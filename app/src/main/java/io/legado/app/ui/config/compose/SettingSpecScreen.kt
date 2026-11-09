@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -101,6 +102,10 @@ fun SettingSpecScreen(
     }
     val listState = rememberLazyListState()
     val density = LocalDensity.current
+    val header = page.header
+    // 头部区块是 LazyColumn 的第 0 项，分区整体后移一位；定位目标时要补上这个偏移，
+    // 否则从搜索进来会滚到错误的区块。
+    val sectionIndexOffset = if (header != null) 1 else 0
     val targetTitleOffsetPx = with(density) { 38.dp.roundToPx() }
     val targetRowOffsetPx = with(density) { 72.dp.roundToPx() }
     // 目标行的实测位置：行高随摘要行数（1~3 行）和滑杆行变化，按固定 72dp 估算必然对不准，
@@ -134,7 +139,7 @@ fun SettingSpecScreen(
             val section = sections[targetSectionIndex]
             val scrollOffset = targetRowIndex * targetRowOffsetPx +
                 if (section.title.isNullOrBlank()) 0 else targetTitleOffsetPx
-            listState.animateScrollToItem(targetSectionIndex, scrollOffset)
+            listState.animateScrollToItem(targetSectionIndex + sectionIndexOffset, scrollOffset)
             // 先点亮高亮再校正：目标行只有处于高亮态才会回报实测位置
             highlightKey = targetKey
             // 动画结束后目标行可能已经不在组合里（滚过头），所以每帧重新取实测位置，
@@ -165,6 +170,17 @@ fun SettingSpecScreen(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            if (header != null) {
+                item(key = "page-header") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = PanelHorizontalPadding)
+                    ) {
+                        header.content()
+                    }
+                }
+            }
             itemsIndexed(
                 sections,
                 key = { index, section -> "${index}:${section.title}:${section.items.firstOrNull()?.key}" }

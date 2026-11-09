@@ -587,6 +587,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         // 选区放大镜由浮层自绘，接上阅读视图（浮层在手柄之上，布局里位于手柄后面）
         binding.selectionMagnifier.readView = binding.readView
         binding.readView.magnifierOverlay = binding.selectionMagnifier
+        // 阅读页底部菜单的液态玻璃采样源：正文视图与 read_menu 是兄弟节点（1.25.10 顶栏先例）
+        binding.readMenu.setLiquidGlassSource(binding.readView)
         binding.readAiPanel.attach(this)
         binding.readAiSummaryPanel.attach(this)
         binding.readAloudPlayerPanel.attach(this, this)

@@ -4,8 +4,11 @@ import android.content.Context
 import android.database.ContentObserver
 import android.graphics.RectF
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.util.AttributeSet
+import android.view.View
+import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 import android.widget.FrameLayout
@@ -46,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -82,7 +86,16 @@ import io.legado.app.ui.book.read.config.rememberReaderMenuDialogStyle
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.browser.WebViewActivity
+import io.legado.app.ui.glass.GlassPanelRect
+import io.legado.app.ui.glass.applyLiquidGlassSpec
+import io.legado.app.ui.glass.contentLiquidGlassSpec
+import io.legado.app.ui.glass.glassPanelFillYielded
+import io.legado.app.ui.glass.glassPanelRect
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.utils.activity
 import io.legado.app.utils.buildMainHandler
@@ -179,6 +192,7 @@ class ReadMenu @JvmOverloads constructor(
         callBack.upSystemUiVisibility()
         isTopBarVisible = true
         isBottomMenuVisible = true
+        refreshMenuGlass()
         // 每次唤出菜单都刷新待发条数：三点图标小圆点与「发送离线评论（N）」都吃这个值
         refreshOfflineReviewCounts()
         if (!LocalConfig.readMenuHelpVersionIsLast) {
@@ -196,6 +210,7 @@ class ReadMenu @JvmOverloads constructor(
         // 延迟清理状态（等待动画结束）
         postDelayed({
             this.visibility = INVISIBLE
+            hideMenuGlass()
             callBack.onMenuHidden()
             canShowMenu = false
             isMenuOutAnimating = false
@@ -340,6 +355,38 @@ class ReadMenu @JvmOverloads constructor(
     // region Private state
     private val callBack: CallBack get() = activity as CallBack
     private var composeView: ComposeView? = null
+    /**
+     * 底部菜单液态玻璃。采样源是阅读页正文视图（与 [ReadMenu] 平级的兄弟子树），
+     * 菜单打开时绑定、关闭动画结束后解绑——底层库每帧把采样源整树录制进
+     * `RenderNode`，常驻绑定会让阅读过程中持续付出这一开销。
+     */
+    private val bottomGlass = StableLiquidGlassView(context).apply {
+        visibility = GONE
+        isClickable = false
+        isFocusable = false
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    /**
+     * 顶部菜单液态玻璃：与底部菜单同源同材质，采样源仍是阅读页正文视图。
+     *
+     * 半径取 0——TitleBar / ActionBar 本身就是贴边全宽的矩形 Surface，玻璃层只有
+     * 单一半径，加圆角会在屏幕顶边两角留下缺口；方形贴边与现有顶栏形状一致。
+     */
+    private val topGlass = StableLiquidGlassView(context).apply {
+        visibility = GONE
+        isClickable = false
+        isFocusable = false
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private var liquidGlassSource: ViewGroup? = null
+    private var bottomGlassActive by mutableStateOf(false)
+    /** 玻璃层最终矩形（逐帧更新，不参与重组）。 */
+    private var bottomGlassRect: GlassPanelRect? = null
+    /** 是否已完成过一次定位（只在 false→true 时触发一次重组，决定面板能否让出底色）。 */
+    private var bottomGlassGeometried by mutableStateOf(false)
+    private var topGlassActive by mutableStateOf(false)
+    private var topGlassRect: GlassPanelRect? = null
+    private var topGlassGeometried by mutableStateOf(false)
     private var confirmSkipToChapter: Boolean = false
     private var isMenuOutAnimating = false
     private var onMenuOutEnd: (() -> Unit)? = null
@@ -379,6 +426,9 @@ class ReadMenu @JvmOverloads constructor(
     init {
         // 设置 FrameLayout 背景透明，避免退出时闪白屏
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        // 玻璃层必须在 Compose 内容之前加入：同层子 View 的绘制顺序即叠放顺序
+        addView(topGlass, LayoutParams(0, 0))
+        addView(bottomGlass, LayoutParams(0, 0))
         composeView = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent { ReadMenuContent() }
@@ -386,6 +436,179 @@ class ReadMenu @JvmOverloads constructor(
         addView(composeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         upBrightnessState()
         updateButtonLayout()
+    }
+
+    /** 设置底部菜单液态玻璃的采样源（阅读页正文视图，必须是本视图的兄弟子树）。 */
+    fun setLiquidGlassSource(source: ViewGroup?) {
+        liquidGlassSource = source
+    }
+
+    /**
+     * 按当前档位 / 设备能力决定顶部与底部菜单是否走液态玻璃。
+     *
+     * 每次唤出菜单时调用一次：采样源是否可见、是否 EPUB 直读（WebView 不可采样）
+     * 都可能随书籍切换变化。返回 null（solid 档 / API<33 / 低内存 / 墨水屏 / 无源）
+     * 时两处都保持原有实底菜单，不做任何布局改动。
+     */
+    private fun refreshMenuGlass() {
+        val source = liquidGlassSource
+            ?.takeIf { !directReader && it.isShown && it.width > 0 && it.height > 0 }
+        val spec = contentLiquidGlassSpec(
+            params = GlassMaterialPreset.current(resolvedExploreGlassMode()),
+            density = resources.displayMetrics.density,
+            sdkInt = Build.VERSION.SDK_INT,
+            sourceAvailable = source != null,
+            isLowRam = ExploreGlassBackdrop.isLowRamDevice(context),
+            isEInk = AppConfig.isEInkMode
+        )
+        if (spec == null || source == null) {
+            bottomGlassActive = false
+            bottomGlassRect = null
+            bottomGlassGeometried = false
+            bottomGlass.bind(null)
+            bottomGlass.visibility = GONE
+            topGlassActive = false
+            topGlassRect = null
+            topGlassGeometried = false
+            topGlass.bind(null)
+            topGlass.visibility = GONE
+            return
+        }
+        bottomGlassActive = true
+        bottomGlass.setCornerRadius(UiCorner.panelRadius(context))
+        bottomGlass.applyLiquidGlassSpec(spec)
+        bottomGlass.bind(source)
+        bottomGlass.visibility = VISIBLE
+        applyBottomGlassRect()
+        topGlassActive = true
+        topGlass.setCornerRadius(0f)
+        topGlass.applyLiquidGlassSpec(spec)
+        topGlass.bind(source)
+        topGlass.visibility = VISIBLE
+        applyTopGlassRect()
+    }
+
+    /** 菜单收起动画结束后解绑：不采样就没有每帧整树录制。 */
+    private fun hideMenuGlass() {
+        bottomGlass.bind(null)
+        bottomGlass.visibility = GONE
+        bottomGlassRect = null
+        bottomGlassGeometried = false
+        bottomGlassActive = false
+        topGlass.bind(null)
+        topGlass.visibility = GONE
+        topGlassRect = null
+        topGlassGeometried = false
+        topGlassActive = false
+    }
+
+    /**
+     * 面板在窗口中的位置 → 玻璃层本地矩形。
+     *
+     * 由 Compose 的 `onGloballyPositioned` 每帧回调，因此滑入 / 滑出动画期间
+     * 玻璃与面板逐帧对齐，不需要另写一套动画。
+     */
+    private fun updateBottomGlassGeometry(
+        windowLeft: Float,
+        windowTop: Float,
+        width: Int,
+        height: Int
+    ) {
+        if (!bottomGlassActive || width <= 0 || height <= 0) return
+        val location = IntArray(2)
+        getLocationInWindow(location)
+        bottomGlassRect = glassPanelRect(
+            panelLeft = windowLeft - location[0],
+            panelTop = windowTop - location[1],
+            panelWidth = width.toFloat(),
+            panelHeight = height.toFloat(),
+            cornerRadiusPx = UiCorner.panelRadius(context)
+        )
+        if (bottomGlassRect != null) bottomGlassGeometried = true
+        applyBottomGlassRect()
+    }
+
+    /**
+     * 玻璃层按面板矩形定位。
+     *
+     * 必须显式测量：玻璃层以 `LayoutParams(0, 0)` 加入（位置完全由面板决定），
+     * 父容器测不到有效尺寸，内部玻璃子 View 会停在 0×0、整层空绘制——真机表现
+     * 就是「面板已让出底色、玻璃却没画出来，菜单背景整个消失」。这里把
+     * `LayoutParams` 同步成目标尺寸（父容器后续布局不会再把它压回 0×0），
+     * 并在尺寸变化时按 EXACTLY 测量一次。
+     */
+    private fun applyBottomGlassRect() {
+        val rect = bottomGlassRect ?: return
+        val width = rect.right - rect.left
+        val height = rect.bottom - rect.top
+        if (width <= 0 || height <= 0) return
+        val params = bottomGlass.layoutParams
+        if (params.width != width || params.height != height) {
+            params.width = width
+            params.height = height
+            bottomGlass.layoutParams = params
+        }
+        if (bottomGlass.measuredWidth != width || bottomGlass.measuredHeight != height) {
+            bottomGlass.measure(
+                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+            )
+        }
+        bottomGlass.layout(rect.left, rect.top, rect.right, rect.bottom)
+    }
+
+    /**
+     * 顶栏在窗口中的位置 → 顶部玻璃层本地矩形。
+     *
+     * 半径传 0：顶栏贴边全宽且四角为直角，`glassPanelRect` 不会像底部菜单那样
+     * 把底边向下延伸（延伸只为藏住屏幕底边的两个圆角）。
+     */
+    private fun updateTopGlassGeometry(
+        windowLeft: Float,
+        windowTop: Float,
+        width: Int,
+        height: Int
+    ) {
+        if (!topGlassActive || width <= 0 || height <= 0) return
+        val location = IntArray(2)
+        getLocationInWindow(location)
+        topGlassRect = glassPanelRect(
+            panelLeft = windowLeft - location[0],
+            panelTop = windowTop - location[1],
+            panelWidth = width.toFloat(),
+            panelHeight = height.toFloat(),
+            cornerRadiusPx = 0f
+        )
+        if (topGlassRect != null) topGlassGeometried = true
+        applyTopGlassRect()
+    }
+
+    /** 与 [applyBottomGlassRect] 同一套测量纪律：玻璃层尺寸由面板矩形决定。 */
+    private fun applyTopGlassRect() {
+        val rect = topGlassRect ?: return
+        val width = rect.right - rect.left
+        val height = rect.bottom - rect.top
+        if (width <= 0 || height <= 0) return
+        val params = topGlass.layoutParams
+        if (params.width != width || params.height != height) {
+            params.width = width
+            params.height = height
+            topGlass.layoutParams = params
+        }
+        if (topGlass.measuredWidth != width || topGlass.measuredHeight != height) {
+            topGlass.measure(
+                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+            )
+        }
+        topGlass.layout(rect.left, rect.top, rect.right, rect.bottom)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        // 父容器布局会按 LayoutParams 把玻璃层摆回 (0,0)，这里按面板矩形复位。
+        applyBottomGlassRect()
+        applyTopGlassRect()
     }
 
     override fun onDetachedFromWindow() {
@@ -439,15 +662,29 @@ class ReadMenu @JvmOverloads constructor(
                 val statusBarHeight = WindowInsets.statusBars
                     .asPaddingValues()
                     .calculateTopPadding()
+                // 顶栏玻璃与底部菜单同一纪律：只有玻璃层真正定位过才让出底色，
+                // 否则会露出一块透明空面板。
+                val topGlassYielded = glassPanelFillYielded(topGlassActive, topGlassGeometried)
+                val topStyle = if (topGlassYielded) {
+                    style.copy(surface = Color.Transparent)
+                } else {
+                    style
+                }
                 Column(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            val pos = coordinates.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
+                            val size = coordinates.size
+                            updateTopGlassGeometry(pos.x, pos.y, size.width, size.height)
+                        }
                 ) {
                     // 状态栏占位（带背景色，衔接顶栏）
                     Spacer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(statusBarHeight)
-                            .background(style.surface)
+                            .background(topStyle.surface)
                     )
                     // Toolbar（书名 + 换源/刷新/缓存 + 三点菜单）
                     ReadMenuTitleBar(
@@ -510,7 +747,7 @@ class ReadMenu @JvmOverloads constructor(
                                 callBack.clearOfflineReviews()
                             }
                         ),
-                        style = style,
+                        style = topStyle,
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (AppConfig.showReadTitleBarAddition) {
@@ -547,7 +784,7 @@ class ReadMenu @JvmOverloads constructor(
                                     true
                                 }
                             ),
-                            style = style,
+                            style = topStyle,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -600,9 +837,15 @@ class ReadMenu @JvmOverloads constructor(
                         pos.x, pos.y,
                         pos.x + size.width, pos.y + size.height
                     )
+                    updateBottomGlassGeometry(pos.x, pos.y, size.width, size.height)
                 },
             shape = RoundedCornerShape(topStart = style.panelRadius, topEnd = style.panelRadius),
-            color = style.surface,
+            // 玻璃层只有真正定位过（拿到面板矩形）才让出底色：没定位就让出会得到一块透明空面板。
+            color = if (glassPanelFillYielded(bottomGlassActive, bottomGlassGeometried)) {
+                Color.Transparent
+            } else {
+                style.surface
+            },
             contentColor = style.primaryText,
             tonalElevation = 0.dp,
             shadowElevation = 8.dp

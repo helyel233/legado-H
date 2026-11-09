@@ -6,14 +6,17 @@ import com.jaredrummler.android.colorpicker.ColorPickerDialog
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
-import io.legado.app.lib.theme.ThemeRuntimeKeys
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
 import io.legado.app.ui.config.compose.SettingChoiceSpec
+import io.legado.app.ui.config.compose.SettingHeaderSpec
 import io.legado.app.ui.config.compose.SettingPageSpec
 import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSliderSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.EXPLORE_GLASS_BOTTOM_BAR_KEYS
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_SOLID
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_DEFAULT
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_SCALE_MAX
@@ -31,16 +34,22 @@ import java.util.Locale
  *
  * 材质样式（无玻璃 / 透明玻璃 / 磨砂玻璃）是底栏 solid/glass/frosted 同一套自动档的
  * **唯一事实来源**：底栏渲染读同一解析（resolveExploreGlassMode），切档后返回主界面
- * 即对底栏生效。选一档即套用 GlassMaterialPreset 里该档的完整参数（模糊、着色、壳层、
- * 描边、色散/折射），下面四个倍率滑杆在预设原值之上继续微调，切档不清空微调值。
+ * 即对底栏生效。每一档都对应滑杆空间里的一个**固定坐标**（[GlassMaterialPreset.presetPoint]：
+ * 强度 + 四个倍率）：选一档会把整组数写回偏好，于是「预设」与「滑杆数值」不再是两套状态。
+ * 之后拖动任一滑杆，当前值就偏离该档坐标，行尾胶囊改显示「自定义」
+ * （[GlassMaterialPreset.matchesPreset]，不新增可选值、不新增偏好键）。
  * 顶栏毛玻璃与发现页行渲染共用本页的档位与强度设置；1.25.x 的「跟随底栏材质」
  * 开关已移除，升级用户由启动时的一次性迁移固化档位与强度。
  * 1.25.4 的独立总开关已从 UI 移除，由「无玻璃」档承担关闭职责；旧值仍被读取迁移，
  * 避免升级后原本关闭毛玻璃的用户被默认档重新打开。
  *
- * 强度滑杆在 API 33+ 上会同时把取值写入 frostedGlassLevel / liquidGlassLevel：
- * 液态玻璃管线（发现页行 / 底栏 / 顶栏）的强度来自这两个全局键，日夜间分离仅由
- * 静态兜底管线（API < 33）使用。
+ * 页面顶部的实时预览与渲染层共用同一个材质入口（[GlassMaterialPreset.current]），
+ * 拖任何一个滑杆都会立刻重建预览背景，不需要返回发现页比对。
+ *
+ * 强度滑杆只写两个全局键 frostedGlassLevel / liquidGlassLevel：
+ * 液态玻璃管线（发现页行 / 底栏 / 顶栏）的强度全部来自这两个键，
+ * 磨砂档读前者、其余档读后者（[GlassMaterialPreset.levelFor]）。
+ * 旧日夜间键 themeExploreGlassBlur / Night 仅保留给启动迁移读取，刷杆不再写它们。
  *
  * 注意：构建搜索索引时会 new 一个未 attach 的实例调 [buildSpec]，
  * 因此 [buildPageSpec] 只依赖 [ctx] 与静态常量，不碰 Activity / View / 生命周期。
@@ -66,10 +75,39 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
             option.copy(description = descriptions.getOrNull(index))
         }
         val hardwareSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        val liquidStrengthSync = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        val hardwareBlur = booleanSetting(PreferKey.exploreGlassHardwareBlur, true)
         val strokeColorRaw = stringSetting(PreferKey.glassStrokeColor, "")
+        // 材质唯一入口：预览与发现页行 / 底栏 / 顶栏读同一个函数产物。
+        // 强度滑杆显示的就是该档渲染层实际生效的强度（磨砂档读 frosted，其余读 liquid）。
+        val material = GlassMaterialPreset.current(mode)
+        val frostedLevel = intSetting(PreferKey.frostedGlassLevel, AppConfig.frostedGlassLevel)
+        val liquidLevel = intSetting(PreferKey.liquidGlassLevel, AppConfig.liquidGlassLevel)
+        val scales = GlassMaterialPreset.Scales(
+            blur = scaleSetting(PreferKey.exploreGlassBlurScale),
+            tint = scaleSetting(PreferKey.exploreGlassTintScale),
+            shell = scaleSetting(PreferKey.exploreGlassShellScale),
+            stroke = scaleSetting(PreferKey.exploreGlassStrokeScale)
+        )
+        val level = GlassMaterialPreset.levelFor(mode, frostedLevel, liquidLevel).coerceIn(0, 100)
+        // 当前滑杆是否仍落在该档的预设坐标上；偏离即「自定义」，与弹窗勾选互不影响。
+        val presetMatched = GlassMaterialPreset.matchesPreset(mode, frostedLevel, liquidLevel, scales)
+        val previewPipeline = exploreGlassPreviewPipelineNow(
+            context = ctx,
+            mode = mode,
+            hardwareBlurPref = hardwareBlur
+        )
+        val previewSignature = ExploreGlassBackdrop.configSignature(ctx)
         return SettingPageSpec(
             titleRes = titleRes,
+            header = SettingHeaderSpec {
+                ExploreGlassPreview(
+                    signature = previewSignature,
+                    mode = mode,
+                    material = material,
+                    level = level,
+                    pipeline = previewPipeline
+                )
+            },
             sections = listOf(
                 SettingSectionSpec(
                     title = str(R.string.explore_glass_section_effect),
@@ -79,9 +117,26 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                             title = str(R.string.explore_glass_effect_mode),
                             summary = str(R.string.explore_glass_effect_mode_summary),
                             options = options,
-                            selectedValue = mode,
-                            onSelected = {
-                                updateStringSetting(PreferKey.exploreGlassEffectMode, it)
+                            // 偏离预设坐标时传空值：弹窗里不再勾选任何一档（与「自定义」
+                            // 一致），再点同一档就是把它重置回该档的固定滑杆数值。
+                            selectedValue = if (presetMatched) mode else "",
+                            // 选一档 = 写入该档的固定滑杆坐标（强度 + 四个倍率），
+                            // 于是「预设」在界面上有唯一确定的滑杆位置；
+                            // 之后拖动任一滑杆即偏离坐标，胶囊显示「自定义」。
+                            onSelected = { next ->
+                                val point = GlassMaterialPreset.presetPoint(next)
+                                updateIntSetting(PreferKey.frostedGlassLevel, point.level)
+                                updateIntSetting(PreferKey.liquidGlassLevel, point.level)
+                                updateIntSetting(PreferKey.exploreGlassBlurScale, point.scales.blur)
+                                updateIntSetting(PreferKey.exploreGlassTintScale, point.scales.tint)
+                                updateIntSetting(PreferKey.exploreGlassShellScale, point.scales.shell)
+                                updateIntSetting(PreferKey.exploreGlassStrokeScale, point.scales.stroke)
+                                updateStringSetting(PreferKey.exploreGlassEffectMode, next)
+                            },
+                            labelOverride = if (presetMatched) {
+                                null
+                            } else {
+                                str(R.string.explore_glass_mode_custom)
                             },
                             searchKeys = listOf(
                                 "材质", "无玻璃", "透明玻璃", "磨砂玻璃", "自动档",
@@ -89,30 +144,30 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                             )
                         ),
                         SettingSliderSpec(
-                            key = ThemeRuntimeKeys.themeExploreGlassBlur(),
+                            key = PreferKey.frostedGlassLevel,
                             title = str(R.string.explore_glass_level),
                             summary = str(R.string.explore_glass_level_summary),
-                            value = intSetting(
-                                ThemeRuntimeKeys.themeExploreGlassBlur(),
-                                ExploreGlassBackdrop.LEVEL_DEFAULT
-                            ).coerceIn(0, 100),
+                            value = level,
                             valueRange = 0..100,
                             enabled = slidersEnabled,
                             valueFormatter = { "$it%" },
                             onValueChange = {
-                                updateIntSetting(ThemeRuntimeKeys.themeExploreGlassBlur(), it)
-                                if (liquidStrengthSync) {
-                                    // API 33+ 液态管线（发现页行 / 底栏 / 顶栏）强度同源：
-                                    // 两个液态强度键同写同值，改滑杆即时驱动底栏。
-                                    updateIntSetting(PreferKey.frostedGlassLevel, it)
-                                    updateIntSetting(PreferKey.liquidGlassLevel, it)
-                                }
+                                // 两个全局强度键同写同值：底栏 / 顶栏 / 发现页行三处
+                                // 走的都是 GlassMaterialPreset.current，不会读到不同强度。
+                                updateIntSetting(PreferKey.frostedGlassLevel, it)
+                                updateIntSetting(PreferKey.liquidGlassLevel, it)
                             },
-                            searchKeys = listOf("强度", "毛玻璃效果", "透明度", "glass level")
+                            searchKeys = listOf(
+                                "强度", "毛玻璃效果", "透明度", "glass level",
+                                // 旧滑杆键仍可被搜索定位（数值已迁移到两个全局键）
+                                PreferKey.themeExploreGlassBlur,
+                                PreferKey.themeExploreGlassBlurN
+                            )
                         ),
                         strokeColorAction(strokeColorRaw = strokeColorRaw),
                         scaleSlider(
                             key = PreferKey.exploreGlassBlurScale,
+                            value = scales.blur,
                             titleRes = R.string.explore_glass_blur_scale,
                             summaryRes = R.string.explore_glass_blur_scale_summary,
                             enabled = slidersEnabled,
@@ -120,6 +175,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                         ),
                         scaleSlider(
                             key = PreferKey.exploreGlassShellScale,
+                            value = scales.shell,
                             titleRes = R.string.explore_glass_shell_scale,
                             summaryRes = R.string.explore_glass_shell_scale_summary,
                             enabled = slidersEnabled,
@@ -127,6 +183,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                         ),
                         scaleSlider(
                             key = PreferKey.exploreGlassTintScale,
+                            value = scales.tint,
                             titleRes = R.string.explore_glass_tint_scale,
                             summaryRes = R.string.explore_glass_tint_scale_summary,
                             enabled = slidersEnabled,
@@ -134,6 +191,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                         ),
                         scaleSlider(
                             key = PreferKey.exploreGlassStrokeScale,
+                            value = scales.stroke,
                             titleRes = R.string.explore_glass_stroke_scale,
                             summaryRes = R.string.explore_glass_stroke_scale_summary,
                             enabled = slidersEnabled,
@@ -246,9 +304,15 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
 
     override fun onDialogDismissed(dialogId: Int) = Unit
 
-    /** 四个倍率滑杆同构：范围、默认值、限幅、格式化与写入路径完全一致。 */
+    /** 倍率键的当前值（统一限幅，预览坐标与滑杆显示读同一份）。 */
+    private fun scaleSetting(key: String): Int =
+        intSetting(key, EXPLORE_GLASS_SCALE_DEFAULT)
+            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX)
+
+    /** 四个倍率滑杆同构：范围、限幅、格式化与写入路径完全一致。 */
     private fun scaleSlider(
         key: String,
+        value: Int,
         titleRes: Int,
         summaryRes: Int,
         enabled: Boolean,
@@ -257,8 +321,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
         key = key,
         title = str(titleRes),
         summary = str(summaryRes),
-        value = intSetting(key, EXPLORE_GLASS_SCALE_DEFAULT)
-            .coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
+        value = value.coerceIn(EXPLORE_GLASS_SCALE_MIN, EXPLORE_GLASS_SCALE_MAX),
         valueRange = EXPLORE_GLASS_SCALE_MIN..EXPLORE_GLASS_SCALE_MAX,
         enabled = enabled,
         valueFormatter = { "$it%" },
@@ -268,10 +331,11 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
 
     private companion object {
         /**
-         * 恢复默认时清除的键：与渲染层读取键、即时重绑监听键共用
-         * [EXPLORE_GLASS_SETTING_KEYS] 这一份来源（全局细项 + 档位 +
-         * 强度的日间与夜间两个键 + 描边色），新增设置项不会漏清、也不会漏监听。
+         * 恢复默认时清除的键：页面键（档位、描边色、四个倍率、渲染开关、旧日夜间强度）
+         * 与底栏 / 顶栏 / 行共用的两个全局强度键，两个集合都来自
+         * [ExploreGlassBackdrop] 的唯一键声明，新增设置项不会漏清。
          */
-        val resetKeys: List<String> = EXPLORE_GLASS_SETTING_KEYS.toList()
+        val resetKeys: List<String> =
+            (EXPLORE_GLASS_SETTING_KEYS + EXPLORE_GLASS_BOTTOM_BAR_KEYS).toList()
     }
 }

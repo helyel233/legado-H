@@ -1,5 +1,32 @@
 # 更新日志
 
+## 1.25.14 版（2026-11-09）
+
+本版把玻璃材质从「发现页专属」升级为**全 App 统一接入**：新增 `ui/glass` 包作为跨页面玻璃入口（显式采样域 + 纯函数判定表），侧边导航面板、阅读页菜单、选择模式底栏、覆盖式弹层等宿主接入同一条「液态 AGSL → 硬件高斯 → 软件模糊 → 实底壳」四级降级管线；同时完成两笔材质口径收拢——四个倍率滑杆（模糊/着色/壳层/描边）自 1.25.12 起改为**全局单一来源**（`GlassMaterialPreset.current()` 同一输出喂给底栏、顶栏、发现页行，不再各宿主各算一份），预设参数自 1.25.14 起按**四条可见维度拉开透明玻璃与磨砂玻璃的差异**（模糊 3–6dp vs 20–32dp、白色着色 0.004–0.014 vs 0.18–0.28、色散 0.24–0.36 vs 0.04–0.08、折射几何高 24–36dp/偏 46–72dp vs 高 12–15dp/偏 20–32dp），旧取值下两档切换真机差异不足的问题就此解决，且不新增任何偏好键。方案全文见 `docs/glass-appwide-adoption-plan.md`。
+
+### 新功能
+
+- **跨页面玻璃入口 `ui/glass` 包**：`GlassSamplingDomain`（WALLPAPER / PANEL / CONTENT，调用方显式声明宿主视觉后方是什么）→ `glassBackdropSource` 纯函数表（壁纸域 → 壁纸位图 drawable；面板域 → 保持实底壳；内容域 → 兄弟子树采样），结构上堵死「面板内折射用户看不见的壁纸」「行内录制 View 子树」两类错误管线。`GlassSurface` 提供 `panelBackground` 等 drawable 入口（非壁纸域返回 null），`GlassPanel` 提供 Compose `AndroidView` 桥（签名含材质 signature + 采样域 + 圆角）。
+- **接入点**：主界面侧边导航面板（液态玻璃 + 描边，自定义侧边背景图时自动不接）、阅读页菜单顶部 / 底部玻璃（`StableLiquidGlassView` 兄弟子树采样，显式测量纪律 + 让位判定）、`ModernActionPopup` 覆盖式弹层（玻璃层后挂、尺寸回填后才让底色）、书架选择模式 `SelectActionBar`（壁纸域 drawable）、书库搜索页 / 「我的」页 / 设置规格页等 Compose 页面根背景（背景图可用时透出壁纸层，玻璃采样源才真实）。
+- **设置页实时预览**：`ExploreGlassConfigFragment` 新增预览面板——壁纸底上并排放一条书源名行与一颗底栏药丸，两块玻璃走与生产完全相同的入口与降级判定（`ExploreGlassPreviewPipeline` 纯函数逐条同源于 `ExploreGlassBackdrop.glassDrawable()`），拖任何滑杆即时重建；材质参数以十进制明细列出。预设选择改为「坐标化」：选中某档即把该档参数回写进各倍率键，偏离后自动显示「自定义」。
+- **重置范围归位**：设置页「重置发现页玻璃」只清发现页自己的键 + 底栏两个强度键（1.25.12 后强度已收拢为全局口径），不再误清其他页面偏好。
+
+### 修复
+
+- **`RowGlassLiquidRenderer.ensureNodePosition`**：`beginRecording` 不设置 RenderNode 包围盒，空包围盒下 `drawRenderNode` 静默不画——本版补上节点尺寸定位，液态行首帧即正确出图。
+- **发现页行滚动错位**：RecyclerView 的 change 动画用 translation 移动 item，不触发 layout / scroll 回调，玻璃行背景会与壁纸错位；新增 `GlassPositionTracker` 在 `OnPreDrawListener` 逐帧比对屏幕坐标，位置变化即让玻璃层重采样。
+- **Android 5.x 崩溃（P1）**：`MainActivity` 侧边导航玻璃两处 `View.setForeground` 调用（API 23+）无 SDK 守卫，minSdk 21 上切页即 `NoSuchMethodError`；两处均已加 `Build.VERSION.SDK_INT >= M` 守卫（描边只在玻璃激活即 API 33+ 时设置，低版本跳过清理即可）。
+
+### 实现要点
+
+- 材质唯一来源仍是 `GlassMaterialPreset`：新增 `MAX_TINT_ALPHA / MAX_SHELL_ALPHA / MAX_STROKE_ALPHA` 上限收进 `scaled()`、`solidSurfaceFillColor` / `solidShellStroke` 实底壳兜底纯函数、`DEFAULT_FROSTED_LEVEL=70 / DEFAULT_LIQUID_LEVEL=68` 默认档。
+- 让位纪律三处统一为纯函数：`glassPanelFillYielded`（阅读页菜单）/ `sidebarGlassFillYielded`（侧边面板）/ `overlayGlassFillYielded`（弹层）——玻璃层拿到有效几何前不透明面板不让底色，杜绝「透明空面板一帧闪现」（1.25.11 菜单背景消失的同类形态在三个接入点全部前置拦截）。
+- `LiquidGlassSpec` / `contentLiquidGlassSpec` 把内容域液态启用判定（无采样源 / API < 33 / 低内存 / 墨水屏四项否决）与像素换算收拢为纯函数，四个接入点不再各抄一份。
+
+### 单测
+
+新增 4 个纯 JVM 测试文件：`GlassSamplingDomainTest`（采样域 → 来源映射表）、`GlassSurfaceAvailabilityTest`（入口可用性判定含设备降级顺序）、`LiquidGlassSpecTest`（液态参数换算 / 四项否决 / 面板矩形 / 三处让位纪律 / 侧边资格）、`ExploreGlassPreviewPipelineTest`（预览管线判定与生产降级矩阵同源）；与既有玻璃测试（`RowGlassLiquidSpecTest` 等改造后）合计 119 例全绿。移除随 rim 叠加层一并退役的 `RowRimSpectrum` 及其测试。
+
 ## 1.25.11 版（2026-11-09）
 
 本版修复 1.25.10 发现页书源名行液态玻璃「同一档参数却比底栏更白、更厚」的观感不一致。根因有两处：着色器 tint 被钉成 0、改由行内额外 `tintPaint` 层负责并叠加行可见度增益（等于双重上色）；采样源用已预模糊的 `blurred` 位图，GPU 不再模糊，但主题背景模糊偏好仍会二次作用（等于双重模糊）。本版让液态路径与底栏逐层 1:1：着色器负责 tint、GPU 高斯负责模糊、tint/rim/A1 叠加层在液态成功时全部让位。静态降级管线（API < 33）保持原样，行可见度标定只服务于它。
