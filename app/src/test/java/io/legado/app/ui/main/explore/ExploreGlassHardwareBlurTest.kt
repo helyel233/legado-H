@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * 毛玻璃三档材质、倍率与半径口径的确定性单测。
  *
- * 1.25.12 起材质只有一份来源：[GlassMaterialPreset]（档位预设 × 强度 × 四个倍率 ×
+ * 1.26.1 起材质只有一份来源：[GlassMaterialPreset]（档位预设 × 强度 × 四个倍率 ×
  * API 33 以下补偿）。底栏、顶栏、发现页行全部读同一个 `GlassMaterialPreset.current()`，
  * 行内不再有增益、rim 高光或拟液态叠加层。口径错（档位公式写反、误乘软件管线的
  * 1.4 等效系数、漏乘 density、限幅失效、倍率只进某一处宿主、旧值迁移丢失）都不会
@@ -23,7 +23,7 @@ class ExploreGlassHardwareBlurTest {
      * 绝不引用 ExploreGlassConfigKeys / EXPLORE_GLASS_*。这样下面的逐值比较才是
      * 「生产声明 vs 独立基准」，而不是由同一份声明派生出的集合代数恒等式。
      *
-     * 1.25.12 起 [readExploreGlassConfig] 只读非材质键；材质键（两个强度 + 四个倍率）
+     * 1.26.1 起 [readExploreGlassConfig] 只读非材质键；材质键（两个强度 + 四个倍率）
      * 由 [GlassMaterialPreset.current] 统一读取，因此两份基准分开手写。
      */
     private val expectedReadKeys = setOf(

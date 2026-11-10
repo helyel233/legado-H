@@ -14,7 +14,7 @@ import kotlin.math.min
  * 于是行高标定、uniform 口径、降级矩阵都能在本地 JVM 单测里锁死，
  * 不需要 Robolectric、模拟器或真机。
  *
- * ## 与底栏的关系（1.25.12）
+ * ## 与底栏的关系（1.26.1）
  *
  * 行内不再是「发现页自己的一套观感 + 系数」：材质只有一份来源——
  * [GlassMaterialPreset.Params]（档位预设 × 强度 × 四个倍率 × API 33 以下补偿）。

@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    ——与底栏库完全相同的「先着色器、后高斯」链路（见 [ensureEffect]）；
  * 4. `canvas.drawRenderNode(node)`，再剪到行圆角内。
  *
- * 1.25.12 起链路与材质参数都向底栏看齐：tint 由着色器负责（`material.tintAlpha`），
+ * 1.26.1 起链路与材质参数都向底栏看齐：tint 由着色器负责（`material.tintAlpha`），
  * 模糊由 GPU 对 raw 位图做真高斯（sigma = 该档 blurDp × density，与底栏同段限幅），
  * 不再使用预先软件模糊的 `blurred` 位图（那会与主题背景模糊叠加成双倍模糊）。
  *

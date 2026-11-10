@@ -2363,7 +2363,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     /*
      * 全局毛玻璃的四个倍率（0-200，100 = 预设原值）。
-     * 1.25.12 起由 GlassMaterialPreset.current() 统一生效：底栏、顶栏、发现页行
+     * 1.26.1 起由 GlassMaterialPreset.current() 统一生效：底栏、顶栏、发现页行
      * 读同一份「预设 × 倍率」结果。此前只有发现页行消费它们，所以同一档参数下
      * 底栏与行必然不一致——倍率本身就是不一致的来源之一。
      */

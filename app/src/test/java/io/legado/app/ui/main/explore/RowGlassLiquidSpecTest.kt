@@ -17,7 +17,7 @@ import org.junit.Test
  * - 降级矩阵漏一条 → 某类设备上出现黑块 / 空白行 / 崩溃。
  *
  * 因此这里全部用具体数值与逐条分支断言，不使用「非空即通过」这类恒真写法。
- * 1.25.12 起渲染器直接消费 [GlassMaterialPreset.Params]，不再有行级 `Style` 中间层。
+ * 1.26.1 起渲染器直接消费 [GlassMaterialPreset.Params]，不再有行级 `Style` 中间层。
  */
 class RowGlassLiquidSpecTest {
 
@@ -429,7 +429,7 @@ class RowGlassLiquidSpecTest {
 /**
  * 行内 RenderNode 包围盒（[rowGlassNodeBounds]）。
  *
- * 这是 1.25.13 修复的回归锁：`beginRecording(w, h)` 只定录制画布大小、不定 node
+ * 这是 1.26.1 修复的回归锁：`beginRecording(w, h)` 只定录制画布大小、不定 node
  * 位置，位置为空时 `drawRenderNode` 静默不画却仍返回成功——tint 让位、行内只剩
  * 壳层与描边，透出清晰壁纸。修复点是录制前 `setPosition(0, 0, w, h)`（底栏库
  * `onSizeChanged` 同一步），因此这里断言「行尺寸 → 非空且锚在原点的包围盒」。
