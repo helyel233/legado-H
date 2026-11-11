@@ -22,6 +22,8 @@ import io.legado.app.help.IntentData
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isLocal
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.recycler.UpLinearLayoutManager
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyNavigationBarMargin
@@ -107,6 +109,8 @@ class SearchContentActivity :
     }
 
     private fun initSearchView(requestFocus: Boolean) {
+        // 搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         searchView.applyTint(primaryTextColor)
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.search)

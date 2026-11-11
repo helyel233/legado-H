@@ -39,6 +39,7 @@ import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.utils.sendToClip
@@ -110,6 +111,8 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
         query = savedInstanceState?.getString("query").orEmpty()
         binding.run {
             titleBar.title = getString(R.string.highlight_rule_manage)
+            // 搜索栏在 TitleBar 下方、根布局无底色，背后是主题壁纸
+            searchView.glassDomain = GlassSamplingDomain.WALLPAPER
             searchView.maxWidth = Int.MAX_VALUE
             searchView.findViewById<TextView>(androidx.appcompat.R.id.search_src_text).filters =
                 arrayOf(InputFilter.LengthFilter(512))

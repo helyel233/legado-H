@@ -5312,7 +5312,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (binding.readAloudPlayerPanel.isFullPanelActive()) {
             applyReadAloudPlayerSystemBars()
         } else {
-            WindowCompat.setDecorFitsSystemWindows(window, true)
             upSystemUiVisibility(isInMultiWindow, !menuLayoutIsVisible, bottomDialog > 0)
             upNavigationBarColor()
         }
@@ -5330,6 +5329,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     @Suppress("DEPRECATION")
     private fun applyReadAloudPlayerSystemBars() {
+        windowForcedEdgeToEdge = true
         WindowCompat.setDecorFitsSystemWindows(window, false)
         binding.navigationBar.visibility = View.GONE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

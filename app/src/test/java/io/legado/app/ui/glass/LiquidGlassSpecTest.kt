@@ -226,6 +226,180 @@ class LiquidGlassSpecTest {
 
     // endregion
 
+    // region 阅读页导航条让位与玻璃底边外推
+
+    /**
+     * 玻璃底部菜单激活：实色导航条让位隐藏。
+     *
+     * 第五轮定稿：玻璃层把底边折射区整段推出屏幕后，页面导航条区域没有内容、
+     * 玻璃盖上去就是连续磨砂到屏幕底——条带无论怎么画都追不上活采样
+     * （前四轮真机四连败），所以玻璃激活时直接不画。
+     */
+    @Test
+    fun navStripYieldsWhenGlassMenuActive() {
+        assertTrue(readerNavStripYieldsToGlass(glassActive = true, menuVisible = true))
+    }
+
+    /** 玻璃未激活（solid 档 / 降级）：条带保留主题底栏色。 */
+    @Test
+    fun navStripKeepsPaintingWithoutGlass() {
+        assertEquals(false, readerNavStripYieldsToGlass(glassActive = false, menuVisible = true))
+    }
+
+    /** 菜单已隐藏但玻璃尚未随 runMenuOut 复位：条带恢复显示。 */
+    @Test
+    fun navStripRestoresWhenMenuHidden() {
+        assertEquals(false, readerNavStripYieldsToGlass(glassActive = true, menuVisible = false))
+    }
+
+    /**
+     * 底边外推量取「圆角与折射区高度」的较大者：圆角是观感需要，折射区高度是
+     * 底层库在玻璃 View 自身底边施加折射/色散/边缘高光的范围——贴屏底菜单必须
+     * 整段推出屏幕，否则该区域留在屏内形成偏亮色带。负值按 0 处理。
+     */
+    @Test
+    fun bottomEdgeExtensionTakesMaxOfRadiusAndRefraction() {
+        assertEquals(80f, glassBottomEdgeExtensionPx(cornerRadiusPx = 80f, refractionHeightPx = 56f))
+        assertEquals(100f, glassBottomEdgeExtensionPx(cornerRadiusPx = 80f, refractionHeightPx = 100f))
+        assertEquals(28f, glassBottomEdgeExtensionPx(cornerRadiusPx = 28f, refractionHeightPx = 0f))
+        assertEquals(0f, glassBottomEdgeExtensionPx(cornerRadiusPx = -5f, refractionHeightPx = -5f))
+    }
+
+    /** 玻璃矩形底边按 bottomEdgeZonePx 外推：折射区整段离屏，屏内只剩干净磨砂。 */
+    @Test
+    fun panelRectExtendsBottomByEdgeZoneBeyondRadius() {
+        val rect = glassPanelRect(
+            panelLeft = 0f,
+            panelTop = 1800f,
+            panelWidth = 1080f,
+            panelHeight = 300f,
+            cornerRadiusPx = 28f,
+            bottomEdgeZonePx = 100f
+        )!!
+        assertEquals(1800, rect.top)
+        assertEquals(2200, rect.bottom) // 2100 + 100（外推量 > 圆角，取外推量）
+    }
+
+    /** 外推量小于圆角时维持旧的圆角外推行为，不缩小玻璃高度。 */
+    @Test
+    fun panelRectBottomExtensionFallsBackToRadius() {
+        val rect = glassPanelRect(
+            panelLeft = 0f,
+            panelTop = 1800f,
+            panelWidth = 1080f,
+            panelHeight = 300f,
+            cornerRadiusPx = 28f,
+            bottomEdgeZonePx = 10f
+        )!!
+        assertEquals(2128, rect.bottom) // 圆角 28 赢过外推 10
+    }
+
+    /** 默认外推量 0：顶部菜单等非贴底用法行为不变。 */
+    @Test
+    fun panelRectDefaultEdgeZoneKeepsOldGeometry() {
+        val rect = glassPanelRect(0f, 0f, 1080f, 176f, 0f)!!
+        assertEquals(176, rect.bottom)
+    }
+
+    // endregion
+
+    // region 玻璃菜单窗口 e2e 判定（第六轮根因修复）
+
+    /**
+     * 玻璃菜单激活且非分屏：窗口必须切 edge-to-edge。
+     *
+     * 第六轮真机根因：常规系统条带路径只有 LAYOUT_FULLSCREEN 没有
+     * LAYOUT_HIDE_NAVIGATION，decor 内容被布局在导航栏上方，屏幕底部导航栏
+     * 高度的一段不在应用视图树内，窗口级 navColor 撕膜是唯一画手——面板 /
+     * 玻璃层 / App 内条带都够不到（前五轮配色全部无效的根因）。修法与朗读
+     * 全面板同一先例：玻璃菜单激活时切 e2e，玻璃层才能真正铺到屏幕底。
+     */
+    @Test
+    fun glassMenuWantsE2eWhenActive() {
+        assertTrue(readerGlassMenuWantsE2e(isInMultiWindow = false, anyGlassMenuActive = true))
+    }
+
+    /** 分屏 / 多窗口：窗口尺寸由系统分派，不动系统条带，走 navColor 近似配色回退。 */
+    @Test
+    fun glassMenuKeepsBarsInMultiWindow() {
+        assertEquals(
+            false,
+            readerGlassMenuWantsE2e(isInMultiWindow = true, anyGlassMenuActive = true)
+        )
+    }
+
+    /** 玻璃未激活（solid 档 / 降级 / 菜单未开）：保持常规条带路径。 */
+    @Test
+    fun nonGlassMenuKeepsLegacyBars() {
+        assertEquals(
+            false,
+            readerGlassMenuWantsE2e(isInMultiWindow = false, anyGlassMenuActive = false)
+        )
+    }
+
+    // endregion
+
+    // region 系统导航栏底色（Android 14 及以下非 e2e 设备）
+
+    /**
+     * 回归锁：磨砂档默认强度（level 70 → 着色 0.25）在近黑页面上必须复现 (65,64,65)。
+     *
+     * 65/64/65 是 1.26.1 真机截图逐行采样到的面板内部常色；导航栏画成同一值，
+     * 两层才合成一层。公式是「白色按 tintAlpha 叠在页面背景色上」，偏移 1 即重新开裂。
+     */
+    @Test
+    fun navBarColorMatchesFrostedPanelOnDarkPage() {
+        assertEquals(
+            0xFF414041.toInt(),
+            readerGlassNavBarColor(tintAlpha = 0.25f, backdropColor = 0xFF010001.toInt())
+        )
+    }
+
+    /** 透明档（level 68 → 着色 0.0108）：导航栏几乎等同页面底色，不再是偏白实底。 */
+    @Test
+    fun navBarColorNearlyPageColorForTransparentGlass() {
+        val color = readerGlassNavBarColor(tintAlpha = 0.0108f, backdropColor = 0xFF010001.toInt())
+        assertEquals(255, (color ushr 24) and 0xFF)
+        val red = (color shr 16) and 0xFF
+        val green = (color shr 8) and 0xFF
+        val blue = color and 0xFF
+        assertTrue("透明档导航栏必须贴近近黑页面底色，实测 $red/$green/$blue", red <= 8)
+        assertTrue("透明档导航栏必须贴近近黑页面底色，实测 $red/$green/$blue", green <= 8)
+        assertTrue("透明档导航栏必须贴近近黑页面底色，实测 $red/$green/$blue", blue <= 8)
+    }
+
+    /** 浅色页面（羊皮纸 / 白底）：磨砂导航栏随之变亮，图标深浅由宿主按亮度重设。 */
+    @Test
+    fun navBarColorLightensOnLightPage() {
+        assertEquals(
+            0xFFF4F3EE.toInt(),
+            readerGlassNavBarColor(tintAlpha = 0.25f, backdropColor = 0xFFF0EFE8.toInt())
+        )
+    }
+
+    /** 边界：着色 0 取页面底色、着色 1 取纯白、越界值收敛到 [0,1]。 */
+    @Test
+    fun navBarColorClampsTintAlpha() {
+        assertEquals(
+            0xFF336699.toInt(),
+            readerGlassNavBarColor(tintAlpha = 0f, backdropColor = 0xFF336699.toInt())
+        )
+        assertEquals(
+            0xFFFFFFFF.toInt(),
+            readerGlassNavBarColor(tintAlpha = 1f, backdropColor = 0xFF336699.toInt())
+        )
+        assertEquals(
+            0xFFFFFFFF.toInt(),
+            readerGlassNavBarColor(tintAlpha = 2f, backdropColor = 0xFF336699.toInt())
+        )
+        assertEquals(
+            0xFF336699.toInt(),
+            readerGlassNavBarColor(tintAlpha = -1f, backdropColor = 0xFF336699.toInt())
+        )
+    }
+
+    // endregion
+
     // region 侧边面板让出底色判定
 
     /** 玻璃激活且玻璃层已测量：面板让出底色。 */

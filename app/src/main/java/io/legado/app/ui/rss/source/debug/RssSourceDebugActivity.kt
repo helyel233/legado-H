@@ -15,6 +15,8 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyThemedFilletControlBackground
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.setEdgeEffectColor
@@ -87,6 +89,8 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
     }
 
     private fun initSearchView() {
+        // 搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         openOrCloseHelp(true)
         searchView.onActionViewExpanded()
         searchView.isSubmitButtonEnabled = true

@@ -1,5 +1,35 @@
 # 更新日志
 
+## 1.27.1 版（2026-11-11）
+
+本版完成全 App 玻璃材质接入的 **P3 顶部菜单 + P4 面板与弹层** 阶段：把液态玻璃 / 硬件高斯 / 实底壳四档降级管线从「发现页 + 底栏 + 顶栏」扩展到阅读页（顶/底菜单、搜索菜单、漫画菜单、AI 浮窗与章节摘要浮窗）、订阅页（顶部浮层 + 订阅源卡片 + RSS 阅读标题栏）、共享搜索栏、主界面侧边导航面板、统一弹层宿主 `ModernActionPopup`；内容域复用顶栏同款 `StableLiquidGlassView` + 兄弟子树采样（`selfOrAncestorContains` 守卫），壁纸域复用 `GlassSurface.rowBackground/panelBackground` 同源 drawable；顶栏 `TopBarGlassSpec` 收拢为跨包 `LiquidGlassSpec` 单一来源，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。
+
+### 新功能
+
+- **内容域（兄弟子树采样，API33+ 液态、否则硬件高斯/实底壳）**：阅读页顶部菜单、搜索菜单底部面板、漫画阅读菜单（底部控制条 + 顶部标题栏）、阅读页 AI 浮窗与章节摘要浮窗、订阅页顶部浮层（`RssFragment.MainTopBarView` 补齐同型缺口、Web 渲染模式按无源降级、classic 布局显式解绑）——与发现页行/底栏/顶栏同一 `contentLiquidGlassSpec` 启用判定与材质入口。
+- **壁纸域（复用 `GlassSurface` 同源 drawable + `GlassPositionTracker` 绝对坐标对齐）**：订阅源卡片（`RssAdapter.item_rss`，1–3 列宫格/单列列表同套，墨水屏/低内存回退 `bg_ai_surface_panel`）、RSS 阅读页标题栏（`ReadRssActivity`，贴边全宽矩形、无玻璃档/墨水屏早退）。
+- **面板整体玻璃化**：`ModernActionPopup`（发现页弹层/各页行菜单统一宿主，一次接入落掉 P4 弹层项；无 scrim 故无补偿层）、主界面侧边导航面板（整体玻璃化 + 0.42 scrim 补偿层，自定义侧边背景图时按 `sidebarGlassSourceAllowed` 否决）。
+- **共享搜索栏 `SearchView` 玻璃化**：背景解析收进控件内部（`updateSearchBackground`），显式 `glassDomain`（默认 PANEL、由各宿主 `applyGlassDomain` 声明壁纸域），已接入 RSS/发现/我的/搜索/导入/搜索内容/书架管理/各类调试页等 12+ 宿主；弹窗窗口与已改 Compose 顶栏的源管理页明确排除。
+- **架构收口**：`TopBarGlassSpec`/`topBarGlassSpec` 删除，改为跨包 `io.legado.app.ui.glass.LiquidGlassSpec` + `liquidGlassSpec`/`contentLiquidGlassSpec`（启用判定纯函数：无合法源 / API<33 / 低内存 / 墨水屏四项否决、solid 档自身返回 null），顶栏与阅读页菜单共用同一份参数与降级。
+
+### 修复
+
+- **阅读页底部菜单玻璃/磨砂档背景消失（真机）**：玻璃层以 `LayoutParams(0,0)` 加入致父容器测不到尺寸、内部玻璃子 View 停在 0×0 整层空绘制——定位时把 `LayoutParams` 同步为目标尺寸并按 `EXACTLY` 测量一次；面板只在「玻璃已激活且完成一次定位」时让出底色（纯函数 `glassPanelFillYielded`）。
+- **阅读页底部菜单导航栏区域（真机，第六轮 e2e 定稿）**：decor 内容被布局在导航栏上方，菜单下方一段永远够不到——玻璃激活且非分屏时窗口切 edge-to-edge（纯函数 `readerGlassMenuWantsE2e` 判定 + 单测），玻璃层与面板延伸到屏底由真实磨砂覆盖；菜单关闭重设旗标与 navColor。
+- **「我的」页/全库搜索页错误管线**：原先铺不透明页色盖住壁纸（接玻璃采到看不见的壁纸）→ 背景图可用且非墨水屏时页面背景透明（纯函数 `glassPageBackgroundColor`）。
+- **订阅页顶栏缺口**：`MainTopBarView` 同型控件只在书架/发现页接线，订阅页从未接 → 补齐 `fl_rss_content` 兄弟子树采样，Web 渲染/空态/列表切换后重算。
+
+### 实现要点
+
+- 让出底色纪律统一为纯函数 `glassPanelFillYielded`（阅读页菜单/漫画/搜索菜单）/ `sidebarGlassFillYielded`（侧边面板）/ `overlayGlassFillYielded`（弹层）——玻璃层量到有效尺寸面板才转透明，链路失败也不出透明空面板（与 1.25.11 同一失败形态，三处前置拦截）。
+- 绑定时机 = 菜单/面板/抽屉可见期（`runMenuIn` 绑定、`runMenuOut`/动画结束解绑、可见性兜底解绑），阅读/漫画过程不付每帧整树录制开销。
+- 形状：贴边全宽矩形玻璃 `setCornerRadius(0)`（顶栏/标题栏/面板，避免屏幕顶角挖缺口）；控制条/药丸取控件半径。
+- 共享搜索栏 `onLayout` 按 `GlassSurface.configSignature` 缓存 drawable，从设置页返回窗口可见时再比签名重挂，杜绝布局频繁冲掉玻璃。
+
+### 单测
+
+新增 `LiquidGlassSpecTest` 40 例：液态参数换算 / 四项否决 / 面板矩形 / 三处让位纪律 / 侧边资格；与既有玻璃测试合计 159 例全绿。`tools/check_settings_mapping.py` 仍 PASS（零新增偏好键）。
+
 ## 1.26.1 版（2026-11-10）
 
 本版把玻璃材质从「发现页专属」升级为**全 App 统一接入**：新增 `ui/glass` 包作为跨页面玻璃入口（显式采样域 + 纯函数判定表），侧边导航面板、阅读页菜单、选择模式底栏、覆盖式弹层等宿主接入同一条「液态 AGSL → 硬件高斯 → 软件模糊 → 实底壳」四级降级管线；同时完成两笔材质口径收拢——四个倍率滑杆（模糊/着色/壳层/描边）改为**全局单一来源**（`GlassMaterialPreset.current()` 同一输出喂给底栏、顶栏、发现页行，不再各宿主各算一份），预设参数按**四条可见维度拉开透明玻璃与磨砂玻璃的差异**（模糊 3–6dp vs 20–32dp、白色着色 0.004–0.014 vs 0.18–0.28、色散 0.24–0.36 vs 0.04–0.08、折射几何高 24–36dp/偏 46–72dp vs 高 12–15dp/偏 20–32dp），旧取值下两档切换真机差异不足的问题就此解决，且不新增任何偏好键。方案全文见 `docs/glass-appwide-adoption-plan.md`。

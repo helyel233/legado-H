@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.read
 
 import android.content.Context
+import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,9 +60,16 @@ import io.legado.app.help.ai.AiTaskKeepAlive
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.glass.LiquidGlassSpec
+import io.legado.app.ui.glass.applyLiquidGlassSpec
+import io.legado.app.ui.glass.contentLiquidGlassSpec
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.ai.AiMarkdownRender
 import io.legado.app.ui.main.ai.compose.AiComposeStyle
 import io.legado.app.ui.main.ai.compose.aiComposeStyle
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
+import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
 import io.noties.markwon.Markwon
@@ -75,6 +84,14 @@ import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.min
 import splitties.init.appCtx
+
+/**
+ * 章节摘要面板的玻璃层参数（内容域）：采样源同 `read_view`，与面板同级。
+ */
+private data class SummaryPanelGlass(
+    val spec: LiquidGlassSpec,
+    val source: ViewGroup
+)
 
 class ReadAiSummaryPanel @JvmOverloads constructor(
     context: Context,
@@ -100,6 +117,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
     private var startY = 0f
 
     private var uiState by mutableStateOf(SummaryUiState())
+    private var panelGlass by mutableStateOf<SummaryPanelGlass?>(null)
 
     init {
         orientation = VERTICAL
@@ -111,6 +129,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
             ReadAiSummaryContent(
                 state = uiState,
                 markwon = markwon,
+                panelGlass = panelGlass,
                 onTopDrag = ::handleDrag,
                 onSelectModel = ::selectModel,
                 onRefresh = { loadSummary(forceRefresh = true) },
@@ -123,6 +142,22 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
     @Suppress("UNUSED_PARAMETER")
     fun attach(lifecycleOwner: LifecycleOwner) {
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+    }
+
+    /** 与 AI 浮窗同一口径：正文 `read_view` 兄弟子树采样，否决条件交给 `contentLiquidGlassSpec`。 */
+    private fun refreshGlass() {
+        val source = (parent as? ViewGroup)
+            ?.findViewById<ViewGroup>(R.id.read_view)
+            ?.takeIf { it.isShown && it.width > 0 && it.height > 0 }
+        val spec = contentLiquidGlassSpec(
+            params = GlassMaterialPreset.current(resolvedExploreGlassMode()),
+            density = resources.displayMetrics.density,
+            sdkInt = Build.VERSION.SDK_INT,
+            sourceAvailable = source != null,
+            isLowRam = ExploreGlassBackdrop.isLowRamDevice(context),
+            isEInk = AppConfig.isEInkMode
+        )
+        panelGlass = if (spec != null && source != null) SummaryPanelGlass(spec, source) else null
     }
 
     fun open(book: Book, chapter: BookChapter, content: String, anchor: ReadAiFloatingPanel.Anchor? = null) {
@@ -141,6 +176,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
         } else {
             visibility = VISIBLE
         }
+        refreshGlass()
         bringToFront()
         doOnLayoutCompat {
             if (anchor != null) placeNearAnchor(anchor)
@@ -153,6 +189,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
     }
 
     fun close() {
+        panelGlass = null
         visibility = GONE
     }
 
@@ -381,6 +418,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
 private fun ReadAiSummaryContent(
     state: ReadAiSummaryPanel.SummaryUiState,
     markwon: Markwon,
+    panelGlass: SummaryPanelGlass?,
     onTopDrag: (MotionEvent) -> Boolean,
     onSelectModel: () -> Unit,
     onRefresh: () -> Unit,
@@ -396,56 +434,78 @@ private fun ReadAiSummaryContent(
             .shadow(12.dp, panelShape, clip = false)
             .clip(panelShape),
         shape = panelShape,
-        color = style.colors.background,
+        color = if (panelGlass != null) Color.Transparent else style.colors.background,
         shadowElevation = 0.dp,
         border = BorderStroke(style.metrics.strokeWidth, style.colors.stroke)
     ) {
-        Column(modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 12.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = onSelectModel,
-                    enabled = !state.requesting,
-                    shape = RoundedCornerShape(style.metrics.chipRadius),
-                    color = style.colors.accent.copy(alpha = if (state.requesting) 0.06f else 0.10f)
-                ) {
-                    Text(
-                        text = state.modelLabel.ifBlank { appCtx.getString(R.string.ai_ui_select_model) },
-                        color = if (state.requesting) style.colors.secondaryText else style.colors.accent,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .widthIn(max = 150.dp)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .pointerInteropFilter(onTouchEvent = onTopDrag)
+        Box {
+            // 与 AI 浮窗同一接法：玻璃同尺寸同圆角垫底，面板只在无玻璃时保留实底。
+            val glass = panelGlass
+            if (glass != null) {
+                val cornerRadiusPx = with(LocalDensity.current) { 20.dp.toPx() }
+                AndroidView(
+                    factory = { ctx ->
+                        StableLiquidGlassView(ctx).apply {
+                            isClickable = false
+                            isFocusable = false
+                            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        }
+                    },
+                    update = { view ->
+                        view.setCornerRadius(cornerRadiusPx)
+                        view.applyLiquidGlassSpec(glass.spec)
+                        view.bind(glass.source)
+                    },
+                    modifier = Modifier.matchParentSize()
                 )
-                SummaryIconButton(R.drawable.ic_refresh_black_24dp, appCtx.getString(R.string.ai_ui_regenerate_summary), style, onRefresh)
-                if (state.requesting) {
-                    SummaryIconButton(R.drawable.ic_stop_black_24dp, appCtx.getString(R.string.stop), style, onStop)
-                }
-                SummaryIconButton(R.drawable.ic_close_x, appCtx.getString(R.string.jf_convert_o), style, onClose)
             }
-            Text(
-                text = state.title,
-                color = style.colors.secondaryText,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            SummaryBody(state, markwon, style)
+            Column(modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = onSelectModel,
+                        enabled = !state.requesting,
+                        shape = RoundedCornerShape(style.metrics.chipRadius),
+                        color = style.colors.accent.copy(alpha = if (state.requesting) 0.06f else 0.10f)
+                    ) {
+                        Text(
+                            text = state.modelLabel.ifBlank { appCtx.getString(R.string.ai_ui_select_model) },
+                            color = if (state.requesting) style.colors.secondaryText else style.colors.accent,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .widthIn(max = 150.dp)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .pointerInteropFilter(onTouchEvent = onTopDrag)
+                    )
+                    SummaryIconButton(R.drawable.ic_refresh_black_24dp, appCtx.getString(R.string.ai_ui_regenerate_summary), style, onRefresh)
+                    if (state.requesting) {
+                        SummaryIconButton(R.drawable.ic_stop_black_24dp, appCtx.getString(R.string.stop), style, onStop)
+                    }
+                    SummaryIconButton(R.drawable.ic_close_x, appCtx.getString(R.string.jf_convert_o), style, onClose)
+                }
+                Text(
+                    text = state.title,
+                    color = style.colors.secondaryText,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                SummaryBody(state, markwon, style)
+            }
         }
     }
 }

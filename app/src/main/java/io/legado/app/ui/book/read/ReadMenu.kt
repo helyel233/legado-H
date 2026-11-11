@@ -99,6 +99,7 @@ import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.utils.activity
 import io.legado.app.utils.buildMainHandler
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.postEvent
@@ -189,10 +190,11 @@ class ReadMenu @JvmOverloads constructor(
     fun runMenuIn(anim: Boolean = !AppConfig.isEInkMode) {
         callBack.onMenuShow()
         this.visibility = VISIBLE
-        callBack.upSystemUiVisibility()
         isTopBarVisible = true
         isBottomMenuVisible = true
         refreshMenuGlass()
+        // 玻璃判定先于系统栏同步：玻璃激活时导航栏区域要全程让给玻璃
+        callBack.upSystemUiVisibility()
         // 每次唤出菜单都刷新待发条数：三点图标小圆点与「发送离线评论（N）」都吃这个值
         refreshOfflineReviewCounts()
         if (!LocalConfig.readMenuHelpVersionIsLast) {
@@ -380,6 +382,18 @@ class ReadMenu @JvmOverloads constructor(
     }
     private var liquidGlassSource: ViewGroup? = null
     private var bottomGlassActive by mutableStateOf(false)
+    /** 底部菜单当前是否由液态玻璃铺底：决定阅读页导航栏区域是否让给玻璃。 */
+    val isBottomGlassActive: Boolean get() = bottomGlassActive
+    /**
+     * 当前生效的玻璃着色透明度（0 = 玻璃未激活）。
+     *
+     * 导航栏区域在 App 内容之外、玻璃层画不到，宿主只能把「同一份着色叠在页面背景上」
+     * 算出的颜色画到系统导航栏；着色值取玻璃层真正收到的那一份，宿主不重算预设。
+     */
+    var glassTintAlpha: Float = 0f
+        private set
+    /** 当前玻璃档的折射区高度（px）：玻璃矩形底边外推量要盖过它，见 updateBottomGlassGeometry。 */
+    private var bottomGlassRefractionPx: Float = 0f
     /** 玻璃层最终矩形（逐帧更新，不参与重组）。 */
     private var bottomGlassRect: GlassPanelRect? = null
     /** 是否已完成过一次定位（只在 false→true 时触发一次重组，决定面板能否让出底色）。 */
@@ -463,6 +477,8 @@ class ReadMenu @JvmOverloads constructor(
         )
         if (spec == null || source == null) {
             bottomGlassActive = false
+            glassTintAlpha = 0f
+            bottomGlassRefractionPx = 0f
             bottomGlassRect = null
             bottomGlassGeometried = false
             bottomGlass.bind(null)
@@ -475,6 +491,8 @@ class ReadMenu @JvmOverloads constructor(
             return
         }
         bottomGlassActive = true
+        glassTintAlpha = spec.tintAlpha
+        bottomGlassRefractionPx = spec.refractionHeightPx
         bottomGlass.setCornerRadius(UiCorner.panelRadius(context))
         bottomGlass.applyLiquidGlassSpec(spec)
         bottomGlass.bind(source)
@@ -495,6 +513,8 @@ class ReadMenu @JvmOverloads constructor(
         bottomGlassRect = null
         bottomGlassGeometried = false
         bottomGlassActive = false
+        glassTintAlpha = 0f
+        bottomGlassRefractionPx = 0f
         topGlass.bind(null)
         topGlass.visibility = GONE
         topGlassRect = null
@@ -507,6 +527,11 @@ class ReadMenu @JvmOverloads constructor(
      *
      * 由 Compose 的 `onGloballyPositioned` 每帧回调，因此滑入 / 滑出动画期间
      * 玻璃与面板逐帧对齐，不需要另写一套动画。
+     *
+     * 底边外推量取「圆角」与「折射区 + 8dp 余量」的较大值：底层库在玻璃 View
+     * 自身底边的折射区高度内施加折射 / 色散 / 边缘高光，贴屏底的菜单若不把
+     * 这一段整个推出屏幕，导航栏区域会露出一圈形变与亮边（真机第四、五轮
+     * 排查的「偏白色块」即折射区上沿露在屏幕内的部分）。
      */
     private fun updateBottomGlassGeometry(
         windowLeft: Float,
@@ -522,7 +547,8 @@ class ReadMenu @JvmOverloads constructor(
             panelTop = windowTop - location[1],
             panelWidth = width.toFloat(),
             panelHeight = height.toFloat(),
-            cornerRadiusPx = UiCorner.panelRadius(context)
+            cornerRadiusPx = UiCorner.panelRadius(context),
+            bottomEdgeZonePx = bottomGlassRefractionPx + 8f.dpToPx()
         )
         if (bottomGlassRect != null) bottomGlassGeometried = true
         applyBottomGlassRect()

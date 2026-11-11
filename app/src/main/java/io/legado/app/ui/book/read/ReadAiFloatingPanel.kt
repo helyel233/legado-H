@@ -2,6 +2,7 @@
 
 import android.content.Intent
 import android.content.Context
+import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.view.ViewCompat
@@ -85,6 +88,10 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.ui.config.AiWorldBookManageActivity
+import io.legado.app.ui.glass.LiquidGlassSpec
+import io.legado.app.ui.glass.applyLiquidGlassSpec
+import io.legado.app.ui.glass.contentLiquidGlassSpec
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.ai.AiChatMessage
 import io.legado.app.ui.main.ai.AiWorldBookBinding
 import io.legado.app.ui.main.ai.compose.AiComposeMarkdownText
@@ -94,6 +101,9 @@ import io.legado.app.ui.main.ai.compose.AiProcessStepType
 import io.legado.app.ui.main.ai.compose.AiProcessStepUi
 import io.legado.app.ui.main.ai.compose.AiProcessTimelineCard
 import io.legado.app.ui.main.ai.compose.aiComposeStyle
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
+import io.legado.app.ui.widget.StableLiquidGlassView
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
@@ -109,6 +119,15 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+
+/**
+ * AI 面板的玻璃层参数（内容域）：采样源是阅读页正文 `read_view`，与本面板同级。
+ * 与 `ModernActionPopup.PopupGlass` 同一形态——只在拿到合法源与档位参数时才创建。
+ */
+private data class AiPanelGlass(
+    val spec: LiquidGlassSpec,
+    val source: ViewGroup
+)
 
 class ReadAiFloatingPanel @JvmOverloads constructor(
     context: Context,
@@ -149,6 +168,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     private var startY = 0f
     private var imeBottomInset = 0
     private var savedWindowState: FloatingWindowState? = null
+    private var panelGlass by mutableStateOf<AiPanelGlass?>(null)
 
     private var messages by mutableStateOf<List<ReadAiMessage>>(emptyList())
     private var historySessions by mutableStateOf<List<ReadAiSession>>(emptyList())
@@ -178,6 +198,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                 requesting = requesting,
                 modelLabel = modelLabel,
                 fullscreen = fullscreen,
+                panelGlass = panelGlass,
                 timeFormat = timeFormat,
                 onTopDrag = ::handleDrag,
                 onToggleFullscreen = ::toggleFullscreen,
@@ -211,6 +232,29 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
     }
 
+    /**
+     * 解析本面板的玻璃层。采样源是阅读页正文 `read_view`——同样画在本窗口的兄弟子树，
+     * 与阅读页菜单 / 漫画菜单同一类合法源；面板自身不在源子树内，不会重入录制。
+     *
+     * solid 档 / API<33 / 低内存 / 墨水屏由 [contentLiquidGlassSpec] 统一否决，
+     * 此时面板保持原实底表面。可读性口径与底栏一致：文字压在材质自带的 tint 之上，
+     * 不再额外叠不透明底（叠了就看不见玻璃）。
+     */
+    private fun refreshGlass() {
+        val source = (parent as? ViewGroup)
+            ?.findViewById<ViewGroup>(R.id.read_view)
+            ?.takeIf { it.isShown && it.width > 0 && it.height > 0 }
+        val spec = contentLiquidGlassSpec(
+            params = GlassMaterialPreset.current(resolvedExploreGlassMode()),
+            density = resources.displayMetrics.density,
+            sdkInt = Build.VERSION.SDK_INT,
+            sourceAvailable = source != null,
+            isLowRam = ExploreGlassBackdrop.isLowRamDevice(context),
+            isEInk = AppConfig.isEInkMode
+        )
+        panelGlass = if (spec != null && source != null) AiPanelGlass(spec, source) else null
+    }
+
     fun open(readContext: ReadContext, anchor: Anchor? = null) {
         this.readContext = readContext
         currentSessionId = ensureSession(readContext, createNew = false).id
@@ -226,6 +270,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
         } else {
             visibility = VISIBLE
         }
+        refreshGlass()
         bringToFront()
         doOnLayoutCompat {
             if (anchor != null && !fullscreen) {
@@ -249,6 +294,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             setFullscreenMode(false)
         }
         updateRequestingState()
+        panelGlass = null
         visibility = GONE
     }
 
@@ -1282,6 +1328,7 @@ private fun ReadAiPanelContent(
     requesting: Boolean,
     modelLabel: String,
     fullscreen: Boolean,
+    panelGlass: AiPanelGlass?,
     timeFormat: SimpleDateFormat,
     onTopDrag: (MotionEvent) -> Boolean,
     onToggleFullscreen: () -> Unit,
@@ -1312,141 +1359,166 @@ private fun ReadAiPanelContent(
     Surface(
         modifier = panelModifier.clip(panelShape),
         shape = panelShape,
-        color = style.colors.background,
+        color = if (panelGlass != null) Color.Transparent else style.colors.background,
         shadowElevation = 0.dp,
         border = if (fullscreen) null else BorderStroke(style.metrics.strokeWidth, style.colors.stroke)
     ) {
-        Column(
-            modifier = Modifier
-                .then(if (fullscreen) Modifier.fillMaxSize() else Modifier)
-                .then(if (fullscreen) Modifier.statusBarsPadding() else Modifier)
-                .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
-                .then(if (fullscreen) Modifier.imePadding() else Modifier)
-                .padding(
-                    start = if (fullscreen) 16.dp else 12.dp,
-                    top = if (fullscreen) 12.dp else 10.dp,
-                    end = if (fullscreen) 16.dp else 12.dp,
-                    bottom = if (fullscreen) 14.dp else 12.dp
-                )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .then(
-                            if (fullscreen) Modifier else Modifier.pointerInteropFilter(
-                                onTouchEvent = onTopDrag
-                            )
-                        ),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.ask_ai),
-                        color = style.colors.primaryText,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = contextLabel,
-                        color = style.colors.secondaryText,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
+        Box {
+            // 玻璃层与面板同尺寸同圆角，垫在正文之下；面板底色仅在玻璃缺失时保留，
+            // 否则会整块盖住玻璃（与阅读页菜单「让出底色」同一条纪律）。
+            val glass = panelGlass
+            if (glass != null) {
+                val cornerRadiusPx = with(LocalDensity.current) {
+                    (if (fullscreen) 0.dp else 20.dp).toPx()
                 }
-                if (modelLabel.isNotBlank()) {
-                    Surface(
-                        onClick = onSelectModel,
-                        enabled = !requesting,
-                        shape = RoundedCornerShape(style.metrics.chipRadius),
-                        color = style.colors.accent.copy(alpha = if (requesting) 0.06f else 0.10f)
+                AndroidView(
+                    factory = { ctx ->
+                        StableLiquidGlassView(ctx).apply {
+                            isClickable = false
+                            isFocusable = false
+                            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        }
+                    },
+                    update = { view ->
+                        view.setCornerRadius(cornerRadiusPx)
+                        view.applyLiquidGlassSpec(glass.spec)
+                        view.bind(glass.source)
+                    },
+                    modifier = Modifier.matchParentSize()
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .then(if (fullscreen) Modifier.fillMaxSize() else Modifier)
+                    .then(if (fullscreen) Modifier.statusBarsPadding() else Modifier)
+                    .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
+                    .then(if (fullscreen) Modifier.imePadding() else Modifier)
+                    .padding(
+                        start = if (fullscreen) 16.dp else 12.dp,
+                        top = if (fullscreen) 12.dp else 10.dp,
+                        end = if (fullscreen) 16.dp else 12.dp,
+                        bottom = if (fullscreen) 14.dp else 12.dp
+                    )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .then(
+                                if (fullscreen) Modifier else Modifier.pointerInteropFilter(
+                                    onTouchEvent = onTopDrag
+                                )
+                            ),
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = modelLabel,
-                            color = if (requesting) style.colors.secondaryText else style.colors.accent,
+                            text = stringResource(R.string.ask_ai),
+                            color = style.colors.primaryText,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = contextLabel,
+                            color = style.colors.secondaryText,
                             fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .widthIn(max = 118.dp)
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
-                }
-                ReadAiIconButton(
-                    iconRes = if (fullscreen) R.drawable.ic_exit else R.drawable.ic_fullscreen,
-                    contentDescriptionRes = if (fullscreen) R.string.exit else R.string.full_screen,
-                    style = style,
-                    onClick = onToggleFullscreen
-                )
-                Box {
-                    ReadAiIconButton(R.drawable.ic_settings, R.string.menu, style) {
-                        menuExpanded = true
+                    if (modelLabel.isNotBlank()) {
+                        Surface(
+                            onClick = onSelectModel,
+                            enabled = !requesting,
+                            shape = RoundedCornerShape(style.metrics.chipRadius),
+                            color = style.colors.accent.copy(alpha = if (requesting) 0.06f else 0.10f)
+                        ) {
+                            Text(
+                                text = modelLabel,
+                                color = if (requesting) style.colors.secondaryText else style.colors.accent,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .widthIn(max = 118.dp)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
-                    if (menuExpanded) {
-                        ReadAiTopMenu(
+                    ReadAiIconButton(
+                        iconRes = if (fullscreen) R.drawable.ic_exit else R.drawable.ic_fullscreen,
+                        contentDescriptionRes = if (fullscreen) R.string.exit else R.string.full_screen,
+                        style = style,
+                        onClick = onToggleFullscreen
+                    )
+                    Box {
+                        ReadAiIconButton(R.drawable.ic_settings, R.string.menu, style) {
+                            menuExpanded = true
+                        }
+                        if (menuExpanded) {
+                            ReadAiTopMenu(
+                                style = style,
+                                actions = buildList {
+                                    add(ReadAiMenuAction(stringResource(R.string.ai_new_chat), onNewChat))
+                                    add(ReadAiMenuAction(stringResource(R.string.ai_chat_history), onToggleHistory))
+                                    add(ReadAiMenuAction("Skill", onOpenSkills))
+                                    add(ReadAiMenuAction("MCP", onOpenMcp))
+                                    add(ReadAiMenuAction(appCtx.getString(R.string.ai_tool_world_book), onOpenWorldBooks))
+                                    add(ReadAiMenuAction(appCtx.getString(R.string.ai_ui_window_capabilities), onOpenAbilities))
+                                    add(ReadAiMenuAction(stringResource(R.string.ai_current_model), onSelectModel))
+                                },
+                                onDismiss = { menuExpanded = false }
+                            )
+                        }
+                    }
+                    ReadAiIconButton(R.drawable.ic_close_x, R.string.close, style, onClose)
+                }
+                Box(
+                    modifier = if (fullscreen) Modifier.weight(1f) else Modifier.height(if (showingHistory) 300.dp else 340.dp)
+                ) {
+                    if (showingHistory) {
+                        ReadAiHistoryList(
+                            sessions = historySessions,
                             style = style,
-                            actions = buildList {
-                                add(ReadAiMenuAction(stringResource(R.string.ai_new_chat), onNewChat))
-                                add(ReadAiMenuAction(stringResource(R.string.ai_chat_history), onToggleHistory))
-                                add(ReadAiMenuAction("Skill", onOpenSkills))
-                                add(ReadAiMenuAction("MCP", onOpenMcp))
-                                add(ReadAiMenuAction(appCtx.getString(R.string.ai_tool_world_book), onOpenWorldBooks))
-                                add(ReadAiMenuAction(appCtx.getString(R.string.ai_ui_window_capabilities), onOpenAbilities))
-                                add(ReadAiMenuAction(stringResource(R.string.ai_current_model), onSelectModel))
-                            },
-                            onDismiss = { menuExpanded = false }
+                            timeFormat = timeFormat,
+                            onOpenSession = onOpenSession,
+                            onDeleteSession = onDeleteSession,
+                            onClearHistory = onClearHistory,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 88.dp)
+                        )
+                    } else {
+                        ReadAiMessageList(
+                            messages = messages,
+                            requesting = requesting,
+                            style = style,
+                            fullscreen = fullscreen,
+                            showProcessChain = AppConfig.aiThinkingToolbarEnabled,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 88.dp)
                         )
                     }
-                }
-                ReadAiIconButton(R.drawable.ic_close_x, R.string.close, style, onClose)
-            }
-            Box(
-                modifier = if (fullscreen) Modifier.weight(1f) else Modifier.height(if (showingHistory) 300.dp else 340.dp)
-            ) {
-                if (showingHistory) {
-                    ReadAiHistoryList(
-                        sessions = historySessions,
-                        style = style,
-                        timeFormat = timeFormat,
-                        onOpenSession = onOpenSession,
-                        onDeleteSession = onDeleteSession,
-                        onClearHistory = onClearHistory,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 88.dp)
-                    )
-                } else {
-                    ReadAiMessageList(
-                        messages = messages,
+                    ReadAiComposer(
                         requesting = requesting,
+                        enterToSend = AppConfig.aiEnterToSend,
                         style = style,
-                        fullscreen = fullscreen,
-                        showProcessChain = AppConfig.aiThinkingToolbarEnabled,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 88.dp)
+                        onStop = onStop,
+                        onSend = onSend,
+                        onInputFocused = onInputFocused,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = if (fullscreen) 2.dp else 0.dp)
                     )
                 }
-                ReadAiComposer(
-                    requesting = requesting,
-                    enterToSend = AppConfig.aiEnterToSend,
-                    style = style,
-                    onStop = onStop,
-                    onSend = onSend,
-                    onInputFocused = onInputFocused,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = if (fullscreen) 2.dp else 0.dp)
-                )
             }
         }
     }

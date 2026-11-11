@@ -51,7 +51,9 @@ import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyNavigationBarMargin
 import io.legado.app.utils.applyTint
@@ -153,6 +155,8 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         rootBaseTopPadding = binding.root.paddingTop
         binding.btnMenu.setColorFilter(secondaryTextColor)
         TopBarSearchStyle.apply(binding.searchView)
+        // 页面根布局无底色、无 TitleBar，搜索栏背后是主题壁纸
+        binding.searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         updateSourceGroupTags()
         binding.btnMenu.setOnClickListener {
             showSearchMenu(it)

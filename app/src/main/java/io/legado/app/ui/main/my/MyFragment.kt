@@ -34,11 +34,13 @@ import io.legado.app.ui.config.RelaySettingsActivity
 import io.legado.app.ui.config.SettingsSearchIndex
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
@@ -173,6 +175,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     private fun applySearchBarStyle() {
         settingsSearchView.applyUiBodyTypefaceDeep(requireContext().uiTypeface())
         TopBarSearchStyle.apply(settingsSearchView)
+        // 设置搜索栏直接在页面根布局里，根布局无底色、背后是主题壁纸
+        settingsSearchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
     }
 
     private fun updateSettingsState() {

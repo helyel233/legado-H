@@ -79,6 +79,10 @@ import splitties.views.bottomPadding
 import java.io.ByteArrayInputStream
 import java.util.regex.PatternSyntaxException
 import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.utils.StartActivityContract
@@ -172,6 +176,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         viewModel.upTtsMenuData.observe(this) { upTtsMenu(it) }
         viewModel.upTitleData.observe(this) { binding.titleBar.title = it }
         initView()
+        applyTitleBarGlass()
         initWebView()
         initLiveData()
         viewModel.initData(intent)
@@ -354,6 +359,27 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             view.bottomPadding = insets.bottom
             windowInsets
         }
+    }
+
+    /**
+     * 标题栏接入壁纸域玻璃。
+     *
+     * 本页根窗口背景就是主题壁纸（`BaseActivity` 的 `imageBg` 默认开启，`decorView`
+     * 背景直接换成壁纸），标题栏这一条区域背后正是壁纸；正文 WebView 不进父容器
+     * RenderNode，但这里根本不需要采样正文，与主底栏走同一条壁纸采样管线即可。
+     * 圆角取 0：标题栏是贴边全宽的矩形，加圆角会在屏幕顶部两角留下缺口。
+     *
+     * 无玻璃档不接管：该档的实底壳取底栏底色，会让标题栏偏离全 App 统一的主题主色。
+     * 墨水屏 / 低内存由 drawable 入口返回 null，保留 TitleBar 原有背景（含墨水屏描边）。
+     */
+    private fun applyTitleBarGlass() {
+        if (resolvedExploreGlassMode() == GlassMaterialPreset.SOLID) return
+        val glass = GlassSurface.panelBackground(
+            binding.titleBar,
+            GlassSamplingDomain.WALLPAPER,
+            0f
+        ) ?: return
+        binding.titleBar.background = glass
     }
 
     @SuppressLint("SetJavaScriptEnabled")

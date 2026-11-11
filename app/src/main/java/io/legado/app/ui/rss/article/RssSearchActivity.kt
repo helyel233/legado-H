@@ -12,6 +12,8 @@ import io.legado.app.databinding.ActivityRssSearchBinding
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -63,6 +65,8 @@ class RssSearchActivity : VMBaseActivity<ActivityRssSearchBinding, RssSortViewMo
     private fun setupSearchView() {
         binding.searchView.applyUiBodyTypefaceDeep(uiTypeface())
         TopBarSearchStyle.apply(binding.searchView)
+        // 搜索栏在 TitleBar 下方、根布局无底色，背后是主题壁纸
+        binding.searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         binding.searchView.queryHint = getString(R.string.rss_search_hint)
         binding.searchView.isSubmitButtonEnabled = true
         binding.searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {

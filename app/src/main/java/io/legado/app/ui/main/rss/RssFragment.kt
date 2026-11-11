@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.rss
 
 import android.annotation.SuppressLint
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -38,6 +39,8 @@ import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.ReadRecordDialog
@@ -48,7 +51,9 @@ import io.legado.app.ui.rss.favorites.RssFavoritesActivity
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
+import io.legado.app.ui.widget.shouldEnableTopBarBackdrop
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.applyStatusBarPadding
 import io.legado.app.utils.applyTint
@@ -120,11 +125,13 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     private var rssTopOverlaySpace = 0
     private var rssTopOverlayEnabled = false
     private var pendingRenderCurrentSort = false
+    private var lastRssGlassSignature = ""
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
         binding.titleBar.applyStatusBarPadding(withInitialPadding = true)
         applyWebContainerBottomPadding()
+        lastRssGlassSignature = GlassSurface.configSignature(requireContext())
         initSearchView()
         initGroupData()
         applyRssMode()
@@ -137,6 +144,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         }
         // 兜底重读：UP_PAGE_LAYOUT 事件为主通道，这里保证漏订阅/进程切换后切回订阅页仍按最新列数
         applyRssSourceLayout()
+        refreshRowGlassOnConfigChange()
         if (pendingRenderCurrentSort && usingModernRss) {
             binding.root.post {
                 if (pendingRenderCurrentSort) {
@@ -224,6 +232,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     }
 
     private fun initSearchView() {
+        // 经典布局的搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         searchView.applyTint(primaryTextColor)
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.rss)
@@ -242,6 +252,9 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     }
 
     private fun initClassicRecycler() {
+        // 经典布局顶栏在列表上方、背后没有内容；从现代布局切过来时顶栏整体 GONE，
+        // 这里显式解绑玻璃层，避免它继续挂在 GONE 子树里持有采样源。
+        binding.topBar.setBackdropBlur(null)
         binding.recyclerView.setEdgeEffectColor(primaryColor)
         binding.recyclerView.clipToPadding = false
         binding.recyclerView.applyMainBottomBarPadding(withInitialPadding = true)
@@ -272,6 +285,21 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         val columns = AppConfig.rssSourceLayout
         (binding.recyclerView.layoutManager as? GridLayoutManager)?.spanCount = columns
         adapter.setColumns(columns)
+    }
+
+    /**
+     * 玻璃档位 / 强度 / 描边等设置改完返回订阅页时重绑卡片背景。
+     *
+     * 卡片 drawable 在 `RssAdapter.convert` 里按当时的配置创建，设置页是独立 Activity，
+     * 返回时 RecyclerView 不会自己重绑；与发现页同一条兜底：配置签名变了就整表重绑一次。
+     */
+    @SuppressLint("NotifyDataSetChanged")
+    private fun refreshRowGlassOnConfigChange() {
+        val signature = GlassSurface.configSignature(requireContext())
+        if (signature == lastRssGlassSignature) return
+        lastRssGlassSignature = signature
+        // 现代布局不显示订阅源宫格（recycler 整体 GONE），没有需要重绑的卡片
+        if (!usingModernRss) adapter.notifyDataSetChanged()
     }
 
     private fun initModernRssView() {
@@ -422,6 +450,23 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             true,
             (topSpace - 28.dpToPx()).coerceAtLeast(0),
             topSpace + 56.dpToPx()
+        )
+        // 订阅页顶栏与书架 / 发现页同一条液态管线：采样源只能取 top_bar 的兄弟子树
+        // fl_rss_content（两者同在 SwipeRefreshLayout 内的 FrameLayout 下）。传祖先
+        // （swipe_refresh_layout 等）会 RenderNode 重入录制 → hwui abort（1.25.8 同类），
+        // setBackdropBlur 内还有同一份守卫兜底。
+        // Web 渲染模式下正文由 WebView 独立绘制、录不进父容器，视为无源保持实底。
+        binding.topBar.setBackdropBlur(
+            if (shouldEnableTopBarBackdrop(
+                    overlayContent = binding.topBar.isOverlayMode(),
+                    sdkInt = Build.VERSION.SDK_INT,
+                    sourceAvailable = !binding.rssWebContainer.isVisible
+                )
+            ) {
+                binding.flRssContent
+            } else {
+                null
+            }
         )
         binding.topBar.bringToFront()
     }
@@ -703,6 +748,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             rssWebView = created
         }
         applyModernRssWebViewTopSpace(webView)
+        // 内容容器已切到 WebView：它不再是合法采样源，重算顶栏玻璃（回落实底）
+        scheduleModernRssTopBarOverlayUpdate()
         webView.settings.javaScriptEnabled = source.enableJs
         webView.settings.loadWithOverviewMode = true
         webView.settings.useWideViewPort = true
@@ -795,6 +842,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         binding.rssWebContainer.gone()
         binding.pbRssLoading.gone()
         binding.tvEmptyMsg.visible()
+        // 容器全部收起后采样源状态已变（例如从 Web 渲染退回空态），重算顶栏玻璃
+        scheduleModernRssTopBarOverlayUpdate()
     }
 
     private fun applyWebContainerBottomPadding() {

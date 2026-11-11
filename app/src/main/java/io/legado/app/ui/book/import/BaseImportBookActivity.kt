@@ -15,6 +15,8 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.applyTint
@@ -144,6 +146,8 @@ abstract class BaseImportBookActivity<VM : ViewModel> :
     }
 
     private fun initSearchView() {
+        // 搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         searchView.applyTint(primaryTextColor)
         searchView.isSubmitButtonEnabled = true
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {

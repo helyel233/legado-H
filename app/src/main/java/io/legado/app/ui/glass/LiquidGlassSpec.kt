@@ -2,6 +2,7 @@ package io.legado.app.ui.glass
 
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.widget.StableLiquidGlassView
+import kotlin.math.roundToInt
 
 /**
  * 液态玻璃一档的最终像素参数（与 `StableLiquidGlassView` 的注入口径一一对应）。
@@ -106,18 +107,35 @@ internal fun glassPanelRect(
     panelTop: Float,
     panelWidth: Float,
     panelHeight: Float,
-    cornerRadiusPx: Float
+    cornerRadiusPx: Float,
+    bottomEdgeZonePx: Float = 0f
 ): GlassPanelRect? {
     if (panelWidth <= 0f || panelHeight <= 0f) return null
     val left = kotlin.math.floor(panelLeft).toInt()
     val top = kotlin.math.floor(panelTop).toInt()
     val right = kotlin.math.ceil(panelLeft + panelWidth).toInt()
     val bottom = kotlin.math.ceil(
-        panelTop + panelHeight + cornerRadiusPx.coerceAtLeast(0f)
+        panelTop + panelHeight + glassBottomEdgeExtensionPx(
+            cornerRadiusPx,
+            bottomEdgeZonePx
+        )
     ).toInt()
     if (right - left <= 0 || bottom - top <= 0) return null
     return GlassPanelRect(left, top, right, bottom)
 }
+
+/**
+ * 玻璃层底边需要向下延伸多少像素（纯 JVM）。
+ *
+ * 玻璃层是单一圆角矩形，底边下推 [cornerRadiusPx] 藏住屏幕底边的两个圆角；
+ * 但底层库在玻璃 View 自身底边的 [refractionHeightPx] 范围内施加折射 / 色散 /
+ * 边缘高光——贴屏底的菜单若不把这一整段推出屏幕，导航栏区域会露出一圈
+ * 折射形变与亮边的「模糊色块」（真机实测：圆角外扩 24dp < 折射区 30dp 时，
+ * 折射区上沿以上约 6dp 的部分正好落在屏幕内）。所以延伸量取两者较大值，
+ * 贴屏底的接入点把折射区整个推到屏幕外。
+ */
+internal fun glassBottomEdgeExtensionPx(cornerRadiusPx: Float, refractionHeightPx: Float): Float =
+    maxOf(cornerRadiusPx.coerceAtLeast(0f), refractionHeightPx.coerceAtLeast(0f))
 
 /**
  * 面板是否让出底色（纯 JVM）。
@@ -128,6 +146,53 @@ internal fun glassPanelRect(
  */
 internal fun glassPanelFillYielded(active: Boolean, hasGeometry: Boolean): Boolean =
     active && hasGeometry
+
+/**
+ * 阅读页 App 内导航条是否让位给玻璃（纯 JVM）。
+ *
+ * 菜单打开且底部玻璃激活时，导航栏区域整个交给玻璃层：玻璃矩形的底边已把
+ * 折射区推出屏幕（见 [glassBottomEdgeExtensionPx]），磨砂能连续铺到屏幕底。
+ * 此时实色条若仍压在玻璃之上，就是「面板偏透明 + 条带偏白」两层的来源
+ * （四轮真机排查的最终结论：条带怎么配色都追不上活磨砂，必须让位）。
+ * 非玻璃态保持条带原样（主题底栏色 / 底部弹层场景）。
+ */
+internal fun readerNavStripYieldsToGlass(glassActive: Boolean, menuVisible: Boolean): Boolean =
+    glassActive && menuVisible
+
+/**
+ * 玻璃菜单激活时窗口是否需要切 edge-to-edge（纯 JVM）。
+ *
+ * 第六轮真机根因：阅读窗口的 decor 内容被布局在导航栏上方
+ * （`fullScreen()` 的 `setDecorFitsSystemWindows(true)` + 只有
+ * `LAYOUT_FULLSCREEN` 没有 `LAYOUT_HIDE_NAVIGATION`），屏幕底部导航栏
+ * 高度的一段根本不在应用的视图树内，只能由窗口级 navColor 撕膜上色——
+ * 面板、玻璃层、App 内条带无论怎么配色都够不到那一段（前五轮全部
+ * 在配错的色上打转的根因）。修法与朗读全面板（`applyReadAloudPlayerSystemBars`）
+ * 同一先例：玻璃菜单激活时把窗口切到 e2e，玻璃层才能真正铺到屏幕底。
+ * 分屏 / 多窗口下窗口尺寸由系统分派，不动系统条带，回退到
+ * [readerGlassNavBarColor] 的近似配色。
+ */
+internal fun readerGlassMenuWantsE2e(isInMultiWindow: Boolean, anyGlassMenuActive: Boolean): Boolean =
+    anyGlassMenuActive && !isInMultiWindow
+
+/**
+ * 系统导航栏的底色（纯 JVM）。
+ *
+ * 沉浸式（内容延伸到导航栏后面）设备上玻璃层自己铺满导航栏区域，这个值不参与
+ * 显示；仍保留给窗口不延伸到导航栏后面的设备（部分低版本 / 厂商定制系统），
+ * 把面板的最终色算出来画到系统导航栏：着色器是「白色按 tintAlpha 叠在采样
+ * 背景上」，取 `bgMeanColor` 作背景近似。`0.25 × 白 + 0.75 × (1,0,1)` 即
+ * (65,64,65)，与磨砂面板内部同源。
+ */
+internal fun readerGlassNavBarColor(tintAlpha: Float, backdropColor: Int): Int {
+    val alpha = tintAlpha.coerceIn(0f, 1f)
+    fun mix(channel: Int): Int =
+        (255f * alpha + channel * (1f - alpha)).roundToInt().coerceIn(0, 255)
+    val red = mix((backdropColor shr 16) and 0xFF)
+    val green = mix((backdropColor shr 8) and 0xFF)
+    val blue = mix(backdropColor and 0xFF)
+    return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
+}
 
 /**
  * 侧边导航面板是否让出底色（纯 JVM）。

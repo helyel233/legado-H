@@ -60,15 +60,24 @@
 | 类 | 表面 | 域 | 接入方式 | 阶段 |
 |---|---|---|---|---|
 | A | **选择模式底栏 `SelectActionBar`**（书源/字典/RSS 源/替换规则/导入书/远程书/书架整理/书架管理/TXT 目录规则，7 个布局、8+ 宿主页面） | 壁纸域（`imageBg=true`，底栏照旧遮在列表上，与主底栏同语义） | `panelBackground(host)` drawable | **P0** |
+| A | 书架收藏页多选操作栏（`BookCollectionActivity` 自绘 `book_action_bar`，与 `SelectActionBar` 同语义但未复用该控件） | 壁纸域（`imageBg=true`，底栏直接遮在书籍网格上） | `GlassSurface.panelBackground(WALLPAPER)` drawable + 圆角轮廓 | **P0 补漏** |
 | A | 发现页行 / 行内控件 / 顶部浮层 | 壁纸域 | 已完成 | 已上线 |
 | B | 「我的」页卡片与按钮（Compose，壁纸正上方） | 壁纸域 | `GlassPanel`（Compose 桥） | **P2 已实施** |
 | B | 搜索页（Compose，`imageBg=true`） | 壁纸域 | `GlassPanel`（输入框） | **P2 已实施** |
 | C | 阅读页底部菜单与顶部菜单（Compose，浮在书页上） | 内容域 | `StableLiquidGlassView` + 兄弟子树采样（`read_view`） | **P3 / P4 已实施** |
-| C | 音频播放控制面板、视频控制条 | 内容域 | 无合法兄弟子树采样源（背景由自身 Compose / 播放器 Surface 绘制）→ 需先把氛围层重构为真实 View 兄弟节点 | P4 维持实底 |
-| C | 书籍详情封面上的信息卡 | 内容域（`imageBg=false`） | 底色 87% 不透明 + scrim 叠加补偿；换玻璃会直接降低正文可读性 | P4 维持实底 |
-| C | 发现页弹窗、套件管理预览、键盘工具条、书源/RSS 调试页 | 面板域 | 发现页弹窗经 `ModernActionPopup` 统一宿主已随同接入；套件预览无内容采样源、键盘工具条是独立 `PopupWindow` 窗口，均维持实底 | P4（弹窗已实施，其余维持实底） |
+| C | 阅读页搜索菜单底部面板（`SearchMenu`，浮在书页上） | 内容域 | 同容器玻璃层（`fl_bottom_menu`）+ 兄弟子树采样（`read_view`） | **P4 已实施** |
+| C | 漫画阅读菜单底部控制条（`MangaMenu`） | 内容域 | 同容器玻璃层（`fl_manga_control_pill`）+ 兄弟子树采样（`webtoon_frame`） | **P4 已实施** |
+| C | 漫画阅读菜单顶部标题栏（`MangaMenu` 的 `TitleBar`） | 内容域 | 兄弟玻璃层（半径 0，约束到 `title_bar` 上下边）+ 同一采样源；与顶栏共用同一段平移动画 | **P4 已实施** |
+| C | 订阅页顶部浮层（`RssFragment` 的 `MainTopBarView`） | 内容域 | `setBackdropBlur(fl_rss_content)` 兄弟子树采样；Web 渲染模式无源、经典布局维持实底 | **P4 已实施** |
+| A | 订阅源卡片（`RssAdapter` 的 `item_rss`，1–3 列宫格 / 单列列表） | 壁纸域（订阅页根布局透明，卡片背后就是壁纸） | `GlassSurface.rowBackground(WALLPAPER)` drawable（与发现页书源名行同源）；墨水屏 / 低内存回退 `bg_ai_surface_panel` | **P4 已实施** |
+| C | RSS 阅读页标题栏（`ReadRssActivity`） | 壁纸域（窗口背景即主题壁纸） | `GlassSurface.panelBackground(WALLPAPER, 0f)` drawable；无玻璃档不接管，墨水屏 / 低内存由 drawable 入口返回 null | **P4 已实施** |
+| A | 共享搜索栏 `io.legado.app.ui.widget.SearchView`（`view_search` 与三处独立布局，覆盖 RSS / 发现 / 我的 / 搜索页 / 导入 / 搜索内容 / 书架整理 / 书源与 RSS 调试 / 高亮规则 / 阅读器资源） | 壁纸域（宿主根布局透明、`TitleBar` 透明） | 控件内按显式 `glassDomain` 取 `GlassSurface.panelBackground(WALLPAPER, TopBarSearchStyle.radius())`；默认 `PANEL` 不接玻璃 | **P4 已实施** |
+| C | 阅读页 AI 浮窗 / 章节摘要浮窗（`read_ai_panel` / `read_ai_summary_panel`） | 内容域 | Compose `AndroidView` 玻璃层（同尺寸同圆角垫在 `Surface` 之下）+ `read_view` 兄弟子树采样；面板 `Surface` 让出实底 | **P4 已实施** |
+| C | 音频播放控制面板、视频控制条 | 内容域 | 无合法兄弟子树采样源（背景由自身 Compose / 播放器 Surface 绘制）→ 需先把氛围层重构为真实 View 兄弟节点 | 未接入（设计见 §4） |
+| C | 书籍详情封面上的信息卡 | 内容域（`imageBg=false`） | 无 `ViewGroup` 采样源（背后是 `ImageView`）+ 卡片底色 87% 不透明 | 未接入（设计见 §4） |
+| C | 发现页弹窗、套件管理预览、键盘工具条、书源/RSS 调试页 | 面板域 | 发现页弹窗经 `ModernActionPopup` 统一宿主已随同接入；套件预览无内容采样源、键盘工具条是独立 `PopupWindow` 窗口 | 弹窗已实施，其余未接入（设计见 §4） |
 | D | `ModernActionPopup`（发现页弹窗、行菜单、`showFromMenu` 统一宿主） | 面板域（无 scrim） | 面板整体玻璃化 + 行底色让位 | **P4 已实施** |
-| D | 通用对话框、`SourceLoginDialog` | 面板域 + scrim 叠加 | 跨窗口绘制，先用 scrim/玻璃叠加补偿方案评估 | P4 维持实底 |
+| D | 通用对话框、`SourceLoginDialog` | 面板域 + scrim 叠加 | 跨窗口绘制，需「窗口快照」管线 + scrim 亮度补偿 | 未接入（设计见 §4） |
 | — | 主界面侧边导航面板 | 面板域（可带自有背景图） | 整体玻璃化 + scrim 补偿 | **P4 已实施** |
 
 ## 4. 分阶段方案
@@ -77,6 +86,7 @@
 
 - `ExploreGlassBackdrop` 新增公共入口 `panelBackground(host)`（圆角 `ui_panel_radius`，与主底栏 shell overlay 圆角逐值一致），`rowBackground` 委托给它，不改变现有行为。
 - `SelectActionBar` 背景由 `bottomBackground` 实色替换为 `panelBackground(this)`；返回 null（墨水屏 / 低内存 / 动图壁纸纯色底）时回退原逻辑（`transparentNavBar` 保持透明，否则实色 + elevation）。
+- **补漏：`BookCollectionActivity` 的自绘多选栏**。该页没有复用 `SelectActionBar`，而是自己铺了一条 72dp 的 `book_action_bar` 并写死 `surfaceCardColor` 实底，P0 逐宿主清点时被漏掉——同一 App 里书架管理的多选栏已是玻璃、收藏页内部仍是实底，属可见的不一致。改为走 `GlassSurface.panelBackground(WALLPAPER)`，回退值仍是原来的 `surfaceCardColor`；玻璃 drawable 无轮廓，补一个 `ui_panel_radius` 圆角矩形轮廓保住 XML 里的 8dp 投影（与 `SelectActionBar` 同一处理）。
 - 不做：面板域控件（见 2.3）、TitleBar 全局改造（共享控件，待 P1 收口后单独评估）。
 
 ### P1 · 架构收口（已实施，不改观感）
@@ -110,6 +120,7 @@
 - **几何**：面板矩形来自 Compose 已有的 `onGloballyPositioned`（同一次回调顺带更新 `bottomMenuBounds`），玻璃层逐帧跟随，滑入/滑出动画不需要另写一套动画。底边额外向下延伸一个圆角（纯函数 `glassPanelRect`），把下方两个圆角推到父容器裁剪区之外——玻璃层只有单一半径，否则底部两角会挖出缺口。
 - **EPUB 直读不接**：直读模式的正文是 WebView（`EpubDirectWebLayer`），`RenderNode` 录制 WebView 不可靠；且该模式下 `read_view` 本身已 `GONE`（`isShown=false` 是无源否决）。双重门禁，保持实底菜单。
 - **宿主测量（真机修复）**：玻璃层以 `LayoutParams(0, 0)` 加入、位置由面板矩形决定，父容器因此测不到有效尺寸，内部玻璃子 View 停在 0×0、整层空绘制——真机表现是玻璃 / 磨砂档下阅读页底部菜单背景整体消失（页面文字原样透出、无模糊无着色）。修复两条：①定位时把 `LayoutParams` 同步为目标尺寸并按 `EXACTLY` 测量一次（尺寸只随面板变化，滑入滑出期间只改位置，不触发重新测量）；②面板只在「玻璃已激活且已完成一次定位」时让出底色（纯函数 `glassPanelFillYielded` + 单测），未定位时保持实底——即使玻璃链路在个别设备上失败，菜单也不会变成透明空面板。
+- **导航栏区域与玻璃层的关系（真机修复，第六轮 e2e 定稿）**：磨砂档下底部菜单下方 33px（导航栏高度）是平涂色带。前五轮全部在「给够不到的区域配色」上打转：第一轮沉浸式让玻璃铺到屏底、第二轮隐藏实色条、第三轮实色条平涂合成色、第四轮局部采样渐变、第五轮折射区整段离屏 + 条带让位——真机均无效。**第六轮像素取证定案根因**：阅读窗口的 decor 内容被布局在导航栏**上方**（`ActivityExtensions.fullScreen()` 的 `setDecorFitsSystemWindows(true)` + `upSystemUiVisibilityO` 只有 `LAYOUT_FULLSCREEN` 没有 `LAYOUT_HIDE_NAVIGATION`），面板底边 = 内容底边 = 导航栏顶边，屏幕底部导航栏高度的一段根本不在应用视图树内，唯一画手是窗口级 navColor 撕膜（真机实测 (42,46,49) = 菜单关闭态的非沉浸 navColor）——面板、玻璃层、App 内条带无论怎么配色都够不到那一段。**定稿方案（与朗读全面板 `applyReadAloudPlayerSystemBars` 同一先例）**：玻璃菜单激活且非分屏时窗口切 edge-to-edge（`WindowCompat.setDecorFitsSystemWindows(window, false)` + `LAYOUT_HIDE_NAVIGATION` 加入旗标 + `navigationBarColor` 透明，纯函数 `readerGlassMenuWantsE2e(isInMultiWindow, anyGlassMenuActive)` 判定 + 单测），玻璃层与面板随之延伸到屏幕底，导航栏区域由真实磨砂覆盖；菜单关闭走常规路径重设旗标并重涂 navColor（窗口保持非收合，`PageView.vw_navigation_bar` 内边距已处理内容避让，与朗读全面板使用后的持久 e2e 状态一致）。前五轮产物全部保留并降级为该窗口结构下的配套件：`glassBottomEdgeExtensionPx`（折射区离屏，e2e 后玻璃底边贴屏底仍需要）、`readerNavStripYieldsToGlass`（条带让位）、`readerGlassNavBarColor`（分屏 / 多窗口回退配色）。第五轮遗留的「玻璃合成 navColor 未落地」之谜同轮解开：`runMenuIn` 里 `upNavigationBarColor` 先于玻璃激活回调重跑，条带停在菜单关闭态色值——e2e 方案使该配色路径在玻璃激活时不再参与显示，谜底不再有观察面。JVM 单测：e2e 判定真值表（激活/非激活 × 分屏/非分屏）、外推量、让位判定、`readerGlassNavBarColor`（保留）。
 
 **顺序修正（勘查后）**：原计划先做音频播放控制面板，但核对代码后该面**没有可采样的兄弟子树**——展开态面板的背景是面板自身 `ComposeView` 内绘制的封面氛围层（`CoverAtmosphereBackdrop`），崩溃态胶囊是 `TYPE_APPLICATION_OVERLAY` 独立窗口（跨窗口无法录制 RenderNode）。要接折射必须把氛围层重构为真实 View 兄弟节点，属于「面板整体玻璃化」，归 P4。视频控制条同理（画面由 GSY `VideoPlayer` 内部的 Surface 渲染，控制条由该库自有布局承载）。书籍详情信息卡是滚动内容面板、底色 87% 不透明（`book_info_frost` 为 `#DD…`），换玻璃会直接降低正文可读性且需与 `vw_bg` 的 50% scrim 做叠加补偿，也归 P4。故 P3 首个（也是本阶段唯一）落点为阅读页底部菜单，其余内容域表面在 P4 统一评估。
 
@@ -143,18 +154,78 @@
 - **几何与让出底色**：Compose 顶栏 `onGloballyPositioned` 把窗口坐标交给 `updateTopGlassGeometry()`，玻璃层按目标尺寸 `EXACTLY` 测量并布局；`glassPanelFillYielded(topGlassActive, topGlassGeometried)` 未满足时顶栏保持 `style.surface`，玻璃链路失败不会得到透明空顶栏（与底部菜单 1.25.11 修复同一闸）。
 - **绑定时机**：与底部菜单同步——`runMenuIn()` 绑定、`runMenuOut()` 动画结束后解绑，阅读过程中不付每帧整树录制的开销。
 
-**待接入项的结论（均为「维持实底」，不是延后）**
+**已实施：阅读页搜索菜单底部面板玻璃化（`SearchMenu`）**
 
-- **键盘工具条 `KeyboardToolPop`**：独立 `PopupWindow` 窗口，窗口内找不到 Activity 的 `android.R.id.content`，无法跨窗口录制 RenderNode；其自身又是不透明卡片底。维持实底，除非把它重写为同窗口覆盖层（会改动输入法弹层生命周期，收益不抵风险）。
-- **套件管理预览**：面板背景是自身 Compose 绘制（可带 `panelImage`），其下方没有可采样的真实内容子树；接折射只会画出被面板遮住的壁纸（2.2 的错误管线）。维持实底。
-- **音频 / 视频控制面板**：展开态背景是面板自身 Compose 内的 `CoverAtmosphereBackdrop`，崩溃态胶囊是 `TYPE_APPLICATION_OVERLAY` 独立窗口；接玻璃必须先做「氛围层重构为真实 View 兄弟节点」的面板级改造，属于独立项目。维持实底。
-- **书籍详情信息卡**：底色 87% 不透明且叠 50% scrim，换玻璃会直接降低封面文字可读性。维持实底。
-- **带 scrim 的通用对话框（含 `SourceLoginDialog`）**：对话框在自己的窗口绘制，activity 侧无法采样；且玻璃采到的是未压暗内容，需先定 scrim 减淡 / tint 提亮补偿（侧边面板 0.42 补偿层是参照）。维持实底。
+- **结构改动**：`view_search_menu.xml` 里把 `ll_bottom_menu` 包进新容器 `fl_bottom_menu`（外边距 16/16/10dp 移到容器上），玻璃层是该容器的第一个子 View（`MATCH_PARENT`），面板本体留在容器内第二层。滑入 / 滑出动画改在容器上执行，玻璃与面板同属一个被 `translate` 的子树，位移逐帧一致——不需要坐标换算，也没有「玻璃停在终位、面板还在滑」的错位窗口。
+- **采样源**：与阅读页主菜单同一个正文 `read_view` 兄弟子树；EPUB 直读时 `read_view` 为 `GONE`，按「不可见即无源」退回实底。玻璃层在本视图子树内，采样源不是其自身也不是祖先，`StableLiquidGlassView` 的 `selfOrAncestorContains` 守卫不触发。
+- **几何**：面板走常规布局，玻璃层随容器一起测量，没有 P3 的 `LayoutParams(0,0)` 场景；圆角由玻璃层 `setCornerRadius(18dp)` 承担，矩形不做底边延伸（面板离屏幕底边 10dp，圆角本来就该露出来）。
+- **让出底色**：沿用 `glassPanelFillYielded(active, glassWidth/Height > 0)`——玻璃层由 `GONE` 转 `VISIBLE` 的那一帧还没有尺寸，面板保持 `panelBackground`，由玻璃层布局回调触发一次重算，避免一帧透明空面板。
+- **绑定时机**：`runMenuIn()` 绑定、收起动画结束后 `hideGlass()` 解绑并 `clearAnimation()`；面板不可见（`onVisibilityChanged`）时兜底解绑，搜索态切走不会遗留每帧整树录制。
+
+**已实施：漫画阅读菜单底部控制条玻璃化（`MangaMenu`）**
+
+- **结构**：`ll_manga_control_pill` 外新增容器 `fl_manga_control_pill`（16/14dp 外边距上移到容器），玻璃层是容器第一个子 View（`MATCH_PARENT`），随 `bottom_menu` 既有的滑入 / 滑出平移动画一起移动，与控制条逐帧同形。
+- **采样源**：漫画正文 `webtoon_frame`（`manga_menu` 的兄弟子树）。菜单打开期间全屏遮罩 `vw_menu_bg` 接管触摸，正文静止，不存在「滚动中逐帧录制大图列表」的场景——这也是本项从「维持实底」转为可实施的原因：成本只发生菜单可见期，与主底栏常驻采样的量级一致，而不是与滚动中的列表叠加。
+- **形状与让出底色**：圆角取 `manga_control_bar_radius`（24dp，恰好是 48dp 条高的一半，玻璃层与胶囊同形）；`glassPanelFillYielded(active, 玻璃实测尺寸 > 0)` 满足后控制条底色与 1px 描边一并让给玻璃层，由玻璃层布局回调触发一次重算。
+- **顶部标题栏同源接入**：`titleGlass` 是 `ConstraintLayout` 的兄弟节点，约束到 `title_bar` 的上下边（`0dp` × `0dp` 双向约束 = 与标题栏逐像素同尺寸），半径取 0（贴边全宽矩形，加圆角会在屏幕顶部两角挖缺口）。它与标题栏共用同一段 `anim_readbook_top_in/out`（`-100%` 垂直平移按时高百分比解析，两者高度相同 → 像素位移一致），滑动期间不出现「玻璃停住、标题栏先走」或反过来的错位。让出底色沿用 `glassPanelFillYielded(active, 玻璃实测尺寸 > 0)`：满足后把 `title_bar` 背景置空（原背景——主题主色或墨水屏描边——保存在 `titleBarBackground`，条件不满足时原样还原），所以玻璃链路失败时标题栏仍是实底主色，不会变成透明空条。
+- **共享控件的边界**：这里只为 `MangaMenu` 内的**这一个实例**接管背景，`TitleBar` 控件本身与其它页面的实例不变；墨水屏 `contentLiquidGlassSpec` 直接否决，描边分支保持原样。
+- **绑定时机**：`runMenuIn()` 绑定、收起动画结束 `hideGlass()` 解绑并 `clearAnimation()`；`onVisibilityChanged` 兜底，离开漫画页不会遗留采样。
+
+**已实施：订阅页顶部浮层玻璃化（`RssFragment` 的 `MainTopBarView`）**
+
+- **补齐的是同型宿主的缺口**：书架（`BookshelfFragment1`）与发现页（`ExploreFragment`）早已在 `updateTopBarOverlay` / `updateModernTopBarOverlay` 里调用 `setBackdropBlur`，订阅页同样使用 `MainTopBarView`、同样把列表滚到顶栏下方（`recycler.paddingTop = topBar.height` + `clipToPadding`），却从未接线，导致同一个顶栏控件只在订阅页是实底。
+- **采样源**：`fl_rss_content`——与 `top_bar` 同在 `swipeRefreshLayout` 内那个 `FrameLayout` 下，是兄弟子树。传 `swipe_refresh_layout` / `content_container` 一律会被 `topBarLiquidSourceAllowed` 拒绝（祖先采样 = RenderNode 重入录制）。
+- **Web 渲染模式视为无源**：订阅源可走 `renderWebSource` 用 WebView 渲染正文，此时内容由 WebView 独立绘制、不进父容器 RenderNode，采样只会得到空白。因此 `sourceAvailable` 取 `!rssWebContainer.isVisible`；容器切换（Web 渲染 / 空态 / 列表）后都会 `scheduleModernRssTopBarOverlayUpdate()` 重算。
+- **判定与降级复用既有纯函数**：`shouldEnableTopBarBackdrop(overlayContent, sdkInt, sourceAvailable)` 三条件缺一不可（已有 JVM 单测锁表）。其中 `overlayContent` 取自 `topBar.isOverlayMode()`，即顶栏配置为 `STYLE_REGULAR`（覆盖式）——默认样式下顶栏本就平铺在顶部、列表不会滚到其下，与书架 / 发现页的门槛完全一致；实底档由 `MainTopBarView` 的 `overlayOpaqueBackground` 实底分支兜住，API<33 保持原观感。
+- **经典布局显式解绑**：经典布局顶栏在列表上方、背后没有内容，`initClassicRecycler()` 里解绑玻璃层，避免它留在 `GONE` 子树里持有采样源。
+
+**已实施：订阅页订阅源卡片玻璃化（`RssAdapter` 的 `item_rss`）**
+
+- **为什么是壁纸域而不是内容域**：订阅页根布局透明、顶部搜索栏也已接入同一壁纸域玻璃，卡片下方直接就是主界面壁纸层（`decorView` 背景），没有需要采样的兄弟子树；与发现页书源名行同样是「卡片直接压在壁纸上」，因此走 `GlassSurface.rowBackground(host, WALLPAPER)`——同一 `FrostedGlassDrawable`、同一 `GlassPositionTracker` 绝对坐标对齐、同一四档降级，不新增任何材质参数。
+- **形状**：圆角取 `ui_panel_radius`，与 XML `bg_ai_surface_panel` 的 corners 同值；卡片原有的 1dp `divider` 描边改由玻璃的全局描边键（`glassStrokeColor`）接管，未设置时不描边。
+- **两种排布共用一套**：`RssAdapter` 的 1/2/3 列只改约束、内边距与字号，卡片根始终是同一个 `ConstraintLayout`；玻璃在 `convert()` 里统一挂一次，列数切换走 `notifyDataSetChanged` 时逐行重挂。
+- **位置刷新**：`GlassPositionTracker` 自动查找最近的 `RecyclerView` 注册滚动回调，并在 `OnPreDraw` 逐帧校正采样坐标——宫格滚动、上方增删造成的整体位移都不会留下「玻璃停在旧位置」。
+- **降级与回退**：墨水屏 / 低内存由 drawable 入口返回 null，`setBackgroundResource(bg_ai_surface_panel)` 回到原底色；无玻璃档由管线返回实底壳（底栏底色 + 1dp 描边），与发现页行同档观感。
+- **设置变更重绑**：卡片 drawable 在 `convert()` 时按当时档位 / 强度 / 描边创建，设置页是独立 Activity，返回时 RecyclerView 不会自己重绑。`RssFragment.onResume` 比较 `GlassSurface.configSignature`，签名变化就整表重绑一次；现代布局不显示订阅源宫格，直接跳过。
+- **不做**：文章列表条目（`item_rss_article*`）以封面图为主导、没有卡片底，叠玻璃只会压暗图片，维持现状。
+
+**已实施：RSS 阅读页标题栏壁纸域玻璃（`ReadRssActivity`）**
+
+- **为什么不是内容域**：正文整页由 WebView 独立绘制，不进父容器 `RenderNode`，把 `web_view_container` 当采样源只会录到空白；但这页**不需要采样正文**——`BaseActivity.imageBg` 默认为真，`decorView` 背景就是主题壁纸，标题栏这条区域背后正是壁纸。
+- **同一份壁纸管线**：`GlassSurface.panelBackground(titleBar, GlassSamplingDomain.WALLPAPER, 0f)`，与 `SelectActionBar` / 书源调试页底栏完全同源（同一 `ExploreGlassBackdrop` drawable、同一 `GlassPositionTracker` 绝对坐标对齐、同一四档降级）。圆角 0：贴边全宽矩形。
+- **不接管的两个早退**：无玻璃档（`resolvedExploreGlassMode() == SOLID`）直接返回，因为该档的实底壳取底栏底色，会让标题栏偏离全 App 统一的主题主色；墨水屏 / 低内存由 drawable 入口返回 null，保留 `TitleBar` 原有背景（含墨水屏描边）。
+
+**已实施：阅读页 AI 浮窗 / 章节摘要浮窗玻璃化（`ReadAiFloatingPanel` / `ReadAiSummaryPanel`）**
+
+- **结构**：两个面板都改为在自身 Compose 根 `Surface` 内部、正文 `Column` 之前放一个 `AndroidView` 承载 `StableLiquidGlassView`，用 `matchParentSize()` 与面板同尺寸、`Surface` 的 `clip(panelShape)` 负责圆角裁剪。`Surface` 只在玻璃就位时把 `color` 让成 `Transparent`，其余情况保持 `style.colors.background` 实底——与 `ModernActionPopup` 的「玻璃层 + 透明面板」同一接法，不需要再算一套面板矩形。
+- **采样源**：`read_view`（阅读页正文），与面板同在本窗口的兄弟分支；面板/Compose 子树都不是源的祖先或自身，`selfOrAncestorContains` 守卫不触发。源解析复用 `contentLiquidGlassSpec`，solid 档 / API<33 / 低内存 / 墨水屏任一命中即 `panelGlass == null`，面板外观完全回到接入前。
+- **绑定时机**：`open()` 时解析并进组合，`close()` 置空即从组合移除 → `onDetachedFromWindow` → `removeGlass()`；面板 `GONE` 期间也不绘制、不采样，不存在「收起后仍在每帧录制整页正文」。
+- **可读性口径**：不再额外叠不透明底（叠了就看不见玻璃），文字直接压在材质自带的 tint 上——与主底栏「图标 / 文字压在玻璃上」同一条口径；如果观感上仍嫌透，调整的是全局档位预设，而不是给面板单独加一层遮罩（那会出现第二套材质参数）。
+
+**已实施：共享搜索栏玻璃化（`io.legado.app.ui.widget.SearchView`）**
+
+- **阻塞点的解法**：原阻塞点是 `SearchView.onLayout` 每次都调 `TopBarSearchStyle.apply(this)` 用 `GradientDrawable` 重设背景，任何外部设置的玻璃都会被下一次布局冲掉。现在背景解析收进控件内部：`updateSearchBackground()` 先问 `resolveGlassBackground()`，拿到玻璃就设玻璃、否则回退原药丸——`onLayout` 再频繁也只会在同一实例上做身份比较，不会重建管线。
+- **显式采样域**：新增属性 `glassDomain`，默认 `GlassSamplingDomain.PANEL`（不接玻璃）。共享控件同时被壁纸页与弹窗使用（`dialog_cache_chapters` 里也是同一份 `view_search`），运行期无法判定背后是壁纸还是弹窗面板，因此由每个宿主显式声明；声明入口是 `applyGlassDomain(domain)`（对布局引用的 `androidx.appcompat.widget.SearchView` 做一次安全收窄，不是本控件则忽略）。采样域合法性仍由既有 `glassSurfaceDrawableAllowed` 纯函数表决定，不新增判定分支。
+- **几何只换材质不换形状**：圆角直接取 `TopBarSearchStyle.radius()`（`UiCorner.searchRadius(18f)`，跟随全局圆角缩放），与被替换的药丸逐像素同形。
+- **重绑**：`onLayout` 按 `GlassSurface.configSignature` 缓存 drawable；从设置页返回时窗口重新可见（`onWindowVisibilityChanged == VISIBLE`）再比一次签名，档位 / 强度 / 描边变化后自动换新 drawable 并重挂位置追踪器。
+- **降级**：墨水屏 / 低内存由 drawable 入口返回 null，回退原半透明药丸；无玻璃档返回与全 App 行、底栏同档的实底壳（底栏底色 + 1dp 描边）。
+- **已接入宿主（壁纸域）**：`RssFragment`（经典订阅页）、`ExploreFragment`（经典发现页）、`MyFragment`（设置搜索）、`RssSearchActivity`、`SearchActivity`（书搜索，根布局无 `TitleBar`）、`BaseImportBookActivity`、`SearchContentActivity`、`BookshelfManageActivity`、`BookSourceDebugActivity`、`RssSourceDebugActivity`、`HighlightRuleManageActivity`、`ReaderAssetManageActivity`。共同前提是根布局无底色、`TitleBar` 透明——`ThemeConfig.applyTheme` 每次应用主题都会把 `transparentNavBar` 置真，`TitleBar` 因此走 `Color.TRANSPARENT` 分支。
+- **明确排除**：`CacheChapterDialog`（弹窗自身窗口没有 Activity 壁纸，保持默认 `PANEL`）；`BookSourceActivity` / `RssSourceActivity` / `ReplaceRuleActivity` 已改为 Compose 顶栏并 `titleBar.visibility = View.GONE`，XML 搜索栏不可见，也保持默认 `PANEL`。
+
+**未接入项的接入设计（结构前置条件未满足，前置条件可做，单独成项）**
+
+以下每一项都已定位到**具体阻塞点**与**接入路径**，不是「维持现状」的空结论：
+
+- **键盘工具条 `KeyboardToolPop`**：阻塞点是**跨窗口**——它是独立 `PopupWindow`，窗口内找不到 Activity 的 `android.R.id.content`，`RenderNode` 录制无法跨窗口。两条路径：①（推荐）把它改成同窗口的覆盖层（挂在 DecorView 上、跟随输入法 inset），采样 `android.R.id.content`，代价是重做输入法弹层生命周期；②保留 `PopupWindow`，为它单独建一条「窗口快照」管线（`PixelCopy` 定时抓取下层窗口 + 硬件模糊），属于新的降级链，不与现有四档共用。
+- **套件管理预览（`DiscoverySuiteManageActivity`）**：阻塞点是**没有可采样层**——预览面板的外观由自身 Compose 绘制（`panelImage` 可换成任意图），其下方没有任何真实内容子树，接折射只会画出被面板盖住的壁纸。接入路径：把预览的背景拆成「真实 View 兄弟节点」——面板自身负责内容，背后放一个承载实际选图的 `View`/`ImageView` 容器作为采样源（与书籍详情同一思路）；在此之前接入等于画错采样源。
+- **音频 / 视频播放器面板**：阻塞点是**背景由自身绘制 + 跨窗口**——展开态背景是面板 Compose 内的 `CoverAtmosphereBackdrop`，收起态胶囊是 `TYPE_APPLICATION_OVERLAY` 独立窗口。接入路径：①展开态把氛围层从 Compose 内部搬到面板层的真实 `View` 兄弟节点，玻璃即可采样它；②收起态胶囊只能走「窗口快照」管线（同 `KeyboardToolPop` 路径②）。视频控制条另有播放器库自带 Surface，需在库布局外包一层同窗口容器。
+- **书籍详情信息卡（`ll_detail_panel` / `ll_info_page` / `ll_detail_content_panel`）**：阻塞点是**没有合法 `ViewGroup` 采样源 + 可读性**——背后是 `bg_book`（`ImageView`，`bind` 只接受 `ViewGroup`），唯一同级容器 `vw_bg` 是面板的祖先（会被拒绝）。接入路径：把 `bg_book` 与 `vw_bg` 的 `#50000000` scrim 包进一个 `FrameLayout(@id/book_backdrop)`，三张卡片各挂一层玻璃采样它（与面板一起滚动、采样源静止）；同时要把卡片底色 `book_info_frost`（`#DDF1F2F6` / `#DD252528`，87% 不透明）让出，否则玻璃整块被盖住，而文字直接压在封面图上会明显降低可读性——这一步需要先定「封面压暗 + 文字描边 / 加厚 tint」的观感方案，属于独立的可读性设计项，不是接线工作量。
+- **带 scrim 的通用对话框（含 `SourceLoginDialog`）**：阻塞点是**跨窗口 + 亮度不一致**——对话框在自己的窗口绘制，activity 侧无法采样；且玻璃会采到未压暗的内容，需要与侧边面板 0.42 补偿层同类的亮度补偿。接入路径：先做「窗口快照」管线（`PixelCopy` 抓取宿主窗口可见区域 + 复用硬件模糊），再按对话框 `dimAmount` 叠加补偿层；在没有这条管线前，把对话框做成玻璃只会显示为「不模糊的壁纸色块」。
 
 ## 5. 约束与风险
 
 - **无新增用户可见偏好键**：所有阶段消费现有档位键与 `GlassMaterialPreset`；`tools/check_settings_mapping.py` 必须 PASS。
 - **行内禁令不变**：RecyclerView 行内一律 drawable 路径；`StableLiquidGlassView` 只用于固定位置浮层。
 - **降级链不变**：新接入面自动继承四档降级与设备判定，不写第二套判断。
-- **性能边界**：单表面面积与底栏同量级可接受；列表行（书架卡片、RSS 卡片）属于高数量表面，不做逐行玻璃化。
-- **验证协议**：`./gradlew :app:testAppDebugUnitTest --tests "io.legado.app.ui.main.*" --tests "io.legado.app.ui.config.*" --tests "io.legado.app.ui.glass.*"`、`:app:assembleAppDebug`、`python3 tools/check_settings_mapping.py`；真机观感由安装 debug 包核验。
+- **性能边界**：单表面面积与底栏同量级可接受。列表行只在「可见数量有界、滚动期采样成本为每行一条位图 shader 矩形」的前提下走逐行玻璃——发现页书源名行、订阅源卡片（1–3 列宫格 / 单列列表，可见上限约 20 个）已按此口径接入；书架封面卡片行数更多、单行更高，仍不逐行玻璃化。搜索栏是每页一个、屏幕位置固定的药丸，位置追踪器只在真正位移时重录，列表滚动期间不产生逐帧重绘，成本远低于一行列表。
+- **验证协议**：`./gradlew :app:testAppDebugUnitTest --tests "io.legado.app.ui.main.*" --tests "io.legado.app.ui.config.*" --tests "io.legado.app.ui.glass.*" --tests "io.legado.app.ui.widget.*"`、`:app:assembleAppDebug`、`python3 tools/check_settings_mapping.py`；真机观感由安装 debug 包核验。

@@ -34,7 +34,9 @@ import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.widget.SelectActionBar
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
@@ -163,6 +165,8 @@ class BookshelfManageActivity :
     }
 
     private fun initSearchView() {
+        // 搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        searchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         searchView.applyTint(primaryTextColor)
         searchView.isSubmitButtonEnabled = true
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {

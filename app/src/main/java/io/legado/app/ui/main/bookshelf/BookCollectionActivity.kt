@@ -1,11 +1,13 @@
 package io.legado.app.ui.main.bookshelf
 
 import android.content.Intent
+import android.graphics.Outline
 import android.os.Bundle
 import android.graphics.drawable.ColorDrawable
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -32,6 +34,8 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.manage.BookshelfManageViewModel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.main.bookshelf.style1.books.BaseBooksAdapter
 import io.legado.app.ui.main.bookshelf.style1.books.BooksAdapterGrid
 import io.legado.app.utils.applyMainBottomBarPadding
@@ -81,9 +85,7 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
     )
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.bookActionBar.background = ColorDrawable(
-            UiCorner.surfaceColor(UiCorner.themeSurfaceCardColor(this))
-        )
+        applyBookActionBarBackground()
         val spanCount = AppConfig.bookshelfLayout.takeIf { it >= 2 } ?: 3
         binding.rvBooks.layoutManager = GridLayoutManager(this, spanCount)
         binding.rvBooks.clipToPadding = false
@@ -139,6 +141,33 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
                     appDb.bookCollectionDao.getCollection(collectionId)?.name
                 } ?: getString(R.string.book_collection)
                 binding.titleBar.title = "$title (${it.size})"
+            }
+        }
+    }
+
+    /**
+     * 收藏页多选操作栏与 `SelectActionBar` 同语义（`imageBg=true` 的壁纸域底栏，
+     * 直接遮在书籍列表上），因此接入同一条玻璃管线：档位 / 强度 / 四档降级全部
+     * 由 `GlassSurface.panelBackground` 判定。
+     *
+     * 只有墨水屏 / 低内存设备会返回 null（无玻璃档本身由底层返回实底壳，不经过这里），
+     * 此时保留原实底卡片色。
+     */
+    private fun applyBookActionBarBackground() {
+        val bar = binding.bookActionBar
+        val glass = GlassSurface.panelBackground(bar, GlassSamplingDomain.WALLPAPER)
+        if (glass == null) {
+            bar.background = ColorDrawable(
+                UiCorner.surfaceColor(UiCorner.themeSurfaceCardColor(this))
+            )
+            return
+        }
+        bar.background = glass
+        // 玻璃 drawable 不提供轮廓；显式补圆角矩形轮廓，保留 XML 里的 8dp 投影。
+        bar.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val radius = resources.getDimension(R.dimen.ui_panel_radius)
+                outline.setRoundRect(0, 0, view.width, view.height, radius)
             }
         }
     }

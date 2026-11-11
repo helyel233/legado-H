@@ -20,6 +20,8 @@ import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.utils.dpToPx
 import splitties.views.onLongClick
@@ -62,6 +64,7 @@ class RssAdapter(
     ) {
         binding.apply {
             applyItemLayout()
+            applyRowGlass()
             tvName.text = item.sourceName
             val options = RequestOptions()
                 .set(OkHttpModelLoader.sourceOriginOption, item.sourceUrl)
@@ -120,6 +123,26 @@ class RssAdapter(
             bottomMargin = vMargin
         }
         root.requestLayout()
+    }
+
+    /**
+     * 订阅源卡片背景接到发现页书源名行**同一条**壁纸域玻璃管线。
+     *
+     * 卡片背后就是壁纸（订阅页根布局透明，主界面壁纸层挂在 decorView 上），采样域为
+     * [GlassSamplingDomain.WALLPAPER]，圆角与 XML 的 `ui_panel_radius` 同值。drawable
+     * 按卡片在屏幕上的实时位置采样壁纸，`GlassPositionTracker` 负责滚动 / 列数切换 /
+     * 上方增删造成的位移逐帧刷新，不会出现「玻璃停在旧位置」。
+     *
+     * 降级回退 XML 原底色 [R.drawable.bg_ai_surface_panel]（圆角 + 1dp 描边），
+     * 只在墨水屏 / 低内存时发生；无玻璃档由管线返回实底壳，与发现页行同档观感。
+     */
+    private fun ItemRssBinding.applyRowGlass() {
+        val glass = GlassSurface.rowBackground(root, GlassSamplingDomain.WALLPAPER)
+        if (glass != null) {
+            root.background = glass
+        } else {
+            root.setBackgroundResource(R.drawable.bg_ai_surface_panel)
+        }
     }
 
     private fun buildListConstraints(): ConstraintSet = ConstraintSet().apply {

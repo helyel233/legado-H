@@ -109,10 +109,12 @@ import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.common.UiErrorType
 import io.legado.app.ui.main.MainFragmentInterface
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.video.VideoBookPreloader
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.RoundedTagBarView
 import io.legado.app.ui.widget.SourceSelectDialog
+import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.shouldEnableTopBarBackdrop
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
@@ -1855,6 +1857,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     private fun initSearchView() {
         val view = searchView ?: return
+        // 经典布局的搜索栏在透明 TitleBar 内容区里，背后是主题壁纸
+        view.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
         view.applyTint(primaryTextColor)
         view.isSubmitButtonEnabled = true
         view.queryHint = getString(R.string.screen_find)

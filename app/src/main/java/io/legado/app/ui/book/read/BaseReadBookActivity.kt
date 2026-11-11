@@ -10,6 +10,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.viewModels
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -40,6 +41,9 @@ import io.legado.app.ui.book.read.config.PaddingConfigDialog
 import io.legado.app.ui.book.read.config.PageKeyDialog
 import io.legado.app.ui.book.read.config.ReaderTemplateDialog
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.readerGlassMenuWantsE2e
+import io.legado.app.ui.glass.readerGlassNavBarColor
+import io.legado.app.ui.glass.readerNavStripYieldsToGlass
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.find
@@ -98,6 +102,10 @@ abstract class BaseReadBookActivity :
             view.updateLayoutParams {
                 height = insets.bottom
             }
+            // 沉浸阅读收起菜单时导航条隐藏、弹出菜单时复现：高度随 inset 回填的
+            // 那一刻可能晚于 upNavigationBarColor，这里补一次重涂，否则条带停留在
+            // 高度未就绪时的均值回退色。
+            upNavigationBar()
             windowInsets
         }
     }
@@ -176,6 +184,11 @@ abstract class BaseReadBookActivity :
         useBgMeanColor: Boolean = false
     ) {
         upLayoutInDisplayCutoutMode()
+        if (!toolBarHide && readerGlassMenuWantsE2e(isInMultiWindow, readGlassMenuActive())) {
+            applyGlassMenuSystemBars(useBgMeanColor)
+            return
+        }
+        restoreDecorFitsSystemWindows()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.run {
                 if (toolBarHide && ReadBookConfig.hideNavigationBar) {
@@ -215,6 +228,72 @@ abstract class BaseReadBookActivity :
         }
     }
 
+    /** 底部 / 搜索两个菜单任一处于玻璃激活态。玻璃激活蕴含菜单可见（收起即解绑）。 */
+    private fun readGlassMenuActive(): Boolean =
+        binding.readMenu.isBottomGlassActive || binding.searchMenu.isBottomGlassActive
+
+    /**
+     * 玻璃菜单 / 朗读全面板曾把窗口切到 edge-to-edge（Window 级
+     * `setDecorFitsSystemWindows(false)` 是粘性的，仅 API 30+ 存在此旗标）。
+     * 回到常规路径时复位为 `true`，即 Activity 初始已知良好状态——否则玻璃菜单
+     * 开过一次后，API 30-34 上 `statusBarColor` / `navigationBarColor` 将被
+     * 系统永久忽略，阅读页正文条带配色失效。API 35+ 强制 e2e，复位为无害空操作。
+     */
+    protected var windowForcedEdgeToEdge = false
+        protected set
+
+    private fun restoreDecorFitsSystemWindows() {
+        if (!windowForcedEdgeToEdge) return
+        windowForcedEdgeToEdge = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+        }
+    }
+
+    /**
+     * 玻璃菜单激活时的系统条带：窗口切 edge-to-edge。
+     *
+     * 真机第六轮根因：常规路径（`upSystemUiVisibilityO`）只有
+     * `LAYOUT_FULLSCREEN` 没有 `LAYOUT_HIDE_NAVIGATION`，decor 内容被布局在
+     * 导航栏上方，屏幕底部导航栏高度的一段不在应用视图树内，只能由窗口级
+     * navColor 上色——面板、玻璃层、App 内条带都画不到（前五轮在配色上打转
+     * 的根因）。这里与朗读全面板（`applyReadAloudPlayerSystemBars`）同一先例：
+     * `setDecorFitsSystemWindows(false)` + 三个 `LAYOUT_*` 旗标，让玻璃层真正
+     * 铺到屏幕底；菜单关闭后走常规路径重设旗标并重涂 navColor，窗口保持
+     * 非收合（PageView 的 `vw_navigation_bar` 内边距已处理内容避让）。
+     * Window 级 `setDecorFitsSystemWindows(false)` 是粘性的，故置位
+     * `windowForcedEdgeToEdge`，由常规路径的 `restoreDecorFitsSystemWindows`
+     * 在菜单关闭后复位。仅在非分屏、且菜单可见（`toolBarHide` = false）时走本分支；
+     * 分屏回退到 `upNavigationBarColor` 的玻璃近似配色。
+     */
+    @Suppress("DEPRECATION")
+    private fun applyGlassMenuSystemBars(useBgMeanColor: Boolean) {
+        windowForcedEdgeToEdge = true
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.run {
+                show(WindowInsets.Type.navigationBars())
+                show(WindowInsets.Type.statusBars())
+            }
+        }
+        window.decorView.systemUiVisibility =
+            (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        val statusBarColor =
+            if (AppConfig.readBarStyleFollowPage
+                && ReadBookConfig.durConfig.curBgType() == 0
+                || useBgMeanColor
+            ) {
+                ReadBookConfig.bgMeanColor
+            } else {
+                ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar)
+            }
+        setLightStatusBar(ColorUtils.isColorLight(statusBarColor))
+    }
+
     @Suppress("DEPRECATION")
     private fun upSystemUiVisibilityO(
         isInMultiWindow: Boolean,
@@ -241,6 +320,22 @@ abstract class BaseReadBookActivity :
     override fun upNavigationBarColor() {
         upNavigationBar()
         when {
+            // 系统导航栏在 App 内容之外（玻璃层画不到），仅影响 Android 14 及以下
+            // 非 e2e 设备：玻璃菜单弹出时把面板的最终色算出来铺上去，磨砂档避免
+            // 「面板偏透明 + 导航栏偏白」两层。Android 15+ 强制 e2e 会忽略此色，
+            // 那些设备上靠条带让位（见 upNavigationBar）保证观感。
+            binding.readMenu.isBottomGlassActive -> setNavigationBarColorAuto(
+                readerGlassNavBarColor(
+                    tintAlpha = binding.readMenu.glassTintAlpha,
+                    backdropColor = ReadBookConfig.bgMeanColor
+                )
+            )
+            binding.searchMenu.isBottomGlassActive -> setNavigationBarColorAuto(
+                readerGlassNavBarColor(
+                    tintAlpha = binding.searchMenu.glassTintAlpha,
+                    backdropColor = ReadBookConfig.bgMeanColor
+                )
+            )
             binding.readMenu.isVisible -> super.upNavigationBarColor()
             binding.searchMenu.bottomMenuVisible -> super.upNavigationBarColor()
             bottomDialog > 0 -> super.upNavigationBarColor()
@@ -249,9 +344,25 @@ abstract class BaseReadBookActivity :
         }
     }
 
+    /**
+     * App 内实色导航条压在玻璃层之上（布局声明在 `read_menu` 之后）。
+     *
+     * 玻璃底部菜单激活时让位隐藏：玻璃层已经把底边折射区整段推出屏幕（见
+     * `glassBottomEdgeExtensionPx`），页面导航条区域又没有内容（正文与页脚都
+     * 约束在它上方），玻璃盖上去就是连续磨砂到屏幕底——条带无论怎么画都追不上
+     * 活采样（第一至四轮真机四连败的教训），不如不画。搜索菜单的玻璃面板悬在
+     * 导航条上方、不伸进导航条区域，条带保留主题底栏色兜底。
+     */
     @SuppressLint("RtlHardcoded")
     private fun upNavigationBar() {
-        binding.navigationBar.gone(!menuLayoutIsVisible)
+        val readMenuGlassActive = readerNavStripYieldsToGlass(
+            glassActive = binding.readMenu.isBottomGlassActive,
+            menuVisible = binding.readMenu.isVisible
+        )
+        if (!readMenuGlassActive) {
+            binding.navigationBar.setBackgroundColor(bottomBackground)
+        }
+        binding.navigationBar.gone(readMenuGlassActive || !menuLayoutIsVisible)
     }
 
     /**
