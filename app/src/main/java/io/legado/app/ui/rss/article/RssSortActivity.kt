@@ -227,6 +227,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         shouldFocusSearch = intent.getBooleanExtra("focusSearch", false)
         pureSearch = intent.getBooleanExtra("pureSearch", false)
         binding.viewPager.adapter = adapter

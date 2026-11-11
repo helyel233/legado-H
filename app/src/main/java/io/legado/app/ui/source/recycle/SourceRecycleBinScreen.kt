@@ -35,12 +35,13 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.SourceRecycleBin
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.SourceRecycleBinHelp
+import io.legado.app.ui.glass.GlassSurfaceCard
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppRuleTabRow
 import io.legado.app.ui.widget.compose.AppRuleTextField
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.toastOnUi
@@ -80,6 +81,7 @@ private sealed interface RecycleBinConfirm {
 fun SourceRecycleBinScreen() {
     val style = rememberAppDialogStyle()
     val palette = style.toMiuixPalette()
+    val glassSignature = rememberGlassConfigSignature()
     val scope = rememberCoroutineScope()
 
     val filters = remember { RecycleBinFilter.entries.toList() }
@@ -164,6 +166,7 @@ fun SourceRecycleBinScreen() {
                         item = item,
                         selected = item.id in selectedIds,
                         style = style,
+                        configSignature = glassSignature,
                         onClick = {
                             selectedIds = if (item.id in selectedIds) {
                                 selectedIds - item.id
@@ -342,18 +345,20 @@ private fun RecycleBinItemCard(
     item: SourceRecycleBin,
     selected: Boolean,
     style: AppDialogStyle,
+    configSignature: String,
     onClick: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit
 ) {
-    LegadoMiuixCard(
+    GlassSurfaceCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        color = if (selected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
+        fillColor = if (selected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
         contentColor = style.primaryText,
         cornerRadius = style.actionRadius,
-        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
+        insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp),
+        configSignature = configSignature
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

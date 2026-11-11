@@ -46,6 +46,7 @@ abstract class BaseImportBookActivity<VM : ViewModel> :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initSearchView()
+        binding.titleBar.applyWallpaperGlass()
     }
 
     /**

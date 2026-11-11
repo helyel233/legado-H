@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,10 +51,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -81,6 +84,10 @@ import io.legado.app.lib.theme.themeDividerColorOrDefault
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.utils.ColorUtils
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import kotlin.math.roundToInt
 
 private const val MAX_SAVEABLE_MULTI_CHOICE_ITEMS = 128
@@ -197,75 +204,107 @@ fun AppDialogFrame(
 ) {
     val style = rememberAppDialogStyle()
     val frameShape = RoundedCornerShape(style.panelRadius)
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    // 与 View 对话框同一口径：只有宿主页面背后真是壁纸、且处于玻璃档时才铺玻璃；
+    // 阅读页 / 书籍详情封面 / 视频 / 音频等页面弹出时仍用主题实底表面。
+    val glassSignature = rememberGlassConfigSignature()
+    val glassEnabled = remember(context, glassSignature) {
+        GlassSurface.dialogGlassAllowed(context)
+    }
+    val outerModifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 10.dp, vertical = 10.dp)
+    val frame: @Composable ColumnScope.() -> Unit = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+        ) {
+            Text(
+                text = title,
+                color = style.primaryText,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = style.titleFontFamily,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!message.isNullOrBlank() && !messageInContent) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AppDialogMessageText(message = message, style = style)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            val contentModifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+            val shouldScrollContent = scrollContent || messageInContent
+            if (shouldScrollContent) {
+                Column(
+                    modifier = contentModifier.verticalScroll(rememberScrollState())
+                ) {
+                    AppDialogContent(
+                        message = message,
+                        messageInContent = messageInContent,
+                        style = style,
+                        content = content
+                    )
+                }
+            } else {
+                Column(modifier = contentModifier) {
+                    AppDialogContent(
+                        message = message,
+                        messageInContent = messageInContent,
+                        style = style,
+                        content = content
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                actions()
+            }
+        }
+    }
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
     ) {
-        LegadoMiuixCard(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp)
-                .shadow(14.dp, frameShape, clip = false)
-                .border(1.dp, style.stroke, frameShape),
-            color = style.surface,
-            contentColor = style.primaryText,
-            cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
+        if (glassEnabled) {
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = with(density) { style.panelRadius.toPx() },
+                configSignature = glassSignature,
+                // 对话框是独立窗口：采样必须按屏幕对齐，不能用窗口根视图当基准。
+                screenAligned = true,
+                modifier = outerModifier.clip(frameShape)
             ) {
-                Text(
-                    text = title,
-                    color = style.primaryText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = style.titleFontFamily,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                // 玻璃接管表面后卡片必须让出填充色；阴影同样会绕开玻璃外缘画一圈黑边。
+                LegadoMiuixCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.Transparent,
+                    contentColor = style.primaryText,
+                    cornerRadius = style.panelRadius,
+                    insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                    content = frame
                 )
-                if (!message.isNullOrBlank() && !messageInContent) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AppDialogMessageText(message = message, style = style)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                val contentModifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                val shouldScrollContent = scrollContent || messageInContent
-                if (shouldScrollContent) {
-                    Column(
-                        modifier = contentModifier.verticalScroll(rememberScrollState())
-                    ) {
-                        AppDialogContent(
-                            message = message,
-                            messageInContent = messageInContent,
-                            style = style,
-                            content = content
-                        )
-                    }
-                } else {
-                    Column(modifier = contentModifier) {
-                        AppDialogContent(
-                            message = message,
-                            messageInContent = messageInContent,
-                            style = style,
-                            content = content
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    actions()
-                }
             }
+        } else {
+            LegadoMiuixCard(
+                modifier = outerModifier
+                    .shadow(14.dp, frameShape, clip = false)
+                    .border(1.dp, style.stroke, frameShape),
+                color = style.surface,
+                contentColor = style.primaryText,
+                cornerRadius = style.panelRadius,
+                insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                content = frame
+            )
         }
     }
 }

@@ -49,7 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
@@ -159,15 +159,16 @@ private fun <T> SourceSelectContent(
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
     ) {
-        LegadoMiuixCard(
+        GlassSurfaceCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxPanelHeight)
                 .padding(horizontal = 18.dp, vertical = 12.dp),
-            color = style.surface,
+            fillColor = style.surface,
             contentColor = style.primaryText,
             cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)
+            insidePadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            screenAligned = true
         ) {
             if (showTitle) {
                 Text(

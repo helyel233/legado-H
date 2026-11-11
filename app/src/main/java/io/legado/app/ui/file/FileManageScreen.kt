@@ -45,11 +45,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import java.io.File
 
 @Composable
@@ -70,6 +76,9 @@ internal fun FileManageScreen(
     val dialogStyle = rememberAppDialogStyle()
     val headerBg = Color(context.backgroundColor)
     val headerTextColor = Color(context.accentColor)
+    // 壁纸模式下页面根透明，顶栏背后是壁纸（壁纸域）；无背景图 / 墨水屏保持原页色。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
 
     val filteredFiles = remember(currentFiles, searchQuery) {
         if (searchQuery.isNotEmpty()) {
@@ -84,11 +93,13 @@ internal fun FileManageScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(palette.page)
+            .background(glassPageBackgroundColor(palette.page, wallpaperVisible))
     ) {
         FileTopBar(
             title = title,
             palette = palette,
+            wallpaperVisible = wallpaperVisible,
+            glassSignature = glassSignature,
             onBackClick = onBackClick
         )
 
@@ -193,34 +204,56 @@ private fun SearchBar(
 private fun FileTopBar(
     title: String,
     palette: AppSettingPalette,
+    wallpaperVisible: Boolean,
+    glassSignature: String,
     onBackClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(palette.page)
-            .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_arrow_back),
-            contentDescription = stringResource(R.string.back),
-            tint = palette.accent,
+    val topBarContent: @Composable () -> Unit = {
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clickable(onClick = onBackClick)
-                .padding(8.dp)
-        )
-        Text(
-            text = title,
-            color = palette.primaryText,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_arrow_back),
+                contentDescription = stringResource(R.string.back),
+                tint = palette.accent,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(onClick = onBackClick)
+                    .padding(8.dp)
+            )
+            Text(
+                text = title,
+                color = palette.primaryText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+    if (wallpaperVisible) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = 0f,
+            configSignature = glassSignature,
+            modifier = Modifier.fillMaxWidth(),
+            fallback = Modifier.background(palette.page)
+        ) {
+            topBarContent()
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(palette.page)
+        ) {
+            topBarContent()
+        }
     }
 }
 

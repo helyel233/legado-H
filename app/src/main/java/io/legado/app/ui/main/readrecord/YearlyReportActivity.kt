@@ -48,6 +48,7 @@ class YearlyReportActivity :
     override val viewModel by viewModels<YearlyReportViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         binding.titleBar.setNavigationOnClickListener {
             finish()
         }

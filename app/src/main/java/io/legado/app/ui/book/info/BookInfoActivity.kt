@@ -303,6 +303,12 @@ class BookInfoActivity :
     private var composeReadTimeJob: Job? = null
 
     override val binding by viewBinding(ActivityBookInfoBinding::inflate)
+
+    /**
+     * 本页背景是满屏书籍封面（`bg_book`）而不是主题壁纸：从本页弹出的对话框
+     * 若采壁纸域玻璃会画出用户看不见的背景，保持主题实底。
+     */
+    override val showsWallpaperBehindContent: Boolean get() = false
     override val viewModel by viewModels<BookInfoViewModel>()
     private val cacheManageViewModel by viewModels<CacheManageViewModel>()
     private var initIntroView = false

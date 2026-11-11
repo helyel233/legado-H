@@ -39,6 +39,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
     private var currentGroup = ""
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         initView()
         upFragments()
     }

@@ -93,6 +93,7 @@ class ReaderAssetManageActivity : BaseActivity<ActivityReaderAssetManageBinding>
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         filter = savedInstanceState?.getString("filter") ?: pickKind.takeIf { it in setOf("image", "font") } ?: "all"
         query = savedInstanceState?.getString("query").orEmpty()
         val directoryNames = savedInstanceState?.getStringArrayList("directoryNames").orEmpty()

@@ -51,6 +51,7 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
     private var fixedTitle: String = ""
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         fixedBookKey = intent.getStringExtra(EXTRA_BOOK_KEY).orEmpty()
         fixedTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         if (fixedBookKey.isNotBlank()) {

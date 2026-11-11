@@ -67,6 +67,17 @@ abstract class BaseActivity<VB : ViewBinding>(
             }
         }
 
+    /**
+     * 本页内容背后是否真实露出壁纸（壁纸域玻璃的采样前提：页面内卡片与对话框共用）。
+     *
+     * 取值与 [applyRootBackgroundPolicy] 同源：只有「背景图可用的普通页面」根背景
+     * 才会被置空、透出壁纸。自己用不透明内容铺满整页的页面（书籍详情封面、视频、
+     * 音频播放）必须覆盖为 false——否则从这些页面弹出的对话框、页面内的卡片会采到
+     * 用户根本看不见的壁纸。
+     */
+    open val showsWallpaperBehindContent: Boolean
+        get() = imageBg && !AppConfig.isEInkMode && ThemeConfig.hasUsableBgImage(this)
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppContextWrapper.wrap(newBase))
     }

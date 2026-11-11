@@ -40,6 +40,9 @@ import io.legado.app.data.entities.Book
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
@@ -137,6 +140,7 @@ fun ReadRecordOverviewCard(
     modifier: Modifier = Modifier
 ) {
     val colors = rememberReadRecordThemeColors()
+    val glassSignature = rememberGlassConfigSignature()
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -149,12 +153,14 @@ fun ReadRecordOverviewCard(
                 value = ui.todayValue,
                 label = ui.todayLabel,
                 colors = colors,
+                configSignature = glassSignature,
                 modifier = Modifier.weight(1f)
             )
             ReadRecordOverviewMetric(
                 value = ui.monthValue,
                 label = ui.monthLabel,
                 colors = colors,
+                configSignature = glassSignature,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -166,12 +172,14 @@ fun ReadRecordOverviewCard(
                 value = ui.totalValue,
                 label = ui.totalLabel,
                 colors = colors,
+                configSignature = glassSignature,
                 modifier = Modifier.weight(1f)
             )
             ReadRecordOverviewMetric(
                 value = ui.activeDaysValue,
                 label = ui.activeDaysLabel,
                 colors = colors,
+                configSignature = glassSignature,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -694,7 +702,8 @@ private fun ReadRecordOverviewMetric(
     value: String,
     label: String,
     colors: ReadRecordThemeColors,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    configSignature: String = rememberGlassConfigSignature()
 ) {
     val context = LocalContext.current
     val surfaceColor = UiCorner.surfaceColor(colors.cardColor)
@@ -705,34 +714,42 @@ private fun ReadRecordOverviewMetric(
     }
     val titleFont = FontFamily(context.titleTypeface())
     val bodyFont = FontFamily(context.uiTypeface())
-    Column(
-        modifier = modifier
-            .heightIn(min = 88.dp)
-            .appSettingPanelBackground(
-                normalColor = surfaceColor,
-                panelImage = panelImage,
-                borderColor = borderColor,
-                radiusPx = radiusPx
-            )
-            .padding(16.dp)
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = radiusPx,
+        configSignature = configSignature,
+        modifier = modifier.heightIn(min = 88.dp),
+        fallback = Modifier.appSettingPanelBackground(
+            normalColor = surfaceColor,
+            panelImage = panelImage,
+            borderColor = borderColor,
+            radiusPx = radiusPx
+        ),
+        requireWallpaperHost = true
     ) {
-        Text(
-            text = value,
-            color = colors.primaryText,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = titleFont,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = label,
-            color = colors.secondaryText,
-            fontSize = 12.sp,
-            fontFamily = bodyFont,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = value,
+                color = colors.primaryText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = titleFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = label,
+                color = colors.secondaryText,
+                fontSize = 12.sp,
+                fontFamily = bodyFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }

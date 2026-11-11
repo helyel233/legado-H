@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -78,6 +79,8 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.toThemeTextColorOrNull
@@ -267,6 +270,13 @@ fun AppManagementCard(
         androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     enabled: Boolean = true,
     drawPanelImage: Boolean = true,
+    /**
+     * 是否允许把卡片底换成壁纸域玻璃。默认跟随 [LocalAppManagementGlassSignature]：
+     * 只有列表页（壁纸可见、非墨水屏）会提供签名，弹窗与不透明页面保持主题实底。
+     * 对话框内的卡片必须显式传 false——弹窗根视图不是屏幕，按页面口径采样会错位。
+     */
+    glassSurface: Boolean = true,
+    glassSignature: String? = LocalAppManagementGlassSignature.current,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
@@ -305,20 +315,46 @@ fun AppManagementCard(
         )
         else -> Modifier
     }
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .appSettingPanelBackground(
-                normalColor = if (pressed) palette.settings.rowPressed else palette.settings.row,
-                panelImage = panelImage.takeIf { drawPanelImage },
-                borderColor = palette.settings.border,
-                radiusPx = panelRadiusPx
-            )
-            .then(clickableModifier)
-            .padding(insidePadding),
-        content = content
+    val solidBackground = Modifier.appSettingPanelBackground(
+        normalColor = if (pressed) palette.settings.rowPressed else palette.settings.row,
+        panelImage = panelImage.takeIf { drawPanelImage },
+        borderColor = palette.settings.border,
+        radiusPx = panelRadiusPx
     )
+    val outerModifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 4.dp)
+    if (glassSurface && glassSignature != null) {
+        val shape = RoundedCornerShape(with(LocalDensity.current) { panelRadiusPx.toDp() })
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = panelRadiusPx,
+            configSignature = glassSignature,
+            requireWallpaperHost = true,
+            modifier = outerModifier.clip(shape),
+            fallback = solidBackground
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 玻璃 drawable 没有按下态，用主题行按下色叠在玻璃之上保留触摸反馈
+                    .background(
+                        if (pressed) Color(palette.settings.rowPressed) else Color.Transparent
+                    )
+                    .then(clickableModifier)
+                    .padding(insidePadding),
+                content = content
+            )
+        }
+    } else {
+        Column(
+            modifier = outerModifier
+                .then(solidBackground)
+                .then(clickableModifier)
+                .padding(insidePadding),
+            content = content
+        )
+    }
 }
 
 @Composable
@@ -338,6 +374,8 @@ fun AppManagementListRow(
     subtitleMaxLines: Int = 1,
     minHeight: Dp = 0.dp,
     drawPanelImage: Boolean = true,
+    glassSurface: Boolean = true,
+    glassSignature: String? = LocalAppManagementGlassSignature.current,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
@@ -354,6 +392,8 @@ fun AppManagementListRow(
         modifier = modifier.fillMaxWidth(),
         insidePadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         drawPanelImage = drawPanelImage,
+        glassSurface = glassSurface,
+        glassSignature = glassSignature,
         onClick = onClick,
         onLongClick = onLongClick
     ) {

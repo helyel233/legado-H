@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 
 @Suppress("unused")
@@ -50,14 +50,15 @@ class WaitDialog(private val context: Context) : ComponentDialog(context) {
                     CompositionLocalProvider(
                         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                     ) {
-                        LegadoMiuixCard(
+                        GlassSurfaceCard(
                             modifier = Modifier
                                 .widthIn(min = 180.dp, max = 420.dp)
                                 .padding(horizontal = 18.dp, vertical = 12.dp),
-                            color = style.surface,
+                            fillColor = style.surface,
                             contentColor = style.primaryText,
                             cornerRadius = style.panelRadius,
-                            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
+                            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+                            screenAligned = true
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

@@ -50,6 +50,7 @@ class BookCacheExportActivity :
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         binding.composeView.setContent {
             LegadoComposeTheme {
                 val items by viewModel.items.collectAsStateWithLifecycle()

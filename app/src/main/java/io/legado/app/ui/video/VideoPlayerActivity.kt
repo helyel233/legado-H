@@ -109,6 +109,9 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     override val binding by viewBinding(ActivityVideoPlayerBinding::inflate)
+
+    /** 视频画面铺满窗口，背后没有壁纸：本页弹窗保持主题实底表面。 */
+    override val showsWallpaperBehindContent: Boolean get() = false
     override val viewModel by viewModels<VideoPlayerViewModel>()
     private val bookInfoViewModel by viewModels<BookInfoViewModel>()
     private val playerView: VideoPlayer by lazy { binding.playerView }

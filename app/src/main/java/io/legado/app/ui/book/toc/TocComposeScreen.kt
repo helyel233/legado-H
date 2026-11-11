@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -58,6 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -99,6 +101,10 @@ import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.utils.toastOnUi
 import io.legado.app.ui.book.read.epub.EpubTocNavigationPolicy
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +137,10 @@ fun TocComposeScreen(
     LegadoComposeTheme {
         val context = LocalContext.current
         val palette = rememberAppManagementPalette()
+        // 章节/书签行与底部跳转条背后都是壁纸；有背景图且非墨水屏才接壁纸域玻璃，
+        // 其余情况保持原有的行衬底与不透明浮块。
+        val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+        val glassSignature = rememberGlassConfigSignature()
         var selectedPage by remember { mutableStateOf(TocPage.Chapters) }
         var searchQuery by remember { mutableStateOf("") }
         var refreshTick by remember { mutableIntStateOf(0) }
@@ -338,6 +348,7 @@ fun TocComposeScreen(
                 onSearchQueryChange = { searchQuery = it },
                 onBack = onBack,
                 onSelectPage = { selectedPage = it },
+                glassSignature = if (wallpaperVisible) glassSignature else null,
                 chapterActions = {
                     buildChapterActions(
                         book = book,
@@ -405,6 +416,7 @@ fun TocComposeScreen(
                                     chapterCacheMap = chapterCacheMap,
                                     countWords = countWords,
                                     hasVolumes = hasVolumes,
+                                    glassSignature = glassSignature,
                                     listState = chapterListState,
                                     onToggleVolume = { chapter ->
                                         if (!chapter.isVolume || searchQuery.isNotBlank()) return@TocChapterList
@@ -429,8 +441,14 @@ fun TocComposeScreen(
                                     }
                                 )
                             }
-                            bookLoaded && book == null -> TocEmptyState(text = stringResource(R.string.empty))
-                            chaptersLoaded -> TocEmptyState(text = stringResource(R.string.empty))
+                            bookLoaded && book == null -> TocEmptyState(
+                                text = stringResource(R.string.empty),
+                                glassSignature = glassSignature
+                            )
+                            chaptersLoaded -> TocEmptyState(
+                                text = stringResource(R.string.empty),
+                                glassSignature = glassSignature
+                            )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
@@ -441,6 +459,7 @@ fun TocComposeScreen(
                                 TocBookmarkList(
                                     bookmarks = bookmarks,
                                     listState = bookmarkListState,
+                                    glassSignature = glassSignature,
                                     onClick = { bookmark ->
                                         (context as? android.app.Activity)?.run {
                                             setResult(
@@ -455,8 +474,14 @@ fun TocComposeScreen(
                                     onLongClick = onEditBookmark
                                 )
                             }
-                            bookLoaded && book == null -> TocEmptyState(text = stringResource(R.string.empty))
-                            bookmarksLoaded -> TocEmptyState(text = stringResource(R.string.empty))
+                            bookLoaded && book == null -> TocEmptyState(
+                                text = stringResource(R.string.empty),
+                                glassSignature = glassSignature
+                            )
+                            bookmarksLoaded -> TocEmptyState(
+                                text = stringResource(R.string.empty),
+                                glassSignature = glassSignature
+                            )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
@@ -532,8 +557,14 @@ fun TocComposeScreen(
                                     }
                                 )
                             }
-                            bookLoaded && book == null -> TocEmptyState(text = stringResource(R.string.empty))
-                            illustrationsLoaded -> TocEmptyState(text = stringResource(R.string.illustration_empty))
+                            bookLoaded && book == null -> TocEmptyState(
+                                text = stringResource(R.string.empty),
+                                glassSignature = glassSignature
+                            )
+                            illustrationsLoaded -> TocEmptyState(
+                                text = stringResource(R.string.illustration_empty),
+                                glassSignature = glassSignature
+                            )
                             else -> Box(modifier = Modifier.fillMaxSize())
                         }
                     }
@@ -543,6 +574,7 @@ fun TocComposeScreen(
             if (selectedPage == TocPage.Chapters) {
                 TocBottomBar(
                     book = book,
+                    glassSignature = if (wallpaperVisible) glassSignature else null,
                     onCurrentClick = {
                         book?.let {
                             scope.launch {
@@ -570,7 +602,7 @@ fun TocComposeScreen(
 }
 
 @Composable
-private fun TocEmptyState(text: String) {
+private fun TocEmptyState(text: String, glassSignature: String?) {
     val palette = rememberAppManagementPalette()
     Box(
         modifier = Modifier
@@ -578,10 +610,16 @@ private fun TocEmptyState(text: String) {
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
-        AppManagementCard(
+        TocGlassSurface(
             palette = palette,
+            glassSignature = glassSignature,
+            cornerRadiusPx = palette.settings.panelRadiusPx,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-            drawPanelImage = true
+            contentAlignment = Alignment.CenterStart,
+            contentModifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = text,
@@ -602,6 +640,7 @@ private fun TocTopBar(
     onSearchQueryChange: (String) -> Unit,
     onBack: () -> Unit,
     onSelectPage: (TocPage) -> Unit,
+    glassSignature: String?,
     chapterActions: @Composable () -> List<AppManagementMenuAction>,
     bookmarkActions: @Composable () -> List<AppManagementMenuAction>,
     illustrationActions: @Composable () -> List<AppManagementMenuAction>
@@ -656,13 +695,15 @@ private fun TocTopBar(
         if (selectedPage != TocPage.Illustrations) {
             TocSearchField(
                 query = searchQuery,
-                onQueryChange = onSearchQueryChange
+                onQueryChange = onSearchQueryChange,
+                glassSignature = glassSignature
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
         TocTabs(
             selectedPage = selectedPage,
             onSelectPage = onSelectPage,
+            glassSignature = glassSignature,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -671,48 +712,66 @@ private fun TocTopBar(
 @Composable
 private fun TocSearchField(
     query: String,
-    onQueryChange: (String) -> Unit
+    onQueryChange: (String) -> Unit,
+    glassSignature: String?
 ) {
     val palette = rememberAppManagementPalette()
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(palette.settings.row))
-            .padding(horizontal = 12.dp, vertical = 9.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_search),
-                contentDescription = null,
-                tint = palette.settings.secondaryText,
-                modifier = Modifier.size(18.dp)
-            )
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = TextStyle(
-                    color = palette.settings.primaryText,
-                    fontSize = 14.sp,
-                    fontFamily = palette.settings.bodyFontFamily
-                ),
-                cursorBrush = SolidColor(palette.settings.accent),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                decorationBox = { inner ->
-                    if (query.isBlank()) {
-                        Text(
-                            text = stringResource(R.string.search),
-                            color = palette.settings.secondaryText,
-                            fontSize = 14.sp,
-                            fontFamily = palette.settings.bodyFontFamily
-                        )
+    val shape = RoundedCornerShape(12.dp)
+    val radiusPx = with(LocalDensity.current) { 12.dp.toPx() }
+    val fieldContent: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_search),
+                    contentDescription = null,
+                    tint = palette.settings.secondaryText,
+                    modifier = Modifier.size(18.dp)
+                )
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = palette.settings.primaryText,
+                        fontSize = 14.sp,
+                        fontFamily = palette.settings.bodyFontFamily
+                    ),
+                    cursorBrush = SolidColor(palette.settings.accent),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp),
+                    decorationBox = { inner ->
+                        if (query.isBlank()) {
+                            Text(
+                                text = stringResource(R.string.search),
+                                color = palette.settings.secondaryText,
+                                fontSize = 14.sp,
+                                fontFamily = palette.settings.bodyFontFamily
+                            )
+                        }
+                        inner()
                     }
-                    inner()
-                }
-            )
+                )
+            }
+        }
+    }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = radiusPx,
+            configSignature = glassSignature,
+            modifier = Modifier.fillMaxWidth(),
+            fallback = Modifier.clip(shape).background(Color(palette.settings.row))
+        ) {
+            fieldContent()
+        }
+    } else {
+        Box(Modifier.fillMaxWidth().clip(shape).background(Color(palette.settings.row))) {
+            fieldContent()
         }
     }
 }
@@ -721,34 +780,53 @@ private fun TocSearchField(
 private fun TocTabs(
     selectedPage: TocPage,
     onSelectPage: (TocPage) -> Unit,
+    glassSignature: String?,
     modifier: Modifier = Modifier
 ) {
     val palette = rememberAppManagementPalette()
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(palette.settings.row))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        TocTabButton(
-            text = stringResource(R.string.chapter_list),
-            selected = selectedPage == TocPage.Chapters,
-            onClick = { onSelectPage(TocPage.Chapters) },
-            modifier = Modifier.weight(1f)
-        )
-        TocTabButton(
-            text = stringResource(R.string.bookmark),
-            selected = selectedPage == TocPage.Bookmarks,
-            onClick = { onSelectPage(TocPage.Bookmarks) },
-            modifier = Modifier.weight(1f)
-        )
-        TocTabButton(
-            text = stringResource(R.string.menu_illustration),
-            selected = selectedPage == TocPage.Illustrations,
-            onClick = { onSelectPage(TocPage.Illustrations) },
-            modifier = Modifier.weight(1f)
-        )
+    val shape = RoundedCornerShape(12.dp)
+    val radiusPx = with(LocalDensity.current) { 12.dp.toPx() }
+    val tabsRow: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            TocTabButton(
+                text = stringResource(R.string.chapter_list),
+                selected = selectedPage == TocPage.Chapters,
+                onClick = { onSelectPage(TocPage.Chapters) },
+                modifier = Modifier.weight(1f)
+            )
+            TocTabButton(
+                text = stringResource(R.string.bookmark),
+                selected = selectedPage == TocPage.Bookmarks,
+                onClick = { onSelectPage(TocPage.Bookmarks) },
+                modifier = Modifier.weight(1f)
+            )
+            TocTabButton(
+                text = stringResource(R.string.menu_illustration),
+                selected = selectedPage == TocPage.Illustrations,
+                onClick = { onSelectPage(TocPage.Illustrations) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = radiusPx,
+            configSignature = glassSignature,
+            modifier = modifier,
+            fallback = Modifier.clip(shape).background(Color(palette.settings.row))
+        ) {
+            tabsRow()
+        }
+    } else {
+        Box(modifier.clip(shape).background(Color(palette.settings.row))) {
+            tabsRow()
+        }
     }
 }
 
@@ -797,6 +875,7 @@ private fun TocChapterList(
     chapterCacheMap: Map<String, Boolean>,
     countWords: Boolean,
     hasVolumes: Boolean,
+    glassSignature: String?,
     listState: LazyListState,
     onToggleVolume: (BookChapter) -> Unit,
     onOpenChapter: (BookChapter) -> Unit
@@ -844,6 +923,7 @@ private fun TocChapterList(
                             cached = chapterCacheMap[chapter.primaryStr()] ?: true,
                             countWords = countWords,
                             indented = hasVolumes,
+                            glassSignature = glassSignature,
                             onClick = { onOpenChapter(chapter) }
                         )
                     }
@@ -936,91 +1016,114 @@ private fun TocChapterRow(
     cached: Boolean,
     countWords: Boolean,
     indented: Boolean,
+    glassSignature: String?,
     onClick: () -> Unit
 ) {
     val isCurrent = book?.durChapterIndex == chapter.index
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     // 自定义背景图下章节行原本全透明，文字直接压图难分辨：背景图模式时先铺半透明行底
-    // （row 已按界面不透明度调透明度），当前章/按压高亮再叠加其上
+    // （row 已按界面不透明度调透明度），当前章/按压高亮再叠加其上。
+    // 玻璃可用时这层行底交给壁纸域玻璃（与目录浮块同一管线），无背景图/墨水屏时仍是原行底。
     val context = LocalContext.current
     val hasBgImage = remember(context, palette.settings.themeSignature) {
         ThemeConfig.hasUsableBgImage(context)
     }
+    val fallbackBackground = if (hasBgImage) Color(palette.settings.row) else Color.Transparent
     val rowBackground = when {
         isCurrent -> palette.settings.accent.copy(alpha = 0.14f)
         pressed -> Color(palette.settings.rowPressed)
         else -> Color.Transparent
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .background(if (hasBgImage) Color(palette.settings.row) else Color.Transparent)
-            .background(rowBackground)
-            .padding(
-                start = if (indented) 22.dp else 14.dp,
-                end = 12.dp,
-                top = 11.dp,
-                bottom = 11.dp
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (chapter.isVip && !chapter.isPay) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_lock_outline),
-                contentDescription = null,
-                tint = palette.settings.secondaryText,
-                modifier = Modifier
-                    .size(18.dp)
-                    .padding(end = 4.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = if (isCurrent) palette.settings.accent else palette.settings.primaryText,
-                fontSize = 14.sp,
-                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                fontFamily = palette.settings.bodyFontFamily,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            val meta = listOfNotNull(
-                chapter.tag?.takeIf { it.isNotBlank() },
-                chapter.wordCount?.takeIf { countWords && it.isNotBlank() }
-            ).joinToString("  ")
-            if (meta.isNotBlank()) {
-                Text(
-                    text = meta,
-                    color = palette.settings.secondaryText,
-                    fontSize = 12.sp,
-                    fontFamily = palette.settings.bodyFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp)
+    val rowContent: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+                .background(rowBackground)
+                .padding(
+                    start = if (indented) 22.dp else 14.dp,
+                    end = 12.dp,
+                    top = 11.dp,
+                    bottom = 11.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (chapter.isVip && !chapter.isPay) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_lock_outline),
+                    contentDescription = null,
+                    tint = palette.settings.secondaryText,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .padding(end = 4.dp)
                 )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = if (isCurrent) palette.settings.accent else palette.settings.primaryText,
+                    fontSize = 14.sp,
+                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                    fontFamily = palette.settings.bodyFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val meta = listOfNotNull(
+                    chapter.tag?.takeIf { it.isNotBlank() },
+                    chapter.wordCount?.takeIf { countWords && it.isNotBlank() }
+                ).joinToString("  ")
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        color = palette.settings.secondaryText,
+                        fontSize = 12.sp,
+                        fontFamily = palette.settings.bodyFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+            }
+            // 每章显示缓存状态：已缓存打勾、未缓存显示云朵
+            Icon(
+                painter = painterResource(
+                    id = if (cached) R.drawable.ic_check else R.drawable.ic_outline_cloud_24
+                ),
+                contentDescription = null,
+                tint = if (isCurrent) palette.settings.accent else palette.settings.secondaryText,
+                modifier = Modifier.size(20.dp)
+            )
         }
-        // 每章显示缓存状态：已缓存打勾、未缓存显示云朵
-        Icon(
-            painter = painterResource(
-                id = if (cached) R.drawable.ic_check else R.drawable.ic_outline_cloud_24
-            ),
-            contentDescription = null,
-            tint = if (isCurrent) palette.settings.accent else palette.settings.secondaryText,
-            modifier = Modifier.size(20.dp)
-        )
+    }
+    if (glassSignature != null) {
+        // 章节行无缝相连（无外边距），圆角取 0：每行各自采样同一张壁纸，
+        // 视觉上等价于整片玻璃，同时保持原有行几何与吸顶卷标题不变。
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = 0f,
+            configSignature = glassSignature,
+            requireWallpaperHost = true,
+            modifier = Modifier.fillMaxWidth(),
+            fallback = Modifier.background(fallbackBackground)
+        ) {
+            rowContent()
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxWidth().background(fallbackBackground)) {
+            rowContent()
+        }
     }
 }
 
 @Composable
 private fun TocBookmarkList(
     bookmarks: List<Bookmark>,
+    glassSignature: String?,
     listState: LazyListState,
     onClick: (Bookmark) -> Unit,
     onLongClick: (Bookmark, Int) -> Unit
@@ -1037,6 +1140,7 @@ private fun TocBookmarkList(
             ) { index, bookmark ->
                 TocBookmarkRow(
                     bookmark = bookmark,
+                    glassSignature = glassSignature,
                     onClick = { onClick(bookmark) },
                     onLongClick = { onLongClick(bookmark, index) }
                 )
@@ -1052,6 +1156,7 @@ private fun TocBookmarkList(
 @Composable
 private fun TocBookmarkRow(
     bookmark: Bookmark,
+    glassSignature: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1060,6 +1165,8 @@ private fun TocBookmarkRow(
         palette = palette,
         insidePadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         drawPanelImage = true,
+        glassSurface = glassSignature != null,
+        glassSignature = glassSignature,
         onClick = onClick,
         onLongClick = onLongClick
     ) {
@@ -1100,6 +1207,7 @@ private fun TocBookmarkRow(
 @Composable
 private fun TocBottomBar(
     book: Book?,
+    glassSignature: String?,
     onCurrentClick: () -> Unit,
     onTopClick: () -> Unit,
     onBottomClick: () -> Unit
@@ -1112,11 +1220,16 @@ private fun TocBottomBar(
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AppManagementCard(
+        TocGlassSurface(
             palette = palette,
-            modifier = Modifier.weight(1f),
+            glassSignature = glassSignature,
+            cornerRadiusPx = palette.settings.panelRadiusPx,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             insidePadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            drawPanelImage = true,
+            contentAlignment = Alignment.CenterStart,
+            contentModifier = Modifier.fillMaxWidth(),
             onClick = onCurrentClick
         ) {
             Text(
@@ -1132,11 +1245,15 @@ private fun TocBottomBar(
         TocBottomIconButton(
             iconRes = R.drawable.ic_arrow_drop_up,
             contentDescription = stringResource(R.string.go_to_top),
+            palette = palette,
+            glassSignature = glassSignature,
             onClick = onTopClick
         )
         TocBottomIconButton(
             iconRes = R.drawable.ic_arrow_drop_down,
             contentDescription = stringResource(R.string.go_to_bottom),
+            palette = palette,
+            glassSignature = glassSignature,
             onClick = onBottomClick
         )
     }
@@ -1146,34 +1263,19 @@ private fun TocBottomBar(
 private fun TocBottomIconButton(
     iconRes: Int,
     contentDescription: String,
+    palette: AppManagementPalette,
+    glassSignature: String?,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val palette = rememberAppManagementPalette()
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val panelRadiusPx = palette.settings.panelRadiusPx
-    val panelImage = remember(context, panelRadiusPx, palette.settings.themeSignature) {
-        UiCorner.panelImageDrawable(context, panelRadiusPx)
-    }
-    Box(
-        modifier = Modifier
-            .padding(start = 8.dp)
-            .defaultMinSize(minWidth = 42.dp, minHeight = 42.dp)
-            .clip(RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
-            .appSettingPanelBackground(
-                normalColor = if (pressed) palette.settings.rowPressed else palette.settings.row,
-                panelImage = panelImage,
-                borderColor = palette.settings.border,
-                radiusPx = panelRadiusPx
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(9.dp),
-        contentAlignment = Alignment.Center
+    val radiusDp = palette.miuix.actionRadius ?: 12.dp
+    TocGlassSurface(
+        palette = palette,
+        glassSignature = glassSignature,
+        cornerRadiusPx = with(LocalDensity.current) { radiusDp.toPx() },
+        modifier = Modifier.padding(start = 8.dp),
+        insidePadding = PaddingValues(9.dp),
+        minSize = 42.dp,
+        onClick = onClick
     ) {
         Icon(
             painter = painterResource(id = iconRes),
@@ -1181,6 +1283,89 @@ private fun TocBottomIconButton(
             tint = palette.settings.primaryText,
             modifier = Modifier.size(22.dp)
         )
+    }
+}
+
+/**
+ * 目录页里浮在壁纸上的圆角面（底部跳转条浮块 / 空状态卡）。
+ *
+ * [glassSignature] 非空时用壁纸域玻璃做底：静止态完全交给玻璃层，按压态只叠一层
+ * 主题行色保留触摸反馈；[glassSignature] 为空（无背景图 / 墨水屏）或玻璃不可用时，
+ * 回退到原来的不透明面板背景——两条路径的外观与改造前逐点一致。
+ */
+@Composable
+private fun TocGlassSurface(
+    palette: AppManagementPalette,
+    glassSignature: String?,
+    cornerRadiusPx: Float,
+    modifier: Modifier = Modifier,
+    insidePadding: PaddingValues,
+    contentAlignment: Alignment = Alignment.Center,
+    contentModifier: Modifier = Modifier,
+    minSize: Dp = 0.dp,
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val shape = RoundedCornerShape(with(LocalDensity.current) { cornerRadiusPx.toDp() })
+    val panelImage = remember(context, cornerRadiusPx, palette.settings.themeSignature) {
+        UiCorner.panelImageDrawable(context, cornerRadiusPx)
+    }
+    val panelBackground = Modifier.appSettingPanelBackground(
+        normalColor = if (pressed) palette.settings.rowPressed else palette.settings.row,
+        panelImage = panelImage,
+        borderColor = palette.settings.border,
+        radiusPx = cornerRadiusPx
+    )
+    val chipContent: @Composable BoxScope.() -> Unit = {
+        Box(
+            modifier = contentModifier
+                .then(if (minSize > 0.dp) Modifier.defaultMinSize(minSize, minSize) else Modifier)
+                .clip(shape)
+                .then(
+                    if (glassSignature != null) {
+                        Modifier.background(
+                            if (pressed) Color(palette.settings.rowPressed) else Color.Transparent
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = onClick
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(insidePadding),
+            contentAlignment = contentAlignment,
+            content = content
+        )
+    }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = cornerRadiusPx,
+            configSignature = glassSignature,
+            // 空态卡等调用方可能传未按 wallpaperVisible 过滤的签名，这里再要一份
+            // 壁纸可见性口径兜底；底栏 / 图标按钮调用处已 gate，判定结果一致。
+            requireWallpaperHost = true,
+            modifier = modifier,
+            fallback = panelBackground
+        ) {
+            chipContent()
+        }
+    } else {
+        Box(modifier = modifier.then(panelBackground)) {
+            chipContent()
+        }
     }
 }
 

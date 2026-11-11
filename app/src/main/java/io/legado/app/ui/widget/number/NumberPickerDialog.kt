@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.lib.theme.composeActionRadius
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
@@ -178,17 +179,18 @@ private fun NumberPickerContent(
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
     ) {
-        LegadoMiuixCard(
+        GlassSurfaceCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 520.dp)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(horizontal = 18.dp, vertical = 12.dp),
-            color = style.surface,
+            fillColor = style.surface,
             contentColor = style.primaryText,
             cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
+            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+            screenAligned = true
         ) {
             Text(
                 text = title,

@@ -55,7 +55,7 @@ import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
@@ -426,16 +426,17 @@ private fun BookTagAddDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        LegadoMiuixCard(
+        GlassSurfaceCard(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .fillMaxHeight(0.82f)
                 .widthIn(max = 620.dp)
                 .navigationBarsPadding(),
-            color = style.surface,
+            fillColor = style.surface,
             contentColor = style.primaryText,
             cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(16.dp)
+            insidePadding = PaddingValues(16.dp),
+            screenAligned = true
         ) {
             Text(
                 text = stringResource(R.string.bookshelf_tag_add_title),
@@ -623,16 +624,17 @@ private fun BookTagAssignmentDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        LegadoMiuixCard(
+        GlassSurfaceCard(
             modifier = Modifier
                 .fillMaxWidth(0.96f)
                 .fillMaxHeight(0.90f)
                 .widthIn(max = 700.dp)
                 .navigationBarsPadding(),
-            color = style.surface,
+            fillColor = style.surface,
             contentColor = style.primaryText,
             cornerRadius = style.panelRadius,
-            insidePadding = PaddingValues(16.dp)
+            insidePadding = PaddingValues(16.dp),
+            screenAligned = true
         ) {
             Text(
                 text = "${assignment.groupName} · ${assignment.tag}",

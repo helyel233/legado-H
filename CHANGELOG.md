@@ -1,5 +1,34 @@
 # 更新日志
 
+## 1.28.1 版（2026-11-11）
+
+本版完成全 App 玻璃材质接入的 **P5** 阶段：把壁纸域玻璃从「已有宿主」扩展到设置/About 根背景与分区卡、`ConfigActivity` 顶栏、目录页（搜索框/三标签/底部跳转条/空状态卡/章节行）、共享 `TitleBar` 显式 opt-in（17 个二级页调用点）、页面内卡片壳 `GlassSurfaceCard`、Compose 弹窗统一宿主 `AppDialogFrame`（46 点）与 View 弹窗入口（`BaseDialogFragment`/`AndroidAlertBuilder`）、独立卡片式弹窗，以及 `AppManagementCard` 玻璃分支接管管理列表行。底层材质与四档降级仍由同一管线单点决定，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。
+
+### 新功能
+
+- **设置/About 根背景透壁纸 + 分区卡/顶栏玻璃**：`SettingSpecScreen` 全部分区卡、`FileManageScreen` 页根 + 顶栏、`ReadRecord` 等 About 页改 `glassPageBackgroundColor` 透出壁纸（背景图可用且非墨水屏时），无背景图/墨水屏保持原观感。
+- **`ConfigActivity` 顶栏（`ConfigTopBar`）**：所有 `ComposeSettingFragment` 二级页共用，程序化根布局无背景、顶栏背后即壁纸，按**壁纸域**接 `GlassPanel(WALLPAPER, 圆角 0)`（贴边矩形避免顶部缺口），判定 `rememberHasUsableBgImage() && !isEInkMode`，一处改动覆盖约 20 个二级页。
+- **目录页 `TocComposeScreen`**：浮于章节列表之上的搜索框/三标签/底部跳转条/空状态卡统一接壁纸域玻璃；新增页面局部 helper `TocGlassSurface`（不改共享 `AppManagementCard`，保持爆炸半径最小）；章节行用圆角 0 的玻璃替原半透明行底、书签行走 `AppManagementCard(glassSurface = 签名 != null)`。
+- **共享 `TitleBar` 显式 opt-in `applyWallpaperGlass()`**：仅当顶栏处于透明档（`!opaque && context.transparentNavBar`）、非墨水屏、页面确有可用背景图时，把背景换成 `GlassSurface.panelBackground(this, WALLPAPER, 0f)`；判定抽成纯函数 `titleBarWantsWallpaperGlass`，5 例 JVM 单测锁定真值表。**17 个调用点**：首批 4（搜索内容/全库搜索/所有书签/阅读记录），第五批 13（缓存管理/缓存章节/缓存导出/导入书籍基类/书架收藏/规则回收站/RSS 收藏/RSS 文章/高亮规则/阅读器资源/AI 图库/发现查看更多/年度报告）。不做全局 TitleBar 改造（62 个布局引用，背景非壁纸页过多，显式 opt-in 让调用点自声明）。
+- **页面内卡片壳 `GlassSurfaceCard`**：命中玻璃时用 `GlassPanel` 垫底、`LegadoMiuixCard` 填充让位透明；未命中时原样铺实底卡。只声明采样方式（页面卡片按根视图对齐、对话框按屏幕对齐）。落点：阅读记录 4 张统计小卡 + 6 个面板、搜索输入帮助卡、规则回收站条目卡、书架标签管理卡。
+- **弹窗/浮层玻璃化**：`AppDialogFrame`（46 调用点）整体玻璃化（`GlassPanel(WALLPAPER, screenAligned = true)` 垫底、卡片填充与 14dp 阴影让位、按面板圆角裁剪）；View 弹窗两处统一入口——`BaseDialogFragment` 窗口背景改 `GlassSurface.dialogBackground(view)`、`AndroidAlertBuilder` 两处 `setBackgroundDrawable` 改走 `decorView` 采样；独立卡片式弹窗 `WaitDialog`/`BackupProgressDialog`/`NumberPickerDialog`/`SourceSelectDialog`/`BookshelfConfigDialog` 改 `GlassSurfaceCard(screenAligned = true)`。判定 `dialogGlassAllowed`，阅读页/书籍详情等壁纸不可见页弹窗保持实底。
+- **管理列表行玻璃（范围修正）**：按用户要求推翻第六批「长列表逐行 AndroidView 违反性能边界」的排除——`AppManagementCard`/`AppManagementListRow` 新增 `glassSurface`（默认 true）与 `glassSignature`，签名由 `AppManagementScaffold` 按页提供一次（行卡片只读不算，不新增偏好监听）；卡片走 `GlassPanel(requireWallpaperHost = true)` 同一份「页面背后真是壁纸」口径。自动覆盖书源/订阅源/订阅规则/替换规则/词典/TXT 目录规则/定时任务/书架标签管理。保持实底：弹窗内卡片、未提供签名的设置资源列表页（主题包/气泡/封面/存储/AI 提供商/分享模板/顶栏方案）。
+
+### 修复
+
+- **采样前提误接防护**：`GlassSurface` 新增 `dialogGlassAllowed`/`pageGlassAllowed` 同源判定，采样前提上提为 `BaseActivity.showsWallpaperBehindContent`（与 `applyRootBackgroundPolicy` 同源）；音频播放/视频播放/书籍详情三页自铺不透明内容、覆盖为 false，避免从这些页弹出的对话框/卡片采到用户看不见的壁纸（错误管线）。
+- **目录章节行视觉**：圆角 0 玻璃替原半透明行底，逐行采样同一张壁纸视觉上等价于整片玻璃，保持行几何与吸顶卷标题不变；当前章/按压高亮仍叠在玻璃之上。
+
+### 实现要点
+
+- **阴影让位纪律延续（第八轮定稿）**：`AppDialogFrame` 卡片 `shadowElevation` 14dp 会绕玻璃外缘画黑边 → 玻璃激活让出底色时阴影归零（与 P3 底部菜单 `glassPanelShadowElevationDp` 同因）。
+- **长列表行性能边界**：列表可见行数由组合窗口天然有界（一屏 10–20 行），滚动期每行只做壁纸局部采样与材质绘制，不录制列表子树、不在行内放 `StableLiquidGlassView`。
+- 材质/四档降级/描边/采样坐标全部沿用底层管线，无第二套参数；不新增任何偏好键。
+
+### 单测
+
+新增 `TitleBarGlassTest` 5 例（`titleBarWantsWallpaperGlass` 真值表）、`LiquidGlassSpecTest` +2 例；glass + widget 单测全绿；`tools/check_settings_mapping.py` 仍 PASS（零新增偏好键）。真机观感部分已在 vivo V2417A（Android 16）adb 截图核验（目录/配置页顶栏/弹窗/卡片透壁纸），部分（书源管理卡片、列表行滚动、部分顶栏黑色壁纸不明显）待补。
+
 ## 1.27.1 版（2026-11-11）
 
 本版完成全 App 玻璃材质接入的 **P3 顶部菜单 + P4 面板与弹层** 阶段：把液态玻璃 / 硬件高斯 / 实底壳四档降级管线从「发现页 + 底栏 + 顶栏」扩展到阅读页（顶/底菜单、搜索菜单、漫画菜单、AI 浮窗与章节摘要浮窗）、订阅页（顶部浮层 + 订阅源卡片 + RSS 阅读标题栏）、共享搜索栏、主界面侧边导航面板、统一弹层宿主 `ModernActionPopup`；内容域复用顶栏同款 `StableLiquidGlassView` + 兄弟子树采样（`selfOrAncestorContains` 守卫），壁纸域复用 `GlassSurface.rowBackground/panelBackground` 同源 drawable；顶栏 `TopBarGlassSpec` 收拢为跨包 `LiquidGlassSpec` 单一来源，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。

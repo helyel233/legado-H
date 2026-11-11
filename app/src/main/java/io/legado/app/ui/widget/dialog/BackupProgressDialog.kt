@@ -35,7 +35,7 @@ import io.legado.app.help.storage.BackupProgress
 import io.legado.app.help.storage.BackupProgressHolder
 import io.legado.app.help.storage.BackupStage
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
@@ -60,14 +60,15 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                     CompositionLocalProvider(
                         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                     ) {
-                        LegadoMiuixCard(
+                        GlassSurfaceCard(
                             modifier = Modifier
                                 .widthIn(min = 260.dp, max = 420.dp)
                                 .padding(horizontal = 18.dp, vertical = 12.dp),
-                            color = style.surface,
+                            fillColor = style.surface,
                             contentColor = style.primaryText,
                             cornerRadius = style.panelRadius,
-                            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
+                            insidePadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+                            screenAligned = true
                         ) {
                             Text(
                                 text = stringResource(R.string.backup),

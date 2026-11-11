@@ -8,6 +8,7 @@ import android.view.MenuItem
 import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
+import androidx.core.content.ContextCompat
 import androidx.core.view.allViews
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -23,11 +24,13 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isLocal
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.recycler.UpLinearLayoutManager
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyNavigationBarMargin
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.invisible
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
@@ -57,7 +60,21 @@ class SearchContentActivity :
     private var initJob: Job? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.llSearchBaseInfo.setBackgroundResource(R.drawable.bg_search_glass_panel)
+        // 顶栏在页面根（背景被 BaseActivity 置空）上方，背后就是壁纸：透明档下有玻璃就补一层。
+        binding.titleBar.applyWallpaperGlass()
+        // 悬浮条位于搜索列表下方（recycler 底边约束在条顶），背后是页面壁纸而非列表，
+        // 属壁纸域：与底栏 / 选择栏同一条 drawable 管线，无需每帧整树录制。
+        // 管线只查域与设备档位、不查壁纸可见性，必须先用 pageGlassAllowed 把
+        // 「无背景图（根背景还是主题实底）」挡在门外，否则会采样用户看不见的壁纸。
+        binding.llSearchBaseInfo.background = if (GlassSurface.pageGlassAllowed(this)) {
+            GlassSurface.panelBackground(
+                binding.llSearchBaseInfo,
+                GlassSamplingDomain.WALLPAPER,
+                18f.dpToPx()
+            )
+        } else {
+            null
+        } ?: ContextCompat.getDrawable(this, R.drawable.bg_search_glass_panel)
         binding.llSearchBaseInfo.applyNavigationBarMargin()
         binding.tvCurrentSearchInfo.setTextColor(primaryTextColor)
         binding.ivSearchContentTop.setColorFilter(primaryTextColor)

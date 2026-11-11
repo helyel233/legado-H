@@ -148,6 +148,16 @@ internal fun glassPanelFillYielded(active: Boolean, hasGeometry: Boolean): Boole
     active && hasGeometry
 
 /**
+ * 面板让出底色后的阴影高度（纯 JVM）。
+ *
+ * Compose `Surface` 的阴影独立于填充色绘制：玻璃接管背景后，透明 `Surface` 若仍保留
+ * 阴影，就会在玻璃外缘和圆角周围画出一圈黑边。只有实际让出底色时移除阴影；solid、
+ * 设备降级及玻璃尚未定位的首帧都保留原来的实底面板阴影。
+ */
+internal fun glassPanelShadowElevationDp(fillYielded: Boolean, solidShadowDp: Float = 8f): Float =
+    if (fillYielded) 0f else solidShadowDp
+
+/**
  * 阅读页 App 内导航条是否让位给玻璃（纯 JVM）。
  *
  * 菜单打开且底部玻璃激活时，导航栏区域整个交给玻璃层：玻璃矩形的底边已把

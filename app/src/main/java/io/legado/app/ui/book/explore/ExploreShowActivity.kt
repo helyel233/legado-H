@@ -78,6 +78,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         binding.titleBar.title = intent.getStringExtra("exploreName")
         initSwipeRefresh()
         initComposeList()

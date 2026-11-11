@@ -80,6 +80,72 @@
 | D | 通用对话框、`SourceLoginDialog` | 面板域 + scrim 叠加 | 跨窗口绘制，需「窗口快照」管线 + scrim 亮度补偿 | 未接入（设计见 §4） |
 | — | 主界面侧边导航面板 | 面板域（可带自有背景图） | 整体玻璃化 + scrim 补偿 | **P4 已实施** |
 
+## 3.1 二级页面增量勘查（2026-11-11）
+
+背景前提核查：`applyRootBackgroundPolicy`（`BaseActivity.kt:228`）默认全部页面 `imageBg=true`，仅 `BaseReadBookActivity:68`、`BookInfoComposeActivity:93`、`AiChatActivity:86`、`WelcomeActivity:24`、`ImageCropActivity:42`、BookCharacter 四页、`AiWorldBookManageActivity:28`、`EpubLoadingTemplatePreviewActivity:19` 显式关闭。`TitleBar`（`ui/widget/TitleBar.kt:195-199`）透明与否由「透明导航栏」偏好驱动，`opaque="true"` 仅 5 处（web_view、manga_menu[已接]、code_edit、rss_read[已叠玻璃]、web_view_login），其余约 55 个宿主为默认透明档。
+
+| 分组 | 候选面 | 前提 / 路径 |
+|---|---|---|
+| 可直接接入 · 内容域 | **搜索内容页底部悬浮条**（`activity_search_content.xml:34-46` `ll_search_base_info`，代码 `SearchContentActivity.kt:60`）+ mini FAB（:89） | 现状是自绘「假玻璃」`bg_search_glass_panel`；根布局无背景、`rv_search_list` 兄弟子树可采样，零结构改动 |
+| 可直接接入 · 壁纸域 | **AppManagementScaffold 宿主页顶栏/多选底栏**（`ui/widget/compose/AppManagementScaffold.kt:112-121` 顶栏、:264-278 底栏） | 根透明（:75），十余个管理页（Toc/AutoTask/DictRule/RuleSub/ThemeManage 等）共用，一处改动覆盖最大 |
+| 可直接接入 · 壁纸域 | **TocActivity 底部跳转条**（`TocComposeScreen.kt:1101-1135`） | 浮在列表上、页面透明，行已按 `hasBgImage` 自适应（:963,1354） |
+| 可直接接入 · 壁纸域 | **ConfigActivity 顶栏**（`ConfigActivity.kt:245-296` `ConfigTopBar`） | 程序化根布局无背景（:57-122），Compose 顶栏浮在壁纸上 |
+| 需先改结构 | **设置二级页 + About 页分区卡**（`SettingSpecScreen.kt:167`、`AppSettingComponents.kt:139` 页背景铺不透明 `colors.page`；`AboutFragment:42`） | 卡片结构与「我的」页同构，页面根换 `glassPageBackgroundColor` 即解锁（`MySettingsScreen.kt:177` 现成先例）；FileManage 同理（`FileManageScreen.kt:87,193-239`） |
+| 需先改结构 | **BookInfoActivity 底部操作排**（`activity_book_info.xml:579-640` `fl_action`） | `refresh_layout` 兄弟可采样，但背后是封面 ImageView + 50% scrim，需先定可读性方案 |
+| 已由 TitleBar opt-in 覆盖 | 普通二级页顶栏（`ExploreShow`、缓存 / 导入 / 收藏 / 回收站 / RSS 收藏与文章 / 高亮规则 / 阅读器资源 / AI 图库 / 年度报告等） | 第四批落地 `TitleBar.applyWallpaperGlass()` 显式 opt-in，第五批扩展到 13 个调用点；书源 / 订阅源 / 替换规则页改 Compose 顶栏后 XML `TitleBar` 已隐藏，顶栏玻璃由 `AppManagementScaffold` 提供 |
+| 前提缺失 | BookCharacter 系列 / AiWorldBookManageActivity 卡片 | `imageBg=false` 壁纸不可见，需先改背景策略 |
+| 结构性阻塞 | AiChatActivity（输入栏/气泡全 Compose Surface + `imageBg=false`）、WebView / CodeEdit / WebViewLogin（opaque TitleBar + WebView/Surface 内容） | 无有效 View 采样源或跨窗口 |
+| 不建议接 | ThemeManage 主题预览卡（预览保真）、EpubLoadingTemplatePreview、ImageCrop（取景器自绘）、HandleFile（收益低） | — |
+
+优先级：SearchContent 悬浮条（内容域零结构改动）→ AppManagementScaffold 顶/底栏（一处覆盖十余页）→ 设置/About 页根背景换 `glassPageBackgroundColor`（解锁最大一批卡片）→ TitleBar 全局改造（单独评估项）。
+
+**实施记录（2026-11-11）**：
+- 搜索内容页悬浮条：`ll_search_base_info` 背后是壁纸而非列表（recycler 底边约束在条顶），改按**壁纸域**接入（`GlassSurface.panelBackground(WALLPAPER, 18dp)`），非内容域——避免逐帧整树录制且采样位置正确；非玻璃档回退原 `bg_search_glass_panel`。
+- `AppManagementScaffold` 顶栏（含搜索行）与多选底栏：`GlassPanel(WALLPAPER, 0)`，`wallpaperVisible = rememberHasUsableBgImage() && !isEInk` 时才建玻璃宿主，否则原实底；一处改动覆盖书源/订阅源/字典/替换规则/TXT 目录规则/自动任务/书架标签等管理页。
+- 设置二级页与 About（`SettingSpecScreen` 全部分区卡）、文件管理页（`FileManageScreen` 页根 + 顶栏）：页面根换 `glassPageBackgroundColor` 透出壁纸，分区卡/顶栏接 `GlassPanel(WALLPAPER)`；无背景图 / 墨水屏保持原观感。
+- 验证：`compileAppDebugKotlin` 通过、glass 单测全绿、`check_settings_mapping.py` PASS、debug 包已产出；真机观感未核验（adb 设备离线）。
+
+**实施记录（2026-11-11 第三批）**：
+- `ConfigActivity` 顶栏（`ConfigTopBar`）：所有 `ComposeSettingFragment` 二级页共用。程序化根布局本身无背景，顶栏这一条背后即壁纸，按**壁纸域**接 `GlassPanel(WALLPAPER, 圆角 0)`——圆角 0 是贴边矩形，带圆角会在屏幕顶部留缺口；判定口径与 RSS 阅读标题栏一致（`rememberHasUsableBgImage() && !isEInkMode`），否则保留原来的透明顶栏（不建玻璃宿主）。一处改动覆盖页面布局 / 阅读界面 / 其它设置等约 20 个二级页。
+- 目录页 `TocComposeScreen`：浮在章节列表之上的 **搜索框、目录-书签-插入三标签页、底部跳转条当前章块 + 两个箭头块、空状态卡**统一接壁纸域玻璃。新增页面局部 helper `TocGlassSurface`（不修改共享的 `AppManagementCard`，保持爆炸半径最小）：玻璃档下静止态完全交给玻璃层、按压态只叠一层主题行色保留触摸反馈；非玻璃档回退原 `appSettingPanelBackground` 链，与改造前逐点一致。章节行与书签行**刻意保持半透明衬底**不逐行接玻璃（100+ 行会各建一个 `AndroidView` 宿主，违反第 5 节性能边界）。
+- solid 档行为与全 App 其余面一致：渲染不透明实底壳（仅 RSS 阅读标题栏显式跳过 solid），不新增例外。
+- 验证（真机）：`compileAppDebugKotlin` / `assembleAppDebug` 通过、glass 单测全绿、`check_settings_mapping.py` PASS；debug 包装机到 vivo V2417A（Android 16）后，adb 截图确认「页面布局」二级页顶栏、「字典规则」顶部菜单页顶栏为带液态高光的玻璃条，目录页搜索框 / 三标签 / 底部跳转条 / 空状态卡均透出模糊壁纸且边缘高光与主底栏同源。无背景图 / 墨水屏回退路径由代码结构保证（不创建玻璃宿主、原背景链不变），未改动用户持久化主题做真机验证。
+
+**实施记录（2026-11-11 第四批）**：
+- 共享 `TitleBar` 新增显式 opt-in `applyWallpaperGlass()`：仅当顶栏处于透明档（`!opaque && context.transparentNavBar`）、非墨水屏、页面确有可用背景图时，把背景换成 `GlassSurface.panelBackground(this, WALLPAPER, 0f)`（贴边矩形）；否则返回 false 保留 init 时的原背景。判定抽成纯函数 `titleBarWantsWallpaperGlass`，5 例 JVM 单测锁定真值表。
+- 首批 opt-in 4 页：搜索内容页（`SearchContentActivity`）、全库搜索（`LibrarySearchActivity`）、所有书签（`AllBookmarkActivity`）、阅读记录（`ReadRecordActivity`）。四页均为页面根背景被 `BaseActivity` 置空、顶栏在内容之上的普通纵向布局，壁纸确实透到顶栏。
+- 为什么不做全局 TitleBar 改造：62 个布局引用 TitleBar，其中视频播放 / 音频播放 / 书籍详情（`imageBg=false`）/ 相机取景 / 代码编辑 / WebView 等页面的顶栏背后不是壁纸（根容器自绘不透明背景或整页不是壁纸模式）；而「祖先容器是否不透明」无法在共享控件内可靠探测（P1 已否决运行期祖先透明度探测）。显式 opt-in 让每个调用点自己声明「这里壁纸确实透到顶栏」，后续页面按同一方法逐个接入。
+- 验证：`compileAppDebugKotlin` / `assembleAppDebug` 通过；`TitleBarGlassTest` + glass 包单测全绿；`check_settings_mapping.py` PASS；debug 包装机后 adb 截图确认「所有书签」「阅读记录」「全库搜索」三页顶栏均为透出模糊壁纸的玻璃条；搜索内容页同一调用路径未单独截图（入口需经过阅读页搜索流程），其玻璃与否由同一判定函数与同一 drawable 入口决定。
+
+**实施记录（2026-11-11 第五批）**：
+- 继续用同一 opt-in 清空「受制于 TitleBar 全局改造」分组，新增 13 个调用点：缓存管理（`CacheManageActivity`）、缓存章节（`CacheActivity`）、缓存导出（`BookCacheExportActivity`）、导入书籍基类（`BaseImportBookActivity.onCreate`，同时覆盖本地导入 / 远程书籍两页）、书架收藏（`BookCollectionActivity`）、规则回收站（`SourceRecycleBinActivity`）、RSS 收藏（`RssFavoritesActivity`）、RSS 文章（`RssSortActivity`）、高亮规则管理（`HighlightRuleManageActivity`）、阅读器资源管理（`ReaderAssetManageActivity`）、AI 图库（`AiImageGalleryActivity`）、发现页查看更多（`ExploreShowActivity`）、年度报告（`YearlyReportActivity`）。
+- 逐页核对布局前提，全部满足「`TitleBar` 是纵向流里的第一个子节点、内容在其下方、根布局无自绘背景」：`activity_cache_manage` / `activity_import_book` / `activity_book_collection` / `activity_source_recycle_bin` / `activity_rss_favorites` / `activity_rss_artivles` / `activity_cache_book` / `activity_book_cache_export` / `activity_highlight_rule_manage` / `activity_reader_asset_manage` / `activity_ai_image_gallery` / `activity_explore_show` / `activity_yearly_report`。没有一页是 `opaque=true` 或 `imageBg=false`。
+- 未接入的编辑类 / 调试类页（书源编辑、RSS 源编辑、替换编辑、书源调试、RSS 调试、代码编辑等）保持原状：这些页要么整页是编辑区域、要么属于后续单独评估的面，不在本批范围。
+- 验证：`compileAppDebugKotlin` 通过；`TitleBarGlassTest` + glass 包单测全绿；`assembleAppDebug` 产出 debug 包并装机；adb 截图确认「缓存管理」「收藏夹（RSS 收藏）」「规则回收站」「本地导入」四页顶栏为玻璃条；书架收藏页同一调用路径生效，但其顶栏背后壁纸以黑色为主，玻璃观感在截图上不明显，未按「明显可见」计为已核验。
+
+**实施记录（2026-11-11 第六批 · 页面内卡片）**：
+- 新增共享卡片壳 `GlassSurfaceCard`：命中玻璃时用 `GlassPanel` 垫底、`LegadoMiuixCard` 填充让位透明；未命中时原样铺实底卡。只声明采样方式（页面卡片按根视图对齐、对话框按屏幕对齐），材质与降级仍由底层管线单点决定。明确约束：**不放长列表每一行**，长列表行仍走行级 drawable 管线。
+- 采样前提上提为 `BaseActivity.showsWallpaperBehindContent`（与 `applyRootBackgroundPolicy` 同源）；自铺不透明内容的页面必须覆盖为 false，避免从这些页面弹出的对话框/卡片采到用户看不见的壁纸——音频播放、视频播放、书籍详情三页已覆盖。`GlassSurface` 随之新增 `dialogGlassAllowed` / `pageGlassAllowed` 两个同源判定。
+- 落点：阅读记录页 4 张统计小卡（`ReadRecordOverviewCard`）、搜索页输入帮助卡（`SearchInputHelpScreen` 的书架命中 + 搜索历史两张卡）、规则回收站条目卡（`SourceRecycleBinScreen`）、书架标签管理卡（`BookshelfTagManageScreen`）。阅读记录页原有 6 个 View 面板（阅读目标 / 热力图 / 最近在读 / 日记录 / 封面 / 排行）同步接入 `GlassSurface.panelBackground(WALLPAPER, 14dp)`，失败回退原 `panelInsetStrokeDrawable`——否则同页会出现「小卡玻璃、大卡实底」的混搭。
+- 刻意未接：管理类长列表（书源 / 订阅源 / 缓存 / 导出记录，一屏数十至上百行）、规则编辑表单的字段卡（每表单十余个字段卡），逐行建 `AndroidView` 宿主违反第 5 节性能边界；这些页面继续靠顶栏 / 底栏玻璃提供观感。（第八批按用户要求改由 `AppManagementCard` 的玻璃分支接管管理列表行，见下。）
+- 验证（真机）：`compileAppDebugKotlin` / `assembleAppDebug` 通过；glass + widget 单测 73 例全绿；`check_settings_mapping.py` PASS。adb 截图确认：阅读记录页全部卡片（含我后补的 6 个面板）同为透壁纸玻璃；搜索历史卡透出模糊壁纸；规则回收站借临时插入的一条假数据截图确认条目卡为玻璃后已删除该行（`select count(*) = 0`）。
+
+**实施记录（2026-11-11 第七批 · 弹窗/浮层）**：
+- Compose 弹窗统一宿主 `AppDialogFrame`（46 个调用点）整体玻璃化：`GlassPanel(WALLPAPER, screenAligned = true)` 垫底、卡片填充与 14dp 阴影让位（阴影会绕玻璃外缘画黑边，与 P3 底部菜单同因）、外层按面板圆角裁剪；判定用 `dialogGlassAllowed`，阅读页 / 书籍详情等壁纸不可见页面弹出的弹窗仍为实底。
+- View 弹窗两条统一入口：`BaseDialogFragment` 的窗口背景改 `GlassSurface.dialogBackground(view) ?: dialogSurfaceBackground`（覆盖全部继承它的 DialogFragment）；`AndroidAlertBuilder` 的两处 `setBackgroundDrawable` 改走 `window.decorView` 采样（系统 AlertDialog 覆盖全 App 的 `alert()` / 输入框）。
+- 独立卡片式弹窗改 `GlassSurfaceCard(screenAligned = true)`：`WaitDialog`、`BackupProgressDialog`、`NumberPickerDialog`、`SourceSelectDialog`、`BookshelfConfigDialog`。
+- 明确未接：`SourceLoginDialog`（WebView 登录，跨窗口 + 网页内容）、`BottomWebViewDialog`、`CodeDialog`（编辑器自绘表面）、弹窗内的列表行字段卡（沿用实底字段面，避免叠层模糊）。
+- 验证：`compileAppDebugKotlin` / `assembleAppDebug` 通过、单测全绿；adb 截图确认「排列统计组件」弹窗（`AppDialogFrame`）面板透出模糊壁纸；`alert()` 系弹窗与 `BaseDialogFragment` 系由同一 `dialogBackground` 入口决定，未逐一截图。
+
+**实施记录（2026-11-11 第八批 · 目录与资源列表行卡片）**：
+- **范围修正**：用户明确「卡片玻璃化也包括目录，书源 / 订阅源等各类资源展示界面的卡片」，推翻第六批按「长列表逐行 AndroidView 违反性能边界」作出的排除。落地方式不变：每行仍是 `GlassPanel` 承载同一份 `GlassSurface.panelBackground(WALLPAPER, 圆角)`，列表可见行数由 LazyColumn / RecyclerView 的组合窗口天然有界（一屏 10–20 行），滚动期每行只做壁纸位图局部采样与材质绘制，不录制列表子树、不在行内放 `StableLiquidGlassView`。
+- **统一入口**：`AppManagementCard` / `AppManagementListRow` 新增 `glassSurface`（默认 true）与 `glassSignature`；签名由 `AppManagementScaffold` 通过 `LocalAppManagementGlassSignature` 按页提供一次（`rememberGlassConfigSignature` + `wallpaperVisible`），行卡片只读不算，不新增偏好监听。无背景图 / 墨水屏、或页面未提供签名（弹窗、自绘背景的设置页）时玻璃分支不触发，外观与接入前逐点一致。
+- **采样前提**：卡片走 `GlassPanel(requireWallpaperHost = true)`，即 `GlassSurface.pageGlassAllowed` 与对话框同一份「页面背后真的是壁纸」口径；玻璃 drawable 没有按压态，`palette.settings.rowPressed` 按压色叠在玻璃之上保留触摸反馈。
+- **目录页**：`TocChapterRow` 用圆角 0 的玻璃替掉原半透明行底——章节行无外边距、逐行采样同一张壁纸，视觉上等价于整片玻璃，同时保持行几何与吸顶卷标题不变；当前章 / 按压高亮仍叠在玻璃之上。`TocBookmarkRow` 的书签卡片走 `AppManagementCard(glassSurface = glassSignature != null)`。
+- **自动覆盖的页面**（AppManagementScaffold 宿主）：书源管理、订阅源、订阅规则、替换规则、词典规则、TXT 目录规则、定时任务、书架标签管理。
+- **保持实底的两类**：①弹窗内卡片（`BubbleQuickSwitchDialog` / `ShareNoteTemplateSelectDialog`）——弹窗根视图不是屏幕，没有签名提供者；②设置内的资源列表页（主题包 / 气泡 / 封面集合 / 存储容器 / AI 提供商 / 分享模板 / 顶栏方案等直接使用 `AppManagementCard` 的页面）——本批不提供签名，外观与接入前一致。其中气泡 / 封面 / 高级提示 / 书籍信息几页已核对到根布局自铺 `palette.settings.page` 页色，壁纸被整页盖住，接玻璃前需先把页根改成透壁纸（与 P2 的「我的」页同一改法）；其余页面待逐页核对根背景后再决定是否给签名。
+- **验证**：`compileAppDebugKotlin` / `assembleAppDebug` 通过；glass + widget 单测全绿；`check_settings_mapping.py` PASS；debug 包装机后真机截图待补（adb 在安装完成瞬间掉线，恢复连接后按下列清单核验：书源管理卡片透壁纸、目录章节行透壁纸且滚动无错位、弹窗卡片仍为实底）。
+
 ## 4. 分阶段方案
 
 ### P0 · 壁纸域底栏收口（本次实施）
@@ -125,6 +191,8 @@
 **顺序修正（勘查后）**：原计划先做音频播放控制面板，但核对代码后该面**没有可采样的兄弟子树**——展开态面板的背景是面板自身 `ComposeView` 内绘制的封面氛围层（`CoverAtmosphereBackdrop`），崩溃态胶囊是 `TYPE_APPLICATION_OVERLAY` 独立窗口（跨窗口无法录制 RenderNode）。要接折射必须把氛围层重构为真实 View 兄弟节点，属于「面板整体玻璃化」，归 P4。视频控制条同理（画面由 GSY `VideoPlayer` 内部的 Surface 渲染，控制条由该库自有布局承载）。书籍详情信息卡是滚动内容面板、底色 87% 不透明（`book_info_frost` 为 `#DD…`），换玻璃会直接降低正文可读性且需与 `vw_bg` 的 50% scrim 做叠加补偿，也归 P4。故 P3 首个（也是本阶段唯一）落点为阅读页底部菜单，其余内容域表面在 P4 统一评估。
 
 **已知边界**：P3 当轮只做了底部菜单，顶部菜单随后在 P4 补齐（同一采样源与同一材质入口，见下）；EPUB 直读、solid 档、API<33、低内存与墨水屏完全保持原观感。
+
+- **菜单面板四周黑边（真机修复，第八轮定稿）**：磨砂档打开菜单后，面板外缘与圆角周围有一圈黑边。第八轮 adb 像素取证 + 实验开关逐一证伪了折射位移、模糊边缘侵蚀、AGSL 着色器分支、宿主 `clipToOutline` 四个假设（none 档折射分支与 interior 分支算术恒等、亮度台阶对折射/模糊参数不变、关闭 clip 后台阶与圆角均不变——圆角实际由底层库 `LiquidGlassView.dispatchDraw` 的 clipPath 提供）。**根因**：Compose `Surface` 的 `shadowElevation`（8dp）**独立于填充色绘制**——玻璃激活让出底色后 `Surface` 变 `Color.Transparent`，阴影照画，在玻璃外缘留下一圈黑边。修复：新增纯函数 `glassPanelShadowElevationDp(fillYielded)`（让出→0，否则→8），底部菜单 Surface 的 `shadowElevation` 接入该判定，补 2 例单测（透明/磨砂让位档归零、solid/降级/未定位首帧保持 8dp）。经验：排查「让出底色」类缺陷时，Surface 阴影与填充色是两个独立绘制层，须分别归零验证。
 
 ### P4 · 面板与弹层
 
@@ -227,5 +295,5 @@
 - **无新增用户可见偏好键**：所有阶段消费现有档位键与 `GlassMaterialPreset`；`tools/check_settings_mapping.py` 必须 PASS。
 - **行内禁令不变**：RecyclerView 行内一律 drawable 路径；`StableLiquidGlassView` 只用于固定位置浮层。
 - **降级链不变**：新接入面自动继承四档降级与设备判定，不写第二套判断。
-- **性能边界**：单表面面积与底栏同量级可接受。列表行只在「可见数量有界、滚动期采样成本为每行一条位图 shader 矩形」的前提下走逐行玻璃——发现页书源名行、订阅源卡片（1–3 列宫格 / 单列列表，可见上限约 20 个）已按此口径接入；书架封面卡片行数更多、单行更高，仍不逐行玻璃化。搜索栏是每页一个、屏幕位置固定的药丸，位置追踪器只在真正位移时重录，列表滚动期间不产生逐帧重绘，成本远低于一行列表。
+- **性能边界**：单表面面积与底栏同量级可接受。列表行按「可见数量有界、滚动期采样成本为每行一条位图 shader 矩形」的口径走逐行玻璃——发现页书源名行、订阅源卡片（1–3 列宫格 / 单列列表）、书源 / 订阅源 / 规则 / 定时任务等管理列表、目录章节与书签行均由 LazyColumn / RecyclerView 只组合可见行（一屏 10–20 行），不录制列表子树；书架封面卡片行因封面解码与行高成本，仍不逐行玻璃化。搜索栏是每页一个、屏幕位置固定的药丸，位置追踪器只在真正位移时重录，列表滚动期间不产生逐帧重绘，成本远低于一行列表。
 - **验证协议**：`./gradlew :app:testAppDebugUnitTest --tests "io.legado.app.ui.main.*" --tests "io.legado.app.ui.config.*" --tests "io.legado.app.ui.glass.*" --tests "io.legado.app.ui.widget.*"`、`:app:assembleAppDebug`、`python3 tools/check_settings_mapping.py`；真机观感由安装 debug 包核验。

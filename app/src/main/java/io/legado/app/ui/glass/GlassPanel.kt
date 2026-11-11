@@ -40,17 +40,36 @@ fun GlassPanel(
     configSignature: String,
     modifier: Modifier = Modifier,
     fallback: Modifier = Modifier,
+    /**
+     * 采样是否按屏幕对齐。独立窗口（对话框）必须置 true：窗口根视图只有面板大小，
+     * 按根视图换算会把整张壁纸缩进面板（见 [GlassSurface.panelBackground]）。
+     */
+    screenAligned: Boolean = false,
+    /**
+     * 是否要求宿主页面真的露出壁纸（[GlassSurface.pageGlassAllowed]）。
+     *
+     * 页面内卡片应置 true：可用性只有设备/档位口径，无法判断「这张卡背后到底有没有
+     * 壁纸」；不要求时，自铺不透明背景的页面（阅读页等）也会建出采样隐藏壁纸的宿主。
+     * 底栏 / 顶栏等由页面显式声明壁纸域的位置保持 false 即可（它们本来就只在这些页面出现）。
+     */
+    requireWallpaperHost: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
-    val available = remember(domain, configSignature) {
-        GlassSurface.isAvailable(domain, context)
+    val available = remember(domain, configSignature, requireWallpaperHost) {
+        if (requireWallpaperHost) {
+            GlassSurface.pageGlassAllowed(context)
+        } else {
+            GlassSurface.isAvailable(domain, context)
+        }
     }
     Box(modifier = modifier) {
         if (available) {
             AndroidView(
                 factory = { GlassPanelHost(it) },
-                update = { host -> host.bind(domain, cornerRadiusPx, configSignature) },
+                update = { host ->
+                    host.bind(domain, cornerRadiusPx, configSignature, screenAligned)
+                },
                 modifier = Modifier.matchParentSize()
             )
         } else {
@@ -108,10 +127,15 @@ private class GlassPanelHost(context: Context) : FrameLayout(context) {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
-    fun bind(domain: GlassSamplingDomain, cornerRadiusPx: Float, signature: String) {
-        val key = "$signature|${domain.name}|$cornerRadiusPx"
+    fun bind(
+        domain: GlassSamplingDomain,
+        cornerRadiusPx: Float,
+        signature: String,
+        screenAligned: Boolean
+    ) {
+        val key = "$signature|${domain.name}|$cornerRadiusPx|$screenAligned"
         if (key == bindKey) return
         bindKey = key
-        background = GlassSurface.panelBackground(this, domain, cornerRadiusPx)
+        background = GlassSurface.panelBackground(this, domain, cornerRadiusPx, screenAligned)
     }
 }

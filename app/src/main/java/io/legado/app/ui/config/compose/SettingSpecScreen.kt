@@ -59,7 +59,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
@@ -70,6 +75,7 @@ import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 private val PanelHorizontalPadding = 12.dp
@@ -85,6 +91,10 @@ fun SettingSpecScreen(
 ) {
     val colors = rememberAppSettingPalette()
     val panelRadiusPx = colors.panelRadiusPx
+    // 壁纸模式下页面根背景透明，分区卡背后是壁纸（壁纸域）；无背景图 / 墨水屏时
+    // 保持主题页色与实底卡，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
     val sections = remember(page) {
         page.sections.mapNotNull { section ->
             val rows = section.items.filter { it.visible }
@@ -164,7 +174,7 @@ fun SettingSpecScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .background(colors.page)
+                .background(glassPageBackgroundColor(colors.page, wallpaperVisible))
                 .onGloballyPositioned { listTopPx = it.positionInWindow().y }
                 .navigationBarsPadding(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -190,6 +200,8 @@ fun SettingSpecScreen(
                     colors = colors,
                     panelRadiusPx = panelRadiusPx,
                     drawPanelImage = drawPanelImage,
+                    wallpaperVisible = wallpaperVisible,
+                    glassSignature = glassSignature,
                     // 带 targetKey 进来说明是要定位到某一项，此时所有分区必须展开，
                     // 否则目标项根本不在列表里，定位会静默失败
                     forceExpanded = !scrollTargetKey.isNullOrBlank(),
@@ -208,6 +220,8 @@ private fun SettingSectionPanel(
     colors: AppSettingPalette,
     panelRadiusPx: Float,
     drawPanelImage: Boolean,
+    wallpaperVisible: Boolean,
+    glassSignature: String,
     forceExpanded: Boolean,
     highlightKey: String?,
     onTargetRowPositioned: (Float) -> Unit,
@@ -237,42 +251,64 @@ private fun SettingSectionPanel(
             expanded = true
         }
     }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = PanelHorizontalPadding)
-            .appSettingPanelBackground(
-                normalColor = colors.row,
-                panelImage = panelImage,
-                borderColor = colors.border,
-                radiusPx = panelRadiusPx
+    val sectionContent: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AppSettingSectionTitle(
+                title = section.title,
+                palette = colors,
+                collapsible = section.collapsible,
+                expanded = expanded,
+                onToggle = if (section.collapsible) {
+                    { expanded = !expanded }
+                } else {
+                    null
+                }
             )
-    ) {
-        AppSettingSectionTitle(
-            title = section.title,
-            palette = colors,
-            collapsible = section.collapsible,
-            expanded = expanded,
-            onToggle = if (section.collapsible) {
-                { expanded = !expanded }
-            } else {
-                null
+            if (expanded) {
+                section.items.forEachIndexed { index, item ->
+                    SettingRow(
+                        item = item,
+                        colors = colors,
+                        panelRadiusPx = panelRadiusPx,
+                        showDivider = index != section.items.lastIndex,
+                        isLast = index == section.items.lastIndex,
+                        isHighlighted = highlightKey != null &&
+                            (item.key == highlightKey || highlightKey in item.searchKeys),
+                        onTargetPositioned = onTargetRowPositioned,
+                        onItemClick = onItemClick
+                    )
+                }
             }
-        )
-        if (expanded) {
-            section.items.forEachIndexed { index, item ->
-                SettingRow(
-                    item = item,
-                    colors = colors,
-                    panelRadiusPx = panelRadiusPx,
-                    showDivider = index != section.items.lastIndex,
-                    isLast = index == section.items.lastIndex,
-                    isHighlighted = highlightKey != null &&
-                        (item.key == highlightKey || highlightKey in item.searchKeys),
-                    onTargetPositioned = onTargetRowPositioned,
-                    onItemClick = onItemClick
-                )
-            }
+        }
+    }
+    val panelFallback = Modifier.appSettingPanelBackground(
+        normalColor = colors.row,
+        panelImage = panelImage,
+        borderColor = colors.border,
+        radiusPx = panelRadiusPx
+    )
+    if (wallpaperVisible) {
+        // 分区卡与「我的」页 SettingsSectionCard 同一份壁纸域玻璃（GlassPanel 桥），
+        // 材质 / 降级 / 圆角全部由底层管线决定，这里只声明采样域与圆角。
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = panelRadiusPx,
+            configSignature = glassSignature,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PanelHorizontalPadding),
+            fallback = panelFallback
+        ) {
+            sectionContent()
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PanelHorizontalPadding)
+                .then(panelFallback)
+        ) {
+            sectionContent()
         }
     }
 }

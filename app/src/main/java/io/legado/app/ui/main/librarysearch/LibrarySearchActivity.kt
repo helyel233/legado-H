@@ -64,6 +64,7 @@ class LibrarySearchActivity :
     override val viewModel by viewModels<LibrarySearchViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         binding.titleBar.setNavigationOnClickListener {
             finish()
         }

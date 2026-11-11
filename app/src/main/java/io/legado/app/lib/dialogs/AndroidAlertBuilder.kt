@@ -11,10 +11,20 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.dialogSurfaceBackground
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.utils.applyTint
 
 internal class AndroidAlertBuilder(override val ctx: Context) : AlertBuilder<AlertDialog> {
     private val builder = AlertDialog.Builder(ctx)
+
+    /**
+     * 系统 AlertDialog 的表面：能与壁纸域玻璃同源时用玻璃，否则保持主题实底。
+     * 宿主是对话框窗口的 decorView——窗口背景只能从窗口内部拿到采样坐标。
+     */
+    private fun AlertDialog.windowSurfaceBackground(): Drawable {
+        val decor = window?.decorView ?: return ctx.dialogSurfaceBackground
+        return GlassSurface.dialogBackground(decor) ?: ctx.dialogSurfaceBackground
+    }
 
     override fun setTitle(title: CharSequence) {
         builder.setTitle(title)
@@ -162,7 +172,7 @@ internal class AndroidAlertBuilder(override val ctx: Context) : AlertBuilder<Ale
                 val attr = attributes
                 attr.windowAnimations = R.style.AnimDialogCenter
                 attributes = attr
-                setBackgroundDrawable(ctx.dialogSurfaceBackground)
+                setBackgroundDrawable(dialog.windowSurfaceBackground())
             }
         }
         return dialog
@@ -181,7 +191,7 @@ internal class AndroidAlertBuilder(override val ctx: Context) : AlertBuilder<Ale
                 val attr = attributes
                 attr.windowAnimations = R.style.AnimDialogCenter
                 attributes = attr
-                setBackgroundDrawable(ctx.dialogSurfaceBackground)
+                setBackgroundDrawable(dialog.windowSurfaceBackground())
             }
         }
         return dialog

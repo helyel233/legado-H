@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
@@ -667,9 +668,16 @@ object ExploreGlassBackdrop {
      * Compose 桥（[io.legado.app.ui.glass.GlassPanel]）的宿主是一个独立 View，圆角由调用方
      * 传入（如设置页卡片的 `UiCorner.panelRadius` 缩放值），不能读死 `ui_panel_radius`。
      * 除圆角外没有任何参数分支：材质、降级、采样域仍由 [glassDrawable] 单点决定。
+     *
+     * [screenAligned] 供独立窗口（对话框）使用：本管线按「壁纸位图对齐到宿主根视图」
+     * 建立采样矩阵，而对话框窗口的根视图只有面板那么大，照常换算会把整张壁纸
+     * 缩进面板里。置 true 时改用屏幕尺寸与屏幕坐标，与壁纸位图的构建口径一致。
      */
-    fun panelBackground(host: View, cornerRadiusPx: Float): Drawable? =
-        glassDrawable(host, cornerRadiusPx)
+    fun panelBackground(
+        host: View,
+        cornerRadiusPx: Float,
+        screenAligned: Boolean = false
+    ): Drawable? = glassDrawable(host, cornerRadiusPx, screenAligned)
 
     /** 返回毛玻璃行背景；设备降级时返回 null，调用方保留默认透明背景。 */
     fun rowBackground(host: View): Drawable? = panelBackground(host)
@@ -733,7 +741,8 @@ object ExploreGlassBackdrop {
 
     private fun glassDrawable(
         host: View,
-        cornerRadiusPx: Float
+        cornerRadiusPx: Float,
+        screenAligned: Boolean = false
     ): Drawable? {
         val context = host.context
         val config = readExploreGlassConfig(context)
@@ -763,6 +772,7 @@ object ExploreGlassBackdrop {
             strokeColor = glassStrokeColor(context),
             useHardware = useHardware,
             blurPx = if (useHardware) blurPx else 0f,
+            screenAligned = screenAligned,
             // 设备与偏好层面判定一次；「当帧」的三个事实（硬件加速 Canvas / 底图可用 /
             // 持久故障位）交给 rowLiquidDrawableNow 在 draw() 里逐帧判定，
             // 故障位传**进程级**那一位：AGSL 一旦失败过，之后重建的行不再建液态层。
@@ -972,7 +982,12 @@ private class FrostedGlassDrawable(
     /** 硬件 / 液态管线的高斯 sigma（像素）；0 = 模糊倍率 0，不额外模糊。 */
     private val blurPx: Float,
     /** 是否尝试行内液态玻璃（A2）；为 false 时只走静态管线。 */
-    useLiquid: Boolean
+    useLiquid: Boolean,
+    /**
+     * 采样根是否取屏幕而非宿主根视图。对话框是独立窗口，根视图只有面板大小，
+     * 按根视图换算会把整张壁纸缩进面板；置 true 后与壁纸位图的屏幕口径一致。
+     */
+    private val screenAligned: Boolean = false
 ) : Drawable() {
 
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1162,16 +1177,24 @@ private class FrostedGlassDrawable(
         }
         if (glassBitmap != null) {
             val root = host.rootView
-            if (root.width > 0 && root.height > 0) {
+            // 对话框窗口的根视图只有面板大小，不能当壁纸的对齐基准；此时改用屏幕尺寸与
+            // 屏幕原点，和 decodeRaw 里「按 displayMetrics 构建位图」的口径保持一致。
+            val rootWidth = if (screenAligned) host.resources.displayMetrics.widthPixels else root.width
+            val rootHeight = if (screenAligned) host.resources.displayMetrics.heightPixels else root.height
+            if (rootWidth > 0 && rootHeight > 0) {
                 ensureLocationSampled()
+                if (screenAligned) {
+                    rootLocation[0] = 0
+                    rootLocation[1] = 0
+                }
                 // 采样矩阵：与软件 / 硬件 / 液态三条管线共用同一份口径（纯函数在
                 // RowGlassLiquidSpec.rowSampleTransform）。方向是「位图 → 局部」，
                 // 与 BitmapShader.setLocalMatrix 的约定一致：降采样位图放大回根视图尺寸。
                 val transform = rowSampleTransform(
                     bitmapWidth = glassBitmap.width,
                     bitmapHeight = glassBitmap.height,
-                    rootWidth = root.width,
-                    rootHeight = root.height,
+                    rootWidth = rootWidth,
+                    rootHeight = rootHeight,
                     locationX = location[0],
                     locationY = location[1],
                     rootX = rootLocation[0],
@@ -1253,6 +1276,17 @@ private class FrostedGlassDrawable(
     }
 
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    /**
+     * 圆角轮廓：对话框把结论 View 设为 `clipToOutline`，若这里只给矩形轮廓，
+     * 子内容会按直角裁剪、在圆角处露出方角。与绘制用的圆角保持同一半径。
+     */
+    override fun getOutline(outline: Outline) {
+        super.getOutline(outline)
+        if (bounds.width() > 0 && bounds.height() > 0) {
+            outline.setRoundRect(bounds, radiusPx)
+        }
+    }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
         glassPaint.colorFilter = colorFilter

@@ -115,6 +115,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         groupId = intent.getLongExtra("groupId", -1)
         lifecycleScope.launch {
             binding.titleBar.subtitle = withContext(IO) {

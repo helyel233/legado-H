@@ -15,6 +15,7 @@ class SourceRecycleBinActivity :
     override val binding by viewBinding(ActivitySourceRecycleBinBinding::inflate)
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         binding.composeView.setContent {
             LegadoComposeTheme {
                 SourceRecycleBinScreen()

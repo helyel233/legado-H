@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchKeyword
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -54,6 +57,7 @@ fun SearchInputHelpScreen(
 ) {
     LegadoComposeTheme {
         val palette = rememberAppManagementPalette()
+        val glassSignature = rememberGlassConfigSignature()
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -62,7 +66,8 @@ fun SearchInputHelpScreen(
             if (bookshelfBooks.isNotEmpty()) {
                 SearchHelpCard(
                     palette = palette,
-                    title = stringResource(R.string.bookshelf)
+                    title = stringResource(R.string.bookshelf),
+                    configSignature = glassSignature
                 ) {
                     SearchChipFlow {
                         bookshelfBooks.forEach { book ->
@@ -80,6 +85,7 @@ fun SearchInputHelpScreen(
                 palette = palette,
                 title = stringResource(R.string.searchHistory),
                 modifier = Modifier.weight(1f),
+                configSignature = glassSignature,
                 headerAction = {
                     if (historyKeywords.isNotEmpty()) {
                         SearchChip(
@@ -131,34 +137,44 @@ private fun SearchHelpCard(
     title: String,
     modifier: Modifier = Modifier,
     headerAction: @Composable (() -> Unit)? = null,
+    configSignature: String = rememberGlassConfigSignature(),
     content: @Composable () -> Unit
 ) {
     val radiusDp = with(LocalDensity.current) { palette.settings.panelRadiusPx.toDp() }
-    Column(
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = palette.settings.panelRadiusPx,
+        configSignature = configSignature,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(radiusDp))
-            .appSettingPanelBackground(
-                normalColor = palette.settings.row,
-                panelImage = null,
-                borderColor = palette.settings.border,
-                radiusPx = palette.settings.panelRadiusPx
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .clip(RoundedCornerShape(radiusDp)),
+        fallback = Modifier.appSettingPanelBackground(
+            normalColor = palette.settings.row,
+            panelImage = null,
+            borderColor = palette.settings.border,
+            radiusPx = palette.settings.panelRadiusPx
+        ),
+        requireWallpaperHost = true
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                color = palette.settings.primaryText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = palette.settings.titleFontFamily,
-                modifier = Modifier.weight(1f)
-            )
-            headerAction?.invoke()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    color = palette.settings.primaryText,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = palette.settings.titleFontFamily,
+                    modifier = Modifier.weight(1f)
+                )
+                headerAction?.invoke()
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            content()
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        content()
     }
 }
 

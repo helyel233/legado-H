@@ -91,6 +91,7 @@ import io.legado.app.ui.glass.applyLiquidGlassSpec
 import io.legado.app.ui.glass.contentLiquidGlassSpec
 import io.legado.app.ui.glass.glassPanelFillYielded
 import io.legado.app.ui.glass.glassPanelRect
+import io.legado.app.ui.glass.glassPanelShadowElevationDp
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
@@ -852,6 +853,7 @@ class ReadMenu @JvmOverloads constructor(
         val navigationBarBottom = WindowInsets.navigationBars
             .asPaddingValues()
             .calculateBottomPadding()
+        val bottomGlassYielded = glassPanelFillYielded(bottomGlassActive, bottomGlassGeometried)
 
         Surface(
             modifier = Modifier
@@ -867,14 +869,11 @@ class ReadMenu @JvmOverloads constructor(
                 },
             shape = RoundedCornerShape(topStart = style.panelRadius, topEnd = style.panelRadius),
             // 玻璃层只有真正定位过（拿到面板矩形）才让出底色：没定位就让出会得到一块透明空面板。
-            color = if (glassPanelFillYielded(bottomGlassActive, bottomGlassGeometried)) {
-                Color.Transparent
-            } else {
-                style.surface
-            },
+            color = if (bottomGlassYielded) Color.Transparent else style.surface,
             contentColor = style.primaryText,
             tonalElevation = 0.dp,
-            shadowElevation = 8.dp
+            // Surface 的阴影不随透明填充消失；玻璃接管背景时必须同步移除，否则外缘会留黑边。
+            shadowElevation = glassPanelShadowElevationDp(bottomGlassYielded).dp
         ) {
             Column(
                 modifier = Modifier

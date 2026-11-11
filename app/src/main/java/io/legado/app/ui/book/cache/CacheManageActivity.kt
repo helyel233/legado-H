@@ -73,6 +73,7 @@ class CacheManageActivity :
     private var webDavTaskStateMap by mutableStateOf<Map<String, WebDavTaskState>>(emptyMap())
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         initView()
         observeData()
         observeTasks()

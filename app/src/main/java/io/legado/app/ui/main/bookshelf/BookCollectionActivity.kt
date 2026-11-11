@@ -85,6 +85,7 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
     )
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         applyBookActionBarBackground()
         val spanCount = AppConfig.bookshelfLayout.takeIf { it >= 2 } ?: 3
         binding.rvBooks.layoutManager = GridLayoutManager(this, spanCount)

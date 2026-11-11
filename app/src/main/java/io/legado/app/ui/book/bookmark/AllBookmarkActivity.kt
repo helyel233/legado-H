@@ -43,6 +43,7 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         initComposeContent()
         lifecycleScope.launch {
             appDb.bookmarkDao.flowAll().catch {

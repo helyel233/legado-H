@@ -107,6 +107,7 @@ class HighlightRuleManageActivity : BaseActivity<ActivityHighlightRuleManageBind
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         bookUrl = intent.getStringExtra("bookUrl") ?: ReadBook.book?.bookUrl
         query = savedInstanceState?.getString("query").orEmpty()
         binding.run {

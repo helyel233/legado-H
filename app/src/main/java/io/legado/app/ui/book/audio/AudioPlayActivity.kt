@@ -76,6 +76,9 @@ class AudioPlayActivity :
     AudioPlay.CallBack {
 
     override val binding by viewBinding(ActivityAudioPlayBinding::inflate)
+
+    /** 本页背景是满屏封面 + 黑色压暗层（`iv_bg` / `vw_bg`），不是主题壁纸。 */
+    override val showsWallpaperBehindContent: Boolean get() = false
     override val viewModel by viewModels<AudioPlayViewModel>()
     private val cacheViewModel by viewModels<CacheManageViewModel>()
     private val timerSliderPopup by lazy { SliderPopup(this, TIMER) }

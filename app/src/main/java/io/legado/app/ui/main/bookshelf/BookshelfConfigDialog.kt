@@ -64,7 +64,7 @@ import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
 import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.LegadoMiuixSlider
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
@@ -467,18 +467,19 @@ private fun BookshelfConfigPanel(
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
     ) {
-        LegadoMiuixCard(
+        GlassSurfaceCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 18.dp),
-            color = style.surface,
+            fillColor = style.surface,
             contentColor = style.primaryText,
             cornerRadius = style.panelRadius,
             insidePadding = PaddingValues(
                 horizontal = spec.panelHorizontalPadding,
                 vertical = spec.panelVerticalPadding
-            )
+            ),
+            screenAligned = true
         ) {
             Column(
                 modifier = Modifier

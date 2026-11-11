@@ -27,6 +27,8 @@ import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.main.readrecord.YearlyReportActivity
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
@@ -110,6 +112,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.applyWallpaperGlass()
         initView()
         loadData()
     }
@@ -638,7 +641,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             binding.panelRecentBooks,
             binding.panelDailyRecords
         ).forEach { panel ->
-            panel.background = createSurfaceDrawable(panelSurfaceColor, 14f)
+            panel.background = createPanelBackground(panel, panelSurfaceColor, 14f)
         }
         binding.tvRecordDate.setTextColor(primaryTextColor)
         binding.tvRecordDateHint.setTextColor(secondaryTextColor)
@@ -650,11 +653,11 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         binding.tvHeatmapMonthCenter.setTextColor(secondaryTextColor)
         binding.tvHeatmapMonthEnd.setTextColor(secondaryTextColor)
         binding.panelRecentCovers.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelRecentCovers, panelSurfaceColor, 14f)
         binding.panelReadRank.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelReadRank, panelSurfaceColor, 14f)
         binding.panelGoalCard.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelGoalCard, panelSurfaceColor, 14f)
         binding.ivComponentMenu.background = null
         binding.ivComponentMenu.setColorFilter(primaryTextColor)
         binding.ivRankMore.background = null
@@ -674,6 +677,26 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             }
             setBackgroundColor(ColorUtils.adjustAlpha(primaryTextColor, 0.08f))
         }
+    }
+
+    /**
+     * 面板背景：页面背后真实露出壁纸时走壁纸域玻璃（与统计小卡同一管线），
+     * 否则保留主题实底表面。壁纸域的采样前提由 [GlassSurface.pageGlassAllowed]
+     * 统一判定，不在这里另立条件。
+     */
+    private fun createPanelBackground(
+        panel: View,
+        fillColor: Int,
+        radiusDp: Float
+    ): Drawable {
+        if (GlassSurface.pageGlassAllowed(this)) {
+            GlassSurface.panelBackground(
+                panel,
+                GlassSamplingDomain.WALLPAPER,
+                UiCorner.scaledDp(radiusDp)
+            )?.let { return it }
+        }
+        return createSurfaceDrawable(fillColor, radiusDp)
     }
 
     private fun createSurfaceDrawable(

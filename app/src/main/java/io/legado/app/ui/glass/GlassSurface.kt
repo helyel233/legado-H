@@ -1,10 +1,14 @@
 package io.legado.app.ui.glass
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.drawable.Drawable
 import android.view.View
+import io.legado.app.R
+import io.legado.app.base.BaseActivity
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.filletControlBackground
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 
@@ -39,9 +43,10 @@ object GlassSurface {
     fun panelBackground(
         host: View,
         domain: GlassSamplingDomain,
-        cornerRadiusPx: Float
+        cornerRadiusPx: Float,
+        screenAligned: Boolean = false
     ): Drawable? = wallpaperDrawable(host, domain) {
-        ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx)
+        ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned)
     }
 
     /** 列表行背景。非壁纸域返回 null（调用方保留默认透明背景）。 */
@@ -51,6 +56,62 @@ object GlassSurface {
     /** 行内小控件背景（带按压态）。非壁纸域返回 null。 */
     fun controlBackground(host: View, domain: GlassSamplingDomain): Drawable? =
         wallpaperDrawable(host, domain) { ExploreGlassBackdrop.controlBackground(host) }
+
+    /**
+     * 对话框面板背景（壁纸域，圆角默认 `ui_panel_radius`）。
+     *
+     * 对话框是独立窗口，采样必须按屏幕而不是按宿主根视图对齐
+     * （见 [ExploreGlassBackdrop.panelBackground] 的 screenAligned）。
+     * 返回 null 表示本对话框应保持主题实底表面：无壁纸可见 / 非玻璃档 /
+     * 墨水屏 / 低内存，调用方回退 [io.legado.app.lib.theme.dialogSurfaceBackground]。
+     */
+    fun dialogBackground(host: View): Drawable? = dialogBackground(
+        host,
+        host.resources.getDimension(R.dimen.ui_panel_radius)
+    )
+
+    fun dialogBackground(host: View, cornerRadiusPx: Float): Drawable? {
+        if (!dialogGlassAllowed(host.context)) return null
+        return wallpaperDrawable(host, GlassSamplingDomain.WALLPAPER) {
+            ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned = true)
+        }
+    }
+
+    /**
+     * 对话框能否铺壁纸域玻璃（组合期与绘制期共用同一口径）。
+     *
+     * 三条否决条件：
+     * - 宿主页面内容背后不是壁纸（阅读页、书籍详情封面、视频、音频等
+     *   `showsWallpaperBehindContent = false` 的页面）：采样到用户看不见的壁纸；
+     * - 无玻璃档：此时对话框保持主题实底表面，而不是换成底栏色的实底壳；
+     * - 墨水屏 / 低内存：由 [isAvailable] 的设备判定统一否决。
+     */
+    fun dialogGlassAllowed(context: Context): Boolean = wallpaperHostAllowed(context)
+
+    /**
+     * 页面内卡片能否铺壁纸域玻璃（与对话框同一份壁纸可见性口径）。
+     *
+     * 与 [dialogGlassAllowed] 的区别只在采样方式：页面卡片的宿主根视图就是屏幕
+     * （多窗口下是窗口），按根视图对齐即可；对话框是独立小窗口，必须屏幕对齐。
+     */
+    fun pageGlassAllowed(context: Context): Boolean = wallpaperHostAllowed(context)
+
+    private fun wallpaperHostAllowed(context: Context): Boolean {
+        if (resolvedExploreGlassMode() == GlassMaterialPreset.SOLID) return false
+        val host = context.hostBaseActivity() ?: return false
+        if (!host.showsWallpaperBehindContent) return false
+        return isAvailable(GlassSamplingDomain.WALLPAPER, context)
+    }
+
+    private fun Context.hostBaseActivity(): BaseActivity<*>? {
+        var current: Context = this
+        while (true) {
+            if (current is BaseActivity<*>) return current
+            val base = (current as? ContextWrapper)?.baseContext ?: return null
+            if (base === current) return null
+            current = base
+        }
+    }
 
     /**
      * 行内小控件的玻璃化回退链：玻璃可用则用玻璃，否则回退主题纯色控件背景。

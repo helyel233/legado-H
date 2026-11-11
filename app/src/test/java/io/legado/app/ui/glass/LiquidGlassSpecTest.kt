@@ -224,6 +224,31 @@ class LiquidGlassSpecTest {
         assertEquals(false, glassPanelFillYielded(active = false, hasGeometry = false))
     }
 
+    /** 透明玻璃与磨砂玻璃让出底色后都必须移除 Surface 阴影，避免外缘黑边。 */
+    @Test
+    fun yieldedGlassPanelRemovesSurfaceShadow() {
+        listOf(GlassMaterialPreset.GLASS, GlassMaterialPreset.FROSTED).forEach { mode ->
+            val params = GlassMaterialPreset.params(mode, 0.34f)
+            assertNotNull(contentSpec(params = params))
+            val fillYielded = glassPanelFillYielded(active = true, hasGeometry = true)
+            assertEquals(0f, glassPanelShadowElevationDp(fillYielded), 0f)
+        }
+    }
+
+    /** solid / 降级 / 玻璃尚未定位时仍画实底面板，原有 8dp 阴影保持不变。 */
+    @Test
+    fun solidOrFallbackPanelKeepsSurfaceShadow() {
+        assertNull(contentSpec(params = GlassMaterialPreset.params(GlassMaterialPreset.SOLID, 0.34f)))
+        assertEquals(8f, glassPanelShadowElevationDp(fillYielded = false), 0f)
+        assertEquals(
+            8f,
+            glassPanelShadowElevationDp(
+                glassPanelFillYielded(active = true, hasGeometry = false)
+            ),
+            0f
+        )
+    }
+
     // endregion
 
     // region 阅读页导航条让位与玻璃底边外推

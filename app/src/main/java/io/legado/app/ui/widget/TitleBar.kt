@@ -21,15 +21,31 @@ import androidx.core.view.children
 import com.google.android.material.appbar.AppBarLayout
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.transparentNavBar
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.utils.activity
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import splitties.views.bottomPadding
 import splitties.views.topPadding
+
+/**
+ * 顶栏是否该接管壁纸域玻璃（纯 JVM 判定，便于单测）。
+ *
+ * 只在顶栏本身就是「透明档」时成立：`opaque` 页面（web_view / code_edit 等）与
+ * 关闭透明导航栏的偏好下，顶栏背后不是壁纸，接了会采到被自己盖住的壁纸。
+ */
+internal fun titleBarWantsWallpaperGlass(
+    opaque: Boolean,
+    transparentNavBar: Boolean,
+    isEInk: Boolean,
+    hasUsableBgImage: Boolean
+): Boolean = !opaque && transparentNavBar && !isEInk && hasUsableBgImage
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 class TitleBar @JvmOverloads constructor(
@@ -256,6 +272,32 @@ class TitleBar @JvmOverloads constructor(
     fun setTextColor(@ColorInt color: Int) {
         setTitleTextColor(color)
         setSubTitleTextColor(color)
+    }
+
+    /**
+     * 把顶栏背景换成壁纸域玻璃（贴边矩形，圆角 0）。
+     *
+     * 只在顶栏正处于透明档、页面确有可用背景图且非墨水屏时生效；返回 false 表示保留
+     * init 时设定的原背景。调用方须是「页面根背景会被 BaseActivity 置空、壁纸确实透到
+     * 顶栏」的普通二级页——本方法不猜测祖先容器是否不透明。
+     */
+    fun applyWallpaperGlass(): Boolean {
+        if (isInEditMode) return false
+        if (!titleBarWantsWallpaperGlass(
+                opaque = opaque,
+                transparentNavBar = context.transparentNavBar,
+                isEInk = AppConfig.isEInkMode,
+                hasUsableBgImage = ThemeConfig.hasUsableBgImage(context)
+            )
+        ) {
+            return false
+        }
+        val glass = GlassSurface.panelBackground(this, GlassSamplingDomain.WALLPAPER, 0f)
+            ?: return false
+        // 与透明分支同一口径：极低 elevation 避免横屏下文字 / 图标颜色异常
+        elevation = 0.1f
+        setBackground(glass)
+        return true
     }
 
     fun setColorFilter(@ColorInt color: Int) {
