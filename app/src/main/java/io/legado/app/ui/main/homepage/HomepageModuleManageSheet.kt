@@ -44,6 +44,15 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
 
     private val binding by viewBinding(DialogHomepageManageBinding::bind)
 
+    /**
+     * 面板表面走壁纸域玻璃。
+     *
+     * 这个面板是**稀疏行列表**（标题 + 开关 + 图标，行底本身是透明的水波纹选择器），
+     * 玻璃不会压住信息密度；目录 / 分类选择这类密集面板保持实底不变。
+     * 面板内部各页（集详情 / 源详情 / 发现）共用同一个表面，因此一处 opt-in 即可。
+     */
+    override val sheetSurfaceGlass: Boolean get() = true
+
     internal val viewModel: HomepageViewModel
         get() = (parentFragment as HomepageFragment).viewModel
 

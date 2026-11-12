@@ -57,6 +57,7 @@ import androidx.viewbinding.ViewBinding
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.PreferKey
+import io.legado.app.help.config.AppConfig
 import io.legado.app.service.relay.RelayConfig
 import io.legado.app.service.relay.RelayConnectionState
 import io.legado.app.service.relay.RelayControlClient
@@ -64,12 +65,16 @@ import io.legado.app.service.relay.RelaySecretStore
 import io.legado.app.service.relay.RelayService
 import io.legado.app.service.relay.RelayShareResult
 import io.legado.app.service.relay.RelayStateRepository
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.shareWithQr
@@ -331,13 +336,23 @@ private fun RelaySettingsScreen(
     var operationMessage by remember { mutableStateOf("") }
     val stateText = relayStateText(connectionState)
     val invalidAdminTokenMessage = stringResource(R.string.public_web_relay_admin_token_invalid)
+    // 本页是纯 Compose 页（自绘顶栏），根 Surface 原来铺 palette.settings.page 整页不透明，
+    // 壁纸模式下会被页面自己盖住——卡片玻璃只能采到「用户看不见的壁纸」。背景图可用且非
+    // 墨水屏时改铺透明，让 BaseActivity.applyRootBackgroundPolicy() 置空的根背景透出壁纸；
+    // 否则仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    // 一页只算一次玻璃签名，四张卡片只读不各注册监听
+    val glassSignature = rememberGlassConfigSignature()
 
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily),
+        // 页内 4 张卡都是 AppManagementCard：提供签名后自动走壁纸域玻璃，按下态由卡片自己
+        // 叠主题行按下色（玻璃 drawable 没有按下态）；提供 null 时保持主题实底。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = palette.settings.page,
+            color = glassPageBackgroundColor(palette.settings.page, wallpaperVisible),
             contentColor = palette.settings.primaryText
         ) {
             Column(

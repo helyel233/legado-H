@@ -2,12 +2,15 @@ package io.legado.app.ui.main.homepage
 
 import android.content.Context
 import android.graphics.Typeface
+import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
+import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.SearchBook
@@ -19,7 +22,9 @@ import io.legado.app.databinding.ItemHomepageRankingRowBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.secondaryTextColor
+import io.legado.app.ui.glass.applyWallpaperGlassBackground
 import io.legado.app.utils.StringUtils
+import io.legado.app.utils.dpToPx
 
 /**
  * 主页模块内嵌书籍列表适配器，按展示模式加载不同行布局，排版对齐 Max 版：
@@ -45,6 +50,61 @@ class HomepageBooksAdapter(
             MODE_CARD -> ItemHomepageBookCardBinding.inflate(inflater, parent, false)
             MODE_WATERFALL -> ItemHomepageBookWaterfallBinding.inflate(inflater, parent, false)
             else -> ItemHomepageBookGridBinding.inflate(inflater, parent, false)
+        }
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
+        val holder = super.onCreateViewHolder(parent, viewType)
+        holder.itemView.applyBookCardSurface()
+        return holder
+    }
+
+    /**
+     * 行再次挂到窗口时校准一次卡面。
+     *
+     * 卡面只在 [onCreateViewHolder] 里铺一次，复用中的 ViewHolder 不会重建；玻璃档位 /
+     * 强度 / 描边色 / 夜间模式 / 是否开启背景图都可能在这期间变化，签名未变时
+     * [applyWallpaperGlassBackground] 是零开销的空操作。
+     */
+    override fun onViewAttachedToWindow(holder: ItemViewHolder) {
+        super.onViewAttachedToWindow(holder)
+        holder.itemView.applyBookCardSurface()
+    }
+
+    /**
+     * 按签名重铺 [recyclerView] 中**已显示**书卡的卡面。
+     *
+     * 供宿主在回到前台时调用（见 `HomepageFragment.onResume`）：书卡在窗口上常驻，
+     * 从设置页改档 / 关背景图返回时不会产生 attach 事件，只靠 [onViewAttachedToWindow]
+     * 会漏，卡面就停在旧材质上（solid 档仍显示玻璃）。签名未变时零开销。
+     */
+    fun refreshVisibleCardSurfaces(recyclerView: RecyclerView) {
+        for (index in 0 until recyclerView.childCount) {
+            recyclerView.getChildAt(index).applyBookCardSurface()
+        }
+    }
+
+    /**
+     * 书籍卡片的卡面：**只有自带卡面的两种模式**参与，其余模式的行底是
+     * `?selectableItemBackground`（按压涟漪）或干脆透明，套玻璃会把「行」变成「卡」，
+     * 改变原有排版观感，因此逐模式显式列出，不做「统一套一层」。
+     *
+     * - [MODE_CARD]：120dp 竖卡，原卡面 `bg_homepage_book_card`（圆角 4dp）；
+     * - [MODE_WATERFALL]：瀑布卡，原卡面 `bg_explore_book_grid_card`（圆角 8dp）。
+     *
+     * 采样走壁纸域位图 + 位置跟随（`applyWallpaperGlassBackground`），**不录制自身或
+     * 祖先子树**：这些书卡处在「模块 RecyclerView → ViewPager2 → 外层 RecyclerView」
+     * 的多层嵌套里，任何子树录制都会重入绘制。横向列表的采样坐标按卡片在屏幕上的
+     * 实时位置换算，横滑 / 竖向滚动都由 `GlassPositionTracker` 重采样，不会错位。
+     */
+    private fun View.applyBookCardSurface() {
+        val (radiusDp, cardRes) = when (mode) {
+            MODE_CARD -> CARD_SURFACE_RADIUS_DP to R.drawable.bg_homepage_book_card
+            MODE_WATERFALL -> WATERFALL_SURFACE_RADIUS_DP to R.drawable.bg_explore_book_grid_card
+            else -> return
+        }
+        applyWallpaperGlassBackground(cornerRadiusPx = radiusDp.dpToPx()) {
+            ContextCompat.getDrawable(context, cardRes)
         }
     }
 
@@ -154,6 +214,12 @@ class HomepageBooksAdapter(
         const val MODE_BANNER = 2
         const val MODE_CARD = 3
         const val MODE_WATERFALL = 4
+
+        /** 卡片模式原卡面 `bg_homepage_book_card` 的圆角（4dp）。 */
+        private const val CARD_SURFACE_RADIUS_DP = 4f
+
+        /** 瀑布模式原卡面 `bg_explore_book_grid_card` 的圆角（8dp）。 */
+        private const val WATERFALL_SURFACE_RADIUS_DP = 8f
 
         /** 纵向布局管理器 */
         fun verticalLayoutManager(context: Context): LinearLayoutManager =

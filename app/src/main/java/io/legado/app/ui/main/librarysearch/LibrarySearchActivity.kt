@@ -111,7 +111,11 @@ private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
                 fallback = Modifier.background(
                     style.fieldSurface,
                     RoundedCornerShape(style.actionRadius)
-                )
+                ),
+                // 本页顶栏是布局里的 title_bar，这个输入框属页面内表面（圆角 = actionRadius，
+                // 回退是 fieldSurface）。不置 true 的话 solid 档 / 无背景图时只判采样域与设备会
+                // 判为可用，画出底栏色不透明壳，把 fieldSurface 的 fallback 顶掉。
+                requireWallpaperHost = true
             ) {
                 OutlinedTextField(
                     value = query,

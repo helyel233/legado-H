@@ -48,6 +48,7 @@ import io.legado.app.help.CoverWarmup
 import splitties.init.appCtx
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.book.search.SearchActivity
@@ -201,6 +202,9 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         val gridState = rememberLazyGridState()
         val currentGroupId = composeGroupId
         val pendingScrollRestoreGroupId = composePendingScrollRestoreGroupId
+        // 整页算一次玻璃签名，往下传：放 BookshelfGridItem 里会让每个可见项各注册一个
+        // 偏好监听（3 列 × 约 7 行 ≈ 20 个），滚动时反复建销
+        val glassSignature = rememberGlassConfigSignature()
         val canScrollBackward by remember {
             derivedStateOf {
                 gridState.firstVisibleItemIndex > 0 ||
@@ -267,6 +271,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                 ) { item ->
                     BookshelfGridItem(
                         item = item,
+                        glassSignature = glassSignature,
                         modifier = Modifier,
                         fragment = this@BookshelfFragment2,
                         lifecycle = viewLifecycleOwner.lifecycle,

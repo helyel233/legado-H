@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -101,13 +102,20 @@ import io.legado.app.ui.book.cache.WebDavTaskStatus
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.font.FontSelectDialog
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppManagementCard
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
@@ -2206,12 +2214,21 @@ private fun ThemePackageManageScreen(
     previewData: (ThemePackageManager.Entry) -> ThemePreviewData
 ) {
     val palette = rememberAppManagementPalette()
+    // 根 Surface 原先铺 palette.settings.page 整页不透明：壁纸模式下主题卡玻璃只能采到被本页
+    // 自己盖住的壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，
+    // 壁纸由此透出）；无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    // 一页只算一次签名：主题网格卡与日夜胶囊只读，不各注册偏好监听
+    val glassSignature = rememberGlassConfigSignature()
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily),
+        // 主列表卡（ThemePackageGridCard）是 AppManagementCard：提供签名后自动走壁纸域玻璃；
+        // 提供 null（壁纸不可见）时卡片保持主题实底，与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = palette.settings.page,
+            color = glassPageBackgroundColor(palette.settings.page, wallpaperVisible),
             contentColor = palette.settings.primaryText
         ) {
             Column(
@@ -2222,6 +2239,7 @@ private fun ThemePackageManageScreen(
                 ThemePackageTabs(
                     isNightTheme = isNightTheme,
                     palette = palette,
+                    glassSignature = glassSignature,
                     onSwitchDayNight = onSwitchDayNight
                 )
                 Text(
@@ -2229,6 +2247,12 @@ private fun ThemePackageManageScreen(
                     color = palette.settings.secondaryText,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
+                    // 页根在背景图模式下已透明，这句说明文字直接压在壁纸上：
+                    // 按 BackgroundReadability 的口径给独立提示文本加自适应投影
+                    // （无背景图时返回 null，普通主题观感逐值不变）
+                    style = LocalTextStyle.current.copy(
+                        shadow = imageBgTextShadow(palette.settings.secondaryText)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, top = 10.dp, end = 16.dp)
@@ -2284,31 +2308,50 @@ private fun ThemePackageManageScreen(
 private fun ThemePackageTabs(
     isNightTheme: Boolean,
     palette: AppManagementPalette,
+    glassSignature: String,
     onSwitchDayNight: (Boolean) -> Unit
 ) {
-    Row(
+    val actionRadius = palette.miuix.actionRadius ?: 12.dp
+    val actionRadiusPx = with(LocalDensity.current) { actionRadius.toPx() }
+    // 胶囊底改走 GlassPanel：它是页面内表面，先经 requireWallpaperHost = true 问一句
+    // 「背后真的有壁纸吗」，不可用（solid 档 / 墨水屏 / 低内存 / 无壁纸）时由 fallback 铺回
+    // 原来的 palette.settings.row 实底胶囊，观感与改动前逐值一致。
+    // 圆角沿原 actionRadius，几何不变。
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = actionRadiusPx,
+        configSignature = glassSignature,
+        requireWallpaperHost = true,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
-            .background(ComposeColor(palette.settings.row))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .clip(RoundedCornerShape(actionRadius)),
+        fallback = Modifier.background(
+            color = ComposeColor(palette.settings.row),
+            shape = RoundedCornerShape(actionRadius)
+        )
     ) {
-        ThemePackageTabButton(
-            text = stringResource(R.string.theme_day),
-            selected = !isNightTheme,
-            palette = palette,
-            onClick = { onSwitchDayNight(false) },
-            modifier = Modifier.weight(1f)
-        )
-        ThemePackageTabButton(
-            text = stringResource(R.string.theme_night),
-            selected = isNightTheme,
-            palette = palette,
-            onClick = { onSwitchDayNight(true) },
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ThemePackageTabButton(
+                text = stringResource(R.string.theme_day),
+                selected = !isNightTheme,
+                palette = palette,
+                onClick = { onSwitchDayNight(false) },
+                modifier = Modifier.weight(1f)
+            )
+            ThemePackageTabButton(
+                text = stringResource(R.string.theme_night),
+                selected = isNightTheme,
+                palette = palette,
+                onClick = { onSwitchDayNight(true) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

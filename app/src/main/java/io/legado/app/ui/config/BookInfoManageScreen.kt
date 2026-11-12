@@ -19,8 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -37,14 +39,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.BookInfoComponentItem
 import io.legado.app.help.config.BookInfoPageStyle
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
 @Composable
 internal fun BookInfoManageScreen(
@@ -56,105 +64,121 @@ internal fun BookInfoManageScreen(
     onMoveBy: (BookInfoComponentItem, Int) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
+    // 根背景原先铺 palette.settings.page 整页不透明——壁纸模式下卡片玻璃只能采到被本页盖住的
+    // 壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，壁纸由此透出）；
+    // 无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(palette.settings.page)
+    CompositionLocalProvider(
+        // 列表卡与沉浸式面板都是 AppManagementCard：提供签名后自动走壁纸域玻璃；
+        // 提供 null（壁纸不可见）时卡片保持主题实底，与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
-        // Tab bar
-        StyleTabBar(
-            style = style,
-            palette = palette,
-            onStyleChanged = onStyleChanged
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
+        ) {
+            // Tab bar
+            StyleTabBar(
+                style = style,
+                palette = palette,
+                onStyleChanged = onStyleChanged
+            )
 
-        Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-        // Summary text
-        val summaryText = when (style) {
-            BookInfoPageStyle.CLASSIC -> stringResource(R.string.book_info_components_hint)
-            BookInfoPageStyle.IMMERSIVE_COMPOSE -> stringResource(R.string.book_info_style_immersive_hint)
-        }
-        Text(
-            text = summaryText,
-            color = palette.settings.secondaryText,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 18.dp),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
+            // Summary text
+            val summaryText = when (style) {
+                BookInfoPageStyle.CLASSIC -> stringResource(R.string.book_info_components_hint)
+                BookInfoPageStyle.IMMERSIVE_COMPOSE -> stringResource(R.string.book_info_style_immersive_hint)
+            }
+            Text(
+                text = summaryText,
+                color = palette.settings.secondaryText,
+                fontSize = 13.sp,
+                // 页根在壁纸模式下透明，这句说明直接压图难分辨，补自适应投影；
+                // imageBgTextShadow 无背景图时返回 null，普通主题观感不变。
+                style = LocalTextStyle.current.copy(
+                    shadow = imageBgTextShadow(palette.settings.secondaryText)
+                ),
+                modifier = Modifier.padding(horizontal = 18.dp),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        when (style) {
-            BookInfoPageStyle.CLASSIC -> {
-                // Component list
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
-                ) {
-                    itemsIndexed(
-                        items = components,
-                        key = { _, item -> item.type.name }
-                    ) { index, item ->
-                        ComponentItemRow(
-                            item = item,
-                            palette = palette,
-                            onCheckedChange = { checked ->
-                                onComponentToggle(index, checked)
-                            },
-                            onMoveBy = { delta ->
-                                // 只传条目身份+偏移量，索引由 Activity 侧按最新状态解析：
-                                // 拖动期间列表实时重排，同一帧内连续移动时组合侧列表会过期。
-                                onMoveBy(item, delta)
-                            }
+            when (style) {
+                BookInfoPageStyle.CLASSIC -> {
+                    // Component list
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                    ) {
+                        itemsIndexed(
+                            items = components,
+                            key = { _, item -> item.type.name }
+                        ) { index, item ->
+                            ComponentItemRow(
+                                item = item,
+                                palette = palette,
+                                onCheckedChange = { checked ->
+                                    onComponentToggle(index, checked)
+                                },
+                                onMoveBy = { delta ->
+                                    // 只传条目身份+偏移量，索引由 Activity 侧按最新状态解析：
+                                    // 拖动期间列表实时重排，同一帧内连续移动时组合侧列表会过期。
+                                    onMoveBy(item, delta)
+                                }
+                            )
+                        }
+                    }
+
+                    // Reset button
+                    LegadoMiuixActionButton(
+                        text = stringResource(R.string.reset),
+                        palette = palette.miuix,
+                        onClick = onReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
+                    )
+                }
+
+                BookInfoPageStyle.IMMERSIVE_COMPOSE -> {
+                    // Immersive info panel
+                    AppManagementCard(
+                        palette = palette,
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        insidePadding = PaddingValues(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.book_info_style_immersive_title),
+                            color = palette.settings.primaryText,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(R.string.book_info_style_immersive_desc),
+                            color = palette.settings.secondaryText,
+                            fontSize = 13.5.sp,
+                            lineHeight = 20.sp,
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(modifier = Modifier.weight(1f))
                 }
-
-                // Reset button
-                LegadoMiuixActionButton(
-                    text = stringResource(R.string.reset),
-                    palette = palette.miuix,
-                    onClick = onReset,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                )
-            }
-
-            BookInfoPageStyle.IMMERSIVE_COMPOSE -> {
-                // Immersive info panel
-                AppManagementCard(
-                    palette = palette,
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    insidePadding = PaddingValues(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.book_info_style_immersive_title),
-                        color = palette.settings.primaryText,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(R.string.book_info_style_immersive_desc),
-                        color = palette.settings.secondaryText,
-                        fontSize = 13.5.sp,
-                        lineHeight = 20.sp,
-                        maxLines = 6,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }

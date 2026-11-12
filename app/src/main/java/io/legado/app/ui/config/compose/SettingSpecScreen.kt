@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,8 +78,37 @@ import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.utils.ColorUtils
 
 private val PanelHorizontalPadding = 12.dp
+
+/**
+ * 宿主页面此刻是否**真的露出 App 壁纸**（由宿主显式声明，不由本组件猜）。
+ *
+ * 三态，缺一不可：
+ * - `null`（默认，未声明）：交给 App 级「有没有背景图」判定，也就是本 Local 引入之前
+ *   的那条老规则。**约 20 个设置页宿主（`ConfigActivity` 各页、`AppearanceKitActivity`、
+ *   `HomepageModuleManageSheet` 等）不声明，行为一字不变。**
+ * - `true`：宿主声明「我背后就是壁纸」，分区卡铺壁纸域玻璃（与「我的」页同一形态）。
+ * - `false`：宿主声明「我背后不是壁纸」，**同时约定宿主自己负责面板表面**
+ *   （阅读页「更多设置」面板铺的是当前正文的磨砂，见 `MoreConfigDialog`）。
+ *   此时分区卡不铺玻璃，且填充改为半透明薄底（[CARD_FILL_YIELD_ALPHA]）——
+ *   否则不透明的卡片会把面板的磨砂整块盖死，变成「实底套磨砂」。
+ *
+ * 为什么必须是「声明」而不是「探测」：运行期无法可靠判断任意外层容器是否不透明
+ * （取决于布局、主题与运行时状态），把判定写成猜测只会引入假阴性。这与
+ * `GlassSamplingDomain` 显式声明采样域是同一条纪律。
+ */
+val LocalGlassWallpaperAvailable = compositionLocalOf<Boolean?> { null }
+
+/**
+ * 宿主自己铺了磨砂面板时，分区卡的填充不透明度。
+ *
+ * 0.45 = 「能看出这是一张卡、又能透出面板底下的阅读内容」。取值来源是
+ * `UiCorner.surfaceColor` 算出的卡片底色再压这个 alpha；1px 描边沿用 `colors.border`，
+ * 所以卡片的可辨识度不依赖填充，降低了薄底对可读性的影响。
+ */
+private const val CARD_FILL_YIELD_ALPHA = 0.45f
 
 @Composable
 fun SettingSpecScreen(
@@ -93,7 +123,19 @@ fun SettingSpecScreen(
     val panelRadiusPx = colors.panelRadiusPx
     // 壁纸模式下页面根背景透明，分区卡背后是壁纸（壁纸域）；无背景图 / 墨水屏时
     // 保持主题页色与实底卡，观感逐值不变。
-    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    //
+    // 宿主可以用 [LocalGlassWallpaperAvailable] 覆盖这个结论：阅读页的配置弹窗声明 false
+    // （背后是自绘正文，不是 App 壁纸），不声明时这里的表达式与引入本 Local 之前完全一致。
+    //
+    // `rememberHasUsableBgImage()` 一定要在 `?:` 左边**无条件**调用掉：写成
+    // `declared ?: rememberHasUsableBgImage() && ...` 会把这次 remember 变成条件调用，
+    // 宿主声明值翻转时该组合槽位会插入/移除，白白丢掉一次记忆化。先算成局部变量即可。
+    val declaredWallpaperAvailable = LocalGlassWallpaperAvailable.current
+    val appWallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val wallpaperVisible = declaredWallpaperAvailable ?: appWallpaperVisible
+    // 宿主声明「不露壁纸」等价于「宿主自己铺了面板表面」：分区卡必须让出填充，
+    // 否则面板磨砂被不透明卡面整块盖死，又变回「实底套磨砂」。
+    val cardFillYieldsToPanel = declaredWallpaperAvailable == false
     val glassSignature = rememberGlassConfigSignature()
     val sections = remember(page) {
         page.sections.mapNotNull { section ->
@@ -174,7 +216,18 @@ fun SettingSpecScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .background(glassPageBackgroundColor(colors.page, wallpaperVisible))
+                // 列表根背景：有壁纸时透明（透出壁纸），否则铺主题页色。
+                //
+                // 第三种情况同样必须透明：宿主自己铺了面板表面（`cardFillYieldsToPanel`，
+                // 阅读页「更多设置」面板的正文磨砂）。漏掉这一位的话，这个**铺满整块面板**的
+                // 不透明 `colors.page` 会把面板磨砂从根上盖死——分区卡改成薄底也白改，
+                // 露出来的只会是主题页色，真机那条「黑边」会原样留着。
+                .background(
+                    glassPageBackgroundColor(
+                        pageColor = colors.page,
+                        hasBgImage = wallpaperVisible || cardFillYieldsToPanel
+                    )
+                )
                 .onGloballyPositioned { listTopPx = it.positionInWindow().y }
                 .navigationBarsPadding(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -201,6 +254,7 @@ fun SettingSpecScreen(
                     panelRadiusPx = panelRadiusPx,
                     drawPanelImage = drawPanelImage,
                     wallpaperVisible = wallpaperVisible,
+                    cardFillYieldsToPanel = cardFillYieldsToPanel,
                     glassSignature = glassSignature,
                     // 带 targetKey 进来说明是要定位到某一项，此时所有分区必须展开，
                     // 否则目标项根本不在列表里，定位会静默失败
@@ -221,6 +275,7 @@ private fun SettingSectionPanel(
     panelRadiusPx: Float,
     drawPanelImage: Boolean,
     wallpaperVisible: Boolean,
+    cardFillYieldsToPanel: Boolean,
     glassSignature: String,
     forceExpanded: Boolean,
     highlightKey: String?,
@@ -282,7 +337,13 @@ private fun SettingSectionPanel(
         }
     }
     val panelFallback = Modifier.appSettingPanelBackground(
-        normalColor = colors.row,
+        // 宿主自己铺了磨砂面板时，卡面让出填充（薄底），把面板底下的阅读内容透上来；
+        // 其它情况保持原来的实底卡面，观感逐值不变。
+        normalColor = if (cardFillYieldsToPanel) {
+            ColorUtils.withAlpha(colors.row, CARD_FILL_YIELD_ALPHA)
+        } else {
+            colors.row
+        },
         panelImage = panelImage,
         borderColor = colors.border,
         radiusPx = panelRadiusPx
@@ -290,10 +351,22 @@ private fun SettingSectionPanel(
     if (wallpaperVisible) {
         // 分区卡与「我的」页 SettingsSectionCard 同一份壁纸域玻璃（GlassPanel 桥），
         // 材质 / 降级 / 圆角全部由底层管线决定，这里只声明采样域与圆角。
+        //
+        // `requireWallpaperHost = true` 不能省：`wallpaperVisible` 只回答「App 有没有背景图」，
+        // 回答不了「宿主页面此刻露不露壁纸」。本页被阅读页的「更多设置」面板复用
+        // （`MoreConfigDialog.ReadPreferenceFragment`），而阅读页正文由 ReadView 自绘阅读主题
+        // 背景、页根背景从不置空 —— 少了这一位，阅读页的分区卡会去采样用户根本看不见的
+        // App 壁纸（真机反馈：「面板里透出的是 app 壁纸的模糊版」）。
+        // 同一判定顺带修掉 solid 档：不开这一位时 `GlassPanel` 只查采样域与设备，
+        // 无玻璃档会拿到 `solidShellDrawable`（底栏色不透明壳），分区卡跟着变成底栏色；
+        // 判否后走下面的 `panelFallback`，回到主题卡片色（与 `pagePanelBackground` 同一纪律）。
+        // 判否时的渲染与下面 else 分支逐值相同，因此无背景图 / 墨水屏 / solid / 低内存
+        // 的观感不变。
         GlassPanel(
             domain = GlassSamplingDomain.WALLPAPER,
             cornerRadiusPx = panelRadiusPx,
             configSignature = glassSignature,
+            requireWallpaperHost = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = PanelHorizontalPadding),

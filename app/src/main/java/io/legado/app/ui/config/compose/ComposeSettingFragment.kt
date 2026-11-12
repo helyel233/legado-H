@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.StringRes
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,22 @@ abstract class ComposeSettingFragment : Fragment(),
     protected open val autoOpenTargetItem: Boolean = true
 
     protected open val drawPanelImage: Boolean = true
+
+    /**
+     * 宿主页面是否真的露出 App 壁纸，交给 `LocalGlassWallpaperAvailable`。
+     *
+     * `null`（默认）= 不声明，由 App 级「有没有背景图」判定 —— 所有常规设置页宿主
+     * 走这条，行为与引入本属性之前一字不变。
+     *
+     * 目前唯一的覆写点是 `MoreConfigDialog.ReadPreferenceFragment`（阅读页「更多设置」面板）：
+     * 它背后是自绘的正文而不是 App 壁纸，且该面板自己会铺「当前正文」的磨砂表面 ——
+     * 按照 `LocalGlassWallpaperAvailable` 的约定，声明 false 同时意味着分区卡改用薄底。
+     *
+     * `ReadAloudConfigDialog.ReadAloudPreferenceFragment` **不覆写**（保持 null）：那个面板根
+     * 仍是不透明的 `dialogSurfaceBackground`，卡片一旦改薄底就会变成「半透明卡套实底面板」。
+     * 等它的面板表面也改成正文磨砂之后，才应该跟进声明。
+     */
+    protected open val wallpaperGlassAvailable: Boolean? = null
 
     /**
      * 构建 spec 时使用的上下文。
@@ -94,15 +111,19 @@ abstract class ComposeSettingFragment : Fragment(),
                 // 只有偏好变化（refreshTick）时才重读 SP 重建
                 val tick = refreshTick.intValue
                 val page = remember(tick) { buildPageSpec() }
-                LegadoComposeTheme {
-                    SettingSpecScreen(
-                        page = page,
-                        scrollTargetKey = scrollTargetKey.value,
-                        drawPanelImage = drawPanelImage,
-                        onTargetReady = ::handleTargetReady,
-                        onTargetMissing = ::consumeMissingTarget,
-                        onItemClick = ::handleItemClick
-                    )
+                CompositionLocalProvider(
+                    LocalGlassWallpaperAvailable provides wallpaperGlassAvailable
+                ) {
+                    LegadoComposeTheme {
+                        SettingSpecScreen(
+                            page = page,
+                            scrollTargetKey = scrollTargetKey.value,
+                            drawPanelImage = drawPanelImage,
+                            onTargetReady = ::handleTargetReady,
+                            onTargetMissing = ::consumeMissingTarget,
+                            onItemClick = ::handleItemClick
+                        )
+                    }
                 }
             }
         }

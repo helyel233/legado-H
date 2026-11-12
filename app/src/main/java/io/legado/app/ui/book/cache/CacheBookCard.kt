@@ -18,8 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.image.CoverImageView
@@ -36,11 +40,17 @@ import io.legado.app.ui.widget.image.CoverImageView
  * 缓存管理的单本书卡片：封面 + 书名/来源 + 缓存计数与任务进度 + 操作按钮行
  *
  * 任务状态取值与按钮可用性规则与原 View 版列表项保持一致
+ *
+ * 卡面走 [GlassPanel]（页面内表面，`requireWallpaperHost = true`）：壁纸可见时让位给
+ * 壁纸域玻璃，solid 档 / 墨水屏 / 低内存 / 无壁纸由 fallback 铺回原来的
+ * `palette.settings.row` 实底卡。卡内按钮与来源 chips 仍是低透明度着色的控件底
+ * （`row` / `rowPressed` / `accent.copy(alpha = 0.12f)`），压不实玻璃，对比度不变。
  */
 @Composable
 internal fun CacheBookCard(
     item: CacheBookItem,
     palette: AppManagementPalette,
+    glassSignature: String,
     audioTaskStates: Map<String, AudioCacheTaskState>,
     webDavTaskStates: Map<String, WebDavTaskState>,
     onOpenChapters: (CacheBookItem) -> Unit,
@@ -55,6 +65,7 @@ internal fun CacheBookCard(
 ) {
     val context = LocalContext.current
     val panelRadius = context.composePanelRadius()
+    val panelRadiusPx = with(LocalDensity.current) { panelRadius.toPx() }
     val actionRadius = context.composeActionRadius()
     val audioState = remember(item, audioTaskStates) { audioTaskStateFor(item, audioTaskStates) }
     val webDavState = remember(item, webDavTaskStates) { webDavTaskStateFor(item, webDavTaskStates) }
@@ -65,80 +76,104 @@ internal fun CacheBookCard(
     val hasLocalCache = item.localCachedCount > 0
     val hasRemoteCache = item.hasRemoteCache()
 
-    Column(
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = panelRadiusPx,
+        configSignature = glassSignature,
+        requireWallpaperHost = true,
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                color = Color(palette.settings.row),
-                shape = RoundedCornerShape(panelRadius)
-            )
-            .padding(12.dp)
+            .clip(RoundedCornerShape(panelRadius)),
+        fallback = Modifier.background(
+            color = Color(palette.settings.row),
+            shape = RoundedCornerShape(panelRadius)
+        )
     ) {
-        Row(verticalAlignment = Alignment.Top) {
-            BookCoverImage(
-                book = item.book,
-                style = CoverImageView.CoverStyle.LIST,
-                modifier = Modifier
-                    .width(66.dp)
-                    .height(90.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.book.name,
-                    color = palette.settings.primaryText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = palette.settings.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                BookCoverImage(
+                    book = item.book,
+                    style = CoverImageView.CoverStyle.LIST,
+                    modifier = Modifier
+                        .width(66.dp)
+                        .height(90.dp)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = item.cacheCountText(context),
-                    color = palette.settings.primaryText,
-                    fontSize = 13.sp,
-                    fontFamily = palette.settings.bodyFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(cacheStateLabelRes(item)),
-                    color = palette.settings.secondaryText,
-                    fontSize = 12.sp,
-                    fontFamily = palette.settings.bodyFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val taskMessage = when {
-                    isCaching || isPaused -> audioState?.message
-                    webDavActive -> webDavState?.message
-                    else -> webDavState?.takeIf { it.status != WebDavTaskStatus.COMPLETED }?.message
-                        ?: audioState?.takeIf { it.status != CacheTaskStatus.COMPLETED }?.message
-                }
-                if (!taskMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.book.name,
+                        color = palette.settings.primaryText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = palette.settings.titleFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = item.cacheCountText(context),
+                        color = palette.settings.primaryText,
+                        fontSize = 13.sp,
+                        fontFamily = palette.settings.bodyFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = taskMessage,
+                        text = stringResource(cacheStateLabelRes(item)),
                         color = palette.settings.secondaryText,
                         fontSize = 12.sp,
                         fontFamily = palette.settings.bodyFontFamily,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                }
-                if (item.sourceVariants.size > 1) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                color = Color(palette.settings.rowPressed),
-                                shape = RoundedCornerShape(actionRadius)
+                    val taskMessage = when {
+                        isCaching || isPaused -> audioState?.message
+                        webDavActive -> webDavState?.message
+                        else -> webDavState?.takeIf { it.status != WebDavTaskStatus.COMPLETED }?.message
+                            ?: audioState?.takeIf { it.status != CacheTaskStatus.COMPLETED }?.message
+                    }
+                    if (!taskMessage.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = taskMessage,
+                            color = palette.settings.secondaryText,
+                            fontSize = 12.sp,
+                            fontFamily = palette.settings.bodyFontFamily,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (item.sourceVariants.size > 1) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = Color(palette.settings.rowPressed),
+                                    shape = RoundedCornerShape(actionRadius)
+                                )
+                                .clickable { onSelectSource(item) }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (item.sourceAvailable) {
+                                    item.sourceName
+                                } else {
+                                    stringResource(R.string.cache_manage_source_deleted_chip, item.sourceName)
+                                },
+                                color = palette.settings.secondaryText,
+                                fontSize = 12.sp,
+                                fontFamily = palette.settings.bodyFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            .clickable { onSelectSource(item) }
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (item.sourceAvailable) {
                                 item.sourceName
@@ -152,84 +187,70 @@ internal fun CacheBookCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                } else {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (item.sourceAvailable) {
-                            item.sourceName
-                        } else {
-                            stringResource(R.string.cache_manage_source_deleted_chip, item.sourceName)
-                        },
-                        color = palette.settings.secondaryText,
-                        fontSize = 12.sp,
-                        fontFamily = palette.settings.bodyFontFamily,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CacheActionButton(
+                    text = stringResource(R.string.cache_manage_chapters),
+                    palette = palette,
+                    actionRadius = actionRadius,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasLocalCache,
+                    accent = true,
+                    onClick = { onOpenChapters(item) }
+                )
+                CacheActionButton(
+                    text = stringResource(uploadActionLabelRes(item)),
+                    palette = palette,
+                    actionRadius = actionRadius,
+                    modifier = Modifier.weight(1f),
+                    enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
+                    onClick = {
+                        when {
+                            hasLocalCache && hasRemoteCache -> onSelectSyncAction(item)
+                            hasRemoteCache && !hasLocalCache -> onDownload(item)
+                            else -> onUpload(item)
+                        }
+                    }
+                )
+                CacheActionButton(
+                    text = stringResource(R.string.cache_manage_review_snapshots),
+                    palette = palette,
+                    actionRadius = actionRadius,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onOpenReviews(item) }
+                )
+                if (item.manifest != null && hasLocalCache) {
+                    CacheActionButton(
+                        text = stringResource(
+                            if (item.inBookshelf) R.string.cache_manage_use_cache
+                            else R.string.cache_manage_add_bookshelf
+                        ),
+                        palette = palette,
+                        actionRadius = actionRadius,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onRestore(item) }
                     )
                 }
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CacheActionButton(
-                text = stringResource(R.string.cache_manage_chapters),
-                palette = palette,
-                actionRadius = actionRadius,
-                modifier = Modifier.weight(1f),
-                enabled = hasLocalCache,
-                accent = true,
-                onClick = { onOpenChapters(item) }
-            )
-            CacheActionButton(
-                text = stringResource(uploadActionLabelRes(item)),
-                palette = palette,
-                actionRadius = actionRadius,
-                modifier = Modifier.weight(1f),
-                enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
-                onClick = {
-                    when {
-                        hasLocalCache && hasRemoteCache -> onSelectSyncAction(item)
-                        hasRemoteCache && !hasLocalCache -> onDownload(item)
-                        else -> onUpload(item)
-                    }
+                if (isCaching || isPaused) {
+                    CacheActionButton(
+                        text = stringResource(if (isPaused) R.string.resume else R.string.pause),
+                        palette = palette,
+                        actionRadius = actionRadius,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onStopAudio(item) }
+                    )
                 }
-            )
-            CacheActionButton(
-                text = stringResource(R.string.cache_manage_review_snapshots),
-                palette = palette,
-                actionRadius = actionRadius,
-                modifier = Modifier.weight(1f),
-                onClick = { onOpenReviews(item) }
-            )
-            if (item.manifest != null && hasLocalCache) {
                 CacheActionButton(
-                    text = stringResource(
-                        if (item.inBookshelf) R.string.cache_manage_use_cache
-                        else R.string.cache_manage_add_bookshelf
-                    ),
+                    text = stringResource(R.string.delete),
                     palette = palette,
                     actionRadius = actionRadius,
                     modifier = Modifier.weight(1f),
-                    onClick = { onRestore(item) }
+                    enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
+                    onClick = { onDelete(item) }
                 )
             }
-            if (isCaching || isPaused) {
-                CacheActionButton(
-                    text = stringResource(if (isPaused) R.string.resume else R.string.pause),
-                    palette = palette,
-                    actionRadius = actionRadius,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onStopAudio(item) }
-                )
-            }
-            CacheActionButton(
-                text = stringResource(R.string.delete),
-                palette = palette,
-                actionRadius = actionRadius,
-                modifier = Modifier.weight(1f),
-                enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
-                onClick = { onDelete(item) }
-            )
         }
     }
 }

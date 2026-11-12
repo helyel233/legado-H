@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
 import android.view.Gravity
@@ -36,6 +37,9 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.utils.*
@@ -46,6 +50,20 @@ import kotlinx.coroutines.withContext
 import androidx.viewpager.widget.ViewPager
 import io.legado.app.utils.startActivity
 import splitties.init.appCtx
+
+/** 栏目按钮的圆角，与原 `createTabBackground` 的 radius 逐值一致（16dp）。 */
+private const val TAB_CORNER_RADIUS_DP = 16f
+
+/** 选中描边线宽，与原 `createTabBackground` 的 strokeWidth 逐值一致（1dp）。 */
+private const val TAB_STROKE_WIDTH_DP = 1f
+
+/**
+ * 栏目按钮玻璃签名 tag 的 keyed tag key。
+ *
+ * 本页只有这一种玻璃表面，取值仍按项目约定用 `0x5F` 打头：`View.setTag(int, Object)`
+ * 要求 key 的应用位 >= 2（低 24 位留给框架），否则真机抛 `IllegalArgumentException`。
+ */
+private const val TAB_GLASS_SIGNATURE_TAG = 0x5F_54_41_42
 
 class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewModel>(),
     VariableDialog.Callback {
@@ -76,11 +94,22 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     var maxTagsPerRow = 10 // 每行尽量容纳10个标签,横屏20
     private val tabScrollViews = mutableListOf<HorizontalScrollView>() // 添加滚动视图列表
 
+    /**
+     * 上一次给这批栏目按钮铺表面时记下的签名（[wallpaperGlassSignature]）。
+     *
+     * null = 还没铺过（首次进入，或刚由 [setupMultiLineTabs] 重建出新的 View）。
+     * 非 null 时每次 [onResume] 只做一次字符串比较：档位没变就完全不动 drawable。
+     */
+    private var lastTabsGlassSignature: String? = null
+
     private fun setupMultiLineTabs() {
         val tabsContainer = binding.tabsContainer
         tabsContainer.removeAllViews()
         tabRows.clear()
         tabScrollViews.clear()
+        // 旧的 tabView 连同它们的签名 tag 一起被丢弃了，记录必须作废，
+        // 否则下面 applyTabsGlass 会以为「这一档已经铺过」而让新按钮停在默认背景上
+        lastTabsGlassSignature = null
         if (sortList.isEmpty()) {
             tabsContainer.gone()
             return
@@ -125,6 +154,9 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             tabsContainer.addView(scrollView)
             tabRows.add(rowLayout)
         }
+        // 标签是新建出来的：先把表面铺好，再定选中态。先铺背景再选中可以避免
+        // 第一帧出现「有选中文字、没有选中描边」的闪动
+        applyTabsGlass()
         // 初始选中状态
         updateTabSelection(binding.viewPager.currentItem)
     }
@@ -135,7 +167,9 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             gravity = Gravity.CENTER
             textSize = 14f
             typeface = uiTypeface()
-            background = createTabBackground(accentColor, context)
+            // 先铺改动前的原表面：玻璃不可用时它就是最终结果（逐值等于改前），
+            // 可用时会被 applyTabGlass 整体换成「玻璃 + 描边层」
+            background = createTabBackground(accentColor)
             setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
             tag = position
             setTextColor(context.primaryTextColor)
@@ -153,9 +187,22 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         }
     }
 
-    private fun createTabBackground(accentColor: Int, context: Context): Drawable {
-        val radius = 16f.dpToPx()
-        val strokeWidth = 1f.dpToPx()
+    /**
+     * 栏目按钮改动前的原表面：圆角 16dp，选中 = 1dp accent 描边，未选中 = 全透明。
+     *
+     * 一份实现两处用，这是刻意的：
+     * 1. **回退表面**——无背景图 / solid 档 / 墨水屏 / 低内存时它原封不动地留在 `background`
+     *    上，观感与改动前逐值一致；
+     * 2. **玻璃上方的描边层**——玻璃模式给 `background` 垫
+     *    `LayerDrawable(玻璃, 本 Selector)`，选中描边就从这里来（玻璃层本身没有选中态）。
+     *
+     * 描边为什么不改成别的载体：`View.setForeground` 自 API 23 才有，本项目 minSdk 21；
+     * 而 Selector 的 state 分发是 View 对 `background` 的既有能力（改动前选中描边就是靠它
+     * 显示的），所以放进 LayerDrawable 后**状态变化完全不需要重建 drawable**。
+     */
+    private fun createTabBackground(accentColor: Int): Drawable {
+        val radius = TAB_CORNER_RADIUS_DP.dpToPx()
+        val strokeWidth = TAB_STROKE_WIDTH_DP.dpToPx()
 
         val selectedDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -172,6 +219,78 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             addState(intArrayOf(android.R.attr.state_selected), selectedDrawable)
             addState(intArrayOf(), defaultDrawable)
         }
+    }
+
+    /**
+     * 把整排栏目按钮的表面重铺到当前档位。
+     *
+     * 只在签名变化时真的重铺：按钮由 [setupMultiLineTabs] 一次性创建、是常驻 View，
+     * 「进设置切玻璃档 / 开关背景图 → 返回本页」不会重建它们，不重铺就停在旧材质上
+     * （页面根背景已被 `BaseActivity` 换成实底、按钮却还是玻璃）。
+     *
+     * 签名取 [wallpaperGlassSignature]（玻璃观感 + 壁纸此刻是否可用），**不用**
+     * `GlassSurface.configSignature`：后者不含背景图开关，关背景图后签名不变会漏掉这一次。
+     */
+    private fun applyTabsGlass() {
+        val signature = wallpaperGlassSignature(this)
+        if (!tabsGlassRelayoutRequired(lastTabsGlassSignature, signature)) return
+        lastTabsGlassSignature = signature
+        tabRows.forEach { row ->
+            for (i in 0 until row.childCount) {
+                (row.getChildAt(i) as? TextView)?.let { applyTabGlass(it, signature) }
+            }
+        }
+    }
+
+    /**
+     * 单个栏目按钮的表面。
+     *
+     * 两条分支，回退逐值等于改动前：
+     * - 玻璃拿不到（无背景图 / solid 档 / 墨水屏 / 低内存 / 页面不露壁纸）→ 不做任何事，
+     *   保持 [createTabBackground] 的 StateListDrawable 原样（选中描边自有，观感一字不差）；
+     * - 玻璃可用 → `background = LayerDrawable(玻璃, 描边层)`：底层采样壁纸，上层是同一个
+     *   Selector，选中描边因此仍然存在。
+     *
+     * **为什么选中态不进 key**：描边层是 StateListDrawable，`isSelected` 变化由 View 把
+     * state 分发给 `background`（LayerDrawable 会继续分发给子层），所以点击切换只重绘、
+     * 不重建 drawable——省掉每次点击重建一份玻璃 drawable 与重新挂位置跟踪。[signature]
+     * 只回答「是不是同一档表面」，同值即零开销返回。
+     *
+     * 取玻璃用的是 [GlassSurface.pageGlassAllowed] + [GlassSurface.panelBackground]，
+     * 与 `io.legado.app.ui.glass.applyWallpaperGlassBackground` 内部同一份判定、同一条管线，
+     * 只是后者会直接写 `background`、无法再拼 LayerDrawable，这里少一层封装。
+     * `pageGlassAllowed` 已经包含背景图开关（经 `showsWallpaperBehindContent`）、solid 档、
+     * 墨水屏、低内存、采样域，因此拿得到玻璃就等于「此刻确实该铺玻璃」。
+     */
+    private fun applyTabGlass(tabView: TextView, signature: String) {
+        // as? String 而非直接比 Any?：让「tag 里存的必须是签名」这件事在代码上显式，
+        // 将来有人往里塞别的对象时会立刻失效重铺，而不是静默命中
+        if ((tabView.getTag(TAB_GLASS_SIGNATURE_TAG) as? String) == signature) return
+        val radiusPx = TAB_CORNER_RADIUS_DP.dpToPx()
+        val glass = if (GlassSurface.pageGlassAllowed(this)) {
+            GlassSurface.panelBackground(
+                host = tabView,
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = radiusPx
+            )
+        } else {
+            null
+        }
+        if (glass == null) {
+            // 回退：旧跟踪必须同时下线，否则位置监听会继续驱动一份不再绘制的 drawable
+            GlassSurface.releaseBackgroundTracking(tabView)
+            // 当前已经是原表面（新建的 View / 一直没有壁纸）→ 什么都不做，保持
+            // createTabBackground 的 StateListDrawable 原样；只有从玻璃退回时才需要重铺一次
+            if (tabView.background is LayerDrawable) {
+                tabView.background = createTabBackground(accentColor)
+            }
+        } else {
+            tabView.background = LayerDrawable(
+                arrayOf(glass, createTabBackground(accentColor))
+            )
+        }
+        // 记在最后：只有真的铺完才认为这一档已完成，中途异常不会把 View 留在「已铺」状态
+        tabView.setTag(TAB_GLASS_SIGNATURE_TAG, signature)
     }
 
     //更新选中状态
@@ -252,6 +371,13 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             }
             finish()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 玻璃档位 / 背景图开关可能在设置页改过：栏目按钮是常驻 View，
+        // 不重铺会停在旧材质上。签名未变时是零开销的字符串比较
+        applyTabsGlass()
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {

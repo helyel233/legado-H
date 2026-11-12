@@ -58,6 +58,7 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.info.BookInfoNavigator
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.main.bookshelf.BookCollectionActivity
@@ -317,6 +318,9 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     @Composable
     private fun BookshelfGridContent() {
         val gridState = rememberLazyGridState()
+        // 整页算一次玻璃签名并下传给 BookshelfGridItem：标签用的是同一份签名，
+        // 逐项各注册一个偏好监听会让滚动反复建销监听器
+        val glassSignature = rememberGlassConfigSignature()
         val canScrollBackward by remember {
             derivedStateOf {
                 gridState.firstVisibleItemIndex > 0 ||
@@ -384,6 +388,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                 ) { item ->
                     BookshelfGridItem(
                         item = item,
+                        glassSignature = glassSignature,
                         modifier = Modifier.padding(marginDp.coerceAtLeast(2.dp)),
                         fragment = this@BooksFragment,
                         lifecycle = viewLifecycleOwner.lifecycle,

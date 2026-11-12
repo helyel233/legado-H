@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -63,6 +65,7 @@ import com.bumptech.glide.signature.ObjectKey
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityThemeManageBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKit
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.AppearanceKitType
@@ -71,11 +74,15 @@ import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.releaseComposeImage
@@ -378,6 +385,12 @@ private fun AppearanceKitScreen(
     onDelete: (AppearanceKit) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
+    // 本页 ComposeView 直接铺在 activity_theme_manage 的根 LinearLayout 上，宿主背景已被
+    // BaseActivity 在壁纸模式下置空，所以根节点不需要再铺页色；这里只负责算一次
+    // 「此刻能不能用壁纸域玻璃」与玻璃签名，往下传给网格卡（一个页面算一次，避免每张卡
+    // 各注册一个偏好监听）。壁纸不可见（无背景图 / 墨水屏）时签名 为 null，卡片保持实底。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 18.dp),
@@ -390,6 +403,7 @@ private fun AppearanceKitScreen(
                 rows = kits,
                 previews = previews,
                 currentKitId = currentKitId,
+                glassSignature = glassSignature.takeIf { wallpaperVisible },
                 onApply = onApply,
                 onEdit = onEdit,
                 onDelete = onDelete
@@ -405,6 +419,7 @@ private fun KitSection(
     rows: List<AppearanceKit>,
     previews: Map<String, KitPreviewData>,
     currentKitId: String,
+    glassSignature: String?,
     onApply: (AppearanceKit) -> Unit,
     onEdit: (AppearanceKit) -> Unit,
     onDelete: (AppearanceKit) -> Unit
@@ -429,6 +444,7 @@ private fun KitSection(
                     preview = previews[kit.id] ?: KitPreviewData.default(),
                     active = kit.id == currentKitId,
                     palette = palette,
+                    glassSignature = glassSignature,
                     onClick = { if (kit.id != currentKitId) onApply(kit) },
                     onLongClick = if (kit.type == AppearanceKitType.IMPORTED_THEME) {
                         { onEdit(kit) }
@@ -607,79 +623,144 @@ private fun AppearanceKitCard(
     preview: KitPreviewData,
     active: Boolean,
     palette: AppManagementPalette,
+    /**
+     * 本页玻璃签名；null 表示壁纸此刻不可见（无背景图 / 墨水屏 / solid 档），
+     * 卡片保持接入玻璃之前的主题实底，观感逐值不变。
+     */
+    glassSignature: String?,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onDelete: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(206.dp)
-            .clip(RoundedCornerShape(palette.miuix.panelRadius ?: 14.dp))
-            .background(if (pressed) Color(palette.settings.rowPressed) else Color(palette.settings.row))
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-            .padding(9.dp)
-    ) {
-        AppearanceKitPreview(
-            preview = preview,
-            active = active,
-            palette = palette,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(104.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = kit.name,
-            color = palette.settings.primaryText,
-            fontSize = 14.sp,
-            lineHeight = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = kit.summary,
-            color = palette.settings.secondaryText,
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+    val radius = palette.miuix.panelRadius ?: 14.dp
+    val shape = RoundedCornerShape(radius)
+    // 原来的实底（含按下态）逐值保留下来，作为玻璃不可用时的 fallback
+    val solidColor = if (pressed) Color(palette.settings.rowPressed) else Color(palette.settings.row)
+    val clickableModifier = Modifier.combinedClickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = onClick,
+        onLongClick = onLongClick
+    )
+    val outerModifier = Modifier
+        .fillMaxWidth()
+        .height(206.dp)
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = with(LocalDensity.current) { radius.toPx() },
+            configSignature = glassSignature,
+            // 卡片是页面内表面：先问一句「背后真的有壁纸吗」，自铺不透明底的页面不该建采样宿主
+            requireWallpaperHost = true,
+            modifier = outerModifier.clip(shape),
+            fallback = Modifier.background(solidColor)
         ) {
-            listOf(preview.primaryColor, preview.accentColor, preview.cardColor, preview.bottomColor).forEach {
-                Box(
-                    modifier = Modifier
-                        .size(width = 18.dp, height = 8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(it))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 玻璃 drawable 没有按下态，用主题行按下色叠在玻璃之上保留触摸反馈
+                    // （与 AppManagementCard 同一口径；界面不透明度 < 1 时按下态会略深一点，
+                    // 只在手指按住期间可见）
+                    .background(
+                        if (pressed) Color(palette.settings.rowPressed) else Color.Transparent
+                    )
+                    .then(clickableModifier)
+                    .padding(9.dp)
+            ) {
+                AppearanceKitCardBody(
+                    kit = kit,
+                    preview = preview,
+                    active = active,
+                    palette = palette,
+                    onDelete = onDelete
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
-            if (onDelete != null) {
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_outline_delete),
-                        contentDescription = stringResource(R.string.delete),
-                        tint = palette.settings.secondaryText,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+        }
+    } else {
+        Column(
+            modifier = outerModifier
+                .clip(shape)
+                .background(solidColor)
+                .then(clickableModifier)
+                .padding(9.dp)
+        ) {
+            AppearanceKitCardBody(
+                kit = kit,
+                preview = preview,
+                active = active,
+                palette = palette,
+                onDelete = onDelete
+            )
+        }
+    }
+}
+
+/**
+ * 外观套卡的内容体：玻璃分支与实底分支共用，避免两份布局各自演化。
+ * 抽成 [ColumnScope] 扩展是因为中间有 `Spacer(Modifier.weight(1f))` 把色卡行压到底部。
+ */
+@Composable
+private fun ColumnScope.AppearanceKitCardBody(
+    kit: AppearanceKit,
+    preview: KitPreviewData,
+    active: Boolean,
+    palette: AppManagementPalette,
+    onDelete: (() -> Unit)?
+) {
+    AppearanceKitPreview(
+        preview = preview,
+        active = active,
+        palette = palette,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(104.dp)
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = kit.name,
+        color = palette.settings.primaryText,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = kit.summary,
+        color = palette.settings.secondaryText,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
+    Spacer(modifier = Modifier.weight(1f))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        listOf(preview.primaryColor, preview.accentColor, preview.cardColor, preview.bottomColor).forEach {
+            Box(
+                modifier = Modifier
+                    .size(width = 18.dp, height = 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(it))
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (onDelete != null) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_outline_delete),
+                    contentDescription = stringResource(R.string.delete),
+                    tint = palette.settings.secondaryText,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }

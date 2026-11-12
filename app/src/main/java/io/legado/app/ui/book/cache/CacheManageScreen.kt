@@ -23,8 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,11 +34,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
 /**
  * 缓存管理页（Compose 渲染）
@@ -68,17 +76,25 @@ fun CacheManageScreen(
     val palette = rememberAppManagementPalette()
     val context = LocalContext.current
     val panelRadius = context.composePanelRadius()
+    val panelRadiusPx = with(LocalDensity.current) { panelRadius.toPx() }
     val actionRadius = context.composeActionRadius()
+    // 壁纸可见性：页面根背景透明、Tab 胶囊与书卡玻璃三处共用同一判定
+    // （BaseActivity 的根背景策略，与「我的」页、阅读记录页同一口径）
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    // 每个页面算一次签名即可，不要在每一行里各注册一个偏好监听
+    val glassSignature = rememberGlassConfigSignature()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(palette.settings.page)
+            .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
     ) {
         CacheModeTabRow(
             mode = mode,
             palette = palette,
             panelRadius = panelRadius,
+            panelRadiusPx = panelRadiusPx,
             actionRadius = actionRadius,
+            glassSignature = glassSignature,
             onModeChange = onModeChange
         )
         Text(
@@ -127,6 +143,7 @@ fun CacheManageScreen(
                         CacheBookCard(
                             item = item,
                             palette = palette,
+                            glassSignature = glassSignature,
                             audioTaskStates = audioTaskStates,
                             webDavTaskStates = webDavTaskStates,
                             onOpenChapters = onOpenChapters,
@@ -161,53 +178,75 @@ fun CacheManageScreen(
     }
 }
 
+/**
+ * 分类 Tab 胶囊。
+ *
+ * 外壳（胶囊底）改走 [GlassPanel]：胶囊是页面内表面，需要先经
+ * `requireWallpaperHost = true` 问一句「背后真的有壁纸吗」，不可用（solid 档 /
+ * 墨水屏 / 低内存 / 无壁纸）时由 fallback 铺回原来的 `palette.settings.row` 实底胶囊。
+ * 选中项的内部高亮仍用 `palette.miuix.surfaceVariant` 叠在玻璃之上——它是一个
+ * **低透明度着色块**，压不实玻璃；solid 档下与改动前逐值一致。
+ * 圆角沿用 `panelRadius`（外层）与 `actionRadius`（内层），几何不变。
+ */
 @Composable
 private fun CacheModeTabRow(
     mode: CacheManageMode,
     palette: AppManagementPalette,
     panelRadius: Dp,
+    panelRadiusPx: Float,
     actionRadius: Dp,
+    glassSignature: String,
     onModeChange: (CacheManageMode) -> Unit
 ) {
     val modes = remember { CacheManageMode.entries.toList() }
-    Row(
+    GlassPanel(
+        domain = GlassSamplingDomain.WALLPAPER,
+        cornerRadiusPx = panelRadiusPx,
+        configSignature = glassSignature,
+        requireWallpaperHost = true,
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 10.dp)
             .height(42.dp)
-            .background(
-                color = Color(palette.settings.row),
-                shape = RoundedCornerShape(panelRadius)
-            )
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .clip(RoundedCornerShape(panelRadius)),
+        fallback = Modifier.background(
+            color = Color(palette.settings.row),
+            shape = RoundedCornerShape(panelRadius)
+        )
     ) {
-        modes.forEach { entry ->
-            val selected = entry == mode
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .background(
-                        color = if (selected) {
-                            palette.miuix.surfaceVariant
-                        } else {
-                            Color.Transparent
-                        },
-                        shape = RoundedCornerShape(actionRadius)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            modes.forEach { entry ->
+                val selected = entry == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .background(
+                            color = if (selected) {
+                                palette.miuix.surfaceVariant
+                            } else {
+                                Color.Transparent
+                            },
+                            shape = RoundedCornerShape(actionRadius)
+                        )
+                        .clickable { onModeChange(entry) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(entry.titleRes),
+                        color = if (selected) palette.settings.accent else palette.settings.primaryText,
+                        fontSize = 14.sp,
+                        fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                        fontFamily = palette.settings.bodyFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    .clickable { onModeChange(entry) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(entry.titleRes),
-                    color = if (selected) palette.settings.accent else palette.settings.primaryText,
-                    fontSize = 14.sp,
-                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                    fontFamily = palette.settings.bodyFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                }
             }
         }
     }

@@ -8,6 +8,8 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.media.AudioManager
 import android.os.Build
@@ -268,6 +270,7 @@ import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.spToPx
+import io.legado.app.utils.stackBlurSoftware
 import io.legado.app.utils.sysScreenOffTime
 import io.legado.app.utils.throttle
 import io.legado.app.utils.toastOnUi
@@ -320,6 +323,85 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var pendingReadAloudPanelIntentOpen = false
     private val shelfExitRequestGate = ShelfExitRequestGate()
     private var requestedReaderTemplate: EpubReaderTemplate? = null
+
+    /**
+     * 阅读页内容背后不是壁纸。
+     *
+     * 这是事实纠正，不是观感偏好：正文由 [io.legado.app.ui.book.read.page.ReadView] /
+     * [io.legado.app.ui.book.read.epub.EpubReadView] 自绘阅读主题背景（纯色或阅读背景图），
+     * 页根背景从不被置空（`applyRootBackgroundPolicy` 判定的是 `imageBg`，而阅读页里
+     * `imageBg` 的语义是「阅读背景图」，与 App 壁纸无关），decorView 上的壁纸层被阅读视图
+     * 整块盖住。因此本页与书籍详情 / 视频 / 音频三页同一口径。
+     *
+     * 改判后的效果：从本页弹出的对话框 / 弹层不再按壁纸域采样
+     * （[io.legado.app.ui.glass.GlassSurface.dialogGlassAllowed] 与
+     * [io.legado.app.ui.glass.GlassSurface.pageGlassAllowed] 同源判否 → 回退主题实底），
+     * `BaseActivity` 的顶栏自动玻璃也不会在本页 opt-in（本页布局没有 `@id/title_bar`，
+     * 实际无调用点）。
+     */
+    override val showsWallpaperBehindContent: Boolean get() = false
+
+    /**
+     * 当前阅读内容的模糊快照，供阅读页底部面板当「自己压着的那块内容」的磨砂底图。
+     *
+     * 取样范围是**屏幕底部与 [targetHeight] 等高的那一段**（面板贴底弹出）：先按
+     * `targetWidth / 源宽` 缩放画布，再把画布上移到该段顶端，让源视图底边与位图底边对齐。
+     * 位图宽高比与面板一致，因此 `SurfaceDrawable` 的 center-crop 退化为整图，不会二次裁切。
+     *
+     * 只在主线程调用一次（面板 `onCreateView`）。开销由调用方按 1/3 降采样控制：
+     * `stackBlurSoftware` 每像素 O(1)、与半径无关。任何一步失败都返回 null，调用方回退
+     * [io.legado.app.lib.theme.dialogSurfaceBackground]，绝不会留下半张底图。
+     *
+     * EPUB 直连模式**恒返回 null**（正文是硬件加速 WebView，软件画布截不到），原因见函数内
+     * 首段的说明。模糊半径为 0（用户把「玻璃模糊强度」拖到 0）同样返回 null：绝不交回未模糊
+     * 的清晰快照，否则就是「半透明 + 字看得见」这个已被真机否决的观感。
+     */
+    fun captureReaderContentBackdrop(
+        targetWidth: Int,
+        targetHeight: Int,
+        blurRadius: Int
+    ): Bitmap? {
+        // EPUB 直连模式的正文是硬件加速的 ReaderWebView（EpubDirectWebLayer.kt:224
+        // currentWebView），软件 Canvas 的 draw() 拿不到 WebView 的合成结果，截出来是空白
+        // → 模糊后是纯色，面板会变成「半透明但完全平」，与本函数的目的相反。这里直接判否，
+        // 让面板逐值回落到不透明实底（= 改动前的观感，不是回归）。
+        //
+        // TODO(下一批)：改用 PixelCopy.request(window, srcRect, bitmap, listener, handler)
+        // 拿硬件合成结果（API 26+），再回到同一套降采样 + 模糊流程。
+        if (epubCoreActive) return null
+        // 用户把「玻璃模糊强度」滑杆拖到 0 时 blurRadius 也是 0。此时**不能**交回未模糊的快照：
+        // 面板会变成「26% 透出的清晰正文」（只是被 3 倍上采样软化了笔画），
+        // 与本函数要解决的「半透明但字看得见」是同一个观感缺陷。
+        // 判否 → 调用方回落实底，与全 App「模糊=0 时玻璃就是平的」一致。
+        if (blurRadius <= 0) return null
+        if (targetWidth <= 0 || targetHeight <= 0) return null
+        val source: View = binding.readView
+        if (source.width <= 0 || source.height <= 0) return null
+        val raw = runCatching {
+            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        }.getOrNull() ?: return null
+        val scale = targetWidth.toFloat() / source.width
+        val sampledHeight = targetHeight / scale
+        val drawn = runCatching {
+            val canvas = Canvas(raw)
+            canvas.scale(scale, scale)
+            canvas.translate(0f, sampledHeight - source.height)
+            source.draw(canvas)
+        }.isSuccess
+        if (!drawn) {
+            raw.recycle()
+            return null
+        }
+        val blurred = runCatching { raw.stackBlurSoftware(blurRadius) }.getOrNull()
+        if (blurred == null || blurred === raw) {
+            raw.recycle()
+            return null
+        }
+        // 模糊结果是新位图，原图不再需要。这里不跨调用缓存（每次打开面板都重截），
+        // 显式回收不会撞上「已回收位图仍被某张 drawable 引用」——那份底图只属于本次面板。
+        raw.recycle()
+        return blurred
+    }
 
     private val tocActivity =
         registerForActivityResult(TocActivityResult()) {

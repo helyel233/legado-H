@@ -24,6 +24,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -49,6 +50,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.AppDialogStyle
@@ -365,6 +367,16 @@ private fun SortDropdown(
     style: AppDialogStyle
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // 排序菜单是 Material3 DropdownMenu（独立 Popup 窗口）。它的表面由内层 Surface 自己画，
+    // 没法像页面卡片那样垫一层 GlassPanel 的采样宿主；material3 1.4.0 的 DropdownMenu 倒是
+    // 开放了 containerColor / tonalElevation（见 AndroidMenu_androidKt 的 DropdownMenu 重载），
+    // 所以这里只在「本对话框此刻就是玻璃面板」时把容器色降为半透明，让背后那层玻璃透出来。
+    //
+    // 判定直接调 GlassSurface.dialogGlassAllowed（AppDialogFrame 用的同一口径），不传签名去重：
+    // 菜单每次展开都会重组，这里是取值而不是「表面与上次是否同一档」的比较，因此不存在
+    // configSignature 不含背景图开关的那个老坑；无背景图 / 墨水屏 / solid 档 / 低内存时
+    // 返回 false，容器色与高度逐值沿用 Material3 默认值。
+    val glassMenuEnabled = GlassSurface.dialogGlassAllowed(LocalContext.current)
     Box {
         Text(
             text = options.getOrNull(selectedIndex) ?: options.first(),
@@ -378,7 +390,14 @@ private fun SortDropdown(
         )
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            containerColor = if (glassMenuEnabled) {
+                MenuDefaults.containerColor.copy(alpha = 0.88f)
+            } else {
+                MenuDefaults.containerColor
+            },
+            // 半透明容器色再叠 tonalElevation 的 surfaceTint 会发灰，玻璃分支把高度归零
+            tonalElevation = if (glassMenuEnabled) 0.dp else MenuDefaults.TonalElevation
         ) {
             options.forEachIndexed { index, label ->
                 DropdownMenuItem(

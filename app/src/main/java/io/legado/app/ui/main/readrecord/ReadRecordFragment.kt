@@ -55,6 +55,9 @@ import io.legado.app.ui.about.openReadRecordBook
 import io.legado.app.ui.about.showReadRecordBookActionDialog
 import io.legado.app.ui.about.showReadRecordGoalDialog
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.panelContentBaseColor
+import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.widget.MainTopBarView
@@ -113,6 +116,15 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
     private var loadedDate: LocalDate? = null
     private var lastLoadTime = 0L
     private var lastRecentReadTime = 0L
+
+    /**
+     * 上次铺卡片背景时的重绑签名（null = 还没铺过），用于 onResume 的重绑判定。
+     *
+     * 口径是 [wallpaperGlassSignature]（玻璃观感 + 壁纸此刻是否可用），**不是**
+     * `GlassSurface.configSignature`：后者不含背景图开关，「进设置关背景图 → 返回」时
+     * 签名不变 → 面板停在玻璃上，而页根背景已被 `BaseActivity` 换成实底。
+     */
+    private var lastGlassRebindSignature: String? = null
     private var componentItems = ReadRecordComponents.load()
     private var currentRankItems: List<ReadRecordRankItem> = emptyList()
     private var currentGoalConfig: ReadRecordGoalConfig = ReadRecordWidgetStore.loadGoalConfig()
@@ -302,6 +314,18 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
 
     override fun onResume() {
         super.onResume()
+        // 玻璃档位 / 描边色 / 夜间模式可能在设置页改过：本页是主界面常驻标签，
+        // 卡片背景是在 applyPageChrome 里一次性铺好的，不重绑会停在旧材质上
+        // （四个统计小卡是 Compose，签名变化自动重建，这里不跟着走就是半新半旧）。
+        // 与发现页同一兜底口径：只比签名，未变化时零开销；lastGlassRebindSignature 非空
+        // 才比较——首帧由 renderDashboard → applyPageChrome 铺，不必在数据到达前空跑一遍。
+        // 签名必须用 wallpaperGlassSignature（含壁纸可用性）：本页是常驻标签，返回时不重建
+        // Activity，`ThemePackageManager` 的 `applyConfig(notify = false)` 路径也不会发
+        // RECREATE，只比 configSignature 会漏掉「关/开背景图」这一次变化。
+        val glassSignature = wallpaperGlassSignature(requireContext())
+        if (lastGlassRebindSignature != null && glassSignature != lastGlassRebindSignature) {
+            applyPageChrome()
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             val latestRecentReadTime = withContext(IO) {
                 appDb.readRecentBookDao.latestReadTime() ?: 0L
@@ -795,6 +819,10 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
 
     private fun applyPageChrome() {
         val panelSurfaceColor = requireContext().themeCardColorOrDefault()
+        // 卡片是否让位给壁纸域玻璃：由 GlassSurface 单点判定（档位 / 壁纸可见性 /
+        // 墨水屏 / 低内存），本页不另立条件。热力图格子等自绘底色要跟着同一个结论走。
+        lastGlassRebindSignature = wallpaperGlassSignature(requireContext())
+        val panelGlassActive = GlassSurface.pageGlassAllowed(requireContext())
 
         binding.panelOverview.background = null
         listOf(
@@ -802,7 +830,7 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
             binding.panelRecentBooks,
             binding.panelDailyRecords
         ).forEach { panel ->
-            panel.background = createSurfaceDrawable(panelSurfaceColor, 14f)
+            panel.background = createPanelBackground(panel, panelSurfaceColor, 14f)
         }
         binding.tvRecordDate.setTextColor(primaryTextColor)
         binding.tvRecordDateHint.setTextColor(secondaryTextColor)
@@ -824,18 +852,27 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
         binding.tvHeatmapMonthCenter.setTextColor(secondaryTextColor)
         binding.tvHeatmapMonthEnd.setTextColor(secondaryTextColor)
         binding.panelRecentCovers.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelRecentCovers, panelSurfaceColor, 14f)
         binding.panelReadRank.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelReadRank, panelSurfaceColor, 14f)
         binding.panelGoalCard.background =
-            createSurfaceDrawable(panelSurfaceColor, 14f)
+            createPanelBackground(binding.panelGoalCard, panelSurfaceColor, 14f)
         binding.ivComponentMenu.background = null
         binding.ivComponentMenu.setColorFilter(primaryTextColor)
         binding.ivRankMore.background = null
         binding.ivGoalEdit.background = null
         binding.ivRankMore.setColorFilter(secondaryTextColor)
         binding.ivGoalEdit.setColorFilter(secondaryTextColor)
-        binding.heatmapView.submit(currentHeatmapCells, accentColor, panelSurfaceColor)
+        // 格子底与卡面同一结论：卡面让位给玻璃后，格子若仍用不透明卡色会把玻璃整片盖住
+        binding.heatmapView.submit(
+            currentHeatmapCells,
+            accentColor,
+            panelContentBaseColor(
+                panelFillColor = panelSurfaceColor,
+                cardGlassActive = panelGlassActive,
+                layoutAlpha = UiCorner.layoutAlpha()
+            )
+        )
     }
 
     private fun createDivider(): View {
@@ -847,6 +884,21 @@ class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFr
                 marginStart = 15.dpToPx()
             }
             setBackgroundColor(ColorUtils.adjustAlpha(primaryTextColor, 0.08f))
+        }
+    }
+
+    /**
+     * 面板背景：页面背后真实露出壁纸时走壁纸域玻璃（与四个统计小卡同一管线），
+     * 否则回退主题实底表面。采样前提与降级链由 [GlassSurface.pagePanelBackground]
+     * 统一判定，本页不另立条件——与 `ReadRecordActivity` 的同名实现逐值一致。
+     */
+    private fun createPanelBackground(
+        panel: View,
+        fillColor: Int,
+        radiusDp: Float
+    ): Drawable {
+        return GlassSurface.pagePanelBackground(panel, UiCorner.scaledDp(radiusDp)) {
+            createSurfaceDrawable(fillColor, radiusDp)
         }
     }
 

@@ -9,7 +9,8 @@
         android:id="@+id/title_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:title="@string/scan_qr_code" />
+        app:title="@string/scan_qr_code"
+        app:wallpaperGlass="false" />
 
     <FrameLayout
         android:id="@+id/fl_content"

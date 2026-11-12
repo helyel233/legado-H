@@ -49,6 +49,7 @@ import io.legado.app.R
 import io.legado.app.data.dao.BookTagInfo
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.BookTagManagement
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
@@ -56,10 +57,12 @@ import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppManagementScaffold
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.glass.GlassSurfaceCard
+import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.widget.compose.LegadoMiuixChoiceRow
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
 internal data class BookshelfTagItemUi(
@@ -105,6 +108,10 @@ internal fun BookshelfTagManageScreen(
     onSaveAssignment: (BookTagAssignmentUi, Set<String>) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
+    // 页根原先铺 palette.settings.page 整页不透明：卡片即使拿到 `AppManagementScaffold`
+    // 提供的玻璃签名，玻璃也只会采到被本页盖住的壁纸。背景图可用且非墨水屏时改铺透明
+    // （BaseActivity 已把根 View 背景置空）；无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
     var selectedGroupId by rememberSaveable { mutableLongStateOf(focusGroupId) }
     var addTagsGroupId by rememberSaveable { mutableStateOf<Long?>(null) }
     LaunchedEffect(groups, focusGroupId) {
@@ -134,7 +141,7 @@ internal fun BookshelfTagManageScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(palette.settings.page)
+                .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
         ) {
             if (groups.isNotEmpty()) {
                 GroupSelector(

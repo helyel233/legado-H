@@ -27,8 +27,8 @@ import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.panelContentBaseColor
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.main.readrecord.YearlyReportActivity
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
@@ -634,6 +634,9 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 
     private fun applyPageChrome() {
         val panelSurfaceColor = themeCardColorOrDefault()
+        // 卡片是否让位给壁纸域玻璃：判定点唯一（GlassSurface），热力图格子等自绘
+        // 底色要跟着同一个结论走，否则不透明格子会把玻璃卡面又盖成实底
+        val panelGlassActive = GlassSurface.pageGlassAllowed(this)
 
         binding.panelOverview.background = null
         listOf(
@@ -664,7 +667,15 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         binding.ivGoalEdit.background = null
         binding.ivRankMore.setColorFilter(secondaryTextColor)
         binding.ivGoalEdit.setColorFilter(secondaryTextColor)
-        binding.heatmapView.submit(currentHeatmapCells, accentColor, panelSurfaceColor)
+        binding.heatmapView.submit(
+            currentHeatmapCells,
+            accentColor,
+            panelContentBaseColor(
+                panelFillColor = panelSurfaceColor,
+                cardGlassActive = panelGlassActive,
+                layoutAlpha = UiCorner.layoutAlpha()
+            )
+        )
     }
 
     private fun createDivider(): View {
@@ -681,22 +692,17 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 
     /**
      * 面板背景：页面背后真实露出壁纸时走壁纸域玻璃（与统计小卡同一管线），
-     * 否则保留主题实底表面。壁纸域的采样前提由 [GlassSurface.pageGlassAllowed]
-     * 统一判定，不在这里另立条件。
+     * 否则保留主题实底表面。采样前提与降级链由 [GlassSurface.pagePanelBackground]
+     * 单点判定，不在这里另立条件——`ReadRecordFragment` 的同名实现与本处逐值一致。
      */
     private fun createPanelBackground(
         panel: View,
         fillColor: Int,
         radiusDp: Float
     ): Drawable {
-        if (GlassSurface.pageGlassAllowed(this)) {
-            GlassSurface.panelBackground(
-                panel,
-                GlassSamplingDomain.WALLPAPER,
-                UiCorner.scaledDp(radiusDp)
-            )?.let { return it }
+        return GlassSurface.pagePanelBackground(panel, UiCorner.scaledDp(radiusDp)) {
+            createSurfaceDrawable(fillColor, radiusDp)
         }
-        return createSurfaceDrawable(fillColor, radiusDp)
     }
 
     private fun createSurfaceDrawable(

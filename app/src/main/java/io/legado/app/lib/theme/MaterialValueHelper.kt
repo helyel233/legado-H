@@ -237,12 +237,21 @@ fun View.applyThemedFilletControlBackground() {
     walk(this)
 }
 
+/**
+ * 弹窗表面的最终底色，也就是 [dialogSurfaceBackground] 的填充色。
+ *
+ * 单独暴露出来的唯一理由：磨砂面板要在**同一份底色**上加一层半透明着色当作磨砂层
+ * （阅读页「更多设置」面板把当前正文快照垫在底下）。着色层与实底若各取一次色，
+ * 用户在主题里改过卡片色之后，磨砂面板与其它弹窗就会分成两种色调。
+ *
+ * 取值链与改动前逐值一致：主题卡片色优先，否则 `R.color.dialog_surface`。
+ */
+val Context.dialogSurfaceColor: Int
+    get() = themeColorOrNull(PreferKey.themeCardColor)
+        ?: ContextCompat.getColor(this, R.color.dialog_surface)
+
 val Context.dialogSurfaceBackground: GradientDrawable
-    get() {
-        val surfaceColor = themeColorOrNull(PreferKey.themeCardColor)
-            ?: ContextCompat.getColor(this, R.color.dialog_surface)
-        return UiCorner.opaqueRounded(surfaceColor, UiCorner.panelRadius(this))
-    }
+    get() = UiCorner.opaqueRounded(dialogSurfaceColor, UiCorner.panelRadius(this))
 
 fun Context.filletTopBackground(@ColorInt color: Int): GradientDrawable {
     val radius = UiCorner.panelRadius(this)

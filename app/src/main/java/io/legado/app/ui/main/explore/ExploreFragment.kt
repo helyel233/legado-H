@@ -110,6 +110,7 @@ import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.common.UiErrorType
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.video.VideoBookPreloader
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.RoundedTagBarView
@@ -271,11 +272,15 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
      * 设置页是独立 Activity，且 ViewPager 用 BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT——
      * 改设置时本 Fragment 往往只是 STARTED，返回时 onResume 的签名比较是唯一触发点，
      * 一旦生命周期路径没走到（或返回后先看到旧帧）滑杆就像没生效。这里在偏好变更的
-     * 当下就刷新，onResume 的 [ExploreGlassBackdrop.configSignature] 比较保留为兜底。
+     * 当下就刷新，onResume 的 [wallpaperGlassSignature] 比较保留为兜底。
+     *
+     * 两处必须用同一个口径（含壁纸可用性）：这里无条件重铺但要**记下**签名，onResume
+     * 拿它做比较；若这里记 `configSignature`、那里算含壁纸位的签名，无背景图档下两者
+     * 恒定不等 → 每次 onResume 都重绑一次经典行。
      */
     private val exploreGlassRefreshRunnable = Runnable {
         if (isAdded && view != null && !usingModernDiscovery && !usingSuiteDiscovery) {
-            lastExploreGlassSignature = ExploreGlassBackdrop.configSignature(requireContext())
+            lastExploreGlassSignature = wallpaperGlassSignature(requireContext())
             refreshClassicRowTheme()
         }
     }
@@ -3958,8 +3963,10 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         if (!usingModernDiscovery && !usingSuiteDiscovery) {
             // 毛玻璃任一设置项（总开关/强度/四个倍率/渲染管线/动图降级）在
             // 「我的 › 发现页毛玻璃」或编辑主题页调整后，返回发现页时刷新行背景。
-            // 用配置签名而非单一强度值，新增细项不必再逐个补监听。
-            val glassSignature = ExploreGlassBackdrop.configSignature(requireContext())
+            // 用重绑签名而非单一强度值，新增细项不必再逐个补监听。
+            // 必须是 wallpaperGlassSignature（观感 + 壁纸此刻是否可用）：只比
+            // configSignature 时关背景图后签名不变 → 经典行停在玻璃上，而页根已变实底。
+            val glassSignature = wallpaperGlassSignature(requireContext())
             if (glassSignature != lastExploreGlassSignature) {
                 lastExploreGlassSignature = glassSignature
                 refreshClassicRowTheme()

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -27,6 +26,11 @@ import io.legado.app.ui.widget.compose.LegadoMiuixCard
  * [io.legado.app.ui.widget.compose.AppManagementCard] 的 `glassSurface` 分支（同一份
  * [GlassPanel] 管线与实底回退）；本组件只给自带布局的少数量卡片与对话框面板，
  * 避免每个页面各写一份「玻璃壳 + 回退」。
+ *
+ * **可用性走 [rememberGlassAvailability]（可观察 State）**：它读的是「背景图开关 + 宿主
+ * 页面是否露壁纸」，而 `configSignature` 只含档位 / 强度 / 描边 / 夜间。把结论包进
+ * `remember(context, screenAligned, configSignature)` 会让「开背景图 + 玻璃 → 关背景图
+ * → 返回」命中旧值，卡片停在玻璃上（与 [GlassPanel] 内部同一条纪律）。
  */
 @Composable
 fun GlassSurfaceCard(
@@ -40,7 +44,11 @@ fun GlassSurfaceCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val context = LocalContext.current
-    val glassEnabled = remember(context, screenAligned, configSignature) {
+    // 壁纸可用性走可观察入口：背景图开关不进 configSignature（类注释），只靠父级重组
+    // 会命中旧结论，卡片停在玻璃上 / 玻璃不出现。
+    // screenAligned 换的是整套判定入口（对话框按屏幕对齐 / 页面按根视图），必须进 key：
+    // 不传的话闭包会捕获旧值，effect 也不重建（与 rememberGlassAvailability 的签名契约一致）。
+    val glassEnabled = rememberGlassAvailability(screenAligned) {
         if (screenAligned) {
             GlassSurface.dialogGlassAllowed(context)
         } else {

@@ -29,6 +29,14 @@
         <attr name="fitStatusBar" format="boolean" />
         <attr name="fitNavigationBar" format="boolean" />
         <attr name="opaque" format="boolean" />
+        <!--
+            顶栏是否允许由 BaseActivity / BaseFragment 自动接入壁纸域玻璃。
+            默认 true（与 opaque 同一个「布局显式声明」的先例，语义相反）：
+            BaseActivity / BaseFragment 会对 R.id.title_bar 自动 opt-in，只有
+            真实露出壁纸、非墨水屏、非 opaque 的页面才真正生效；内容域页面
+            （相机预览、WebView 预览等）在布局里写 app:wallpaperGlass="false" 显式退出。
+        -->
+        <attr name="wallpaperGlass" format="boolean" />
         <attr name="navigationContentDescription" format="reference|string" />
         <attr name="navigationIconTint" format="color|reference" />
         <attr name="themeMode" />

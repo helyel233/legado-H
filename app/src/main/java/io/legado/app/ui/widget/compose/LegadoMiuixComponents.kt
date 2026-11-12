@@ -4,6 +4,7 @@ import android.os.Build
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -600,6 +601,33 @@ fun LegadoMiuixFloatingPanel(
     }
 }
 
+/**
+ * 玻璃面板内行底的不透明度（纯函数，便于单测锁定）。
+ *
+ * 入参取**面板自己的不透明度** `palette.surface.alpha`——[LegadoMiuixPalette.surface] 由
+ * `AppDialogStyle` 按「对话框不透明度」上色（`ColorUtils.withAlpha(surfaceBase,
+ * layoutAlpha)`），因此这里与面板同源，而不是另读一个全局偏好，避免出现「面板不透明度
+ * 改了、行底不跟」的两份口径。
+ *
+ * **这个函数只负责「有底感」，不负责「画出边界」。** 原因是
+ * [LegadoMiuixPalette.surfaceVariant] 的真实取值（`AppComposeDialogs.kt:161-182`）：
+ * `fieldSurface = blendColors(surfaceBase, accent, night ? 0.10 : 0.05)` —— 只混了
+ * 5%~10% 的 accent，与面板 `surface` 本就是**同族近色**；它的 alpha 原本是
+ * `layoutAlpha + 0.08`（接近实底）。
+ *
+ * 于是历史取值 0.18~0.32 的真实效果不是「降一点点让玻璃透出来」，而是把一个接近不透明的
+ * 行底**直接抹掉 70%+**：有效色差只剩 `0.18 × (5%~10%) ≈ 1%~2%`。真机现象就是
+ * 「完全看不出选项有底面」——0.18 恰好是不可辨的那一档，那条下限的注释被真机证伪。
+ * 行边界因此必须由 [LegadoMiuixChoiceRow] 的 1dp 描边承担（描边不受「同族近色」影响）。
+ *
+ * 上下限现在的分工：
+ * - 下限 0.34：面板调得很透时行底仍有一点「有底」的观感；
+ * - 上限 0.6：**不再上调**。色差本身只有 5%~10%，抬到 0.8 也换不来可见度，只会把玻璃
+ *   盖成实底；可见度交给描边。
+ */
+internal fun translucentRowSurfaceAlpha(panelAlpha: Float): Float =
+    (panelAlpha.coerceIn(0f, 1f) * 0.6f).coerceIn(0.34f, 0.6f)
+
 @Composable
 fun LegadoMiuixChoiceRow(
     text: String,
@@ -615,11 +643,40 @@ fun LegadoMiuixChoiceRow(
     leadingIconName: String? = null,
     textAlign: TextAlign = TextAlign.Center,
     /**
-     * 行底色让位给所在面板的玻璃层：仅选中态保留强调色，未选中行完全透明。
+     * 行底色让位给所在面板的玻璃层：仅选中态保留强调色，未选中行铺一层**半透明行色**
+     * 而不是全透明。
+     *
      * 只用于「面板本身已经是玻璃」的宿主（如 [io.legado.app.ui.widget.ModernActionPopup]），
      * 其余弹窗保持默认实底行色。
+     *
+     * **为什么不是 `Color.Transparent`**：玻璃面板上没有行底时，文字直接浮在活玻璃上，
+     * 相邻选项之间没有可辨的边界，真机反馈为「菜单项没有各自的底面、不够凸显」。
+     * 行底取 [LegadoMiuixPalette.surfaceVariant]（与实底面板里的行同一个颜色来源），
+     * 只把 alpha 降下来（见 [translucentRowSurfaceAlpha]），并额外补一条 1dp 描边
+     * （`border`），因此：
+     * - 非玻璃档（`translucentSurface = false`）逐值不变，仍是原来的实底行色、无描边；
+     * - 玻璃档下行有可见的圆角底面 + 细边，同时不把玻璃盖成实底。
+     *
+     * 描边是必需的：`surfaceVariant` 与面板 `surface` 是**同族近色**——`AppComposeDialogs.kt`
+     * 里 `fieldSurface = blendColors(surfaceBase, accent, night ? 0.10 : 0.05)`，只混 5%~10%
+     * 的 accent；而它原本的 alpha 是 `layoutAlpha + 0.08`（接近实底）。压低 alpha 的填充
+     * 换不来可见度（有效色差只剩 2%~6%），边界必须由一条与面板底色**反向**的 1dp 线给出。
      */
-    translucentSurface: Boolean = false
+    translucentSurface: Boolean = false,
+    /**
+     * 无论面板是否玻璃，都强制给这一行画 1dp 描边。
+     *
+     * 存在的理由是「部分页面有框、部分没有」这个真机反馈：行边界原先只挂在
+     * [translucentSurface] 上，而它是 `glassLayer != null` 的派生值——同一个菜单组件，
+     * 玻璃档能拿到采样源时有描边，拿不到时（宿主页面没有可采样子树、solid 档降级、
+     * 面板尚未量到尺寸）就退回只剩 `surfaceVariant` 的 5%~10% 同族色差。那点色差在
+     * 浅色主题上几乎不可辨，真机就是「选项没有背景框」。
+     *
+     * 弹出菜单（[io.legado.app.ui.widget.ModernActionPopup]）一律传 true：它是浮在内容
+     * 之上的临时面板，每一行都必须自带可辨边界，不能依赖「这一档恰好有没有玻璃」。
+     * 其余 40 多个对话框宿主保持默认 false，逐值不变。
+     */
+    outlined: Boolean = false
 ) {
     val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
     val contentAlpha = if (enabled) 1f else 0.42f
@@ -633,8 +690,24 @@ fun LegadoMiuixChoiceRow(
         shape = RoundedCornerShape(actionRadius),
         color = when {
             selected -> palette.accent.copy(alpha = 0.14f)
-            translucentSurface -> Color.Transparent
+            translucentSurface -> palette.surfaceVariant.copy(
+                alpha = translucentRowSurfaceAlpha(palette.surface.alpha)
+            )
             else -> palette.surfaceVariant
+        },
+        // 玻璃档下补一条 1dp 细描边 —— **行边界的主承重就是这一条**：行底
+        // （`palette.surfaceVariant`）与面板 `surface` 是同族近色（只混 5%~10% 的 accent，
+        // 见 `AppComposeDialogs.kt:161-182`），填充那条路即使抬到 0.6，有效色差也只有
+        // 3%~6%，在磨砂底上仍显微弱；描边不受「同族近色」影响，是唯一能画出边界的手段。
+        // [palette.primaryText] 是唯一在浅色 / 深色主题下都与面板底色**反向**的颜色
+        // （浅色主题偏深、深色主题偏浅），因此两个主题下都必然可见，且不必引入第三个
+        // 色源或新偏好。alpha 取 0.18（0.12 在真机磨砂底上偏淡）。
+        // 非玻璃档传 null：`Surface` 的 `border` 默认就是 null，传 null 与改动前逐值等价
+        // （不能写成 alpha=0 的描边——那仍会占位并可能画出一条透明线）。
+        border = if (translucentSurface || outlined) {
+            BorderStroke(1.dp, palette.primaryText.copy(alpha = 0.18f))
+        } else {
+            null
         },
         contentColor = if (selected) selectedColor else primaryColor,
         tonalElevation = 0.dp,

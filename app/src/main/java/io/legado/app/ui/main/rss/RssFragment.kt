@@ -40,7 +40,7 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.glass.GlassSamplingDomain
-import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.ReadRecordDialog
@@ -131,7 +131,10 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         setSupportToolbar(binding.titleBar.toolbar)
         binding.titleBar.applyStatusBarPadding(withInitialPadding = true)
         applyWebContainerBottomPadding()
-        lastRssGlassSignature = GlassSurface.configSignature(requireContext())
+        // 初始值必须与 refreshRowGlassOnConfigChange 的比较口径完全一致
+        // （wallpaperGlassSignature）：初始化记 configSignature 而比较算含壁纸位的签名，
+        // 无背景图档下两者恒定不等 → 每次 onResume 都全量重绑，把「漏重绑」换成「白重绑」
+        lastRssGlassSignature = wallpaperGlassSignature(requireContext())
         initSearchView()
         initGroupData()
         applyRssMode()
@@ -291,11 +294,16 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
      * 玻璃档位 / 强度 / 描边等设置改完返回订阅页时重绑卡片背景。
      *
      * 卡片 drawable 在 `RssAdapter.convert` 里按当时的配置创建，设置页是独立 Activity，
-     * 返回时 RecyclerView 不会自己重绑；与发现页同一条兜底：配置签名变了就整表重绑一次。
+     * 返回时 RecyclerView 不会自己重绑；与发现页同一条兜底：重绑签名变了就整表重绑一次。
+     *
+     * 签名必须用 [wallpaperGlassSignature]（观感 + 壁纸此刻是否可用），不能用
+     * `GlassSurface.configSignature`：后者不含背景图开关，关背景图后签名不变 →
+     * 不重绑 → 已挂载的订阅行停在玻璃上，要等被滚动复用才回退。
      */
     @SuppressLint("NotifyDataSetChanged")
     private fun refreshRowGlassOnConfigChange() {
-        val signature = GlassSurface.configSignature(requireContext())
+        // 必须含壁纸可用性：configSignature 不含背景图开关，关背景图后签名不变 → 不重绑
+        val signature = wallpaperGlassSignature(requireContext())
         if (signature == lastRssGlassSignature) return
         lastRssGlassSignature = signature
         // 现代布局不显示订阅源宫格（recycler 整体 GONE），没有需要重绑的卡片

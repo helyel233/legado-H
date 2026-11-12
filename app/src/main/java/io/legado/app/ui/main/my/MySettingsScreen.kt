@@ -245,7 +245,12 @@ private fun SettingsSectionCard(
             panelImage = panelImage,
             borderColor = colors.border,
             radiusPx = panelRadiusPx
-        )
+        ),
+        // 页面内分区卡必须问一句「背后真的有壁纸吗」。requireWallpaperHost = false 只判采样域
+        // 与设备：solid 档（用户选「无玻璃」）会被判为可用，于是画出 ThemeStore.bottomBackground
+        // 的不透明壳、把上面 row 色的 fallback 顶掉；无背景图时同理（domainAvailable 不看背景图
+        // 开关）。置 true 后「solid / 无背景图 / 墨水屏 / 低内存」四档都逐值回退。
+        requireWallpaperHost = true
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             AppSettingSectionTitle(title = section.title, palette = colors)
@@ -589,7 +594,12 @@ private fun EmptySettingsFrame(
             panelImage = panelImage,
             borderColor = colors.border,
             radiusPx = panelRadiusPx
-        )
+        ),
+        // 页面内分区卡必须问一句「背后真的有壁纸吗」。requireWallpaperHost = false 只判采样域
+        // 与设备：solid 档（用户选「无玻璃」）会被判为可用，于是画出 ThemeStore.bottomBackground
+        // 的不透明壳、把上面 row 色的 fallback 顶掉；无背景图时同理（domainAvailable 不看背景图
+        // 开关）。置 true 后「solid / 无背景图 / 墨水屏 / 低内存」四档都逐值回退。
+        requireWallpaperHost = true
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             AppSettingSectionTitle(

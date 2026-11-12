@@ -47,7 +47,10 @@ import io.legado.app.R
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.composeActionRadius
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementCard
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -55,7 +58,9 @@ import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,16 +86,24 @@ internal fun BubbleManageScreen(
     onAddClick: () -> Unit
 ) {
     val palette = rememberAppManagementPalette()
+    // 根背景原先铺 palette.settings.page 整页不透明，壁纸模式下卡片玻璃只能采到被本页盖住的
+    // 壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，壁纸由此透出）；
+    // 无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
 
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.copy(
             fontFamily = palette.settings.bodyFontFamily
-        )
+        ),
+        // 强制软件气泡行与各气泡包卡都是 AppManagementCard：提供签名后自动走壁纸域玻璃；
+        // 提供 null（壁纸不可见）时卡片保持主题实底，与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(palette.settings.page)
+                .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
         ) {
         // Summary
         if (summary.isNotBlank()) {
@@ -100,6 +113,12 @@ internal fun BubbleManageScreen(
                 fontSize = 13.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                // 页根在背景图模式下已透明，这句说明文字直接压在壁纸上：
+                // 按 BackgroundReadability 的口径给独立提示文本加自适应投影
+                // （无背景图时返回 null，普通主题观感逐值不变）
+                style = LocalTextStyle.current.copy(
+                    shadow = imageBgTextShadow(palette.settings.secondaryText)
+                ),
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
             )
         }

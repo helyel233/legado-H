@@ -437,7 +437,13 @@ fun Bitmap.stackBlurSoftware(radius: Int = 8): Bitmap {
         var stackpointer = rad
         var yi = x
         for (y in 0 until h) {
-            pix[yi] = (0xff000000.toInt() shl 24) or
+            // alpha 必须直接写 0xFF，**不能**再 `shl 24`：`0xff000000.toInt()` 本身就是
+            // -16777216（0xFF000000），再左移 24 位会把仅存的低 8 位（此时全是 0）留在原处，
+            // 结果恒为 0。那会让整张模糊位图 alpha=0 —— 画到 Canvas / BitmapShader 上等于
+            // 什么都没画，只剩调用方的半透明着色层。真机现象就是「面板半透明、背后正文
+            // 完全清晰、一点不糊」（阅读页齿轮面板）与「玻璃面板整个消失、选项文字直接
+            // 浮在页面上」（右上角菜单）。修的是同一行。
+            pix[yi] = 0xff000000.toInt() or
                 (dv[rsum] shl 16) or
                 (dv[gsum] shl 8) or
                 dv[bsum]

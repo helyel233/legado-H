@@ -1,5 +1,35 @@
 # 更新日志
 
+## 1.29.1 版（2026-11-12）
+
+本版将全 App 玻璃材质接入从「已有宿主」继续深化到首页模块、设置配置页、RSS、阅读页更多设置对话框、缓存管理与书签页、书架等面，并把「顶栏自动玻璃化」「弹层/首页重铺」「签名驱动重铺」做成通用机制，底层材质与四档降级仍由同一管线单点决定，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。
+
+### 新功能
+
+- **首页模块玻璃 + 重铺机制**：`HomepageAdapter`/`HomepageBooksAdapter`/`HomepageGridRankingPagerAdapter`（榜单/排行等模块）各卡片与模块壳接壁纸域玻璃；新增「重铺（resurface）」机制——壁纸/档位/强度变化且页面可见时按签名增量重铺（不重建宿主），由 `HomepageResurfaceWiring`/`HomepageGlassResurface` 锁定装配与重铺时机，避免列表滚动期逐帧重绘。`HomepageModuleManageSheet` 模块管理页同步接入。
+- **设置/配置页根背景透壁纸**：`AppearanceKitActivity`（外观套件管理）、`ThemeManageActivity`、`BookInfoManageScreen`、`CoverCollectionManageScreen`、`BubbleManageScreen`、`LibraryContainerManageScreen`、`RelaySettingsActivity`、`S3ContainerManageScreen`、`AdvancedTipManageScreen`、`AdvancedTitleManageScreen`、`ComposeSettingFragment`、`SettingSpecScreen`、`CoverHtmlActivity` 等——这些页根布局透出壁纸、分区卡与顶栏按「页面背后真是壁纸」口径接 `GlassPanel(WALLPAPER)`；无背景图/墨水屏保持原观感，复用 P5 的 `GlassSurfaceCard`/`dialogGlassAllowed` 同源判定。
+- **RSS 标签与文章行玻璃**：新增 `RssTabsGlass`（分类标签条壁纸域玻璃，纯函数 `tabsGlassRelayoutRequired` 锁重铺时机）；`BaseRssArticlesAdapter`/`BaseRssArticlesAdapterRowScope` 文章行按可见行走逐行玻璃（与发现页书源名行同源 drawable），`RssArticlesAdapter3`、排序/管理页 `RssSortActivity` 一并接入。
+- **阅读页「更多设置」对话框玻璃**：`MoreConfigDialog` 整体玻璃化（`ReaderDialogWindow` 提供对话框窗口级玻璃背景与让位），与 P5 弹窗统一宿主同一口径。
+- **缓存管理与书签页卡片玻璃**：`CacheManageScreen`/`CacheBookCard`/`BookCacheExportScreen`（缓存管理）、`AllBookmarkScreen`（书签页）按 `GlassSurfaceCard` 接玻璃；命中玻璃用 `GlassPanel` 垫底、卡片填充让位透明，未命中原样实底。
+- **书架玻璃**：`BooksFragment`/`BookshelfFragment2`/`BookshelfComposeItems`/`BookshelfTagManageScreen` 书架列表与标签管理接壁纸域玻璃（封面卡片行因解码成本仍不逐行玻璃化，与历史口径一致）。
+- **顶栏自动玻璃化收口**：`TitleBar` 把 P5 的显式 opt-in 提升为「透明档 + 非墨水屏 + 页面确有可用背景图 + 祖先非不透明」自动判定（保留调用点自声明语义），新增纯函数与 30 例单测锁自动玻璃/回退/让位优先级真值表。
+- **弹层重铺与收口**：`ModernActionPopup` 新增重铺/释放路径（面板 `GONE`/关闭期间不绘制不采样），与 P4 面板玻璃口径统一。
+
+### 修复
+
+- **重铺时机与回退**：壁纸/档位切换时玻璃按签名增量重铺而非重建；`TitleBarGlassRollback`/`GlassSurfaceTrackingRelease` 锁定关闭/切页/无可用源时的回退与位置追踪器释放（避免收起后仍在每帧录制整页）。
+- **让位优先级**：`TitleBarGlassYieldPrecedence`/`GlassSurfaceMode` 锁定玻璃激活与面板让出实底的优先级（玻璃未量到有效尺寸/未激活时面板保持实底，杜绝透明空面板）。
+- **StackBlur 透明通道**：`StackBlurAlphaTest` 锁 StackBlur 在带 alpha 位图上的透明通道处理（修复低内存/墨水屏回退路径上的潜在色偏）。
+
+### 实现要点
+
+- **签名驱动重铺**：`GlassViewBackground`（新）提供 `View.applyWallpaperGlassBackground` 扩展与 `glassSignatureWithWallpaper`/`wallpaperGlassSignature` 纯函数，把「壁纸是否可用 + 档位签名」编码进 drawable 身份，窗口重新可见/档位变化仅重绑不重建。
+- 材质/四档降级/描边/采样坐标全部沿用底层管线，无第二套参数；不新增任何偏好键。
+
+### 单测
+
+新增 11 个纯 JVM 测试文件 + homepage/rss 两个测试目录共约 104 例（`GlassAvailabilitySignal`/`GlassPanelKey`/`GlassSignatureWithWallpaper`/`GlassSurfaceMode`/`GlassSurfaceTrackingPath`/`GlassSurfaceTrackingRelease`/`GlassViewBackground`/`TitleBarAutoGlass`/`TitleBarGlassRollback`/`TitleBarGlassYieldPrecedence`/`StackBlurAlpha` + `HomepageBooksCardSurface`/`HomepageGlassResurface`/`HomepageResurfaceWiring`/`RssTabsGlass`/`BaseRssArticlesAdapterRowScope`），`LiquidGlassSpecTest` 增 3 例；glass+widget+homepage+rss 单测全绿；`tools/check_settings_mapping.py` 仍 PASS（零新增偏好键）。
+
 ## 1.28.1 版（2026-11-11）
 
 本版完成全 App 玻璃材质接入的 **P5** 阶段：把壁纸域玻璃从「已有宿主」扩展到设置/About 根背景与分区卡、`ConfigActivity` 顶栏、目录页（搜索框/三标签/底部跳转条/空状态卡/章节行）、共享 `TitleBar` 显式 opt-in（17 个二级页调用点）、页面内卡片壳 `GlassSurfaceCard`、Compose 弹窗统一宿主 `AppDialogFrame`（46 点）与 View 弹窗入口（`BaseDialogFragment`/`AndroidAlertBuilder`）、独立卡片式弹窗，以及 `AppManagementCard` 玻璃分支接管管理列表行。底层材质与四档降级仍由同一管线单点决定，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,15 +38,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.ui.widget.compose.releaseComposeImage
 import com.bumptech.glide.Glide
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.lib.theme.composeActionRadius
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
 @Composable
 internal fun CoverCollectionManageScreen(
@@ -59,46 +65,60 @@ internal fun CoverCollectionManageScreen(
     val context = LocalContext.current
     val palette = rememberAppManagementPalette()
     val actionRadius = palette.miuix.actionRadius ?: context.composeActionRadius()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(palette.settings.page)
-            .windowInsetsPadding(WindowInsets.navigationBars)
+    // 根背景原本铺 palette.settings.page 整页不透明，壁纸模式下卡片玻璃只能采到被本页盖住的
+    // 壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，壁纸由此透出）；
+    // 无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
+    CompositionLocalProvider(
+        // Tab 胶囊与列表卡都是 AppManagementCard：提供签名后自动走壁纸域玻璃；
+        // 提供 null（壁纸不可见）时卡片保持主题实底，与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
-        // Tab bar
-        CoverCollectionTabBar(
-            isNight = isNight,
-            palette = palette,
-            onTabChanged = onTabChanged
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // List
-        LazyColumn(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                .fillMaxSize()
+                .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
-            itemsIndexed(entries, key = { _, entry -> "${entry.collection.id}_${entry.source}" }) { _, entry ->
-                CoverCollectionItemRow(
-                    entry = entry,
-                    palette = palette,
-                    onClick = { onItemClick(entry) },
-                    moreActions = itemActions(entry)
-                )
+            // Tab bar
+            CoverCollectionTabBar(
+                isNight = isNight,
+                palette = palette,
+                onTabChanged = onTabChanged
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // List
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+            ) {
+                itemsIndexed(
+                    entries,
+                    key = { _, entry -> "${entry.collection.id}_${entry.source}" }
+                ) { _, entry ->
+                    CoverCollectionItemRow(
+                        entry = entry,
+                        palette = palette,
+                        onClick = { onItemClick(entry) },
+                        moreActions = itemActions(entry)
+                    )
+                }
             }
+            // Add button
+            LegadoMiuixActionButton(
+                text = stringResource(R.string.cover_collection_add),
+                palette = palette.miuix,
+                onClick = onAddClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                cornerRadius = actionRadius
+            )
         }
-        // Add button
-        LegadoMiuixActionButton(
-            text = stringResource(R.string.cover_collection_add),
-            palette = palette.miuix,
-            onClick = onAddClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            cornerRadius = actionRadius
-        )
     }
 }
 

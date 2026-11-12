@@ -22,9 +22,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.ui.glass.GlassSurfaceCard
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
-import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 
@@ -147,13 +147,18 @@ private fun BookCacheExportItemCard(
     style: AppDialogStyle,
     onClick: () -> Unit
 ) {
-    LegadoMiuixCard(
+    // 卡面走页面卡片玻璃壳：壁纸可见时让位给壁纸域玻璃，否则原样铺主题实底。
+    // 实底下勾选态保留 accent 低透明度叠色；玻璃档卡面固定透明，叠色不参与绘制，
+    // 选中态靠 ☑/☐ 字形与 accent 文字色辨认。
+    // 页面根（Activity 根视图 → ComposeView → 本 Column）本来就是透明的，
+    // 壁纸可见性由 BaseActivity 的根背景策略决定，这里不额外铺底色。
+    GlassSurfaceCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        color = if (item.isSelected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
-        contentColor = style.primaryText,
         cornerRadius = style.actionRadius,
+        fillColor = if (item.isSelected) style.accent.copy(alpha = 0.10f) else style.fieldSurface,
+        contentColor = style.primaryText,
         insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

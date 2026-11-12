@@ -1,7 +1,12 @@
 package io.legado.app.ui.widget.compose
 
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -9,6 +14,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.rememberThemeUiPalette
+import io.legado.app.utils.defaultSharedPreferences
 
 /**
  * 复杂背景图下的文字可读性辅助。
@@ -22,9 +28,26 @@ import io.legado.app.lib.theme.rememberThemeUiPalette
 fun rememberHasUsableBgImage(): Boolean {
     val context = LocalContext.current
     val signature = rememberThemeUiPalette().signature
-    return remember(context, signature) {
-        ThemeConfig.hasUsableBgImage(context)
+    // 背景图开关（bgImage/bgImageN）不在色板签名里，纯 remember 会在「页面后台存活时
+    // 开背景图」方向停值（关方向由下游 GlassPanel 的监听自愈）。这里与
+    // rememberGlassAvailability 同款：订阅偏好把值提升为 State，结论变化才触发重组。
+    var hasBgImage by remember(context, signature) {
+        mutableStateOf(ThemeConfig.hasUsableBgImage(context))
     }
+    DisposableEffect(context, signature) {
+        val prefs = context.defaultSharedPreferences
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            val next = ThemeConfig.hasUsableBgImage(context)
+            if (next != hasBgImage) {
+                hasBgImage = next
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+    return hasBgImage
 }
 
 /**

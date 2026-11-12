@@ -765,7 +765,10 @@ private fun TocSearchField(
             cornerRadiusPx = radiusPx,
             configSignature = glassSignature,
             modifier = Modifier.fillMaxWidth(),
-            fallback = Modifier.clip(shape).background(Color(palette.settings.row))
+            fallback = Modifier.clip(shape).background(Color(palette.settings.row)),
+            // 页面内输入框：不置 true 的话 solid 档 / 无背景图时会被判为可用，画成底栏色不透明壳，
+            // 把上面 row 色的 fallback 顶掉（requireWallpaperHost = false 只判采样域与设备）。
+            requireWallpaperHost = true
         ) {
             fieldContent()
         }
@@ -819,7 +822,9 @@ private fun TocTabs(
             cornerRadiusPx = radiusPx,
             configSignature = glassSignature,
             modifier = modifier,
-            fallback = Modifier.clip(shape).background(Color(palette.settings.row))
+            fallback = Modifier.clip(shape).background(Color(palette.settings.row)),
+            // 同上：页签条是页面内表面，solid 档 / 无背景图时必须回退到 row 色而不是底栏色壳。
+            requireWallpaperHost = true
         ) {
             tabsRow()
         }

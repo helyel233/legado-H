@@ -32,10 +32,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -44,11 +46,17 @@ import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.EventBus
 import io.legado.app.databinding.ActivityCoverHtmlBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverHtmlTemplateConfig
 import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -156,11 +164,17 @@ private fun CoverHtmlTemplateScreen(
         CoverHtmlTemplateConfig.templateList.toList()
     }
     val selectedId = templates.firstOrNull { it.isSelected }?.id
+    // 根背景原先铺 palette.settings.page 整页不透明——壁纸模式下卡片的玻璃层只能采到被本页盖住
+    // 的壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，壁纸由此透出）；
+    // 无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    // 一个页面算一次签名往下传：每张卡各注册偏好监听会白跑 N 份回调。
+    val glassSignature = rememberGlassConfigSignature()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(palette.settings.page)
+            .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
     ) {
         LazyColumn(
             modifier = Modifier
@@ -176,6 +190,7 @@ private fun CoverHtmlTemplateScreen(
                 TemplateRow(
                     template = template,
                     selected = template.id == selectedId,
+                    glassSignature = glassSignature.takeIf { wallpaperVisible },
                     onEdit = { onEdit(template) },
                     onSelect = {
                         CoverHtmlTemplateConfig.setSelectedTemplate(template.id)
@@ -270,6 +285,7 @@ private fun CoverHtmlTemplateScreen(
 private fun TemplateRow(
     template: CoverHtmlTemplateConfig.Template,
     selected: Boolean,
+    glassSignature: String?,
     onEdit: () -> Unit,
     onSelect: () -> Unit,
     onRename: () -> Unit,
@@ -277,55 +293,81 @@ private fun TemplateRow(
     onPreview: () -> Unit
 ) {
     val palette = rememberAppManagementPalette()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .background(Color(palette.settings.row), RoundedCornerShape(12.dp))
-            .padding(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+    val radius = 12.dp
+    val radiusPx = with(LocalDensity.current) { radius.toPx() }
+    // 卡片自带布局（单选 + 四个按钮），走不了 AppManagementCard 的签名机制，这里直接用
+    // GlassPanel 声明采样域：回退就是改动前那一句「row 色 + 12dp 圆角」，无背景图 / 墨水屏 /
+    // solid 档 / 低内存时逐值不变。
+    val fallback = Modifier.background(Color(palette.settings.row), RoundedCornerShape(radius))
+    val outerModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
+    val cardContent: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
         ) {
-            RadioButton(selected = selected, onClick = onSelect)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 4.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = template.name,
-                    fontSize = 16.sp,
-                    color = palette.settings.primaryText
-                )
-                Text(
-                    text = if (template.htmlCode.isBlank()) {
-                        stringResource(R.string.cover_html_empty)
-                    } else {
-                        stringResource(R.string.html_code) + " (${template.htmlCode.length})"
-                    },
-                    fontSize = 12.sp,
-                    color = palette.settings.secondaryText
-                )
+                RadioButton(selected = selected, onClick = onSelect)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 4.dp)
+                ) {
+                    Text(
+                        text = template.name,
+                        fontSize = 16.sp,
+                        color = palette.settings.primaryText
+                    )
+                    Text(
+                        text = if (template.htmlCode.isBlank()) {
+                            stringResource(R.string.cover_html_empty)
+                        } else {
+                            stringResource(R.string.html_code) + " (${template.htmlCode.length})"
+                        },
+                        fontSize = 12.sp,
+                        color = palette.settings.secondaryText
+                    )
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(onClick = onEdit) {
+                    Text(text = stringResource(R.string.edit))
+                }
+                TextButton(onClick = onPreview) {
+                    Text(text = stringResource(R.string.cover_html_preview))
+                }
+                TextButton(onClick = onRename) {
+                    Text(text = stringResource(R.string.rename))
+                }
+                TextButton(onClick = onDelete) {
+                    Text(text = stringResource(R.string.delete))
+                }
             }
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+    }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = radiusPx,
+            configSignature = glassSignature,
+            // 页面内卡片：要求宿主页面真的露出壁纸，否则会采到被页面自身盖住的壁纸。
+            requireWallpaperHost = true,
+            modifier = outerModifier.clip(RoundedCornerShape(radius)),
+            fallback = fallback
         ) {
-            TextButton(onClick = onEdit) {
-                Text(text = stringResource(R.string.edit))
-            }
-            TextButton(onClick = onPreview) {
-                Text(text = stringResource(R.string.cover_html_preview))
-            }
-            TextButton(onClick = onRename) {
-                Text(text = stringResource(R.string.rename))
-            }
-            TextButton(onClick = onDelete) {
-                Text(text = stringResource(R.string.delete))
-            }
+            cardContent()
+        }
+    } else {
+        Column(modifier = outerModifier.then(fallback)) {
+            cardContent()
         }
     }
 }

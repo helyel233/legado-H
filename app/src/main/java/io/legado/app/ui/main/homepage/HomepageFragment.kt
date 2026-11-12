@@ -181,6 +181,13 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
         if (viewModel.uiState.value.layoutMode != AppConfig.homepageLayoutMode) {
             viewModel.setLayoutMode(AppConfig.homepageLayoutMode)
         }
+        // 设置里改玻璃档 / 关背景图后返回首页：模块 holder 与分源 Tab 的页卡都常驻窗口
+        // （不重建、不重绑数据、也不产生 attach 事件），必须按签名把当前已显示的卡面
+        // 重铺一遍，否则 solid 档仍停在玻璃上。签名未变时零开销。
+        if (isAdded && view != null) {
+            adapter.refreshVisibleCardSurfaces(binding.rvModules)
+            sourcePagerAdapter.refreshCardSurfaces()
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: android.view.Menu) {
@@ -349,6 +356,17 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
 
         fun getPage(index: Int): SourcePage? = pages.getOrNull(index)
 
+        /**
+         * 改档 / 关背景图后重铺每页已显示模块的卡面。
+         *
+         * 分源 Tab 模式下页由 ViewPager2 常驻（`offscreenPageLimit = 1`），返回首页时
+         * 不重建也不产生 attach 事件，所以由宿主在 `onResume` 主动推一次。
+         * 签名未变时零开销，不重绑数据。
+         */
+        fun refreshCardSurfaces() {
+            pages.forEach { page -> page.refreshCardSurfaces() }
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SourcePageHolder {
             val pageBinding = ItemHomepageSourcePageBinding.inflate(
                 LayoutInflater.from(parent.context), parent, false
@@ -398,6 +416,13 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
 
         fun detach() {
             attachedBinding = null
+        }
+
+        /** 重铺本页已显示模块的卡面；页未附着时为 no-op。 */
+        fun refreshCardSurfaces() {
+            attachedBinding?.rvPage?.let { recyclerView ->
+                adapter.refreshVisibleCardSurfaces(recyclerView)
+            }
         }
 
         fun scrollToTop() {

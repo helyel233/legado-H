@@ -41,6 +41,7 @@ import io.legado.app.databinding.ActivityRssReadBinding
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.readingHttpClient as okHttpClient
 import io.legado.app.help.http.text
@@ -79,12 +80,10 @@ import splitties.views.bottomPadding
 import java.io.ByteArrayInputStream
 import java.util.regex.PatternSyntaxException
 import io.legado.app.ui.about.AppLogDialog
-import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
-import io.legado.app.ui.main.GlassMaterialPreset
-import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
+import io.legado.app.ui.widget.TitleBar
 import io.legado.app.utils.StartActivityContract
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -369,17 +368,19 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
      * RenderNode，但这里根本不需要采样正文，与主底栏走同一条壁纸采样管线即可。
      * 圆角取 0：标题栏是贴边全宽的矩形，加圆角会在屏幕顶部两角留下缺口。
      *
-     * 无玻璃档不接管：该档的实底壳取底栏底色，会让标题栏偏离全 App 统一的主题主色。
-     * 墨水屏 / 低内存由 drawable 入口返回 null，保留 TitleBar 原有背景（含墨水屏描边）。
+     * 本页顶栏是 `opaque = true`（正文需要不透明外壳），自动 opt-in 会否掉它，所以由本页
+     * 显式驱动 [TitleBar.applyControlledWallpaperGlass]；代价是**回退也归本页**：
+     * 它在内部保存首次铺玻璃前的 `background` / `elevation`，solid 档 / 墨水屏 / 低内存 /
+     * 无背景图时恢复原背景（含墨水屏描边）并解绑旧的位置跟踪。所以在
+     * `onActivityCreated` 与每次 [onResume] 都要重判一次——上一版在这里
+     * `if (SOLID) return`，于是「开玻璃 → 切 solid → 返回」会一直停在旧玻璃上。
      */
     private fun applyTitleBarGlass() {
-        if (resolvedExploreGlassMode() == GlassMaterialPreset.SOLID) return
-        val glass = GlassSurface.panelBackground(
-            binding.titleBar,
-            GlassSamplingDomain.WALLPAPER,
-            0f
-        ) ?: return
-        binding.titleBar.background = glass
+        binding.titleBar.applyControlledWallpaperGlass(
+            enabled = GlassSurface.wallpaperGlassEnabled(this) &&
+                ThemeConfig.hasUsableBgImage(this),
+            cornerRadiusPx = 0f
+        )
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -609,6 +610,10 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     override fun onResume() {
         super.onResume()
+        // 本页顶栏由 applyTitleBarGlass 受控接管，自动 opt-in 已让位：
+        // 玻璃档位 / 背景图在设置页改过后，必须由这里重判才会换材质或回退。
+        // 签名未变时零开销（只比一次签名）。
+        applyTitleBarGlass()
         if (!wasScreenOff) {
             currentWebView.onResume()
         }

@@ -699,6 +699,21 @@ object ExploreGlassBackdrop {
     }
 
     /**
+     * 显式解绑 [host] 上的玻璃位置跟踪。
+     *
+     * 宿主把玻璃换回**原背景**时必须调这里（顶栏降级回退、卡片切回实底）：旧
+     * [TrackerBinding] 仍挂在 host 的 layout / attach 回调与最近可滚动祖先的滚动监听上，
+     * 并持有已换下的 drawable 与壁纸位图。只是 `setBackground(原背景)` 不足以停掉它——
+     * 滚动时回调照样触发，等于给一个不再绘制的 drawable 白算矩阵、白留一张位图。
+     *
+     * 复用切档时已有的那条 View-detach 路径（[GlassPositionTracker.detach]），不新增
+     * 监听；重复调用是 no-op，切回玻璃档后 [glassDrawable] 的 attach 会重建 binding。
+     */
+    fun detachPositionTracking(host: View) {
+        GlassPositionTracker.detach(host)
+    }
+
+    /**
      * 展开行内部小控件（线路 / 类型 / 平台 / 搜索按钮等）的玻璃背景。
      *
      * 与行标题、底栏走**同一条**链路：档位、强度、四个倍率、tint / shell / 描边全部来自
@@ -1412,13 +1427,22 @@ private class HardwareGlassLayer(private val blurRadiusPx: Float) {
 }
 
 /**
+ * 位置跟踪绑定所在的 keyed tag key。
+ *
+ * 单独暴露（而不是留在 [GlassPositionTracker] 内部）是为了让「切档 / 关背景图后
+ * 旧跟踪是否真的被解绑」可被单测直接观察：解绑的唯一可观测副作用就是把这一格
+ * tag 写成 null，测试据此断言，不必反射私有字段、也不必伪造 tracker。
+ */
+internal const val GLASS_POSITION_TRACKING_TAG_KEY: Int = 0x5F_4753_50
+
+/**
  * 把 [FrostedGlassDrawable] 挂到 host 的布局 / 滚动 / attach 回调上，
  * 用「位置缓存 + 变化才重算」替代 draw() 里的逐帧 getLocationOnScreen。
  * 视图脱离窗口时自动解绑，避免泄漏。
  */
 private object GlassPositionTracker {
 
-    private const val TAG_KEY = 0x5F_4753_50
+    private const val TAG_KEY = GLASS_POSITION_TRACKING_TAG_KEY
     private const val TAG_KEY_SCROLLER = 0x5F_4753_51
 
     fun attach(host: View, drawable: FrostedGlassDrawable) {

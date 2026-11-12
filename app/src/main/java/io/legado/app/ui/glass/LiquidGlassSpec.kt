@@ -243,3 +243,26 @@ internal fun overlayGlassFillYielded(
     panelWidthPx: Int,
     panelHeightPx: Int
 ): Boolean = glassAvailable && panelWidthPx > 0 && panelHeightPx > 0
+
+/**
+ * 自绘内容的底色（热力图格子等）该用实底还是半透明（纯 JVM）。
+ *
+ * 卡片让位给玻璃后，卡片内部**自绘的不透明色块**会整片盖住玻璃层：真机上表现为
+ * 「卡片边角是磨砂、中间仍是实底」，看起来依旧没玻璃化（阅读记录页热力图卡就是这个
+ * 形态——卡面已是半透明 `surfaceColor(cardColor)`，而格子底色传的是不透明
+ * `cardColor`）。因此格子底必须跟着卡片走：
+ *
+ * - [cardGlassActive] = false（solid 档 / 墨水屏 / 低内存 / 无壁纸）：原样返回实底色，
+ *   实底卡片观感逐值不变；
+ * - [cardGlassActive] = true：按 [layoutAlpha] 施加与页面其它表面同一份不透明度，
+ *   透出玻璃层（[layoutAlpha] 取 `UiCorner.layoutAlpha()`，即用户设定的界面不透明度）。
+ */
+internal fun panelContentBaseColor(
+    panelFillColor: Int,
+    cardGlassActive: Boolean,
+    layoutAlpha: Float
+): Int {
+    if (!cardGlassActive) return panelFillColor
+    val alpha = (layoutAlpha.coerceIn(0f, 1f) * 255f).roundToInt().coerceIn(0, 255)
+    return (panelFillColor and 0x00FFFFFF) or (alpha shl 24)
+}

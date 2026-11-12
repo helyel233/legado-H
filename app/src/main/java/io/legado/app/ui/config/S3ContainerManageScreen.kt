@@ -34,15 +34,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.cloud.S3Container
 import io.legado.app.lib.cloud.S3ContainerScope
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
+import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
 @Composable
 internal fun S3ContainerManageScreen(
@@ -53,12 +59,20 @@ internal fun S3ContainerManageScreen(
     onMoreActions: (S3Container) -> List<AppManagementMenuAction>
 ) {
     val palette = rememberAppManagementPalette()
+    // 根 Surface 原先铺 palette.settings.page 整页不透明——壁纸模式下卡片玻璃只能采到被本页
+    // 盖住的壁纸。背景图可用且非墨水屏时改铺透明（BaseActivity 已把根 View 背景置空，壁纸由此
+    // 透出）；无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily),
+        // 列表卡是 AppManagementCard：提供签名后自动走壁纸域玻璃；提供 null（壁纸不可见）时
+        // 卡片保持主题实底，与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = palette.settings.page,
+            color = glassPageBackgroundColor(palette.settings.page, wallpaperVisible),
             contentColor = palette.settings.primaryText
         ) {
             Column(
@@ -73,6 +87,11 @@ internal fun S3ContainerManageScreen(
                     color = palette.settings.secondaryText,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
+                    // 页根在壁纸模式下透明，这行长句说明直接压图难分辨，补自适应投影；
+                    // imageBgTextShadow 无背景图时返回 null，普通主题观感不变。
+                    style = LocalTextStyle.current.copy(
+                        shadow = imageBgTextShadow(palette.settings.secondaryText)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, top = 6.dp, end = 16.dp)

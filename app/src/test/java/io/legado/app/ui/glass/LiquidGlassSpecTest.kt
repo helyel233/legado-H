@@ -522,4 +522,69 @@ class LiquidGlassSpecTest {
     }
 
     // endregion
+
+    // region 卡片内自绘底色跟随玻璃
+
+    /**
+     * 回归锁：卡片**实底**时格子底色必须原样返回。
+     *
+     * solid 档 / 墨水屏 / 低内存 / 无壁纸页面都走这条分支，任何 alpha 改写都会
+     * 把「实底卡片」变成半透明卡片，是比漏玻璃更严重的回归。
+     */
+    @Test
+    fun panelContentBaseColorKeepsSolidColorWhenCardIsOpaque() {
+        val cardColor = 0xFF1C1C1E.toInt()
+        assertEquals(
+            cardColor,
+            panelContentBaseColor(
+                panelFillColor = cardColor,
+                cardGlassActive = false,
+                layoutAlpha = 0.86f
+            )
+        )
+        // layoutAlpha 越界也不影响实底分支
+        assertEquals(
+            cardColor,
+            panelContentBaseColor(cardColor, cardGlassActive = false, layoutAlpha = -3f)
+        )
+    }
+
+    /**
+     * 回归锁：卡片让位给玻璃后，格子底按界面不透明度同步半透明。
+     *
+     * 真机形态：热力图卡的卡面已是半透明 `surfaceColor(cardColor)`，格子却仍画不透明
+     * 卡色，整片格块把玻璃盖回实底，用户看到的就是「这张卡没玻璃化」。
+     */
+    @Test
+    fun panelContentBaseColorFollowsLayoutAlphaWhenCardIsGlass() {
+        val cardColor = 0xFF1C1C1E.toInt()
+        assertEquals(
+            0xDB1C1C1E.toInt(), // 0.86 * 255 = 219 = 0xDB
+            panelContentBaseColor(cardColor, cardGlassActive = true, layoutAlpha = 0.86f)
+        )
+        assertEquals(
+            0xFF1C1C1E.toInt(), // 不透明度拉满时与实底等价
+            panelContentBaseColor(cardColor, cardGlassActive = true, layoutAlpha = 1f)
+        )
+        assertEquals(
+            0x001C1C1E,
+            panelContentBaseColor(cardColor, cardGlassActive = true, layoutAlpha = 0f)
+        )
+    }
+
+    /** alpha 越界收敛到 [0,1]：负值不会翻转成不透明，>1 不会溢出到 RGB 位。 */
+    @Test
+    fun panelContentBaseColorClampsLayoutAlpha() {
+        val cardColor = 0xFF336699.toInt()
+        assertEquals(
+            0xFF336699.toInt(),
+            panelContentBaseColor(cardColor, cardGlassActive = true, layoutAlpha = 2.5f)
+        )
+        assertEquals(
+            0x00336699,
+            panelContentBaseColor(cardColor, cardGlassActive = true, layoutAlpha = -1f)
+        )
+    }
+
+    // endregion
 }

@@ -41,9 +41,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.R
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.ModernActionPopup
 
 @Composable
@@ -59,12 +62,23 @@ fun AppPackageManageScreen(
     listContent: LazyListScope.(AppManagementPalette) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
+    // 页面根背景必须能在壁纸模式下透出壁纸：原来这里铺 palette.settings.page 整页不透明，
+    // 结果卡片玻璃采样的是「被本页自己盖住的壁纸」，属于错误管线。背景图可用（且非墨水屏）
+    // 时改铺透明，让 BaseActivity.applyRootBackgroundPolicy() 已置空的根背景生效；
+    // 无背景图 / 墨水屏时仍返回原页色，观感逐值不变。
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    // 一个页面只算一次玻璃签名：行卡片与日夜胶囊只读，不再各自注册偏好监听
+    val glassSignature = rememberGlassConfigSignature()
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily),
+        // 本页的卡片（AppPackageManageItemCard / AppPackageManageSettingCard）与日夜切换胶囊
+        // 都是 AppManagementCard，提供签名后自动接到壁纸域玻璃；壁纸不可见时提供 null，
+        // 卡片保持主题实底——与接入玻璃之前逐值一致。
+        LocalAppManagementGlassSignature provides glassSignature.takeIf { wallpaperVisible }
     ) {
         Surface(
             modifier = modifier.fillMaxSize(),
-            color = palette.settings.page,
+            color = glassPageBackgroundColor(palette.settings.page, wallpaperVisible),
             contentColor = palette.settings.primaryText
         ) {
             Column(
@@ -85,6 +99,12 @@ fun AppPackageManageScreen(
                         color = palette.settings.secondaryText,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
+                        // 页根在背景图模式下已透明，这句说明文字直接压在壁纸上：
+                        // 按 BackgroundReadability 的口径给独立提示文本加自适应投影
+                        // （无背景图时返回 null，普通主题观感逐值不变）
+                        style = LocalTextStyle.current.copy(
+                            shadow = imageBgTextShadow(palette.settings.secondaryText)
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = 16.dp, top = 10.dp, end = 16.dp)

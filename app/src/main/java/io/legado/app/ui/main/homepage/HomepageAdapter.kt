@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
@@ -26,6 +27,9 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
+import io.legado.app.ui.glass.GLASS_SIGNATURE_TAG
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.applyWallpaperGlassBackground
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
@@ -206,6 +210,28 @@ class HomepageAdapter(
         super.onBindViewHolder(holder, position, payloads)
     }
 
+    override fun onViewAttachedToWindow(holder: ModuleViewHolder) {
+        super.onViewAttachedToWindow(holder)
+        // 模块 holder 是常驻的：设置里改玻璃档 / 关背景图后返回首页不会重新 bind
+        // （boundKey 会拦掉同模块重绑，`submitModules` 的 diff 也可能认为内容没变），
+        // 所以挂载时按签名重铺一次**当前已显示**的卡面。同档重复挂载零开销。
+        holder.refreshCardSurfaces()
+    }
+
+    /**
+     * 按签名重铺 [recyclerView] 中所有**当前已显示**模块的卡面。
+     *
+     * 供宿主在回到前台时调用（见 `HomepageFragment.onResume`）：从设置页返回时 View
+     * 一直挂在窗口上，不会产生 attach 事件，只靠 [onViewAttachedToWindow] 会漏。
+     * 不重绑内容、不重新请求数据、不碰内嵌适配器——只重铺卡面背景。
+     */
+    fun refreshVisibleCardSurfaces(recyclerView: RecyclerView) {
+        for (index in 0 until recyclerView.childCount) {
+            val holder = recyclerView.getChildViewHolder(recyclerView.getChildAt(index))
+            (holder as? ModuleViewHolder)?.refreshCardSurfaces()
+        }
+    }
+
     inner class ModuleViewHolder(
         private val binding: ItemHomepageModuleBinding
     ) : RecyclerView.ViewHolder(binding.root) {
@@ -219,6 +245,15 @@ class HomepageAdapter(
         private var currentPagerKey: String? = null
         private var pagerLoadAction: (() -> Unit)? = null
         private val pagerPositions = mutableMapOf<String, Int>()
+
+        /**
+         * `llRankCard` 当前以哪种形态显示：true = 榜单卡（`rankStyle = true`，有卡面），
+         * false = 其它形态复用同一容器（无卡面），null = 容器隐藏。
+         *
+         * 改档后重铺（[refreshCardSurfaces]）要靠它区分「该铺卡面」与「该保持无背景」，
+         * 不能只看 View 可见性——`rankStyle = false` 时容器同样是可见的。
+         */
+        private var rankCardStyled: Boolean? = null
 
         /** 横幅/卡片横滑到最右时的自动加载动作，其他类型保持 null */
         private var hEndAction: (() -> Unit)? = null
@@ -332,11 +367,15 @@ class HomepageAdapter(
             binding.llTabs.gone()
             binding.flButtons.gone()
             binding.llRankCard.gone()
+            rankCardStyled = null
             binding.vpGridRanking.gone()
             binding.llExpand.gone()
             binding.flSkeleton.gone()
             binding.llError.gone()
             binding.llLoadMore.gone()
+            // 这里不解绑位置跟踪：llRankCard/llError 的玻璃背景与签名 tag 都还在，
+            // 下次形态切换会经 clearRankCardSurface（解绑+清 tag）或带签名的重铺自愈；
+            // 只解绑不清 tag 会让重绑早退，玻璃背景在场却没人驱动采样
         }
 
         private fun bindLoading(module: HomepageModuleUi) {
@@ -348,7 +387,77 @@ class HomepageAdapter(
         private fun bindError(module: HomepageModuleUi) {
             hideAll()
             binding.llError.visible()
+            applyErrorCardSurface()
             binding.llError.setOnClickListener { callBack.onRetry(module) }
+        }
+
+        /**
+         * 错误卡卡面：原卡面 `bg_homepage_card_12`（圆角 12dp），壁纸可见时让位给玻璃，
+         * 否则铺回同一张实底 drawable（solid / 墨水屏 / 低内存 / 无壁纸）。
+         *
+         * 抽成方法是因为它在两条路径上都要跑：首次 bind，以及改档 / 关背景图后回到首页
+         * 的重铺（[refreshCardSurfaces]）。
+         */
+        private fun applyErrorCardSurface() {
+            binding.llError.applyWallpaperGlassBackground(
+                cornerRadiusPx = ERROR_CARD_RADIUS_DP.dpToPx()
+            ) {
+                ContextCompat.getDrawable(appContext, R.drawable.bg_homepage_card_12)
+            }
+        }
+
+        /**
+         * 榜单卡卡面：原卡面 `bg_homepage_card_16`（圆角 16dp），壁纸可见时让位给玻璃，
+         * 卡内的排行行本身是透明的，玻璃直接透到行文字后面。
+         */
+        private fun applyRankCardSurface() {
+            binding.llRankCard.applyWallpaperGlassBackground(
+                cornerRadiusPx = RANK_CARD_RADIUS_DP.dpToPx()
+            ) {
+                ContextCompat.getDrawable(appContext, R.drawable.bg_homepage_card_16)
+            }
+            binding.llRankCard.setPadding(0, 12.dpToPx(), 0, 0)
+        }
+
+        /**
+         * 同一 ViewHolder 会在「排行榜 / 网格 / 瀑布」等形态间复用：清掉背景的同时必须
+         * 清掉玻璃签名 tag，否则切回榜单形态时签名未变会被判成「已经铺过」而跳过铺底。
+         */
+        private fun clearRankCardSurface() {
+            GlassSurface.releaseBackgroundTracking(binding.llRankCard)
+            binding.llRankCard.background = null
+            binding.llRankCard.setTag(GLASS_SIGNATURE_TAG, null)
+            binding.llRankCard.setPadding(0, 0, 0, 0)
+        }
+
+        /**
+         * 只重铺「此刻已显示」的卡面：不重绑内容、不重新请求数据、不动内嵌适配器。
+         *
+         * 依据是绑定期记下的 UI 事实（[rankCardStyled] + 可见性），而不是再跑一遍状态机
+         * ——重跑状态机会和 holder 里已有的内容状态分叉。签名未变时
+         * [applyWallpaperGlassBackground] 直接返回，所以重复调用（每次 attach + 每次
+         * onResume）是零开销的。
+         */
+        internal fun refreshCardSurfaces() {
+            when (rankCardStyled) {
+                // 榜单卡形态：按签名重铺卡面（solid / 无壁纸时逐值回退到原实底）
+                true -> applyRankCardSurface()
+                // 其它形态复用同一容器：只保证背景与签名 tag 被清掉，
+                // 不能把已经隐藏的卡面重新铺回来
+                false -> clearRankCardSurface()
+                null -> Unit
+            }
+            if (binding.llError.isVisible) applyErrorCardSurface()
+            // 内嵌的卡片在各自适配器里（多层 RecyclerView / ViewPager2）：它们同样是常驻的，
+            // 回到前台不会重新 attach，所以从宿主这一层一起推下去
+            if (binding.rvContent.isVisible) {
+                booksAdapter?.refreshVisibleCardSurfaces(binding.rvContent)
+            }
+            if (binding.vpGridRanking.isVisible) {
+                (binding.vpGridRanking.getChildAt(0) as? RecyclerView)?.let { pages ->
+                    gridRankAdapter?.refreshVisibleCardSurfaces(pages)
+                }
+            }
         }
 
         private fun bindButtons(module: HomepageModuleUi, state: ModuleLoadState.Buttons) {
@@ -559,6 +668,7 @@ class HomepageAdapter(
             onLoadMore: () -> Unit,
         ) {
             binding.llRankCard.gone()
+            rankCardStyled = null
             binding.flSkeleton.gone()
             binding.llError.gone()
             binding.flButtons.gone()
@@ -568,7 +678,8 @@ class HomepageAdapter(
 
             if (gridRankAdapter == null || binding.vpGridRanking.adapter == null) {
                 gridRankAdapter = HomepageGridRankingPagerAdapter(
-                    appContext,
+                    // 同上：页卡面要玻璃化，context 必须是 Activity（能回溯到 BaseActivity）
+                    binding.vpGridRanking.context,
                     { item -> callBack.onBookClick(item.book) },
                     { item -> callBack.onBookLongClick(item.book) },
                 )
@@ -600,12 +711,11 @@ class HomepageAdapter(
             binding.flButtons.gone()
             binding.llExpand.gone()
             binding.llRankCard.visible()
+            rankCardStyled = rankStyle
             if (rankStyle) {
-                binding.llRankCard.setBackgroundResource(R.drawable.bg_homepage_card_16)
-                binding.llRankCard.setPadding(0, 12.dpToPx(), 0, 0)
+                applyRankCardSurface()
             } else {
-                binding.llRankCard.background = null
-                binding.llRankCard.setPadding(0, 0, 0, 0)
+                clearRankCardSurface()
             }
         }
 
@@ -857,16 +967,22 @@ class HomepageAdapter(
                 return
             }
             boundKey = key
-            booksAdapter = HomepageBooksAdapter(appContext, modeOf(type), object :
-                HomepageBooksAdapter.CallBack {
-                override fun onBookClick(book: SearchBook) {
-                    callBack.onBookClick(book)
-                }
+            booksAdapter = HomepageBooksAdapter(
+                // 用承载内嵌列表的视图 context（Activity）而不是 appContext：
+                // 玻璃采样要沿 ContextWrapper 链找到 BaseActivity 才能判「背后有没有壁纸」，
+                // Application context 链上没有 Activity，玻璃会恒判不可用
+                binding.rvContent.context,
+                modeOf(type),
+                object :
+                    HomepageBooksAdapter.CallBack {
+                    override fun onBookClick(book: SearchBook) {
+                        callBack.onBookClick(book)
+                    }
 
-                override fun onBookLongClick(book: SearchBook) {
-                    callBack.onBookLongClick(book)
-                }
-            }).also { adapter ->
+                    override fun onBookLongClick(book: SearchBook) {
+                        callBack.onBookLongClick(book)
+                    }
+                }).also { adapter ->
                 binding.rvContent.adapter = adapter
                 binding.rvContent.layoutManager = layoutManagerOf(type)
             }
@@ -910,6 +1026,12 @@ class HomepageAdapter(
         private const val GRID_MAX_ITEMS = 6
         private const val RANK_INITIAL_COUNT = 5
         private const val RANK_MAX_COUNT = 20
+
+        /** 榜单卡原卡面 `bg_homepage_card_16` 的圆角（16dp）。 */
+        private const val RANK_CARD_RADIUS_DP = 16f
+
+        /** 错误卡原卡面 `bg_homepage_card_12` 的圆角（12dp）。 */
+        private const val ERROR_CARD_RADIUS_DP = 12f
 
         /** 网格排行榜翻页：页间距与右缘露出宽度（dp） */
         private const val PAGE_SPACING_DP = 12
