@@ -55,7 +55,9 @@ class ExploreGlassHardwareBlurTest {
         PreferKey.exploreGlassStrokeScale,
         PreferKey.glassStrokeColor,
         PreferKey.exploreGlassHardwareBlur,
-        PreferKey.exploreGlassAnimatedSolid
+        PreferKey.exploreGlassAnimatedSolid,
+        // 预设档位是否仍匹配的独立状态键，选档 / 拖滑杆 / 恢复默认都会写它
+        PreferKey.glassPresetMatched
     )
 
     /** 1.25.8 档位键统一后，底栏联动只剩两个液态强度键（bottomBarEffectMode 已废弃删除）。 */
@@ -292,10 +294,14 @@ class ExploreGlassHardwareBlurTest {
         assertEquals("solid", GlassMaterialPreset.SOLID)
         assertEquals("glass", GlassMaterialPreset.GLASS)
         assertEquals("frosted", GlassMaterialPreset.FROSTED)
-        assertEquals(setOf("solid", "glass", "frosted"), GlassMaterialPreset.modes)
+        assertEquals(
+            setOf("solid", "glass", "frosted", "clear"),
+            GlassMaterialPreset.modes
+        )
         assertEquals(GlassMaterialPreset.SOLID, EXPLORE_GLASS_MODE_SOLID)
         assertEquals(GlassMaterialPreset.GLASS, EXPLORE_GLASS_MODE_GLASS)
         assertEquals(GlassMaterialPreset.FROSTED, EXPLORE_GLASS_MODE_FROSTED)
+        assertEquals(GlassMaterialPreset.CLEAR, EXPLORE_GLASS_MODE_CLEAR)
     }
 
     @Test

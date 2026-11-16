@@ -35,9 +35,10 @@ import java.util.Locale
  * 材质样式（无玻璃 / 透明玻璃 / 磨砂玻璃）是底栏 solid/glass/frosted 同一套自动档的
  * **唯一事实来源**：底栏渲染读同一解析（resolveExploreGlassMode），切档后返回主界面
  * 即对底栏生效。每一档都对应滑杆空间里的一个**固定坐标**（[GlassMaterialPreset.presetPoint]：
- * 强度 + 四个倍率）：选一档会把整组数写回偏好，于是「预设」与「滑杆数值」不再是两套状态。
- * 之后拖动任一滑杆，当前值就偏离该档坐标，行尾胶囊改显示「自定义」
- * （[GlassMaterialPreset.matchesPreset]，不新增可选值、不新增偏好键）。
+ * 强度 + 四个倍率）：选一档会把整组数写回偏好。
+ * 胶囊显示「预设 / 自定义」用独立状态键 [PreferKey.glassPresetMatched]，选档置 true、
+ * 拖任一滑杆置 false——不再由滑杆数值反推，因为底栏主题包每次启动会用 config.opacity
+ * 覆盖两个全局强度键（真机 70→60），数值反推会把「效果没变的预设」误显示成自定义。
  * 顶栏毛玻璃与发现页行渲染共用本页的档位与强度设置；1.25.x 的「跟随底栏材质」
  * 开关已移除，升级用户由启动时的一次性迁移固化档位与强度。
  * 1.25.4 的独立总开关已从 UI 移除，由「无玻璃」档承担关闭职责；旧值仍被读取迁移，
@@ -67,7 +68,9 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
         val storedMode = stringSetting(PreferKey.exploreGlassEffectMode, "")
         val legacyEnabled = booleanSetting(PreferKey.exploreGlassEnabled, true)
         val mode = resolveExploreGlassMode(storedMode, legacyEnabled)
-        val slidersEnabled = mode != EXPLORE_GLASS_MODE_SOLID
+        // solid（不透明实底）与 clear（半透明无玻璃）都不受强度 / 模糊 / 着色等滑杆影响，
+        // 二者都把材质滑杆置灰，避免用户调了却没反应。
+        val slidersEnabled = mode != EXPLORE_GLASS_MODE_SOLID && mode != GlassMaterialPreset.CLEAR
         val descriptions = ctx.resources.getStringArray(R.array.explore_glass_mode_descriptions)
         val options = choiceOptionList(
             R.array.explore_glass_mode_entries, R.array.explore_glass_mode_values
@@ -89,8 +92,11 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
             stroke = scaleSetting(PreferKey.exploreGlassStrokeScale)
         )
         val level = GlassMaterialPreset.levelFor(mode, frostedLevel, liquidLevel).coerceIn(0, 100)
-        // 当前滑杆是否仍落在该档的预设坐标上；偏离即「自定义」，与弹窗勾选互不影响。
-        val presetMatched = GlassMaterialPreset.matchesPreset(mode, frostedLevel, liquidLevel, scales)
+        // 预设 / 自定义是独立状态，不能由「当前强度 == 预设固定值」反推：
+        // 底栏主题包每次启动会用 config.opacity 覆盖两个全局强度键（真机 70→60），
+        // 数值反推会把「选了预设、效果没变」误显示成「自定义」。选档置 true、
+        // 手动拖任一滑杆置 false（见下方 onSelected / onValueChange），与此键解耦。
+        val presetMatched = booleanSetting(PreferKey.glassPresetMatched, true)
         val previewPipeline = exploreGlassPreviewPipelineNow(
             context = ctx,
             mode = mode,
@@ -132,6 +138,8 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                                 updateIntSetting(PreferKey.exploreGlassShellScale, point.scales.shell)
                                 updateIntSetting(PreferKey.exploreGlassStrokeScale, point.scales.stroke)
                                 updateStringSetting(PreferKey.exploreGlassEffectMode, next)
+                                // 显式选档即回到「预设」态；底栏主题包随后覆盖强度也不改变此状态。
+                                updateBooleanSetting(PreferKey.glassPresetMatched, true)
                             },
                             labelOverride = if (presetMatched) {
                                 null
@@ -139,8 +147,9 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                                 str(R.string.explore_glass_mode_custom)
                             },
                             searchKeys = listOf(
-                                "材质", "无玻璃", "透明玻璃", "磨砂玻璃", "自动档",
-                                "预设", "毛玻璃", "glass mode", "frosted", "solid"
+                                "材质", "不透明无玻璃", "无玻璃", "透明无玻璃", "透明玻璃", "磨砂玻璃", "自动档",
+                                "预设", "毛玻璃", "透明效果", "glass mode", "frosted", "solid", "clear",
+                                "opaque", "opaque no glass"
                             )
                         ),
                         SettingSliderSpec(
@@ -156,6 +165,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                                 // 走的都是 GlassMaterialPreset.current，不会读到不同强度。
                                 updateIntSetting(PreferKey.frostedGlassLevel, it)
                                 updateIntSetting(PreferKey.liquidGlassLevel, it)
+                                updateBooleanSetting(PreferKey.glassPresetMatched, false)
                             },
                             searchKeys = listOf(
                                 "强度", "毛玻璃效果", "透明度", "glass level",
@@ -325,7 +335,10 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
         valueRange = EXPLORE_GLASS_SCALE_MIN..EXPLORE_GLASS_SCALE_MAX,
         enabled = enabled,
         valueFormatter = { "$it%" },
-        onValueChange = { updateIntSetting(key, it) },
+        onValueChange = {
+            updateIntSetting(key, it)
+            updateBooleanSetting(PreferKey.glassPresetMatched, false)
+        },
         searchKeys = searchKeys
     )
 

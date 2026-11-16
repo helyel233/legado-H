@@ -5,7 +5,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.SubMenu
 import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -51,6 +50,7 @@ import io.legado.app.ui.rss.favorites.RssFavoritesActivity
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
+import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.applyGlassDomain
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.shouldEnableTopBarBackdrop
@@ -72,7 +72,6 @@ import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.transaction
 import io.legado.app.utils.visible
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.ui.widget.SourceSelectDialog
@@ -112,7 +111,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     private var groupsFlowJob: Job? = null
     private var rssFlowJob: Job? = null
     private val groups = linkedSetOf<String>()
-    private var groupsMenu: SubMenu? = null
+    /** 经典订阅页「分组」自绘菜单（ModernActionPopup）的句柄，切模式 / 销毁视图时收起。 */
+    private var groupsMenuPopup: ModernActionPopup.Handle? = null
     private var rssWebView: WebView? = null
     private var selectedRssSource: RssSource? = null
     private val rssSources = mutableListOf<RssSource>()
@@ -159,11 +159,12 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
 
     override fun onCompatCreateOptionsMenu(menu: Menu) {
         menuInflater.inflate(R.menu.main_rss, menu)
-        groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
+        // 经典订阅页的分组列表在点击时经 onCompatOptionsItemSelected 拦截后用
+        // ModernActionPopup 渲染（见 showGroupsMenu），不再往平台子菜单里塞——
+        // 平台子菜单没有行底色块与描边，与发现页同源的「右上菜单选项无背景色框」。
         menu.findItem(R.id.menu_rss_star)?.isVisible = !usingModernRss
         menu.findItem(R.id.menu_rss_config)?.isVisible = !usingModernRss
         menu.findItem(R.id.menu_layout_switch)?.isVisible = !usingModernRss
-        upGroupsMenu()
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem) {
@@ -178,9 +179,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
                 applyRssSourceLayout()
                 toastOnUi(getString(R.string.rss_layout_column_toast, next))
             }
-            else -> if (!usingModernRss && item.groupId == R.id.menu_group_text) {
-                searchView.setQuery("group:${item.title}", true)
-            }
+            R.id.menu_group -> if (!usingModernRss) showGroupsMenu()
         }
     }
 
@@ -193,6 +192,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     override fun onDestroyView() {
         groupsFlowJob?.cancel()
         groupsFlowJob = null
+        groupsMenuPopup?.dismiss()
+        groupsMenuPopup = null
         rssFlowJob?.cancel()
         rssFlowJob = null
         pendingRenderCurrentSort = false
@@ -227,11 +228,34 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         activity?.invalidateOptionsMenu()
     }
 
-    private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
-        subMenu.removeGroup(R.id.menu_group_text)
-        groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+    /**
+     * 经典订阅页「分组」菜单：ModernActionPopup 渲染（与书架 / 发现页同一实现与同一套
+     * 行样式——半透明行底 + 描边 + 玻璃域判定）。
+     *
+     * ## 为什么弃用平台子菜单（与发现页同源的遗留点）
+     *
+     * 旧实现把分组写进 `menu_group` 的 `SubMenu` 由平台渲染，行本身没有底色块与描边；
+     * QA 回归确认这正是用户「部分页面右上角菜单选项无背景色框」反馈里的另外几个页面。
+     * 点击行为与旧子菜单逐值一致：`group:${title}` 交给 searchView（setQuery 带提交，
+     * 与旧路径同一条查询链）。
+     */
+    private fun showGroupsMenu() {
+        if (usingModernRss) return
+        if (groups.isEmpty()) return
+        // 锚点按菜单项 id 精确匹配：本页工具栏有 5 个动作项，不能按 touchables 顺序猜
+        val anchor = ModernActionPopup.findToolbarItemAnchor(
+            binding.titleBar.toolbar, R.id.menu_group
+        ) ?: binding.titleBar.toolbar
+        val actions = groups.map { group ->
+            ModernActionPopup.Action(title = group) {
+                searchView.setQuery("group:$group", true)
+            }
         }
+        groupsMenuPopup = ModernActionPopup.show(
+            anchor,
+            actions,
+            groupsMenuPopup
+        )
     }
 
     private fun initSearchView() {
@@ -523,7 +547,8 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             ).conflate().collect {
                 groups.clear()
                 groups.addAll(it)
-                upGroupsMenu()
+                // 分组列表由 showGroupsMenu() 在点击时即时读取，
+                // 这里不再需要同步任何平台子菜单（已移除）。
             }
         }
     }

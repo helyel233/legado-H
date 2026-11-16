@@ -294,6 +294,15 @@ object PreferKey {
      */
     const val exploreGlassEffectMode = "exploreGlassEffectMode"
     /**
+     * 设置页「材质样式」是否仍显示已选预设（而非「自定义」）的**独立状态键**。
+     *
+     * 为什么不用「当前强度 == 预设固定值」反推：两个全局强度键 frostedGlassLevel /
+     * liquidGlassLevel 会被底栏主题包在每次启动时用 config.opacity 覆盖（真机实测 70→60），
+     * 数值反推必然误判为「自定义」，而渲染读的也是被覆盖后的值，效果其实没变。
+     * 选档时置 true、用户手动拖任一滑杆时置 false，判定与可被外部覆盖的数值彻底解耦。
+     */
+    const val glassPresetMatched = "glassPresetMatched"
+    /**
      * 1.25.x 已废弃：跟随底栏材质的开关已从设置页移除，本常量仅供
      * 一次性迁移（migrateLegacyExploreGlassFollow）读取，禁止新增业务引用。
      */

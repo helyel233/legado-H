@@ -5,7 +5,6 @@ package io.legado.app.ui.rss.favorites
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.SubMenu
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.lifecycle.lifecycleScope
@@ -17,6 +16,7 @@ import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityRssFavoritesBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.utils.gone
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
@@ -35,7 +35,8 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
     override val binding by viewBinding(ActivityRssFavoritesBinding::inflate)
     private val adapter by lazy { TabFragmentPageAdapter() }
     private var groupList = mutableListOf<String>()
-    private var groupsMenu: SubMenu? = null
+    /** 「分组」自绘菜单（ModernActionPopup）的句柄，销毁时收起防泄漏。 */
+    private var groupsMenuPopup: ModernActionPopup.Handle? = null
     private var currentGroup = ""
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -89,21 +90,40 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.rss_favorites, menu)
-        groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
-        upGroupsMenu()
+        // 分组列表在点击时经 onCompatOptionsItemSelected 拦截后用 ModernActionPopup
+        // 渲染（见 showGroupsMenu），不再走平台子菜单——平台子菜单的行没有底色块
+        // 与描边，与发现页 / 订阅源页同源的「右上菜单选项无背景色框」。
         return super.onCompatCreateOptionsMenu(menu)
     }
 
-    private fun upGroupsMenu() = groupsMenu?.let { subMenu ->
-        subMenu.removeGroup(R.id.menu_group)
-        groupList.forEachIndexed { index, it ->
-            subMenu.add(R.id.menu_group, Menu.NONE, index, it)
+    /**
+     * 「分组」菜单：ModernActionPopup 渲染（与书架 / 发现页 / 订阅源页同一实现与同一套
+     * 行样式——半透明行底 + 描边 + 玻璃域判定）。
+     *
+     * 点击行为与旧子菜单逐值一致：按分组在 [groupList] 中的下标切 ViewPager 页
+     * （旧实现用 `subMenu.add(groupId, NONE, index, title)` 的 order，等价于本下标）。
+     * 顶部 tabLayout 已展示同样分组时，弹层与 tab 双入口并存，行为一致不冲突。
+     */
+    private fun showGroupsMenu() {
+        if (groupList.isEmpty()) return
+        val anchor = ModernActionPopup.findToolbarItemAnchor(
+            binding.titleBar.toolbar, R.id.menu_group
+        ) ?: binding.titleBar.toolbar
+        val actions = groupList.mapIndexed { index, group ->
+            ModernActionPopup.Action(title = group) {
+                binding.viewPager.setCurrentItem(index)
+            }
         }
+        groupsMenuPopup = ModernActionPopup.show(
+            anchor,
+            actions,
+            groupsMenuPopup
+        )
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.groupId == R.id.menu_group) {
-            binding.viewPager.setCurrentItem(item.order)
+        if (item.itemId == R.id.menu_group) {
+            showGroupsMenu()
         } else {
             when (item.itemId) {
                 R.id.menu_del_group -> deleteGroup()
@@ -111,6 +131,12 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             }
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    override fun onDestroy() {
+        groupsMenuPopup?.dismiss()
+        groupsMenuPopup = null
+        super.onDestroy()
     }
 
     private fun upFragments() {
@@ -124,9 +150,6 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
                     binding.tabLayout.gone()
                 } else {
                     binding.tabLayout.visible()
-                }
-                if (groupsMenu != null) {
-                    upGroupsMenu()
                 }
                 adapter.notifyDataSetChanged()
             }

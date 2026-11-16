@@ -24,6 +24,40 @@ class LiquidGlassSpecTest {
         assertNull(liquidGlassSpec(params, density = 3f))
     }
 
+    /** 透明无玻璃档同样不激活液态层：宿主改用主题包半透明表面，不做折射/模糊。 */
+    @Test
+    fun clearModeReturnsNull() {
+        val params = GlassMaterialPreset.params(GlassMaterialPreset.CLEAR, 0.3f)
+        assertNull(liquidGlassSpec(params, density = 3f))
+    }
+
+    /** 透明无玻璃档所有可见玻璃维度必须为 0——误走玻璃管线也画不出磨砂/折射。 */
+    @Test
+    fun clearParamsAreAllZero() {
+        val p = GlassMaterialPreset.params(GlassMaterialPreset.CLEAR, 0.8f)
+        assertEquals(0f, p.blurDp, 0f)
+        assertEquals(0f, p.tintAlpha, 0f)
+        assertEquals(0f, p.dispersion, 0f)
+        assertEquals(0f, p.refractionHeightDp, 0f)
+        assertEquals(0f, p.refractionOffsetDp, 0f)
+        assertEquals(0f, p.shell.start, 0f)
+        assertEquals(0f, p.shell.center, 0f)
+        assertEquals(0f, p.shell.end, 0f)
+        assertEquals(0f, p.shell.stroke, 0f)
+    }
+
+    /** 透明无玻璃档的填充色：主题色 + 固定 alpha，RGB 分量保持不变（取色于主题包）。 */
+    @Test
+    fun clearSurfaceColorKeepsThemeRgbWithFixedAlpha() {
+        val theme = 0xFF336699.toInt()
+        val result = GlassMaterialPreset.clearSurfaceColor(theme)
+        val expectedAlpha = (GlassMaterialPreset.CLEAR_SURFACE_ALPHA * 255).toInt()
+        assertEquals(expectedAlpha, (result ushr 24) and 0xFF)
+        assertEquals(0x33, (result shr 16) and 0xFF)
+        assertEquals(0x66, (result shr 8) and 0xFF)
+        assertEquals(0x99, result and 0xFF)
+    }
+
     /** glass 档五参数与预设 1:1：dp 值乘密度，无量纲值直传。 */
     @Test
     fun glassParamsMapOneToOneWithDensityConversion() {
@@ -127,11 +161,13 @@ class LiquidGlassSpecTest {
         assertNull(contentSpec(isEInk = true))
     }
 
-    /** solid 档：即使设备与采样源都合格也不激活。 */
+    /** solid / clear 档：即使设备与采样源都合格也不激活。 */
     @Test
-    fun contentDomainKeepsSolidModeOff() {
+    fun contentDomainKeepsSolidAndClearModeOff() {
         val solid = GlassMaterialPreset.params(GlassMaterialPreset.SOLID, 0.34f)
         assertNull(contentSpec(params = solid))
+        val clear = GlassMaterialPreset.params(GlassMaterialPreset.CLEAR, 0.34f)
+        assertNull(contentSpec(params = clear))
     }
 
     // endregion

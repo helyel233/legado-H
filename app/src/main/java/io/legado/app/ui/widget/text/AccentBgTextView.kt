@@ -36,6 +36,18 @@ class AccentBgTextView @JvmOverloads constructor(
         upBackground()
     }
 
+    /**
+     * 按当前主题 accent 重建自绘背景与文字色。
+     *
+     * 还原入口：宿主页面（书籍详情页的「阅读」按钮）在玻璃档会把本控件的自绘背景换成
+     * 半透明 accent 玻璃面并重算文字色，判否回退时必须把**背景与文字色一并**还原——
+     * 只换回背景会留下玻璃档的文字色。与 [setRadius] 一样只是 `upBackground()` 的公开
+     * 包装，不改变任何既有观感。
+     */
+    fun restoreAccentBackground() {
+        upBackground()
+    }
+
     private fun upBackground() {
         val accentColor = if (isInEditMode) {
             context.getCompatColor(R.color.accent)

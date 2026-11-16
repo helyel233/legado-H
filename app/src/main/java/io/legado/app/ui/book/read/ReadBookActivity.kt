@@ -10,10 +10,13 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.graphics.Color
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.SystemClock
 import android.util.TypedValue
 import android.view.Gravity
@@ -22,6 +25,7 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -293,6 +297,8 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.paramPattern
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import java.text.DateFormat
 import java.util.Date
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.io.File
 import java.util.regex.Matcher
 import splitties.init.appCtx
@@ -382,14 +388,22 @@ class ReadBookActivity : BaseReadBookActivity(),
         }.getOrNull() ?: return null
         val scale = targetWidth.toFloat() / source.width
         val sampledHeight = targetHeight / scale
+        var captureError: Throwable? = null
         val drawn = runCatching {
             val canvas = Canvas(raw)
             canvas.scale(scale, scale)
             canvas.translate(0f, sampledHeight - source.height)
             source.draw(canvas)
-        }.isSuccess
+        }.onFailure { captureError = it }.isSuccess
         if (!drawn) {
             raw.recycle()
+            // 正文快照截取失败此前被静默吞掉：用户侧只表现为「更多设置面板没有磨砂」，
+            // 代码侧没有任何痕迹（第二轮排查只能靠像素比对反推哪条分支画的）。
+            // 落一条 AppLog，下一轮直接看「我的-关于-日志」即可定位。
+            AppLog.put(
+                "readerPanelBackdrop: 捕获阅读正文失败，面板回退实底",
+                captureError
+            )
             return null
         }
         val blurred = runCatching { raw.stackBlurSoftware(blurRadius) }.getOrNull()
@@ -401,6 +415,91 @@ class ReadBookActivity : BaseReadBookActivity(),
         // 显式回收不会撞上「已回收位图仍被某张 drawable 引用」——那份底图只属于本次面板。
         raw.recycle()
         return blurred
+    }
+
+    /**
+     * [captureReaderContentBackdrop] 的窗口级兜底：EPUB 直连模式（`readView` 被 GONE）
+     * 或正文 view 尚未布局时，用 `PixelCopy` 取 Activity 窗口的实际合成结果。
+     *
+     * ## 为什么必须有这条兜底
+     *
+     * 原实现在 `epubCoreActive` 与 `source.width/height <= 0` 两处直接 return null，
+     * 调用方 [io.legado.app.ui.book.read.config.MoreConfigDialog] 随即回退不透明实底。
+     * 用户反馈「设置弹窗完全无变化」在这两档上逐字成立——不是判定门，是取源分支。
+     * 正文是硬件加速 WebView 时软件 `View.draw` 截不到（旧注释的 TODO），但
+     * `PixelCopy.request(window, ...)` 拿的是窗口合成结果，不依赖 view 树的软件绘制。
+     *
+     * API < 26 / 窗口未布局 / 拷贝超时 / 非 SUCCESS / 模糊失败全部返回 null，
+     * 调用方仍走 [io.legado.app.lib.theme.dialogSurfaceBackground] 既有降级，
+     * 绝不会交回未模糊的清晰快照。失败落 AppLog，可在「我的-关于-日志」定位。
+     *
+     * 本函数在**调用线程同步等待**（MoreConfigDialog.onCreateView 与 Compose 弹层的
+     * remember 计算块都在主线程调用），`latch.await` 的超时就是主线程的最长冻结时间。
+     * PixelCopy 正常一帧内回调（16ms 级），50ms 已是 3 帧余量；窗口真没就绪时按时
+     * 降级回实底，比让弹窗打开动画卡 250ms 更可接受——不再给 250ms 的余量。
+     */
+    fun captureReaderWindowBackdrop(
+        targetWidth: Int,
+        targetHeight: Int,
+        blurRadius: Int
+    ): Bitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        if (blurRadius <= 0 || targetWidth <= 0 || targetHeight <= 0) return null
+        val window = window
+        val decor = window.decorView
+        val sourceWidth = decor.width
+        val sourceHeight = decor.height
+        if (sourceWidth <= 0 || sourceHeight <= 0) return null
+
+        val raw = runCatching {
+            Bitmap.createBitmap(sourceWidth, sourceHeight, Bitmap.Config.ARGB_8888)
+        }.getOrNull() ?: return null
+        val cropped = runCatching {
+            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        }.getOrNull() ?: run {
+            raw.recycle()
+            return null
+        }
+
+        val worker = HandlerThread("reader-window-backdrop").apply { start() }
+        val latch = CountDownLatch(1)
+        var copyStatus = PixelCopy.ERROR_UNKNOWN
+        var result: Bitmap? = null
+        try {
+            PixelCopy.request(
+                window,
+                Rect(0, 0, sourceWidth, sourceHeight),
+                raw,
+                { status ->
+                    copyStatus = status
+                    latch.countDown()
+                },
+                Handler(worker.looper)
+            )
+            if (!latch.await(50, TimeUnit.MILLISECONDS) ||
+                copyStatus != PixelCopy.SUCCESS
+            ) {
+                AppLog.put("readerPanelBackdrop: PixelCopy 失败(status=$copyStatus)，面板回退实底")
+                return null
+            }
+            val scale = targetWidth.toFloat() / sourceWidth
+            val sampledHeight = targetHeight / scale
+            val canvas = Canvas(cropped)
+            canvas.scale(scale, scale)
+            canvas.translate(0f, sampledHeight - sourceHeight)
+            canvas.drawBitmap(raw, 0f, 0f, null)
+            val blurred = runCatching { cropped.stackBlurSoftware(blurRadius) }.getOrNull()
+            if (blurred == null || blurred === cropped) return null
+            result = blurred
+            return blurred
+        } catch (t: Throwable) {
+            AppLog.put("readerPanelBackdrop: PixelCopy 兜底异常，面板回退实底", t)
+            return null
+        } finally {
+            worker.quitSafely()
+            raw.recycle()
+            if (result !== cropped) cropped.recycle()
+        }
     }
 
     private val tocActivity =

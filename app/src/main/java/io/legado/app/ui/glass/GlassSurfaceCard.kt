@@ -80,6 +80,7 @@ fun GlassSurfaceCard(
             contentColor = contentColor,
             cornerRadius = cornerRadius,
             insidePadding = insidePadding,
+            outline = false,
             content = content
         )
     }

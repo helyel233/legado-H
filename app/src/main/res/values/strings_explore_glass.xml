@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="explore_glass_settings_title">Global glass effect</string>
-    <string name="explore_glass_settings_summary">Material presets, fine-tuning and rendering for the glass on the top bar and Explore page</string>
+    <string name="explore_glass_settings_title">Global transparency effect</string>
+    <string name="explore_glass_settings_summary">Transparency material presets, fine-tuning and rendering for the top bar and Explore page</string>
 
     <string name="explore_glass_section_effect">Glass effect</string>
     <string name="explore_glass_section_advanced">Rendering and compatibility</string>
 
     <string name="explore_glass_effect_mode">Material style</string>
     <string name="explore_glass_effect_mode_summary">Shares the exact Solid / Glass / Frosted glass presets with the bottom bar; the sliders below fine-tune those preset values</string>
-    <string name="explore_glass_mode_none">No glass</string>
+    <string name="explore_glass_mode_none">Opaque, no glass</string>
+    <string name="explore_glass_mode_clear">Transparent, no glass</string>
     <string name="explore_glass_mode_glass">Transparent glass</string>
     <string name="explore_glass_mode_frosted">Frosted glass</string>
     <string name="explore_glass_mode_custom">Custom</string>
 
     <string name="explore_glass_level">Glass strength</string>
-    <string name="explore_glass_level_summary">Global strength shared by the Explore rows, top bar and bottom bar; the frosted style reads its own value. Choose the No glass style to turn glass off</string>
+    <string name="explore_glass_level_summary">Global strength shared by the Explore rows, top bar and bottom bar; the frosted style reads its own value. Choose the Opaque, no glass style to turn glass off</string>
 
     <string name="explore_glass_preview_title">Live preview</string>
     <string name="explore_glass_preview_stage_row">Explore row</string>
@@ -51,17 +52,20 @@
     <string name="explore_glass_restore_defaults_summary">Clears every setting on this page, including the material style and the global glass strength</string>
 
     <string-array name="explore_glass_mode_entries">
-        <item>No glass</item>
+        <item>Opaque, no glass</item>
+        <item>Transparent, no glass</item>
         <item>Transparent glass</item>
         <item>Frosted glass</item>
     </string-array>
     <string-array name="explore_glass_mode_values">
         <item>solid</item>
+        <item>clear</item>
         <item>glass</item>
         <item>frosted</item>
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
         <item>Fully opaque solid colour block in the theme background colour: no wallpaper shows through and no glass layer is drawn; glass strength, e-ink and low-memory settings do not change it</item>
+        <item>A translucent layer in the theme surface colour: content behind shows through, but with no blur, no refraction and no dispersion; glass strength, e-ink and low-memory settings do not change it</item>
         <item>Matches the bottom bar Glass style: 3 + level x 6dp light blur, 0.004 + level x 0.02 near-colourless tint, stronger dispersion and deeper refraction; on the row this means a clearer glass layer and a brighter edge highlight</item>
         <item>Matches the bottom bar Frosted glass style: 20 + level x 24dp strong blur, 0.18 + level x 0.20 milky tint, restrained dispersion and shallower refraction; on the row this means a noticeably whiter, softer scrim that barely distorts</item>
     </string-array>

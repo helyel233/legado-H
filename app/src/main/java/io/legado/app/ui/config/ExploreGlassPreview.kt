@@ -152,7 +152,9 @@ internal fun exploreGlassPreviewPipeline(
     isLowRam: Boolean,
     liquidFailed: Boolean
 ): ExploreGlassPreviewPipeline = when {
-    mode == GlassMaterialPreset.SOLID -> ExploreGlassPreviewPipeline.SOLID
+    // solid / clear 都不采样、不模糊、不折射；预览共用「无玻璃」管线标签。
+    mode == GlassMaterialPreset.SOLID || mode == GlassMaterialPreset.CLEAR ->
+        ExploreGlassPreviewPipeline.SOLID
     isEInk || isLowRam -> ExploreGlassPreviewPipeline.DISABLED
     sdkInt >= ROW_LIQUID_MIN_SDK && rowLiquidEnabled && hardwareBlurPref &&
         !liquidFailed -> ExploreGlassPreviewPipeline.LIQUID

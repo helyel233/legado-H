@@ -2,14 +2,14 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- 不再挂 <menu/> 子菜单：经典发现页的分组列表改为 ModernActionPopup 渲染
+         （与书架 ⋮ 菜单同一实现，行块带底色 + 描边），平台子菜单样式（无行底 /
+         无描边的 bg_popup_action_modern）正是「菜单选项没有背景色框」的来源。
+         点击本项由 ExploreFragment.onCompatOptionsItemSelected 拦截后弹出自绘菜单。 -->
     <item
         android:id="@+id/menu_group"
         android:title="@string/group"
         android:icon="@drawable/ic_groups"
-        app:showAsAction="always">
-
-        <menu />
-
-    </item>
+        app:showAsAction="always" />
 
 </menu>

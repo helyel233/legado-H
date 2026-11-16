@@ -20,4 +20,9 @@ fun glassSurfaceAvailable(
     isEInk: Boolean,
     isLowRam: Boolean
 ): Boolean = glassSurfaceDrawableAllowed(domain) &&
-    (mode == GlassMaterialPreset.SOLID || !(isEInk || isLowRam))
+    (
+        // solid（不透明实底）与 clear（半透明无玻璃）都不采样壁纸，
+        // 不受墨水屏 / 低内存降级影响，始终按「非玻璃表面」参与组合。
+        mode == GlassMaterialPreset.SOLID || mode == GlassMaterialPreset.CLEAR ||
+            !(isEInk || isLowRam)
+        )

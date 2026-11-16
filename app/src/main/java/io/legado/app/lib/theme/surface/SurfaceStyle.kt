@@ -43,7 +43,11 @@ object SurfaceStyles {
 
     fun dialogBlurRadius(): Int = 0
 
-    fun themePanelBorderColor(@Suppress("UNUSED_PARAMETER") context: Context): Int? = null
+    /**
+     * 对话框 / 阅读浮层 / 浮层的描边色：统一取主题包「边框线色」（跟随强调色或选色）。
+     * 之前恒返回 null 导致走 SurfaceDrawable 的弹窗一律无边框，与其他界面不一致。
+     */
+    fun themePanelBorderColor(context: Context): Int? = UiCorner.borderLineColor(context)
 
     fun themePanelImagePath(@Suppress("UNUSED_PARAMETER") context: Context): String? = null
 

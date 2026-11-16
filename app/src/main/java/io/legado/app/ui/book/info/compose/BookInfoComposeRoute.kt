@@ -17,6 +17,7 @@ import android.widget.ImageView
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -124,6 +125,7 @@ import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.book.info.BookInfoUseWebHost
 import io.legado.app.ui.book.info.BookInfoTocPhase
@@ -131,10 +133,12 @@ import io.legado.app.ui.book.info.BookInfoWebIntroDocument
 import io.legado.app.ui.book.info.BookInfoWebIntroHeightScheduler
 import io.legado.app.ui.book.info.BookInfoWebIntroLifecycle
 import io.legado.app.ui.book.info.createBookInfoMarkwon
+import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.help.GlideImageGetter
 import io.legado.app.help.TextViewTagHandler
 import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.setHtml
@@ -250,7 +254,11 @@ data class BookInfoComposeColors(
     val metricSecondaryText: Color,
     val metricHighlight: Color,
     val actionText: Color,
-    val scrim: Color
+    val scrim: Color,
+    /** 玻璃档是否给卡面让 alpha + 描边（[bookInfoComposeGlassAllowed]，只认档位）。 */
+    val glassEnabled: Boolean = false,
+    /** 玻璃描边色（glass_stroke）；非玻璃档透明，逐值等价接入前。 */
+    val glassStroke: Color = Color.Transparent
 )
 
 @Immutable
@@ -333,6 +341,16 @@ fun bookInfoComposeStyle(context: Context, coverColor: Int? = null): BookInfoCom
     }
     val primaryText = context.primaryTextColor
     val secondaryText = context.secondaryTextColor
+    // 第四轮：Compose 详情页此前从未接玻璃。与 CLASSIC 路径 / 阅读弹窗统一口径——
+    // 只认玻璃档（不含「有背景图」门），solid / 墨水屏 / 低内存时逐值回到实底。
+    val glassEnabled = bookInfoComposeGlassAllowed(
+        glassEnabled = GlassSurface.wallpaperGlassEnabled(context)
+    )
+    val glassStroke = if (bookInfoComposeGlassStroke(glassEnabled)) {
+        Color(UiCorner.borderLineColor(context))
+    } else {
+        Color.Transparent
+    }
     return BookInfoComposeStyle(
         colors = BookInfoComposeColors(
             background = Color(pageBackground),
@@ -350,7 +368,9 @@ fun bookInfoComposeStyle(context: Context, coverColor: Int? = null): BookInfoCom
             metricSecondaryText = Color(secondaryText),
             metricHighlight = Color(if (night) 0x3dffffff else 0x80ffffff),
             actionText = Color(actionText),
-            scrim = Color(scrim)
+            scrim = Color(scrim),
+            glassEnabled = glassEnabled,
+            glassStroke = glassStroke
         ),
         metrics = BookInfoComposeMetrics(
             panelRadius = context.composePanelRadius(),
@@ -778,7 +798,19 @@ private fun BookInfoMetricBox(
             .height(74.dp)
             .shadow(2.dp, shape, clip = false)
             .clip(shape)
-            .background(style.colors.metricTop.copy(alpha = 0.96f))
+            // 第四轮：Compose 详情页状态条玻璃面。alpha 让位 + 1dp 描边，非玻璃档逐值不变。
+            .background(
+                style.colors.metricTop.copy(
+                    alpha = bookInfoComposeGlassAlpha(style.colors.glassEnabled, 0.96f)
+                )
+            )
+            .then(
+                if (style.colors.glassEnabled) {
+                    Modifier.border(1.dp, style.colors.glassStroke, shape)
+                } else {
+                    Modifier
+                }
+            )
             .onGloballyPositioned { bounds = it.boundsInRoot() }
             .pointerInput(onClick, onLongPressStart, onPressEnd) {
                 detectTapGestures(
@@ -933,7 +965,19 @@ private fun BookInfoMetricPreviewCard(
         modifier = modifier
             .shadow(14.dp, shape, clip = false)
             .clip(shape)
-            .background(style.colors.surface.copy(alpha = 0.97f))
+            // 第四轮：Compose 详情页浮动卡玻璃面。alpha 让位 + 1dp 描边，非玻璃档逐值不变。
+            .background(
+                style.colors.surface.copy(
+                    alpha = bookInfoComposeGlassAlpha(style.colors.glassEnabled, 0.97f)
+                )
+            )
+            .then(
+                if (style.colors.glassEnabled) {
+                    Modifier.border(1.dp, style.colors.glassStroke, shape)
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Column(
             modifier = Modifier

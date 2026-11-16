@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -25,6 +26,7 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.explore.ExploreShowActivity
+import io.legado.app.ui.glass.applyWallpaperGlassBackground
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.utils.applyMainBottomBarPadding
@@ -84,6 +86,7 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
             tabSource.setSelectedTabIndicatorColor(accentColor)
             tabSource.setSelectedTabIndicatorHeight(2.dpToPx())
             tabSource.setTabTextColors(secondaryTextColor, accentColor)
+            applySourceTabGlass()
 
             viewPagerSource.adapter = sourcePagerAdapter
             viewPagerSource.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -187,6 +190,20 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
         if (isAdded && view != null) {
             adapter.refreshVisibleCardSurfaces(binding.rvModules)
             sourcePagerAdapter.refreshCardSurfaces()
+            applySourceTabGlass()
+        }
+    }
+
+    /**
+     * 分源书源 Tab 与排行榜卡走同一条壁纸域管线：此前 TabLayout 没有任何背景，
+     * 在壁纸页上表现为「书源行纯透明、下面的榜单卡却是实底/玻璃」，观感割裂。
+     * 回退面沿用 12dp 主题卡 drawable，与首页其他小卡一致。
+     */
+    private fun applySourceTabGlass() {
+        binding.tabSource.applyWallpaperGlassBackground(
+            cornerRadiusPx = 12.dpToPx().toFloat()
+        ) {
+            ContextCompat.getDrawable(requireContext(), R.drawable.bg_homepage_card_12)
         }
     }
 

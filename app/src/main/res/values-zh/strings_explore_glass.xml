@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="explore_glass_settings_title">全局毛玻璃效果</string>
-    <string name="explore_glass_settings_summary">调整顶栏与发现页毛玻璃的材质预设、微调与渲染方式</string>
+    <string name="explore_glass_settings_title">全局透明效果</string>
+    <string name="explore_glass_settings_summary">调整顶栏与发现页的透明材质预设、微调与渲染方式</string>
 
     <string name="explore_glass_section_effect">玻璃效果</string>
     <string name="explore_glass_section_advanced">渲染与兼容</string>
 
     <string name="explore_glass_effect_mode">材质样式</string>
     <string name="explore_glass_effect_mode_summary">与底栏「常规 / 玻璃 / 磨砂玻璃」共用同一套预设参数；下方滑杆仅在该档原值上微调</string>
-    <string name="explore_glass_mode_none">无玻璃</string>
+    <string name="explore_glass_mode_none">不透明无玻璃</string>
+    <string name="explore_glass_mode_clear">透明无玻璃</string>
     <string name="explore_glass_mode_glass">透明玻璃</string>
     <string name="explore_glass_mode_frosted">磨砂玻璃</string>
     <string name="explore_glass_mode_custom">自定义</string>
 
     <string name="explore_glass_level">玻璃强度</string>
-    <string name="explore_glass_level_summary">发现页书源名行、顶栏与底栏共用的全局强度；磨砂档读取自己的强度值。需要关闭玻璃请选「无玻璃」档</string>
+    <string name="explore_glass_level_summary">发现页书源名行、顶栏与底栏共用的全局强度；磨砂档读取自己的强度值。需要关闭玻璃请选「不透明无玻璃」档</string>
 
     <string name="explore_glass_preview_title">实时预览</string>
     <string name="explore_glass_preview_stage_row">发现页书源名行</string>
@@ -51,17 +52,20 @@
     <string name="explore_glass_restore_defaults_summary">清除本页全部设置，包括材质档位与全局玻璃强度</string>
 
     <string-array name="explore_glass_mode_entries">
-        <item>无玻璃</item>
+        <item>不透明无玻璃</item>
+        <item>透明无玻璃</item>
         <item>透明玻璃</item>
         <item>磨砂玻璃</item>
     </string-array>
     <string-array name="explore_glass_mode_values">
         <item>solid</item>
+        <item>clear</item>
         <item>glass</item>
         <item>frosted</item>
     </string-array>
     <string-array name="explore_glass_mode_descriptions">
         <item>贴主题底色的完全不透明纯色块：不透壁纸、不绘制玻璃层；玻璃强度、墨水屏与低内存设置都不改变它</item>
+        <item>取主题包表面色的半透明层：能透出背后内容，但不模糊、不折射、无色散；玻璃强度、墨水屏与低内存设置都不改变它</item>
         <item>与底栏「玻璃」一致：3 + 强度 × 6dp 轻模糊、0.004 + 强度 × 0.02 近乎无色的着色，色散更强、折射更深；在书源名行上表现为更通透的玻璃层、更亮的边缘高光</item>
         <item>与底栏「磨砂玻璃」一致：20 + 强度 × 24dp 强模糊、0.18 + 强度 × 0.20 奶白着色，色散收敛、折射更浅；在书源名行上表现为明显更白、更柔和且几乎不扭曲的磨砂遮盖</item>
     </string-array>

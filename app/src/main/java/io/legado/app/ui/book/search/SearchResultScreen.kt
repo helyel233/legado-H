@@ -22,6 +22,7 @@ import androidx.lifecycle.Lifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItemStyle
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.ComposeLazyListFastScroller
@@ -54,6 +55,10 @@ fun SearchResultScreen(
     LegadoComposeTheme {
         val renderConfig = rememberBookshelfListRenderConfig()
         val rounded = AppConfig.bookshelfListItemStyle == BookshelfListItemStyle.RoundedCard
+        // 玻璃签名按页算一次、逐行传入：本页根布局无自绘背景（activity_book_search 的
+        // 根 ConstraintLayout），列表卡片背后就是壁纸，属标准壁纸域。
+        // 书架页 / 发现页调用同一个卡片骨架但不传这个签名，因此逐值保持原实底卡面。
+        val glassSignature = rememberGlassConfigSignature()
         val listState = rememberLazyListState()
         var previewState by remember { mutableStateOf<SearchBookPreviewState?>(null) }
 
@@ -107,6 +112,7 @@ fun SearchResultScreen(
                         renderConfig = renderConfig,
                         lifecycle = lifecycle,
                         showOriginCount = true,
+                        glassSignature = glassSignature,
                         onClick = { onBookClick(book) },
                         onPreview = { bounds ->
                             previewState = SearchBookPreviewState(book, bounds)

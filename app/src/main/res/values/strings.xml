@@ -2206,7 +2206,7 @@ Note: custom buttons are meant for reading and helper actions; modifying chapter
     <string name="delete_success">Deleted</string>
     <string name="theme_manage_title">Theme packages</string>
     <string name="navigation_bar_manage">Bottom bar manager</string>
-    <string name="navigation_bar_manage_summary">Manage bottom bar themes, icons, glass style, and opacity.</string>
+    <string name="navigation_bar_manage_summary">Manage bottom bar themes, icons and glass style; transparency is set globally in Global transparency effect.</string>
     <string name="navigation_bar_package_summary">Tap a bottom bar theme to apply, edit, export, or sync.</string>
     <string name="navigation_bar_package_empty">Only the built-in bottom bar theme is available.</string>
     <string name="navigation_bar_edit">Bottom bar theme</string>
@@ -2572,7 +2572,8 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="cache_manage_batch_upload_queued">Queued %1$d upload task(s)</string>
     <string name="theme_image_panel_background">Panel background</string>
     <string name="theme_image_panel_background_mode">Panel image mode</string>
-    <string name="theme_panel_border_color">Panel border color</string>
+    <string name="theme_panel_border_color">Border line color</string>
+    <string name="theme_border_follow_accent">Follow accent color</string>
     <string name="theme_panel_border_alpha">Border opacity</string>
     <string name="top_bar_border_color">Top bar border color</string>
     <string name="select_color">Select color</string>

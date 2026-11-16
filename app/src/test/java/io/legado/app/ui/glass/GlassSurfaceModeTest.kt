@@ -82,6 +82,15 @@ class GlassSurfaceModeTest {
         )
     }
 
+    /** 透明无玻璃档同样不采样壁纸：顶栏判否，宿主保持原透明背景。 */
+    @Test
+    fun `clear mode disables wallpaper glass just like solid`() {
+        putMode(GlassMaterialPreset.CLEAR)
+
+        assertEquals(GlassMaterialPreset.CLEAR, resolvedExploreGlassMode())
+        assertFalse("透明无玻璃档不采样壁纸，顶栏必须判否", GlassSurface.wallpaperGlassEnabled(context))
+    }
+
     /** 阳性对照：同一设备、同一页面，玻璃档下顶栏判定必须为是（否则自动 opt-in 永不起效）。 */
     @Test
     fun `glass modes keep wallpaper glass available for the title bar`() {

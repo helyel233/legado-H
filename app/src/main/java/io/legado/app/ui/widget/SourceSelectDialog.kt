@@ -249,7 +249,12 @@ private fun <T> SourceSelectContent(
                             selected = itemKey(item) == selectedKey,
                             palette = palette,
                             onClick = { onSelect(item) },
-                            minHeight = 46.dp
+                            minHeight = 46.dp,
+                            // 第四轮根因：用户截图「筛选发现源」（SourceSelectDialog）里的书源
+                            // 选项没有背景框。前几轮给 ModernActionPopup 加了 outlined，但本
+                            // 对话框是独立实现（screen_find 作为搜索框 label），从没传过它。
+                            // 弹出选择项一律自带可辨边界，不能依赖「这一档恰好有玻璃」。
+                            outlined = true
                         )
                     }
                 }

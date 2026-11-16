@@ -101,6 +101,7 @@ private const val CONTROL_PRESS_SCRIM_ALPHA = 0.10f
 internal const val EXPLORE_GLASS_MODE_SOLID = GlassMaterialPreset.SOLID
 internal const val EXPLORE_GLASS_MODE_GLASS = GlassMaterialPreset.GLASS
 internal const val EXPLORE_GLASS_MODE_FROSTED = GlassMaterialPreset.FROSTED
+internal const val EXPLORE_GLASS_MODE_CLEAR = GlassMaterialPreset.CLEAR
 internal const val EXPLORE_GLASS_MODE_DEFAULT = EXPLORE_GLASS_MODE_FROSTED
 private const val LEGACY_MODE_NONE = "none"
 
@@ -152,6 +153,7 @@ internal data class ExploreGlassConfig(
 internal object ExploreGlassConfigKeys {
     val legacyEnabled = PreferKey.exploreGlassEnabled
     val effectMode = PreferKey.exploreGlassEffectMode
+    val presetMatched = PreferKey.glassPresetMatched
     val levelDay = PreferKey.themeExploreGlassBlur
     val levelNight = PreferKey.themeExploreGlassBlurN
     val blurScale = PreferKey.exploreGlassBlurScale
@@ -166,7 +168,7 @@ internal object ExploreGlassConfigKeys {
 
     /** 本设置页写入 /「恢复默认」清除的键（含旧总开关、日夜间强度两键与描边色）。 */
     val settingKeys: Set<String> = setOf(
-        legacyEnabled, effectMode,
+        legacyEnabled, effectMode, presetMatched,
         levelDay, levelNight,
         blurScale, shellScale, tintScale, strokeScale,
         strokeColor,
@@ -643,9 +645,27 @@ object ExploreGlassBackdrop {
         }
     }
 
-    /** 全局描边色（ARGB，未设置 / 脏值为 null = 不描边）。 */
-    fun glassStrokeColor(context: Context): Int? =
-        resolveGlassStrokeColor(context.getPrefString(PreferKey.glassStrokeColor))
+    /**
+     * 透明无玻璃档的表面壳：主题包底色 + [GlassMaterialPreset.CLEAR_SURFACE_ALPHA] 半透明。
+     * 只有圆角填充与可选描边，没有模糊 / 折射 / 色散 / 白色着色——「只透明」的落点。
+     * 与 solid 壳同为 GradientDrawable 薄映射，差别只在填充色的 alpha。
+     */
+    private fun clearShellDrawable(
+        context: Context,
+        cornerRadiusPx: Float = context.resources.getDimension(R.dimen.ui_panel_radius)
+    ): GradientDrawable = GlassMaterialPreset.createSolidShellDrawable(
+        fillColor = GlassMaterialPreset.clearSurfaceColor(ThemeStore.bottomBackground(context)),
+        borderColor = glassStrokeColor(context),
+        cornerRadiusPx = cornerRadiusPx,
+        oval = false,
+        strokeWidthPx = 1.dpToPx()
+    )
+
+    /**
+     * 描边色：统一取主题包「边框线色」（[UiCorner.borderLineColor]，跟随强调色或选色）。
+     * 这样玻璃行 / 壳层 / 底栏描边与其他卡片 / 弹窗 / 按钮共用同一份取色口径。
+     */
+    fun glassStrokeColor(context: Context): Int? = UiCorner.borderLineColor(context)
 
     /**
      * 底栏 / 面板玻璃背景（选择模式底栏等与主底栏同语义的表面）。
@@ -767,6 +787,12 @@ object ExploreGlassBackdrop {
         if (config.mode == EXPLORE_GLASS_MODE_SOLID) {
             GlassPositionTracker.detach(host)
             return solidShellDrawable(context, cornerRadiusPx)
+        }
+        // 透明无玻璃：只把表面变成半透明主题色，透出背后但不模糊、不折射、无色散。
+        // 与 solid 同在设备降级判定之前——它同样不采样壁纸，墨水屏 / 低内存也应一致。
+        if (config.mode == EXPLORE_GLASS_MODE_CLEAR) {
+            GlassPositionTracker.detach(host)
+            return clearShellDrawable(context, cornerRadiusPx)
         }
         // 墨水屏 / 低内存设备自动降级为关闭，牺牲少量视觉换取滚动流畅（架构 T03 验收项）
         if (AppConfig.isEInkMode || isLowRamDevice(context)) {

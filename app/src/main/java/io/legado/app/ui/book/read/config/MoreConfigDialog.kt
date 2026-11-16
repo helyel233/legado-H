@@ -18,7 +18,6 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.model.ReadBook
@@ -31,7 +30,9 @@ import io.legado.app.ui.config.compose.SettingSectionSpec
 import io.legado.app.ui.config.compose.SettingSwitchSpec
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.glass.GlassLiquidBackdropDrawable
 import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.glassFrostSurfaceRgb
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
@@ -39,8 +40,6 @@ import io.legado.app.ui.widget.compose.showComposeNumberPickerDialog
 import io.legado.app.lib.theme.dialogSurfaceBackground
 import io.legado.app.lib.theme.dialogSurfaceColor
 import io.legado.app.lib.theme.surface.SurfaceCorners
-import io.legado.app.lib.theme.surface.SurfaceDrawable
-import io.legado.app.lib.theme.surface.SurfaceStyle
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.dpToPx
@@ -48,31 +47,39 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.removePref
 
 /**
- * 本面板该不该铺「当前读书界面」的磨砂。**外层面板与内层分区卡必须同源**，所以抽成文件级函数。
+ * 阅读设置面板该不该磨砂（纯函数，便于 JVM 单测锁表）。
  *
- * 四条否决与全 App 玻璃的降级矩阵对齐：
- * - 无可用背景图：`ThemeConfig.hasUsableBgImage`（读 `bgImage` / `bgImageN` 偏好并校验文件，
- *   也就是 `rememberHasUsableBgImage` 与 `BaseActivity.showsWallpaperBehindContent` 用的同一个
- *   判定）→ 用户此刻整个 UI 都没有壁纸/玻璃语义，本面板也不该是全场唯一的磨砂面；
- * - solid 档 / 墨水屏 / 低内存：`GlassSurface.wallpaperGlassEnabled`。
+ * 只认 [glassEnabled]——即 [GlassSurface.wallpaperGlassEnabled]（solid 档 / 墨水屏 / 低内存）。
  *
- * 任一条命中都回 `dialogSurfaceBackground` 实底，逐值回到改动前。
+ * ## 为什么删掉 `ThemeConfig.hasUsableBgImage` 这道门（第四轮根因）
  *
- * **不能改用 `GlassSurface.pageGlassAllowed`**：它含 `showsWallpaperBehindContent`，而阅读页
- * 正是被声明为 false 的那一类——本面板的底图是正文而不是壁纸，判定必须独立成立。
- * 同页弹层（`ModernActionPopup`）走 AUTO 落内容域是对的，因为它是同窗口覆盖视图，
- * 与本面板的独立 Dialog 窗口不是一回事。
+ * 本面板磨的是**当前页面正文**（见 [MoreConfigDialog.readerContentBackdrop]，
+ * `ReadBookActivity.captureReaderContentBackdrop` 截的是屏幕上的书页），根本不是 App 背景图 /
+ * 壁纸。前几轮却把「用户配置了 `bgImage` / `bgImageN` 偏好且文件可读」当成前置门：
+ *
+ * - 绝大多数用户用的是**系统壁纸 / 主题纯色**，从不写这两个偏好键 → 判定恒 false；
+ * - 于是 `readerPanelBackground()` 在第一步就 `return dialogSurfaceBackground` 实底，
+ *   前几轮加在那之后的 `SurfaceDrawable` 磨砂与 1dp 玻璃描边**永远执行不到**；
+ * - 用户反馈正是「设置弹窗未接入玻璃」。这道与采样源无关的门就是直接原因。
+ *
+ * 唯一生效的搜书页走 `GlassPanel(requireWallpaperHost = false)`——它不看任何背景图偏好。
+ * 本函数据此统一口径：玻璃档开就磨砂。截图 / 模糊失败时 [readerContentBackdrop] 返回 null，
+ * 调用方仍回落实底（事实位 `panelSurfaceFrosted = false`），降级链完整。
  */
+internal fun readerPanelFrostedAllowed(glassEnabled: Boolean): Boolean = glassEnabled
+
+/** 见 [readerPanelFrostedAllowed]：磨砂判定只看玻璃档，与背景图偏好无关。 */
 private fun isReaderPanelFrosted(context: Context): Boolean =
-    ThemeConfig.hasUsableBgImage(context) && GlassSurface.wallpaperGlassEnabled(context)
+    readerPanelFrostedAllowed(glassEnabled = GlassSurface.wallpaperGlassEnabled(context))
 
 class MoreConfigDialog : BasePrefDialogFragment() {
     private val readPreferTag = "readPreferenceFragment"
 
     /**
      * 本次面板截出的正文底图（截图 + 软件模糊路径的唯一产物）。持有引用唯一目的是在
-     * `onDestroyView` 里显式回收——`SurfaceDrawable` 内部有 `isRecycled` 守卫
-     * （`SurfaceDrawable.kt:46`），所以即便退出动画期间位图已被回收也只是不画底图，不会崩。
+     * `onDestroyView` 里显式回收——`GlassFrostDrawable` 内部有 `isRecycled` 守卫
+     * （`GlassFrostDrawable.draw` 的 `takeUnless(Bitmap::isRecycled)`），所以即便退出动画
+     * 期间位图已被回收也只是不画底图，不会崩。
      */
     private var panelBackdropBitmap: Bitmap? = null
 
@@ -133,7 +140,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
 
     /**
      * 面板表面：**当前读书界面**的磨砂，唯一实现是「打开瞬间截一张正文 → 降采样 →
-     * 软件模糊 → 当 [SurfaceDrawable] 的 backdrop」。降级时逐值回落
+     * 软件模糊 → 当 [GlassFrostDrawable] 的 backdrop」。降级时逐值回落
      * [dialogSurfaceBackground]（同一份 drawable、同一个颜色、同一个圆角）。
      *
      * 为什么不再用系统级背景模糊（`FLAG_BLUR_BEHIND` + `setBackgroundBlurRadius`）：
@@ -152,6 +159,19 @@ class MoreConfigDialog : BasePrefDialogFragment() {
      */
     private fun readerPanelBackground(): Drawable {
         val context = requireContext()
+        // 透明无玻璃档：面板取主题包表面色的半透明层，透出背后正文但不模糊、不折射。
+        // 提前到 isReaderPanelFrosted 之前——后者对 clear 判否，会误落不透明实底。
+        if (resolvedExploreGlassMode() == GlassMaterialPreset.CLEAR) {
+            panelSurfaceFrosted = true
+            panelBackdropBitmap = null
+            return GlassMaterialPreset.createSolidShellDrawable(
+                fillColor = GlassMaterialPreset.clearSurfaceColor(readerPanelTintColor(context)),
+                borderColor = UiCorner.borderLineColor(context),
+                cornerRadiusPx = UiCorner.panelRadius(context),
+                oval = false,
+                strokeWidthPx = 1.dpToPx()
+            )
+        }
         // 降级口径与全 App 玻璃一致：无背景图 / solid 档 / 墨水屏 / 低内存 → 今天的实底，
         // 逐值回到改动前（同一份 dialogSurfaceBackground）。
         if (!isReaderPanelFrosted(context)) {
@@ -169,13 +189,34 @@ class MoreConfigDialog : BasePrefDialogFragment() {
         }
         panelBackdropBitmap = backdrop
         panelSurfaceFrosted = true
-        return SurfaceDrawable(
+        // 1dp 玻璃描边（glass_stroke，与全 App 其它玻璃面同一份资源色）：
+        // 第二轮真机取证发现面板其实已经铺上了 SurfaceDrawable（面板基色 ≈ 0.74 着色
+        // 混合阅读底色的结果，而不是回退档的纯 dialog_surface），但**没有描边**——
+        // 全 App 其它玻璃面都靠这 1dp 边界把自己从「一块纯色面」里标出来，本面板
+        // 缺了它之后，深色阅读底 + 0.74 着色的磨砂在观感上与实底无法区分，
+        // 用户反馈「弹窗未接玻璃」。描边不参与对比度计算（只描边界不铺面），
+        // 因此不动 [PANEL_TINT_ALPHA] 的对比度推导。
+        // 第五轮：底图糊了但仍看不出玻璃的根因是「大片纯色正文 + 0.74 着色」把模糊
+        // 压成一块近似纯色。这里在原有 backdrop + tint之上叠壳层渐变与上缘高光 /
+        // 下缘折射暗带，边缘只占 1~2dp，不覆盖列表文字，因此不改动 tint 的对比度推导。
+        val density = resources.displayMetrics.density
+        val params = GlassMaterialPreset.current(resolvedExploreGlassMode())
+        // 与全 App 其它玻璃面（底栏 / 目录页 / 书架）走同一颗 AGSL 着色器：
+        // 真折射 + 色散 + GPU 高斯，而不是第五轮那套手绘直线的假玻璃。
+        return GlassLiquidBackdropDrawable(
+            context = context,
             backdrop = backdrop,
-            style = SurfaceStyle(
-                tintColor = tint,
-                cornerRadiusPx = radius,
-                corners = SurfaceCorners.ALL
-            )
+            material = params,
+            density = density,
+            cornerRadiusPx = radius,
+            corners = SurfaceCorners.ALL,
+            strokeColor = UiCorner.borderLineColor(context),
+            strokeWidthPx = 1.dpToPx().toFloat(),
+            tintColor = tint,
+            surfaceRgb = glassFrostSurfaceRgb(
+                lightBase = ColorUtils.isColorLight(readerPanelTintColor(context))
+            ),
+            shell = params.shell
         )
     }
 
@@ -230,7 +271,14 @@ class MoreConfigDialog : BasePrefDialogFragment() {
             GlassMaterialPreset.current(resolvedExploreGlassMode()).blurDp,
             metrics.density
         )
-        return (activity as? ReadBookActivity)?.captureReaderContentBackdrop(
+        val host = activity as? ReadBookActivity ?: return null
+        // 原生页：View.draw 软件抓正文即可；EPUB 直连 / 正文尚未布局时它 return null，
+        // 走 PixelCopy 窗口合成兜底，避免用户看到「设置弹窗完全无变化」。
+        return host.captureReaderContentBackdrop(
+            targetWidth = targetWidth,
+            targetHeight = targetHeight,
+            blurRadius = blurRadius
+        ) ?: host.captureReaderWindowBackdrop(
             targetWidth = targetWidth,
             targetHeight = targetHeight,
             blurRadius = blurRadius

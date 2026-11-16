@@ -71,6 +71,12 @@ object GlassSurface {
     )
 
     fun dialogBackground(host: View, cornerRadiusPx: Float): Drawable? {
+        // CLEAR 不采样壁纸，只铺主题包底色的半透明壳；即使宿主页面不露壁纸（阅读 /
+        // 详情等内容域），也要让对话框 / 弹出菜单与底栏、阅读弹窗同一质感，
+        // 不能因为 pageGlassAllowed 的壁纸前提而落回不透明实底。
+        if (resolvedExploreGlassMode() == GlassMaterialPreset.CLEAR) {
+            return ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned = true)
+        }
         if (!dialogGlassAllowed(host.context)) return null
         return wallpaperDrawable(host, GlassSamplingDomain.WALLPAPER) {
             ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned = true)
@@ -83,7 +89,8 @@ object GlassSurface {
      * 三条否决条件：
      * - 宿主页面内容背后不是壁纸（阅读页、书籍详情封面、视频、音频等
      *   `showsWallpaperBehindContent = false` 的页面）：采样到用户看不见的壁纸；
-     * - 无玻璃档：此时对话框保持主题实底表面，而不是换成底栏色的实底壳；
+     * - 无玻璃档（solid）：对话框保持主题实底表面，而不是换成底栏色的实底壳；
+     *   透明无玻璃档（clear）不在此列——它不采样壁纸，直接铺主题包取色的半透明壳；
      * - 墨水屏 / 低内存：由 [isAvailable] 的设备判定统一否决。
      */
     fun dialogGlassAllowed(context: Context): Boolean = wallpaperHostAllowed(context)
@@ -108,9 +115,11 @@ object GlassSurface {
      * 与顶栏原背景（透明档 → 透明）不同观感。顶栏降级回退要回到「init 时的原背景」，
      * 就必须在取 drawable 之前先问这里，而不是拿回一个实底壳贴上去。
      */
-    fun wallpaperGlassEnabled(context: Context): Boolean =
-        resolvedExploreGlassMode() != GlassMaterialPreset.SOLID &&
-            isAvailable(GlassSamplingDomain.WALLPAPER, context)
+    fun wallpaperGlassEnabled(context: Context): Boolean {
+        val mode = resolvedExploreGlassMode()
+        if (mode == GlassMaterialPreset.SOLID || mode == GlassMaterialPreset.CLEAR) return false
+        return isAvailable(GlassSamplingDomain.WALLPAPER, context)
+    }
 
     /**
      * 解绑 [host] 上的玻璃位置跟踪（换回原背景时调）。
@@ -127,9 +136,11 @@ object GlassSurface {
      * 页面内卡片 / 列表行的背景：壁纸域玻璃优先，不可用时回退调用方给的实底 drawable。
      *
      * 抽成单一入口的原因是「先判 [pageGlassAllowed] 再取 drawable」这两步**不能拆**：
-     * [panelBackground] 在无玻璃档返回的是底栏色的不透明实底壳，直接拿来铺页面卡片会
+     * [panelBackground] 在 solid 档返回的是底栏色的不透明实底壳，直接拿来铺页面卡片会
      * 变成「主题卡片 → 底栏色」的观感跳变；必须先让 [pageGlassAllowed] 判否、走调用方
-     * 的主题实底回退。solid 档 / 墨水屏 / 低内存 / 无背景图的页面因此逐值保持原样。
+     * 的主题实底回退。clear 档则相反：它要的就是主题包取色的半透明壳，必须让判定放通，
+     * 否则真机上是「卡片没有透明效果」。solid 档 / 墨水屏 / 低内存 / 无背景图的页面
+     * 仍逐值保持原样。
      *
      * **回退即解绑**：判否时先 [releaseBackgroundTracking]。这条不能留给调用方各写一遍
      * ——「关于页卡 / 阅读记录面板 / 首页榜单卡」这些宿主是常驻 View，切 solid 或关背景图
@@ -154,7 +165,11 @@ object GlassSurface {
     }
 
     private fun wallpaperHostAllowed(context: Context): Boolean {
-        if (resolvedExploreGlassMode() == GlassMaterialPreset.SOLID) return false
+        val mode = resolvedExploreGlassMode()
+        if (mode == GlassMaterialPreset.SOLID) return false
+        // CLEAR 档虽然不采样壁纸，但页面卡片 / 弹出菜单仍要走同一条管线：
+        // glassDrawable() 在其入口早退为「主题包取色的半透明无玻璃壳」。
+        // 这里若判否，调用方会铺回 solid 实底，真机表现就是「卡片 / 菜单没有透明效果」。
         val host = context.hostBaseActivity() ?: return false
         if (!host.showsWallpaperBehindContent) return false
         return isAvailable(GlassSamplingDomain.WALLPAPER, context)

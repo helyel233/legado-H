@@ -50,7 +50,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -73,6 +75,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.Text
 import io.legado.app.R
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
 import kotlinx.coroutines.delay
@@ -155,11 +158,34 @@ fun LegadoMiuixCard(
     contentColor: Color,
     cornerRadius: Dp,
     insidePadding: PaddingValues = PaddingValues(0.dp),
+    /**
+     * 是否画主题包「边框线色」的 1dp 描边。默认开，覆盖所有卡片；玻璃面板内部那层
+     * （[io.legado.app.ui.glass.GlassSurfaceCard] 的透明卡）由玻璃壳自己画边，传 false
+     * 避免双重描边。
+     */
+    outline: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val context = LocalContext.current
+    val borderColor = if (outline) Color(UiCorner.borderLineColor(context)) else Color.Transparent
+    val borderModifier = if (outline) {
+        modifier.drawWithContent {
+            drawContent()
+            val w = 1.dp.toPx()
+            drawRoundRect(
+                color = borderColor,
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                    cornerRadius.toPx(), cornerRadius.toPx()
+                ),
+                style = Stroke(width = w)
+            )
+        }
+    } else {
+        modifier
+    }
     if (canUseRealMiuix()) {
         MiuixCard(
-            modifier = modifier,
+            modifier = borderModifier,
             cornerRadius = cornerRadius,
             insideMargin = insidePadding,
             colors = MiuixCardDefaults.defaultColors(
@@ -171,7 +197,7 @@ fun LegadoMiuixCard(
         return
     }
     Surface(
-        modifier = modifier,
+        modifier = borderModifier,
         shape = RoundedCornerShape(cornerRadius),
         color = color,
         contentColor = contentColor,

@@ -4,15 +4,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="AlwaysShowAction">
 
+    <!-- 不再挂 <menu/> 子菜单：收藏页的分组列表改为 ModernActionPopup 渲染
+         （与书架 ⋮ 菜单同一实现，行块带底色 + 描边）。点击本项由
+         RssFavoritesActivity.onCompatOptionsItemSelected 拦截后弹出自绘菜单。 -->
     <item
         android:id="@+id/menu_group"
         android:title="@string/group"
         android:icon="@drawable/ic_groups"
-        app:showAsAction="always">
-
-        <menu />
-
-    </item>
+        app:showAsAction="always" />
     <item
         android:id="@+id/menu_del_group"
         android:title="@string/delete_select_group"

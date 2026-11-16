@@ -1052,19 +1052,23 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         row.tvTitle.text = getString(R.string.theme_panel_border_color)
         val colorText = normalizeOptionalColor(pendingPanelBorderColor)
         pendingPanelBorderColor = colorText
+        // null = 跟随强调色（渲染时由 UiCorner 取 ThemeStore.accentColor）；非 null HEX = 选择颜色。
         row.viewSwatch.visibility = if (colorText == null) View.INVISIBLE else View.VISIBLE
-        row.tvValue.text = colorText?.uppercase(Locale.ROOT) ?: getString(R.string.disable)
+        row.tvValue.text = colorText?.uppercase(Locale.ROOT) ?: getString(R.string.theme_border_follow_accent)
         colorText?.toColorInt()?.let { updateSwatch(row, it) }
         row.root.setOnClickListener {
             selector(
                 getString(R.string.theme_panel_border_color),
-                listOf(getString(R.string.disable), getString(R.string.select_color))
+                listOf(getString(R.string.theme_border_follow_accent), getString(R.string.select_color))
             ) { _, index ->
                 if (index == 0) {
                     pendingPanelBorderColor = null
+                    // 跟随强调色时同时清掉旧版全局「描边颜色」覆盖，否则统一取色器会
+                    // 优先命中那个遗留值，「跟随强调色」就名不副实了。
+                    removePref(PreferKey.glassStrokeColor)
                     setupPanelBorderColorRow(row)
                 } else {
-                    val currentColor = normalizeOptionalColor(pendingPanelBorderColor)
+                    val currentColor = normalizeOptionalColor(pendingPanelBorderColor) ?: "#${accentColor.hexString}"
                     ColorPickerDialog.newBuilder()
                         .setColor(colorIntOrDefault(currentColor, accentColor))
                         .setShowAlphaSlider(false)

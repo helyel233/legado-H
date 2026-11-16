@@ -1778,7 +1778,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 bottomNavigationIndicatorContainer.alpha = 1f
                 bottomNavigationIndicatorContainer.scaleX = 1f
                 bottomNavigationIndicatorContainer.scaleY = 1f
-                bottomNavigationShellOverlay.background = createStandardBottomShellDrawable()
+                bottomNavigationShellOverlay.background = if (effectMode == GlassMaterialPreset.CLEAR) {
+                    // 「透明无玻璃」在标准底栏下同样只铺主题包底色的半透明壳：
+                    // 不能沿用图标包 opacity 的旧半透明公式，否则与其他界面的 CLEAR 表面不同色。
+                    createClearBottomShellDrawable(cornerRadius = 0f, oval = false)
+                } else {
+                    createStandardBottomShellDrawable()
+                }
                 renderStandardBottomWallpaper()
                 bottomNavigationView.setBackgroundColor(Color.TRANSPARENT)
                 syncSearchButtonTint()
@@ -1788,7 +1794,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 return
             }
             bottomNavigationWallpaper.isVisible = false
-            if (effectMode == "solid") {
+            val clearMode = effectMode == GlassMaterialPreset.CLEAR
+            if (effectMode == "solid" || clearMode) {
+                // 两者都不绑定 LiquidGlass：CLEAR 若继续走玻璃分支，StableLiquidGlassView
+                // 会把 0 折射/0 模糊钳回非零下限，且壳层 alpha=0 →「纯透明 + 折射、无主题色」。
                 bottomNavigationGlassView.visibility = android.view.View.GONE
                 bottomNavigationIndicatorGlassView.visibility = android.view.View.GONE
                 searchButtonGlassView.visibility = android.view.View.GONE
@@ -1798,21 +1807,32 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 bottomNavigationIndicatorContainer.alpha = 1f
                 bottomNavigationIndicatorContainer.scaleX = 1f
                 bottomNavigationIndicatorContainer.scaleY = 1f
-                bottomNavigationShellOverlay.background = createSolidBottomShellDrawable(
-                    cornerRadius = bottomPillRadius,
-                    oval = false,
-                    forceOpaque = true
-                )
-                searchButtonShellOverlay.background = createSolidBottomShellDrawable(
-                    cornerRadius = searchPillRadius,
-                    oval = true,
-                    forceOpaque = true
-                )
+                bottomNavigationShellOverlay.background = if (clearMode) {
+                    createClearBottomShellDrawable(cornerRadius = bottomPillRadius, oval = false)
+                } else {
+                    createSolidBottomShellDrawable(
+                        cornerRadius = bottomPillRadius,
+                        oval = false,
+                        forceOpaque = true
+                    )
+                }
+                searchButtonShellOverlay.background = if (clearMode) {
+                    createClearBottomShellDrawable(cornerRadius = searchPillRadius, oval = true)
+                } else {
+                    createSolidBottomShellDrawable(
+                        cornerRadius = searchPillRadius,
+                        oval = true,
+                        forceOpaque = true
+                    )
+                }
                 bottomNavigationView.setBackgroundColor(Color.TRANSPARENT)
                 if (!standardMode) searchButton.setBackgroundColor(Color.TRANSPARENT)
                 syncSearchButtonTint()
-                bottomNavigationIndicatorOverlay.background =
+                bottomNavigationIndicatorOverlay.background = if (clearMode) {
+                    createClearBottomIndicatorDrawable(indicatorPillRadius)
+                } else {
                     createSolidBottomIndicatorDrawable(indicatorPillRadius)
+                }
                 updateBottomNavigationIndicator(animate = false)
                 return
             }
@@ -2005,6 +2025,29 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             strokeWidthPx = 1.dpToPx()
         )
     }
+
+    /**
+     * 「透明无玻璃」档的底栏表面：主题包底栏色 + 固定半透明 alpha，零模糊 / 零折射。
+     * 与发现页 `clearShellDrawable()`、阅读弹窗的 CLEAR 分支取同一份颜色与 alpha，
+     * 避免底栏沦为纯透明或沿用一个只有底栏才有的透明度。
+     */
+    private fun createClearBottomShellDrawable(
+        cornerRadius: Float,
+        oval: Boolean
+    ): GradientDrawable = GlassMaterialPreset.createSolidShellDrawable(
+        fillColor = GlassMaterialPreset.clearSurfaceColor(bottomBackground),
+        borderColor = bottomBarBorderColor(),
+        cornerRadiusPx = cornerRadius,
+        oval = oval,
+        strokeWidthPx = 1.dpToPx()
+    )
+
+    private fun createClearBottomIndicatorDrawable(cornerRadius: Float): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            this.cornerRadius = cornerRadius
+            setColor(GlassMaterialPreset.clearSurfaceColor(primaryColor))
+        }
 
     private fun createStandardBottomShellDrawable(): Drawable {
         val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
@@ -2242,13 +2285,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     /**
-     * 玻璃描边统一色：自 1.25.8 起收归全局设置 [PreferKey.glassStrokeColor]，
-     * 不再读底栏包 borderColor / borderAlpha（字段已废弃删除，旧包 JSON 由 Gson
-     * 静默忽略）。null = 未设置 → 实底壳层不描边、液态壳层回退 shell.stroke。
+     * 描边统一色：取主题包「边框线色」（[UiCorner.borderLineColor]，跟随强调色或选色），
+     * 与卡片 / 弹窗 / 栏位 / 按钮共用同一份口径，不再单独读底栏包或全局描边键。
      */
-    private fun bottomBarBorderColor(): Int? = resolveGlassStrokeColor(
-        appCtx.getPrefString(PreferKey.glassStrokeColor)
-    )
+    private fun bottomBarBorderColor(): Int? = UiCorner.borderLineColor(appCtx)
 
     private fun setupLiquidGlassView(
         liquidGlassView: StableLiquidGlassView,

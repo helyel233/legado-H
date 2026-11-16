@@ -225,6 +225,12 @@ object ModernActionPopup {
      * （`GlassSurface.isAvailable` 与 drawable 早退分支同源，见 GlassSurface.kt:194-204）。
      */
     private fun resolvePopupGlass(host: ViewGroup, domain: GlassDomain): PopupGlass? {
+        // CLEAR 档不需要采样源：直接复用壁纸域宿主，由 glassDrawable() 早退成
+        // 「主题包取色的半透明无玻璃壳」。若按内容域判定，liquidGlassSpec 对 CLEAR
+        // 返回 null → 弹层落回不透明 Surface，真机就是「右上角菜单没有透明效果」。
+        if (resolvedExploreGlassMode() == GlassMaterialPreset.CLEAR) {
+            return PopupGlass.Wallpaper
+        }
         val wallpaperRequested = when (domain) {
             GlassDomain.AUTO, GlassDomain.WALLPAPER -> true
             GlassDomain.CONTENT -> false
@@ -341,6 +347,21 @@ object ModernActionPopup {
         }
         return handle
     }
+
+    /**
+     * 工具栏菜单项的锚点 View（经典页「右上角图标 → 自绘菜单」的取锚唯一口径）。
+     *
+     * appcompat 的 ActionMenuItemView 位于内部包（androidx.appcompat.view.menu），
+     * 各页面不宜各自静态 import、更不能按 touchables 的顺序去猜——订阅源 / 订阅收藏页
+     * 的工具栏有**多个**动作项，顺序会随 showAsAction 配置漂移。这里集中一次类型依赖，
+     * 按 `getItemData().itemId` 精确匹配菜单项。找不到（菜单尚未布置到工具栏 / 目标项
+     * 不是动作项）返回 null，调用方退回工具栏本身（弹层按工具栏矩形贴右上，仍可用）。
+     */
+    fun findToolbarItemAnchor(toolbar: androidx.appcompat.widget.Toolbar, itemId: Int): View? =
+        toolbar.touchables.firstOrNull { view ->
+            (view as? androidx.appcompat.view.menu.ActionMenuItemView)
+                ?.getItemData()?.itemId == itemId
+        }
 
     /**
      * 从菜单资源显示弹层。

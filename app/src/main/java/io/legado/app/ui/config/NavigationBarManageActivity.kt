@@ -542,11 +542,8 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                         showBottomWallpaperSelector()
                     })
                 }
-                addView(optionRow(getString(R.string.bottom_bar_opacity), "${config.opacity}%") {
-                    showAlphaPicker(getString(R.string.bottom_bar_opacity), config.opacity) {
-                        config.opacity = it
-                    }
-                })
+                // 不透明度配置项已移除：底栏现由全局「透明效果」档位统一控制，
+                // 主题包不再单独存 opacity。保留 config.opacity 字段仅为兼容旧包反序列化。
             } else {
                 addView(optionRow(
                     getString(R.string.navigation_bar_sidebar_background),
@@ -1020,16 +1017,9 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun entryInfo(entry: NavigationBarIconConfig.Entry): String {
         return buildString {
             append(layoutModeLabel(entry.config.layoutMode))
-            if (entry.config.layoutMode != "sidebar") {
+            if (entry.config.layoutMode == "standard" && !entry.config.wallpaperPath.isNullOrBlank()) {
                 append(" \u00B7 ")
-                append(getString(R.string.bottom_bar_opacity))
-                append(" ")
-                append(entry.config.opacity)
-                append("%")
-                if (entry.config.layoutMode == "standard" && !entry.config.wallpaperPath.isNullOrBlank()) {
-                    append(" \u00B7 ")
-                    append(getString(R.string.bottom_bar_wallpaper))
-                }
+                append(getString(R.string.bottom_bar_wallpaper))
             }
             if (entry.config.updatedAt > 0) {
                 append(" \u00B7 ")

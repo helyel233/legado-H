@@ -26,7 +26,6 @@ import android.widget.TextView
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.AutoCompleteTextView
-import android.view.SubMenu
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
@@ -140,7 +139,6 @@ import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setSelectionSafely
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.transaction
 import io.legado.app.utils.visible
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.windowSize
@@ -198,7 +196,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private val diffItemCallBack = ExploreDiffItemCallBack()
     private val groups = linkedSetOf<String>()
     private var exploreFlowJob: Job? = null
-    private var groupsMenu: SubMenu? = null
+    /** 经典发现页「分组」自绘菜单（ModernActionPopup）的句柄，切模式 / 销毁视图时收起。 */
+    private var groupsMenuPopup: ModernActionPopup.Handle? = null
     private var oldModeInitialized = false
     private var modernModeInitialized = false
     private var discoveryPageMode = AppConfig.DISCOVERY_PAGE_MODE_MODERN
@@ -424,12 +423,13 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     override fun onCompatCreateOptionsMenu(menu: Menu) {
         super.onCompatCreateOptionsMenu(menu)
         if (usingModernDiscovery || usingSuiteDiscovery) {
-            groupsMenu = null
             return
         }
+        // 经典发现页顶栏只保留「分组」入口图标；分组列表在点击时经
+        // onCompatOptionsItemSelected 拦截后用 ModernActionPopup 渲染（见 showGroupsMenu），
+        // 不再往平台子菜单里塞（平台子菜单样式没有行底色块与描边，正是
+        // 「右上菜单选项无背景色框」那轮反馈的经典发现页来源）。
         menuInflater.inflate(R.menu.main_explore, menu)
-        groupsMenu = menu.findItem(R.id.menu_group)?.subMenu
-        upGroupsMenu()
     }
 
     private fun applyDiscoveryMode(loadData: Boolean = true) {
@@ -3829,7 +3829,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 .collect {
                     groups.clear()
                     groups.addAll(it)
-                    upGroupsMenu()
+                    // 分组列表由 showGroupsMenu() 在点击时即时读取，
+                    // 这里不再需要同步任何平台子菜单（已移除）。
                     delay(DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS)
                 }
         }
@@ -4021,15 +4022,44 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             .unregisterOnSharedPreferenceChangeListener(exploreGlassPrefListener)
         oldModeInitialized = false
         modernModeInitialized = false
-        groupsMenu = null
+        groupsMenuPopup?.dismiss()
+        groupsMenuPopup = null
         super.onDestroyView()
     }
 
-    private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
-        subMenu.removeGroup(R.id.menu_group_text)
-        groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+    /**
+     * 经典发现页「分组」菜单：ModernActionPopup 渲染（与书架 ⋮ 菜单、现代发现页
+     * 筛选菜单同一实现与同一套行样式——半透明行底 + 描边 + 玻璃域判定）。
+     *
+     * ## 为什么弃用平台子菜单（第二轮真机取证）
+     *
+     * 旧实现把分组写进 `menu_group` 的 `SubMenu`，由平台的 `MenuPopupHelper` 渲染：
+     * 弹层底是 `bg_popup_action_modern`（纯色圆角 + 6dp 内边距），**行本身没有底色块
+     * 与描边**——正是用户反馈「部分页面右上角菜单内选项无背景色框」中残留的那个页面
+     * （书架等页的 ⋮ 菜单在上一轮已换成 ModernActionPopup，经典发现页是漏网之鱼）。
+     *
+     * 点击行为与旧子菜单逐值一致：`group:${title}` 作为搜索词交给
+     * [upExploreData]（searchView 存在时走 setQuery，与旧路径同一条链）。
+     */
+    private fun showGroupsMenu() {
+        if (usingModernDiscovery || usingSuiteDiscovery) return
+        if (groups.isEmpty()) return
+        // 锚点：工具栏上的分组图标，按菜单项 id 精确匹配（口径统一收在
+        // ModernActionPopup.findToolbarItemAnchor，本页工具栏只有这一个动作项，
+        // RSS 等多动作项页面也走同一口径）。取不到时退回工具栏本身，
+        // ModernActionPopup 会按锚点矩形贴右上角弹出。
+        val toolbar = binding.titleBar.toolbar
+        val anchor = ModernActionPopup.findToolbarItemAnchor(toolbar, R.id.menu_group) ?: toolbar
+        val actions = groups.map { group ->
+            ModernActionPopup.Action(title = group) {
+                searchView?.setQuery("group:$group", true) ?: upExploreData("group:$group")
+            }
         }
+        groupsMenuPopup = ModernActionPopup.show(
+            anchor,
+            actions,
+            groupsMenuPopup
+        )
     }
 
     override val scope: CoroutineScope
@@ -4038,8 +4068,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
         if (usingModernDiscovery || usingSuiteDiscovery) return
-        if (item.groupId == R.id.menu_group_text) {
-            searchView?.setQuery("group:${item.title}", true) ?: upExploreData("group:${item.title}")
+        if (item.itemId == R.id.menu_group) {
+            showGroupsMenu()
         }
     }
 

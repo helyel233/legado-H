@@ -32,7 +32,9 @@ internal fun liquidGlassSpec(
     params: GlassMaterialPreset.Params,
     density: Float
 ): LiquidGlassSpec? = when (params.mode) {
-    GlassMaterialPreset.SOLID -> null
+    // solid（不透明实底）与 clear（半透明无玻璃）都不激活液态层：
+    // 二者都不采样、不折射、不模糊，宿主各自用实底 / 透明表面兜底。
+    GlassMaterialPreset.SOLID, GlassMaterialPreset.CLEAR -> null
     else -> LiquidGlassSpec(
         blurPx = params.blurDp * density,
         tintAlpha = params.tintAlpha,

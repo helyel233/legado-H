@@ -1,5 +1,29 @@
 # 更新日志
 
+## 1.30.1 版（2026-11-16）
+
+本版在 1.29.1 的「全 App 玻璃材质接入」基础上继续收口：材质样式新增「透明无玻璃（clear）」第四档，把磨砂与液态玻璃抽成可复用的 drawable 基础设施，并把书籍详情页接入同一套壁纸域玻璃管线；同时修正搜索栏与 RSS 收藏分组菜单的两处收口。底层四档降级仍由同一管线单点决定，仅新增 1 个与渲染解耦的展示状态键。
+
+### 新功能
+
+- **材质样式新增「透明无玻璃」档**：`GlassMaterialPreset` 四档从 `solid / glass / frosted` 扩为 `solid / clear / glass / frosted`。`clear` 取主题包表面色 + 固定 `CLEAR_SURFACE_ALPHA=0.86` 的半透明层——能透出背后内容，但不模糊、不折射、无色散，且不受玻璃强度/墨水屏/低内存影响；替换原「无玻璃」语义为「不透明无玻璃」，字符串/预览同步。
+- **磨砂与液态玻璃 drawable 化**：新增 `GlassFrostSpec`（纯函数，从 `GlassMaterialPreset.Params` 算壳层起止/中心/边缘 alpha 与色散强度、表面色、边缘内缩/宽度）、`GlassFrostDrawable`（软件磨砂底图 + 壳渐变 + 边缘高光，支持 outline 圆角裁剪）与 `GlassLiquidBackdropDrawable`（液态玻璃底图 + 壳渐变），把材质从「内联在具体宿主里」收拢为共享 drawable，供后续表面复用。
+- **书籍详情页玻璃**：`BookInfoActivity` 新增 `BookInfoBackdropSurface`（封面底图采集与降采样、`panelBackground`/`actionBackground`/`titleBarBackground`/`readButtonBackground`/`sectionBackground` 五类背景、对比度与按钮文字色纯函数）与 `BookInfoComposeGlass`（Compose 侧玻璃 alpha/描边判定）；标题栏、阅读按钮、分区卡等按「背景图可用且玻璃启用」口径接壁纸域玻璃，无背景图/墨水屏回落实底。
+- **搜索栏收口**：`SearchView` 玻璃背景改用 `wallpaperGlassSignature` 签名缓存、`glassDomain` 显式声明采样域（`applyGlassDomain(WALLPAPER)` 才走玻璃）；clear 档铺主题表面色半透明壳、无玻璃档先判否回实底药丸，不再误拿管线产物。
+- **RSS 收藏分组菜单改 `ModernActionPopup`**：`RssFavoritesActivity` 的「分组」菜单从平台子菜单改走 `ModernActionPopup`（玻璃相位），与全 App 浮层口径一致。
+
+### 修复
+
+- **预设/自定义误判**：设置页「材质样式」胶囊此前用「当前强度 == 预设固定值」反推是否仍显示已选预设，但两个全局强度键会被底栏主题包在启动时用 `config.opacity` 覆盖（真机实测 70→60），数值反推必然误判为「自定义」。新增独立状态键 `glassPresetMatched`（选档置 true、手动拖滑杆置 false），判定与可被外部覆盖的数值彻底解耦；渲染仍读被覆盖后的值，效果不变。
+
+### 实现要点
+
+- 材质/四档降级/描边/采样坐标沿用底层管线，无第二套参数；仅新增 1 个展示状态偏好键 `glassPresetMatched`，`tools/check_settings_mapping.py` 仍 PASS。
+
+### 单测
+
+新增 `BookInfoBackdropSurfaceTest`（13 例）、`GlassFrostSpecTest`（8 例）、`BookInfoComposeGlassTest`（6 例）、`ReaderPanelGlassTest`（2 例）；`LiquidGlassSpecTest`/`GlassSurfaceModeTest`/`ExploreGlassHardwareBlurTest` 共 +4 例；glass+widget 单测全绿。
+
 ## 1.29.1 版（2026-11-12）
 
 本版将全 App 玻璃材质接入从「已有宿主」继续深化到首页模块、设置配置页、RSS、阅读页更多设置对话框、缓存管理与书签页、书架等面，并把「顶栏自动玻璃化」「弹层/首页重铺」「签名驱动重铺」做成通用机制，底层材质与四档降级仍由同一管线单点决定，**不新增任何偏好键**。逐项方案与偏差见 `docs/glass-appwide-adoption-plan.md`。

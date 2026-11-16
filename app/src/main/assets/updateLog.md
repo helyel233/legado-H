@@ -4,6 +4,16 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.30.1 · 2026/11/16**
+
+- 材质样式新增「透明无玻璃(clear)」第四档(solid/clear/glass/frosted)：取主题表面色+固定 0.86 半透明，能透背后但不模糊不折射无色散、不受强度/墨水屏/低内存影响；原「无玻璃」改「不透明无玻璃」
+- 磨砂与液态玻璃 drawable 化：GlassFrostSpec(纯函数算壳层/边缘/色散/表面色) + GlassFrostDrawable(磨砂底图+壳渐变+边缘高光+圆角 outline) + GlassLiquidBackdropDrawable(液态底图+壳渐变)，材质收拢为共享 drawable
+- 书籍详情页玻璃：BookInfoActivity 接 BookInfoBackdropSurface(封面底图采集/降采样 + 标题栏/阅读按钮/分区卡五类背景) 与 BookInfoComposeGlass(Compose 侧 alpha/描边判定)，壁纸域玻璃、无背景图/墨水屏回实底
+- 搜索栏收口：SearchView 玻璃背景改 wallpaperGlassSignature 签名缓存 + glassDomain 显式采样域；clear 档铺半透明壳、无玻璃档先判否回实底药丸
+- RSS 收藏「分组」菜单从平台子菜单改 ModernActionPopup(玻璃相位)，与全 App 浮层口径一致
+- 修「预设/自定义」误判：设置页胶囊原用「强度==预设固定值」反推，被底栏主题包启动时覆盖强度(70→60)必然误判；新增独立状态键 glassPresetMatched(选档 true、拖滑杆 false)彻底解耦
+- 新增 BookInfoBackdropSurfaceTest(13)+GlassFrostSpecTest(8)+BookInfoComposeGlassTest(6)+ReaderPanelGlassTest(2)，LiquidGlassSpecTest/GlassSurfaceModeTest/ExploreGlassHardwareBlurTest +4，glass+widget 单测全绿，check_settings_mapping 仍 PASS，仅新增 1 个展示状态键
+
 **vH.1.29.1 · 2026/11/12**
 
 - 全 App 玻璃材质接入深化(P5 之后)：首页模块卡片/榜单壳接玻璃+重铺(resurface)机制(壁纸/档位变化按签名增量重铺不重建、HomepageResurfaceWiring/GlassResurface 锁装配与重铺时机)、设置配置页根背景透壁纸(AppearanceKit/ThemeManage/BookInfoManage/CoverCollection/Bubble/LibraryContainer/Relay/S3/AdvancedTip/AdvancedTitle/ComposeSetting/SettingSpec/CoverHtml 等分区卡与顶栏接 GlassPanel(WALLPAPER))、RSS 分类标签(RssTabsGlass 纯函数 tabsGlassRelayoutRequired 锁重铺)+文章行逐行玻璃(BaseRssArticlesAdapter/RowScope/RssArticlesAdapter3/RssSortActivity)、阅读页更多设置对话框(MoreConfigDialog+ReaderDialogWindow 窗口级玻璃)、缓存管理(CacheManageScreen/CacheBookCard/BookCacheExportScreen)与书签页(AllBookmarkScreen)卡片玻璃、书架(BooksFragment/BookshelfFragment2/ComposeItems/TagManage)壁纸域玻璃；顶栏自动玻璃化收口(透明档+非墨水屏+有可用背景图+祖先非不透明自动判定、30 例单测锁自动玻璃/回退/让位优先级)、ModernActionPopup 重铺/释放收口；签名驱动重铺(GlassViewBackground 新、applyWallpaperGlassBackground 扩展+glassSignatureWithWallpaper/wallpaperGlassSignature 纯函数)；修重铺时机与回退(关闭/切页/无源释放位置追踪器)、让位优先级(玻璃未激活面板保持实底)、StackBlur 透明通道色偏；新增约 104 例纯 JVM 单测(glass/widget/homepage/rss 包)+LiquidGlassSpecTest +3、glass+widget+homepage+rss 单测全绿，check_settings_mapping 仍 PASS，不新增偏好键

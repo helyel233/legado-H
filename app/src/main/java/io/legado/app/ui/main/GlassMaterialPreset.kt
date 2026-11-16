@@ -29,8 +29,30 @@ object GlassMaterialPreset {
     const val SOLID = "solid"
     const val GLASS = "glass"
     const val FROSTED = "frosted"
+    /**
+     * 透明无玻璃：只把表面变成半透明，透出背后内容但不模糊、不折射、无色散。
+     * 透明层的颜色取主题包表面色（各宿主传自己的主题色），alpha 固定 [CLEAR_SURFACE_ALPHA]。
+     */
+    const val CLEAR = "clear"
 
-    val modes = setOf(SOLID, GLASS, FROSTED)
+    val modes = setOf(SOLID, GLASS, FROSTED, CLEAR)
+
+    /**
+     * 透明无玻璃档的固定 alpha：透出背后内容以体现「透明」，同时保留足够遮盖力，
+     * 让面板自身文字与背后内容重叠时依然清晰可辨。
+     *
+     * 初值 0.66（34% 透底）在真机上重叠区域难以阅读，上调到 0.86（14% 透底）：
+     * 仍能看出壁纸与背后层次，但不再与面板内容糊在一起。
+     * 纯函数常量，各宿主（底栏 / 面板 / 弹窗）共用同一口径，避免各自写死导致分叉。
+     */
+    const val CLEAR_SURFACE_ALPHA = 0.86f
+
+    /**
+     * 透明无玻璃档的最终填充色（纯函数）：主题包表面色 + 固定半透明 alpha。
+     * 没有模糊 / 折射 / 色散，也不叠白色着色——「只透明」的字面实现。
+     */
+    fun clearSurfaceColor(baseColor: Int): Int =
+        ColorUtils.withAlpha(baseColor, CLEAR_SURFACE_ALPHA)
 
     /** 玻璃档强度：0-100 → 0-0.5，与底栏 bottomBarOpacityLevel 同口径。 */
     fun opacityLevel(value: Int): Float =
@@ -137,6 +159,21 @@ object GlassMaterialPreset {
         glassLevel: Float,
         fallbackBoost: Float = 0f
     ): Params {
+        // 透明无玻璃：所有可见的玻璃维度全部归零。即便某宿主来不及特判、误走玻璃管线，
+        // 零半径 / 零色散 / 零折射 / 零壳层也画不出磨砂和折射，只会剩一层透明底色。
+        if (mode == CLEAR) {
+            val none = ShellAlphas(0f, 0f, 0f, 0f)
+            return Params(
+                mode = mode,
+                glassLevel = 0f,
+                blurDp = 0f,
+                tintAlpha = 0f,
+                dispersion = 0f,
+                refractionHeightDp = 0f,
+                refractionOffsetDp = 0f,
+                shell = none
+            )
+        }
         val frosted = mode == FROSTED
         return Params(
             mode = mode,

@@ -1930,7 +1930,7 @@
     <string name="delete_success">已删除</string>
     <string name="theme_manage_title">主题包管理</string>
     <string name="navigation_bar_manage">底栏管理</string>
-    <string name="navigation_bar_manage_summary">管理底栏主题、图标、玻璃样式和不透明度。</string>
+    <string name="navigation_bar_manage_summary">管理底栏主题、图标和玻璃样式；透明效果由「全局透明效果」统一设置。</string>
     <string name="navigation_bar_package_summary">点击底栏主题可应用、编辑、导出或同步。</string>
     <string name="navigation_bar_package_empty">当前只有内置底栏主题。</string>
     <string name="navigation_bar_edit">底栏主题</string>
@@ -2425,7 +2425,8 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="cache_manage_webdav_task_cancelled">WebDAV 任务已取消</string>
     <string name="cache_manage_webdav_task_duplicate">任务已在队列中</string>
     <string name="cache_manage_batch_upload_queued">已加入 %1$d 个上传任务</string>
-    <string name="theme_panel_border_color">圆角卡片边框色</string>
+    <string name="theme_panel_border_color">边框线色</string>
+    <string name="theme_border_follow_accent">跟随强调色</string>
     <string name="theme_panel_border_alpha">边框不透明度</string>
     <string name="top_bar_border_color">顶栏边框色</string>
     <string name="select_color">选择颜色</string>

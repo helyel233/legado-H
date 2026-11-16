@@ -52,7 +52,14 @@ fun SearchBookListItem(
     onPreview: (Rect?) -> Unit,
     modifier: Modifier = Modifier,
     fragment: Fragment? = null,
-    showOriginCount: Boolean = false
+    showOriginCount: Boolean = false,
+    /**
+     * 玻璃配置签名；非 null 时卡片让出实底、由壁纸域玻璃接管。
+     *
+     * 只有搜书页（`SearchResultScreen`）传值：本组件同时被发现页（`ExploreModernListScreen`）
+     * 与发现页「查看更多」（`ExploreShowComposeScreen`）复用，那两页的卡片观感必须逐值不变。
+     */
+    glassSignature: String? = null
 ) {
     val palette = renderConfig.palette
     val coverBounds = remember(book.bookUrl, book.origin, book.coverUrl) {
@@ -64,7 +71,8 @@ fun SearchBookListItem(
         renderConfig = renderConfig,
         modifier = if (rounded) modifier else modifier.heightIn(min = NormalSearchBookListItemHeight),
         onClick = onClick,
-        onLongClick = { onPreview(coverBounds.value) }
+        onLongClick = { onPreview(coverBounds.value) },
+        glassSignature = glassSignature
     ) { metrics ->
         Box(modifier = Modifier.width(metrics.coverWidth)) {
             BookCoverImage(

@@ -32,6 +32,10 @@ object UiCorner {
 
     /** 评论快照等轻量操作按钮的软选择背景（legadoC 移植简化版）。 */
     fun softActionSelector(defaultColor: Int, pressedColor: Int, radius: Float): android.graphics.drawable.StateListDrawable {
+        val border = runCatching { borderLineColor(appCtx) }.getOrNull()
+        if (border != null) {
+            return actionStrokeSelector(defaultColor, pressedColor, radius, 1.dpToPx(), border)
+        }
         fun rounded(color: Int): android.graphics.drawable.GradientDrawable {
             return android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
@@ -228,6 +232,12 @@ object UiCorner {
     }
 
     fun actionSelector(defaultColor: Int, pressedColor: Int, radius: Float): StateListDrawable {
+        // 所有走通用 action 背景的按钮 / 栏位统一取主题包「边框线色」描边。
+        // 单测等无 Application 环境取不到 appCtx 时回退到无描边旧行为，不影响纯函数测试。
+        val border = runCatching { borderLineColor(appCtx) }.getOrNull()
+        if (border != null) {
+            return actionStrokeSelector(defaultColor, pressedColor, radius, 1.dpToPx(), border)
+        }
         return StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), roundedColor(pressedColor, radius, true, false))
             addState(intArrayOf(android.R.attr.state_selected), roundedColor(pressedColor, radius, true, false))
@@ -281,11 +291,31 @@ object UiCorner {
         }
     }
 
-    fun panelBorderColor(context: Context): Int? {
+    /**
+     * 边框线色的唯一读取入口：主题包「边框线色」 chosen 颜色优先，未选（跟随强调色）时
+     * 回落到全局描边覆盖色，再回落到主题强调色。所有卡片 / 弹窗 / 栏位 / 按钮 / bar
+     * 的描边都必须经这里取色，避免各处各存一份导致同档不同色。
+     *
+     * - 主题包自定义 HEX（`panelBorderColor` / `panelBorderColorN`）= 「选择颜色」；
+     * - 未设置 = 「跟随强调色」，取 [ThemeStore.accentColor]；
+     * - 兼容旧版「描边颜色」（`glassStrokeColor`，十进制 ARGB）：主题未选色时它仍生效，
+     *   让升级用户此前手调的描边不丢失。
+     * 最终统一套用主题包「边框不透明度」，返回 **非 null** 的固定色。
+     */
+    fun borderLineColor(context: Context): Int {
         val key = if (AppConfig.isNightTheme) PreferKey.panelBorderColorN else PreferKey.panelBorderColor
-        val value = context.getPrefString(key)?.takeIf { it.isNotBlank() } ?: return null
-        return runCatching { applyPanelBorderAlpha(context, value.toColorInt()) }.getOrNull()
+        val custom = context.getPrefString(key)?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { it.toColorInt() }.getOrNull() }
+        val legacy = context.getPrefString(PreferKey.glassStrokeColor)?.toIntOrNull()
+        val base = custom ?: legacy ?: ThemeStore.accentColor(context)
+        return applyPanelBorderAlpha(context, base)
     }
+
+    /**
+     * 兼容旧调用点：现在边框线色恒有值（跟随强调色是默认档），因此本函数不再返回 null。
+     * 保留 Int? 签名是为了不动 40+ 个 `if (border != null)` 的调用处。
+     */
+    fun panelBorderColor(context: Context): Int? = borderLineColor(context)
 
     fun panelBorderAlpha(context: Context): Int {
         val key = if (AppConfig.isNightTheme) PreferKey.panelBorderAlphaN else PreferKey.panelBorderAlpha
