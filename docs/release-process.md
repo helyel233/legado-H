@@ -4,6 +4,8 @@
 
 ## 0. 关键前提
 
+- **唯一主线是 `main`**。`v5` 分支是 2026-10-08 从 `main`（1.7.3 / `08348a785`）分叉出的 UI 架构重写尝试（Host 换壳、`uikit`/`theme` 模块、组件库），**已于 2026-10-16（`876e8781e`）停止更新并冻结**，不再合并回 main、不再发版、不再在其上开发。两条分支分叉后零 merge、零功能互通；main 的 SecurePrefs、玻璃四档、评论快照、预取、状态栏修复等能力 v5 全无，把 v5 扶正等于全量重移植，不划算。v5 保留为归档参考（含 uikit/theme 的 UI 重构素材），仅此而已。
+- **versionCode 与 v5 已脱钩**：历史上 `main` 与 `v5` 共用 `29860000 + 提交数` 命名空间（v5 曾发过 `H-1.20.0`，code 29862282；main 的 `H-1.30.1` 为 29862283，仅高 1）。v5 冻结后不再产生新提交，其最大 code 停在 29862337，**不会再冲击 main 的进位**；main 后续按提交数正常递增即可，无需改基线。发版前仍须核对 `git rev-list --count HEAD` 严格递增。
 - **发布渠道只有一条**：本机构建出双包 → `.legadoh/create-release.sh` 走 GitHub API 上传到 helyel233/legado-H 的 Releases。**没有 CI 发布**（`android-fast-release.yml`、`sync-release-gitee.yml` 已删除，不要再新建发布 workflow）。
 - **签名密钥在本机 `.legadoh/`**（`keystore.properties` + `legadoh-release.jks`，均已 gitignore）。release 正式包用 LegadoH 签名，debug 包用 Android Debug 签名。
 - 发布凭证：无 gh CLI，脚本用 `git credential fill` 从 osxkeychain 取 helyel233 token 调 GitHub API。
