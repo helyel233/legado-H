@@ -2,7 +2,9 @@ package io.legado.app.ui.widget.compose
 
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.titleTextColor
@@ -137,6 +140,8 @@ private fun AppManagementTopBar(
     glassSignature: String
 ) {
     val context = LocalContext.current
+    // 栏位边框统一取主题包「边框线色」，与卡片 / 弹窗 / 底栏同一份口径。
+    val barBorder = BorderStroke(1.dp, Color(UiCorner.borderLineColor(context)))
     val topBarColor = if (AppConfig.immersiveManageBar) {
         context.backgroundColor
     } else {
@@ -201,7 +206,9 @@ private fun AppManagementTopBar(
             // 顶栏贴边全宽、四角直角：玻璃层单一半径会在屏幕顶角留缺口，取 0。
             cornerRadiusPx = 0f,
             configSignature = glassSignature,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(barBorder),
             fallback = Modifier.background(Color(topBarColor))
         ) {
             topBarContent()
@@ -211,6 +218,7 @@ private fun AppManagementTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(topBarColor))
+                .border(barBorder)
         ) {
             topBarContent()
         }
@@ -320,6 +328,8 @@ private fun AppManagementSelectionBottomBar(
     wallpaperVisible: Boolean,
     glassSignature: String
 ) {
+    val context = LocalContext.current
+    val barBorder = BorderStroke(1.dp, Color(UiCorner.borderLineColor(context)))
     AnimatedVisibility(visible = selectedCount > 0) {
         val mainAction = actions.lastOrNull { it.danger } ?: actions.lastOrNull()
         val moreActions = if (mainAction == null) actions else actions.filterNot { it === mainAction }
@@ -375,7 +385,9 @@ private fun AppManagementSelectionBottomBar(
                 domain = GlassSamplingDomain.WALLPAPER,
                 cornerRadiusPx = 0f,
                 configSignature = glassSignature,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(barBorder),
                 fallback = Modifier.background(Color(palette.settings.bottomBar))
             ) {
                 barContent()
@@ -385,6 +397,7 @@ private fun AppManagementSelectionBottomBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(palette.settings.bottomBar))
+                    .border(barBorder)
             ) {
                 barContent()
             }

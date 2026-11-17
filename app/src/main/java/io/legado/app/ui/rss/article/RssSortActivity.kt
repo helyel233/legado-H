@@ -33,6 +33,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssStar
 import io.legado.app.help.source.sortUrls
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.uiTypeface
@@ -169,7 +170,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             typeface = uiTypeface()
             // 先铺改动前的原表面：玻璃不可用时它就是最终结果（逐值等于改前），
             // 可用时会被 applyTabGlass 整体换成「玻璃 + 描边层」
-            background = createTabBackground(accentColor)
+            background = createTabBackground()
             setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
             tag = position
             setTextColor(context.primaryTextColor)
@@ -200,14 +201,14 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
      * 而 Selector 的 state 分发是 View 对 `background` 的既有能力（改动前选中描边就是靠它
      * 显示的），所以放进 LayerDrawable 后**状态变化完全不需要重建 drawable**。
      */
-    private fun createTabBackground(accentColor: Int): Drawable {
+    private fun createTabBackground(): Drawable {
         val radius = TAB_CORNER_RADIUS_DP.dpToPx()
         val strokeWidth = TAB_STROKE_WIDTH_DP.dpToPx()
 
         val selectedDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
-            setStroke(strokeWidth.toInt(), accentColor)
+            setStroke(strokeWidth.toInt(), UiCorner.borderLineColor(this@RssSortActivity))
         }
 
         val defaultDrawable = GradientDrawable().apply {
@@ -282,11 +283,11 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             // 当前已经是原表面（新建的 View / 一直没有壁纸）→ 什么都不做，保持
             // createTabBackground 的 StateListDrawable 原样；只有从玻璃退回时才需要重铺一次
             if (tabView.background is LayerDrawable) {
-                tabView.background = createTabBackground(accentColor)
+                tabView.background = createTabBackground()
             }
         } else {
             tabView.background = LayerDrawable(
-                arrayOf(glass, createTabBackground(accentColor))
+                arrayOf(glass, createTabBackground())
             )
         }
         // 记在最后：只有真的铺完才认为这一档已完成，中途异常不会把 View 留在「已铺」状态

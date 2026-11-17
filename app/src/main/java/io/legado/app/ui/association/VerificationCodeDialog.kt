@@ -2,6 +2,7 @@ package io.legado.app.ui.association
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
@@ -21,10 +22,12 @@ import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.ImageProvider
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -64,6 +67,12 @@ class VerificationCodeDialog() : BaseDialogFragment(R.layout.dialog_verification
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?): Unit = binding.run {
         initMenu()
+        // 卡片描边统一取主题包「边框线色」，与导入弹窗 / 底栏同一口径；玻璃档的描边
+        // 由 GlassSurface 自带，这里只给实底回退的 GradientDrawable 补 1dp 主题描边。
+        (root.background as? GradientDrawable)?.setStroke(
+            1.dpToPx(),
+            UiCorner.borderLineColor(requireContext())
+        )
         val arguments = arguments ?: return@run
         viewModel.initData(arguments)
         toolBar.setBackgroundColor(primaryColor)

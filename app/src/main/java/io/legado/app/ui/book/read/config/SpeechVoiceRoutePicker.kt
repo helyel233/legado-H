@@ -40,6 +40,7 @@ import io.legado.app.help.readaloud.speech.SpeechEmotion
 import io.legado.app.help.readaloud.speech.SpeechRoute
 import io.legado.app.help.readaloud.speech.SpeechVoiceEngineGroup
 import io.legado.app.help.readaloud.speech.SpeechVoiceOption
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -407,7 +408,7 @@ private fun rememberSpeechVoicePickerColors(): SpeechVoicePickerColors {
         card = Color(if (night) 0xff20242a.toInt() else 0xfff6f7fa.toInt()),
         text = Color(context.primaryTextColor),
         subText = Color(context.secondaryTextColor),
-        stroke = Color(if (night) 0x26ffffff else 0x18000000),
+        stroke = Color(UiCorner.borderLineColor(context)),
         accent = Color(context.accentColor),
         danger = Color(0xffff5555.toInt())
     )

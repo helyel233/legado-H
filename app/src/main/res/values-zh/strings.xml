@@ -457,6 +457,8 @@
     <string name="finish_book">完结书籍</string>
     <string name="local_book">本地书籍</string>
     <string name="status_bar_immersion">状态栏颜色透明</string>
+    <string name="overlap_status_bar">覆盖状态栏</string>
+    <string name="overlap_status_bar_summary">开启后页面内容延伸到手机状态栏；关闭后内容避开状态栏、状态栏显示不透明主题色</string>
     <string name="main_immersion_status_bar">隐藏主界面状态栏</string>
     <string name="main_status_bar_immersion">开启后主界面进入全屏模式</string>
     <string name="manage_bar_immersion">管理页沉浸顶栏</string>

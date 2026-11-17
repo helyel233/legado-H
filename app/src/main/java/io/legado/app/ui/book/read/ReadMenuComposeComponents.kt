@@ -2,6 +2,7 @@ package io.legado.app.ui.book.read
 
 import android.widget.ImageView
 import androidx.appcompat.widget.AppCompatImageView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -153,6 +154,8 @@ fun ReadMenuTitleBar(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
+        // 阅读页中心弹出的顶部菜单栏：边框统一取主题包「边框线色」(style.stroke)。
+        border = BorderStroke(1.dp, style.stroke),
         color = style.surface,
         contentColor = style.primaryText,
         tonalElevation = 0.dp,
@@ -356,6 +359,8 @@ fun ReadMenuActionBar(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
+        // 阅读页中心弹出的顶部操作栏：边框统一取主题包「边框线色」(style.stroke)。
+        border = BorderStroke(1.dp, style.stroke),
         color = style.surface,
         contentColor = style.primaryText,
         tonalElevation = 0.dp,

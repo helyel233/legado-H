@@ -17,6 +17,11 @@ import io.legado.app.help.config.EpubLoadingTemplateStore
 import io.legado.app.ui.book.read.epub.EpubLoadingPreviewView
 
 class EpubLoadingTemplatePreviewActivity : BaseActivity<ViewBinding>(imageBg = false) {
+    // 全屏模板预览自己用 applyPreviewBars 管理 e2e + 透明状态/导航栏，
+    // 跳过全局 content inset + backdrop，避免两套机制叠加（透明栏被实色 backdrop 盖住）。
+    override val applyGlobalStatusBarInsetEnabled: Boolean
+        get() = false
+
     private val preview by lazy {
         EpubLoadingPreviewView(this).apply {
             fullSize = true

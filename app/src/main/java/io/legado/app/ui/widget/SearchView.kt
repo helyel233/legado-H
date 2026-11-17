@@ -190,12 +190,19 @@ class SearchView @JvmOverloads constructor(
      * 都新建 drawable，所以不存在该问题，是本次引入缓存后才出现的回归。
      */
     private fun resolveFallbackBackground(): Drawable {
-        val key = "${TopBarSearchStyle.surfaceColor(context)}|${TopBarSearchStyle.radius()}"
+        // 静态药丸的描边色来自 TopBarSearchStyle.strokeColor（primaryTextColor 低 alpha），
+        // 与主题包「边框线色」不是同一份口径；这里只覆盖描边颜色，填充/圆角仍取 TopBarSearchStyle。
+        // 缓存键补上描边色，改主题边框线色后返回本页才能刷新到新描边。
+        val borderColor = UiCorner.borderLineColor(context)
+        val key = "${TopBarSearchStyle.surfaceColor(context)}|${TopBarSearchStyle.radius()}|$borderColor"
         fallbackDrawable?.let { cached ->
             if (fallbackSignature == key) return cached
         }
-        return TopBarSearchStyle.searchViewBackground(context).also {
-            fallbackDrawable = it
+        return TopBarSearchStyle.searchViewBackground(context).also { drawable ->
+            // 局部 stroke：只改描边颜色来源，不动填充与圆角。
+            (drawable as? android.graphics.drawable.GradientDrawable)
+                ?.setStroke(1.dpToPx(), borderColor)
+            fallbackDrawable = drawable
             fallbackSignature = key
         }
     }

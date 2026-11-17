@@ -364,8 +364,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val textSelectAble: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.textSelectAble, true)
 
+    /**
+     * 全局「覆盖状态栏」：开启后页面内容（壁纸 / 顶栏）延伸到手机状态栏，
+     * 状态栏透明；关闭（默认）时内容避开状态栏、状态栏为不透明主题色，
+     * 顶栏边框也就不会包住状态栏。
+     *
+     * 这是控制「app 是否覆盖状态栏」的唯一全局开关，由 BaseActivity 在窗口层统一落地。
+     * 与 `isMainTransparentStatusBar`（仅主界面的沉浸开关，语义为隐藏系统条）相互独立：
+     * 前者决定内容是否铺进状态栏，后者决定系统条是否显示。
+     */
+    val overlapStatusBar: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.overlapStatusBar, false)
+
+    /** 阅读页等场景沿用的旧语义：状态栏是否透明取色。跟随全局「覆盖状态栏」开关。 */
     val isTransparentStatusBar: Boolean
-        get() = true
+        get() = overlapStatusBar
 
     val isMainTransparentStatusBar: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.mainTransparentStatusBar, false)

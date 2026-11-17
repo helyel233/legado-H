@@ -28,6 +28,7 @@ import io.legado.app.databinding.DialogBookChangeSourceBinding
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.primaryColor
@@ -113,7 +114,9 @@ class ChangeBookSourceDialog() : BaseDialogFragment(R.layout.dialog_book_change_
         val surfaceColor = context.changeSourceSurfaceColor()
         val mutedColor = context.changeSourceMutedColor()
         binding.toolBar.setBackgroundColor(primaryColor.forceOpaque())
-        view.background = context.changeSourceDialogBackground()
+        view.background = context.changeSourceDialogBackground().apply {
+            setStroke(1.dpToPx(), UiCorner.borderLineColor(context))
+        }
         view.clipToOutline = true
         binding.recyclerView.setBackgroundColor(surfaceColor)
         binding.llBottomBar.setBackgroundColor(mutedColor)

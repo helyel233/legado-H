@@ -89,6 +89,7 @@ import io.legado.app.help.readaloud.speech.SpeechVoiceEngineGroup
 import io.legado.app.help.readaloud.speech.SpeechVoiceOption
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -139,7 +140,7 @@ fun rememberCharacterStyle(): CharacterStyle {
     val cardAlt = ColorUtils.blendColors(card, accent, if (night) 0.18f else 0.08f)
     val text = context.primaryTextColor
     val subText = context.secondaryTextColor
-    val stroke = if (night) 0x26ffffff else 0x17000000
+    val stroke = UiCorner.borderLineColor(context)
     return CharacterStyle(
         colors = CharacterColors(
             accent = Color(accent),

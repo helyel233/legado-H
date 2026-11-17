@@ -9,9 +9,12 @@ import io.legado.app.base.BaseActivity
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityWelcomeBinding
+import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.main.MainActivity
+import io.legado.app.utils.applyGlobalStatusBarInset
 import io.legado.app.utils.fullScreen
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.setStatusBarColorAuto
@@ -43,7 +46,15 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>(imageBg = fals
 
     override fun setupSystemBar() {
         fullScreen()
-        setStatusBarColorAuto(backgroundColor, true, fullScreen)
+        // 与全局「覆盖状态栏」开关同向：不再写死透明档，避免与 BaseActivity
+        // 其余页面的状态栏口径不一致（背景色本身由 upBackgroundImage / 主题兜底）。
+        val isTransparentStatusBar = AppConfig.isTransparentStatusBar
+        setStatusBarColorAuto(
+            ThemeStore.statusBarColor(this, isTransparentStatusBar),
+            isTransparentStatusBar,
+            fullScreen
+        )
+        applyGlobalStatusBarInset()
         upNavigationBarColor()
     }
 

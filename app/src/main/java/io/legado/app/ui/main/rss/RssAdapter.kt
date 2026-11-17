@@ -2,6 +2,7 @@ package io.legado.app.ui.main.rss
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -18,6 +19,7 @@ import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ItemRssBinding
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.glass.GlassSamplingDomain
@@ -141,7 +143,11 @@ class RssAdapter(
         if (glass != null) {
             root.background = glass
         } else {
+            // 降级回退的 bg_ai_surface_panel 是静态 @color/divider 描边，主题包「边框线色」
+            // 改色对它不生效。这里只覆盖 stroke 颜色，填充/圆角保持 XML 原值不变。
             root.setBackgroundResource(R.drawable.bg_ai_surface_panel)
+            (root.background as? GradientDrawable)
+                ?.setStroke(1.dpToPx(), UiCorner.borderLineColor(root.context))
         }
     }
 

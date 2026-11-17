@@ -37,6 +37,7 @@ import io.legado.app.ui.widget.TitleBar
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyOpenTint
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.applyGlobalStatusBarInset
 import io.legado.app.utils.disableAutoFill
 import io.legado.app.utils.fullScreen
 import io.legado.app.utils.hideSoftInput
@@ -79,6 +80,19 @@ abstract class BaseActivity<VB : ViewBinding>(
      */
     open val showsWallpaperBehindContent: Boolean
         get() = imageBg && !AppConfig.isEInkMode && ThemeConfig.hasUsableBgImage(this)
+
+    /**
+     * 是否套用全局「覆盖状态栏」的 content inset + decor backdrop。
+     *
+     * 绝大多数页面走默认 true：由 [setupSystemBar] 与 onCreate 兜底统一落地开关。
+     * 自己完整管理状态栏的沉浸式页面（阅读器正文、EPUB 模板全屏预览）覆写为 false：
+     * 它们用 PageView 的 vwStatusBar / 全屏预览的自绘Insets自行避让，并直接改写
+     * statusBarColor 与 decor 旗标，再叠加全局 backdrop 会造成两套机制打架
+     * （透明栏 + 实色 backdrop 同屏、或内容二次下移）。这些页面仍保留在
+     * 「覆盖状态栏」开关例外清单里，不影响普通页面。
+     */
+    open val applyGlobalStatusBarInsetEnabled: Boolean
+        get() = true
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppContextWrapper.wrap(newBase))
@@ -172,6 +186,11 @@ abstract class BaseActivity<VB : ViewBinding>(
         applyPreferredRefreshRate()
         setupSystemBar()
         setContentView(binding.root)
+        // 与 setupSystemBar 内的调用幂等；确定性保证 content view 存在后一定接上全局 inset 处理。
+        // 自管状态栏的沉浸页（阅读器 / EPUB 预览）跳过，避免与自身 inset 逻辑打架。
+        if (applyGlobalStatusBarInsetEnabled) {
+            applyGlobalStatusBarInset()
+        }
         LiveEventBus.get(EventBus.MAIN_THEME_BACKGROUND_CHANGED, Boolean::class.java)
             .observe(this) { isNightTheme ->
                 if (isNightTheme == AppConfig.isNightTheme) {
@@ -372,6 +391,12 @@ abstract class BaseActivity<VB : ViewBinding>(
         val isTransparentStatusBar = AppConfig.isTransparentStatusBar
         val statusBarColor = ThemeStore.statusBarColor(this, isTransparentStatusBar)
         setStatusBarColorAuto(statusBarColor, isTransparentStatusBar, fullScreen)
+        // targetSdk 36 上窗口级 statusBarColor / decorFit 都可能被系统忽略，统一由
+        // content inset + decor backdrop 落地全局「覆盖状态栏」开关。
+        // 自管状态栏的沉浸页跳过（见 applyGlobalStatusBarInsetEnabled）。
+        if (applyGlobalStatusBarInsetEnabled) {
+            applyGlobalStatusBarInset(statusBarColor)
+        }
         if (toolBarTheme == Theme.Dark) {
             setLightStatusBar(false)
         } else if (toolBarTheme == Theme.Light) {

@@ -13,9 +13,11 @@ import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
 import io.legado.app.databinding.DialogOpenUrlConfirmBinding
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.dialogSurfaceBackground
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -56,7 +58,11 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
             dismiss()
             return
         }
-        binding.root.background = requireContext().dialogSurfaceBackground
+        // 卡片描边统一取主题包「边框线色」，与导入弹窗 / 底栏同一口径；填充不变，
+        // 只在实底 drawable 上补 1dp 主题描边（玻璃档的描边由 GlassSurface 自带）。
+        binding.root.background = requireContext().dialogSurfaceBackground.apply {
+            setStroke(1.dpToPx(), UiCorner.borderLineColor(requireContext()))
+        }
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.subtitle = viewModel.sourceName
         initView()

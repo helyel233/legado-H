@@ -332,6 +332,7 @@ object PreferKey {
     const val uiCornerReplyFollow = "uiCornerReplyFollow"
     const val uiCornerReplyFollowN = "uiCornerReplyFollowNight"
     const val transparentStatusBar = "transparentStatusBar"
+    const val overlapStatusBar = "overlapStatusBar"
     const val mainTransparentStatusBar = "mainTransparentStatusBar"
     const val immersiveManageBar = "immersiveManageBar"
     const val immNavigationBar = "immNavigationBar"

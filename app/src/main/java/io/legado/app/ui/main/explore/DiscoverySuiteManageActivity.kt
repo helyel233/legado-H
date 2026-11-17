@@ -78,6 +78,7 @@ import io.legado.app.databinding.ItemFilletCompleteTextBinding
 import io.legado.app.databinding.ItemFilletSelectorSingleBinding
 import io.legado.app.databinding.ItemFilletTextBinding
 import io.legado.app.databinding.ItemFindBookBinding
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.filletControlBackground
@@ -1526,7 +1527,9 @@ private fun applyClassicDiscoverTagSelectedStyle(tv: TextView, selected: Boolean
                 AndroidColor.blue(accent)
             )
         )
-        setStroke(1.dpToPx(), accent)
+        // 选中态描边统一取主题包「边框线色」，与卡片 / 弹窗 / 底栏同一份口径；
+        // 半透明 accent 只做填充，不用于边界。
+        setStroke(1.dpToPx(), UiCorner.borderLineColor(context))
     }
     tv.background = bg
     tv.setTextColor(accent)

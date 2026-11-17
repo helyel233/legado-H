@@ -23,6 +23,7 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.databinding.ItemHomepageModuleBinding
 import io.legado.app.domain.model.HomepageModuleType
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.primaryTextColor
@@ -731,7 +732,7 @@ class HomepageAdapter(
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = 6.dpToPx().toFloat()
                     setColor(ColorUtils.setAlphaComponent(appContext.accentColor, 20))
-                    setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(appContext.accentColor, 38))
+                    setStroke(1.dpToPx(), UiCorner.borderLineColor(appContext))
                 }
                 binding.tvLoadMore.setTextColor(appContext.accentColor)
                 binding.ivLoadMore.setColorFilter(appContext.accentColor)

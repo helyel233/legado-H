@@ -26,4 +26,7 @@
     <item name="book_info_useweb_source_binding" type="id" />
     <item name="book_info_rich_intro_image_getter" type="id" />
 
+    <item name="status_bar_backdrop_view" type="id" />
+    <item name="status_bar_inset_base_top_padding" type="id" />
+
 </resources>

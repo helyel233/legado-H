@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.audio
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -60,6 +61,7 @@ import java.util.Locale
 import io.legado.app.ui.book.audio.config.AudioSkipCredits
 import com.dirror.lyricviewx.OnPlayClickListener
 import io.legado.app.lib.theme.ThemeStore.Companion.accentColor
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.book.audio.SliderPopup.Companion.SPEED
 import io.legado.app.ui.book.audio.SliderPopup.Companion.TIMER
 import io.legado.app.model.SourceCallBack
@@ -259,12 +261,24 @@ class AudioPlayActivity :
         }
     }
 
+    /**
+     * bg_edit 是静态 @color/btn_bg_press 描边，主题包「边框线色」改色对它不生效。
+     * 只在 inflate 出的实底 drawable 上覆盖 stroke 颜色，填充/圆角/padding 保持 XML 原值。
+     */
+    private fun applyThemeEditBorder(vararg fields: android.widget.EditText) {
+        fields.forEach { field ->
+            (field.background as? GradientDrawable)
+                ?.setStroke(1.dpToPx(), UiCorner.borderLineColor(field.context))
+        }
+    }
+
     private fun showAudioCacheRangeDialog(book: Book) {
         alert(titleResource = R.string.offline_cache) {
             val total = book.totalChapterNum.takeIf { it > 0 } ?: AudioPlay.simulatedChapterSize
             val alertBinding = DialogDownloadChoiceBinding.inflate(layoutInflater).apply {
                 editStart.setText((book.durChapterIndex + 1).coerceAtLeast(1).toString())
                 editEnd.setText(total.coerceAtLeast(1).toString())
+                applyThemeEditBorder(editStart, editEnd)
             }
             customView { alertBinding.root }
             okButton {

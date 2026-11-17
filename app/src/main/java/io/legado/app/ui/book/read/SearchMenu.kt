@@ -38,7 +38,6 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.activity
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.dpToPx
-import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.invisible
 import io.legado.app.utils.loadAnimation
 import io.legado.app.utils.visible
@@ -122,7 +121,6 @@ class SearchMenu @JvmOverloads constructor(
         val isBgLight = ColorUtils.isColorLight(bgColor)
         val themeSurfaceColor = context.themeMutedColorOrDefault()
         val themeCardColor = context.themeCardColorOrDefault()
-        val dividerColor = context.getCompatColor(R.color.divider)
         val panelBaseColor = ColorUtils.blendColors(
             bgColor,
             themeSurfaceColor,
@@ -137,10 +135,7 @@ class SearchMenu @JvmOverloads constructor(
             .setDefaultColor(panelInnerColor)
             .setPressedColor(ColorUtils.darkenColor(panelInnerColor))
             .create()
-        val panelStrokeColor = ColorUtils.adjustAlpha(
-            if (isBgLight) dividerColor else textColor,
-            if (isBgLight) 1f else 0.14f
-        )
+        val panelStrokeColor = UiCorner.borderLineColor(context)
         val menuOpacity = (AppConfig.readMenuAlpha / 100f).coerceIn(0.35f, 1f)
         panelBackground = GradientDrawable().apply {
             cornerRadius = UiCorner.scaledDp(18F)

@@ -60,6 +60,7 @@ import io.legado.app.help.readaloud.speech.SpeechVoiceEngineGroup
 import io.legado.app.help.readaloud.speech.SpeechVoiceGroupRepository
 import io.legado.app.help.readaloud.speech.SpeechVoiceOption
 import io.legado.app.help.readaloud.speech.SpeechRoute
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -1052,7 +1053,7 @@ private fun rememberSpeakerManageColors(): SpeakerManageColors {
         card = Color(if (night) 0xff20242a.toInt() else 0xfff6f7fa.toInt()),
         text = Color(context.primaryTextColor),
         subText = Color(context.secondaryTextColor),
-        stroke = Color.Transparent,
+        stroke = Color(UiCorner.borderLineColor(context)),
         accent = Color(accent),
         danger = Color(ColorUtils.blendColors(0xffff4444.toInt(), accent, 0.08f))
     )

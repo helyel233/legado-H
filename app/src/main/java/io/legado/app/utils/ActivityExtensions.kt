@@ -3,6 +3,7 @@ package io.legado.app.utils
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.util.DisplayMetrics
@@ -16,9 +17,12 @@ import android.view.WindowMetrics
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import androidx.fragment.app.DialogFragment
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
@@ -76,18 +80,109 @@ val WindowManager.windowSize: DisplayMetrics
         return displayMetrics
     }
 
+/**
+ * 全 app 窗口的公共初始化（BaseActivity.setupSystemBar 调用）。
+ *
+ * 「内容是否铺进状态栏」由全局开关 [AppConfig.overlapStatusBar] 单点决定：
+ * - 覆盖（true）：decor 不贴合系统栏（e2e）+ LAYOUT_FULLSCREEN，内容延伸到状态栏，
+ *   状态栏由 setStatusBarColorAuto 设为透明；这是沉浸式场景。
+ * - 不覆盖（false，默认）：decor 贴合系统栏 + 清除 LAYOUT_FULLSCREEN，内容从状态栏
+ *   下方开始，状态栏为不透明主题色。顶栏边框因此不会再包住状态栏。
+ *
+ * 关键：setDecorFitsSystemWindows 与 LAYOUT_FULLSCREEN 必须同向，旧实现同时打开两者
+ * （先 setDecorFitsSystemWindows(true) 又设 LAYOUT_FULLSCREEN），互相覆盖导致行为
+ * 因机型/API 而异，是「内容被铺进状态栏」的全局根因。
+ */
 @Suppress("DEPRECATION")
 fun Activity.fullScreen() {
+    val overlap = AppConfig.overlapStatusBar
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        window.setDecorFitsSystemWindows(true)
+        window.setDecorFitsSystemWindows(!overlap)
     }
-    window.decorView.systemUiVisibility =
+    window.decorView.systemUiVisibility = if (overlap) {
         View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    } else {
+        // 不覆盖状态栏：清掉 LAYOUT_FULLSCREEN，仅保留 LAYOUT_STABLE。
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
     window.clearFlags(
         WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
                 or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
     )
     window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+}
+
+/**
+ * 全局「不覆盖状态栏」的真实落地：窗口层在 targetSdk 36 / Android 15+ 已被系统
+ * 强制 edge-to-edge，`setDecorFitsSystemWindows(true)` 与 `statusBarColor` 都可能
+ * 被忽略，靠局部遮罩 / 顶栏 margin 永远补不全。
+ *
+ * 这里在 Activity 的 `android.R.id.content` 上做**唯一**处理：
+ * 1. 把状态栏高度作为 content 的 topPadding，页面整体从状态栏下方开始；
+ * 2. 随即把这份 top inset 从继续下发的 WindowInsets 中扣掉，所有子 View 原有的
+ *    `applyStatusBarPadding()` / 侧栏 padding 逻辑拿到 0，不会二次下移；
+ * 3. 在 decor 顶层铺一块与状态栏等高的实色 backdrop。系统状态栏色在新 API 上
+ *    不再受 `window.statusBarColor` 控制，这块 backdrop 才是图标底下的不透明主题色。
+ *
+ * 开关打开（覆盖状态栏）时不加 padding、不铺 backdrop，也不扣 inset，恢复沉浸式。
+ */
+fun Activity.applyGlobalStatusBarInset() {
+    applyGlobalStatusBarInset(ThemeStore.statusBarColor(this, false))
+}
+
+fun Activity.applyGlobalStatusBarInset(@ColorInt statusBarColor: Int) {
+    val content = findViewById<View>(android.R.id.content) ?: return
+    val decor = window.decorView as? ViewGroup
+    val baseTop = (content.getTag(R.id.status_bar_inset_base_top_padding) as? Int)
+        ?: content.paddingTop.also {
+            content.setTag(R.id.status_bar_inset_base_top_padding, it)
+        }
+
+    fun statusBarBackdrop(): View? = decor?.findViewById(R.id.status_bar_backdrop_view)
+
+    if (!AppConfig.overlapStatusBar && decor != null) {
+        val backdrop = statusBarBackdrop() ?: View(this@applyGlobalStatusBarInset).apply {
+            id = R.id.status_bar_backdrop_view
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                0,
+                Gravity.TOP
+            )
+            decor.addView(this)
+        }
+        if (backdrop.background !is ColorDrawable) {
+            backdrop.background = ColorDrawable(statusBarColor)
+        } else {
+            (backdrop.background as ColorDrawable).color = statusBarColor
+        }
+    } else {
+        statusBarBackdrop()?.let { (it.parent as? ViewGroup)?.removeView(it) }
+    }
+
+    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+        val avoidStatusBar = !AppConfig.overlapStatusBar
+        val statusTop = if (avoidStatusBar) {
+            insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+        } else {
+            0
+        }
+        view.updatePadding(top = baseTop + statusTop)
+        val backdrop = statusBarBackdrop()
+        if (avoidStatusBar && backdrop != null) {
+            backdrop.updateLayoutParams<FrameLayout.LayoutParams> {
+                height = statusTop
+            }
+        }
+        if (avoidStatusBar && statusTop > 0) {
+            insets.inset(0, statusTop, 0, 0)
+        } else {
+            insets
+        }
+    }
+    ViewCompat.requestApplyInsets(content)
 }
 
 val isHuaweiSystemDevice: Boolean
@@ -136,15 +231,11 @@ fun Activity.setStatusBarColorAuto(
     } else {
         ColorUtils.isColorLight(iconReferenceColor)
     }
-    if (fullScreen) {
-        if (isTransparent) {
-            window.statusBarColor = Color.TRANSPARENT
-        } else {
-            window.statusBarColor = getCompatColor(R.color.status_bar_bag)
-        }
-    } else {
-        window.statusBarColor = color
-    }
+    // 状态栏底色只由「是否透明」决定：透明档给全透明（内容覆盖到状态栏），
+    // 不透明档给实色主题色。旧实现里 fullScreen=true 且非透明时会退回到半透明
+    // status_bar_bag(#19000000)，壁纸因此透进状态栏、顶栏描边看起来像包住了状态栏；
+    // 全局「覆盖状态栏」关闭时必须是不透明实色，故不再按 fullScreen 分叉取半透明色。
+    window.statusBarColor = if (isTransparent) Color.TRANSPARENT else color
     setLightStatusBar(isLightBar)
     if (isTransparent && fullScreen) {
         window.decorView.post { setLightStatusBar(isLightBar) }

@@ -152,6 +152,7 @@ import io.legado.app.model.BookCover
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composeActionShape
 import io.legado.app.lib.theme.composePanelShape
@@ -2099,7 +2100,7 @@ internal fun rememberPlayerColors(palette: ReaderSheetStyle.Palette): PlayerColo
         },
         panel = panel,
         panelStrong = panelStrong,
-        panelBorder = Color.Transparent,
+        panelBorder = Color(UiCorner.borderLineColor(LocalContext.current)),
         primaryText = Color(palette.textColor).copy(alpha = 0.94f),
         secondaryText = Color(palette.secondaryTextColor).copy(alpha = 0.88f),
         subtleText = Color(palette.secondaryTextColor).copy(alpha = 0.66f),
@@ -3368,7 +3369,7 @@ private fun RoleTypeChip(
     Surface(
         shape = RoundedCornerShape(LocalContext.current.composeActionRadius()),
         color = color.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, Color.Transparent)
+        border = BorderStroke(1.dp, Color(UiCorner.borderLineColor(LocalContext.current)))
     ) {
         Text(
             text = roleTypeLabel(roleType),

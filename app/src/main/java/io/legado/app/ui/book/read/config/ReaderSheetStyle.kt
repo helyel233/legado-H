@@ -48,8 +48,9 @@ object ReaderSheetStyle {
             primaryColor,
             if (isLight) 0.14f else 0.22f
         )
-        val strokeBase = ColorUtils.blendColors(primaryColor, textColor, 0.3f)
-        val stroke = ColorUtils.adjustAlpha(strokeBase, if (isLight) 0.2f else 0.28f)
+        // 阅读页菜单 / 面板描边不再由页色与文字色推算，统一取主题包「边框线色」，
+        // 与卡片、弹窗、底栏、右上角菜单共用同一份取色入口。
+        val stroke = UiCorner.borderLineColor(context)
         return Palette(
             surface = surface,
             panel = panel,

@@ -457,6 +457,8 @@
     <string name="finish_book">Finished books</string>
     <string name="local_book">Local books</string>
     <string name="status_bar_immersion">The status bar color becomes transparent</string>
+    <string name="overlap_status_bar">Cover status bar</string>
+    <string name="overlap_status_bar_summary">When on, page content extends under the status bar; when off, content avoids the status bar and it shows an opaque themed color</string>
     <string name="main_immersion_status_bar">Hide main screen status bar</string>
     <string name="main_status_bar_immersion">Use fullscreen mode on the main screen</string>
     <string name="manage_bar_immersion">Immersive management bar</string>

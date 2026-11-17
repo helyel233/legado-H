@@ -96,6 +96,21 @@ object GlassSurface {
     fun dialogGlassAllowed(context: Context): Boolean = wallpaperHostAllowed(context)
 
     /**
+     * Compose 弹窗 CLEAR 档是否要走主题色半透明壳。
+     *
+     * View 弹窗由 [dialogBackground] 在 CLEAR 档直接早退铺壳（不看壁纸宿主），
+     * 但 Compose 的 `dialogGlassAllowed` / [GlassPanel] 还要过壁纸宿主判定，内容域
+     * 宿主（阅读 / 详情 / 视频 / 音频，showsWallpaperBehindContent=false）会被判否、
+     * 落回不透明实底——同一档 View / Compose 弹窗观感不一致。这里把 View 侧那条
+     * CLEAR 特判抽成组合期可调用的统一入口：CLEAR 档不看宿主，一律放行半透明壳。
+     *
+     * 调用方拿到 true 后不采样壁纸，直接用 [GlassMaterialPreset.clearSurfaceColor]
+     * 给主题表面色上固定 alpha（与底栏 / 阅读弹窗同一份口径）。
+     */
+    fun dialogClearAllowed(context: Context): Boolean =
+        resolvedExploreGlassMode() == GlassMaterialPreset.CLEAR
+
+    /**
      * 页面内卡片能否铺壁纸域玻璃（与对话框同一份壁纸可见性口径）。
      *
      * 与 [dialogGlassAllowed] 的区别只在采样方式：页面卡片的宿主根视图就是屏幕

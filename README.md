@@ -73,6 +73,9 @@ LegadoH 不内置任何书籍或书源内容，你可以在应用内自行添加
 
 ## 使用文档
 
+新接手代码？运行 `python3 tools/architecture_guide.py` 可从源码实时生成一份导读
+（顶层枢纽类、策略类索引、术语映射、隐式契约注释锚点），输出即当前真相、不会过期。
+
 - [页面模板：应用、分享与编写](docs/reader-templates.md)
 - [网络与 DNS](docs/doh-network.md)
 - [高级标题等视觉资源包](docs/visual-resource-packages.md)

@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityLibrarySearchBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
@@ -218,6 +220,13 @@ private fun LibrarySearchScreen(viewModel: LibrarySearchViewModel) {
                                     }
                                 }
                                 .background(style.fieldSurface, RoundedCornerShape(style.actionRadius))
+                                // 结果行原本只有 fieldSurface 实底、无边界，浅色主题下同族近色难辨；
+                                // 补一条主题包「边框线色」的 1dp 描边，与卡片/弹窗同一口径。
+                                .border(
+                                    width = 1.dp,
+                                    color = Color(UiCorner.borderLineColor(context)),
+                                    shape = RoundedCornerShape(style.actionRadius)
+                                )
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             if (item.showHeader) {

@@ -18,6 +18,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -868,6 +869,8 @@ class ReadMenu @JvmOverloads constructor(
                     updateBottomGlassGeometry(pos.x, pos.y, size.width, size.height)
                 },
             shape = RoundedCornerShape(topStart = style.panelRadius, topEnd = style.panelRadius),
+            // 阅读页中心弹出的底部菜单栏：边框统一取主题包「边框线色」(style.stroke)。
+            border = BorderStroke(1.dp, style.stroke),
             // 玻璃层只有真正定位过（拿到面板矩形）才让出底色：没定位就让出会得到一块透明空面板。
             color = if (bottomGlassYielded) Color.Transparent else style.surface,
             contentColor = style.primaryText,

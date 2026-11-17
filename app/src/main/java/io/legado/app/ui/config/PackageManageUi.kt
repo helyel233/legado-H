@@ -13,7 +13,6 @@ import io.legado.app.lib.theme.applyUiInputStyle
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
 
 object PackageManageUi {
@@ -60,7 +59,7 @@ object PackageManageUi {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
                         setColor(colorPreview)
-                        setStroke(1.dp(context), context.themeMutedColorOrDefault())
+                        setStroke(1.dp(context), UiCorner.borderLineColor(context))
                     }
                     layoutParams = LinearLayout.LayoutParams(18.dp(context), 18.dp(context)).apply {
                         marginEnd = 8.dp(context)

@@ -340,6 +340,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     private fun hideMainStatusBar() {
         setHuaweiDisplayCutoutShortEdgesCompat(true)
+        // 隐藏状态栏：仅隐藏系统条本身，窗口的 e2e/decorFit 与状态栏底色统一由
+        // BaseActivity.setupSystemBar() 按全局「覆盖状态栏」开关设定，这里不再单独改窗口。
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.hide(WindowInsets.Type.statusBars())
         } else {
@@ -356,11 +358,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             @Suppress("DEPRECATION")
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         }
-        setStatusBarColorAuto(
-            ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar),
-            AppConfig.isTransparentStatusBar,
-            fullScreen
-        )
+        // 内容是否避开状态栏（decorFit）、状态栏是否透明，已由 BaseActivity.setupSystemBar()
+        // 按全局「覆盖状态栏」开关统一设定。此处只负责显示系统条，不再重复改窗口标志、
+        // 不再加实底遮罩 —— 那条包住状态栏的描边是 e2e + 半透明状态栏色导致的，
+        // 已在全局单点修正，遮罩只是徒劳的补丁。
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -2092,7 +2093,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 this.cornerRadius = cornerRadius
             }
             setColor(baseColor)
-            setStroke(1.dpToPx(), AppColorUtils.withAlpha(Color.BLACK, 0.42f))
+            setStroke(1.dpToPx(), UiCorner.borderLineColor(this@MainActivity))
         }
     }
 
@@ -2112,12 +2113,11 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     /** 玻璃面板没有面板底色可挂描边，边缘线改挂在玻璃层前景上。 */
     private fun createSideNavigationGlassEdgeDrawable(): GradientDrawable {
-        val strokeColor = if (AppColorUtils.isColorLight(bottomBackground)) Color.BLACK else Color.WHITE
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 0f
             setColor(Color.TRANSPARENT)
-            setStroke(1.dpToPx(), AppColorUtils.withAlpha(strokeColor, 0.12f))
+            setStroke(1.dpToPx(), UiCorner.borderLineColor(this@MainActivity))
         }
     }
 
@@ -2141,13 +2141,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             shape = GradientDrawable.RECTANGLE
             cornerRadius = UiCorner.panelRadius(this@MainActivity)
             setColor(surface)
-            setStroke(
-                1.dpToPx(),
-                AppColorUtils.withAlpha(
-                    if (isLight) Color.BLACK else Color.WHITE,
-                    if (translucentSurface) 0.06f else 0.10f
-                )
-            )
+            setStroke(1.dpToPx(), UiCorner.borderLineColor(this@MainActivity))
         }
     }
 
@@ -2175,13 +2169,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             if (translucentSurface) {
                 setStroke(0, Color.TRANSPARENT)
             } else {
-                setStroke(
-                    1.dpToPx(),
-                    AppColorUtils.withAlpha(
-                        if (AppColorUtils.isColorLight(baseColor)) Color.BLACK else Color.WHITE,
-                        0.12f
-                    )
-                )
+                setStroke(1.dpToPx(), UiCorner.borderLineColor(this@MainActivity))
             }
         }
     }

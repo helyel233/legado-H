@@ -46,8 +46,7 @@ object TopBarSearchStyle {
     }
 
     fun strokeColor(context: Context): Int {
-        val alpha = if (AppConfig.isNightTheme) 0.10f else 0.08f
-        return ColorUtils.setAlphaComponent(context.primaryTextColor, (alpha * 255).toInt())
+        return UiCorner.borderLineColor(context)
     }
 
     fun radius(): Float {

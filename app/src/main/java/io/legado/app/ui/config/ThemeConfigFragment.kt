@@ -51,6 +51,16 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             onSelected = { updateStringSetting(PreferKey.launcherIcon, it) }
                         ),
                         SettingSwitchSpec(
+                            key = PreferKey.overlapStatusBar,
+                            title = str(R.string.overlap_status_bar),
+                            summary = str(R.string.overlap_status_bar_summary),
+                            checked = booleanSetting(PreferKey.overlapStatusBar, false),
+                            onCheckedChange = {
+                                updateBooleanSetting(PreferKey.overlapStatusBar, it)
+                            },
+                            searchKeys = listOf("状态栏", "覆盖", "status bar", "overlap")
+                        ),
+                        SettingSwitchSpec(
                             key = PreferKey.mainTransparentStatusBar,
                             title = str(R.string.main_immersion_status_bar),
                             summary = str(R.string.main_status_bar_immersion),
@@ -174,6 +184,7 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                 stringSetting(PreferKey.launcherIcon, DEFAULT_LAUNCHER_ICON)
             )
 
+            PreferKey.overlapStatusBar,
             PreferKey.mainTransparentStatusBar,
             PreferKey.transparentStatusBar,
             PreferKey.immersiveManageBar,

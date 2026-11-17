@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.databinding.ItemHomepageRankingTabBinding
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.utils.dpToPx
@@ -38,7 +39,7 @@ class HomepageRankingTabAdapter(
         shape = GradientDrawable.RECTANGLE
         cornerRadius = 8.dpToPx().toFloat()
         setColor(Color.TRANSPARENT)
-        setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(secondaryTextColor, 51))
+        setStroke(1.dpToPx(), UiCorner.borderLineColor(context))
     }
 
     fun submitItems(items: List<RankingTabData>, selected: Int) {

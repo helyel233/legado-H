@@ -8,10 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 
 /**
@@ -55,10 +57,19 @@ fun GlassSurfaceCard(
             GlassSurface.pageGlassAllowed(context)
         }
     }
+    // CLEAR 档不采样壁纸：即便宿主是内容域（dialogGlassAllowed 判否），也要像
+    // View 弹窗 / 底栏那样铺主题色半透明壳，否则同一档 Compose 卡片是实底。
+    val clearEnabled = rememberGlassAvailability(screenAligned) {
+        GlassSurface.dialogClearAllowed(context)
+    }
     if (!glassEnabled) {
         LegadoMiuixCard(
             modifier = modifier,
-            color = fillColor,
+            color = if (clearEnabled) {
+                Color(GlassMaterialPreset.clearSurfaceColor(fillColor.toArgb()))
+            } else {
+                fillColor
+            },
             contentColor = contentColor,
             cornerRadius = cornerRadius,
             insidePadding = insidePadding,

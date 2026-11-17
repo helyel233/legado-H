@@ -65,6 +65,7 @@ import io.legado.app.help.readaloud.speech.SpeechVoiceEngineGroup
 import io.legado.app.help.readaloud.speech.SpeechVoiceOption
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -823,7 +824,7 @@ private fun rememberSpeakEngineColors(): SpeakEngineColors {
     val card = Color(if (night) 0xff20242a.toInt() else 0xfff6f7fa.toInt())
     val text = Color(context.primaryTextColor)
     val subText = Color(context.secondaryTextColor)
-    val stroke = Color(if (night) 0x26ffffff else 0x18000000)
+    val stroke = Color(UiCorner.borderLineColor(context))
     return SpeakEngineColors(
         page = page,
         card = card,

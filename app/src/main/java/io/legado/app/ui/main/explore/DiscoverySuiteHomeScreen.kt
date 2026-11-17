@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -667,11 +668,17 @@ private fun DiscoverySuiteWaterfallBookCard(
     lifecycle: Lifecycle
 ) {
     val palette = renderConfig.palette
+    val context = LocalContext.current
     var coverBounds by remember(book.displayKey()) { mutableStateOf<Rect?>(null) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(palette.actionRadius))
+            .border(
+                width = 1.dp,
+                color = Color(UiCorner.borderLineColor(context)),
+                shape = RoundedCornerShape(palette.actionRadius)
+            )
             .combinedClickable(
                 onClick = { onBookClick(book) },
                 onLongClick = { onBookPreview(book, coverBounds) }

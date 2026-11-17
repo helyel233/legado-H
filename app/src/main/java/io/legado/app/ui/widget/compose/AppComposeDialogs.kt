@@ -88,6 +88,7 @@ import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.main.GlassMaterialPreset
 import kotlin.math.roundToInt
 
 private const val MAX_SAVEABLE_MULTI_CHOICE_ITEMS = 128
@@ -110,6 +111,8 @@ data class AppDialogStyle(
     val accent: Color,
     val onAccent: Color,
     val surface: Color,
+    /** CLEAR（透明无玻璃）档的主题色半透明表面：只透底、不模糊，与底栏同口径。 */
+    val clearSurface: Color,
     val fieldSurface: Color,
     val primaryText: Color,
     val secondaryText: Color,
@@ -179,6 +182,7 @@ fun rememberAppDialogStyle(): AppDialogStyle {
             accent = Color(accent),
             onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
             surface = Color(ColorUtils.withAlpha(surfaceBase, layoutAlpha)),
+            clearSurface = Color(GlassMaterialPreset.clearSurfaceColor(surfaceBase)),
             fieldSurface = Color(ColorUtils.withAlpha(fieldSurface, fieldAlpha)),
             primaryText = Color(primaryText),
             secondaryText = Color(secondaryText),
@@ -211,6 +215,11 @@ fun AppDialogFrame(
     val glassSignature = rememberGlassConfigSignature()
     val glassEnabled = remember(context, glassSignature) {
         GlassSurface.dialogGlassAllowed(context)
+    }
+    // CLEAR 档：内容域宿主（阅读 / 详情 / 视频 / 音频）在 dialogGlassAllowed 被判否，
+    // 但透明无玻璃档本就不采样壁纸，应像 View 弹窗一样铺主题色半透明壳。
+    val dialogClear = remember(context, glassSignature) {
+        GlassSurface.dialogClearAllowed(context)
     }
     val outerModifier = modifier
         .fillMaxWidth()
@@ -299,7 +308,7 @@ fun AppDialogFrame(
                 modifier = outerModifier
                     .shadow(14.dp, frameShape, clip = false)
                     .border(1.dp, style.stroke, frameShape),
-                color = style.surface,
+                color = if (dialogClear) style.clearSurface else style.surface,
                 contentColor = style.primaryText,
                 cornerRadius = style.panelRadius,
                 insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),

@@ -3,6 +3,7 @@ package io.legado.app.ui.book.read
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.content.pm.ActivityInfo
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
@@ -32,6 +33,7 @@ import io.legado.app.help.storage.ReaderDataRepair
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ThemeStore
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
@@ -46,6 +48,7 @@ import io.legado.app.ui.glass.readerGlassNavBarColor
 import io.legado.app.ui.glass.readerNavStripYieldsToGlass
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileDoc
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.find
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.gone
@@ -66,6 +69,12 @@ import splitties.init.appCtx
  */
 abstract class BaseReadBookActivity :
     VMBaseActivity<ActivityBookReadBinding, ReadBookViewModel>(imageBg = false) {
+
+    // 阅读器正文用 PageView 的 vwStatusBar + 自身的 systemUiVisibility / e2e 逻辑
+    // 完整管理状态栏（含玻璃菜单、朗读全面板两种沉浸态），跳过全局 inset + backdrop，
+    // 避免透明栏与实色 backdrop 同屏或内容二次下移。属「覆盖状态栏」开关例外页。
+    override val applyGlobalStatusBarInsetEnabled: Boolean
+        get() = false
 
     override val binding by viewBinding(ActivityBookReadBinding::inflate)
     override val viewModel by viewModels<ReadBookViewModel>()
@@ -395,6 +404,18 @@ abstract class BaseReadBookActivity :
         }
     }
 
+    /**
+     * bg_edit 是静态 @color/btn_bg_press 描边，主题包「边框线色」改色对它不生效。
+     * 输入框只是复用这张 XML 底图，这里在 inflate 出的实底 drawable 上只覆盖 stroke
+     * 颜色，填充/圆角/padding 全部保持 XML 原值（与其余 View 描边同一取色入口）。
+     */
+    private fun applyThemeEditBorder(vararg fields: android.widget.EditText) {
+        fields.forEach { field ->
+            (field.background as? GradientDrawable)
+                ?.setStroke(1.dpToPx(), UiCorner.borderLineColor(field.context))
+        }
+    }
+
     @SuppressLint("InflateParams", "SetTextI18n")
     fun showDownloadDialog() {
         ReadBook.book?.let { book ->
@@ -408,6 +429,7 @@ abstract class BaseReadBookActivity :
                 val alertBinding = DialogDownloadChoiceBinding.inflate(layoutInflater).apply {
                     editStart.setText((startIndex + 1).toString())
                     editEnd.setText(book.totalChapterNum.toString())
+                    applyThemeEditBorder(editStart, editEnd)
                 }
                 customView { alertBinding.root }
                 okButton {
@@ -442,6 +464,7 @@ abstract class BaseReadBookActivity :
             srEnabled.isChecked = book.getReadSimulating()
             editStart.setText(book.getStartChapter().toString())
             editNum.setText(book.getDailyChapters().toString())
+            applyThemeEditBorder(editStart, editNum)
             startDate.setText(book.getStartDate()?.format(dateFormatter))
             startDate.isFocusable = false // 设置为false，不允许获得焦点
             startDate.isCursorVisible = false // 不显示光标

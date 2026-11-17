@@ -47,6 +47,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -461,7 +462,7 @@ private fun rememberHttpTtsEditColors(): HttpTtsEditColors {
         card = Color(if (night) 0xff20242a.toInt() else 0xfff6f7fa.toInt()),
         text = Color(context.primaryTextColor),
         subText = Color(context.secondaryTextColor),
-        stroke = Color(if (night) 0x26ffffff else 0x18000000),
+        stroke = Color(UiCorner.borderLineColor(context)),
         accent = Color(ColorUtils.blendColors(context.accentColor, if (night) 0xffffffff.toInt() else 0xff000000.toInt(), 0.04f))
     )
 }

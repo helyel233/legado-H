@@ -686,7 +686,7 @@ fun LegadoMiuixChoiceRow(
      * 描边是必需的：`surfaceVariant` 与面板 `surface` 是**同族近色**——`AppComposeDialogs.kt`
      * 里 `fieldSurface = blendColors(surfaceBase, accent, night ? 0.10 : 0.05)`，只混 5%~10%
      * 的 accent；而它原本的 alpha 是 `layoutAlpha + 0.08`（接近实底）。压低 alpha 的填充
-     * 换不来可见度（有效色差只剩 2%~6%），边界必须由一条与面板底色**反向**的 1dp 线给出。
+     * 换不来可见度（有效色差只剩 2%~6%），边界必须由一条主题包「边框线色」的 1dp 线给出。
      */
     translucentSurface: Boolean = false,
     /**
@@ -704,7 +704,8 @@ fun LegadoMiuixChoiceRow(
      */
     outlined: Boolean = false
 ) {
-    val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
+    val context = LocalContext.current
+    val actionRadius = palette.actionRadius ?: context.composeActionRadius()
     val contentAlpha = if (enabled) 1f else 0.42f
     val selectedColor = palette.accent.copy(alpha = contentAlpha)
     val primaryColor = palette.primaryText.copy(alpha = contentAlpha)
@@ -721,17 +722,11 @@ fun LegadoMiuixChoiceRow(
             )
             else -> palette.surfaceVariant
         },
-        // 玻璃档下补一条 1dp 细描边 —— **行边界的主承重就是这一条**：行底
-        // （`palette.surfaceVariant`）与面板 `surface` 是同族近色（只混 5%~10% 的 accent，
-        // 见 `AppComposeDialogs.kt:161-182`），填充那条路即使抬到 0.6，有效色差也只有
-        // 3%~6%，在磨砂底上仍显微弱；描边不受「同族近色」影响，是唯一能画出边界的手段。
-        // [palette.primaryText] 是唯一在浅色 / 深色主题下都与面板底色**反向**的颜色
-        // （浅色主题偏深、深色主题偏浅），因此两个主题下都必然可见，且不必引入第三个
-        // 色源或新偏好。alpha 取 0.18（0.12 在真机磨砂底上偏淡）。
-        // 非玻璃档传 null：`Surface` 的 `border` 默认就是 null，传 null 与改动前逐值等价
-        // （不能写成 alpha=0 的描边——那仍会占位并可能画出一条透明线）。
+        // 行边界统一取主题包「边框线色」，与面板外框 / 卡片 / 底栏同一份口径。
+        // 行底（palette.surfaceVariant）与面板 surface 是同族近色，填充色差很小，
+        // 边界必须靠这条 1dp 线；不画时传 null，不用 alpha=0 的线占位。
         border = if (translucentSurface || outlined) {
-            BorderStroke(1.dp, palette.primaryText.copy(alpha = 0.18f))
+            BorderStroke(1.dp, Color(UiCorner.borderLineColor(context)))
         } else {
             null
         },

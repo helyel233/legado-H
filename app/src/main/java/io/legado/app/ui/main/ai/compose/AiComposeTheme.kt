@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -82,7 +83,8 @@ fun aiComposeStyle(context: Context): AiComposeStyle {
     val userText = if (ColorUtils.isColorLight(userBubble)) 0xff202124.toInt() else 0xffffffff.toInt()
     val processSurface = if (baseIsLight) 0xffeef3f7.toInt() else 0xff242a31.toInt()
     val toolSurface = ColorUtils.blendColors(cardSurface, accent, if (baseIsLight) 0.10f else 0.14f)
-    val stroke = if (baseIsLight) 0x14000000 else 0x24ffffff
+    // 描边色统一走主题包「边框线色」，不再各自按明暗派生，保证全模块同档同色。
+    val stroke = UiCorner.borderLineColor(context)
     return AiComposeStyle(
         colors = AiComposeColors(
             accent = Color(accent),
@@ -92,9 +94,9 @@ fun aiComposeStyle(context: Context): AiComposeStyle {
             secondaryText = Color(secondaryText),
             cardSurface = Color(cardSurface),
             composerSurface = Color(composerSurface),
-            composerStroke = Color(ColorUtils.adjustAlpha(accent, if (baseIsLight) 0.18f else 0.24f)),
+            composerStroke = Color(stroke),
             userBubble = Color(userBubble),
-            userBubbleStroke = Color(ColorUtils.adjustAlpha(accent, if (baseIsLight) 0.28f else 0.36f)),
+            userBubbleStroke = Color(stroke),
             userText = Color(userText),
             assistantBubble = Color(assistantBubble),
             assistantBubbleStroke = Color(stroke),
