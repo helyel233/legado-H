@@ -4,6 +4,13 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.30.2 · 2026/11/17**
+
+- 备份补齐 UI 美术资产包导出：主题包/底栏图标包/顶栏包/封面集合此前备份端从未导出、恢复端却能还原，换机时静默丢失；新增 UiPackageBackup 统一目录名常量 + 目录过滤 + 复制，Backup 导出与 zip 打包白名单补齐四类目录，Restore/RestoreSnapshot 改引同一常量
+- 修复「内容被铺进状态栏」全局根因：新增全局开关「覆盖状态栏」overlapStatusBar，decorFit 与 LAYOUT_FULLSCREEN 严格同向；新增 applyGlobalStatusBarInset() 应对 targetSdk 36 强制 edge-to-edge；状态栏不再取半透明色、壁纸不再透进状态栏
+- 仓库治理：确立 main 唯一主线、冻结 v5 分支；删除失效 stale.yml 与废弃分支的 CircleCI 配置
+- 工具：新增 architecture_guide.py 从源码实时生成新人导读；新增 UiPackageBackupTest 5 例
+
 **vH.1.30.1 · 2026/11/16**
 
 - 材质样式新增「透明无玻璃(clear)」第四档(solid/clear/glass/frosted)：取主题表面色+固定 0.86 半透明，能透背后但不模糊不折射无色散、不受强度/墨水屏/低内存影响；原「无玻璃」改「不透明无玻璃」

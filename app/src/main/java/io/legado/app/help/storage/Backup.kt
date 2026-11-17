@@ -20,10 +20,14 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ShelfIdentity
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
+import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.ThemePackageManager
+import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.BookCover
 import io.legado.app.model.AutoTask
@@ -87,6 +91,13 @@ object Backup {
     internal const val bookCharacterAvatarsDirName = "bookCharacterAvatars"
     internal const val advancedTitlePackagesDirName = "advancedTitlePackages"
     internal const val bubblePackagesDirName = "bubblePackages"
+
+    // UI 美术资产包目录名：与恢复端共用 UiPackageBackup 的单一真相源
+    internal const val themePackagesDirName = UiPackageBackup.THEME_PACKAGES
+    internal const val navigationBarPackagesDirName = UiPackageBackup.NAVIGATION_BAR_PACKAGES
+    internal const val topBarPackagesDirName = UiPackageBackup.TOP_BAR_PACKAGES
+    internal const val coverCollectionsDirName = UiPackageBackup.COVER_COLLECTIONS
+
     internal const val fontsDirName = "fonts"
     private const val fontsCollectDirName = "fonts_collect"
     private val fontFileRegex = Regex("(?i).*\\.[ot]tf")
@@ -395,6 +406,13 @@ object Backup {
             ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
         File(backupPath, bubblePackagesDirName).takeIf { it.exists() }
             ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
+        // UI 美术资产包（exportVisualResourcePackages 已复制到 backupPath）：打包阶段
+        // 是显式白名单，漏加 = 只导出到暂存区、从不进 zip，下次备份开头
+        // FileUtils.delete(backupPath) 即被丢弃——恢复端永远读不到，整个导出静默空转。
+        UiPackageBackup.packageDirNames.forEach { name ->
+            File(backupPath, name).takeIf { it.exists() }
+                ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
+        }
         File(backupPath, io.legado.app.help.book.highlight.HighlightRules.BACKUP_DIR)
             .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
         File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
@@ -570,6 +588,24 @@ object Backup {
             BubblePackageManager.rootDir,
             File(backupPath, bubblePackagesDirName)
         ) { name -> name !in setOf("temp", "remote_cache", BubblePackageManager.BUILTIN_DIR_NAME) }
+        // 主题包/底栏图标包/顶栏包/封面集合：恢复端 Restore.restore* 均会读取这些目录，
+        // 历史上备份端漏导出，换机时只能靠云同步兜底（默认关闭）→ 补齐导出，做到备份自包含。
+        UiPackageBackup.copyVisiblePackages(
+            ThemePackageManager.rootDir,
+            File(backupPath, themePackagesDirName)
+        )
+        UiPackageBackup.copyVisiblePackages(
+            NavigationBarIconConfig.rootDir,
+            File(backupPath, navigationBarPackagesDirName)
+        )
+        UiPackageBackup.copyVisiblePackages(
+            TopBarConfig.rootDir,
+            File(backupPath, topBarPackagesDirName)
+        )
+        UiPackageBackup.copyVisiblePackages(
+            CoverCollectionManager.rootDir,
+            File(backupPath, coverCollectionsDirName)
+        )
     }
 
     /**

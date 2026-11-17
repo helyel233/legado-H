@@ -942,15 +942,15 @@ object Restore {
     }
 
     private fun restoreThemePackages(path: String) {
-        restorePackageDirectory(File(path, "themePackages"), ThemePackageManager.rootDir)
+        restorePackageDirectory(File(path, Backup.themePackagesDirName), ThemePackageManager.rootDir)
     }
 
     private fun restoreNavigationIcons(path: String) {
-        restorePackageDirectory(File(path, "navigationBarPackages"), NavigationBarIconConfig.rootDir)
+        restorePackageDirectory(File(path, Backup.navigationBarPackagesDirName), NavigationBarIconConfig.rootDir)
     }
 
     private fun restoreTopBarPackages(path: String) {
-        restorePackageDirectory(File(path, "topBarPackages"), TopBarConfig.rootDir)
+        restorePackageDirectory(File(path, Backup.topBarPackagesDirName), TopBarConfig.rootDir)
     }
 
     private fun restoreVisualResourcePackages(path: String) {
@@ -1055,7 +1055,7 @@ object Restore {
         postEvent(EventBus.NAVIGATION_BAR_CHANGED, AppConfig.isNightTheme)
     }
     private fun restoreCoverCollections(path: String) {
-        restorePackageDirectory(File(path, "coverCollections"), CoverCollectionManager.rootDir)
+        restorePackageDirectory(File(path, Backup.coverCollectionsDirName), CoverCollectionManager.rootDir)
     }
 
     private fun normalizeBackgroundPrefs() {

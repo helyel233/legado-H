@@ -126,16 +126,16 @@ internal object RestoreSnapshot {
                 targets.add(appCtx.externalFiles.getFile(dirName))
             }
         }
-        if (File(backupDir, "themePackages").isDirectory) {
+        if (File(backupDir, Backup.themePackagesDirName).isDirectory) {
             targets.add(ThemePackageManager.rootDir)
         }
-        if (File(backupDir, "navigationBarPackages").isDirectory) {
+        if (File(backupDir, Backup.navigationBarPackagesDirName).isDirectory) {
             targets.add(NavigationBarIconConfig.rootDir)
         }
-        if (File(backupDir, "topBarPackages").isDirectory) {
+        if (File(backupDir, Backup.topBarPackagesDirName).isDirectory) {
             targets.add(TopBarConfig.rootDir)
         }
-        if (File(backupDir, "coverCollections").isDirectory) {
+        if (File(backupDir, Backup.coverCollectionsDirName).isDirectory) {
             targets.add(CoverCollectionManager.rootDir)
         }
         if (File(backupDir, Backup.advancedTitlePackagesDirName).isDirectory) {

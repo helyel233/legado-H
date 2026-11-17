@@ -1,5 +1,23 @@
 # 更新日志
 
+## 1.30.2 版（2026-11-17）
+
+本版聚焦三处「静默丢数据 / 状态栏」修复与一处仓库治理：备份端补齐 UI 美术资产包导出（修复换机时主题包/图标包/顶栏包/封面集合静默丢失），修复「内容被铺进状态栏」的全局根因（新增全局「覆盖状态栏」开关），冻结废弃的 v5 分支以确立 main 唯一主线。
+
+### 修复
+
+- **备份端补齐 UI 美术资产包导出**：历史上备份端从未导出主题包/底栏图标包/顶栏包/封面集合，而恢复端 `Restore.restoreThemePackages`/`restoreNavigationIcons`/`restoreTopBarPackages`/`restoreCoverCollections` 早已实现还原，换机时只能靠云同步兜底（默认关闭），导致用户自定义的美术资产静默丢失。新增纯逻辑 `UiPackageBackup`（单一真相源目录名常量 + `dirVisible` 过滤临时/缓存/隐藏/内置包 + `copyVisiblePackages` 复制），`Backup.exportVisualResourcePackages` 与 zip 打包白名单一并补齐这四类目录，备份自包含；`Restore`/`RestoreSnapshot` 改引同一常量，杜绝「备份写 A 目录、恢复读 B 目录」。
+- **修复「内容被铺进状态栏」全局根因**：`fullScreen()` 旧实现同时打开 `setDecorFitsSystemWindows(true)` 又设 `LAYOUT_FULLSCREEN`，互相覆盖导致内容是否铺进状态栏因机型/API 而异。现改为由全局开关 `overlapStatusBar`（覆盖状态栏）单点决定，`decorFit` 与 `LAYOUT_FULLSCREEN` 严格同向；新增 `Activity.applyGlobalStatusBarInset()` 应对 targetSdk 36 / Android 15+ 强制 edge-to-edge（content 加状态栏高度 topPadding + 扣掉继续下发的 top inset + decor 顶层铺等高实色 backdrop）；`setStatusBarColorAuto` 不再按 `fullScreen` 分叉取半透明 `status_bar_bag`，壁纸不再透进状态栏。沉浸式页面（阅读器正文、EPUB 全屏预览）通过 `applyGlobalStatusBarInsetEnabled=false` 自管，避免打架。
+
+### 其它
+
+- **仓库治理**：确立 main 唯一主线并冻结 v5 分支——v5 于 10-16（`876e8781e`）停止更新、不合并不发版仅归档，记录 versionCode 与 v5 脱钩；删除指向已失效上游的 `stale.yml` 与只构建废弃分支的 CircleCI 配置。
+- **工具**：新增 `tools/architecture_guide.py` 从源码实时生成新人导读（顶层枢纽类/策略类索引/术语映射/隐式契约注释锚点，只读零依赖、不落盘不腐烂），README「使用文档」段加用法；`.gitignore` 排除 `/output/`。
+
+### 单测
+
+新增 `UiPackageBackupTest`（5 例，锁目录名对称性与 `dirVisible` 过滤真值表）；`tools/check_settings_mapping.py` 仍 PASS。
+
 ## 1.30.1 版（2026-11-16）
 
 本版在 1.29.1 的「全 App 玻璃材质接入」基础上继续收口：材质样式新增「透明无玻璃（clear）」第四档，把磨砂与液态玻璃抽成可复用的 drawable 基础设施，并把书籍详情页接入同一套壁纸域玻璃管线；同时修正搜索栏与 RSS 收藏分组菜单的两处收口。底层四档降级仍由同一管线单点决定，仅新增 1 个与渲染解耦的展示状态键。
