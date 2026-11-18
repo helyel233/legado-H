@@ -67,6 +67,7 @@ class TopBarEditDialog : ComposeDialogFragment() {
     private var onShowTagBarAlphaPicker: ((Int) -> Unit)? = null
     private var onShowTagSelectedAlphaPicker: ((Int) -> Unit)? = null
     private var onToggleSearchInDefaultStyle: ((Boolean) -> Unit)? = null
+    private var onToggleFloatingChrome: ((Boolean) -> Unit)? = null
     private var onSave: ((String) -> Unit)? = null
     private var onCancel: (() -> Unit)? = null
 
@@ -89,7 +90,8 @@ class TopBarEditDialog : ComposeDialogFragment() {
                     onToggleFilterToggleHidden != null &&
                     onShowTagBarAlphaPicker != null &&
                     onShowTagSelectedAlphaPicker != null &&
-                    onToggleSearchInDefaultStyle != null
+                    onToggleSearchInDefaultStyle != null &&
+                    onToggleFloatingChrome != null
                 LaunchedEffect(callbacksReady) {
                     if (!callbacksReady) {
                         dismissAllowingStateLoss()
@@ -137,6 +139,9 @@ class TopBarEditDialog : ComposeDialogFragment() {
                         onToggleSearchInDefaultStyle = {
                             onToggleSearchInDefaultStyle?.invoke(it) ?: dismissAllowingStateLoss()
                         },
+                        onToggleFloatingChrome = {
+                            onToggleFloatingChrome?.invoke(it) ?: dismissAllowingStateLoss()
+                        },
                         onSave = { name ->
                             val saveCallback = onSave
                             if (saveCallback != null) {
@@ -171,6 +176,7 @@ class TopBarEditDialog : ComposeDialogFragment() {
             onShowTagBarAlphaPicker: (Int) -> Unit,
             onShowTagSelectedAlphaPicker: (Int) -> Unit,
             onToggleSearchInDefaultStyle: (Boolean) -> Unit,
+            onToggleFloatingChrome: (Boolean) -> Unit,
             onSave: (String) -> Unit,
             onCancel: () -> Unit
         ): TopBarEditDialog {
@@ -180,6 +186,7 @@ class TopBarEditDialog : ComposeDialogFragment() {
                     putString(ARG_STYLE, config.style)
                     putBoolean(ARG_IS_NIGHT, config.isNightMode)
                     putFloat(ARG_CORNER_SCALE, config.cornerScale ?: 1f)
+                    putBoolean(ARG_FLOATING, config.floatingChrome)
                     putInt(ARG_BG_COLOR, config.backgroundColor ?: 0)
                     putBoolean(ARG_HAS_BG_COLOR, config.backgroundColor != null)
                     putString(ARG_WALLPAPER_PATH, config.wallpaperPath)
@@ -206,6 +213,7 @@ class TopBarEditDialog : ComposeDialogFragment() {
                 this.onShowTagBarAlphaPicker = onShowTagBarAlphaPicker
                 this.onShowTagSelectedAlphaPicker = onShowTagSelectedAlphaPicker
                 this.onToggleSearchInDefaultStyle = onToggleSearchInDefaultStyle
+                this.onToggleFloatingChrome = onToggleFloatingChrome
                 this.onSave = onSave
                 this.onCancel = onCancel
             }
@@ -228,6 +236,7 @@ class TopBarEditDialog : ComposeDialogFragment() {
         const val ARG_HAS_TAG_SELECTED_COLOR = "hasTagSelectedColor"
         const val ARG_TAG_SELECTED_ALPHA = "tagSelectedAlpha"
         const val ARG_SHOW_SEARCH = "showSearchInDefaultStyle"
+        const val ARG_FLOATING = "floatingChrome"
     }
 }
 
@@ -246,6 +255,7 @@ private fun TopBarEditDialogContent(
     onShowTagBarAlphaPicker: (Int) -> Unit,
     onShowTagSelectedAlphaPicker: (Int) -> Unit,
     onToggleSearchInDefaultStyle: (Boolean) -> Unit,
+    onToggleFloatingChrome: (Boolean) -> Unit,
     onSave: (String) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -255,6 +265,7 @@ private fun TopBarEditDialogContent(
         ?: TopBarConfig.STYLE_DEFAULT
     val isRegular = currentStyle == TopBarConfig.STYLE_REGULAR
     val cornerScale = args.getFloat(TopBarEditDialog.ARG_CORNER_SCALE, 1f)
+    val floatingChrome = args.getBoolean(TopBarEditDialog.ARG_FLOATING)
     val hasBgColor = args.getBoolean(TopBarEditDialog.ARG_HAS_BG_COLOR)
     val bgColor = args.getInt(TopBarEditDialog.ARG_BG_COLOR)
     val wallpaperPath = args.getString(TopBarEditDialog.ARG_WALLPAPER_PATH)
@@ -294,6 +305,14 @@ private fun TopBarEditDialogContent(
                     palette = palette,
                     style = style,
                     onClick = onShowStyleSelector
+                )
+                // Floating rounded chrome (both styles; geometry comes from TopBarChromeSpec)
+                TopBarEditOptionRow(
+                    title = stringResource(R.string.top_bar_floating_chrome),
+                    value = if (floatingChrome) "On" else "Off",
+                    palette = palette,
+                    style = style,
+                    onClick = { onToggleFloatingChrome(!floatingChrome) }
                 )
                 if (isRegular) {
                     // Corner scale

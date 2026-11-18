@@ -15,6 +15,7 @@ import io.legado.app.ui.widget.code.addJsPattern
 import io.legado.app.ui.widget.code.addJsonPattern
 import io.legado.app.ui.widget.code.addLegadoPattern
 import io.legado.app.ui.widget.text.EditEntity
+import io.legado.app.ui.widget.text.applyThemeOutlineBorder
 import io.legado.app.utils.isTrue
 
 class RssSourceEditAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -44,6 +45,7 @@ class RssSourceEditAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             else -> {
                 val binding = ItemSourceEditBinding
                     .inflate(LayoutInflater.from(parent.context), parent, false)
+                binding.textInputLayout.applyThemeOutlineBorder()
                 binding.editText.addLegadoPattern()
                 binding.editText.addJsonPattern()
                 binding.editText.addJsPattern()

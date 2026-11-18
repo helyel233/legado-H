@@ -2471,6 +2471,7 @@ Selected text or question:
     <string name="top_bar_style_default">Default top bar</string>
     <string name="top_bar_style_regular">Regular top bar</string>
     <string name="top_bar_corner_scale">Top bar corner scale</string>
+    <string name="top_bar_floating_chrome">Floating rounded top bar</string>
     <string name="top_bar_background_color">Top bar background color</string>
     <string name="top_bar_tag_bar_color">Tag bar background</string>
     <string name="top_bar_tag_bar_alpha">Tag bar opacity</string>

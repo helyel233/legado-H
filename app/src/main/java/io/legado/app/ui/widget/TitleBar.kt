@@ -7,9 +7,11 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.view.Menu
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.ColorInt
@@ -22,6 +24,8 @@ import com.google.android.material.appbar.AppBarLayout
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.titleTextColor
@@ -128,6 +132,45 @@ internal fun titleBarGlassAction(
     appliedSignature == signature -> TitleBarGlassAction.KEEP
     else -> TitleBarGlassAction.REBUILD
 }
+
+/**
+ * B系 [TitleBar] 悬浮 chrome 的表面决策（纯 JVM 判定，便于单测）。
+ *
+ * 与 [titleBarGlassAction] 同层：只回答「顶栏表面用哪种材质」，不碰 View：
+ *
+ * - [TitleBarChromeSurface.GLASS]：悬浮 + 玻璃判定通过 → 圆角玻璃卡片；
+ * - [TitleBarChromeSurface.PACKAGE]：悬浮 + 玻璃判定不过（无背景图 / solid 档 /
+ *   `opaque` / 布局退出 / 低内存降级）→ 顶栏包实底圆角卡片；
+ * - [TitleBarChromeSurface.LEGACY]：非悬浮 → 一切回归历史行为（逐字节 dormant）。
+ *
+ * 「是否悬浮」只来自顶栏包 `floatingChrome`（独立布尔，禁止由 radius>0 反推，R4）。
+ */
+internal enum class TitleBarChromeSurface {
+    GLASS,
+    PACKAGE,
+    LEGACY
+}
+
+internal fun titleBarChromeSurface(glassEnabled: Boolean, floating: Boolean): TitleBarChromeSurface =
+    when {
+        floating && glassEnabled -> TitleBarChromeSurface.GLASS
+        floating -> TitleBarChromeSurface.PACKAGE
+        else -> TitleBarChromeSurface.LEGACY
+    }
+
+/**
+ * 玻璃账本与包背景卡片共用的复合签名。
+ *
+ * 必须同时含：顶栏包身份（编辑包文件后 lastModified 变化 → 即时重铺）、玻璃档位签名、
+ * 有效半径与悬浮态。半径进签名是红队既定项——View 侧 ledger 此前不含 radius，
+ * 改 cornerScale 会命中 KEEP 而保留旧半径的玻璃 drawable。
+ */
+internal fun titleBarChromeSurfaceSignature(
+    packageSignature: String,
+    glassSignature: String,
+    radiusPx: Float,
+    floating: Boolean
+): String = "$packageSignature|$glassSignature|r=$radiusPx|f=$floating"
 
 /**
  * 顶栏的「原样快照 + 已铺标记」账本。
@@ -252,6 +295,20 @@ class TitleBar @JvmOverloads constructor(
     /** 「原样快照 + 已铺标记」，降级回退的唯一状态来源（见 [TitleBarGlassLedger]）。 */
     private val glassLedger = TitleBarGlassLedger()
 
+    // ===== 悬浮圆角 chrome 状态（B系接线，dormant by default）=====
+
+    /** 系统栏顶部 inset，来自 insets listener；悬浮卡片的 top margin 依赖它。 */
+    private var systemTopInset = 0
+
+    /** 最近一次解析的 chrome 几何；inset 变化 / 非悬浮回滚都要拿它重算。 */
+    private var lastResolvedChrome: TopBarChromeSpec.Chrome? = null
+
+    /** 首次悬浮前的原始 margins 快照；从没悬浮过则不回滚（null = 无事发生）。 */
+    private var chromeOriginalMargins: IntArray? = null
+
+    /** 当前包背景卡片签名；非 null 表示顶栏表面被 chrome 接管（玻璃之外的状态）。 */
+    private var chromeBgSignature: String? = null
+
     /**
      * 本顶栏是否已被页面用 [applyControlledWallpaperGlass] 接管。
      *
@@ -372,17 +429,26 @@ class TitleBar @JvmOverloads constructor(
 //                setPadding(paddingLeft, paddingTop, paddingRight, context.navigationBarHeight)
 //            }
 
-            if (fitStatusBar || fitNavigationBar) {
-                setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
-                    val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                    if (fitStatusBar) {
-                        topPadding = insets.top
-                    }
-                    if (fitNavigationBar) {
-                        bottomPadding = insets.bottom
-                    }
-                    windowInsets
+            // listener 恒装：悬浮 chrome 的 top margin 依赖 systemTopInset，
+            // 与 fitStatusBar 无关（写 padding 才受开关控制）。
+            setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
+                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                systemTopInset = insets.top
+                val floating = lastResolvedChrome?.floating == true
+                if (fitStatusBar) {
+                    // 悬浮态：状态栏让位改由卡片 top margin 承担，padding 归零，
+                    // 否则卡片表面会一直延伸进状态栏。
+                    topPadding = if (floating) 0 else insets.top
                 }
+                if (fitNavigationBar) {
+                    bottomPadding = insets.bottom
+                }
+                if (floating) {
+                    // 首次 inset 派发可能在 chrome 应用之后（margin 里 top 缺状态栏高度），
+                    // inset 到位即重算一次几何。
+                    lastResolvedChrome?.let { applyChromeGeometry(it) }
+                }
+                windowInsets
             }
 
             if (AppConfig.isEInkMode) {
@@ -547,50 +613,182 @@ class TitleBar @JvmOverloads constructor(
     }
 
     /**
-     * 一条路径执行 [titleBarGlassAction] 给出的动作：铺 / 保持 / 重建 / 回退 / 不动。
+     * 解析当前顶栏包的悬浮 chrome 几何（半径 / 悬浮态 / 三向 inset）。
      *
-     * 自动 / 手动 / 受控三个入口共用这里，因此三者的幂等与回退行为逐值一致——
-     * 「手写过 applyWallpaperGlass 的页面」不会因为少了自动 opt-in 就失去回退。
+     * 唯一真相源是 [TopBarChromeSpec]（与 A系 [MainTopBarView] 共用）：
+     * 半径只来自 `cornerScale`，悬浮只来自 `floatingChrome`，互不反推（R4）。
+     */
+    private fun resolveChrome(): Pair<TopBarChromeSpec.Chrome, TopBarConfig.Config> {
+        val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
+        val base = resources.getDimension(R.dimen.ui_panel_radius)
+        val height = measuredHeight.takeIf { it > 0 }?.toFloat() ?: 0f
+        return TopBarChromeSpec.resolve(base, config, height) to config
+    }
+
+    /**
+     * 把悬浮卡片的几何施加到 [TitleBar] 自身：左右 / 底部 inset 走 margins，
+     * 状态栏让位从 topPadding 迁移到 top margin（卡片从状态栏下方起卡）。
+     * 非悬浮时恢复首次悬浮前快照；从没悬浮过则什么都不动（dormant 安全底线）。
+     */
+    private fun applyChromeGeometry(chrome: TopBarChromeSpec.Chrome) {
+        lastResolvedChrome = chrome
+        val lp = layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        if (chromeOriginalMargins == null) {
+            chromeOriginalMargins = intArrayOf(lp.leftMargin, lp.topMargin, lp.rightMargin, lp.bottomMargin)
+        }
+        if (chrome.floating) {
+            val top = if (fitStatusBar) systemTopInset + chrome.topInsetPx else chrome.topInsetPx
+            if (lp.leftMargin != chrome.hInsetPx || lp.rightMargin != chrome.hInsetPx ||
+                lp.topMargin != top || lp.bottomMargin != chrome.bottomInsetPx
+            ) {
+                lp.leftMargin = chrome.hInsetPx
+                lp.topMargin = top
+                lp.rightMargin = chrome.hInsetPx
+                lp.bottomMargin = chrome.bottomInsetPx
+                layoutParams = lp
+            }
+            if (fitStatusBar && paddingTop != 0) {
+                setPadding(paddingLeft, 0, paddingRight, paddingBottom)
+            }
+        } else {
+            val original = chromeOriginalMargins
+            if (original != null &&
+                (lp.leftMargin != original[0] || lp.topMargin != original[1] ||
+                    lp.rightMargin != original[2] || lp.bottomMargin != original[3])
+            ) {
+                lp.leftMargin = original[0]
+                lp.topMargin = original[1]
+                lp.rightMargin = original[2]
+                lp.bottomMargin = original[3]
+                layoutParams = lp
+            }
+            if (fitStatusBar && systemTopInset > 0 && paddingTop != systemTopInset) {
+                setPadding(paddingLeft, systemTopInset, paddingRight, paddingBottom)
+            }
+        }
+    }
+
+    /**
+     * 悬浮 + 玻璃判定不过时的降级表面：顶栏包实底圆角卡片（[TopBarConfig.resolveBackgroundColor]）。
+     * 按 [signature] 幂等：包文件 / 半径 / 悬浮态任一变化才重建 drawable。
+     */
+    private fun applyPackageChromeSurface(chrome: TopBarChromeSpec.Chrome, signature: String, config: TopBarConfig.Config) {
+        if (chromeBgSignature == signature) return
+        chromeBgSignature = signature
+        val color = TopBarConfig.resolveBackgroundColor(config)
+        // 与 setBackground(ColorDrawable) 的存量语义一致：半透明底保留 0.1f，
+        // 避免横屏下文字 / 图标颜色异常。
+        elevation = if (Color.alpha(color) < 255) GLASS_ELEVATION else 0f
+        setBackground(
+            GradientDrawable().apply {
+                cornerRadius = chrome.radiusPx
+                setColor(color)
+            }
+        )
+    }
+
+    /** 撤掉包背景卡片，恢复 init 时设定的原背景与 elevation（从没铺过则无事发生）。 */
+    private fun releasePackageChromeSurface() {
+        if (chromeBgSignature == null) return
+        chromeBgSignature = null
+        background = glassLedger.originalBackground
+        elevation = glassLedger.originalElevation
+    }
+
+    /**
+     * 一条路径执行 chrome 几何 + [titleBarGlassAction] 给出的表面动作。
      *
-     * [yieldToPage] 只由自动 opt-in 传 true（页面已接管时不插手）。
-     * [cornerRadiusPx] 供非贴边顶栏卡使用，贴边通栏取 0。
+     * chrome 与玻璃共用这个漏斗（自动 / 手动 / 受控三入口都汇进来），所以
+     * BaseActivity / BaseFragment 的每次 onResume 重判同时也是 chrome 重判：
+     * 设计页改包（半径 / 悬浮开关）后返回页面即生效，签名未变时全部幂等空转。
+     *
+     * 表面决策见 [titleBarChromeSurface]：悬浮+玻璃 → 圆角玻璃卡（半径取 chrome，
+     * 调用方 [cornerRadiusPx] 只在非悬浮受控卡生效）；悬浮+非玻璃 → 包实底卡；
+     * 非悬浮 → 历史行为逐字节不变（radius 参数也回归调用方原值）。
+     *
+     * [yieldToPage] 只由自动 opt-in 传 true（页面已接管时不插手玻璃判定）。
+     * chrome 几何始终施加（悬浮是顶栏包的全局决定）；表面材质则让位——受控页已铺
+     * 玻璃时 SKIP 不撕包卡、PACKAGE 不铺包卡不撤页面玻璃，两者都是「零触碰」让位，
+     * 否则受控页每次 resume 会退化成「页面铺 → 自动撤 → 页面重铺」的循环。
      */
     private fun applyWallpaperGlassDecision(
         enabled: Boolean,
         cornerRadiusPx: Float = 0f,
         yieldToPage: Boolean = false
     ): Boolean {
-        val signature = GlassSurface.configSignature(context)
-        val action = titleBarGlassAction(
-            enabled = enabled,
-            signature = signature,
-            appliedSignature = glassLedger.appliedSignature,
-            yieldToPage = yieldToPage
+        val (chrome, config) = resolveChrome()
+        applyChromeGeometry(chrome)
+        val glassRadius = if (chrome.floating) chrome.radiusPx else cornerRadiusPx
+        val signature = titleBarChromeSurfaceSignature(
+            packageSignature = TopBarConfig.currentSignature(AppConfig.isNightTheme),
+            glassSignature = GlassSurface.configSignature(context),
+            radiusPx = glassRadius,
+            floating = chrome.floating
         )
-        return when (action) {
-            TitleBarGlassAction.SKIP -> false
-            TitleBarGlassAction.KEEP -> true
-            TitleBarGlassAction.RELEASE -> {
+        return when (titleBarChromeSurface(enabled, chrome.floating)) {
+            TitleBarChromeSurface.PACKAGE -> {
+                // 悬浮但玻璃判定不过：撤掉已铺玻璃（若有）再铺包背景卡片；
+                // 让位例外见下方注释。
+                // 例外——让位规则优先：受控页已铺玻璃（appliedSignature 非空）时本入口
+                // 什么都不动。否则 `opaque` 受控页（ReadRssActivity）+ 悬浮顶栏包的
+                // 组合会在每次 resume 上演「自动入口撤页面玻璃 → 页面重铺」的循环，
+                // 正是 [titleBarGlassAction] KDoc 记载已修复的回归在 chrome 分支复发；
+                // 若受控入口晚于自动入口执行，页面玻璃甚至会被包卡永久盖掉。
+                // 页面尚未铺玻璃（appliedSignature 为空）时撤玻璃是空操作，包卡照铺。
+                if (yieldToPage && glassLedger.appliedSignature != null) {
+                    return false
+                }
                 restoreTitleBarSurface(this, glassLedger)
-                false
+                applyPackageChromeSurface(chrome, signature, config)
+                true
             }
 
-            TitleBarGlassAction.APPLY, TitleBarGlassAction.REBUILD -> {
-                val glass = GlassSurface.panelBackground(
-                    this,
-                    GlassSamplingDomain.WALLPAPER,
-                    cornerRadiusPx
+            TitleBarChromeSurface.GLASS, TitleBarChromeSurface.LEGACY -> {
+                val action = titleBarGlassAction(
+                    enabled = enabled,
+                    signature = signature,
+                    appliedSignature = glassLedger.appliedSignature,
+                    yieldToPage = yieldToPage
                 )
-                if (glass == null) {
-                    // 管线本次给不出玻璃（如低内存降级）：上一次铺的必须撤掉，
-                    // 不能把旧材质留在顶栏上。
-                    restoreTitleBarSurface(this, glassLedger)
-                    false
-                } else {
-                    glassLedger.markApplied(signature)
-                    elevation = GLASS_ELEVATION
-                    setBackground(glass)
-                    true
+                // SKIP（受控页接管）：既不铺也不撤——包背景卡与玻璃都保持原样，
+                // 撕包卡同样越权（纪律与玻璃一致：让位即零触碰）。
+                if (action == TitleBarGlassAction.SKIP) {
+                    return false
+                }
+                releasePackageChromeSurface()
+                when (action) {
+                    // SKIP 已在上面早退，此处不可达（穷尽性需要）。
+                    TitleBarGlassAction.SKIP -> false
+                    TitleBarGlassAction.KEEP -> true
+                    TitleBarGlassAction.RELEASE -> {
+                        restoreTitleBarSurface(this, glassLedger)
+                        false
+                    }
+
+                    TitleBarGlassAction.APPLY, TitleBarGlassAction.REBUILD -> {
+                        val glass = GlassSurface.panelBackground(
+                            this,
+                            GlassSamplingDomain.WALLPAPER,
+                            glassRadius
+                        )
+                        if (glass == null) {
+                            // 管线本次给不出玻璃（如低内存降级）：上一次铺的必须撤掉，
+                            // 不能把旧材质留在顶栏上。
+                            restoreTitleBarSurface(this, glassLedger)
+                            if (chrome.floating) {
+                                // 悬浮态玻璃降级失败：退到包实底卡片，悬浮卡不能裸奔成透明。
+                                applyPackageChromeSurface(chrome, signature, config)
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            glassLedger.markApplied(signature)
+                            elevation = GLASS_ELEVATION
+                            setBackground(glass)
+                            true
+                        }
+                    }
                 }
             }
         }

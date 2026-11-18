@@ -24,9 +24,12 @@ import io.legado.app.databinding.ActivityRssSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.glass.applyWallpaperGlassBackground
+import io.legado.app.utils.dpToPx
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
@@ -105,6 +108,26 @@ class RssSourceEditActivity :
         if (!LocalConfig.ruleHelpVersionIsLast) {
             showHelp("rssRuleHelp")
         }
+    }
+
+    /**
+     * 订阅源编辑页栏目栏接壁纸域玻璃管线，逻辑与书源编辑页一致。
+     * 玻璃层自带主题描边；回退为「原背景 + 1dp 主题描边」，签名去重后 onResume 重铺。
+     */
+    private fun applyTabLayoutGlass() {
+        binding.tabLayout.applyWallpaperGlassBackground(cornerRadiusPx = 0f) {
+            UiCorner.opaqueRoundedStroke(
+                backgroundColor,
+                0f,
+                1.dpToPx(),
+                UiCorner.borderLineColor(this)
+            )
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyTabLayoutGlass()
     }
 
     override fun finish() {
@@ -265,7 +288,7 @@ class RssSourceEditActivity :
         }
         globalFocusChangeListener = focusListener
         binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
-        binding.tabLayout.setBackgroundColor(backgroundColor)
+        applyTabLayoutGlass()
         binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {

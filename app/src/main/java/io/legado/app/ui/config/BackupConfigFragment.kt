@@ -6,15 +6,20 @@ import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
+import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.NotificationId
 import io.legado.app.constant.PreferKey
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.LifecycleHelp
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3CapacityFullException
 import io.legado.app.lib.dialogs.SelectItem
@@ -31,6 +36,7 @@ import io.legado.app.help.storage.BackupProgressHolder
 import io.legado.app.help.storage.BackupStage
 import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.Restore
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.ui.about.AppLogDialog
@@ -641,23 +647,69 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }.onSuccess {
             BackupProgressHolder.update(null)
             dismissBackupProgressDialog()
-            appCtx.toastOnUi(R.string.backup_success)
+            notifyBackupResult(success = true, detail = null)
         }.onError { e ->
             BackupProgressHolder.update(null)
             dismissBackupProgressDialog()
             if (e is S3CapacityFullException && isAdded && showS3FullFallbackAfterFailure(backupPath)) {
                 return@onError
             }
-            AppLog.put(appCtx.getString(R.string.backup_fail, e.localizedMessage), e)
-            appCtx.toastOnUi(
-                appCtx.getString(
-                    R.string.backup_fail,
-                    e.localizedMessage
-                )
-            )
+            val detail = e.localizedMessage.orEmpty()
+            AppLog.put(appCtx.getString(R.string.backup_fail, detail), e)
+            notifyBackupResult(success = false, detail = detail)
         }.onFinally {
             activeBackupPath = null
         }
+    }
+
+    /**
+     * 手动备份完成提醒：按用户离开与否分流。
+     * - App 仍在前台且本页挂载 → 【弹窗】（用户大概率就在等结果，弹窗最醒目）；
+     * - 用户点了「后台继续」离开本页、切到别的应用或锁屏 → 【系统通知】（autoCancel 自动消失）。
+     *
+     * 只服务设置页手动触发的备份：自动备份走 Backup.backup() 底层，不经过此回调，
+     * 不会被提醒打扰（成功/失败都提醒仅针对手动备份）。
+     *
+     * 这里不做前台服务保活（方案 A 边界）：进程被系统回收时备份仍会中断，通知也不会发出——
+     * 这是保守方案的已知取舍，需要「保证跑完」时再升级为前台服务（方案 B）。
+     */
+    private fun notifyBackupResult(success: Boolean, detail: String?) {
+        val message = if (success) {
+            appCtx.getString(R.string.backup_success)
+        } else {
+            appCtx.getString(R.string.backup_fail, detail.orEmpty())
+        }
+        // 前台且本页仍挂载 → 弹窗；任何弹窗失败（如 Activity 正销毁）都降级为通知兜底
+        val shownAsDialog = LifecycleHelp.isAppForeground() && isAdded && runCatching {
+            alert(title = appCtx.getString(R.string.backup), message = message) {
+                okButton()
+            }
+        }.isSuccess
+        if (!shownAsDialog) {
+            notifyBackupComplete(message)
+        }
+    }
+
+    /** 后台完成通知：不跳转（用户选择「自动消失即可」）、不常驻、点击即清除。 */
+    private fun notifyBackupComplete(message: String) {
+        // targetSdk 36 发通知须有 POST_NOTIFICATIONS；用 Compat 的 notify 在无权限时不崩溃，
+        // 这里再显式判一次：无权限则降级为 toast，保证后台结果「一定看得见」（不静默丢失）。
+        if (!NotificationManagerCompat.from(appCtx).areNotificationsEnabled()) {
+            appCtx.toastOnUi(message)
+            return
+        }
+        val notification = NotificationCompat.Builder(appCtx, AppConst.channelIdDownload)
+            .setSmallIcon(R.drawable.ic_backup)
+            .setContentTitle(appCtx.getString(R.string.backup))
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        NotificationManagerCompat.from(appCtx).notify(NotificationId.BackupComplete, notification)
     }
 
     private fun showBackupProgressDialog() {

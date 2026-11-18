@@ -24,7 +24,6 @@ import io.legado.app.databinding.ItemSourceEditBinding
 import io.legado.app.databinding.ItemSelectorSingleBinding
 import io.legado.app.help.book.ParagraphRuleJsExtensions
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.filletTopBackground
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.utils.GSON
@@ -59,7 +58,10 @@ import io.legado.app.data.entities.rule.RowUi.Type
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeMutedColorOrDefault
+import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.utils.dpToPx
 import io.legado.app.ui.widget.text.TextInputLayout
+import io.legado.app.ui.widget.text.applyThemeOutlineBorder
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.indexOf
 import io.legado.app.utils.setSelectionSafely
@@ -299,6 +301,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     false
                 ).let {
                     val editText = it.editText
+                    it.textInputLayout.applyThemeOutlineBorder()
                     binding.flexbox.addView(it.root, insertIndex)
                     rowUi.style().apply {
                         when (this.layout_justifySelf) {
@@ -357,6 +360,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     false
                 ).let {
                     val editText = it.editText
+                    it.textInputLayout.applyThemeOutlineBorder()
                     binding.flexbox.addView(it.root, insertIndex)
                     rowUi.style().apply {
                         when (this.layout_justifySelf) {
@@ -416,6 +420,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     binding.root,
                     false
                 ).let {
+                    it.root.background = borderedControlBackground()
                     if (viewName == null) {
                         it.spName.text = name
                     } else if (viewName.length in 3..19 && viewName.first() == '\'' && viewName.last() == '\'') {
@@ -485,7 +490,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     binding.root,
                     false
                 ).let {
-                    it.root.background = binding.root.context.filletControlBackground()
+                    it.root.background = borderedControlBackground()
                     binding.flexbox.addView(it.root, insertIndex)
                     rowUi.style().apply {
                         when (this.layout_justifySelf) {
@@ -549,7 +554,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     binding.root,
                     false
                 ).let {
-                    it.root.background = binding.root.context.filletControlBackground()
+                    it.root.background = borderedControlBackground()
                     var newName = name
                     var left = true
                     binding.flexbox.addView(it.root, insertIndex)
@@ -672,6 +677,28 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
         }
     }
 
+    /**
+     * 登录弹窗内的按钮 / 切换块 / 下拉框表面：主题柔和色 + 主题包「边框线色」描边。
+     * 与卡片描边同一取色入口；按下 / 选中态加深 0.08 与 filletControlBackground 一致。
+     */
+    private fun borderedControlBackground(): android.graphics.drawable.StateListDrawable {
+        val ctx = requireContext()
+        val base = ctx.themeMutedColorOrDefault()
+        val radius = UiCorner.actionRadius(ctx)
+        val border = UiCorner.borderLineColor(ctx)
+        fun state(pressed: Boolean) = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = radius
+            setColor(UiCorner.surfaceColor(base, pressed))
+            setStroke(1.dpToPx(), border)
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), state(true))
+            addState(intArrayOf(android.R.attr.state_selected), state(true))
+            addState(intArrayOf(), state(false))
+        }
+    }
+
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         val source = viewModel.source ?: return
         loginUrl = source.getLoginJs()
@@ -695,13 +722,31 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
             rowUis = loginUi(loginUiStr)
             buttonUi(source, rowUis)
         }
-        binding.vwBg.background = UiCorner.opaqueRounded(
-            requireContext().themeCardColorOrDefault(),
-            UiCorner.panelRadius(requireContext())
-        )
-        binding.toolBar.background = requireContext().filletTopBackground(
+        // 登录弹窗用 adaptationSoftKeyboard=true，基类不会替它铺玻璃，这里自行接入。
+        // dialogBackground 在 GLASS/FROSTED 档拿壁纸域玻璃（screenAligned + 自带主题描边），
+        // CLEAR 档拿主题色半透明壳，solid / 无壁纸 / 墨水屏回退到「实底 + 1dp 主题描边」。
+        val panelRadius = UiCorner.panelRadius(requireContext())
+        binding.vwBg.background = GlassSurface.dialogBackground(binding.vwBg, panelRadius)
+            ?: UiCorner.opaqueRoundedStroke(
+                requireContext().themeCardColorOrDefault(),
+                panelRadius,
+                1.dpToPx(),
+                UiCorner.borderLineColor(requireContext())
+            )
+        // 工具栏沿用上两角圆角的主题柔和色填充，底部补一条主题描边作为内容区分隔线。
+        // 四周不描边——外框由卡片统一提供，避免出现「框中框」。
+        val toolbarFill = requireContext().filletTopBackground(
             requireContext().themeMutedColorOrDefault()
         )
+        val bottomLine = android.graphics.drawable.GradientDrawable().apply {
+            setColor(UiCorner.borderLineColor(requireContext()))
+        }
+        binding.toolBar.background = android.graphics.drawable.LayerDrawable(
+            arrayOf(toolbarFill, bottomLine)
+        ).apply {
+            setLayerGravity(1, Gravity.BOTTOM)
+            setLayerHeight(1, 1.dpToPx())
+        }
         binding.toolBar.title = getString(R.string.login_source, source.getTag())
         binding.toolBar.inflateMenu(R.menu.source_login)
         binding.toolBar.menu.applyTint(requireContext())

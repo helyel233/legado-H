@@ -28,6 +28,7 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.applyUiTitleTypeface
@@ -304,7 +305,12 @@ class MainTopBarView @JvmOverloads constructor(
             )
             if (spec != null) {
                 val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-                val radius = if (isRegularStyle()) TopBarConfig.cornerRadius(context, config) else 0f
+                val chrome = floatingChrome(config)
+                val radius = when {
+                    chrome.floating -> chrome.radiusPx
+                    isRegularStyle() -> TopBarConfig.cornerRadius(context, config)
+                    else -> 0f
+                }
                 backdropGlass.visibility = View.VISIBLE
                 backdropGlass.setCornerRadius(radius)
                 backdropGlass.applyLiquidGlassSpec(spec)
@@ -380,13 +386,46 @@ class MainTopBarView @JvmOverloads constructor(
         login?.let { loginButton.isVisible = it }
     }
 
+    /**
+     * 悬浮卡片几何：半径与悬浮态均取自顶栏包 config（纯函数层 [TopBarChromeSpec]），
+     * 非悬浮态三个 inset 全为 0，保证存量用户 padding 逐字节不变（dormant by default）。
+     */
+    private fun floatingChrome(config: TopBarConfig.Config): TopBarChromeSpec.Chrome {
+        val base = resources.getDimension(R.dimen.ui_panel_radius)
+        val height = measuredHeight.takeIf { it > 0 }?.toFloat() ?: 0f
+        val result = TopBarChromeSpec.resolve(base, config, height)
+        return result
+    }
+
+    /**
+     * 把悬浮卡片的内缩施加到**卡片表面**（[surfaceLayout]，背景层/玻璃层的共同宿主），
+     * 内容 padding 只承担基础节奏。此前 inset 只喂给内容 padding，卡片表面始终全宽，
+     * 「悬浮」只剩圆角没有留白——观感是全宽圆角条而非悬浮卡片。
+     * 传 null 时归零（非悬浮回滚安全底线：几何与历史版本逐字节一致）。
+     */
+    private fun applySurfaceChromeInsets(chrome: TopBarChromeSpec.Chrome?) {
+        val lp = surfaceLayout.layoutParams as? LinearLayout.LayoutParams ?: return
+        val left = chrome?.hInsetPx ?: 0
+        val right = chrome?.hInsetPx ?: 0
+        val top = chrome?.let { statusBarInsetTop + it.topInsetPx } ?: 0
+        val bottom = chrome?.bottomInsetPx ?: 0
+        if (lp.leftMargin == left && lp.topMargin == top &&
+            lp.rightMargin == right && lp.bottomMargin == bottom
+        ) return
+        lp.leftMargin = left
+        lp.topMargin = top
+        lp.rightMargin = right
+        lp.bottomMargin = bottom
+        surfaceLayout.layoutParams = lp
+    }
+
     private fun applyTopBarStyle(force: Boolean = false, resetFilters: Boolean = force) {
+        val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
         val signature =
-            "${TopBarConfig.currentSignature(AppConfig.isNightTheme)}|$mode|${topBarGlassSignature()}"
+            "${TopBarConfig.currentSignature(AppConfig.isNightTheme)}|$mode|${topBarGlassSignature()}|${config.floatingChrome}"
         if (!force && styleSignature == signature) return
         val signatureChanged = styleSignature != signature
         styleSignature = signature
-        val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
         if (resetFilters && (force || signatureChanged)) {
             filtersExpanded = config.style == TopBarConfig.STYLE_REGULAR && config.expandFiltersByDefault
         }
@@ -450,19 +489,30 @@ class MainTopBarView @JvmOverloads constructor(
 
     private fun applyDefaultStyle() {
         contentLayout.layoutTransition = null
+        val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
         val horizontal = resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
-        contentLayout.setPadding(horizontal, statusBarInsetTop, horizontal, 0)
-        // 覆盖式场景(如发现页顶栏浮在列表之上)需要不透明底，否则滚动的书籍会从透明顶栏后透出。
-        background = if (overlayOpaqueBackground && !backdropGlassActive) {
-            ColorDrawable(context.backgroundColor)
+        val chrome = floatingChrome(config)
+        if (chrome.floating) {
+            // 悬浮卡片：实底交给圆角背景层，宿主自身保持透明；卡片内缩由
+            // applySurfaceChromeInsets 施加到表面，内容 padding 只保留基础节奏。
+            background = null
+            renderBackgroundLayer(config, chrome.radiusPx)
+            applySurfaceChromeInsets(chrome)
+            contentLayout.setPadding(horizontal, 0, horizontal, 0)
         } else {
-            null
+            applySurfaceChromeInsets(null)
+            contentLayout.setPadding(horizontal, statusBarInsetTop, horizontal, 0)
+            // 覆盖式场景(如发现页顶栏浮在列表之上)需要不透明底，否则滚动的书籍会从透明顶栏后透出。
+            background = if (overlayOpaqueBackground && !backdropGlassActive) {
+                ColorDrawable(context.backgroundColor)
+            } else {
+                null
+            }
+            renderBackgroundLayer(null, 0f)
         }
-        renderBackgroundLayer(null, 0f)
         titleRow.background = null
         titleRow.setPadding(0, resources.getDimensionPixelSize(R.dimen.bookshelf_title_row_margin_top), 0, 0)
         updateTitleRowControlHeight(resources.getDimensionPixelSize(R.dimen.bookshelf_title_select_height))
-        val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
         // 顶栏搜索按钮：包自身开启，或悬浮底栏隐藏了搜索时自动顶上来，保证搜索始终可达。
         val showSearch = config.showSearchInDefaultStyle || isFloatingSearchHidden()
         searchEntry.isVisible = false
@@ -502,17 +552,26 @@ class MainTopBarView @JvmOverloads constructor(
         }
         val horizontal = resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
         val vertical = 5.dp
-        contentLayout.setPadding(horizontal, statusBarInsetTop + vertical, horizontal, vertical)
-        background = if (overlayOpaqueBackground && !backdropGlassActive) {
-            ColorDrawable(context.backgroundColor)
+        val chrome = floatingChrome(config)
+        if (chrome.floating) {
+            background = null
+            renderBackgroundLayer(config, chrome.radiusPx)
+            applySurfaceChromeInsets(chrome)
+            contentLayout.setPadding(horizontal, vertical, horizontal, vertical)
         } else {
-            null
+            applySurfaceChromeInsets(null)
+            background = if (overlayOpaqueBackground && !backdropGlassActive) {
+                ColorDrawable(context.backgroundColor)
+            } else {
+                null
+            }
+            val hideConfigBg = overlayOpaqueBackground || backdropGlassActive
+            renderBackgroundLayer(
+                config.takeUnless { hideConfigBg },
+                if (hideConfigBg) 0f else TopBarConfig.cornerRadius(context, config)
+            )
+            contentLayout.setPadding(horizontal, statusBarInsetTop + vertical, horizontal, vertical)
         }
-        val hideConfigBg = overlayOpaqueBackground || backdropGlassActive
-        renderBackgroundLayer(
-            config.takeUnless { hideConfigBg },
-            if (hideConfigBg) 0f else TopBarConfig.cornerRadius(context, config)
-        )
         titleRow.background = null
         titleRow.setPadding(0, 0, 0, 0)
         updateTitleRowControlHeight(resources.getDimensionPixelSize(R.dimen.top_bar_regular_action_size))

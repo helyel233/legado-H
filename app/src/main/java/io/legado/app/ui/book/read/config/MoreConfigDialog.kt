@@ -77,8 +77,8 @@ class MoreConfigDialog : BasePrefDialogFragment() {
 
     /**
      * 本次面板截出的正文底图（截图 + 软件模糊路径的唯一产物）。持有引用唯一目的是在
-     * `onDestroyView` 里显式回收——`GlassFrostDrawable` 内部有 `isRecycled` 守卫
-     * （`GlassFrostDrawable.draw` 的 `takeUnless(Bitmap::isRecycled)`），所以即便退出动画
+     * `onDestroyView` 里显式回收——[GlassLiquidBackdropDrawable] 内部有 `isRecycled`
+     * 守卫（`draw` 里的 `takeUnless(Bitmap::isRecycled)`），所以即便退出动画
      * 期间位图已被回收也只是不画底图，不会崩。
      */
     private var panelBackdropBitmap: Bitmap? = null
@@ -140,7 +140,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
 
     /**
      * 面板表面：**当前读书界面**的磨砂，唯一实现是「打开瞬间截一张正文 → 降采样 →
-     * 软件模糊 → 当 [GlassFrostDrawable] 的 backdrop」。降级时逐值回落
+     * 软件模糊 → 当 [GlassLiquidBackdropDrawable] 的 backdrop」。降级时逐值回落
      * [dialogSurfaceBackground]（同一份 drawable、同一个颜色、同一个圆角）。
      *
      * 为什么不再用系统级背景模糊（`FLAG_BLUR_BEHIND` + `setBackgroundBlurRadius`）：

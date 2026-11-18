@@ -4,6 +4,15 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.31.1 · 2026/11/18**
+
+- 新功能「悬浮圆角顶栏」：顶栏包 opt-in 独立布尔 floatingChrome(不由圆角反推、存量零变化)，新增 TopBarChromeSpec 纯函数几何层(半径/悬浮态各自单一来源、从半径推导悬浮内边距)、TitleBar/MainTopBarView 接线悬浮卡片表面+系统栏 inset 重算、设置页开关、半径进玻璃签名
+- 手动备份完成提醒：前台弹对话框/后台发通知，只服务手动备份不打扰自动备份
+- 玻璃材质收拢为 AGSL 单管线：删除旧手绘磨砂 GlassFrostDrawable/GlassFrostSpec，仅保留壳层取色纯函数到 GlassSurfacePalette
+- 登录弹窗/书源编辑页/更多设置弹窗/管理脚手架等页面玻璃化收口
+- CI 新增玻璃位运算治理门禁 check_glass_governance.py + docs/change-safety.md 改动纪律文档
+- 新增 TopBarChromeSpecTest 14 例 + TitleBarChromeSurfaceTest 7 例 + TopBarConfigFloatingChromePersistenceTest 3 例
+
 **vH.1.30.2 · 2026/11/17**
 
 - 备份补齐 UI 美术资产包导出：主题包/底栏图标包/顶栏包/封面集合此前备份端从未导出、恢复端却能还原，换机时静默丢失；新增 UiPackageBackup 统一目录名常量 + 目录过滤 + 复制，Backup 导出与 zip 打包白名单补齐四类目录，Restore/RestoreSnapshot 改引同一常量

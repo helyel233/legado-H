@@ -1,5 +1,24 @@
 # 更新日志
 
+## 1.31.1 版（2026-11-18）
+
+本版新增「悬浮圆角顶栏」（顶栏包 opt-in，存量视觉零变化），并把玻璃材质从旧手绘软件管线彻底收拢为 AGSL 单管线；同时补上手动备份完成提醒、若干页面玻璃化收口，并把一个月复盘沉淀的位运算反模式做成 CI 硬门禁。**特性 + 修复 → minor+0.1。**
+
+### 新功能
+
+- **悬浮圆角顶栏（floating chrome）**：顶栏包新增独立布尔 `floatingChrome`（禁止由 `cornerScale>0` 反推——直角档是用户主动选择；存量包缺字段默认 false、视觉零变化，包作者 opt-in）。新增 `TopBarChromeSpec` 纯函数几何层——半径只来自 `config.cornerScale`（钳制到半高避免变胶囊）、悬浮态只来自 `config.floatingChrome`，二者互不反推，并从半径纯推导悬浮卡片三向内边距（左右/底 0.6×半径、顶 0.5×半径，不新增 dimens）。`TitleBar`/`MainTopBarView` 接线悬浮卡片表面与系统栏 inset 重算，新增 `titleBarChromeSurface` 纯决策（GLASS/PACKAGE/LEGACY 三态，非悬浮逐字节回归历史行为）与签名（含半径与悬浮态，修 KEEP 命中旧半径 drawable）。设置页加「悬浮圆角顶栏」开关（中英文案），半径进玻璃签名。
+- **手动备份完成提醒**：设置页手动备份成功/失败按「用户是否离开」分流——前台弹对话框、后台发通知（`NotificationId.BackupComplete`，autoCancel 自动消失），明确只服务手动触发、不打扰自动备份；不前台保活（进程被回收则中断，边界已注）。
+
+### 修复 / 收口
+
+- **玻璃材质收拢为 AGSL 单管线**：删除旧手绘磨砂管线 `GlassFrostDrawable`/`GlassFrostSpec`（及 `GlassFrostSpecTest`），仅保留仍被阅读设置弹窗/界面弹层/书籍详情页取壳层色的纯函数 `glassFrostSurfaceRgb` 到新文件 `GlassSurfacePalette`；`GlassLiquidBackdropDrawable` 收口。杜绝「同一能力两套实现只改其一」。
+- **页面玻璃化收口**：`SourceLoginDialog` 背景/控件改 `GlassSurface.dialogBackground` + 主题描边；`BookSourceEditActivity`/`RssSourceEditActivity` 书源编辑页 tab 布局、适配器和 `TextInputLayout` 接统一边框口径；`MoreConfigDialog`、`AppManagementScaffold`、`BookInfoBackdropSurface` 同步收口。
+- **CI 玻璃治理门禁**：新增 `tools/check_glass_governance.py`，拦「带 alpha 的十六进制常量再 `shl 24`」反模式（曾让全 App 软件玻璃静默失效一个月、模糊位图 alpha 恒 0），接入 `.github/workflows/verify.yml`；并新增 `docs/change-safety.md`（一个月返工复盘的可执行改动清单，对应项目级 change-safety 技能）。
+
+### 单测
+
+新增 `TopBarChromeSpecTest`（14 例）、`TitleBarChromeSurfaceTest`（7 例）、`TopBarConfigFloatingChromePersistenceTest`（3 例）；`check_glass_governance.py`、`check_settings_mapping.py` 均 PASS。
+
 ## 1.30.2 版（2026-11-17）
 
 本版聚焦三处「静默丢数据 / 状态栏」修复与一处仓库治理：备份端补齐 UI 美术资产包导出（修复换机时主题包/图标包/顶栏包/封面集合静默丢失），修复「内容被铺进状态栏」的全局根因（新增全局「覆盖状态栏」开关），冻结废弃的 v5 分支以确立 main 唯一主线。

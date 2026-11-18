@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,17 +23,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -42,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
@@ -148,11 +155,44 @@ private fun AppManagementTopBar(
         context.primaryColor
     }
     val topBarContentColor = Color(context.titleTextColor)
+    // 悬浮 chrome 几何：与 A/B 两系共用 TopBarChromeSpec 单一真相源（方案 I′：只共享数，
+    // 不共享渲染——GlassPanel 本就是 Compose 侧唯一玻璃渲染入口，radius 是既有参数）。
+    // remember key = 顶栏包签名：挡住搜索框逐字符重组时的 JSON 重解析；包切换 / 编辑保存
+    // 会写偏好键，经 rememberGlassConfigSignature 的偏好监听触发重组，这里随之拿到新几何。
+    val isNight = AppConfig.isNightTheme
+    val (chrome, chromeColor) = remember(isNight, TopBarConfig.currentSignature(isNight)) {
+        val config = TopBarConfig.currentConfig(context, isNight)
+        TopBarChromeSpec.resolve(
+            context.resources.getDimension(R.dimen.ui_panel_radius),
+            config,
+            0f
+        ) to TopBarConfig.resolveBackgroundColor(config)
+    }
+    val floating = chrome.floating
+    val density = LocalDensity.current
+    val radiusDp = with(density) { chrome.radiusPx.toDp() }
+    val chromeShape = RoundedCornerShape(radiusDp)
+    val statusTopDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 悬浮卡片的三向留白：左右/底部 0.6×半径、顶部 0.5×半径 + 状态栏让位（顶栏包语法定义）。
+    // 状态栏让位从内容的 windowInsetsPadding 迁到表面外边距——卡片从状态栏下方起卡。
+    val surfaceInsets = if (floating) {
+        Modifier.padding(
+            start = with(density) { chrome.hInsetPx.toDp() },
+            end = with(density) { chrome.hInsetPx.toDp() },
+            top = statusTopDp + with(density) { chrome.topInsetPx.toDp() },
+            bottom = with(density) { chrome.bottomInsetPx.toDp() }
+        )
+    } else {
+        Modifier
+    }
     val topBarContent: @Composable () -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .then(
+                    if (floating) Modifier
+                    else Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -203,13 +243,24 @@ private fun AppManagementTopBar(
     if (wallpaperVisible) {
         GlassPanel(
             domain = GlassSamplingDomain.WALLPAPER,
-            // 顶栏贴边全宽、四角直角：玻璃层单一半径会在屏幕顶角留缺口，取 0。
-            cornerRadiusPx = 0f,
-            configSignature = glassSignature,
+            // 非悬浮：贴边全宽、四角直角（玻璃层单一半径会在屏幕顶角留缺口），取 0；
+            // 悬浮：整卡内缩，圆角不再留缺口，取顶栏包半径（半高钳制在 spec 层，0f=不钳，卡高含搜索框足够）。
+            cornerRadiusPx = if (floating) chrome.radiusPx else 0f,
+            // chrome 进签名：半径 / 悬浮态变化必须重绑玻璃，不许 KEEP 住旧形状（红队既定项）。
+            configSignature = "$glassSignature|chrome=$floating|${chrome.radiusPx}",
             modifier = Modifier
                 .fillMaxWidth()
-                .border(barBorder),
-            fallback = Modifier.background(Color(topBarColor))
+                .then(surfaceInsets)
+                .then(if (floating) Modifier.clip(chromeShape) else Modifier)
+                .then(
+                    if (floating) Modifier.border(barBorder, chromeShape)
+                    else Modifier.border(barBorder)
+                ),
+            fallback = if (floating) {
+                Modifier.clip(chromeShape).background(Color(chromeColor))
+            } else {
+                Modifier.background(Color(topBarColor))
+            }
         ) {
             topBarContent()
         }
@@ -217,8 +268,16 @@ private fun AppManagementTopBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(topBarColor))
-                .border(barBorder)
+                .then(surfaceInsets)
+                .then(
+                    if (floating) {
+                        Modifier.clip(chromeShape)
+                            .background(Color(chromeColor))
+                            .border(barBorder, chromeShape)
+                    } else {
+                        Modifier.background(Color(topBarColor)).border(barBorder)
+                    }
+                )
         ) {
             topBarContent()
         }

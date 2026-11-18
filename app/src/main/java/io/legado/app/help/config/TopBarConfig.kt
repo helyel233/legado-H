@@ -64,6 +64,13 @@ object TopBarConfig {
         var wallpaperAlpha: Int = 100,
         var backgroundColor: Int? = null,
         var cornerScale: Float? = null,
+
+        /**
+         * 是否启用悬浮圆角顶栏。独立布尔状态，禁止由 cornerScale > 0 反推：
+         * cornerScale=0 是用户主动选择的直角档，与「未启用悬浮」语义不同。
+         * 存量顶栏包 JSON 缺此字段时走默认 false（视觉零变化，包作者 opt-in）。
+         */
+        var floatingChrome: Boolean = false,
         var expandFiltersByDefault: Boolean = false,
         var hideFilterToggleWhenExpanded: Boolean = false,
         var showSearchInDefaultStyle: Boolean = false,
@@ -313,8 +320,13 @@ object TopBarConfig {
         return config.cornerScale ?: 1f
     }
 
+    /** 纯函数：只做 scale 归一与钳制，供几何 spec 与顶层 adapter 共用，避免两处重复公式。 */
+    fun resolveCornerRadiusPx(baseRadiusPx: Float, config: Config): Float {
+        return baseRadiusPx * resolveCornerScale(config).coerceIn(0f, 3f)
+    }
+
     fun cornerRadius(context: Context, config: Config): Float {
-        return context.resources.getDimension(R.dimen.ui_panel_radius) * resolveCornerScale(config).coerceIn(0f, 3f)
+        return resolveCornerRadiusPx(context.resources.getDimension(R.dimen.ui_panel_radius), config)
     }
 
     private fun defaultEntry(context: Context, isNight: Boolean): Entry {

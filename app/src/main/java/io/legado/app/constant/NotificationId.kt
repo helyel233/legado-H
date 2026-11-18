@@ -18,6 +18,8 @@ object NotificationId {
     const val AiTaskService = 110
     const val PublicWebRelayService = 111
     const val AutoTaskService = 112
+    /** 手动备份完成提醒（非保活通知，autoCancel 自动消失） */
+    const val BackupComplete = 113
     const val AutoTaskBookUpdateBase = 14000
     const val AutoTaskNotifyBase = 24000
     const val Download = 10000

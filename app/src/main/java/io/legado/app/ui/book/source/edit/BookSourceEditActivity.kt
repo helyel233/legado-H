@@ -28,9 +28,12 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.glass.applyWallpaperGlassBackground
+import io.legado.app.utils.dpToPx
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
@@ -243,7 +246,7 @@ class BookSourceEditActivity :
         }
         globalFocusChangeListener = focusListener
         binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
-        binding.tabLayout.setBackgroundColor(backgroundColor)
+        applyTabLayoutGlass()
         binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {
@@ -265,6 +268,28 @@ class BookSourceEditActivity :
             softKeyboardTool.initialPadding = imeHeight
             windowInsets
         }
+    }
+
+    /**
+     * 编辑页的栏目栏是通栏 bar（贴边、不带圆角），与顶栏一样浮在壁纸上。
+     * 复用 [applyWallpaperGlassBackground] 的壁纸域玻璃管线：玻璃档拿到玻璃层
+     * （自带主题包「边框线色」描边），solid / 无壁纸 / 墨水屏 / 低内存回退到
+     * 「原背景色 + 1dp 主题描边」。签名去重，切档 / 开关背景图后 onResume 重铺。
+     */
+    private fun applyTabLayoutGlass() {
+        binding.tabLayout.applyWallpaperGlassBackground(cornerRadiusPx = 0f) {
+            UiCorner.opaqueRoundedStroke(
+                backgroundColor,
+                0f,
+                1.dpToPx(),
+                UiCorner.borderLineColor(this)
+            )
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyTabLayoutGlass()
     }
 
     override fun finish() {

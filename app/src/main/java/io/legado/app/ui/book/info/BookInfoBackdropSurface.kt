@@ -16,12 +16,8 @@ import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.surface.SurfaceCorners
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeMutedColorOrDefault
-import io.legado.app.ui.glass.GlassFrostDrawable
 import io.legado.app.ui.glass.GlassLiquidBackdropDrawable
 import io.legado.app.ui.glass.GlassSurface
-import io.legado.app.ui.glass.glassFrostEdgeInsetPx
-import io.legado.app.ui.glass.glassFrostEdgeWidthPx
-import io.legado.app.ui.glass.glassFrostSpec
 import io.legado.app.ui.glass.glassFrostSurfaceRgb
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.ExploreGlassBackdrop
@@ -45,14 +41,17 @@ import io.legado.app.utils.stackBlurSoftware
  *
  * 第五轮修正：上面「零采样就等价于磨砂」的结论只在**背后真有一张图**时成立。用户
  * 实际用主题纯色 / 系统壁纸，`bg_book` 只是一块纯色——模糊纯色仍是纯色，把卡片
- * alpha 让出来只会得到「透明但没有磨砂」。本类现在分两条：
+ * 现在统一走**一颗** AGSL 玻璃 drawable [GlassLiquidBackdropDrawable]（与底栏 /
+ * 目录页同一颗 shader），材质参数只有 [GlassMaterialPreset] 一份：
  *
- * 1. **真实模糊**：`bg_book` 视图按卡片所在屏幕区域截图 → 1/3 降采样 →
- *    `stackBlurSoftware`，作为卡片的 backdrop（见 [captureBackdropRegion]）；
- * 2. **壳层 + 折射边缘**（[GlassFrostDrawable]）：纯色底上第 1 步退化为纯色时，
- *    靠三色渐变壳层、上缘高光、下缘折射暗带、弱色散和 1dp 描边给出玻璃证据。
+ * 1. **真实模糊**：主线程一次全幅截图降采样（[captureBackdropSnapshot]）→
+ *    后台线程按卡片区域裁剪 + `stackBlurSoftware`（[cropBackdropRegion]），作为卡片的
+ *    backdrop，有底图时给 drawable 做真折射 + 色散的采样源；
+ * 2. **壳层 + 折射边缘**：无底图 / 纯色底 / 位图被回收时，同一颗 drawable 仍画三色渐变
+ *    壳层、边缘与描边（见 [GlassLiquidBackdropDrawable.draw] 的安全降级）。
  *
- * 材质参数仍只有 [GlassMaterialPreset] 一份，没有第二套详情页专用系数。
+ * 关键纪律：底图有无只是**同一档内的细节差异**，绝不再据此切换 drawable 管线——
+ * 这正是反复进入详情页「纯色 / 玻璃 / 磨砂」跳变的根除点。
  *
  * ## 降级
  *
@@ -84,7 +83,7 @@ import io.legado.app.utils.stackBlurSoftware
  *
  * 而唯一生效的搜书页走的是 `GlassPanel(requireWallpaperHost = false)`——它**不看**任何
  * 背景图偏好。本函数据此统一口径：玻璃档开就上玻璃。无背景图时 `bg_book` 是纯色，
- * 半透明卡面透出该纯色并由 [GlassFrostDrawable] 的壳层 / 折射边缘建立玻璃观感，
+ * 半透明卡面透出该纯色并由 [GlassLiquidBackdropDrawable] 的壳层 / 折射边缘建立玻璃观感，
  * 观感不比实底差（对比度推导见 [PANEL_ALPHA]），
  * 绝不会出现「卡片透明却露出错误内容」——本页背后只有纯色 / 用户自己的模糊背景图。
  *
@@ -247,7 +246,8 @@ object BookInfoBackdropSurface {
      *
      * [backdrop] 是 `bg_book` 在**本卡片背后的那一块区域**的区域截图 + 软件模糊结果，
      * 由 `BookInfoActivity` 在视图完成布局后取一次；纯色背景 / 截图失败时为 null，
-     * 此时仍然铺壳层 + 折射边缘（[GlassFrostDrawable]），不会退回死板实底。
+     * 此时仍然铺壳层 + 折射边缘（[GlassLiquidBackdropDrawable] 的安全降级），
+     * 不会退回死板实底。
      *
      * 填充 alpha 仍是 [PANEL_ALPHA]（WCAG 倒推的下限），本函数只新增可见的玻璃边缘，
      * 不动任何一档的对比度。
@@ -437,10 +437,18 @@ object BookInfoBackdropSurface {
     /**
      * 详情页唯一的玻璃 drawable 构造点（卡片 / 按钮 / 分组行共用）。
      *
-     * 有截图底图时走 [GlassLiquidBackdropDrawable]——与底栏 / 目录页同一颗 AGSL
-     * 着色器（真折射 + 色散 + GPU 模糊），材质参数只从 [GlassMaterialPreset.current]
-     * 读；这也是用户「参考其他页面玻璃效果」的正解。纯色 / 截图失败（backdrop=null）
-     * 时退回手绘壳层玻璃，保证没有底图的场景仍看得出玻璃边界与厚度。
+     * 恒走 [GlassLiquidBackdropDrawable]——与底栏 / 目录页同一颗 AGSL 着色器
+     * （真折射 + 色散 + GPU 模糊），材质参数只从 [GlassMaterialPreset.current] 读。
+     * 这是反复进入详情页观感跳变的根除点：
+     *
+     * - **观感只由档位决定**。参数只有一份 [GlassMaterialPreset.current]，不再有第二套
+     *   手绘管线（旧 `GlassFrostDrawable`）在不同时机给出不同观感；
+     * - [backdrop] 退化为纯采样输入：有图 = 折射 + 色散细节更丰富，无图 / 被回收 =
+     *   同档的纯壳层玻璃（见 [GlassLiquidBackdropDrawable.draw] 的安全降级）。
+     *   两者是同一档的「细节差异」，不是「玻璃 / 磨砂 / 纯色」的类别跳变。
+     *
+     * 于是 Glide 缓存命中与否、视图是否完成布局、后台裁剪协程是否被取消这些时序变量，
+     * 只影响玻璃细节的多寡，再也不能改变用户看到的材质档位。
      */
     private fun glassFrost(
         context: Context,
@@ -451,37 +459,20 @@ object BookInfoBackdropSurface {
     ): Drawable {
         val density = context.resources.displayMetrics.density
         val params = GlassMaterialPreset.current(resolvedExploreGlassMode())
-        val surfaceRgb = glassFrostSurfaceRgb(
-            lightBase = AppColorUtils.isColorLight(context.themeCardColorOrDefault())
-        )
-        val strokeColor = glassStrokeColor(context)
-        val strokeWidthPx = 1.dpToPx().toFloat()
-        if (backdrop != null) {
-            return GlassLiquidBackdropDrawable(
-                context = context,
-                backdrop = backdrop,
-                material = params,
-                density = density,
-                cornerRadiusPx = radiusPx,
-                corners = corners,
-                strokeColor = strokeColor,
-                strokeWidthPx = strokeWidthPx,
-                tintColor = tintColor,
-                surfaceRgb = surfaceRgb,
-                shell = params.shell
-            )
-        }
-        return GlassFrostDrawable(
-            backdrop = null,
-            tintColor = tintColor,
-            surfaceRgb = surfaceRgb,
-            spec = glassFrostSpec(params),
+        return GlassLiquidBackdropDrawable(
+            context = context,
+            backdrop = backdrop,
+            material = params,
+            density = density,
             cornerRadiusPx = radiusPx,
             corners = corners,
-            strokeColor = strokeColor,
-            strokeWidthPx = strokeWidthPx,
-            edgeWidthPx = glassFrostEdgeWidthPx(radiusPx, density),
-            edgeInsetPx = glassFrostEdgeInsetPx(radiusPx, density)
+            strokeColor = glassStrokeColor(context),
+            strokeWidthPx = 1.dpToPx().toFloat(),
+            tintColor = tintColor,
+            surfaceRgb = glassFrostSurfaceRgb(
+                lightBase = AppColorUtils.isColorLight(context.themeCardColorOrDefault())
+            ),
+            shell = params.shell
         )
     }
 

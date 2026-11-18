@@ -465,6 +465,10 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     pendingConfig?.showSearchInDefaultStyle = enabled
                     refreshEditDialog()
                 },
+                onToggleFloatingChrome = { enabled ->
+                    pendingConfig?.floatingChrome = enabled
+                    refreshEditDialog()
+                },
                 onSave = { name ->
                     pendingConfig?.name = name.trim()
                     saveEditingPackage()
