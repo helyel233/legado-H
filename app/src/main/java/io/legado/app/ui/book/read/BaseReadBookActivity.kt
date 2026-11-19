@@ -224,17 +224,37 @@ abstract class BaseReadBookActivity :
                 setLightStatusBar(ReadBookConfig.durConfig.curStatusIconDark())
             }
         } else {
-            val statusBarColor =
-                if (AppConfig.readBarStyleFollowPage
-                    && ReadBookConfig.durConfig.curBgType() == 0
-                    || useBgMeanColor
-                ) {
-                    ReadBookConfig.bgMeanColor
-                } else {
-                    ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar)
-                }
-            setLightStatusBar(ColorUtils.isColorLight(statusBarColor))
+            setLightStatusBar(resolveMenuStatusBarLight(useBgMeanColor))
         }
+    }
+
+    /**
+     * 菜单可见时的状态栏图标明暗极性。
+     *
+     * 悬浮圆角顶栏开启时，顶栏下沉至状态栏下方，状态栏区域直接透出阅读正文背景，
+     * 图标极性必须跟正文走，避免浅色主题+深色阅读背景（或反向）导致状态栏图标隐身。
+     */
+    private fun resolveMenuStatusBarLight(useBgMeanColor: Boolean): Boolean {
+        val topBarFloating = binding.readMenu.isVisible && binding.readMenu.isTopBarFloating
+        val usesPageTemplate = ReadBook.usesPageTemplate()
+        val darkSkyTemplate = if (topBarFloating && usesPageTemplate) {
+            EpubReaderTemplateStore.ensureReaderSelection().css == EpubReaderTemplateStore.defaultTemplate.css
+        } else {
+            false
+        }
+        return resolveReadMenuStatusBarLight(
+            topBarFloating = topBarFloating,
+            usesPageTemplate = usesPageTemplate,
+            darkSkyTemplate = darkSkyTemplate,
+            pageStatusIconDark = ReadBookConfig.durConfig.curStatusIconDark(),
+            readBarStyleFollowPage = AppConfig.readBarStyleFollowPage,
+            isColorBgType = ReadBookConfig.durConfig.curBgType() == 0,
+            useBgMeanColor = useBgMeanColor,
+            bgMeanColorIsLight = ColorUtils.isColorLight(ReadBookConfig.bgMeanColor),
+            themeStatusBarIsLight = ColorUtils.isColorLight(
+                ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar)
+            )
+        )
     }
 
     /** 底部 / 搜索两个菜单任一处于玻璃激活态。玻璃激活蕴含菜单可见（收起即解绑）。 */
@@ -291,16 +311,7 @@ abstract class BaseReadBookActivity :
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        val statusBarColor =
-            if (AppConfig.readBarStyleFollowPage
-                && ReadBookConfig.durConfig.curBgType() == 0
-                || useBgMeanColor
-            ) {
-                ReadBookConfig.bgMeanColor
-            } else {
-                ThemeStore.statusBarColor(this, AppConfig.isTransparentStatusBar)
-            }
-        setLightStatusBar(ColorUtils.isColorLight(statusBarColor))
+        setLightStatusBar(resolveMenuStatusBarLight(useBgMeanColor))
     }
 
     @Suppress("DEPRECATION")
@@ -577,5 +588,33 @@ abstract class BaseReadBookActivity :
         }
         val nextKeysStr = getPrefString(PreferKey.nextKeys)
         return nextKeysStr?.split(",")?.contains(keyCode.toString()) ?: false
+    }
+}
+
+/**
+ * 纯 JVM 可测：阅读页菜单可见时的状态栏图标明暗极性判定。
+ */
+internal fun resolveReadMenuStatusBarLight(
+    topBarFloating: Boolean,
+    usesPageTemplate: Boolean,
+    darkSkyTemplate: Boolean,
+    pageStatusIconDark: Boolean,
+    readBarStyleFollowPage: Boolean,
+    isColorBgType: Boolean,
+    useBgMeanColor: Boolean,
+    bgMeanColorIsLight: Boolean,
+    themeStatusBarIsLight: Boolean
+): Boolean {
+    if (topBarFloating) {
+        return if (usesPageTemplate) {
+            !darkSkyTemplate && pageStatusIconDark
+        } else {
+            pageStatusIconDark
+        }
+    }
+    return if (readBarStyleFollowPage && isColorBgType || useBgMeanColor) {
+        bgMeanColorIsLight
+    } else {
+        themeStatusBarIsLight
     }
 }

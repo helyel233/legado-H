@@ -234,6 +234,23 @@ class LiquidGlassSpecTest {
         assertEquals(176, rect.bottom)
     }
 
+    /** 悬浮圆角顶栏四角全圆角：传 extendBottom = false 时底边不因圆角下推。 */
+    @Test
+    fun floatingTopBarGlassRectHasNoBottomExtension() {
+        val rect = glassPanelRect(
+            panelLeft = 18f,
+            panelTop = 100f,
+            panelWidth = 1044f,
+            panelHeight = 176f,
+            cornerRadiusPx = 30f,
+            extendBottom = false
+        )!!
+        assertEquals(18, rect.left)
+        assertEquals(100, rect.top)
+        assertEquals(1062, rect.right)
+        assertEquals(276, rect.bottom)
+    }
+
     // endregion
 
     // region 面板让出底色判定

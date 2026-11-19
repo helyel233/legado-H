@@ -110,18 +110,19 @@ internal fun glassPanelRect(
     panelWidth: Float,
     panelHeight: Float,
     cornerRadiusPx: Float,
-    bottomEdgeZonePx: Float = 0f
+    bottomEdgeZonePx: Float = 0f,
+    extendBottom: Boolean = true
 ): GlassPanelRect? {
     if (panelWidth <= 0f || panelHeight <= 0f) return null
     val left = kotlin.math.floor(panelLeft).toInt()
     val top = kotlin.math.floor(panelTop).toInt()
     val right = kotlin.math.ceil(panelLeft + panelWidth).toInt()
-    val bottom = kotlin.math.ceil(
-        panelTop + panelHeight + glassBottomEdgeExtensionPx(
-            cornerRadiusPx,
-            bottomEdgeZonePx
-        )
-    ).toInt()
+    val bottomExtension = if (extendBottom) {
+        glassBottomEdgeExtensionPx(cornerRadiusPx, bottomEdgeZonePx)
+    } else {
+        0f
+    }
+    val bottom = kotlin.math.ceil(panelTop + panelHeight + bottomExtension).toInt()
     if (right - left <= 0 || bottom - top <= 0) return null
     return GlassPanelRect(left, top, right, bottom)
 }

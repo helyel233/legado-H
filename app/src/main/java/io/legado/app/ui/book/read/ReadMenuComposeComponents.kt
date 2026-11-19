@@ -147,7 +147,8 @@ fun ReadMenuTitleBar(
     state: ReadMenuTitleBarState,
     actions: ReadMenuTitleBarActions,
     style: AppDialogStyle,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBorder: Boolean = true
 ) {
     val context = LocalContext.current
     var popupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
@@ -155,7 +156,7 @@ fun ReadMenuTitleBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         // 阅读页中心弹出的顶部菜单栏：边框统一取主题包「边框线色」(style.stroke)。
-        border = BorderStroke(1.dp, style.stroke),
+        border = if (showBorder) BorderStroke(1.dp, style.stroke) else null,
         color = style.surface,
         contentColor = style.primaryText,
         tonalElevation = 0.dp,
@@ -346,7 +347,8 @@ fun ReadMenuActionBar(
     state: ReadMenuActionBarState,
     actions: ReadMenuActionBarActions,
     style: AppDialogStyle,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBorder: Boolean = true
 ) {
     val context = LocalContext.current
     var sourcePopupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
@@ -360,7 +362,7 @@ fun ReadMenuActionBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         // 阅读页中心弹出的顶部操作栏：边框统一取主题包「边框线色」(style.stroke)。
-        border = BorderStroke(1.dp, style.stroke),
+        border = if (showBorder) BorderStroke(1.dp, style.stroke) else null,
         color = style.surface,
         contentColor = style.primaryText,
         tonalElevation = 0.dp,

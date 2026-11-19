@@ -40,19 +40,23 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
@@ -74,10 +78,12 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.help.source.getSourceType
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.rememberThemeUiPalette
@@ -191,6 +197,7 @@ class ReadMenu @JvmOverloads constructor(
 
     fun runMenuIn(anim: Boolean = !AppConfig.isEInkMode) {
         callBack.onMenuShow()
+        refreshTopBarChrome()
         this.visibility = VISIBLE
         isTopBarVisible = true
         isBottomMenuVisible = true
@@ -373,8 +380,8 @@ class ReadMenu @JvmOverloads constructor(
     /**
      * 顶部菜单液态玻璃：与底部菜单同源同材质，采样源仍是阅读页正文视图。
      *
-     * 半径取 0——TitleBar / ActionBar 本身就是贴边全宽的矩形 Surface，玻璃层只有
-     * 单一半径，加圆角会在屏幕顶边两角留下缺口；方形贴边与现有顶栏形状一致。
+     * 非悬浮态半径取 0（贴边全宽矩形，避免屏幕顶边两角留缺口）；
+     * 悬浮态跟随顶栏包 [TopBarChromeSpec] 的圆角半径与三向内边距。
      */
     private val topGlass = StableLiquidGlassView(context).apply {
         visibility = GONE
@@ -386,6 +393,8 @@ class ReadMenu @JvmOverloads constructor(
     private var bottomGlassActive by mutableStateOf(false)
     /** 底部菜单当前是否由液态玻璃铺底：决定阅读页导航栏区域是否让给玻璃。 */
     val isBottomGlassActive: Boolean get() = bottomGlassActive
+    /** 顶部菜单当前是否处于悬浮圆角模式（决定状态栏图标极性是否改按正文背景）。 */
+    val isTopBarFloating: Boolean get() = isTopBarVisible && resolveTopBarChrome(topBarHeightPx).floating
     /**
      * 当前生效的玻璃着色透明度（0 = 玻璃未激活）。
      *
@@ -403,6 +412,11 @@ class ReadMenu @JvmOverloads constructor(
     private var topGlassActive by mutableStateOf(false)
     private var topGlassRect: GlassPanelRect? = null
     private var topGlassGeometried by mutableStateOf(false)
+    private var lastTopGlassCornerRadiusPx: Float = -1f
+    private var topBarHeightPx by mutableFloatStateOf(0f)
+    private var topBarChromeSignature by mutableStateOf(TopBarConfig.currentSignature(AppConfig.isNightTheme))
+    private var cachedTopBarConfigKey: String? = null
+    private var cachedTopBarConfig: TopBarConfig.Config? = null
     private var confirmSkipToChapter: Boolean = false
     private var isMenuOutAnimating = false
     private var onMenuOutEnd: (() -> Unit)? = null
@@ -454,6 +468,31 @@ class ReadMenu @JvmOverloads constructor(
         updateButtonLayout()
     }
 
+    private fun resolveTopBarConfig(): TopBarConfig.Config {
+        val key = TopBarConfig.currentSignature(AppConfig.isNightTheme)
+        val cached = cachedTopBarConfig
+        if (key == cachedTopBarConfigKey && cached != null) {
+            return cached
+        }
+        return TopBarConfig.currentConfig(context, AppConfig.isNightTheme).also {
+            cachedTopBarConfigKey = key
+            cachedTopBarConfig = it
+        }
+    }
+
+    private fun resolveTopBarChrome(heightPx: Float = topBarHeightPx): TopBarChromeSpec.Chrome {
+        val config = resolveTopBarConfig()
+        val baseRadius = resources.getDimension(R.dimen.ui_panel_radius)
+        return TopBarChromeSpec.resolve(baseRadius, config, heightPx)
+    }
+
+    private fun refreshTopBarChrome() {
+        val next = TopBarConfig.currentSignature(AppConfig.isNightTheme)
+        if (topBarChromeSignature != next) {
+            topBarChromeSignature = next
+        }
+    }
+
     /** 设置底部菜单液态玻璃的采样源（阅读页正文视图，必须是本视图的兄弟子树）。 */
     fun setLiquidGlassSource(source: ViewGroup?) {
         liquidGlassSource = source
@@ -500,12 +539,15 @@ class ReadMenu @JvmOverloads constructor(
         bottomGlass.bind(source)
         bottomGlass.visibility = VISIBLE
         applyBottomGlassRect()
+        // 顶栏圆角半径统一在 updateTopGlassGeometry 中「先 applyTopGlassRect 定尺寸、再 setCornerRadius」施加，
+        // 避免首帧 topBarHeightPx=0 且 topGlass.height=0 时未钳制导致的胶囊形一帧闪烁。
         topGlassActive = true
-        topGlass.setCornerRadius(0f)
+        lastTopGlassCornerRadiusPx = -1f
+        topGlassGeometried = false
+        topGlassRect = null
         topGlass.applyLiquidGlassSpec(spec)
         topGlass.bind(source)
         topGlass.visibility = VISIBLE
-        applyTopGlassRect()
     }
 
     /** 菜单收起动画结束后解绑：不采样就没有每帧整树录制。 */
@@ -522,6 +564,7 @@ class ReadMenu @JvmOverloads constructor(
         topGlassRect = null
         topGlassGeometried = false
         topGlassActive = false
+        lastTopGlassCornerRadiusPx = -1f
     }
 
     /**
@@ -588,8 +631,8 @@ class ReadMenu @JvmOverloads constructor(
     /**
      * 顶栏在窗口中的位置 → 顶部玻璃层本地矩形。
      *
-     * 半径传 0：顶栏贴边全宽且四角为直角，`glassPanelRect` 不会像底部菜单那样
-     * 把底边向下延伸（延伸只为藏住屏幕底边的两个圆角）。
+     * 传 `extendBottom = false`：无论是贴边矩形（半径 0）还是悬浮圆角卡片（四角全圆角），
+     * 玻璃矩形都严格贴合顶栏面板自身边界，不做底部菜单那种底边下推延伸。
      */
     private fun updateTopGlassGeometry(
         windowLeft: Float,
@@ -598,6 +641,8 @@ class ReadMenu @JvmOverloads constructor(
         height: Int
     ) {
         if (!topGlassActive || width <= 0 || height <= 0) return
+        val topChrome = resolveTopBarChrome(height.toFloat())
+        val topCornerRadiusPx = if (topChrome.floating) topChrome.radiusPx else 0f
         val location = IntArray(2)
         getLocationInWindow(location)
         topGlassRect = glassPanelRect(
@@ -605,10 +650,15 @@ class ReadMenu @JvmOverloads constructor(
             panelTop = windowTop - location[1],
             panelWidth = width.toFloat(),
             panelHeight = height.toFloat(),
-            cornerRadiusPx = 0f
+            cornerRadiusPx = topCornerRadiusPx,
+            extendBottom = false
         )
-        if (topGlassRect != null) topGlassGeometried = true
         applyTopGlassRect()
+        if (topCornerRadiusPx != lastTopGlassCornerRadiusPx) {
+            lastTopGlassCornerRadiusPx = topCornerRadiusPx
+            topGlass.setCornerRadius(topCornerRadiusPx)
+        }
+        if (topGlassRect != null) topGlassGeometried = true
     }
 
     /** 与 [applyBottomGlassRect] 同一套测量纪律：玻璃层尺寸由面板矩形决定。 */
@@ -690,6 +740,11 @@ class ReadMenu @JvmOverloads constructor(
                 val statusBarHeight = WindowInsets.statusBars
                     .asPaddingValues()
                     .calculateTopPadding()
+                val isNight = AppConfig.isNightTheme
+                val chrome = remember(isNight, topBarChromeSignature, topBarHeightPx) {
+                    resolveTopBarChrome(topBarHeightPx)
+                }
+                val density = LocalDensity.current
                 // 顶栏玻璃与底部菜单同一纪律：只有玻璃层真正定位过才让出底色，
                 // 否则会露出一块透明空面板。
                 val topGlassYielded = glassPanelFillYielded(topGlassActive, topGlassGeometried)
@@ -698,22 +753,12 @@ class ReadMenu @JvmOverloads constructor(
                 } else {
                     style
                 }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            val pos = coordinates.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
-                            val size = coordinates.size
-                            updateTopGlassGeometry(pos.x, pos.y, size.width, size.height)
-                        }
-                ) {
-                    // 状态栏占位（带背景色，衔接顶栏）
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(statusBarHeight)
-                            .background(topStyle.surface)
-                    )
+                val barStyle = if (chrome.floating && !topGlassYielded) {
+                    topStyle.copy(surface = Color.Transparent)
+                } else {
+                    topStyle
+                }
+                val topBarsContent: @Composable () -> Unit = {
                     // Toolbar（书名 + 换源/刷新/缓存 + 三点菜单）
                     ReadMenuTitleBar(
                         state = ReadMenuTitleBarState(
@@ -775,10 +820,14 @@ class ReadMenu @JvmOverloads constructor(
                                 callBack.clearOfflineReviews()
                             }
                         ),
-                        style = topStyle,
+                        style = barStyle,
+                        showBorder = !chrome.floating,
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (AppConfig.showReadTitleBarAddition) {
+                        if (chrome.floating) {
+                            HorizontalDivider(thickness = 1.dp, color = style.stroke)
+                        }
                         // 操作栏（章节信息 + 操作按钮）
                         ReadMenuActionBar(
                             state = ReadMenuActionBarState(
@@ -812,9 +861,64 @@ class ReadMenu @JvmOverloads constructor(
                                     true
                                 }
                             ),
-                            style = topStyle,
+                            style = barStyle,
+                            showBorder = !chrome.floating,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+                if (chrome.floating) {
+                    val radiusDp = with(density) { chrome.radiusPx.toDp() }
+                    val chromeShape = RoundedCornerShape(radiusDp)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = with(density) { chrome.hInsetPx.toDp() },
+                                end = with(density) { chrome.hInsetPx.toDp() },
+                                top = statusBarHeight + with(density) { chrome.topInsetPx.toDp() },
+                                bottom = with(density) { chrome.bottomInsetPx.toDp() }
+                            )
+                            .onGloballyPositioned { coordinates ->
+                                val pos = coordinates.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
+                                val size = coordinates.size
+                                topBarHeightPx = size.height.toFloat()
+                                updateTopGlassGeometry(pos.x, pos.y, size.width, size.height)
+                            },
+                        shape = chromeShape,
+                        border = BorderStroke(1.dp, style.stroke),
+                        color = topStyle.surface,
+                        contentColor = style.primaryText,
+                        tonalElevation = 0.dp,
+                        shadowElevation = glassPanelShadowElevationDp(topGlassYielded).dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(chromeShape)
+                        ) {
+                            topBarsContent()
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                val pos = coordinates.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
+                                val size = coordinates.size
+                                topBarHeightPx = size.height.toFloat()
+                                updateTopGlassGeometry(pos.x, pos.y, size.width, size.height)
+                            }
+                    ) {
+                        // 状态栏占位（带背景色，衔接顶栏）
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(statusBarHeight)
+                                .background(topStyle.surface)
+                        )
+                        topBarsContent()
                     }
                 }
             }
@@ -1129,6 +1233,7 @@ class ReadMenu @JvmOverloads constructor(
 
     // region Utility
     private fun updateColorConfig() {
+        refreshTopBarChrome()
         colorTick++
     }
 
