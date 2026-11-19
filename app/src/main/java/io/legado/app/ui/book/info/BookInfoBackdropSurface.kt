@@ -3,7 +3,6 @@ package io.legado.app.ui.book.info
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.view.View
 import androidx.core.graphics.ColorUtils
@@ -20,12 +19,11 @@ import io.legado.app.ui.glass.GlassLiquidBackdropDrawable
 import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.glass.glassFrostSurfaceRgb
 import io.legado.app.ui.main.GlassMaterialPreset
-import io.legado.app.ui.main.explore.ExploreGlassBackdrop
+import io.legado.app.ui.main.explore.exploreHardwareBlurPx
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.utils.ColorUtils as AppColorUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefString
-import io.legado.app.utils.stackBlurSoftware
 
 /**
  * 书籍详情页（`BookInfoActivity`）的卡片 / 操作按钮表面。
@@ -44,9 +42,9 @@ import io.legado.app.utils.stackBlurSoftware
  * 现在统一走**一颗** AGSL 玻璃 drawable [GlassLiquidBackdropDrawable]（与底栏 /
  * 目录页同一颗 shader），材质参数只有 [GlassMaterialPreset] 一份：
  *
- * 1. **真实模糊**：主线程一次全幅截图降采样（[captureBackdropSnapshot]）→
- *    后台线程按卡片区域裁剪 + `stackBlurSoftware`（[cropBackdropRegion]），作为卡片的
- *    backdrop，有底图时给 drawable 做真折射 + 色散的采样源；
+ * 1. **共享底图 + 绘制期实时采样**：Glide 投递终图后通过 [BookInfoBackdropSurface.renderDrawableToBackdropBitmap]
+ *    生成单张 1/3 降采样底图，`draw()` 时按宿主实时屏幕坐标经 `rowSampleTransform` 映射
+ *    并与 GPU 高斯（`exploreHardwareBlurPx`）联动，做真折射 + 色散；
  * 2. **壳层 + 折射边缘**：无底图 / 纯色底 / 位图被回收时，同一颗 drawable 仍画三色渐变
  *    壳层、边缘与描边（见 [GlassLiquidBackdropDrawable.draw] 的安全降级）。
  *
@@ -207,20 +205,34 @@ private fun contrastRatio(a: Int, b: Int): Double {
     return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
 }
 
-/** 区域裁剪参数的合法性守卫（纯函数，JVM 单测锁「0 半径不产出位图」）。 */
-internal fun backdropCropParamsValid(outWidth: Int, outHeight: Int, blurRadius: Int): Boolean =
-    blurRadius > 0 && outWidth > 0 && outHeight > 0
+internal data class BackdropCropBounds(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int
+)
 
 /**
- * 将 ViewPager2 次页卡片的屏幕 X 坐标按页宽归一化到当前屏内区间（纯函数，JVM 单测锁表）。
+ * 计算 `centerCrop` 绘制矩形（纯函数，JVM 单测锁表）。
  *
- * 次页卡片在水平方向处于屏幕外，直接与全屏 `bg_book` 求交会得到空矩形并退化为无底图壳层；
- * 当 `pagerWidth <= 0` 时原值返回。
+ * `intrinsicWidth <= 0` 或 `intrinsicHeight <= 0`（如纯色 / 矢量无固有尺寸 Drawable）时
+ * 回退填满 `(0, 0, targetWidth, targetHeight)`。
  */
-internal fun normalizePagerHorizontalOffset(hostX: Int, pagerX: Int, pagerWidth: Int): Int {
-    if (pagerWidth <= 0) return hostX
-    val relX = ((hostX - pagerX) % pagerWidth + pagerWidth) % pagerWidth
-    return pagerX + relX
+internal fun computeCenterCropBounds(
+    intrinsicWidth: Int,
+    intrinsicHeight: Int,
+    targetWidth: Int,
+    targetHeight: Int
+): BackdropCropBounds {
+    if (intrinsicWidth <= 0 || intrinsicHeight <= 0) {
+        return BackdropCropBounds(0, 0, targetWidth, targetHeight)
+    }
+    val scale = maxOf(targetWidth.toFloat() / intrinsicWidth, targetHeight.toFloat() / intrinsicHeight)
+    val scaledW = (intrinsicWidth * scale).toInt()
+    val scaledH = (intrinsicHeight * scale).toInt()
+    val left = (targetWidth - scaledW) / 2
+    val top = (targetHeight - scaledH) / 2
+    return BackdropCropBounds(left, top, left + scaledW, top + scaledH)
 }
 
 object BookInfoBackdropSurface {
@@ -280,7 +292,13 @@ object BookInfoBackdropSurface {
      * 填充 alpha 仍是 [PANEL_ALPHA]（WCAG 倒推的下限），本函数只新增可见的玻璃边缘，
      * 不动任何一档的对比度。
      */
-    fun panelBackground(context: Context, radiusPx: Float, backdrop: Bitmap?): Drawable? {
+    fun panelBackground(
+        context: Context,
+        radiusPx: Float,
+        backdrop: Bitmap?,
+        hostView: View? = null,
+        backdropRootView: View? = null
+    ): Drawable? {
         clearDrawableIfApplicable(context, radiusPx)?.let { return it }
         if (!isAllowed(context)) return null
         return glassFrost(
@@ -288,7 +306,9 @@ object BookInfoBackdropSurface {
             backdrop = backdrop,
             tintColor = fillColor(context, panelAlpha()),
             radiusPx = radiusPx,
-            corners = SurfaceCorners.ALL
+            corners = SurfaceCorners.ALL,
+            hostView = hostView,
+            backdropRootView = backdropRootView
         )
     }
 
@@ -297,20 +317,29 @@ object BookInfoBackdropSurface {
         actionBackground(context, radiusPx, backdrop = null)
 
     /** 操作排按钮背景（带模糊底图）；纯色 / 截图失败时 [backdrop] 传 null。 */
-    fun actionBackground(context: Context, radiusPx: Float, backdrop: Bitmap?): Drawable? {
+    fun actionBackground(
+        context: Context,
+        radiusPx: Float,
+        backdrop: Bitmap?,
+        hostView: View? = null,
+        backdropRootView: View? = null
+    ): Drawable? {
         clearDrawableIfApplicable(context, radiusPx)?.let { return it }
         if (!isAllowed(context)) return null
         val alpha = panelAlpha()
         // 按钮只有一行的高度，壳层按「按下 / 默认」两份分别构造，保留既有按压反馈。
         val default = glassFrost(
-            context, backdrop, frostFillColor(context, alpha), radiusPx, SurfaceCorners.ALL
+            context, backdrop, frostFillColor(context, alpha), radiusPx, SurfaceCorners.ALL,
+            hostView = hostView, backdropRootView = backdropRootView
         )
         val pressed = glassFrost(
             context,
             backdrop,
             frostFillColor(context, (alpha + PRESSED_ALPHA_STEP).coerceAtMost(1f)),
             radiusPx,
-            SurfaceCorners.ALL
+            SurfaceCorners.ALL,
+            hostView = hostView,
+            backdropRootView = backdropRootView
         )
         return android.graphics.drawable.StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), pressed)
@@ -340,7 +369,9 @@ object BookInfoBackdropSurface {
     fun titleBarBackground(
         context: Context,
         cornerRadiusPx: Float = 0f,
-        backdrop: Bitmap? = null
+        backdrop: Bitmap? = null,
+        hostView: View? = null,
+        backdropRootView: View? = null
     ): Drawable? {
         // CLEAR 档：卡片 / 按钮走 clearDrawableIfApplicable 铺了半透明壳，顶栏若沿
         // isAllowed 判否回全透明，就成了同档里唯一没有壳的表面。这里按同一份
@@ -361,7 +392,9 @@ object BookInfoBackdropSurface {
             tintColor = titleBarScrimColor(),
             radiusPx = cornerRadiusPx,
             corners = SurfaceCorners.ALL,
-            lightBase = false
+            lightBase = false,
+            hostView = hostView,
+            backdropRootView = backdropRootView
         )
     }
 
@@ -496,10 +529,17 @@ object BookInfoBackdropSurface {
         tintColor: Int,
         radiusPx: Float,
         corners: SurfaceCorners,
-        lightBase: Boolean = AppColorUtils.isColorLight(context.themeCardColorOrDefault())
+        lightBase: Boolean = AppColorUtils.isColorLight(context.themeCardColorOrDefault()),
+        hostView: View? = null,
+        backdropRootView: View? = null
     ): Drawable {
         val density = context.resources.displayMetrics.density
         val params = GlassMaterialPreset.current(resolvedExploreGlassMode())
+        val blurSigmaPx = if (hostView != null && backdropRootView != null && params.blurDp > 0f) {
+            exploreHardwareBlurPx(params.blurDp, density)
+        } else {
+            0f
+        }
         return GlassLiquidBackdropDrawable(
             context = context,
             backdrop = backdrop,
@@ -511,94 +551,47 @@ object BookInfoBackdropSurface {
             strokeWidthPx = 1.dpToPx().toFloat(),
             tintColor = tintColor,
             surfaceRgb = glassFrostSurfaceRgb(lightBase = lightBase),
-            shell = params.shell
+            shell = params.shell,
+            hostView = hostView,
+            backdropRootView = backdropRootView,
+            blurSigmaPx = blurSigmaPx
         )
     }
 
-    /**
-     * 是否需要真实截图底图（玻璃档可用且非 CLEAR）。
-     *
-     * false 时调用方可**同步**铺完所有表面：CLEAR 走壳层、判否走实底回退，全程无位图
-     * 工作；true 时调用方走「主线程一次快照 + 后台裁剪模糊」的异步管线。
-     */
-    fun backdropGlassCapable(context: Context): Boolean = isAllowed(context)
-
-    /** 底图快照 / 区域裁剪共用的降采样比例（与模糊半径的折算口径一致）。 */
+    /** 底图降采样比例（与屏幕尺寸折算）。 */
     const val BACKDROP_DOWNSCALE = 3f
 
     /**
-     * 把 [source]（`bg_book`）整幅画到一张降采样位图上（**主线程、一次 draw、无模糊**）。
+     * 将 Glide 投递的终图 [Drawable] 按 `centerCrop` 方式绘制到一张独立的 1/3 降采样位图。
      *
-     * 7 张卡片 / 按钮各截各的旧方案会在主线程连做 7 次 `View.draw` + `stackBlurSoftware`；
-     * 改为这里只画一次全幅降采样快照（1/3 尺寸，纯 ImageView 绘制，开销可控），
-     * 各卡片的区域裁剪与软件模糊交给 [cropBackdropRegion] 在后台线程做。
-     *
-     * 视图未布局 / 尺寸为 0 / 建位图失败返回 null，调用方同步铺「纯壳层玻璃」。
+     * 整页共用这一张拥有所有权的 [Bitmap]，Glide BitmapPool 无法提前回收它，
+     * 也不依赖 `bg_book` 视图是否已完成布局或是否显示 placeholder。
      */
-    fun captureBackdropSnapshot(source: View, downscale: Float): Bitmap? {
-        if (source.width <= 0 || source.height <= 0) return null
-        val outWidth = (source.width / downscale).toInt().coerceAtLeast(1)
-        val outHeight = (source.height / downscale).toInt().coerceAtLeast(1)
-        val raw = runCatching {
-            Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
-        }.getOrNull() ?: return null
-        val scaleX = outWidth.toFloat() / source.width
-        val scaleY = outHeight.toFloat() / source.height
-        val drawn = runCatching {
-            val canvas = Canvas(raw)
-            canvas.scale(scaleX, scaleY)
-            source.draw(canvas)
-        }.isSuccess
-        if (!drawn) {
-            raw.recycle()
-            return null
-        }
-        return raw
-    }
-
-    /**
-     * 从 [captureBackdropSnapshot] 的快照里裁出 [regionInSnapshot]（**快照坐标系**）那块
-     * 区域并做软件模糊（**纯位图运算，可在任意线程执行**）。
-     *
-     * 任一步失败都返回 null，调用方退回「纯壳层玻璃」，绝不交回未模糊的清晰快照。
-     * 模糊半径走 [ExploreGlassBackdrop.exploreSoftwareBlurRadius] 同一口径；背景图
-     * 已经由 `BookCover.loadBlur(12)` 预模糊一次，这里再糊只是把卡片区域里的残留
-     * 细节压成雾面，不会出现双重模糊导致的「糊成一整片同色」（底图本身没有文字）。
-     */
-    fun cropBackdropRegion(
-        snapshot: Bitmap,
-        regionInSnapshot: Rect,
-        outWidth: Int,
-        outHeight: Int,
-        blurRadius: Int
+    fun renderDrawableToBackdropBitmap(
+        drawable: Drawable,
+        targetWidth: Int,
+        targetHeight: Int
     ): Bitmap? {
-        if (!backdropCropParamsValid(outWidth, outHeight, blurRadius)) return null
-        val clipped = Rect(regionInSnapshot).apply {
-            intersect(0, 0, snapshot.width, snapshot.height)
-        }
-        if (clipped.isEmpty || clipped.width() <= 0 || clipped.height() <= 0) return null
-        val raw = runCatching {
-            Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        if (targetWidth <= 0 || targetHeight <= 0) return null
+        val out = runCatching {
+            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
         }.getOrNull() ?: return null
-        val scaleX = outWidth.toFloat() / clipped.width()
-        val scaleY = outHeight.toFloat() / clipped.height()
         val drawn = runCatching {
-            val canvas = Canvas(raw)
-            canvas.scale(scaleX, scaleY)
-            canvas.translate(-clipped.left.toFloat(), -clipped.top.toFloat())
-            canvas.drawBitmap(snapshot, 0f, 0f, null)
+            val canvas = Canvas(out)
+            val bounds = computeCenterCropBounds(
+                drawable.intrinsicWidth,
+                drawable.intrinsicHeight,
+                targetWidth,
+                targetHeight
+            )
+            drawable.setBounds(bounds.left, bounds.top, bounds.right, bounds.bottom)
+            drawable.draw(canvas)
         }.isSuccess
         if (!drawn) {
-            raw.recycle()
+            out.recycle()
             return null
         }
-        val blurred = runCatching { raw.stackBlurSoftware(blurRadius) }.getOrNull()
-        if (blurred == null || blurred === raw) {
-            raw.recycle()
-            return null
-        }
-        raw.recycle()
-        return blurred
+        return out
     }
 
     private fun isAllowed(context: Context): Boolean = bookInfoTranslucentSurfaceAllowed(

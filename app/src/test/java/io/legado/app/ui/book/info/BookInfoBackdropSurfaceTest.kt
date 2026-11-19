@@ -248,24 +248,28 @@ class BookInfoBackdropSurfaceTest {
         assertTrue(bookInfoTranslucentSurfaceAllowed(true))
     }
 
-    /** 0 或负模糊半径不产出位图，避免向 GlassLiquidBackdropDrawable 交回未模糊的清晰快照。 */
+    /** centerCrop 矩形计算：横图裁左右、竖图裁上下、无固有尺寸回退填满目标矩形。 */
     @Test
-    fun zeroBlurRadiusRejectsBackdropCrop() {
-        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = 0))
-        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = -3))
-        assertFalse(backdropCropParamsValid(outWidth = 0, outHeight = 100, blurRadius = 8))
-        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 0, blurRadius = 8))
-        assertTrue(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = 1))
-    }
-
-    /** ViewPager2 次页卡片水平坐标按页宽归一化到当前屏内区间，不因离屏而裁剪为空。 */
-    @Test
-    fun normalizePagerHorizontalOffsetWrapsOffscreenPages() {
-        assertEquals(36, normalizePagerHorizontalOffset(hostX = 36, pagerX = 0, pagerWidth = 1080))
-        assertEquals(36, normalizePagerHorizontalOffset(hostX = 1116, pagerX = 0, pagerWidth = 1080))
-        assertEquals(36, normalizePagerHorizontalOffset(hostX = 2196, pagerX = 0, pagerWidth = 1080))
-        assertEquals(120, normalizePagerHorizontalOffset(hostX = -960, pagerX = 100, pagerWidth = 1080))
-        assertEquals(500, normalizePagerHorizontalOffset(hostX = 500, pagerX = 0, pagerWidth = 0))
+    fun computeCenterCropBoundsHandlesAspectRatiosAndFallback() {
+        // 目标 300×600（1:2 竖屏），输入 600×600（1:1 方图）→ 缩放至 600×600，左右各裁 150
+        assertEquals(
+            BackdropCropBounds(-150, 0, 450, 600),
+            computeCenterCropBounds(600, 600, 300, 600)
+        )
+        // 目标 300×600（1:2），输入 300×900（1:3 更窄）→ 缩放至 300×900，上下各裁 150
+        assertEquals(
+            BackdropCropBounds(0, -150, 300, 750),
+            computeCenterCropBounds(300, 900, 300, 600)
+        )
+        // intrinsicWidth/Height <= 0 → 回退填满 (0, 0, targetW, targetH)
+        assertEquals(
+            BackdropCropBounds(0, 0, 300, 600),
+            computeCenterCropBounds(-1, -1, 300, 600)
+        )
+        assertEquals(
+            BackdropCropBounds(0, 0, 300, 600),
+            computeCenterCropBounds(0, 400, 300, 600)
+        )
     }
 
     // ---------------------------------------------------------------------

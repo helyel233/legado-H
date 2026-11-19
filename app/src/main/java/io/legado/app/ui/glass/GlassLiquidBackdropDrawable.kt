@@ -16,11 +16,13 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.view.View
 import androidx.core.graphics.ColorUtils
 import io.legado.app.lib.theme.surface.SurfaceCorners
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.ROW_LIQUID_MIN_SDK
 import io.legado.app.ui.main.explore.RowGlassLiquidRenderer
+import io.legado.app.ui.main.explore.rowSampleTransform
 import kotlin.math.roundToInt
 
 /**
@@ -66,7 +68,7 @@ internal class GlassLiquidBackdropDrawable(
      * 可空：截图失败 / 未布局 / 被竞态回收时为 null，此时只画玻璃壳层，
      * 观感仍由 [material]（即档位）唯一决定，不切换管线、不露纯色实底。
      */
-    private val backdrop: Bitmap?,
+    private var backdrop: Bitmap?,
     private val material: GlassMaterialPreset.Params,
     private val density: Float,
     private val cornerRadiusPx: Float,
@@ -77,17 +79,39 @@ internal class GlassLiquidBackdropDrawable(
     private val tintColor: Int,
     /** 壳层渐变 RGB（浅底白 / 深底近黑）。 */
     private val surfaceRgb: Int,
-    private val shell: GlassMaterialPreset.ShellAlphas
+    private val shell: GlassMaterialPreset.ShellAlphas,
+    /** 可选：宿主与全屏背景视图。传入时在 draw() 按实时屏幕坐标采样共享底图，无需预裁剪。 */
+    private val hostView: View? = null,
+    private val backdropRootView: View? = null,
+    /** 液态/GPU 高斯模糊半径（像素）；已预模糊的裁剪底图传 0f，全屏共享底图传硬件模糊像素。 */
+    private val blurSigmaPx: Float = 0f
 ) : Drawable() {
 
-    private val liquid: RowGlassLiquidRenderer? =
+    private val appContext = context.applicationContext
+
+    private var liquid: RowGlassLiquidRenderer? =
         if (backdrop != null && Build.VERSION.SDK_INT >= ROW_LIQUID_MIN_SDK) {
-            runCatching { RowGlassLiquidRenderer(context, material, density) }.getOrNull()
+            runCatching { RowGlassLiquidRenderer(appContext, material, density) }.getOrNull()
         } else {
             // 无底图时本来就不会走折射路径，不分配 shader：纯壳层细节由下方的
             // tint / shell / stroke 给出，观感仍由 material（档位）唯一决定。
             null
         }
+
+    private val hostLocation = IntArray(2)
+    private val rootLocation = IntArray(2)
+
+    /** 更新共享底图并触发重绘（支持单底图异步到达或清除，不重建 drawable）。 */
+    fun updateBackdrop(next: Bitmap?) {
+        if (backdrop === next) return
+        backdrop = next
+        if (next != null && liquid == null && Build.VERSION.SDK_INT >= ROW_LIQUID_MIN_SDK) {
+            liquid = runCatching { RowGlassLiquidRenderer(appContext, material, density) }.getOrNull()
+        } else {
+            liquid?.reset()
+        }
+        invalidateSelf()
+    }
 
     private val path = Path()
     private val boundsF = RectF()
@@ -140,12 +164,30 @@ internal class GlassLiquidBackdropDrawable(
 
         var drewLiquid = false
         if (usableBackdrop != null) {
-            // 位图坐标 → Drawable 局部坐标：截图就是面板区域的等比例降采样，等比放大铺满。
-            matrix.setScale(w / usableBackdrop.width.toFloat(), h / usableBackdrop.height.toFloat())
-            // 1. 真 AGSL 玻璃：折射 + 色散 + 着色（底图已软件模糊，这里不再做 GPU 模糊）。
+            val root = backdropRootView
+            if (hostView != null && root != null && root.width > 0 && root.height > 0) {
+                hostView.getLocationOnScreen(hostLocation)
+                root.getLocationOnScreen(rootLocation)
+                val transform = rowSampleTransform(
+                    bitmapWidth = usableBackdrop.width,
+                    bitmapHeight = usableBackdrop.height,
+                    rootWidth = root.width,
+                    rootHeight = root.height,
+                    locationX = hostLocation[0],
+                    locationY = hostLocation[1],
+                    rootX = rootLocation[0],
+                    rootY = rootLocation[1]
+                )
+                matrix.setScale(transform.scaleX, transform.scaleY)
+                matrix.postTranslate(transform.translateX, transform.translateY)
+            } else {
+                // 位图坐标 → Drawable 局部坐标：截图就是面板区域的等比例降采样，等比放大铺满。
+                matrix.setScale(w / usableBackdrop.width.toFloat(), h / usableBackdrop.height.toFloat())
+            }
+            // 1. 真 AGSL 玻璃：折射 + 色散 + GPU 模糊。
             //    与底栏 / 发现页行共用同一颗 shader 与同一组材质参数。
             drewLiquid = liquid?.draw(
-                canvas, usableBackdrop, 0f, boundsF, cornerRadiusPx, matrix, drawableAlpha,
+                canvas, usableBackdrop, blurSigmaPx, boundsF, cornerRadiusPx, matrix, drawableAlpha,
                 colorFilter
             ) ?: false
             if (!drewLiquid) {
