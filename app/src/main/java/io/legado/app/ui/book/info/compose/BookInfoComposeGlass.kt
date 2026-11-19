@@ -24,23 +24,10 @@ internal const val BOOK_INFO_COMPOSE_GLASS_ALPHA_CAP = 0.80f
 internal fun bookInfoComposeGlassAllowed(glassEnabled: Boolean): Boolean = glassEnabled
 
 /**
- * 玻璃档下卡面的 alpha：取 [opaqueAlpha] 与 [cap] 的较小值；非玻璃档逐值返回 [opaqueAlpha]，
- * 保证降级观感与接入前完全一致。
- *
- * 卡面原本就带 alpha 的（如简介卡 0.28f）取较小值后不变，避免把它压得比原来还淡；
- * 实底卡（0.97f / 0.96f）才让到 [cap]，透出背后的封面渐变。
- */
-internal fun bookInfoComposeGlassAlpha(
-    glassEnabled: Boolean,
-    opaqueAlpha: Float,
-    cap: Float = BOOK_INFO_COMPOSE_GLASS_ALPHA_CAP
-): Float = if (glassEnabled) minOf(opaqueAlpha, cap) else opaqueAlpha
-
-/**
  * 统一计算 Compose 详情页卡面 alpha（与 CLASSIC 路径 `BookInfoBackdropSurface` 同口径）：
  * - 玻璃档（glass/frosted）：压到 [cap]（0.80f）；
  * - 透明无玻璃档（clear）：压到 [clearAlpha]（`GlassMaterialPreset.CLEAR_SURFACE_ALPHA` = 0.86f）；
- * - 实底 / 降级：逐值保留 [opaqueAlpha]。
+ * - 实底 / 降级：逐值保留 [opaqueAlpha]；本就半透明的卡（如简介卡 0.28f）取较小值后不变。
  */
 internal fun bookInfoComposeCardAlpha(
     glassEnabled: Boolean,
@@ -58,8 +45,6 @@ internal fun bookInfoComposeCardAlpha(
  * 是否给卡面补玻璃描边。玻璃档或 CLEAR 档为真时由调用方画 1dp `glass_stroke`，与全 App 同源；
  * 非玻璃档返回 false（逐值等价接入前：无描边）。
  */
-internal fun bookInfoComposeGlassStroke(glassEnabled: Boolean): Boolean = glassEnabled
-
 internal fun bookInfoComposeCardStroke(
     glassEnabled: Boolean,
     clearEnabled: Boolean

@@ -258,6 +258,16 @@ class BookInfoBackdropSurfaceTest {
         assertTrue(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = 1))
     }
 
+    /** ViewPager2 次页卡片水平坐标按页宽归一化到当前屏内区间，不因离屏而裁剪为空。 */
+    @Test
+    fun normalizePagerHorizontalOffsetWrapsOffscreenPages() {
+        assertEquals(36, normalizePagerHorizontalOffset(hostX = 36, pagerX = 0, pagerWidth = 1080))
+        assertEquals(36, normalizePagerHorizontalOffset(hostX = 1116, pagerX = 0, pagerWidth = 1080))
+        assertEquals(36, normalizePagerHorizontalOffset(hostX = 2196, pagerX = 0, pagerWidth = 1080))
+        assertEquals(120, normalizePagerHorizontalOffset(hostX = -960, pagerX = 100, pagerWidth = 1080))
+        assertEquals(500, normalizePagerHorizontalOffset(hostX = 500, pagerX = 0, pagerWidth = 0))
+    }
+
     // ---------------------------------------------------------------------
     // 测试本地独立的 WCAG / 混色数学（与实现不共享，实现错则这里红）
     // ---------------------------------------------------------------------

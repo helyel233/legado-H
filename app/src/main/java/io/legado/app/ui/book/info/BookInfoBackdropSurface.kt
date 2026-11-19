@@ -211,6 +211,18 @@ private fun contrastRatio(a: Int, b: Int): Double {
 internal fun backdropCropParamsValid(outWidth: Int, outHeight: Int, blurRadius: Int): Boolean =
     blurRadius > 0 && outWidth > 0 && outHeight > 0
 
+/**
+ * 将 ViewPager2 次页卡片的屏幕 X 坐标按页宽归一化到当前屏内区间（纯函数，JVM 单测锁表）。
+ *
+ * 次页卡片在水平方向处于屏幕外，直接与全屏 `bg_book` 求交会得到空矩形并退化为无底图壳层；
+ * 当 `pagerWidth <= 0` 时原值返回。
+ */
+internal fun normalizePagerHorizontalOffset(hostX: Int, pagerX: Int, pagerWidth: Int): Int {
+    if (pagerWidth <= 0) return hostX
+    val relX = ((hostX - pagerX) % pagerWidth + pagerWidth) % pagerWidth
+    return pagerX + relX
+}
+
 object BookInfoBackdropSurface {
 
     /**

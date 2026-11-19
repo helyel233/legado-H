@@ -310,6 +310,12 @@ class BookInfoActivity :
     /** 等待 bg_book 首次完成布局的一次性监听，避免无背景图时卡在 0×0 无底图。 */
     private var bookInfoBackdropLayoutListener: View.OnLayoutChangeListener? = null
 
+    /** Glide 正在异步加载终图时为 true，期间禁止截图（避免截到 thumbnail 默认封面占位）。 */
+    private var isBookInfoBgLoading = false
+
+    /** 卡片 / 操作按钮的初始表面是否已至少铺过一次（与顶栏标志解耦）。 */
+    private var bookInfoBackdropFacesApplied = false
+
     private var useComposeBookInfo = false
     private var composeReadTimeText = ""
     private var composeGroupText = ""
@@ -1083,6 +1089,7 @@ class BookInfoActivity :
                     strokeColor
                 )
             }
+            bookInfoBackdropFacesApplied = true
         }
 
         /** 顶栏玻璃面（几何走 TitleBar.applyPageOwnedSurface 的 chrome 单一真相源）。 */
@@ -1114,6 +1121,15 @@ class BookInfoActivity :
             applyFaces(List(panels.size + buttons.size) { null })
             applyTitleBarFace(null)
             recycleBackdrops(oldBackdrops)
+        } else if (isBookInfoBgLoading) {
+            // 终图仍在异步加载中（bg_book 此刻可能显示 thumbnail 默认封面占位），
+            // 暂不截图以免把占位图颜色烧进卡片材质；仅保底首次铺出壳层与顶栏几何。
+            if (!bookInfoBackdropFacesApplied) {
+                applyFaces(List(panels.size + buttons.size) { null })
+            }
+            if (!bookInfoTitleBarGlassApplied) {
+                applyTitleBarFace(null)
+            }
         } else {
             val snapshot = BookInfoBackdropSurface.captureBackdropSnapshot(
                 bgBook, BookInfoBackdropSurface.BACKDROP_DOWNSCALE
@@ -1151,8 +1167,10 @@ class BookInfoActivity :
                     bgBook.addOnLayoutChangeListener(listener)
                 }
             } else {
-                // 先同步施加顶栏 chrome 几何（避免首帧闪烁），底图裁剪完成后再换装真玻璃。
-                applyTitleBarFace(null)
+                // 首次未铺过时同步施加顶栏 chrome 几何；已铺过则保留旧玻璃直到新底图裁剪完成，避免闪烁回退。
+                if (!bookInfoTitleBarGlassApplied) {
+                    applyTitleBarFace(null)
+                }
                 // 主线程只做一次全幅降采样快照 + 区域折算；各卡片与顶栏的区域裁剪 + 软件模糊
                 // 移到后台线程，完成后回主线程统一换装。
                 val scaleX = snapshot.width.toFloat() / bgBook.width
@@ -1276,7 +1294,6 @@ class BookInfoActivity :
             }
             return@run
         }
-        restoreBookInfoComponentBackgrounds()
         val pages = if (isBookInfoLandscape()) {
             buildLandscapeBookInfoPages(orderedComponents, componentViews)
         } else {
@@ -1291,6 +1308,8 @@ class BookInfoActivity :
             bookInfoPager.setCurrentItem(lastIndex, false)
         }
         updateDetailContentPanelHeight()
+        // 在 submitPages + 高度更新之后等待下一次布局完成再重铺，确保卡片已挂载到 ViewPager2 并完成坐标测量。
+        bookInfoPager.doOnLayout { restoreBookInfoComponentBackgrounds() }
     }
 
     private fun initBookInfoPager(): Unit = binding.run {
@@ -2619,7 +2638,16 @@ class BookInfoActivity :
         val hostLocation = IntArray(2)
         bg.getLocationOnScreen(bgLocation)
         host.getLocationOnScreen(hostLocation)
-        val left = (hostLocation[0] - bgLocation[0]) * scaleX
+        // ViewPager2 次页卡片在水平方向处于屏幕外，按页宽归一化到当前屏内坐标，
+        // 避免次页卡片因坐标越界被裁剪成 null 而退化为无底图壳层。
+        val rawHostX = if (::bookInfoPager.isInitialized && bookInfoPager.width > 0 && host.isDescendantOfView(bookInfoPager)) {
+            val pagerLocation = IntArray(2)
+            bookInfoPager.getLocationOnScreen(pagerLocation)
+            normalizePagerHorizontalOffset(hostLocation[0], pagerLocation[0], bookInfoPager.width)
+        } else {
+            hostLocation[0]
+        }
+        val left = (rawHostX - bgLocation[0]) * scaleX
         val top = (hostLocation[1] - bgLocation[1]) * scaleY
         val region = android.graphics.Rect(
             left.roundToInt(),
@@ -2634,17 +2662,35 @@ class BookInfoActivity :
         )
     }
 
+    private fun View.isDescendantOfView(ancestor: View): Boolean {
+        var cur: android.view.ViewParent? = parent
+        while (cur is View) {
+            if (cur === ancestor) return true
+            cur = cur.parent
+        }
+        return false
+    }
+
     private fun applyBookInfoBackground() {
         binding.bgBook.setBackgroundColor(backgroundColor)
-        // 卡片能否让出 alpha 取决于「本页有没有详情背景图」，而这里正是该偏好的解析点
-        // （换封面、改覆盖范围、返回本页都会重走）——表面必须跟着重算，
-        // 否则卡片会停在上一档：有图时仍是实底，或没图时停在半透明上
-        applyBookInfoBackdropSurfaces()
-        if (AppConfig.isEInkMode) return
+        if (AppConfig.isEInkMode) {
+            isBookInfoBgLoading = false
+            applyBookInfoBackdropSurfaces()
+            return
+        }
         // 取图口径与玻璃判定同一个函数（详情图优先，空则回退 App 级背景图）：
         // 见 BookInfoBackdropSurface.bookInfoBackdropImagePath 的说明，两处各读一遍
         // 偏好迟早分叉成「卡片让了 alpha 而背后没图」。
         val detailBg = BookInfoBackdropSurface.bookInfoBackdropImagePath(this)
+        val willLoadNewBg = !detailBg.isNullOrBlank() && detailBg != lastBookInfoBgPath
+        if (willLoadNewBg) {
+            // 必须在首次 applyBookInfoBackdropSurfaces 之前置位，避免先对纯色 bg_book 截图再跳变。
+            isBookInfoBgLoading = true
+        }
+        // 卡片能否让出 alpha 取决于「本页有没有详情背景图」，而这里正是该偏好的解析点
+        // （换封面、改覆盖范围、返回本页都会重走）——表面必须跟着重算，
+        // 否则卡片会停在上一档：有图时仍是实底，或没图时停在半透明上
+        applyBookInfoBackdropSurfaces()
         if (detailBg == lastBookInfoBgPath) return
         lastBookInfoBgPath = detailBg
         if (!detailBg.isNullOrBlank()) {
@@ -2663,6 +2709,7 @@ class BookInfoActivity :
                         target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>,
                         isFirstResource: Boolean
                     ): Boolean {
+                        isBookInfoBgLoading = false
                         // 加载失败时 bg_book 可能显示缩略图或错误占位，重铺一次避免停在旧底图。
                         binding.bgBook.post { applyBookInfoBackdropSurfaces() }
                         return false
@@ -2675,6 +2722,7 @@ class BookInfoActivity :
                         dataSource: com.bumptech.glide.load.DataSource,
                         isFirstResource: Boolean
                     ): Boolean {
+                        isBookInfoBgLoading = false
                         // 监听器只挂在终图 builder（Glide 不会自动挂到 thumbnail(RequestBuilder)），
                         // 终图投递即终态，无条件重铺一次，否则内存缓存命中或 useDefaultCover 时
                         // isFirstResource=true 会被误伤跳过、卡片永久停在无底图壳层态。
@@ -2684,6 +2732,7 @@ class BookInfoActivity :
                 })
                 .into(binding.bgBook)
         } else {
+            isBookInfoBgLoading = false
             binding.bgBook.setImageDrawable(null)
             // 「有图 → 无图」切换：上面的 applyBookInfoBackdropSurfaces 跑在本分支之前，
             // 那一刻 bg_book 还画着旧图——磨砂底图截到的是即将消失的旧图像素。图被清掉后
