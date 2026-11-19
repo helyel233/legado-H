@@ -21,7 +21,13 @@ class UiPackageBackupTest {
     @Test
     fun packageDirNamesMatchRestoreContract() {
         assertEquals(
-            listOf("themePackages", "navigationBarPackages", "topBarPackages", "coverCollections"),
+            listOf(
+                "themePackages",
+                "navigationBarPackages",
+                "topBarPackages",
+                "coverCollections",
+                "appThemeKits"
+            ),
             UiPackageBackup.packageDirNames
         )
     }
@@ -36,6 +42,7 @@ class UiPackageBackupTest {
         // 临时/缓存/内置/隐藏：排除
         assertFalse(UiPackageBackup.dirVisible("temp"))
         assertFalse(UiPackageBackup.dirVisible("remote_cache"))
+        assertFalse(UiPackageBackup.dirVisible("appearanceKitTemp"))
         assertFalse(UiPackageBackup.dirVisible("builtin_day"))
         assertFalse(UiPackageBackup.dirVisible("builtin_night"))
         assertFalse(UiPackageBackup.dirVisible("default"))
@@ -82,5 +89,20 @@ class UiPackageBackupTest {
         val target = File(temporary.root, "backup/topBarPackages")
         UiPackageBackup.copyVisiblePackages(source, target)
         assertFalse(target.exists())
+    }
+
+    @Test
+    fun copyVisiblePackagesAndFilesIncludesKitsJsonAndSkipsTemp() {
+        val source = temporary.newFolder("appThemeKits")
+        File(source, "kits.json").writeText("[{\"id\":\"k1\"}]")
+        File(source, "appearanceKitTemp").apply { mkdirs() }.let {
+            File(it, "tmp.zip").writeText("tmp")
+        }
+        val target = File(temporary.root, "backup/appThemeKits")
+
+        UiPackageBackup.copyVisiblePackagesAndFiles(source, target)
+
+        assertEquals("[{\"id\":\"k1\"}]", File(target, "kits.json").readText())
+        assertFalse(File(target, "appearanceKitTemp").exists())
     }
 }

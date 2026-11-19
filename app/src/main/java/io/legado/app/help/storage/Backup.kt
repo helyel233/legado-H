@@ -26,6 +26,7 @@ import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -97,6 +98,7 @@ object Backup {
     internal const val navigationBarPackagesDirName = UiPackageBackup.NAVIGATION_BAR_PACKAGES
     internal const val topBarPackagesDirName = UiPackageBackup.TOP_BAR_PACKAGES
     internal const val coverCollectionsDirName = UiPackageBackup.COVER_COLLECTIONS
+    internal const val appThemeKitsDirName = UiPackageBackup.APP_THEME_KITS
 
     internal const val fontsDirName = "fonts"
     private const val fontsCollectDirName = "fonts_collect"
@@ -605,6 +607,10 @@ object Backup {
         UiPackageBackup.copyVisiblePackages(
             CoverCollectionManager.rootDir,
             File(backupPath, coverCollectionsDirName)
+        )
+        UiPackageBackup.copyVisiblePackagesAndFiles(
+            AppearanceKitManager.rootDir,
+            File(backupPath, appThemeKitsDirName)
         )
     }
 

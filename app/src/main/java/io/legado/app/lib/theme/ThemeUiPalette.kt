@@ -144,6 +144,9 @@ private object ThemeUiSignatureCache {
         if (!listenersRegistered.compareAndSet(false, true)) return
         val appContext = context.applicationContext
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (PrefBatchTransaction.isInBatch) {
+                return@OnSharedPreferenceChangeListener
+            }
             if (key == null || key in themeUiDependencyKeySet ||
                 key == ThemeStorePrefKeys.VALUES_CHANGED
             ) {
@@ -178,6 +181,21 @@ fun Context.themeUiSignatureCached(): String {
     ThemeUiSignatureCache.cachedSignature()?.let { return it }
     return synchronized(ThemeUiSignatureCache) {
         ThemeUiSignatureCache.cachedSignature() ?: themeUiSignature().also {
+            ThemeUiSignatureCache.store(it, night)
+        }
+    }
+}
+
+/**
+ * 批量事务退出后强制重算一次 signature 与 palette 缓存，
+ * 对批窗口内跨线程的 SP 写入实现自愈。
+ */
+fun Context.recomputeThemeUiSignatureAfterBatch(): String {
+    ThemeUiSignatureCache.ensureListeners(this)
+    val night = AppConfig.isNightTheme
+    return synchronized(ThemeUiSignatureCache) {
+        ThemeUiSignatureCache.invalidate()
+        themeUiSignature().also {
             ThemeUiSignatureCache.store(it, night)
         }
     }

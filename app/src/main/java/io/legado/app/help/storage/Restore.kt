@@ -55,6 +55,7 @@ import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.model.VideoPlay.VIDEO_PREF_NAME
@@ -357,6 +358,7 @@ object Restore {
         restoreNavigationIcons(path)
         restoreTopBarPackages(path)
         restoreCoverCollections(path)
+        restoreAppearanceKits(path)
         restoreVisualResourcePackages(path)
         restoreSourceRuntime(path)
         // 直接以文件形式读取 config.xml：SharedPreferences 进程级缓存只在首次
@@ -1056,6 +1058,15 @@ object Restore {
     }
     private fun restoreCoverCollections(path: String) {
         restorePackageDirectory(File(path, Backup.coverCollectionsDirName), CoverCollectionManager.rootDir)
+    }
+
+    private suspend fun restoreAppearanceKits(path: String) {
+        restorePackageDirectory(File(path, Backup.appThemeKitsDirName), AppearanceKitManager.rootDir)
+        runCatching {
+            AppearanceKitManager.reconcileKitsAfterRestore()
+        }.onFailure {
+            AppLog.put("对账外观方案索引出错\n${it.localizedMessage}", it)
+        }
     }
 
     private fun normalizeBackgroundPrefs() {

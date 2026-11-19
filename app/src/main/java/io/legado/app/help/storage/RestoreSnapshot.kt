@@ -7,6 +7,7 @@ import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.config.BubblePackageManager
@@ -137,6 +138,9 @@ internal object RestoreSnapshot {
         }
         if (File(backupDir, Backup.coverCollectionsDirName).isDirectory) {
             targets.add(CoverCollectionManager.rootDir)
+        }
+        if (File(backupDir, Backup.appThemeKitsDirName).isDirectory) {
+            targets.add(AppearanceKitManager.rootDir)
         }
         if (File(backupDir, Backup.advancedTitlePackagesDirName).isDirectory) {
             targets.add(AdvancedTitlePackageManager.rootDir)

@@ -6,32 +6,49 @@ import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import io.legado.app.lib.theme.rememberThemeUiPalette
+import io.legado.app.lib.theme.ResolvedThemeTokens
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
 
 /**
- * 统一的 Compose 主题字体下发。
+ * 全 App Compose 共享的运行时视觉 Token 快照。
+ * 由 [LegadoComposeTheme] 统一注入；未包裹时为 null。
+ */
+val LocalLegadoTokens = staticCompositionLocalOf<ResolvedThemeTokens?> { null }
+
+/**
+ * 统一的 Compose 主题契约（颜色 / 圆角 / 字体 / 运行时 Token）。
  *
- * 项目早先只在 AppDialogFrame 等个别作用域里 `LocalTextStyle.copy(fontFamily=...)`，导致大量
- * Compose Text 回退到系统字体、标题字体几乎不生效。用本包裹在 ComposeView 的 setContent 根或
- * 各共享脚手架（AppManagementScaffold / ComposePreferenceScreen / AppDialogFrame）外层，即可让
- * 其内所有未显式指定 fontFamily 的文本都继承主题「界面字体」，标题样式继承「标题字体」。
+ * 幂等守卫：若外层已经注入过 [LocalLegadoTokens]，则直接透传 [content]，避免嵌套
+ * 重复订阅 SP 监听与重复构造 MaterialTheme。
  */
 @Composable
 fun LegadoComposeTheme(content: @Composable () -> Unit) {
+    if (LocalLegadoTokens.current != null) {
+        content()
+        return
+    }
     val context = LocalContext.current
-    val themeSignature = rememberThemeUiPalette().signature
-    val bodyFamily = remember(context, themeSignature) { FontFamily(context.uiTypeface()) }
-    val titleFamily = remember(context, themeSignature) { FontFamily(context.titleTypeface()) }
+    val tokens = rememberResolvedThemeTokens()
+    val bodyFamily = remember(context, tokens.paletteSignature) { FontFamily(context.uiTypeface()) }
+    val titleFamily = remember(context, tokens.paletteSignature) { FontFamily(context.titleTypeface()) }
+    val colorScheme = remember(tokens.signature) { tokens.toMaterialColorScheme() }
+    val shapes = remember(tokens.corners) { tokens.toMaterialShapes() }
+    val typography = MaterialTheme.typography
+    val themedTypography = remember(typography, bodyFamily, titleFamily) {
+        typography.withUiFontFamilies(bodyFamily, titleFamily)
+    }
     MaterialTheme(
-        colorScheme = MaterialTheme.colorScheme,
-        shapes = MaterialTheme.shapes,
-        typography = MaterialTheme.typography.withUiFontFamilies(bodyFamily, titleFamily)
+        colorScheme = colorScheme,
+        shapes = shapes,
+        typography = themedTypography
     ) {
         CompositionLocalProvider(
+            LocalLegadoTokens provides tokens,
             LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = bodyFamily)
         ) {
             content()

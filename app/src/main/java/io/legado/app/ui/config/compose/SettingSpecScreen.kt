@@ -70,6 +70,7 @@ import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LegadoResourceIcon
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -118,7 +119,7 @@ fun SettingSpecScreen(
     onTargetReady: (String) -> Unit,
     onTargetMissing: () -> Unit,
     onItemClick: (SettingItemSpec) -> Unit
-) {
+) = LegadoComposeTheme {
     val colors = rememberAppSettingPalette()
     val panelRadiusPx = colors.panelRadiusPx
     // 壁纸模式下页面根背景透明，分区卡背后是壁纸（壁纸域）；无背景图 / 墨水屏时

@@ -22,17 +22,20 @@ internal object UiPackageBackup {
     const val TOP_BAR_PACKAGES = "topBarPackages"
     /** 封面集合目录名，与 Restore.restoreCoverCollections 读取的名字一致。 */
     const val COVER_COLLECTIONS = "coverCollections"
+    /** 外观方案（kits.json 与方案预览图等）目录名，与 Restore.restoreAppearanceKits 一致。 */
+    const val APP_THEME_KITS = "appThemeKits"
 
     /** 备份↔恢复两端共享的目录名清单，单一真相源。 */
     val packageDirNames = listOf(
         THEME_PACKAGES,
         NAVIGATION_BAR_PACKAGES,
         TOP_BAR_PACKAGES,
-        COVER_COLLECTIONS
+        COVER_COLLECTIONS,
+        APP_THEME_KITS
     )
 
     /** 临时目录与云端缓存，不跨设备迁移。 */
-    private val excludedDirs = setOf("temp", "remote_cache")
+    private val excludedDirs = setOf("temp", "remote_cache", "appearanceKitTemp")
 
     /**
      * 美术资产包子目录是否纳入备份：排除临时/缓存/隐藏目录，
@@ -56,6 +59,23 @@ internal object UiPackageBackup {
             ?.filter { it.isDirectory && dirVisible(it.name) }
             .orEmpty()
             .forEach { dir -> copyDir(dir, File(targetRoot, dir.name)) }
+    }
+
+    /**
+     * 复制根目录下的可见文件（如 `appThemeKits/kits.json`、预览图）与可见子目录。
+     */
+    fun copyVisiblePackagesAndFiles(sourceRoot: File, targetRoot: File) {
+        if (!sourceRoot.isDirectory) return
+        sourceRoot.listFiles().orEmpty().forEach { entry ->
+            if (!dirVisible(entry.name)) return@forEach
+            if (entry.isDirectory) {
+                copyDir(entry, File(targetRoot, entry.name))
+            } else if (entry.isFile) {
+                val targetFile = File(targetRoot, entry.name)
+                targetFile.parentFile?.mkdirs()
+                entry.copyTo(targetFile, overwrite = true)
+            }
+        }
     }
 
     private fun copyDir(source: File, target: File) {

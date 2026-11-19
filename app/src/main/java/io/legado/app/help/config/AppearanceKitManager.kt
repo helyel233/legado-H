@@ -15,11 +15,15 @@ import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefString
+import io.legado.app.utils.removePref
+import io.legado.app.help.config.appearance.BuiltinAppearanceDefaults
+import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.normalizeFileName
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.currentCoroutineContext
@@ -41,7 +45,7 @@ object AppearanceKitManager {
     const val KIT_REGULAR = "builtin_regular"
     const val KIT_SIDEBAR = "builtin_sidebar"
     private const val kitManifestName = "appearance_kit.json"
-    private const val kitVersion = 1
+    internal const val kitVersion = 2
     private const val maxKitManifestBytes = 1024L * 1024L
     private val kitZipLimits = SafeZipLimits(
         maxEntries = 2_048,
@@ -52,7 +56,7 @@ object AppearanceKitManager {
     private val currentModeThemeMutex = Mutex()
     private val currentModeThemeGeneration = AtomicLong()
 
-    private val rootDir: File
+    val rootDir: File
         get() = appCtx.externalFiles.getFile("appThemeKits").apply { mkdirs() }
 
     private val indexFile: File
@@ -442,6 +446,9 @@ object AppearanceKitManager {
             val manifest = GSON.fromJsonObject<AppearanceKitPackage>(
                 manifestFile.readTextLimited(maxKitManifestBytes)
             ).getOrThrow()
+            require(validateManifestVersion(manifest.version)) {
+                "Unsupported appearance kit version: ${manifest.version} (max supported: $kitVersion)"
+            }
             val importedBinding = KitBinding()
             manifest.components.forEach { component ->
                 val componentFile = resolveKitComponentFile(packageRoot, unzipDir, component.path) ?: return@forEach
@@ -657,6 +664,10 @@ object AppearanceKitManager {
         if (kits.isNotEmpty()) saveIndex(kits)
     }
 
+    internal fun validateManifestVersion(version: Int): Boolean {
+        return version in 1..kitVersion
+    }
+
     private suspend fun currentBinding(context: Context): KitBinding {
         return KitBinding(
             preset = MainLayoutPresetConfig.currentPreset(),
@@ -668,7 +679,71 @@ object AppearanceKitManager {
             nightNavigationBar = currentNavigationRef(true),
             dayCoverCollection = currentCoverRef(false),
             nightCoverCollection = currentCoverRef(true),
-            floatingBottomBarHideSearch = AppConfig.floatingBottomBarHideSearch
+            floatingBottomBarHideSearch = AppConfig.floatingBottomBarHideSearch,
+            glass = currentGlassBinding(context),
+            welcome = currentWelcomeBinding(context)
+        )
+    }
+
+    private fun currentGlassBinding(context: Context): KitGlassBinding {
+        val storedMode = context.getPrefString(PreferKey.exploreGlassEffectMode, "").orEmpty()
+        val legacyEnabled = context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
+        return KitGlassBinding(
+            mode = resolveExploreGlassMode(storedMode, legacyEnabled),
+            frostedLevel = context.getPrefInt(
+                PreferKey.frostedGlassLevel,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_LEVEL
+            ),
+            liquidLevel = context.getPrefInt(
+                PreferKey.liquidGlassLevel,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_LEVEL
+            ),
+            blurScale = context.getPrefInt(
+                PreferKey.exploreGlassBlurScale,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE
+            ),
+            shellScale = context.getPrefInt(
+                PreferKey.exploreGlassShellScale,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE
+            ),
+            tintScale = context.getPrefInt(
+                PreferKey.exploreGlassTintScale,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE
+            ),
+            strokeScale = context.getPrefInt(
+                PreferKey.exploreGlassStrokeScale,
+                BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE
+            ),
+            strokeColor = context.getPrefString(PreferKey.glassStrokeColor, "").orEmpty(),
+            presetMatched = context.getPrefBoolean(PreferKey.glassPresetMatched, true),
+            hardwareBlur = context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true),
+            animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true)
+        )
+    }
+
+    private fun currentWelcomeBinding(context: Context): KitWelcomeBinding {
+        return KitWelcomeBinding(
+            customWelcome = context.getPrefBoolean(PreferKey.customWelcome, false),
+            showTextDay = context.getPrefBoolean(
+                PreferKey.welcomeShowText,
+                BuiltinAppearanceDefaults.DEFAULT_WELCOME_SHOW_TEXT
+            ),
+            showTextNight = context.getPrefBoolean(
+                PreferKey.welcomeShowTextDark,
+                BuiltinAppearanceDefaults.DEFAULT_WELCOME_SHOW_TEXT
+            ),
+            showIconDay = context.getPrefBoolean(
+                PreferKey.welcomeShowIcon,
+                BuiltinAppearanceDefaults.DEFAULT_WELCOME_SHOW_ICON
+            ),
+            showIconNight = context.getPrefBoolean(
+                PreferKey.welcomeShowIconDark,
+                BuiltinAppearanceDefaults.DEFAULT_WELCOME_SHOW_ICON
+            ),
+            showTime = context.getPrefInt(
+                PreferKey.welcomeShowTime,
+                BuiltinAppearanceDefaults.DEFAULT_WELCOME_SHOW_TIME
+            )
         )
     }
 
@@ -724,6 +799,89 @@ object AppearanceKitManager {
                 CoverCollectionManager.localEntryForKit(isNight, ref.dirName, ref.name)
                     ?.let { CoverCollectionManager.deleteLocal(it) }
             }
+        }
+    }
+
+    /**
+     * 备份恢复后将 `kits.json` 索引与实盘资产目录对账，清理失效组件引用与全部失效的死条目。
+     */
+    suspend fun reconcileKitsAfterRestore() = withContext(IO) {
+        val kits = loadIndex()
+        if (kits.isEmpty()) return@withContext
+        val dayThemeDirs = ThemePackageManager.loadLocalOnly(false).map { it.dirName }.toSet()
+        val nightThemeDirs = ThemePackageManager.loadLocalOnly(true).map { it.dirName }.toSet()
+        val dayTopBarDirs = TopBarConfig.loadEntries(appCtx, false, includeRemote = false).map { it.dirName }.toSet()
+        val nightTopBarDirs = TopBarConfig.loadEntries(appCtx, true, includeRemote = false).map { it.dirName }.toSet()
+        val dayNavBarDirs = NavigationBarIconConfig.loadEntries(false, includeRemote = false).map { it.dirName }.toSet()
+        val nightNavBarDirs = NavigationBarIconConfig.loadEntries(true, includeRemote = false).map { it.dirName }.toSet()
+        val dayCoverIds = CoverCollectionManager.load(false).map { it.id }.toSet()
+        val nightCoverIds = CoverCollectionManager.load(true).map { it.id }.toSet()
+
+        val reconciled = reconcileStoredKits(
+            kits = kits,
+            dayThemeDirs = dayThemeDirs,
+            nightThemeDirs = nightThemeDirs,
+            dayTopBarDirs = dayTopBarDirs,
+            nightTopBarDirs = nightTopBarDirs,
+            dayNavBarDirs = dayNavBarDirs,
+            nightNavBarDirs = nightNavBarDirs,
+            dayCoverIds = dayCoverIds,
+            nightCoverIds = nightCoverIds
+        )
+        if (reconciled != kits) {
+            saveIndex(reconciled)
+        }
+        val currentId = appCtx.getPrefString(PreferKey.currentAppearanceKitId, "").orEmpty()
+        if (currentId.isNotBlank() &&
+            !isBuiltinKitId(currentId) &&
+            reconciled.none { it.id == currentId }
+        ) {
+            appCtx.removePref(PreferKey.currentAppearanceKitId)
+        }
+    }
+
+    internal fun isBuiltinKitId(kitId: String): Boolean {
+        return kitId == BuiltinAppearanceDefaults.BUILTIN_DEFAULT_KIT_ID ||
+            kitId == KIT_FLOATING ||
+            kitId == KIT_FLOATING_NO_SEARCH ||
+            kitId == KIT_REGULAR ||
+            kitId == KIT_SIDEBAR
+    }
+
+    internal fun reconcileStoredKits(
+        kits: List<StoredAppearanceKit>,
+        dayThemeDirs: Set<String>,
+        nightThemeDirs: Set<String>,
+        dayTopBarDirs: Set<String>,
+        nightTopBarDirs: Set<String>,
+        dayNavBarDirs: Set<String>,
+        nightNavBarDirs: Set<String>,
+        dayCoverIds: Set<String>,
+        nightCoverIds: Set<String>
+    ): List<StoredAppearanceKit> {
+        return kits.mapNotNull { kit ->
+            val b = kit.binding
+            val nextBinding = b.copy(
+                dayTheme = b.dayTheme?.takeIf { it.key() in dayThemeDirs },
+                nightTheme = b.nightTheme?.takeIf { it.key() in nightThemeDirs },
+                dayTopBar = b.dayTopBar?.takeIf { it.key() in dayTopBarDirs },
+                nightTopBar = b.nightTopBar?.takeIf { it.key() in nightTopBarDirs },
+                dayNavigationBar = b.dayNavigationBar?.takeIf { it.key() in dayNavBarDirs },
+                nightNavigationBar = b.nightNavigationBar?.takeIf { it.key() in nightNavBarDirs },
+                dayCoverCollection = b.dayCoverCollection?.takeIf { it.key() in dayCoverIds },
+                nightCoverCollection = b.nightCoverCollection?.takeIf { it.key() in nightCoverIds }
+            )
+            val hasAnyAsset = nextBinding.dayTheme != null ||
+                nextBinding.nightTheme != null ||
+                nextBinding.dayTopBar != null ||
+                nextBinding.nightTopBar != null ||
+                nextBinding.dayNavigationBar != null ||
+                nextBinding.nightNavigationBar != null ||
+                nextBinding.dayCoverCollection != null ||
+                nextBinding.nightCoverCollection != null ||
+                nextBinding.glass != null ||
+                nextBinding.welcome != null
+            if (hasAnyAsset) kit.copy(binding = nextBinding) else null
         }
     }
 
@@ -892,7 +1050,10 @@ data class KitBinding(
     var dayCoverCollection: ComponentRef? = null,
     var nightCoverCollection: ComponentRef? = null,
     // 悬浮底栏是否隐藏搜索按钮(隐藏时顶栏自动显示搜索)。可空：旧主题包无此字段时不改变现状。
-    var floatingBottomBarHideSearch: Boolean? = null
+    var floatingBottomBarHideSearch: Boolean? = null,
+    // v2 新增（可空，v1 旧包缺省为 null）：
+    var glass: KitGlassBinding? = null,
+    var welcome: KitWelcomeBinding? = null
 ) {
     fun mergeImported(imported: KitBinding): KitBinding {
         return copy(
@@ -904,7 +1065,9 @@ data class KitBinding(
             nightNavigationBar = imported.nightNavigationBar ?: nightNavigationBar,
             dayCoverCollection = imported.dayCoverCollection ?: dayCoverCollection,
             nightCoverCollection = imported.nightCoverCollection ?: nightCoverCollection,
-            floatingBottomBarHideSearch = imported.floatingBottomBarHideSearch ?: floatingBottomBarHideSearch
+            floatingBottomBarHideSearch = imported.floatingBottomBarHideSearch ?: floatingBottomBarHideSearch,
+            glass = imported.glass ?: glass,
+            welcome = imported.welcome ?: welcome
         )
     }
 
@@ -947,6 +1110,31 @@ data class AppearanceKitEditOptions(
     val topBars: List<ComponentRef> = emptyList(),
     val navigationBars: List<ComponentRef> = emptyList(),
     val coverCollections: List<ComponentRef> = emptyList()
+)
+
+@Keep
+data class KitGlassBinding(
+    val mode: String = BuiltinAppearanceDefaults.DEFAULT_GLASS_MODE,
+    val frostedLevel: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_LEVEL,
+    val liquidLevel: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_LEVEL,
+    val blurScale: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE,
+    val shellScale: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE,
+    val tintScale: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE,
+    val strokeScale: Int = BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE,
+    val strokeColor: String = "",
+    val presetMatched: Boolean = true,
+    val hardwareBlur: Boolean = true,
+    val animatedSolid: Boolean = true
+)
+
+@Keep
+data class KitWelcomeBinding(
+    val customWelcome: Boolean = false,
+    val showTextDay: Boolean = true,
+    val showTextNight: Boolean = true,
+    val showIconDay: Boolean = true,
+    val showIconNight: Boolean = true,
+    val showTime: Int = 0
 )
 
 @Keep

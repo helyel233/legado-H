@@ -205,7 +205,7 @@ fun AppDialogFrame(
     messageInContent: Boolean = false,
     content: @Composable () -> Unit,
     actions: @Composable () -> Unit
-) {
+) = LegadoComposeTheme {
     val style = rememberAppDialogStyle()
     val frameShape = RoundedCornerShape(style.panelRadius)
     val density = LocalDensity.current
