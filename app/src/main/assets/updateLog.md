@@ -4,6 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.32.1 · 2026/11/19**
+
+- 阅读页顶栏接入悬浮圆角 chrome：ReadMenu 顶部菜单圆角半径+内边距走 TopBarChromeSpec，悬浮态圆角 Surface 卡片包住标题栏+操作栏、玻璃矩形贴边不因圆角下推；状态栏图标极性跟正文走(普通书取 pageStatusIconDark、EPUB 星空模板强制浅色)，非悬浮逐值不变
+- 书籍详情页玻璃底图重构：废弃逐卡截图+后台裁剪，改整页共享单图+绘制期按实时屏幕坐标采样+GPU 硬件模糊，材质与加载时机彻底解耦，从根消除材质跳变；采样/模糊/shader/材质参数全部复用单一实现
+- 详情页卡片材质确定性收敛：终图加载期间禁截图防烧进占位封面色、重铺移到布局完成后、顶栏玻璃几何走 chrome 单一真相源、loadBlur 加 dontAnimate 消除 crossfade 跳变
+- CLEAR 档 Compose 卡面 alpha/描边同 CLASSIC 口径
+- 新增 ReadMenuStatusBarTest 等真值表单测，glass 治理与设置映射门禁 PASS
+
 **vH.1.31.1 · 2026/11/18**
 
 - 新功能「悬浮圆角顶栏」：顶栏包 opt-in 独立布尔 floatingChrome(不由圆角反推、存量零变化)，新增 TopBarChromeSpec 纯函数几何层(半径/悬浮态各自单一来源、从半径推导悬浮内边距)、TitleBar/MainTopBarView 接线悬浮卡片表面+系统栏 inset 重算、设置页开关、半径进玻璃签名

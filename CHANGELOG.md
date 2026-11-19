@@ -1,5 +1,24 @@
 # 更新日志
 
+## 1.32.1 版（2026-11-19）
+
+本版把书籍详情页玻璃底图从「逐卡截图 + 后台裁剪」重构为「整页共享单图 + 绘制期按实时屏幕坐标采样」，从根消除材质跳变；阅读页顶栏接入悬浮圆角 chrome，状态栏图标极性跟随正文。**特性 + 修复 → minor+0.1。**
+
+### 新功能
+
+- **阅读页顶栏接入悬浮圆角 chrome**：`ReadMenu` 顶部菜单跟随 `TopBarChromeSpec`（圆角半径 + h/v 三向内边距），悬浮态用圆角 Surface 卡片包住标题栏+操作栏、去各自边框并加分隔线；玻璃矩形 `extendBottom=false` 严格贴合面板边界、不因圆角下推。`LiquidGlassSpec.glassPanelRect` 新增可选 `extendBottom`（默认 true 保持既有行为），`configSignature` 驱动 chrome 重算、圆角在定尺寸后再施加避免首帧胶囊闪烁。
+- **状态栏图标极性跟正文走**：新增纯函数 `resolveReadMenuStatusBarLight`——悬浮态状态栏透出正文，图标极性跟正文走（普通书取 `pageStatusIconDark`，EPUB 星空模板强制浅色图标、其余跟随）；非悬浮保持原逻辑逐值不变。`BaseReadBookActivity` 两处 `setLightStatusBar` 收口到该函数。
+
+### 重构 / 修复
+
+- **详情页玻璃底图整页共享单图（从根消除材质跳变）**：废弃「7 张卡片各自 `captureBackdropSnapshot` + 后台 `stackBlurSoftware` 裁剪」管线；Glide 投递终图后 `renderDrawableToBackdropBitmap` 生成单张 1/3 全屏底图整页共享，`draw()` 时按宿主实时屏幕坐标经 `rowSampleTransform` 映射采样域 + GPU 硬件模糊，底图不再依赖 `bg_book` 布局/placeholder 状态，材质=f(路径) 与时机彻底解耦。同一能力单一实现（R2）：采样映射复用 `RowGlassLiquidSpec.rowSampleTransform`、模糊半径复用 `exploreHardwareBlurPx`、shader 仍唯一 `RowGlassLiquidRenderer`、材质参数唯一 `GlassMaterialPreset`，删除 `backdropCropParamsValid`/`normalizePagerHorizontalOffset` 等旧纯函数与后台裁剪协程。`GlassLiquidBackdropDrawable.backdrop` 改 var + `updateBackdrop` 原地换图不重建，签名判重（玻璃配置+顶栏配置+两半径）避免幂等重铺，`vwBg` 注册滚动监听刷新可见卡片采样坐标。
+- **详情页卡片材质确定性收敛**：新增 `isBookInfoBgLoading`/`bookInfoBackdropFacesApplied`，终图异步加载期间禁对 `bg_book` 截图（避免把 thumbnail 占位封面色烧进卡片材质），加载失败/成功/无图/EInk 各路径均复位；重铺时机移到 `bookInfoPager.doOnLayout` 之后确保卡片挂载并测量；顶栏玻璃面几何走 chrome 单一真相源（新增 `TitleBar.applyPageOwnedSurface` 唯一写者，修「悬浮内缩了却不是圆角」双写，自动入口对已接管顶栏整体让位消除每帧 resume 你铺我撕循环）；`loadBlur` 加 `dontAnimate` 使投递即终态、消除 crossfade 竞速跳变；删零调用点 `bookInfoComposeGlassAlpha`/`bookInfoComposeGlassStroke` 统一到 `bookInfoComposeCardAlpha`/`CardStroke`。
+- **CLEAR 档一致性**：Compose 详情页卡面 alpha 与描边同 CLASSIC 路径口径（`CLEAR_SURFACE_ALPHA=0.86` + 描边），glass 配置签名变更触发重算。
+
+### 单测
+
+新增 `ReadMenuStatusBarTest`（3 例）、`computeCenterCropBounds` 真值表、`pageOwnedTitleBarRadius`/`backdropCropParamsValid`/`bookInfoComposeCardAlpha+Stroke` 用例；compileAppDebugKotlin 全量重编通过，相关单测全绿，`check_glass_governance.py` / `check_settings_mapping.py` 均 PASS。
+
 ## 1.31.1 版（2026-11-18）
 
 本版新增「悬浮圆角顶栏」（顶栏包 opt-in，存量视觉零变化），并把玻璃材质从旧手绘软件管线彻底收拢为 AGSL 单管线；同时补上手动备份完成提醒、若干页面玻璃化收口，并把一个月复盘沉淀的位运算反模式做成 CI 硬门禁。**特性 + 修复 → minor+0.1。**
