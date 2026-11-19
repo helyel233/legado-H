@@ -92,6 +92,18 @@ import io.legado.app.utils.stackBlurSoftware
 internal fun bookInfoTranslucentSurfaceAllowed(glassEnabled: Boolean): Boolean = glassEnabled
 
 /**
+ * 页面自管顶栏面的圆角（纯函数，便于 JVM 单测锁表）。
+ *
+ * 悬浮 chrome 开启 → 顶栏已被 margins 内缩成卡片，面必须与卡片同圆角
+ * （[cornerRadiusPx] 来自 [io.legado.app.lib.theme.TopBarChromeSpec]）；
+ * 关闭 → 传 0，贴边通栏直角，与 1.31.1 及以前的存量观感逐字节一致。
+ *
+ * 「是否圆角」只由悬浮布尔决定、半径只由 chrome 传入，禁止由 radius>0 反推悬浮（R4）。
+ */
+internal fun pageOwnedTitleBarRadius(floating: Boolean, cornerRadiusPx: Float): Float =
+    if (floating) cornerRadiusPx else 0f
+
+/**
  * 详情页背景图的取用顺序（纯函数，便于 JVM 单测锁表）。
  *
  * 1. 用户配置的「详情背景图」（`bookInfoBackgroundImage` / `...Night`）优先；
@@ -195,6 +207,10 @@ private fun contrastRatio(a: Int, b: Int): Double {
     return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
 }
 
+/** 区域裁剪参数的合法性守卫（纯函数，JVM 单测锁「0 半径不产出位图」）。 */
+internal fun backdropCropParamsValid(outWidth: Int, outHeight: Int, blurRadius: Int): Boolean =
+    blurRadius > 0 && outWidth > 0 && outHeight > 0
+
 object BookInfoBackdropSurface {
 
     /**
@@ -291,7 +307,7 @@ object BookInfoBackdropSurface {
     }
 
     /**
-     * 顶栏玻璃面（零采样，贴边通栏：圆角 0）。
+     * 顶栏玻璃面（零采样；悬浮卡半径由顶栏包 chrome 决定，非悬浮保持贴边通栏直角）。
      *
      * 本页顶栏在 `onActivityCreated` 里已被固定为透明背景
      * （`titleBar.setBackgroundResource(R.color.transparent)`），背后是 `bg_book`
@@ -299,11 +315,21 @@ object BookInfoBackdropSurface {
      * （[bookInfoTranslucentSurfaceAllowed]，只认玻璃档，不再要求背景图偏好非空）。
      * 判否返回 null，调用方保持 / 还原页面的透明背景，逐值不变。
      *
+     * [cornerRadiusPx] 是页面自管表面（`TitleBar.applyPageOwnedSurface`）传进来的
+     * chrome 半径：悬浮 chrome 开启时顶栏已被 margins 内缩成卡片，面必须同圆角，
+     * 否则就是真机上「悬浮了却不是圆角」的方角卡；非悬浮（floatingChrome 关）传 0，
+     * 逐值保持 1.31.1 及以前的贴边通栏直角。半径只消费不解析——解析唯一真相源是
+     * [io.legado.app.lib.theme.TopBarChromeSpec]，由 TitleBar 统一算好传入。
+     *
      * 填充是黑色压暗而不是卡面色：白字在日间浅色卡面上叠 0.80 alpha 反而会跌破
      * 接入前的对比度（推导见 [TITLE_BAR_SCRIM_ALPHA]），黑面与 `vw_bg` 同极性，
      * 两种主题下都只提升白字对比度。描边与卡面同一份 `glass_stroke`。
      */
-    fun titleBarBackground(context: Context): Drawable? {
+    fun titleBarBackground(
+        context: Context,
+        cornerRadiusPx: Float = 0f,
+        backdrop: Bitmap? = null
+    ): Drawable? {
         // CLEAR 档：卡片 / 按钮走 clearDrawableIfApplicable 铺了半透明壳，顶栏若沿
         // isAllowed 判否回全透明，就成了同档里唯一没有壳的表面。这里按同一份
         // clearSurfaceColor 口径铺壳；底色仍取黑（顶栏白字恒定的对比度前提），
@@ -311,17 +337,19 @@ object BookInfoBackdropSurface {
         if (resolvedExploreGlassMode() == GlassMaterialPreset.CLEAR) {
             return UiCorner.opaqueRoundedStroke(
                 GlassMaterialPreset.clearSurfaceColor(android.graphics.Color.BLACK),
-                0f,
+                cornerRadiusPx,
                 1.dpToPx(),
                 glassStrokeColor(context)
             )
         }
         if (!isAllowed(context)) return null
-        return UiCorner.opaqueRoundedStroke(
-            titleBarScrimColor(),
-            0f,
-            1.dpToPx(),
-            glassStrokeColor(context)
+        return glassFrost(
+            context = context,
+            backdrop = backdrop,
+            tintColor = titleBarScrimColor(),
+            radiusPx = cornerRadiusPx,
+            corners = SurfaceCorners.ALL,
+            lightBase = false
         )
     }
 
@@ -455,7 +483,8 @@ object BookInfoBackdropSurface {
         backdrop: Bitmap?,
         tintColor: Int,
         radiusPx: Float,
-        corners: SurfaceCorners
+        corners: SurfaceCorners,
+        lightBase: Boolean = AppColorUtils.isColorLight(context.themeCardColorOrDefault())
     ): Drawable {
         val density = context.resources.displayMetrics.density
         val params = GlassMaterialPreset.current(resolvedExploreGlassMode())
@@ -469,9 +498,7 @@ object BookInfoBackdropSurface {
             strokeColor = glassStrokeColor(context),
             strokeWidthPx = 1.dpToPx().toFloat(),
             tintColor = tintColor,
-            surfaceRgb = glassFrostSurfaceRgb(
-                lightBase = AppColorUtils.isColorLight(context.themeCardColorOrDefault())
-            ),
+            surfaceRgb = glassFrostSurfaceRgb(lightBase = lightBase),
             shell = params.shell
         )
     }
@@ -533,7 +560,7 @@ object BookInfoBackdropSurface {
         outHeight: Int,
         blurRadius: Int
     ): Bitmap? {
-        if (blurRadius <= 0 || outWidth <= 0 || outHeight <= 0) return null
+        if (!backdropCropParamsValid(outWidth, outHeight, blurRadius)) return null
         val clipped = Rect(regionInSnapshot).apply {
             intersect(0, 0, snapshot.width, snapshot.height)
         }

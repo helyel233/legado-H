@@ -118,9 +118,9 @@ internal fun titleBarGlassAction(
     appliedSignature: String?,
     yieldToPage: Boolean = false
 ): TitleBarGlassAction = when {
-    // 页面已用 applyControlledWallpaperGlass 接管本顶栏：自动 opt-in 整条让位。
-    // 否则 `opaque` 页面（WebView 阅读页的顶栏就是这样）的自动判定会立刻把页面
-    // 铺上的玻璃判成「不该铺」并撤掉，每帧 resume 都退化成「撤掉 → 重新铺」。
+    // 页面已用 applyControlledWallpaperGlass / applyPageOwnedSurface 接管本顶栏：自动 opt-in 整条让位。
+    // 注：生产路径已在 applyWallpaperGlassDecision 开头整体早退（内部固定传 false），
+    // 此参数保留供纯函数决策表与既有单测（TitleBarGlassYieldPrecedenceTest 等）显式消费。
     yieldToPage -> TitleBarGlassAction.SKIP
     !enabled -> if (appliedSignature == null) {
         TitleBarGlassAction.SKIP
@@ -613,6 +613,32 @@ class TitleBar @JvmOverloads constructor(
     }
 
     /**
+     * 页面自管顶栏表面的唯一入口（R2 单一写者）。
+     *
+     * 详情页这类「背后是 bg_book 而不是壁纸」的页面，表面材质只能由页面自己画
+     * （壁纸域采样在本页不成立），但**几何必须仍然来自 chrome**。此前页面绕过
+     * chrome 直接写 `background`：悬浮 margins 由自动路径施加、方角面由页面铺，
+     * 同一块表面两个写者——真机上就是「顶栏悬浮内缩了却不是圆角」。
+     *
+     * 本方法把 chrome（几何 + 半径 + 悬浮态）解析好交给 [face]（悬浮卡半径取
+     * `chrome.radiusPx`，非悬浮传 0 保持贴边通栏），施加几何后铺上返回的 drawable。
+     * 调用后 `pageOwnsWallpaperGlass = true`：自动 opt-in 与包卡分支对本顶栏
+     * **零触碰**（几何照常施加，表面动作整体让位），页面是表面的唯一写者。
+     *
+     * [face] 返回 null 表示页面判否（非玻璃档 / CLEAR 判否），本方法不动背景，
+     * 由页面按自身账本还原透明档。
+     */
+    fun applyPageOwnedSurface(face: (chrome: TopBarChromeSpec.Chrome) -> Drawable?): Boolean {
+        if (isInEditMode) return false
+        pageOwnsWallpaperGlass = true
+        val (chrome, _) = resolveChrome()
+        applyChromeGeometry(chrome)
+        val drawable = face(chrome) ?: return false
+        setBackground(drawable)
+        return true
+    }
+
+    /**
      * 解析当前顶栏包的悬浮 chrome 几何（半径 / 悬浮态 / 三向 inset）。
      *
      * 唯一真相源是 [TopBarChromeSpec]（与 A系 [MainTopBarView] 共用）：
@@ -707,9 +733,9 @@ class TitleBar @JvmOverloads constructor(
      * 非悬浮 → 历史行为逐字节不变（radius 参数也回归调用方原值）。
      *
      * [yieldToPage] 只由自动 opt-in 传 true（页面已接管时不插手玻璃判定）。
-     * chrome 几何始终施加（悬浮是顶栏包的全局决定）；表面材质则让位——受控页已铺
-     * 玻璃时 SKIP 不撕包卡、PACKAGE 不铺包卡不撤页面玻璃，两者都是「零触碰」让位，
-     * 否则受控页每次 resume 会退化成「页面铺 → 自动撤 → 页面重铺」的循环。
+     * 让位语义是「几何照常、表面零触碰」：chrome 几何始终施加（悬浮是顶栏包的
+     * 全局决定），但玻璃 / 包卡两个表面分支对已接管顶栏整体无写权——
+     * 否则页面自管材质面（不进玻璃账本）会在每次 resume 被自动入口撕掉重铺。
      */
     private fun applyWallpaperGlassDecision(
         enabled: Boolean,
@@ -718,6 +744,16 @@ class TitleBar @JvmOverloads constructor(
     ): Boolean {
         val (chrome, config) = resolveChrome()
         applyChromeGeometry(chrome)
+        // 让位即零触碰（表面动作层面）：页面自管表面（applyPageOwnedSurface /
+        // applyControlledWallpaperGlass）时，自动入口的几何照常施加，但玻璃 /
+        // 包卡两个表面分支都不再有写权。此前 PACKAGE 分支只在不等式
+        // 「yieldToPage && appliedSignature != null」下让位——页面自管材质面
+        // （如详情页的压暗玻璃面）不进玻璃账本、appliedSignature 恒 null，
+        // 于是每次 resume 自动入口都会把包卡铺到页面上，与页面自己的面
+        // 形成「你铺我撕」的双写循环。
+        if (yieldToPage) {
+            return false
+        }
         val glassRadius = if (chrome.floating) chrome.radiusPx else cornerRadiusPx
         val signature = titleBarChromeSurfaceSignature(
             packageSignature = TopBarConfig.currentSignature(AppConfig.isNightTheme),
@@ -727,37 +763,23 @@ class TitleBar @JvmOverloads constructor(
         )
         return when (titleBarChromeSurface(enabled, chrome.floating)) {
             TitleBarChromeSurface.PACKAGE -> {
-                // 悬浮但玻璃判定不过：撤掉已铺玻璃（若有）再铺包背景卡片；
-                // 让位例外见下方注释。
-                // 例外——让位规则优先：受控页已铺玻璃（appliedSignature 非空）时本入口
-                // 什么都不动。否则 `opaque` 受控页（ReadRssActivity）+ 悬浮顶栏包的
-                // 组合会在每次 resume 上演「自动入口撤页面玻璃 → 页面重铺」的循环，
-                // 正是 [titleBarGlassAction] KDoc 记载已修复的回归在 chrome 分支复发；
-                // 若受控入口晚于自动入口执行，页面玻璃甚至会被包卡永久盖掉。
-                // 页面尚未铺玻璃（appliedSignature 为空）时撤玻璃是空操作，包卡照铺。
-                if (yieldToPage && glassLedger.appliedSignature != null) {
-                    return false
-                }
+                // 悬浮但玻璃判定不过：撤掉已铺玻璃（若有）再铺包背景卡片。
                 restoreTitleBarSurface(this, glassLedger)
                 applyPackageChromeSurface(chrome, signature, config)
                 true
             }
 
             TitleBarChromeSurface.GLASS, TitleBarChromeSurface.LEGACY -> {
+                // yieldToPage 已在上面整体让位早退，这里恒 false（SKIP 分支只为
+                // 穷尽性保留，titleBarGlassAction 的让位语义由单测锁定）。
                 val action = titleBarGlassAction(
                     enabled = enabled,
                     signature = signature,
                     appliedSignature = glassLedger.appliedSignature,
-                    yieldToPage = yieldToPage
+                    yieldToPage = false
                 )
-                // SKIP（受控页接管）：既不铺也不撤——包背景卡与玻璃都保持原样，
-                // 撕包卡同样越权（纪律与玻璃一致：让位即零触碰）。
-                if (action == TitleBarGlassAction.SKIP) {
-                    return false
-                }
                 releasePackageChromeSurface()
                 when (action) {
-                    // SKIP 已在上面早退，此处不可达（穷尽性需要）。
                     TitleBarGlassAction.SKIP -> false
                     TitleBarGlassAction.KEEP -> true
                     TitleBarGlassAction.RELEASE -> {

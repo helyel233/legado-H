@@ -58,4 +58,17 @@ class BookInfoComposeGlassTest {
         assertTrue(BOOK_INFO_COMPOSE_GLASS_ALPHA_CAP > 0f)
         assertTrue(BOOK_INFO_COMPOSE_GLASS_ALPHA_CAP < 1f)
     }
+
+    /** CLEAR 档与 CLASSIC 路径同口径走 0.86f + 描边，不压成玻璃档的 0.80f。 */
+    @Test
+    fun clearModeUsesClearSurfaceAlphaAndStroke() {
+        assertEquals(0.86f, bookInfoComposeCardAlpha(glassEnabled = false, clearEnabled = true, opaqueAlpha = 0.97f), 0f)
+        assertEquals(0.28f, bookInfoComposeCardAlpha(glassEnabled = false, clearEnabled = true, opaqueAlpha = 0.28f), 0f)
+        assertEquals(0.80f, bookInfoComposeCardAlpha(glassEnabled = true, clearEnabled = false, opaqueAlpha = 0.97f), 0f)
+        assertEquals(0.97f, bookInfoComposeCardAlpha(glassEnabled = false, clearEnabled = false, opaqueAlpha = 0.97f), 0f)
+
+        assertTrue(bookInfoComposeCardStroke(glassEnabled = false, clearEnabled = true))
+        assertTrue(bookInfoComposeCardStroke(glassEnabled = true, clearEnabled = false))
+        assertFalse(bookInfoComposeCardStroke(glassEnabled = false, clearEnabled = false))
+    }
 }

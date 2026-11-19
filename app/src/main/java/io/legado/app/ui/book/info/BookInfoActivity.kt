@@ -307,6 +307,9 @@ class BookInfoActivity :
     /** 进行中的后台裁剪任务；新一轮重铺开始时取消上一轮，避免两轮交叉换装。 */
     private var bookInfoBackdropJob: Job? = null
 
+    /** 等待 bg_book 首次完成布局的一次性监听，避免无背景图时卡在 0×0 无底图。 */
+    private var bookInfoBackdropLayoutListener: View.OnLayoutChangeListener? = null
+
     private var useComposeBookInfo = false
     private var composeReadTimeText = ""
     private var composeGroupText = ""
@@ -1009,6 +1012,7 @@ class BookInfoActivity :
             viewModel.getBook(false)?.let { updateComposeAiImages(it, forceRefresh = true) }
         } else {
             updateBookAiImagesPanel(forceRefresh = true)
+            applyBookInfoBackdropSurfaces()
         }
     }
 
@@ -1037,11 +1041,15 @@ class BookInfoActivity :
      * 事实（换封面 / 改设置都会重走 [applyBookInfoBackground]），表面必须跟着重算，
      * 否则卡片会停在上一档（有图时仍是实底、或没图时仍半透明）。
      */
-    private fun applyBookInfoBackdropSurfaces() = binding.run {
+    private fun applyBookInfoBackdropSurfaces(): Unit = binding.run {
         // 新一轮重铺开始：取消上一轮还在跑的后台裁剪（其结果就地回收、不再换装），
         // 避免新旧两轮交叉换装。
         bookInfoBackdropJob?.cancel()
         bookInfoBackdropJob = null
+        bookInfoBackdropLayoutListener?.let {
+            bgBook.removeOnLayoutChangeListener(it)
+            bookInfoBackdropLayoutListener = null
+        }
 
         val panelRadius = UiCorner.panelRadius(this@BookInfoActivity)
         val panels = listOfNotNull(
@@ -1077,31 +1085,79 @@ class BookInfoActivity :
             }
         }
 
+        /** 顶栏玻璃面（几何走 TitleBar.applyPageOwnedSurface 的 chrome 单一真相源）。 */
+        fun applyTitleBarFace(backdrop: Bitmap?) {
+            val titleBarGlassApplied = titleBar.applyPageOwnedSurface { chrome ->
+                BookInfoBackdropSurface.titleBarBackground(
+                    this@BookInfoActivity,
+                    pageOwnedTitleBarRadius(chrome.floating, chrome.radiusPx),
+                    backdrop
+                )
+            }
+            if (titleBarGlassApplied) {
+                bookInfoTitleBarGlassApplied = true
+            } else if (bookInfoTitleBarGlassApplied) {
+                titleBar.setBackgroundResource(R.color.transparent)
+                bookInfoTitleBarGlassApplied = false
+            }
+        }
+
         /** 旧底图批在换装完成后（drawable 已整体替换）才回收。 */
-        fun recycleOldBackdrops() {
-            bookInfoGlassBackdrops.forEach(Bitmap::recycle)
-            bookInfoGlassBackdrops.clear()
+        fun recycleBackdrops(oldBackdrops: List<Bitmap>) {
+            oldBackdrops.forEach(Bitmap::recycle)
         }
 
         if (!BookInfoBackdropSurface.backdropGlassCapable(this@BookInfoActivity)) {
             // 判否 / CLEAR 档：面板走 CLEAR 壳或实底回退，全程无位图工作，同步铺完。
+            val oldBackdrops = bookInfoGlassBackdrops.toList()
+            bookInfoGlassBackdrops.clear()
             applyFaces(List(panels.size + buttons.size) { null })
-            recycleOldBackdrops()
+            applyTitleBarFace(null)
+            recycleBackdrops(oldBackdrops)
         } else {
             val snapshot = BookInfoBackdropSurface.captureBackdropSnapshot(
                 bgBook, BookInfoBackdropSurface.BACKDROP_DOWNSCALE
             )
             if (snapshot == null) {
-                // bg_book 未布局 / 建位图失败：与旧行为一致，全部铺纯壳层玻璃（backdrop=null）。
+                // bg_book 未布局 / 建位图失败：先铺纯壳层玻璃，并在 bg_book 首次完成布局后补截一次。
+                val oldBackdrops = bookInfoGlassBackdrops.toList()
+                bookInfoGlassBackdrops.clear()
                 applyFaces(List(panels.size + buttons.size) { null })
-                recycleOldBackdrops()
+                applyTitleBarFace(null)
+                recycleBackdrops(oldBackdrops)
+                if (bgBook.width <= 0 || bgBook.height <= 0) {
+                    val listener = object : View.OnLayoutChangeListener {
+                        override fun onLayoutChange(
+                            v: View?,
+                            left: Int,
+                            top: Int,
+                            right: Int,
+                            bottom: Int,
+                            oldLeft: Int,
+                            oldTop: Int,
+                            oldRight: Int,
+                            oldBottom: Int
+                        ) {
+                            if (bgBook.width > 0 && bgBook.height > 0) {
+                                bgBook.removeOnLayoutChangeListener(this)
+                                if (bookInfoBackdropLayoutListener === this) {
+                                    bookInfoBackdropLayoutListener = null
+                                }
+                                bgBook.post { applyBookInfoBackdropSurfaces() }
+                            }
+                        }
+                    }
+                    bookInfoBackdropLayoutListener = listener
+                    bgBook.addOnLayoutChangeListener(listener)
+                }
             } else {
-                // 主线程只做一次全幅降采样快照 + 区域折算；各卡片的区域裁剪 + 软件模糊
-                // 移到后台线程，完成后回主线程统一换装——7 连截图 + stackBlur 不再
-                // 卡书籍打开 / 换封面的主线程。
+                // 先同步施加顶栏 chrome 几何（避免首帧闪烁），底图裁剪完成后再换装真玻璃。
+                applyTitleBarFace(null)
+                // 主线程只做一次全幅降采样快照 + 区域折算；各卡片与顶栏的区域裁剪 + 软件模糊
+                // 移到后台线程，完成后回主线程统一换装。
                 val scaleX = snapshot.width.toFloat() / bgBook.width
                 val scaleY = snapshot.height.toFloat() / bgBook.height
-                val requests = (panels + buttons).map { host ->
+                val requests = (panels + buttons + listOf(titleBar)).map { host ->
                     bookInfoBackdropRequestFor(host, bgBook, scaleX, scaleY)
                 }
                 val blurRadius = bookInfoGlassBlurRadius()
@@ -1126,23 +1182,14 @@ class BookInfoActivity :
                         throw e
                     }
                     snapshot.recycle()
-                    recycleOldBackdrops()
+                    val oldBackdrops = bookInfoGlassBackdrops.toList()
+                    bookInfoGlassBackdrops.clear()
                     backdrops.forEach { it?.let(bookInfoGlassBackdrops::add) }
                     applyFaces(backdrops)
+                    applyTitleBarFace(backdrops.getOrNull(panels.size + buttons.size))
+                    recycleBackdrops(oldBackdrops)
                 }
             }
-        }
-        // 顶栏：本页 onActivityCreated 里已把 title_bar 固定为透明背景（透明档），
-        // 背后同样是模糊详情图，玻璃档换成零采样玻璃面（黑面 + 描边），判否时还原透明。
-        // 与 BaseActivity 的顶栏自动玻璃互不干扰：本页 showsWallpaperBehindContent=false，
-        // 那条路径在本页只会 SKIP（不铺也不撤），不存在两边抢背景。
-        val titleBarGlass = BookInfoBackdropSurface.titleBarBackground(this@BookInfoActivity)
-        if (titleBarGlass != null) {
-            titleBar.background = titleBarGlass
-            bookInfoTitleBarGlassApplied = true
-        } else if (bookInfoTitleBarGlassApplied) {
-            titleBar.setBackgroundResource(R.color.transparent)
-            bookInfoTitleBarGlassApplied = false
         }
         // 「阅读」主按钮：保留 accent 色相只让 alpha（主操作的 accent 语义不丢），
         // 文字色按半透明面 + 最坏底图重算；判否时把 AccentBgTextView 的自绘背景与
@@ -2602,13 +2649,24 @@ class BookInfoActivity :
         lastBookInfoBgPath = detailBg
         if (!detailBg.isNullOrBlank()) {
             BookCover.loadBlur(this, detailBg, false, null)
+                // dontAnimate 不是观感偏好，是卡片材质确定性的根：卡片玻璃的采样底图
+                // 来自对 bg_book 的区域截图，而 loadBlur 自带 300ms crossfade + 模糊
+                // 封面缩略图——「最终一轮重铺截到的是哪一帧」就变成了由封面加载 /
+                // 布局回调与 crossfade 窗口的竞速决定，反复进入详情页时卡片材质
+                // 在「无底图壳层」与「真底图液态」之间跳变。背景图不允许动画，
+                // 投递即终态，截图才能变成 f(路径) 而不是 f(时机)。
+                .dontAnimate()
                 .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
                     override fun onLoadFailed(
                         e: com.bumptech.glide.load.engine.GlideException?,
                         model: Any?,
                         target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>,
                         isFirstResource: Boolean
-                    ): Boolean = false
+                    ): Boolean {
+                        // 加载失败时 bg_book 可能显示缩略图或错误占位，重铺一次避免停在旧底图。
+                        binding.bgBook.post { applyBookInfoBackdropSurfaces() }
+                        return false
+                    }
 
                     override fun onResourceReady(
                         resource: android.graphics.drawable.Drawable,
@@ -2617,8 +2675,9 @@ class BookInfoActivity :
                         dataSource: com.bumptech.glide.load.DataSource,
                         isFirstResource: Boolean
                     ): Boolean {
-                        // 背景图是异步进 ImageView 的：加载完成时卡片背后的像素才真正变化，
-                        // 必须重截一次，否则磨砂底图停在「纯色档」那一版。
+                        // 监听器只挂在终图 builder（Glide 不会自动挂到 thumbnail(RequestBuilder)），
+                        // 终图投递即终态，无条件重铺一次，否则内存缓存命中或 useDefaultCover 时
+                        // isFirstResource=true 会被误伤跳过、卡片永久停在无底图壳层态。
                         binding.bgBook.post { applyBookInfoBackdropSurfaces() }
                         return false
                     }

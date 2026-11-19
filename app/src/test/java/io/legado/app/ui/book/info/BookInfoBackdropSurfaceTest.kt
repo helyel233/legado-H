@@ -43,6 +43,40 @@ class BookInfoBackdropSurfaceTest {
     }
 
     // ---------------------------------------------------------------------
+    // 页面自管顶栏面的圆角：悬浮卡必须同圆角，非悬浮保持贴边直角（dormant 底线）
+    // ---------------------------------------------------------------------
+
+    /**
+     * 悬浮 chrome 开启：顶栏 margins 已内缩成卡片，面必须与卡片同圆角——
+     * 半径原值透传（chrome 解析的钳制由 TopBarChromeSpecTest 锁，这里不重复）。
+     */
+    @Test
+    fun floatingChromeFaceUsesChromeRadius() {
+        assertEquals(26f, pageOwnedTitleBarRadius(floating = true, cornerRadiusPx = 26f))
+        assertEquals(0f, pageOwnedTitleBarRadius(floating = true, cornerRadiusPx = 0f))
+    }
+
+    /**
+     * 非悬浮：贴边通栏直角，逐值等价 1.31.1 及以前（半径不透传 chrome 值，
+     * 否则 floatingChrome=false 的存量包顶栏会凭空变圆角）。
+     */
+    @Test
+    fun legacyFaceStaysSquare() {
+        assertEquals(0f, pageOwnedTitleBarRadius(floating = false, cornerRadiusPx = 26f))
+        assertEquals(0f, pageOwnedTitleBarRadius(floating = false, cornerRadiusPx = 0f))
+    }
+
+    /**
+     * R4 双向独立：悬浮布尔与半径是两个独立输入，禁止由 radius>0 反推悬浮——
+     * chrome 给出非零半径但悬浮关闭时，面仍是直角。
+     */
+    @Test
+    fun floatingAndRadiusAreIndependentInputs() {
+        assertEquals(0f, pageOwnedTitleBarRadius(floating = false, cornerRadiusPx = 40f))
+        assertEquals(40f, pageOwnedTitleBarRadius(floating = true, cornerRadiusPx = 40f))
+    }
+
+    // ---------------------------------------------------------------------
     // 顶栏玻璃面：白字恒亮（themeMode=dark），压暗面 alpha 是对比度倒推的下限
     // ---------------------------------------------------------------------
 
@@ -212,6 +246,16 @@ class BookInfoBackdropSurfaceTest {
             bookInfoTranslucentSurfaceAllowed(true)
         )
         assertTrue(bookInfoTranslucentSurfaceAllowed(true))
+    }
+
+    /** 0 或负模糊半径不产出位图，避免向 GlassLiquidBackdropDrawable 交回未模糊的清晰快照。 */
+    @Test
+    fun zeroBlurRadiusRejectsBackdropCrop() {
+        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = 0))
+        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = -3))
+        assertFalse(backdropCropParamsValid(outWidth = 0, outHeight = 100, blurRadius = 8))
+        assertFalse(backdropCropParamsValid(outWidth = 100, outHeight = 0, blurRadius = 8))
+        assertTrue(backdropCropParamsValid(outWidth = 100, outHeight = 100, blurRadius = 1))
     }
 
     // ---------------------------------------------------------------------

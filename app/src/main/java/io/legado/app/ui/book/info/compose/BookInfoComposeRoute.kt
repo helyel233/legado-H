@@ -134,6 +134,8 @@ import io.legado.app.ui.book.info.BookInfoWebIntroHeightScheduler
 import io.legado.app.ui.book.info.BookInfoWebIntroLifecycle
 import io.legado.app.ui.book.info.createBookInfoMarkwon
 import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.help.GlideImageGetter
 import io.legado.app.help.TextViewTagHandler
@@ -257,6 +259,8 @@ data class BookInfoComposeColors(
     val scrim: Color,
     /** 玻璃档是否给卡面让 alpha + 描边（[bookInfoComposeGlassAllowed]，只认档位）。 */
     val glassEnabled: Boolean = false,
+    /** 透明无玻璃档（CLEAR）：与 CLASSIC 路径同口径走 CLEAR_SURFACE_ALPHA + 描边。 */
+    val clearEnabled: Boolean = false,
     /** 玻璃描边色（glass_stroke）；非玻璃档透明，逐值等价接入前。 */
     val glassStroke: Color = Color.Transparent
 )
@@ -346,7 +350,8 @@ fun bookInfoComposeStyle(context: Context, coverColor: Int? = null): BookInfoCom
     val glassEnabled = bookInfoComposeGlassAllowed(
         glassEnabled = GlassSurface.wallpaperGlassEnabled(context)
     )
-    val glassStroke = if (bookInfoComposeGlassStroke(glassEnabled)) {
+    val clearEnabled = GlassSurface.dialogClearAllowed(context)
+    val glassStroke = if (bookInfoComposeCardStroke(glassEnabled, clearEnabled)) {
         Color(UiCorner.borderLineColor(context))
     } else {
         Color.Transparent
@@ -370,6 +375,7 @@ fun bookInfoComposeStyle(context: Context, coverColor: Int? = null): BookInfoCom
             actionText = Color(actionText),
             scrim = Color(scrim),
             glassEnabled = glassEnabled,
+            clearEnabled = clearEnabled,
             glassStroke = glassStroke
         ),
         metrics = BookInfoComposeMetrics(
@@ -400,7 +406,8 @@ fun BookInfoComposeRoute(
     }
     val configuration = LocalConfiguration.current
     val night = AppConfig.isNightTheme
-    val style = remember(context, coverColor, configuration, night) {
+    val glassSignature = rememberGlassConfigSignature()
+    val style = remember(context, coverColor, configuration, night, glassSignature) {
         bookInfoComposeStyle(context, coverColor)
     }
     var showMoreMenu by remember { mutableStateOf(false) }
@@ -801,11 +808,16 @@ private fun BookInfoMetricBox(
             // 第四轮：Compose 详情页状态条玻璃面。alpha 让位 + 1dp 描边，非玻璃档逐值不变。
             .background(
                 style.colors.metricTop.copy(
-                    alpha = bookInfoComposeGlassAlpha(style.colors.glassEnabled, 0.96f)
+                    alpha = bookInfoComposeCardAlpha(
+                        glassEnabled = style.colors.glassEnabled,
+                        clearEnabled = style.colors.clearEnabled,
+                        opaqueAlpha = 0.96f,
+                        clearAlpha = GlassMaterialPreset.CLEAR_SURFACE_ALPHA
+                    )
                 )
             )
             .then(
-                if (style.colors.glassEnabled) {
+                if (bookInfoComposeCardStroke(style.colors.glassEnabled, style.colors.clearEnabled)) {
                     Modifier.border(1.dp, style.colors.glassStroke, shape)
                 } else {
                     Modifier
@@ -968,11 +980,16 @@ private fun BookInfoMetricPreviewCard(
             // 第四轮：Compose 详情页浮动卡玻璃面。alpha 让位 + 1dp 描边，非玻璃档逐值不变。
             .background(
                 style.colors.surface.copy(
-                    alpha = bookInfoComposeGlassAlpha(style.colors.glassEnabled, 0.97f)
+                    alpha = bookInfoComposeCardAlpha(
+                        glassEnabled = style.colors.glassEnabled,
+                        clearEnabled = style.colors.clearEnabled,
+                        opaqueAlpha = 0.97f,
+                        clearAlpha = GlassMaterialPreset.CLEAR_SURFACE_ALPHA
+                    )
                 )
             )
             .then(
-                if (style.colors.glassEnabled) {
+                if (bookInfoComposeCardStroke(style.colors.glassEnabled, style.colors.clearEnabled)) {
                     Modifier.border(1.dp, style.colors.glassStroke, shape)
                 } else {
                     Modifier
