@@ -229,8 +229,6 @@ object NavigationBarIconConfig {
         AppConfig.bottomBarLayoutMode = config.layoutMode
         AppConfig.bottomBarSidebarGravity = config.sidebarGravity
         AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
-        AppConfig.liquidGlassLevel = config.opacity
-        AppConfig.frostedGlassLevel = config.opacity
         if (config.layoutMode == "sidebar") {
             appCtx.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }
@@ -241,13 +239,14 @@ object NavigationBarIconConfig {
         appCtx.putPrefString(key, entry.dirName)
     }
 
-    fun applyCurrentBottomConfig(isNight: Boolean) {
+    fun applyCurrentBottomConfig(isNight: Boolean, preserveLayoutMode: Boolean = false) {
+        if (preserveLayoutMode) {
+            return
+        }
         val config = normalizeConfig(currentEntry(isNight).config)
         AppConfig.bottomBarLayoutMode = config.layoutMode
         AppConfig.bottomBarSidebarGravity = config.sidebarGravity
         AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
-        AppConfig.liquidGlassLevel = config.opacity
-        AppConfig.frostedGlassLevel = config.opacity
         if (config.layoutMode == "sidebar") {
             appCtx.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }

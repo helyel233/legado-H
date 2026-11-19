@@ -20,9 +20,13 @@ import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.postEvent
+import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
 import io.legado.app.help.config.appearance.BuiltinAppearanceDefaults
+import io.legado.app.lib.theme.PrefBatchTransaction
+import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.normalizeFileName
 import kotlinx.coroutines.Dispatchers.IO
@@ -68,38 +72,11 @@ object AppearanceKitManager {
     fun builtinKits(): List<AppearanceKit> {
         return listOf(
             AppearanceKit(
-                id = KIT_FLOATING,
-                name = appCtx.getString(R.string.bottom_bar_layout_floating),
-                summary = appCtx.getString(R.string.main_layout_preset_default_summary),
+                id = BuiltinAppearanceDefaults.BUILTIN_DEFAULT_KIT_ID,
+                name = appCtx.getString(R.string.builtin_default_kit_name),
+                summary = appCtx.getString(R.string.builtin_default_kit_summary),
                 type = AppearanceKitType.BUILTIN,
-                binding = KitBinding(
-                    preset = MainLayoutPresetConfig.PRESET_DEFAULT,
-                    floatingBottomBarHideSearch = false
-                )
-            ),
-            AppearanceKit(
-                id = KIT_FLOATING_NO_SEARCH,
-                name = appCtx.getString(R.string.builtin_kit_floating_no_search),
-                summary = appCtx.getString(R.string.builtin_kit_floating_no_search_summary),
-                type = AppearanceKitType.BUILTIN,
-                binding = KitBinding(
-                    preset = MainLayoutPresetConfig.PRESET_DEFAULT,
-                    floatingBottomBarHideSearch = true
-                )
-            ),
-            AppearanceKit(
-                id = KIT_REGULAR,
-                name = appCtx.getString(R.string.bottom_bar_layout_standard),
-                summary = appCtx.getString(R.string.main_layout_preset_regular_summary),
-                type = AppearanceKitType.BUILTIN,
-                binding = KitBinding(preset = MainLayoutPresetConfig.PRESET_REGULAR)
-            ),
-            AppearanceKit(
-                id = KIT_SIDEBAR,
-                name = appCtx.getString(R.string.bottom_bar_layout_sidebar),
-                summary = appCtx.getString(R.string.main_layout_preset_sidebar_summary),
-                type = AppearanceKitType.BUILTIN,
-                binding = KitBinding(preset = MainLayoutPresetConfig.PRESET_SIDEBAR)
+                binding = KitBinding()
             )
         )
     }
@@ -136,14 +113,25 @@ object AppearanceKitManager {
             .sortedBy { it.name }
     }
 
+    fun normalizeBuiltinKitId(rawId: String?): String {
+        val trimmed = rawId?.trim().orEmpty()
+        return if (trimmed.isBlank() || isBuiltinKitId(trimmed)) {
+            BuiltinAppearanceDefaults.BUILTIN_DEFAULT_KIT_ID
+        } else {
+            trimmed
+        }
+    }
+
+    fun alignBaselineAfterMigration(context: Context) {
+        val raw = context.getPrefString(PreferKey.currentAppearanceKitId, "").orEmpty()
+        val normalized = normalizeBuiltinKitId(raw)
+        if (raw.isNotBlank() && raw != normalized) {
+            context.putPrefString(PreferKey.currentAppearanceKitId, normalized)
+        }
+    }
+
     fun currentKitId(): String {
-        return appCtx.getPrefString(PreferKey.currentAppearanceKitId, "")
-            ?.takeIf { it.isNotBlank() }
-            ?: when (MainLayoutPresetConfig.currentPreset()) {
-                MainLayoutPresetConfig.PRESET_REGULAR -> KIT_REGULAR
-                MainLayoutPresetConfig.PRESET_SIDEBAR -> KIT_SIDEBAR
-                else -> if (AppConfig.floatingBottomBarHideSearch) KIT_FLOATING_NO_SEARCH else KIT_FLOATING
-            }
+        return normalizeBuiltinKitId(appCtx.getPrefString(PreferKey.currentAppearanceKitId, ""))
     }
 
     suspend fun apply(context: Context, kit: AppearanceKit) {
@@ -151,8 +139,16 @@ object AppearanceKitManager {
         try {
             currentModeThemeGeneration.incrementAndGet()
             val binding = kit.binding ?: loadIndex().firstOrNull { it.id == kit.id }?.binding
-            applyBinding(context, binding ?: KitBinding(preset = MainLayoutPresetConfig.PRESET_DEFAULT))
-            context.putPrefString(PreferKey.currentAppearanceKitId, kit.id)
+            val normalizedId = normalizeBuiltinKitId(kit.id)
+            PrefBatchTransaction.beginBatch()
+            try {
+                applyBinding(context, binding ?: KitBinding())
+                context.putPrefString(PreferKey.currentAppearanceKitId, normalizedId)
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
             postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
             postEvent(EventBus.RECREATE, "")
         } finally {
@@ -173,13 +169,20 @@ object AppearanceKitManager {
             val binding = loadIndex().firstOrNull { it.id == currentKitId() }?.binding
             currentCoroutineContext().ensureActive()
             if (generation != currentModeThemeGeneration.get()) return false
-            if (binding != null) {
-                applyCurrentThemeRef(context, binding, isNightTheme)
+            PrefBatchTransaction.beginBatch()
+            try {
+                if (binding != null) {
+                    applyCurrentThemeRef(context, binding, isNightTheme)
+                }
+                currentCoroutineContext().ensureActive()
+                if (generation != currentModeThemeGeneration.get()) return false
+                ThemeConfig.applyTheme(context, isNightTheme)
+                BookCover.upDefaultCover()
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
             }
-            currentCoroutineContext().ensureActive()
-            if (generation != currentModeThemeGeneration.get()) return false
-            ThemeConfig.applyTheme(context, isNightTheme)
-            BookCover.upDefaultCover()
             // 只在投影真的改写了本模式主题（名字/目录/颜色/背景图）时返回 true，调用方
             // （AppConfig.themeMode 监听、App 系统日/夜链路）据此补发刷新事件。
             // 已一致时返回 false，避免与调用方同步的 applyDayNight 形成双重 recreate。
@@ -533,10 +536,7 @@ object AppearanceKitManager {
 
     private suspend fun applyBinding(context: Context, binding: KitBinding) {
         val currentNight = AppConfig.isNightTheme
-        val resolvedPreset = binding.preset?.takeIf { it.isNotBlank() } ?: MainLayoutPresetConfig.PRESET_REGULAR
-        MainLayoutPresetConfig.apply(context, resolvedPreset, notify = false)
-        // Apply only the active mode. The other mode remains an independent
-        // theme reference and is projected when day/night mode switches.
+        // 切换皮肤方案不再覆写主导航布局骨架（M1b 解耦）
         applyCurrentThemeRef(context, binding, currentNight)
         applyTopBarRef(false, binding.dayTopBar)
         applyTopBarRef(true, binding.nightTopBar)
@@ -547,11 +547,36 @@ object AppearanceKitManager {
         if (AppConfig.isNightTheme != currentNight) {
             AppConfig.isNightTheme = currentNight
         }
-        NavigationBarIconConfig.applyCurrentBottomConfig(currentNight)
-        // 主题包显式携带的"底栏隐藏悬浮搜索"覆盖在底栏配置之后生效(隐藏时顶栏会自动显示搜索)。
-        binding.floatingBottomBarHideSearch?.let { AppConfig.floatingBottomBarHideSearch = it }
+        NavigationBarIconConfig.applyCurrentBottomConfig(currentNight, preserveLayoutMode = true)
+        binding.glass?.let { applyGlassBinding(context, it) }
+        binding.welcome?.let { applyWelcomeBinding(context, it) }
         ThemeConfig.applyTheme(context)
         BookCover.upDefaultCover()
+    }
+
+    private fun applyGlassBinding(context: Context, glass: KitGlassBinding) {
+        if (glass.mode.isNotBlank()) {
+            context.putPrefString(PreferKey.exploreGlassEffectMode, glass.mode)
+        }
+        context.putPrefInt(PreferKey.frostedGlassLevel, glass.frostedLevel)
+        context.putPrefInt(PreferKey.liquidGlassLevel, glass.liquidLevel)
+        context.putPrefInt(PreferKey.exploreGlassBlurScale, glass.blurScale)
+        context.putPrefInt(PreferKey.exploreGlassShellScale, glass.shellScale)
+        context.putPrefInt(PreferKey.exploreGlassTintScale, glass.tintScale)
+        context.putPrefInt(PreferKey.exploreGlassStrokeScale, glass.strokeScale)
+        context.putPrefString(PreferKey.glassStrokeColor, glass.strokeColor)
+        context.putPrefBoolean(PreferKey.glassPresetMatched, glass.presetMatched)
+        context.putPrefBoolean(PreferKey.exploreGlassHardwareBlur, glass.hardwareBlur)
+        context.putPrefBoolean(PreferKey.exploreGlassAnimatedSolid, glass.animatedSolid)
+    }
+
+    private fun applyWelcomeBinding(context: Context, welcome: KitWelcomeBinding) {
+        context.putPrefBoolean(PreferKey.customWelcome, welcome.customWelcome)
+        context.putPrefBoolean(PreferKey.welcomeShowText, welcome.showTextDay)
+        context.putPrefBoolean(PreferKey.welcomeShowTextDark, welcome.showTextNight)
+        context.putPrefBoolean(PreferKey.welcomeShowIcon, welcome.showIconDay)
+        context.putPrefBoolean(PreferKey.welcomeShowIconDark, welcome.showIconNight)
+        context.putPrefInt(PreferKey.welcomeShowTime, welcome.showTime)
     }
 
     private suspend fun applyThemeRef(context: Context, isNight: Boolean, ref: ComponentRef?) {

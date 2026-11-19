@@ -124,6 +124,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        AppearanceKitManager.alignBaselineAfterMigration(this)
         binding.titleBar.title = getString(R.string.appearance_kit_manage)
         binding.tabBar.visibility = View.GONE
         binding.tvSummary.visibility = View.GONE
@@ -203,7 +204,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val config = entry?.let {
             runCatching { ThemePackageManager.getConfig(it) }.getOrNull()
         }
-        val darkFallback = kit.id == AppearanceKitManager.KIT_SIDEBAR || isNight
+        val darkFallback = isNight
         val backgroundColor = config?.backgroundColor.toPreviewColor(darkFallback)
         val primaryColor = config?.primaryColor.toPreviewColor(darkFallback)
         val accentColor = config?.accentColor.toPreviewColor(darkFallback, defaultAccent = true)

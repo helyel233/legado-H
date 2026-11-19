@@ -9,6 +9,8 @@
     <string name="builtin_epub_loading_aurora_desc">极光光带、群山与远行的坐标</string>
     <string name="builtin_epub_loading_aurora_caption">下一段旅程，从这一页出发。</string>
     <string name="builtin_bubble_package">内置段评气泡</string>
+    <string name="builtin_default_kit_name">内置默认方案</string>
+    <string name="builtin_default_kit_summary">系统内置默认主题、顶栏、底栏与玻璃材质</string>
     <string name="builtin_kit_floating_no_search">无搜索悬浮底栏</string>
     <string name="builtin_kit_floating_no_search_summary">悬浮底栏(隐藏搜索) + 顶栏显示搜索</string>
     <string name="builtin_cover_template_default">默认模板</string>

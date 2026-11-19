@@ -49,6 +49,15 @@ object MainLayoutPresetConfig {
         return appCtx.getPrefBoolean(PreferKey.floatingBottomBarHideSearch, false)
     }
 
+    fun isTopBarStyleMismatched(targetPreset: String, topBarStyle: String): Boolean {
+        val expectedStyle = if (targetPreset == PRESET_REGULAR) {
+            TopBarConfig.STYLE_REGULAR
+        } else {
+            TopBarConfig.STYLE_DEFAULT
+        }
+        return topBarStyle.isNotBlank() && topBarStyle != expectedStyle
+    }
+
     fun apply(context: Context, preset: String, notify: Boolean = true) {
         val nextPreset = preset.takeIf { it in validPresets } ?: PRESET_DEFAULT
         val topBarStyle = when (nextPreset) {
@@ -62,20 +71,10 @@ object MainLayoutPresetConfig {
         }
         context.putPrefString(PreferKey.mainLayoutPreset, nextPreset)
         context.putPrefString(PreferKey.defaultTopBarStyle, topBarStyle)
-        context.putPrefString(PreferKey.navigationBarPackageDay, NavigationBarIconConfig.DEFAULT_DIR_NAME)
-        context.putPrefString(PreferKey.navigationBarPackageNight, NavigationBarIconConfig.DEFAULT_DIR_NAME)
-        context.putPrefString(PreferKey.topBarPackageDay, TopBarConfig.DEFAULT_DIR_NAME)
-        context.putPrefString(PreferKey.topBarPackageNight, TopBarConfig.DEFAULT_DIR_NAME)
         context.putPrefBoolean(PreferKey.defaultTopBarShowSearch, false)
         context.putPrefBoolean(PreferKey.floatingBottomBarHideSearch, false)
         AppConfig.bottomBarLayoutMode = bottomLayoutMode
         AppConfig.bottomBarSidebarGravity = "start"
-        // 材质档位自 1.25.8 起收拢为全局单一键（底栏 / 发现页 / 顶栏共用）：
-        // 预设沿用「标准布局 → 无玻璃、其余 → 玻璃」的旧耦合语义，写入全局档位键
-        context.putPrefString(
-            PreferKey.exploreGlassEffectMode,
-            if (bottomLayoutMode == "standard") "solid" else "glass"
-        )
         if (bottomLayoutMode == "sidebar") {
             context.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }

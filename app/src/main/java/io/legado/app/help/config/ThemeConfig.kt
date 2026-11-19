@@ -120,6 +120,7 @@ object ThemeConfig {
     }
 
     fun applyDayNightInit(context: Context) {
+        AppearanceKitManager.alignBaselineAfterMigration(context)
         val isNightTheme = AppConfig.isNightTheme
         applyTheme(context, isNightTheme)
         initNightMode(isNightTheme)

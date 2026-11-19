@@ -10,6 +10,8 @@
     <string name="builtin_epub_loading_aurora_desc">Aurora bands, mountains and the coordinates of a journey</string>
     <string name="builtin_epub_loading_aurora_caption">The next journey starts on this page.</string>
     <string name="builtin_bubble_package">Built-in paragraph bubble</string>
+    <string name="builtin_default_kit_name">Default Appearance</string>
+    <string name="builtin_default_kit_summary">Built-in default theme, top bar, bottom bar, and glass material</string>
     <string name="builtin_kit_floating_no_search">Floating bottom bar without search</string>
     <string name="builtin_kit_floating_no_search_summary">Floating bottom bar (search hidden) + search in the top bar</string>
     <string name="builtin_cover_template_default">Default template</string>
