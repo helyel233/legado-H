@@ -69,7 +69,9 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKit
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.AppearanceKitType
+import io.legado.app.help.config.AppearanceSlotSummaries
 import io.legado.app.help.config.ThemePackageManager
+import io.legado.app.help.config.appearance.AppearanceSlot
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.book.cache.WebDavTaskType
@@ -79,6 +81,7 @@ import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
@@ -86,6 +89,7 @@ import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.releaseComposeImage
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
 import io.legado.app.utils.externalFiles
@@ -112,6 +116,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var kitsState by mutableStateOf<List<AppearanceKit>>(emptyList())
     private var kitPreviewsState by mutableStateOf<Map<String, KitPreviewData>>(emptyMap())
     private var currentKitIdState by mutableStateOf("")
+    private var dirtySlotsState by mutableStateOf<Set<AppearanceSlot>>(emptySet())
+    private var slotSummariesState by mutableStateOf(
+        AppearanceSlotSummaries("", "", "", "", "", "")
+    )
 
     private val importPackage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let(::importAppearanceKit)
@@ -125,7 +133,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         AppearanceKitManager.alignBaselineAfterMigration(this)
-        binding.titleBar.title = getString(R.string.appearance_kit_manage)
+        binding.titleBar.title = getString(R.string.appearance_studio_title)
         binding.tabBar.visibility = View.GONE
         binding.tvSummary.visibility = View.GONE
         binding.recyclerView.visibility = View.GONE
@@ -171,9 +179,15 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         kits = kitsState,
                         previews = kitPreviewsState,
                         currentKitId = currentKitIdState,
+                        dirtySlots = dirtySlotsState,
+                        slotSummaries = slotSummariesState,
                         onApply = ::applyKit,
                         onEdit = ::editKit,
-                        onDelete = ::confirmDeleteKit
+                        onDelete = ::confirmDeleteKit,
+                        onOverwriteDirty = ::overwriteActiveKit,
+                        onSaveAsNew = ::showCreateKitDialog,
+                        onRestoreActive = ::restoreActiveKit,
+                        onOpenSlot = ::openSlotTarget
                     )
                 }
             }
@@ -184,8 +198,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun refreshKits() {
         lifecycleScope.launch {
             val kits = AppearanceKitManager.builtinKits() + AppearanceKitManager.importedThemeKits()
+            val currentId = AppearanceKitManager.currentKitId()
+            val activeKit = kits.firstOrNull { it.id == currentId }
             kitsState = kits
-            currentKitIdState = AppearanceKitManager.currentKitId()
+            currentKitIdState = currentId
+            dirtySlotsState = AppearanceKitManager.computeDirtySlots(this@AppearanceKitActivity, activeKit)
+            slotSummariesState = AppearanceKitManager.currentSlotSummaries(this@AppearanceKitActivity)
             kitPreviewsState = withContext(Dispatchers.IO) {
                 kits.associate { it.id to buildKitPreview(it) }
             }
@@ -276,8 +294,84 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun editKit(kit: AppearanceKit) {
         if (kit.type != AppearanceKitType.IMPORTED_THEME) return
-        startActivity<AppearanceKitEditActivity> {
-            putExtra(AppearanceKitEditActivity.EXTRA_KIT_ID, kit.id)
+        showComposeChoiceListDialog(
+            title = kit.name,
+            labels = listOf(
+                getString(R.string.rename),
+                getString(R.string.appearance_studio_overwrite_save),
+                getString(R.string.delete)
+            )
+        ) { which ->
+            when (which) {
+                0 -> showRenameKitDialog(kit)
+                1 -> overwriteKit(kit.id)
+                2 -> confirmDeleteKit(kit)
+            }
+        }
+    }
+
+    private fun showRenameKitDialog(kit: AppearanceKit) {
+        showComposeTextInputDialog(
+            title = getString(R.string.rename),
+            hint = getString(R.string.appearance_kit_name),
+            initialValue = kit.name,
+            validateInput = { it.trim().isNotBlank() },
+            onPositive = { nextName ->
+                lifecycleScope.launch {
+                    runCatching {
+                        AppearanceKitManager.renameKit(kit, nextName)
+                    }.onSuccess { ok ->
+                        toastOnUi(if (ok) R.string.success else R.string.error)
+                        refreshKits()
+                    }.onFailure {
+                        toastOnUi(it.localizedMessage ?: getString(R.string.error))
+                    }
+                }
+            }
+        )
+    }
+
+    private fun overwriteActiveKit() {
+        val current = kitsState.firstOrNull { it.id == currentKitIdState } ?: return
+        if (current.type != AppearanceKitType.IMPORTED_THEME) {
+            showCreateKitDialog()
+            return
+        }
+        overwriteKit(current.id)
+    }
+
+    private fun overwriteKit(kitId: String) {
+        lifecycleScope.launch {
+            runCatching {
+                AppearanceKitManager.overwriteKitFromCurrent(this@AppearanceKitActivity, kitId)
+            }.onSuccess { ok ->
+                toastOnUi(if (ok) R.string.success else R.string.error)
+                refreshKits()
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun restoreActiveKit() {
+        val current = kitsState.firstOrNull { it.id == currentKitIdState } ?: return
+        applyKit(current)
+    }
+
+    private fun openSlotTarget(slot: AppearanceSlot) {
+        when (slot) {
+            AppearanceSlot.THEME -> startActivity<ThemeManageActivity>()
+            AppearanceSlot.TOP_BAR -> startActivity<TopBarManageActivity>()
+            AppearanceSlot.NAVIGATION_BAR -> startActivity<NavigationBarManageActivity>()
+            AppearanceSlot.GLASS -> startActivity<ConfigActivity> {
+                putExtra("configTag", ConfigTag.EXPLORE_GLASS_CONFIG)
+            }
+            AppearanceSlot.COVER -> startActivity<ConfigActivity> {
+                putExtra("configTag", ConfigTag.COVER_CONFIG)
+            }
+            AppearanceSlot.WELCOME -> startActivity<ConfigActivity> {
+                putExtra("configTag", ConfigTag.WELCOME_CONFIG)
+            }
         }
     }
 
@@ -308,11 +402,9 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         lifecycleScope.launch {
             runCatching {
                 AppearanceKitManager.createFromCurrent(this@AppearanceKitActivity, name)
-            }.onSuccess { kit ->
+            }.onSuccess {
+                toastOnUi(R.string.success)
                 refreshKits()
-                startActivity<AppearanceKitEditActivity> {
-                    putExtra(AppearanceKitEditActivity.EXTRA_KIT_ID, kit.id)
-                }
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
@@ -381,22 +473,42 @@ private fun AppearanceKitScreen(
     kits: List<AppearanceKit>,
     previews: Map<String, KitPreviewData>,
     currentKitId: String,
+    dirtySlots: Set<AppearanceSlot>,
+    slotSummaries: AppearanceSlotSummaries,
     onApply: (AppearanceKit) -> Unit,
     onEdit: (AppearanceKit) -> Unit,
-    onDelete: (AppearanceKit) -> Unit
+    onDelete: (AppearanceKit) -> Unit,
+    onOverwriteDirty: () -> Unit,
+    onSaveAsNew: () -> Unit,
+    onRestoreActive: () -> Unit,
+    onOpenSlot: (AppearanceSlot) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
-    // 本页 ComposeView 直接铺在 activity_theme_manage 的根 LinearLayout 上，宿主背景已被
-    // BaseActivity 在壁纸模式下置空，所以根节点不需要再铺页色；这里只负责算一次
-    // 「此刻能不能用壁纸域玻璃」与玻璃签名，往下传给网格卡（一个页面算一次，避免每张卡
-    // 各注册一个偏好监听）。壁纸不可见（无背景图 / 墨水屏）时签名 为 null，卡片保持实底。
     val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
     val glassSignature = rememberGlassConfigSignature()
+    val effectiveGlassSig = glassSignature.takeIf { wallpaperVisible }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item("live_preview") {
+            StudioLivePreviewCard(
+                palette = palette,
+                glassSignature = effectiveGlassSig
+            )
+        }
+        if (dirtySlots.isNotEmpty()) {
+            item("dirty_banner") {
+                DirtySlotsBanner(
+                    dirtySlots = dirtySlots,
+                    palette = palette,
+                    onOverwrite = onOverwriteDirty,
+                    onSaveAsNew = onSaveAsNew,
+                    onRestore = onRestoreActive
+                )
+            }
+        }
         item("kits") {
             KitSection(
                 title = stringResourceCompat(R.string.appearance_kit_manage),
@@ -404,11 +516,295 @@ private fun AppearanceKitScreen(
                 rows = kits,
                 previews = previews,
                 currentKitId = currentKitId,
-                glassSignature = glassSignature.takeIf { wallpaperVisible },
+                glassSignature = effectiveGlassSig,
                 onApply = onApply,
                 onEdit = onEdit,
                 onDelete = onDelete
             )
+        }
+        item("slots") {
+            StudioSlotsSection(
+                summaries = slotSummaries,
+                dirtySlots = dirtySlots,
+                palette = palette,
+                glassSignature = effectiveGlassSig,
+                onOpenSlot = onOpenSlot
+            )
+        }
+    }
+}
+
+@Composable
+private fun StudioLivePreviewCard(
+    palette: AppManagementPalette,
+    glassSignature: String?
+) {
+    val tokens = LocalLegadoTokens.current
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 14.dp)
+    val bgColor = Color(tokens?.colors?.backgroundArgb ?: palette.settings.page.value.toInt())
+    val primaryColor = Color(tokens?.colors?.primaryArgb ?: palette.settings.accent.value.toInt())
+    val cardColor = Color(tokens?.colors?.cardArgb ?: palette.settings.row)
+    val bottomColor = Color(tokens?.colors?.bottomBarArgb ?: palette.settings.bottomBar)
+    val accentColor = palette.settings.accent
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AppSettingSectionTitle(
+            title = stringResourceCompat(R.string.appearance_studio_preview_title),
+            palette = palette.settings
+        )
+        val body: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(bgColor.copy(alpha = if (glassSignature != null) 0.35f else 1f))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(primaryColor.copy(alpha = 0.85f))
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(56.dp)
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.85f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(accentColor)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(34.dp)
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accentColor.copy(alpha = 0.28f))
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(cardColor.copy(alpha = 0.88f))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.65f)
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(palette.settings.primaryText.copy(alpha = 0.72f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(palette.settings.secondaryText.copy(alpha = 0.45f))
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(bottomColor.copy(alpha = 0.90f))
+                )
+            }
+        }
+        if (glassSignature != null) {
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = palette.settings.panelRadiusPx,
+                configSignature = glassSignature,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+            ) { body() }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .appSettingPanelBackground(
+                        normalColor = palette.settings.row,
+                        borderColor = palette.settings.border,
+                        panelImage = null,
+                        radiusPx = palette.settings.panelRadiusPx
+                    )
+            ) { body() }
+        }
+    }
+}
+
+@Composable
+private fun DirtySlotsBanner(
+    dirtySlots: Set<AppearanceSlot>,
+    palette: AppManagementPalette,
+    onOverwrite: () -> Unit,
+    onSaveAsNew: () -> Unit,
+    onRestore: () -> Unit
+) {
+    val context = LocalContext.current
+    val slotNames = dirtySlots.joinToString(" / ") { slot ->
+        when (slot) {
+            AppearanceSlot.THEME -> context.getString(R.string.appearance_slot_theme)
+            AppearanceSlot.TOP_BAR -> context.getString(R.string.appearance_slot_top_bar)
+            AppearanceSlot.NAVIGATION_BAR -> context.getString(R.string.appearance_slot_nav_bar)
+            AppearanceSlot.GLASS -> context.getString(R.string.appearance_slot_glass)
+            AppearanceSlot.COVER -> context.getString(R.string.appearance_slot_cover)
+            AppearanceSlot.WELCOME -> context.getString(R.string.appearance_slot_welcome)
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .appSettingPanelBackground(
+                normalColor = palette.settings.row,
+                borderColor = palette.settings.border,
+                panelImage = null,
+                radiusPx = palette.settings.panelRadiusPx
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.appearance_studio_dirty_banner, slotNames),
+            color = palette.settings.primaryText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DirtyBannerChip(
+                text = stringResourceCompat(R.string.appearance_studio_overwrite_save),
+                accent = true,
+                palette = palette,
+                onClick = onOverwrite
+            )
+            DirtyBannerChip(
+                text = stringResourceCompat(R.string.appearance_studio_save_as),
+                accent = false,
+                palette = palette,
+                onClick = onSaveAsNew
+            )
+            DirtyBannerChip(
+                text = stringResourceCompat(R.string.appearance_studio_restore),
+                accent = false,
+                palette = palette,
+                onClick = onRestore
+            )
+        }
+    }
+}
+
+@Composable
+private fun DirtyBannerChip(
+    text: String,
+    accent: Boolean,
+    palette: AppManagementPalette,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (accent) palette.settings.accent else Color(palette.settings.rowPressed),
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Text(
+            text = text,
+            color = if (accent) palette.settings.onAccent else palette.settings.primaryText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun StudioSlotsSection(
+    summaries: AppearanceSlotSummaries,
+    dirtySlots: Set<AppearanceSlot>,
+    palette: AppManagementPalette,
+    glassSignature: String?,
+    onOpenSlot: (AppearanceSlot) -> Unit
+) {
+    val rows = listOf(
+        Triple(AppearanceSlot.THEME, R.string.appearance_slot_theme, summaries.theme),
+        Triple(AppearanceSlot.TOP_BAR, R.string.appearance_slot_top_bar, summaries.topBar),
+        Triple(AppearanceSlot.NAVIGATION_BAR, R.string.appearance_slot_nav_bar, summaries.navigationBar),
+        Triple(AppearanceSlot.GLASS, R.string.appearance_slot_glass, summaries.glass),
+        Triple(AppearanceSlot.COVER, R.string.appearance_slot_cover, summaries.cover),
+        Triple(AppearanceSlot.WELCOME, R.string.appearance_slot_welcome, summaries.welcome)
+    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AppSettingSectionTitle(
+            title = stringResourceCompat(R.string.appearance_studio_slots_title),
+            palette = palette.settings
+        )
+        Text(
+            text = stringResourceCompat(R.string.appearance_studio_slots_hint),
+            color = palette.settings.secondaryText,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 14.dp)
+        val content: @Composable () -> Unit = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                rows.forEachIndexed { index, (slot, titleRes, summary) ->
+                    val isLast = index == rows.lastIndex
+                    val displaySummary = if (slot in dirtySlots) "● $summary" else summary
+                    ActionRow(
+                        title = stringResourceCompat(titleRes),
+                        summary = displaySummary,
+                        trailing = "",
+                        palette = palette.settings,
+                        isLast = isLast,
+                        onClick = { onOpenSlot(slot) }
+                    )
+                }
+            }
+        }
+        if (glassSignature != null) {
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = palette.settings.panelRadiusPx,
+                configSignature = glassSignature,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+            ) { content() }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .appSettingPanelBackground(
+                        normalColor = palette.settings.row,
+                        borderColor = palette.settings.border,
+                        panelImage = null,
+                        radiusPx = palette.settings.panelRadiusPx
+                    )
+            ) { content() }
         }
     }
 }

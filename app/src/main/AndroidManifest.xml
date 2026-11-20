@@ -333,7 +333,7 @@
             android:name=".ui.config.AppearanceKitActivity"
             android:launchMode="standard" />
         <activity
-            android:name=".ui.config.AppearanceKitEditActivity"
+            android:name=".ui.config.ReadingDecorCenterActivity"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.NavigationBarManageActivity"

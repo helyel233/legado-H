@@ -86,6 +86,9 @@ object SettingsSearchIndex {
         // 发现页毛玻璃的各个细项原先只有编辑主题页一个滑杆，整页进索引后可直接搜到
         PageSource(ConfigTag.EXPLORE_GLASS_CONFIG, ConfigTag.EXPLORE_GLASS_CONFIG) {
             ExploreGlassConfigFragment()
+        },
+        PageSource(ConfigTag.UI_LAYOUT_CONFIG, ConfigTag.UI_LAYOUT_CONFIG) {
+            UiLayoutConfigFragment()
         }
     )
 

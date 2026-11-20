@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.my
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.Menu
@@ -30,6 +31,7 @@ import io.legado.app.ui.book.toc.rule.TxtTocRuleActivity
 import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.AppearanceKitActivity
+import io.legado.app.ui.config.ReadingDecorCenterActivity
 import io.legado.app.ui.config.RelaySettingsActivity
 import io.legado.app.ui.config.SettingsSearchIndex
 import io.legado.app.ui.dict.rule.DictRuleActivity
@@ -133,6 +135,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             )
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 MySettingsScreen(
                     sections = sections,
                     subSearchItemsProvider = { subSearchItems },
@@ -145,6 +148,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     onAutoTaskServiceClick = ::handleAutoTaskServiceClick,
                     onRowClick = ::handleRowClick
                 )
+                            }
             }
         }
         binding.preFragment.addView(composeView)
@@ -246,7 +250,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ConfigTag.AUDIO_CONFIG,
             ConfigTag.MANGA_VIDEO_CONFIG,
             ConfigTag.PAGE_LAYOUT_CONFIG,
-            ConfigTag.EXPLORE_GLASS_CONFIG -> startActivity<ConfigActivity> {
+            ConfigTag.EXPLORE_GLASS_CONFIG,
+            ConfigTag.UI_LAYOUT_CONFIG -> startActivity<ConfigActivity> {
                 putExtra("configTag", key)
             }
 
@@ -263,6 +268,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             }
 
             "appearanceKit" -> startActivity<AppearanceKitActivity>()
+            "readingDecorCenter" -> startActivity<ReadingDecorCenterActivity>()
 
             "ai_setting" -> startActivity<ConfigActivity> {
                 putExtra("configTag", ConfigTag.AI_CONFIG)
@@ -400,6 +406,18 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         R.string.explore_glass_settings_title,
                         R.string.explore_glass_settings_summary,
                         R.drawable.ic_cfg_theme
+                    ),
+                    actionRow(
+                        "readingDecorCenter",
+                        R.string.reading_decor_center_title,
+                        R.string.reading_decor_center_summary,
+                        R.drawable.ic_image
+                    ),
+                    actionRow(
+                        ConfigTag.UI_LAYOUT_CONFIG,
+                        R.string.ui_layout_config_title,
+                        R.string.ui_layout_config_summary,
+                        R.drawable.ic_settings
                     )
                 )
             ),

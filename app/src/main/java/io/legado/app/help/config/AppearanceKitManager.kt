@@ -24,7 +24,13 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
+import io.legado.app.help.config.appearance.AppearanceKitDiff
+import io.legado.app.help.config.appearance.AppearanceKitSnapshot
+import io.legado.app.help.config.appearance.AppearanceSlot
 import io.legado.app.help.config.appearance.BuiltinAppearanceDefaults
+import io.legado.app.help.config.appearance.GlassSlotSnapshot
+import io.legado.app.help.config.appearance.ThemeSlotSnapshot
+import io.legado.app.help.config.appearance.WelcomeSlotSnapshot
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
@@ -283,6 +289,184 @@ object AppearanceKitManager {
         saveIndex(kits + kit)
         context.putPrefString(PreferKey.currentAppearanceKitId, kit.id)
         kit
+    }
+
+    suspend fun overwriteKitFromCurrent(context: Context, kitId: String): Boolean = withContext(IO) {
+        val kits = loadIndex()
+        val index = kits.indexOfFirst { it.id == kitId }
+        if (index < 0) return@withContext false
+        ThemePackageManager.ensureLocalAppliedTheme(context, false)
+        ThemePackageManager.ensureLocalAppliedTheme(context, true)
+        val next = kits[index].copy(
+            binding = currentBinding(context),
+            updatedAt = System.currentTimeMillis()
+        )
+        val updated = kits.toMutableList()
+        updated[index] = next
+        saveIndex(updated)
+        true
+    }
+
+    suspend fun computeDirtySlots(
+        context: Context,
+        activeKit: AppearanceKit?
+    ): Set<AppearanceSlot> = withContext(IO) {
+        if (activeKit == null || activeKit.type == AppearanceKitType.BUILTIN) {
+            return@withContext emptySet()
+        }
+        val current = captureCurrentSnapshot(context)
+        val baseline = snapshotFromBinding(context, activeKit.binding ?: KitBinding())
+        AppearanceKitDiff.computeDirtySlots(current, baseline)
+    }
+
+    fun captureCurrentSnapshot(context: Context): AppearanceKitSnapshot {
+        val dayTheme = currentThemeSlotSnapshot(context, false)
+        val nightTheme = currentThemeSlotSnapshot(context, true)
+        val glass = currentGlassBinding(context)
+        val welcome = currentWelcomeBinding(context)
+        return AppearanceKitSnapshot(
+            dayTheme = dayTheme,
+            nightTheme = nightTheme,
+            dayTopBarDir = TopBarConfig.activeDirName(false),
+            nightTopBarDir = TopBarConfig.activeDirName(true),
+            dayNavBarDir = NavigationBarIconConfig.activeDirName(false),
+            nightNavBarDir = NavigationBarIconConfig.activeDirName(true),
+            dayCoverCollectionId = context.getPrefString(PreferKey.coverCollectionDay, "").orEmpty(),
+            nightCoverCollectionId = context.getPrefString(PreferKey.coverCollectionNight, "").orEmpty(),
+            dayCoverMode = context.getPrefString(
+                PreferKey.coverCollectionModeDay,
+                BuiltinAppearanceDefaults.DEFAULT_COVER_MODE
+            ).orEmpty(),
+            nightCoverMode = context.getPrefString(
+                PreferKey.coverCollectionModeNight,
+                BuiltinAppearanceDefaults.DEFAULT_COVER_MODE
+            ).orEmpty(),
+            glass = GlassSlotSnapshot(
+                mode = glass.mode,
+                frostedLevel = glass.frostedLevel,
+                liquidLevel = glass.liquidLevel,
+                blurScale = glass.blurScale,
+                shellScale = glass.shellScale,
+                tintScale = glass.tintScale,
+                strokeScale = glass.strokeScale,
+                strokeColor = glass.strokeColor,
+                presetMatched = glass.presetMatched,
+                hardwareBlur = glass.hardwareBlur,
+                animatedSolid = glass.animatedSolid
+            ),
+            welcome = WelcomeSlotSnapshot(
+                customWelcome = welcome.customWelcome,
+                imageDay = context.getPrefString(PreferKey.welcomeImage, "").orEmpty(),
+                imageNight = context.getPrefString(PreferKey.welcomeImageDark, "").orEmpty(),
+                showTextDay = welcome.showTextDay,
+                showTextNight = welcome.showTextNight,
+                showIconDay = welcome.showIconDay,
+                showIconNight = welcome.showIconNight,
+                showTime = welcome.showTime
+            )
+        )
+    }
+
+    private fun currentThemeSlotSnapshot(context: Context, isNight: Boolean): ThemeSlotSnapshot {
+        val snap = currentThemeModeSnapshot(isNight)
+        return ThemeSlotSnapshot(
+            themeName = snap.themeName,
+            dirName = snap.dirName,
+            primary = snap.primary,
+            accent = snap.accent,
+            background = snap.background,
+            bottomBackground = snap.bottomBackground,
+            backgroundImage = snap.backgroundImage
+        )
+    }
+
+    private fun snapshotFromBinding(context: Context, binding: KitBinding): AppearanceKitSnapshot {
+        val current = captureCurrentSnapshot(context)
+        val dayThemeRef = binding.dayTheme
+        val nightThemeRef = binding.nightTheme
+        val glass = binding.glass
+        val welcome = binding.welcome
+        return current.copy(
+            dayTheme = if (dayThemeRef != null) {
+                current.dayTheme.copy(themeName = dayThemeRef.name, dirName = dayThemeRef.dirName)
+            } else {
+                current.dayTheme
+            },
+            nightTheme = if (nightThemeRef != null) {
+                current.nightTheme.copy(themeName = nightThemeRef.name, dirName = nightThemeRef.dirName)
+            } else {
+                current.nightTheme
+            },
+            dayTopBarDir = binding.dayTopBar?.dirName ?: BuiltinAppearanceDefaults.DEFAULT_PACKAGE_DIR,
+            nightTopBarDir = binding.nightTopBar?.dirName ?: BuiltinAppearanceDefaults.DEFAULT_PACKAGE_DIR,
+            dayNavBarDir = binding.dayNavigationBar?.dirName ?: BuiltinAppearanceDefaults.DEFAULT_PACKAGE_DIR,
+            nightNavBarDir = binding.nightNavigationBar?.dirName ?: BuiltinAppearanceDefaults.DEFAULT_PACKAGE_DIR,
+            dayCoverCollectionId = binding.dayCoverCollection?.dirName.orEmpty(),
+            nightCoverCollectionId = binding.nightCoverCollection?.dirName.orEmpty(),
+            glass = if (glass != null) {
+                GlassSlotSnapshot(
+                    mode = glass.mode,
+                    frostedLevel = glass.frostedLevel,
+                    liquidLevel = glass.liquidLevel,
+                    blurScale = glass.blurScale,
+                    shellScale = glass.shellScale,
+                    tintScale = glass.tintScale,
+                    strokeScale = glass.strokeScale,
+                    strokeColor = glass.strokeColor,
+                    presetMatched = glass.presetMatched,
+                    hardwareBlur = glass.hardwareBlur,
+                    animatedSolid = glass.animatedSolid
+                )
+            } else {
+                current.glass
+            },
+            welcome = if (welcome != null) {
+                current.welcome.copy(
+                    customWelcome = welcome.customWelcome,
+                    showTextDay = welcome.showTextDay,
+                    showTextNight = welcome.showTextNight,
+                    showIconDay = welcome.showIconDay,
+                    showIconNight = welcome.showIconNight,
+                    showTime = welcome.showTime
+                )
+            } else {
+                current.welcome
+            }
+        )
+    }
+
+    suspend fun currentSlotSummaries(context: Context): AppearanceSlotSummaries = withContext(IO) {
+        val isNight = AppConfig.isNightTheme
+        val themeName = context.getPrefString(
+            if (isNight) PreferKey.dNThemeName else PreferKey.dThemeName,
+            ""
+        ).orEmpty().ifBlank { context.getString(R.string.builtin_default_kit_name) }
+        val topBarName = TopBarConfig.currentEntry(context, isNight).config.name
+        val navBarName = NavigationBarIconConfig.currentEntry(isNight).config.name
+        val glass = currentGlassBinding(context)
+        val glassModeLabel = when (glass.mode) {
+            io.legado.app.ui.main.GlassMaterialPreset.SOLID -> context.getString(R.string.appearance_glass_solid)
+            io.legado.app.ui.main.GlassMaterialPreset.CLEAR -> context.getString(R.string.appearance_glass_clear)
+            io.legado.app.ui.main.GlassMaterialPreset.FROSTED -> context.getString(R.string.appearance_glass_frosted)
+            else -> context.getString(R.string.appearance_glass_liquid)
+        }
+        val coverName = CoverCollectionManager.selectedEntry(isNight)?.collection?.name
+            ?: context.getString(R.string.cover_collection_none)
+        val welcomeCustom = context.getPrefBoolean(PreferKey.customWelcome, false)
+        val welcomeShowTime = context.getPrefInt(PreferKey.welcomeShowTime, 0)
+        val welcomeSummary = if (welcomeCustom) {
+            context.getString(R.string.appearance_welcome_custom_summary, welcomeShowTime)
+        } else {
+            context.getString(R.string.appearance_welcome_default_summary, welcomeShowTime)
+        }
+        AppearanceSlotSummaries(
+            theme = themeName,
+            topBar = topBarName,
+            navigationBar = navBarName,
+            glass = "$glassModeLabel · ${if (glass.mode == io.legado.app.ui.main.GlassMaterialPreset.FROSTED) glass.frostedLevel else glass.liquidLevel}%",
+            cover = coverName,
+            welcome = welcomeSummary
+        )
     }
 
     suspend fun saveImportedKit(kit: StoredAppearanceKit, context: Context = appCtx): Boolean = withContext(IO) {
@@ -1160,6 +1344,15 @@ data class KitWelcomeBinding(
     val showIconDay: Boolean = true,
     val showIconNight: Boolean = true,
     val showTime: Int = 0
+)
+
+data class AppearanceSlotSummaries(
+    val theme: String,
+    val topBar: String,
+    val navigationBar: String,
+    val glass: String,
+    val cover: String,
+    val welcome: String
 )
 
 @Keep

@@ -169,6 +169,8 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
         replaceFragment(configTag, PageLayoutConfigFragment::class.java)
     ConfigTag.EXPLORE_GLASS_CONFIG ->
         replaceFragment(configTag, ExploreGlassConfigFragment::class.java)
+    ConfigTag.UI_LAYOUT_CONFIG ->
+        replaceFragment(configTag, UiLayoutConfigFragment::class.java)
     else -> finish()
         }
     }
@@ -216,8 +218,9 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.PAGE_LAYOUT_CONFIG ->
                 listOf(R.string.config_category_content)
 
-            // 全局毛玻璃效果已上提为「阅读与界面」下的一级行，管的是界面外观不是内容域
-            ConfigTag.EXPLORE_GLASS_CONFIG ->
+            // 全局毛玻璃效果与界面布局与系统栏均挂在「阅读与界面」下
+            ConfigTag.EXPLORE_GLASS_CONFIG,
+            ConfigTag.UI_LAYOUT_CONFIG ->
                 listOf(R.string.config_category_reading_ui)
 
             // 评论抓取已从高级设置拆出，作为「高级与关于」下的独立二级页
