@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.toc
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
@@ -52,6 +53,7 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeView.setContent {
+            LegadoComposeTheme {
             TocComposeScreen(
                 bookUrl = bookUrl,
                 contentRefreshTick = contentRefreshTick.intValue,
@@ -77,6 +79,7 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
                     showDialogFragment<AppLogDialog>()
                 }
             )
+                    }
         }
     }
 

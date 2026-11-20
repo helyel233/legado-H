@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.character
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
         characterId = intent.getLongExtra(BookCharacterManageActivity.EXTRA_CHARACTER_ID, 0L)
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         composeView.setContent {
+            LegadoComposeTheme {
             CharacterCardScreen(
                 character = character,
                 onBack = ::finish,
@@ -53,6 +55,7 @@ class BookCharacterCardActivity : BaseActivity<ViewBinding>(
                 speechEngines = speechEngines,
                 onSpeechRouteChange = ::updateSpeechRoute
             )
+                    }
         }
         load()
     }

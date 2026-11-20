@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.epub
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Dialog
 import android.content.Context
 import android.content.DialogInterface
@@ -132,7 +133,7 @@ class ReaderTemplatePreviewDialog : ComposeDialogFragment() {
         }
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent { MiuixTheme { PreviewContent(current) } }
+            setContent { LegadoComposeTheme { MiuixTheme { PreviewContent(current) } } }
         }
     }
 

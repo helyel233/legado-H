@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.database.ContentObserver
 import android.graphics.RectF
@@ -461,7 +462,7 @@ class ReadMenu @JvmOverloads constructor(
         addView(bottomGlass, LayoutParams(0, 0))
         composeView = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent { ReadMenuContent() }
+            setContent { LegadoComposeTheme { ReadMenuContent() } }
         }
         addView(composeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         upBrightnessState()

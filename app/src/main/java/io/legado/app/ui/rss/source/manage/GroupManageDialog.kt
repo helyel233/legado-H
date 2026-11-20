@@ -1,5 +1,6 @@
 package io.legado.app.ui.rss.source.manage
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.view.View
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,6 +30,7 @@ class GroupManageDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val groups by remember {
                     appDb.rssSourceDao.flowGroups().conflate()
                 }.collectAsState(initial = emptyList())
@@ -39,6 +41,7 @@ class GroupManageDialog : ComposeDialogFragment() {
                     onDeleteGroup = viewModel::delGroup,
                     onDismiss = { dismissAllowingStateLoss() }
                 )
+                            }
             }
         }
     }

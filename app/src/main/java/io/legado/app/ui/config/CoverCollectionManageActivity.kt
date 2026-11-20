@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
@@ -63,6 +64,7 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 CoverCollectionManageScreen(
                     isNight = isNightState.value,
                     entries = entriesState.value,
@@ -74,6 +76,7 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
                     itemActions = ::coverActions,
                     onAddClick = ::showAddActions
                 )
+                            }
             }
         }
         container.addView(cv)

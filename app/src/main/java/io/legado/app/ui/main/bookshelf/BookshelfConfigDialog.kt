@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.bookshelf
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.Gravity
@@ -186,6 +187,7 @@ class BookshelfConfigDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val style = rememberAppDialogStyle()
                 val options = remember { buildBookshelfConfigOptions() }
                 val texts = remember { buildBookshelfConfigTexts() }
@@ -223,6 +225,7 @@ class BookshelfConfigDialog : ComposeDialogFragment() {
                         )
                     }
                 )
+                            }
             }
         }
     }

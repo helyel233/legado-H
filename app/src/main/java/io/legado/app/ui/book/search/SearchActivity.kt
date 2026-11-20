@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.search
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -277,6 +278,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeResults.setContent {
+            LegadoComposeTheme {
             SearchResultScreen(
                 books = searchResults,
                 isLoading = viewModel.isSearchLiveData.value == true,
@@ -289,6 +291,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 onBookClick = { showBookInfo(it) },
                 onLoadMore = { scrollToBottom() }
             )
+                    }
         }
     }
 
@@ -297,6 +300,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeInputHelp.setContent {
+            LegadoComposeTheme {
             SearchInputHelpScreen(
                 bookshelfBooks = bookshelfHintBooks,
                 historyKeywords = historyKeywords,
@@ -305,6 +309,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 onHistoryDelete = { deleteHistory(it) },
                 onClearHistory = { alertClearHistory() }
             )
+                    }
         }
     }
 

@@ -1,5 +1,6 @@
 ﻿package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.content.Context
 import android.os.Build
@@ -190,6 +191,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
         composeView.setContent {
+            LegadoComposeTheme {
             ReadAiPanelContent(
                 messages = messages,
                 historySessions = historySessions,
@@ -217,6 +219,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                 onDeleteSession = ::deleteSession,
                 onClearHistory = ::confirmClearHistory
             )
+                    }
         }
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             updateImeBottomInset(insets)

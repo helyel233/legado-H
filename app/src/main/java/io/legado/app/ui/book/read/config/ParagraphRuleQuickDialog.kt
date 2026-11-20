@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -67,7 +68,9 @@ class ParagraphRuleQuickDialog : ReaderBottomSheetComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 ParagraphRuleQuickContent()
+                            }
             }
         }
     }

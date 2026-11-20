@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.info
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
@@ -599,11 +600,13 @@ class BookInfoActivity :
             id = View.generateViewId()
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val actions = remember { composeBookInfoActions() }
                 BookInfoComposeRoute(
                     state = composeBookInfoState,
                     actions = actions
                 )
+                            }
             }
         }
         (binding.vwBg as ConstraintLayout).addView(

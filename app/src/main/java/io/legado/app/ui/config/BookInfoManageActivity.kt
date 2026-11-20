@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,7 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 BookInfoManageScreen(
                     style = styleState.value,
                     components = componentsState.value,
@@ -56,6 +58,7 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     onReset = ::onReset,
                     onMoveBy = ::onMoveItemBy
                 )
+                            }
             }
         }
         container.addView(composeView, index)

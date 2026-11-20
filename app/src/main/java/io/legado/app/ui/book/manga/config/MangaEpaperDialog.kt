@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.manga.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.ViewGroup
@@ -58,6 +59,7 @@ class MangaEpaperDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val style = rememberAppDialogStyle()
                 val palette = style.toMiuixPalette()
                 var threshold by remember { mutableStateOf(mMangaEInkThreshold.toFloat()) }
@@ -108,6 +110,7 @@ class MangaEpaperDialog : ComposeDialogFragment() {
                         }
                     }
                 }
+                            }
             }
         }
     }

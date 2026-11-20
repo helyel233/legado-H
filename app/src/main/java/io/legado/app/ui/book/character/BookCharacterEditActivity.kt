@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.character
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -97,6 +98,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
         characterId = intent.getLongExtra(BookCharacterManageActivity.EXTRA_CHARACTER_ID, 0L)
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         composeView.setContent {
+            LegadoComposeTheme {
             CharacterEditScreen(
                 title = if (characterId > 0L) appCtx.getString(R.string.bchar_edit_character) else appCtx.getString(R.string.bchar_add_character),
                 draft = draft,
@@ -114,6 +116,7 @@ class BookCharacterEditActivity : BaseActivity<ViewBinding>(
                 onRegenerateAvatar = ::showRegenerateAvatarDialog,
                 onClearAvatar = { draft = draft.copy(avatar = "") }
             )
+                    }
         }
         load()
     }

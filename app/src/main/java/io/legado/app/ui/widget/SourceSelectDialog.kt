@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.KeyEvent
@@ -97,6 +98,7 @@ object SourceSelectDialog {
                 id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
+                    LegadoComposeTheme {
                     SourceSelectContent(
                         title = title.toString(),
                         items = items,
@@ -110,6 +112,7 @@ object SourceSelectDialog {
                             onSelect(it)
                         }
                     )
+                                    }
                 }
             }
         )

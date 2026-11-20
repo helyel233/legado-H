@@ -2,6 +2,7 @@
 
 package io.legado.app.ui.main
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
@@ -765,7 +766,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.liquidGlassSampleBackground.setContent {
+            LegadoComposeTheme {
             MainThemeBackgroundLayer(version = mainBackgroundVersion)
+                    }
         }
         binding.bottomNavigationWallpaper.setViewCompositionStrategy(
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
@@ -2070,6 +2073,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             ?.takeIf { it.isFile && it.canRead() }
         bottomNavigationWallpaper.isVisible = wallpaper != null
         bottomNavigationWallpaper.setContent {
+            LegadoComposeTheme {
             ComposeThemeImageLayer(
                 state = ComposeThemeImageState(
                     file = wallpaper,
@@ -2078,6 +2082,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     fallbackColor = Color.TRANSPARENT
                 )
             )
+                    }
         }
     }
 

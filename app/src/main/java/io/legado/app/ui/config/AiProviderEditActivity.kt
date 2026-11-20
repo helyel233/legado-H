@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -75,7 +76,7 @@ class AiProviderEditActivity : BaseActivity<ViewBinding>() {
                     setViewCompositionStrategy(
                         ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
                     )
-                    setContent { AiProviderEditScreen() }
+                    setContent { LegadoComposeTheme { AiProviderEditScreen() } }
                 },
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,

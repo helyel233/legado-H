@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -212,7 +213,9 @@ class ShareNotePreviewOverlay private constructor(
         bottomBar.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         bottomBar.installViewTreeOwnersFrom(this, activity)
         bottomBar.setContent {
+            LegadoComposeTheme {
             ShareNoteQuickPanel()
+                    }
         }
         addView(
             bottomBar,

@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -245,6 +246,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 1f
             )
             setContent {
+                LegadoComposeTheme {
                 NavigationBarPackageManageScreen(
                     entries = entriesState,
                     activeDirName = activeDirNameState,
@@ -264,6 +266,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     entryInfo = ::entryInfo,
                     entryActions = ::entryActions
                 )
+                            }
             }
         }
         container.addView(cv, index.coerceAtMost(container.childCount))
@@ -341,10 +344,12 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 ComposeView(this@NavigationBarManageActivity).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
+                        LegadoComposeTheme {
                         BottomNavItemsManageContent(
                             initialItems = bottomNavItemsState,
                             onItemsChange = ::saveBottomNavItems
                         )
+                                            }
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.number
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.Window
@@ -107,6 +108,7 @@ class NumberPickerDialog(private val context: Context, private val isDecimalMode
                 id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
+                    LegadoComposeTheme {
                     NumberPickerContent(
                         title = title,
                         minValue = minValue ?: 0,
@@ -124,6 +126,7 @@ class NumberPickerDialog(private val context: Context, private val isDecimalMode
                             dialog.dismiss()
                         }
                     )
+                                    }
                 }
             }
         )

@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeRoot.setContent {
+            LegadoComposeTheme {
             AiWorldBookManageRoute(
                 initialTargetType = intent.getStringExtra(EXTRA_TARGET_TYPE).orEmpty(),
                 initialTargetKey = intent.getStringExtra(EXTRA_TARGET_KEY).orEmpty(),
@@ -60,6 +62,7 @@ class AiWorldBookManageActivity : BaseActivity<ActivityAiWorldBookManageBinding>
                 onRequestImportNetwork = ::showImportUrlDialog,
                 onBack = ::finish
             )
+                    }
         }
     }
 

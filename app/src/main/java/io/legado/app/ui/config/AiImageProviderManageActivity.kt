@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
@@ -78,6 +79,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeRoot.setContent {
+            LegadoComposeTheme {
             AiImageProviderManageScreen(
                 providers = providersState.value,
                 currentProviderId = currentProviderIdState.value,
@@ -90,6 +92,7 @@ class AiImageProviderManageActivity : BaseActivity<ActivityAiProviderManageBindi
                 },
                 providerActions = ::providerActions
             )
+                    }
         }
     }
 

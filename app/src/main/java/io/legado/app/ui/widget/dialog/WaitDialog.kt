@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.dialog
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.View
@@ -46,6 +47,7 @@ class WaitDialog(private val context: Context) : ComponentDialog(context) {
                 id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
+                    LegadoComposeTheme {
                     val style = rememberAppDialogStyle()
                     CompositionLocalProvider(
                         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
@@ -83,6 +85,7 @@ class WaitDialog(private val context: Context) : ComponentDialog(context) {
                             }
                         }
                     }
+                                    }
                 }
             }
         )

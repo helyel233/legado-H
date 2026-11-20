@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.bookshelf.style1.books
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.os.Bundle
@@ -307,11 +308,13 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeBookshelf.setContent {
+            LegadoComposeTheme {
             if (useComposeGrid) {
                 BookshelfGridContent()
             } else {
                 BookshelfListContent()
             }
+                    }
         }
     }
 

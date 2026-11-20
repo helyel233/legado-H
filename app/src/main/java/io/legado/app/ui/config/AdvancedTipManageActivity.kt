@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -153,6 +154,7 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 setContent {
+                    LegadoComposeTheme {
                     AdvancedTipManageScreen(
                         entries = entriesState.value,
                         activeId = activeIdState.value,
@@ -162,6 +164,7 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onMoreActions = ::entryActions,
                         onImport = ::showAddMenu
                     )
+                                    }
                 }
             },
             index

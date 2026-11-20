@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.animation.LayoutTransition
 import android.content.Context
 import android.graphics.Color
@@ -732,11 +733,13 @@ class MainTopBarView @JvmOverloads constructor(
             )
         }
         backgroundLayer.setContent {
+            LegadoComposeTheme {
             ComposeThemeImageLayer(
                 state = state,
                 cornerRadius = (radius / resources.displayMetrics.density).dp,
                 stableWidthScale = true
             )
+                    }
         }
     }
 

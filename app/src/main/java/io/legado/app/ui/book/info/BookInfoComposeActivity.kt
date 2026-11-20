@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.info
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -206,11 +207,13 @@ class BookInfoComposeActivity :
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         composeView.setContent {
+            LegadoComposeTheme {
             val actions = remember { composeActions() }
             BookInfoComposeRoute(
                 state = uiState,
                 actions = actions
             )
+                    }
         }
         viewModel.bookData.observe(this) { book ->
             showBook(book)

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.os.Build
 import android.util.AttributeSet
@@ -126,6 +127,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         addView(composeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         composeView.setContent {
+            LegadoComposeTheme {
             ReadAiSummaryContent(
                 state = uiState,
                 markwon = markwon,
@@ -136,6 +138,7 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
                 onStop = ::stop,
                 onClose = ::close
             )
+                    }
         }
     }
 

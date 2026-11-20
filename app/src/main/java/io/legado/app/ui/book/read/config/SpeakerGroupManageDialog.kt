@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -105,6 +106,7 @@ class SpeakerGroupManageActivity : BaseActivity<ViewBinding>(
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         composeView.setContent {
+            LegadoComposeTheme {
             SpeakerGroupManageScreen(
                 groups = groups,
                 speakerItems = items,
@@ -115,6 +117,7 @@ class SpeakerGroupManageActivity : BaseActivity<ViewBinding>(
                 deleteTarget = deleteTarget,
                 actions = this@SpeakerGroupManageActivity
             )
+                    }
         }
         lifecycleScope.launch {
             combine(
@@ -272,6 +275,7 @@ class SpeakerGroupManageDialog : BaseDialogFragment(0), SpeakerGroupManageAction
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 SpeakerGroupManageScreen(
                     groups = groups,
                     speakerItems = items,
@@ -282,6 +286,7 @@ class SpeakerGroupManageDialog : BaseDialogFragment(0), SpeakerGroupManageAction
                     deleteTarget = deleteTarget,
                     actions = this@SpeakerGroupManageDialog
                 )
+                            }
             }
         }
     }

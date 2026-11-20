@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.KeyEvent
@@ -66,6 +67,7 @@ class PageKeyDialog(private val context: Context) : ComponentDialog(context) {
                 )
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
+                    LegadoComposeTheme {
                     PageKeyContent(
                         prevKeys = prevKeys,
                         nextKeys = nextKeys,
@@ -88,6 +90,7 @@ class PageKeyDialog(private val context: Context) : ComponentDialog(context) {
                             dismiss()
                         }
                     )
+                                    }
                 }
             }
         )

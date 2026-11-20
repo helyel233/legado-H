@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -96,6 +97,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 LibraryContainerManageScreen(
                     containers = containersState.value,
                     onBack = { finish() },
@@ -104,6 +106,7 @@ class LibraryContainerManageActivity : BaseActivity<ActivityS3ContainerManageBin
                     pageMenuActions = ::pageMenuActions,
                     onMoreActions = ::containerActions
                 )
+                            }
             }
         }
         container.addView(cv)

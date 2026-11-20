@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.foundation.clickable
@@ -68,6 +69,7 @@ class AiProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>()
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeRoot.setContent {
+            LegadoComposeTheme {
             AiProviderManageScreen(
                 providers = providersState,
                 modelCounts = modelCountsState,
@@ -77,6 +79,7 @@ class AiProviderManageActivity : BaseActivity<ActivityAiProviderManageBinding>()
                 onOpenProvider = { openEdit(it) },
                 providerActions = ::providerActions
             )
+                    }
         }
     }
 

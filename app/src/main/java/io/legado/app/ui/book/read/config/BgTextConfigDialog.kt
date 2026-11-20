@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.help.http.dns.DnsScope
 import android.content.DialogInterface
 import android.net.Uri
@@ -177,12 +178,14 @@ class BgTextConfigDialog : BaseDialogFragment(0) {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val style = rememberAppDialogStyle()
                 CompositionLocalProvider(
                     LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                 ) {
                     BgTextConfigContent(style = style)
                 }
+                            }
             }
         }
     }

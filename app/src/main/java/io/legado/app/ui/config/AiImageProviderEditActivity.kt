@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -81,6 +82,7 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 val isOpenAi = providerType == AiImageProviderConfig.TYPE_OPENAI
                 AiImageProviderEditScreen(
                     name = nameText,
@@ -128,6 +130,7 @@ class AiImageProviderEditActivity : BaseActivity<ActivityAiImageProviderEditBind
                     onSave = { save() },
                     onBack = { finish() }
                 )
+                            }
             }
         }
         container.addView(cv)

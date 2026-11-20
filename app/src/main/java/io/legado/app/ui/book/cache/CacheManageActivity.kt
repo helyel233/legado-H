@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.cache
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -91,6 +92,7 @@ class CacheManageActivity :
 
     private fun initView() = binding.run {
         composeView.setContent {
+            LegadoComposeTheme {
             CacheManageScreen(
                 mode = screenMode,
                 items = screenItems,
@@ -111,6 +113,7 @@ class CacheManageActivity :
                 onUploadAll = ::uploadAll,
                 onDeleteAll = ::deleteAll
             )
+                    }
         }
         updateSortButton()
     }

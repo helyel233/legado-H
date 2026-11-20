@@ -1,5 +1,6 @@
 package io.legado.app.ui.file
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -60,6 +61,7 @@ class FileManageActivity : io.legado.app.base.VMBaseActivity<ActivityFileManageB
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 FileManageScreen(
                     title = pageTitle,
                     currentFiles = filesState.value,
@@ -72,6 +74,7 @@ class FileManageActivity : io.legado.app.base.VMBaseActivity<ActivityFileManageB
                     onRootBreadcrumbClick = ::onRootBreadcrumbClick,
                     onBackClick = { finish() }
                 )
+                            }
             }
         }
         container.addView(cv)

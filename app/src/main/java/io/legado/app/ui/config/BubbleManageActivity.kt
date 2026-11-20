@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.net.Uri
@@ -146,6 +147,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 BubbleManageScreen(
                     entries = entriesState.value,
                     summary = summaryState.value,
@@ -158,6 +160,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     onMoreActions = ::bubbleActions,
                     onAddClick = ::showAddActions
                 )
+                            }
             }
         }
         container.addView(cv, index)

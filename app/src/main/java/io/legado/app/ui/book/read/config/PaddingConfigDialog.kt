@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -92,12 +93,14 @@ class PaddingConfigDialog : ComposeDialogFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val style = rememberAppDialogStyle()
                 CompositionLocalProvider(
                     LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                 ) {
                     PaddingConfigContent(style = style)
                 }
+                            }
             }
         }
     }

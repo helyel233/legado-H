@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.animation.ValueAnimator
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -200,6 +201,7 @@ internal class ReadAloudSystemFloatingWindow(
         setViewTreeSavedStateRegistryOwner(viewTreeOwners)
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
+            LegadoComposeTheme {
             val revision = themeRevision
             val palette = remember(revision) { ReaderSheetStyle.resolve(context) }
             val colors = rememberPlayerColors(palette)
@@ -277,6 +279,7 @@ internal class ReadAloudSystemFloatingWindow(
                     AppConfig.readAloudFloatingHeightPercent = floatingHeightPercent
                 }
             )
+                    }
         }
     }
 

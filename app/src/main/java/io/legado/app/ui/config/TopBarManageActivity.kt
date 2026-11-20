@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -144,6 +145,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 1f
             )
             setContent {
+                LegadoComposeTheme {
                 TopBarManageScreen(
                     entries = entriesState,
                     activeDirName = activeDirNameState,
@@ -161,6 +163,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     onEdit = { entry -> showEditDialog(entry) },
                     entryActions = ::entryActions
                 )
+                            }
             }
         }
         container.addView(cv, index.coerceAtMost(container.childCount))

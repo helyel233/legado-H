@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -109,6 +110,7 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 setContent {
+                    LegadoComposeTheme {
                     AdvancedTitleManageScreen(
                         entries = entriesState.value,
                         activeId = activeIdState.value,
@@ -118,6 +120,7 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                         onMoreActions = ::entryActions,
                         onImport = ::showAddMenu
                     )
+                                    }
                 }
             },
             index

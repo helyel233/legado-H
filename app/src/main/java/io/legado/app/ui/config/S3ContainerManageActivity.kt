@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 S3ContainerManageScreen(
                     containers = containersState.value,
                     onBack = { finish() },
@@ -63,6 +65,7 @@ class S3ContainerManageActivity : BaseActivity<ActivityS3ContainerManageBinding>
                     onItemClick = { showEditDialog(it) },
                     onMoreActions = ::containerActions
                 )
+                            }
             }
         }
         container.addView(cv)

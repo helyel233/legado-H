@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -283,6 +284,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 1f
             )
             setContent {
+                LegadoComposeTheme {
                 ThemePackageManageScreen(
                     entries = entriesState,
                     isNightTheme = isNightTheme,
@@ -301,6 +303,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     entryActions = ::entryActions,
                     previewData = ::previewData
                 )
+                            }
             }
         }
         container.addView(cv, index.coerceAtMost(container.childCount))

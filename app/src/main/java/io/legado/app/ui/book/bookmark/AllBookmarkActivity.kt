@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.bookmark
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -63,11 +64,13 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             layoutParams = params
             setContent {
+                LegadoComposeTheme {
                 AllBookmarkScreen(
                     bookmarks = bookmarksState.value,
                     onItemClick = ::onItemClick,
                     onItemLongClick = ::onItemLongClick
                 )
+                            }
             }
         }
         container.addView(cv, index)

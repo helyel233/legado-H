@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
@@ -152,7 +153,7 @@ class ReaderTemplateDialog : ReaderBottomSheetComposeDialogFragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent { MiuixTheme { this@ReaderTemplateDialog.ReaderTemplateContent() } }
+            setContent { LegadoComposeTheme { MiuixTheme { this@ReaderTemplateDialog.ReaderTemplateContent() } } }
         }
 
     @Composable

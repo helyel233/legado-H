@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -123,6 +124,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 ShareNoteTemplateManageScreen(
                     entries = entriesState.value,
                     activeDirName = activeDirNameState.value,
@@ -134,6 +136,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
                     onMoreActions = ::templateActions,
                     onAddClick = ::showAddActions
                 )
+                            }
             }
         }
         container.addView(cv, index)

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.RectF
@@ -393,6 +394,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         )
         composeView.setContent {
+            LegadoComposeTheme {
             ReadAloudPlayerContent(
                 state = uiState,
                 onClose = ::closeByUser,
@@ -422,6 +424,7 @@ class ReadAloudPlayerPanel @JvmOverloads constructor(
                 onRetryRoleAssignment = ::retryRoleAssignment,
                 onRoleSegmentAssign = ::updateRoleSegmentAssignment
             )
+                    }
         }
     }
 

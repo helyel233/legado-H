@@ -1,5 +1,6 @@
 package io.legado.app.ui.main.ai
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
@@ -99,6 +100,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         binding.composeRoot.setContent {
+            LegadoComposeTheme {
             AiChatRoute(
                 viewModel = viewModel,
                 lifecycleOwner = this,
@@ -141,6 +143,7 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
                     }
                 )
             }
+                    }
         }
         lifecycleScope.launch(Dispatchers.IO) {
             AiImageGalleryManager.cleanupExpiredTemporary()

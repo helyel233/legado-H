@@ -1,5 +1,6 @@
 package io.legado.app.ui.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.os.Bundle
 import android.content.Intent
 import android.provider.Settings
@@ -118,6 +119,7 @@ class RelaySettingsActivity : BaseActivity<ViewBinding>() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setContent {
+                LegadoComposeTheme {
                 RelaySettingsScreen(
                     initialWorkerUrl = prefs.getString(PreferKey.publicWebRelayWorkerUrl, "").orEmpty(),
                     initialDeviceName = prefs.getString(PreferKey.publicWebRelayDeviceName, "").orEmpty(),
@@ -143,6 +145,7 @@ class RelaySettingsActivity : BaseActivity<ViewBinding>() {
                     },
                     onOpenBatterySettings = ::openBatterySettings,
                 )
+                            }
             }
         }
         (binding.root as FrameLayout).addView(composeView)

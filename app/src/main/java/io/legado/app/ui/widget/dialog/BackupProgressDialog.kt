@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.dialog
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.view.View
@@ -54,6 +55,7 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                 id = View.generateViewId()
                 setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                 setContent {
+                    LegadoComposeTheme {
                     val style = rememberAppDialogStyle()
                     val palette = style.toMiuixPalette()
                     val progress by BackupProgressHolder.progress.collectAsStateWithLifecycle()
@@ -120,6 +122,7 @@ class BackupProgressDialog(private val context: Context) : ComponentDialog(conte
                             }
                         }
                     }
+                                    }
                 }
             }
         )

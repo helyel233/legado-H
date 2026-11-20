@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.content.Context
 import android.os.Build
 import android.view.KeyEvent
@@ -326,6 +327,7 @@ object ModernActionPopup {
         )
         val glass = resolvePopupGlass(host, glassDomain)
         overlay.setContent {
+            LegadoComposeTheme {
             ModernActionPopupOverlay(
                 snapshot = snapshot,
                 actions = actions,
@@ -333,6 +335,7 @@ object ModernActionPopup {
                 glass = glass,
                 onDismiss = handle::dismiss
             )
+                    }
         }
         host.addView(
             overlay,
@@ -488,6 +491,7 @@ object ModernActionPopup {
         )
         val glass = resolvePopupGlass(host, glassDomain)
         overlay.setContent {
+            LegadoComposeTheme {
             ModernActionPopupOverlay(
                 snapshot = snapshot,
                 actions = actions,
@@ -495,6 +499,7 @@ object ModernActionPopup {
                 glass = glass,
                 onDismiss = handle::dismiss
             )
+                    }
         }
         host.addView(
             overlay,

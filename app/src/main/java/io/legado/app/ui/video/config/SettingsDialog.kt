@@ -1,5 +1,6 @@
 package io.legado.app.ui.video.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
@@ -53,12 +54,14 @@ class SettingsDialog(private val context: Context, private val callBack: CallBac
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 val style = rememberAppDialogStyle()
                 CompositionLocalProvider(
                     LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
                 ) {
                     VideoSettingsContent(style = style)
                 }
+                            }
             }
         }
     }

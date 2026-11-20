@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.os.Bundle
@@ -104,6 +105,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                LegadoComposeTheme {
                 HttpTtsEditScreen(
                     draft = draft,
                     onDraftChange = { draft = it },
@@ -123,6 +125,7 @@ class HttpTtsEditDialog() : BaseDialogFragment(0) {
                     onHelp = { showHelp("httpTTSHelp") },
                     onClose = { dismiss() }
                 )
+                            }
             }
         }
     }
