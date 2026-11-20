@@ -569,6 +569,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 colorTabBackground
             )
             setupOptionalColorRow(rowShelfColor, R.string.theme_color_shelf, pendingShelfColor, colorShelf)
+            setupAdvancedColorToggle(this)
             setupImageRow(rowMainBackground, R.string.theme_image_main_background, ThemeImageTarget.MAIN)
             setupImageRow(rowBookInfoBackground, R.string.theme_image_book_info_background, ThemeImageTarget.BOOK_INFO)
             setupImageRow(rowPanelBackground, R.string.theme_image_panel_background, ThemeImageTarget.PANEL)
@@ -608,6 +609,36 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 dialog.dismiss()
             }
         }
+    }
+
+    private fun setupAdvancedColorToggle(binding: DialogThemePackageEditBinding) = binding.run {
+        var expanded = false
+        fun renderToggle() {
+            llAdvancedColorGroup.visibility = if (expanded) View.VISIBLE else View.GONE
+            updateAdvancedColorToggleSummary(this)
+        }
+        renderToggle()
+        rowAdvancedColorToggle.root.setOnClickListener {
+            expanded = !expanded
+            renderToggle()
+        }
+    }
+
+    private fun updateAdvancedColorToggleSummary(binding: DialogThemePackageEditBinding) = binding.run {
+        val overriddenCount = listOf(
+            pendingCardColor,
+            pendingMutedColor,
+            pendingSearchFieldBackgroundColor,
+            pendingTabBackgroundColor,
+            pendingShelfColor
+        ).count { it != null }
+        rowAdvancedColorToggle.tvTitle.setText(R.string.theme_advanced_colors_toggle)
+        rowAdvancedColorToggle.tvValue.text = if (overriddenCount > 0) {
+            getString(R.string.theme_advanced_colors_summary_custom, overriddenCount)
+        } else {
+            getString(R.string.theme_advanced_colors_summary_auto)
+        }
+        rowAdvancedColorToggle.viewSwatch.visibility = View.GONE
     }
 
     private fun setupEditGroups(binding: DialogThemePackageEditBinding) = binding.run {
@@ -2096,6 +2127,9 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
         if (dialogId == colorUiFont || dialogId == colorTitleFont) {
             editDialogBinding?.let { applyThemeEditFonts(it) }
+        }
+        if (dialogId in setOf(colorCard, colorMuted, colorSearchFieldBackground, colorTabBackground, colorShelf)) {
+            updateAdvancedColorToggleSummary(binding)
         }
         return true
     }

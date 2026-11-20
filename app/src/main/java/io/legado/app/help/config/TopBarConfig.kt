@@ -7,9 +7,9 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.themeColorOrNull
-import io.legado.app.lib.theme.themeMutedColorOrDefault
+import io.legado.app.lib.theme.themeTabBackgroundColorOrDefault
 import io.legado.app.lib.theme.themeUiSignature
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -19,8 +19,10 @@ import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.normalizeFileName
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -37,6 +39,10 @@ object TopBarConfig {
     private const val remoteListTimeoutMillis = 4_000L
     private const val activeDayKey = PreferKey.topBarPackageDay
     private const val activeNightKey = PreferKey.topBarPackageNight
+    private const val legacyBehaviorMigratedKey = "legacyTopBarBehaviorMigratedV2"
+
+    @Volatile
+    private var legacyBehaviorMigratedMem = false
 
     val rootDir: File
         get() = appCtx.externalFiles.getFile("topBarPackages")
@@ -95,25 +101,89 @@ object TopBarConfig {
         val updatedAt: Long
     )
 
+    fun newPackageTemplate(name: String, isNight: Boolean): Config {
+        return Config(
+            name = name,
+            isNightMode = isNight,
+            style = STYLE_DEFAULT,
+            tagBarColor = null,
+            tagBarAlpha = 100,
+            tagSelectedColor = null,
+            tagSelectedAlpha = 100,
+            wallpaperPath = null,
+            wallpaperAlpha = 100,
+            backgroundColor = null,
+            cornerScale = null,
+            floatingChrome = false,
+            expandFiltersByDefault = false,
+            hideFilterToggleWhenExpanded = false,
+            showSearchInDefaultStyle = false
+        )
+    }
+
+    fun migrateLegacyBehaviorToGlobalIfNeeded(context: Context = appCtx) {
+        if (legacyBehaviorMigratedMem) return
+        synchronized(this) {
+            if (legacyBehaviorMigratedMem) return
+            if (context.getPrefBoolean(legacyBehaviorMigratedKey, false)) {
+                legacyBehaviorMigratedMem = true
+                return
+            }
+            val isNight = AppConfig.isNightTheme
+            val dirName = activeDirName(isNight)
+            if (dirName != DEFAULT_DIR_NAME) {
+                readEntry(localDir(isNight, dirName))?.config?.let { legacy ->
+                    if (legacy.floatingChrome) AppConfig.topBarFloatingChrome = true
+                    if (legacy.expandFiltersByDefault) AppConfig.topBarExpandFilters = true
+                    if (legacy.hideFilterToggleWhenExpanded) AppConfig.topBarHideFilterToggle = true
+                    if (legacy.showSearchInDefaultStyle) AppConfig.defaultTopBarShowSearch = true
+                    if (legacy.style == STYLE_REGULAR) {
+                        context.putPrefString(PreferKey.defaultTopBarStyle, STYLE_REGULAR)
+                    }
+                }
+            }
+            context.putPrefBoolean(legacyBehaviorMigratedKey, true)
+            legacyBehaviorMigratedMem = true
+        }
+    }
+
     fun defaultConfig(context: Context, isNight: Boolean): Config {
         val style = MainLayoutPresetConfig.defaultTopBarStyle()
-        return Config(
-            name = defaultName(isNight),
-            isNightMode = isNight,
-            style = style,
-            tagBarColor = context.themeColorOrNull(PreferKey.themeTabBackgroundColor)
-                ?: context.themeMutedColorOrDefault(),
-            tagBarAlpha = if (style == STYLE_REGULAR) 0 else 100,
-            tagSelectedColor = context.themeCardColorOrDefault(),
-            backgroundColor = defaultBackgroundColor(isNight),
-            cornerScale = if (style == STYLE_REGULAR) 0f else 1f,
-            showSearchInDefaultStyle = MainLayoutPresetConfig.defaultTopBarShowSearch(),
-            updatedAt = 0L
+        return applyGlobalLayoutAndThemeOverrides(
+            context = context,
+            config = Config(
+                name = defaultName(isNight),
+                isNightMode = isNight,
+                tagBarAlpha = if (style == STYLE_REGULAR) 0 else 100,
+                updatedAt = 0L
+            )
         )
     }
 
     fun currentConfig(context: Context, isNight: Boolean = AppConfig.isNightTheme): Config {
-        return currentEntry(context, isNight).config
+        migrateLegacyBehaviorToGlobalIfNeeded(context)
+        return applyGlobalLayoutAndThemeOverrides(context, currentEntry(context, isNight).config)
+    }
+
+    /**
+     * 方案 B 单一真相源：
+     * - 所有布局/交互开关由「界面布局与系统栏」(MainLayoutPresetConfig / AppConfig) 唯一接管；
+     * - 所有圆角与颜色由「主题」(UiCorner / ThemeUiPalette) 唯一接管；
+     * - 悬浮顶栏无壁纸实底取 `themeCardColorOrDefault()`，避免未配主色时出现刺眼的亮蓝色悬浮条；
+     * - 顶栏包自身只保留壁纸与局部透明遮罩。
+     */
+    private fun applyGlobalLayoutAndThemeOverrides(context: Context, config: Config): Config {
+        return config.copy(
+            style = MainLayoutPresetConfig.defaultTopBarStyle(),
+            floatingChrome = AppConfig.topBarFloatingChrome,
+            expandFiltersByDefault = AppConfig.topBarExpandFilters,
+            hideFilterToggleWhenExpanded = AppConfig.topBarHideFilterToggle,
+            showSearchInDefaultStyle = MainLayoutPresetConfig.defaultTopBarShowSearch(),
+            cornerScale = UiCorner.scale(),
+            backgroundColor = context.themeCardColorOrDefault(),
+            tagBarColor = context.themeTabBackgroundColorOrDefault(),
+            tagSelectedColor = context.themeCardColorOrDefault()
+        )
     }
 
     fun activeDirName(isNight: Boolean): String {
@@ -124,11 +194,19 @@ object TopBarConfig {
 
     fun currentSignature(isNight: Boolean): String {
         val dirName = activeDirName(isNight)
+        val globalPart = buildString {
+            append(MainLayoutPresetConfig.defaultTopBarStyle()).append('|')
+            append(MainLayoutPresetConfig.defaultTopBarShowSearch()).append('|')
+            append(AppConfig.topBarFloatingChrome).append('|')
+            append(AppConfig.topBarExpandFilters).append('|')
+            append(AppConfig.topBarHideFilterToggle).append('|')
+            append(appCtx.themeUiSignature())
+        }
         if (dirName == DEFAULT_DIR_NAME) {
-            return "$isNight|$DEFAULT_DIR_NAME|${MainLayoutPresetConfig.defaultTopBarStyle()}|${MainLayoutPresetConfig.defaultTopBarShowSearch()}|${appCtx.themeUiSignature()}"
+            return "$isNight|$DEFAULT_DIR_NAME|$globalPart"
         }
         val configFile = File(localDir(isNight, dirName), packageFileName)
-        return "$isNight|$dirName|${configFile.lastModified()}"
+        return "$isNight|$dirName|${configFile.lastModified()}|$globalPart"
     }
 
     fun currentEntry(context: Context, isNight: Boolean): Entry {
@@ -181,7 +259,7 @@ object TopBarConfig {
     }
 
     fun addOrUpdate(config: Config, oldEntry: Entry? = null): Entry {
-        val normalized = normalizeConfig(config)
+        val normalized = stripOutOfScopeFields(normalizeConfig(config))
         val name = normalized.name.trim().ifBlank { defaultName(normalized.isNightMode) }
         val keepOldDir = oldEntry != null &&
             oldEntry.dirName.isNotBlank() &&
@@ -447,7 +525,9 @@ object TopBarConfig {
             ZipUtils.unZipToPath(zipFile, unzipDir)
             val packageFile = unzipDir.walkTopDown().firstOrNull { it.isFile && it.name == packageFileName }
                 ?: throw IllegalArgumentException(appCtx.getString(R.string.top_bar_config_missing))
-            val config = normalizeConfig(GSON.fromJsonObject<Config>(packageFile.readText()).getOrThrow())
+            val config = stripOutOfScopeFields(
+                normalizeConfig(GSON.fromJsonObject<Config>(packageFile.readText()).getOrThrow())
+            )
             if (remoteUpdatedAt == 0L) {
                 config.updatedAt = System.currentTimeMillis()
             }
@@ -479,6 +559,24 @@ object TopBarConfig {
         normalizeWallpaperCrop(config)
         config.cornerScale = config.cornerScale?.coerceIn(0f, 3f)
         return config
+    }
+
+    /**
+     * 落盘净化（仅用于新保存与导入 ZIP 落盘，不污染迁移读取）：
+     * 剥离已收归「界面布局」与「主题」的越界/重复字段，确保导出包纯净。
+     */
+    private fun stripOutOfScopeFields(config: Config): Config {
+        return config.copy(
+            style = STYLE_DEFAULT,
+            tagBarColor = null,
+            tagSelectedColor = null,
+            backgroundColor = null,
+            cornerScale = null,
+            floatingChrome = false,
+            expandFiltersByDefault = false,
+            hideFilterToggleWhenExpanded = false,
+            showSearchInDefaultStyle = false
+        )
     }
 
     private fun normalizeWallpaperCrop(config: Config) {

@@ -71,10 +71,7 @@ object MainLayoutPresetConfig {
         }
         context.putPrefString(PreferKey.mainLayoutPreset, nextPreset)
         context.putPrefString(PreferKey.defaultTopBarStyle, topBarStyle)
-        context.putPrefBoolean(PreferKey.defaultTopBarShowSearch, false)
-        context.putPrefBoolean(PreferKey.floatingBottomBarHideSearch, false)
         AppConfig.bottomBarLayoutMode = bottomLayoutMode
-        AppConfig.bottomBarSidebarGravity = "start"
         if (bottomLayoutMode == "sidebar") {
             context.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
         }

@@ -21,7 +21,6 @@
     <string name="appearance_studio_preview_night">Night Preview</string>
     <string name="appearance_studio_slots_title">6 Visual Slots</string>
     <string name="appearance_studio_slots_hint">Appearance packs only manage 6 visual asset slots; navigation layout and system bars are configured separately.</string>
-    <string name="appearance_studio_dirty_banner">Customized slots: %1$s</string>
     <string name="appearance_studio_overwrite_save">Overwrite</string>
     <string name="appearance_studio_save_as">Save as New</string>
     <string name="appearance_studio_restore">Revert</string>

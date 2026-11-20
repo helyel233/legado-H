@@ -881,7 +881,7 @@ fun <T> LegadoMiuixSelectField(
                         expanded = true
                     }
             },
-            color = palette.surface,
+            color = palette.surfaceVariant,
             contentColor = palette.primaryText,
             cornerRadius = resolvedCornerRadius,
             insidePadding = PaddingValues(

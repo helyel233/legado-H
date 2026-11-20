@@ -3415,4 +3415,23 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="discovery_empty_no_sources">暂无书源，点击前往书源管理</string>
     <string name="discovery_empty_all_failed">书源暂不可用，点击管理书源，或下拉重试</string>
     <string name="discovery_error_widget_failed">加载失败，点击重试</string>
+
+    <!-- R2-M2: 归位界面布局与系统栏的顶/底栏交互开关 -->
+    <string name="ui_layout_topbar_show_search">默认顶栏显示搜索按钮</string>
+    <string name="ui_layout_bottom_hide_search">悬浮底栏隐藏搜索按钮</string>
+    <string name="ui_layout_sidebar_gravity">侧边栏停靠方向</string>
+    <string name="ui_layout_sidebar_gravity_start">左侧</string>
+    <string name="ui_layout_sidebar_gravity_end">右侧</string>
+    <string name="ui_layout_topbar_floating_summary">将顶栏显示为悬浮圆角卡片</string>
+    <string name="ui_layout_topbar_filter_expand_summary">常规顶栏下默认展开分类筛选栏</string>
+    <string name="ui_layout_topbar_filter_hide_toggle_summary">筛选栏展开时隐藏右上角展开/收起箭头</string>
+    <string name="top_bar_edit_scope_hint">布局形态、搜索开关、颜色与圆角已统一收归「界面布局与系统栏」和「主题」管理。</string>
+
+    <!-- R2-M3: 外观快照胶囊与主题高级色折叠 -->
+    <string name="appearance_snapshot_title">外观快照</string>
+    <string name="appearance_snapshot_save">+ 存为快照</string>
+    <string name="appearance_snapshot_restore">恢复</string>
+    <string name="theme_advanced_colors_toggle">高级表面与栏位覆写</string>
+    <string name="theme_advanced_colors_summary_auto">默认由核心种子色自动派生</string>
+    <string name="theme_advanced_colors_summary_custom">已自定义 %1$d 项</string>
 </resources>

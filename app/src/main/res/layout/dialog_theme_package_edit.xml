@@ -110,24 +110,37 @@
                     layout="@layout/item_theme_package_option" />
 
                 <include
-                    android:id="@+id/row_card_color"
+                    android:id="@+id/row_advanced_color_toggle"
                     layout="@layout/item_theme_package_option" />
 
-                <include
-                    android:id="@+id/row_muted_color"
-                    layout="@layout/item_theme_package_option" />
+                <LinearLayout
+                    android:id="@+id/ll_advanced_color_group"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
 
-                <include
-                    android:id="@+id/row_search_field_background_color"
-                    layout="@layout/item_theme_package_option" />
+                    <include
+                        android:id="@+id/row_card_color"
+                        layout="@layout/item_theme_package_option" />
 
-                <include
-                    android:id="@+id/row_tab_background_color"
-                    layout="@layout/item_theme_package_option" />
+                    <include
+                        android:id="@+id/row_muted_color"
+                        layout="@layout/item_theme_package_option" />
 
-                <include
-                    android:id="@+id/row_shelf_color"
-                    layout="@layout/item_theme_package_option" />
+                    <include
+                        android:id="@+id/row_search_field_background_color"
+                        layout="@layout/item_theme_package_option" />
+
+                    <include
+                        android:id="@+id/row_tab_background_color"
+                        layout="@layout/item_theme_package_option" />
+
+                    <include
+                        android:id="@+id/row_shelf_color"
+                        layout="@layout/item_theme_package_option" />
+
+                </LinearLayout>
 
             </LinearLayout>
 

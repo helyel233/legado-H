@@ -63,6 +63,85 @@ class UiLayoutConfigFragment : ComposeSettingFragment() {
                             searchKeys = listOf("导航布局", "悬浮底栏", "标准底栏", "侧边栏", "layout preset")
                         ),
                         SettingSwitchSpec(
+                            key = PreferKey.topBarFloatingChrome,
+                            title = str(R.string.top_bar_floating_chrome),
+                            summary = str(R.string.ui_layout_topbar_floating_summary),
+                            checked = AppConfig.topBarFloatingChrome,
+                            onCheckedChange = { checked ->
+                                AppConfig.topBarFloatingChrome = checked
+                                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("悬浮顶栏", "圆角顶栏", "floatingChrome", "top bar")
+                        ),
+                        SettingSwitchSpec(
+                            key = PreferKey.defaultTopBarShowSearch,
+                            title = str(R.string.ui_layout_topbar_show_search),
+                            checked = AppConfig.defaultTopBarShowSearch,
+                            visible = currentPreset != MainLayoutPresetConfig.PRESET_REGULAR,
+                            onCheckedChange = { checked ->
+                                AppConfig.defaultTopBarShowSearch = checked
+                                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("顶栏搜索", "显示搜索", "showSearch")
+                        ),
+                        SettingSwitchSpec(
+                            key = PreferKey.floatingBottomBarHideSearch,
+                            title = str(R.string.ui_layout_bottom_hide_search),
+                            checked = AppConfig.floatingBottomBarHideSearch,
+                            visible = currentPreset == MainLayoutPresetConfig.PRESET_DEFAULT,
+                            onCheckedChange = { checked ->
+                                AppConfig.floatingBottomBarHideSearch = checked
+                                postEvent(EventBus.NOTIFY_MAIN, true)
+                                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("隐藏搜索", "底栏搜索", "hideSearch")
+                        ),
+                        SettingChoiceSpec(
+                            key = PreferKey.bottomBarSidebarGravity,
+                            title = str(R.string.ui_layout_sidebar_gravity),
+                            options = listOf(
+                                SettingChoiceOption("start", str(R.string.ui_layout_sidebar_gravity_start)),
+                                SettingChoiceOption("end", str(R.string.ui_layout_sidebar_gravity_end))
+                            ),
+                            selectedValue = AppConfig.bottomBarSidebarGravity,
+                            visible = currentPreset == MainLayoutPresetConfig.PRESET_SIDEBAR,
+                            onSelected = { gravity ->
+                                AppConfig.bottomBarSidebarGravity = gravity
+                                postEvent(EventBus.NOTIFY_MAIN, true)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("侧边栏方向", "左侧", "右侧", "sidebarGravity")
+                        ),
+                        SettingSwitchSpec(
+                            key = PreferKey.topBarExpandFilters,
+                            title = str(R.string.top_bar_filter_default),
+                            summary = str(R.string.ui_layout_topbar_filter_expand_summary),
+                            checked = AppConfig.topBarExpandFilters,
+                            visible = currentPreset == MainLayoutPresetConfig.PRESET_REGULAR,
+                            onCheckedChange = { checked ->
+                                AppConfig.topBarExpandFilters = checked
+                                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("默认展开筛选", "筛选栏", "expandFilters")
+                        ),
+                        SettingSwitchSpec(
+                            key = PreferKey.topBarHideFilterToggle,
+                            title = str(R.string.top_bar_filter_toggle_button),
+                            summary = str(R.string.ui_layout_topbar_filter_hide_toggle_summary),
+                            checked = AppConfig.topBarHideFilterToggle,
+                            visible = currentPreset == MainLayoutPresetConfig.PRESET_REGULAR,
+                            onCheckedChange = { checked ->
+                                AppConfig.topBarHideFilterToggle = checked
+                                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
+                                refreshSettings()
+                            },
+                            searchKeys = listOf("隐藏筛选按钮", "展开箭头", "hideFilterToggle")
+                        ),
+                        SettingSwitchSpec(
                             key = KEY_HOMEPAGE_VISIBLE,
                             title = str(R.string.homepage),
                             summary = str(R.string.homepage_switch_summary),

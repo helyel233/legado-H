@@ -134,6 +134,8 @@ object AppearanceKitManager {
         if (raw.isNotBlank() && raw != normalized) {
             context.putPrefString(PreferKey.currentAppearanceKitId, normalized)
         }
+        TopBarConfig.migrateLegacyBehaviorToGlobalIfNeeded(context)
+        NavigationBarIconConfig.migrateLegacyLayoutToGlobalIfNeeded(context)
     }
 
     fun currentKitId(): String {

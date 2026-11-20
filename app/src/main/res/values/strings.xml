@@ -3486,4 +3486,23 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="discovery_empty_no_sources">No book sources. Tap to go to source management</string>
     <string name="discovery_empty_all_failed">All book sources are unavailable. Tap to manage sources, or pull down to retry</string>
     <string name="discovery_error_widget_failed">Failed to load, tap to retry</string>
+
+    <!-- R2-M2: Layout & bar behavior strings moved to UiLayoutConfigFragment -->
+    <string name="ui_layout_topbar_show_search">Show search in default top bar</string>
+    <string name="ui_layout_bottom_hide_search">Hide search in floating bottom bar</string>
+    <string name="ui_layout_sidebar_gravity">Sidebar position</string>
+    <string name="ui_layout_sidebar_gravity_start">Left</string>
+    <string name="ui_layout_sidebar_gravity_end">Right</string>
+    <string name="ui_layout_topbar_floating_summary">Float the top bar as a rounded card</string>
+    <string name="ui_layout_topbar_filter_expand_summary">Expand category filter rows by default in regular top bar</string>
+    <string name="ui_layout_topbar_filter_hide_toggle_summary">Hide the expand/collapse arrow when filters are expanded</string>
+    <string name="top_bar_edit_scope_hint">Layout, search buttons, colors and corner radius are managed in Screen Layout &amp; Theme.</string>
+
+    <!-- R2-M3: Snapshot capsules & advanced color overrides -->
+    <string name="appearance_snapshot_title">Appearance Snapshots</string>
+    <string name="appearance_snapshot_save">+ Save Snapshot</string>
+    <string name="appearance_snapshot_restore">Restore</string>
+    <string name="theme_advanced_colors_toggle">Advanced surface &amp; bar overrides</string>
+    <string name="theme_advanced_colors_summary_auto">Auto-derived from seed colors</string>
+    <string name="theme_advanced_colors_summary_custom">%1$d overridden</string>
 </resources>

@@ -81,6 +81,7 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.themeDividerColorOrDefault
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.utils.ColorUtils
@@ -127,66 +128,53 @@ data class AppDialogStyle(
 @Composable
 fun rememberAppDialogStyle(): AppDialogStyle {
     val context = LocalContext.current
-    val night = AppConfig.isNightTheme
-    val accent = context.accentColor
-    val layoutAlpha = if (AppConfig.isEInkMode) {
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val night = tokens.env.isNight
+    val isEInk = tokens.env.isEInk
+    val layoutAlpha = if (isEInk) {
         1f
     } else {
         AppConfig.dialogAlpha.coerceIn(0, 100) / 100f
     }
-    val themeUiPalette = rememberThemeUiPalette()
-    // 结果整体 remember：blendColors/withAlpha/字体构造等重算只在键变化时执行，
-    // 避免每次重组都重复读 SP 与派生颜色计算。
-    // 注意：所有参与构造的派生值都要进键，否则主题局部变化时对话框样式会陈旧。
+    val glassSignature = rememberGlassConfigSignature()
+    val dialogGlass = remember(context, glassSignature) {
+        GlassSurface.dialogGlassAllowed(context)
+    }
     val uiFontPath = AppConfig.uiFontPath
     val titleFontPath = AppConfig.titleFontPath
-    val bottomBackground = context.bottomBackground
-    val primaryText = context.primaryTextColor
-    val secondaryText = context.secondaryTextColor
-    val panelRadius = context.composePanelRadius()
-    val actionRadius = context.composeActionRadius()
-    val panelBorderColor = UiCorner.panelBorderColor(context)
-    val dangerColor = ContextCompat.getColor(context, R.color.md_red_500)
+    val panelRadius = tokens.corners.panelRadiusDp.dp
+    val actionRadius = tokens.corners.actionRadiusDp.dp
+    val panelBorderColor = tokens.colors.borderArgb ?: UiCorner.borderLineColor(context)
+    val accent = tokens.colors.accentArgb
+    val onAccent = tokens.colors.onAccentArgb
+    val surfaceBase = tokens.colors.cardArgb
+    val fieldSurfaceBase = tokens.colors.mutedArgb
+    val primaryText = tokens.colors.primaryTextArgb
+    val secondaryText = tokens.colors.secondaryTextArgb
+    val dangerColor = tokens.colors.dangerArgb
     return remember(
-        themeUiPalette.signature,
-        night,
-        accent,
+        tokens.signature,
         layoutAlpha,
+        dialogGlass,
         uiFontPath,
         titleFontPath,
-        bottomBackground,
-        primaryText,
-        secondaryText,
-        panelRadius,
-        actionRadius,
-        panelBorderColor,
-        dangerColor
+        panelBorderColor
     ) {
-        val customSurface = themeUiPalette.cardColor.takeIf { themeUiPalette.hasCustomCardColor }
-        val customFieldSurface = themeUiPalette.mutedColor.takeIf { themeUiPalette.hasCustomMutedColor }
-        val surfaceBase = customSurface ?: bottomBackground
-        val fieldSurface = customFieldSurface ?: ColorUtils.blendColors(
-            surfaceBase,
-            accent,
-            if (night) 0.10f else 0.05f
-        )
-        val fieldAlpha = (layoutAlpha + if (night) 0.10f else 0.08f).coerceIn(0f, 1f)
-        val stroke = panelBorderColor
-            ?: if (customSurface != null || customFieldSurface != null) {
-                context.themeDividerColorOrDefault()
-            } else {
-                UiCorner.effectStrokeColor(surfaceBase)
-            }
+        val fieldAlpha = when {
+            isEInk -> 1f
+            dialogGlass -> translucentRowSurfaceAlpha(layoutAlpha)
+            else -> (layoutAlpha + if (night) 0.08f else 0.06f).coerceIn(0f, 1f)
+        }
         // 文字色按对话框实际背景明暗推导，而非全局 night 标志，避免深底深字/浅底白字
         AppDialogStyle(
             accent = Color(accent),
-            onAccent = if (ColorUtils.isColorLight(accent)) Color.Black else Color.White,
+            onAccent = Color(onAccent),
             surface = Color(ColorUtils.withAlpha(surfaceBase, layoutAlpha)),
             clearSurface = Color(GlassMaterialPreset.clearSurfaceColor(surfaceBase)),
-            fieldSurface = Color(ColorUtils.withAlpha(fieldSurface, fieldAlpha)),
+            fieldSurface = Color(ColorUtils.withAlpha(fieldSurfaceBase, fieldAlpha)),
             primaryText = Color(primaryText),
             secondaryText = Color(secondaryText),
-            stroke = Color(stroke),
+            stroke = Color(panelBorderColor),
             danger = Color(dangerColor),
             panelRadius = panelRadius,
             actionRadius = actionRadius,
@@ -293,13 +281,14 @@ fun AppDialogFrame(
                 screenAligned = true,
                 modifier = outerModifier.clip(frameShape)
             ) {
-                // 玻璃接管表面后卡片必须让出填充色；阴影同样会绕开玻璃外缘画一圈黑边。
+                // 玻璃接管表面后卡片必须让出填充色；外层 GlassPanel 已负责描边，禁止双重描边。
                 LegadoMiuixCard(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.Transparent,
                     contentColor = style.primaryText,
                     cornerRadius = style.panelRadius,
                     insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                    outline = false,
                     content = frame
                 )
             }
@@ -312,6 +301,7 @@ fun AppDialogFrame(
                 contentColor = style.primaryText,
                 cornerRadius = style.panelRadius,
                 insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                outline = false,
                 content = frame
             )
         }

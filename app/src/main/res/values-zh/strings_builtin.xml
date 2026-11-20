@@ -20,7 +20,6 @@
     <string name="appearance_studio_preview_night">夜间预览</string>
     <string name="appearance_studio_slots_title">6 大外观槽位</string>
     <string name="appearance_studio_slots_hint">外观方案仅管理以下 6 类视觉资产；导航骨架、页面布局与系统栏请前往「界面布局与系统栏」。</string>
-    <string name="appearance_studio_dirty_banner">已微调：%1$s</string>
     <string name="appearance_studio_overwrite_save">覆盖保存</string>
     <string name="appearance_studio_save_as">另存为</string>
     <string name="appearance_studio_restore">还原</string>

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,7 +18,6 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -30,7 +28,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
@@ -41,33 +38,28 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
-import io.legado.app.ui.widget.compose.AppDialogSize
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
-import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
-import java.util.Locale
 
+/**
+ * 顶栏皮肤编辑弹窗（R2-M2 方案 B 纯化版）：
+ * 仅管理顶栏包名称、顶栏壁纸与局部透明遮罩；
+ * 布局形态/搜索/筛选交互已收归「界面布局与系统栏」，颜色与圆角已收归「主题」。
+ */
 class TopBarEditDialog : ComposeDialogFragment() {
 
     override val dialogSize: AppDialogSize = AppDialogSize.Management
 
     private var onNameChanged: ((String) -> Unit)? = null
-    private var onStyleChanged: ((String) -> Unit)? = null
-    private var onShowStyleSelector: (() -> Unit)? = null
-    private var onShowCornerScalePicker: ((Float?) -> Unit)? = null
-    private var onShowColorPicker: ((Int, Int) -> Unit)? = null
     private var onShowWallpaperSelector: (() -> Unit)? = null
     private var onShowWallpaperAlphaPicker: ((Int) -> Unit)? = null
-    private var onShowFilterDefaultSelector: ((Boolean) -> Unit)? = null
-    private var onToggleFilterToggleHidden: ((Boolean) -> Unit)? = null
     private var onShowTagBarAlphaPicker: ((Int) -> Unit)? = null
     private var onShowTagSelectedAlphaPicker: ((Int) -> Unit)? = null
-    private var onToggleSearchInDefaultStyle: ((Boolean) -> Unit)? = null
-    private var onToggleFloatingChrome: ((Boolean) -> Unit)? = null
     private var onSave: ((String) -> Unit)? = null
     private var onCancel: (() -> Unit)? = null
 
@@ -81,17 +73,10 @@ class TopBarEditDialog : ComposeDialogFragment() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val callbacksReady = onSave != null &&
-                    onShowStyleSelector != null &&
-                    onShowCornerScalePicker != null &&
-                    onShowColorPicker != null &&
                     onShowWallpaperSelector != null &&
                     onShowWallpaperAlphaPicker != null &&
-                    onShowFilterDefaultSelector != null &&
-                    onToggleFilterToggleHidden != null &&
                     onShowTagBarAlphaPicker != null &&
-                    onShowTagSelectedAlphaPicker != null &&
-                    onToggleSearchInDefaultStyle != null &&
-                    onToggleFloatingChrome != null
+                    onShowTagSelectedAlphaPicker != null
                 LaunchedEffect(callbacksReady) {
                     if (!callbacksReady) {
                         dismissAllowingStateLoss()
@@ -109,38 +94,17 @@ class TopBarEditDialog : ComposeDialogFragment() {
                         onNameChanged = { name ->
                             onNameChanged?.invoke(name)
                         },
-                        onShowStyleSelector = {
-                            onShowStyleSelector?.invoke() ?: dismissAllowingStateLoss()
-                        },
-                        onShowCornerScalePicker = {
-                            onShowCornerScalePicker?.invoke(it) ?: dismissAllowingStateLoss()
-                        },
-                        onShowColorPicker = { target, color ->
-                            onShowColorPicker?.invoke(target, color) ?: dismissAllowingStateLoss()
-                        },
                         onShowWallpaperSelector = {
                             onShowWallpaperSelector?.invoke() ?: dismissAllowingStateLoss()
                         },
                         onShowWallpaperAlphaPicker = {
                             onShowWallpaperAlphaPicker?.invoke(it) ?: dismissAllowingStateLoss()
                         },
-                        onShowFilterDefaultSelector = {
-                            onShowFilterDefaultSelector?.invoke(it) ?: dismissAllowingStateLoss()
-                        },
-                        onToggleFilterToggleHidden = {
-                            onToggleFilterToggleHidden?.invoke(it) ?: dismissAllowingStateLoss()
-                        },
                         onShowTagBarAlphaPicker = {
                             onShowTagBarAlphaPicker?.invoke(it) ?: dismissAllowingStateLoss()
                         },
                         onShowTagSelectedAlphaPicker = {
                             onShowTagSelectedAlphaPicker?.invoke(it) ?: dismissAllowingStateLoss()
-                        },
-                        onToggleSearchInDefaultStyle = {
-                            onToggleSearchInDefaultStyle?.invoke(it) ?: dismissAllowingStateLoss()
-                        },
-                        onToggleFloatingChrome = {
-                            onToggleFloatingChrome?.invoke(it) ?: dismissAllowingStateLoss()
                         },
                         onSave = { name ->
                             val saveCallback = onSave
@@ -165,78 +129,36 @@ class TopBarEditDialog : ComposeDialogFragment() {
         fun create(
             config: TopBarConfig.Config,
             onNameChanged: (String) -> Unit,
-            onStyleChanged: (String) -> Unit,
-            onShowStyleSelector: () -> Unit,
-            onShowCornerScalePicker: (Float?) -> Unit,
-            onShowColorPicker: (Int, Int) -> Unit,
             onShowWallpaperSelector: () -> Unit,
             onShowWallpaperAlphaPicker: (Int) -> Unit,
-            onShowFilterDefaultSelector: (Boolean) -> Unit,
-            onToggleFilterToggleHidden: (Boolean) -> Unit,
             onShowTagBarAlphaPicker: (Int) -> Unit,
             onShowTagSelectedAlphaPicker: (Int) -> Unit,
-            onToggleSearchInDefaultStyle: (Boolean) -> Unit,
-            onToggleFloatingChrome: (Boolean) -> Unit,
             onSave: (String) -> Unit,
             onCancel: () -> Unit
         ): TopBarEditDialog {
             return TopBarEditDialog().apply {
                 arguments = Bundle().apply {
                     putString(ARG_NAME, config.name)
-                    putString(ARG_STYLE, config.style)
-                    putBoolean(ARG_IS_NIGHT, config.isNightMode)
-                    putFloat(ARG_CORNER_SCALE, config.cornerScale ?: 1f)
-                    putBoolean(ARG_FLOATING, config.floatingChrome)
-                    putInt(ARG_BG_COLOR, config.backgroundColor ?: 0)
-                    putBoolean(ARG_HAS_BG_COLOR, config.backgroundColor != null)
                     putString(ARG_WALLPAPER_PATH, config.wallpaperPath)
                     putInt(ARG_WALLPAPER_ALPHA, config.wallpaperAlpha)
-                    putBoolean(ARG_FILTER_EXPANDED, config.expandFiltersByDefault)
-                    putBoolean(ARG_HIDE_FILTER_TOGGLE, config.hideFilterToggleWhenExpanded)
-                    putInt(ARG_TAG_BAR_COLOR, config.tagBarColor ?: 0)
-                    putBoolean(ARG_HAS_TAG_BAR_COLOR, config.tagBarColor != null)
                     putInt(ARG_TAG_BAR_ALPHA, config.tagBarAlpha)
-                    putInt(ARG_TAG_SELECTED_COLOR, config.tagSelectedColor ?: 0)
-                    putBoolean(ARG_HAS_TAG_SELECTED_COLOR, config.tagSelectedColor != null)
                     putInt(ARG_TAG_SELECTED_ALPHA, config.tagSelectedAlpha)
-                    putBoolean(ARG_SHOW_SEARCH, config.showSearchInDefaultStyle)
                 }
                 this.onNameChanged = onNameChanged
-                this.onStyleChanged = onStyleChanged
-                this.onShowStyleSelector = onShowStyleSelector
-                this.onShowCornerScalePicker = onShowCornerScalePicker
-                this.onShowColorPicker = onShowColorPicker
                 this.onShowWallpaperSelector = onShowWallpaperSelector
                 this.onShowWallpaperAlphaPicker = onShowWallpaperAlphaPicker
-                this.onShowFilterDefaultSelector = onShowFilterDefaultSelector
-                this.onToggleFilterToggleHidden = onToggleFilterToggleHidden
                 this.onShowTagBarAlphaPicker = onShowTagBarAlphaPicker
                 this.onShowTagSelectedAlphaPicker = onShowTagSelectedAlphaPicker
-                this.onToggleSearchInDefaultStyle = onToggleSearchInDefaultStyle
-                this.onToggleFloatingChrome = onToggleFloatingChrome
                 this.onSave = onSave
                 this.onCancel = onCancel
             }
         }
 
         const val ARG_NAME = "name"
-        const val ARG_STYLE = "style"
-        const val ARG_IS_NIGHT = "isNight"
-        const val ARG_CORNER_SCALE = "cornerScale"
-        const val ARG_BG_COLOR = "bgColor"
-        const val ARG_HAS_BG_COLOR = "hasBgColor"
         const val ARG_WALLPAPER_PATH = "wallpaperPath"
         const val ARG_WALLPAPER_ALPHA = "wallpaperAlpha"
-        const val ARG_FILTER_EXPANDED = "filterExpanded"
-        const val ARG_HIDE_FILTER_TOGGLE = "hideFilterToggle"
-        const val ARG_TAG_BAR_COLOR = "tagBarColor"
-        const val ARG_HAS_TAG_BAR_COLOR = "hasTagBarColor"
         const val ARG_TAG_BAR_ALPHA = "tagBarAlpha"
-        const val ARG_TAG_SELECTED_COLOR = "tagSelectedColor"
-        const val ARG_HAS_TAG_SELECTED_COLOR = "hasTagSelectedColor"
         const val ARG_TAG_SELECTED_ALPHA = "tagSelectedAlpha"
-        const val ARG_SHOW_SEARCH = "showSearchInDefaultStyle"
-        const val ARG_FLOATING = "floatingChrome"
     }
 }
 
@@ -245,39 +167,18 @@ private fun TopBarEditDialogContent(
     args: Bundle,
     style: AppDialogStyle,
     onNameChanged: (String) -> Unit,
-    onShowStyleSelector: () -> Unit,
-    onShowCornerScalePicker: (Float?) -> Unit,
-    onShowColorPicker: (Int, Int) -> Unit,
     onShowWallpaperSelector: () -> Unit,
     onShowWallpaperAlphaPicker: (Int) -> Unit,
-    onShowFilterDefaultSelector: (Boolean) -> Unit,
-    onToggleFilterToggleHidden: (Boolean) -> Unit,
     onShowTagBarAlphaPicker: (Int) -> Unit,
     onShowTagSelectedAlphaPicker: (Int) -> Unit,
-    onToggleSearchInDefaultStyle: (Boolean) -> Unit,
-    onToggleFloatingChrome: (Boolean) -> Unit,
     onSave: (String) -> Unit,
     onCancel: () -> Unit
 ) {
     val palette = style.toMiuixPalette()
     var name by rememberSaveable { mutableStateOf(args.getString(TopBarEditDialog.ARG_NAME).orEmpty()) }
-    val currentStyle = args.getString(TopBarEditDialog.ARG_STYLE)
-        ?: TopBarConfig.STYLE_DEFAULT
-    val isRegular = currentStyle == TopBarConfig.STYLE_REGULAR
-    val cornerScale = args.getFloat(TopBarEditDialog.ARG_CORNER_SCALE, 1f)
-    val floatingChrome = args.getBoolean(TopBarEditDialog.ARG_FLOATING)
-    val hasBgColor = args.getBoolean(TopBarEditDialog.ARG_HAS_BG_COLOR)
-    val bgColor = args.getInt(TopBarEditDialog.ARG_BG_COLOR)
     val wallpaperPath = args.getString(TopBarEditDialog.ARG_WALLPAPER_PATH)
     val wallpaperAlpha = args.getInt(TopBarEditDialog.ARG_WALLPAPER_ALPHA, 100)
-    val filterExpanded = args.getBoolean(TopBarEditDialog.ARG_FILTER_EXPANDED)
-    val hideFilterToggle = args.getBoolean(TopBarEditDialog.ARG_HIDE_FILTER_TOGGLE)
-    val showSearchInDefaultStyle = args.getBoolean(TopBarEditDialog.ARG_SHOW_SEARCH)
-    val hasTagBarColor = args.getBoolean(TopBarEditDialog.ARG_HAS_TAG_BAR_COLOR)
-    val tagBarColor = args.getInt(TopBarEditDialog.ARG_TAG_BAR_COLOR)
     val tagBarAlpha = args.getInt(TopBarEditDialog.ARG_TAG_BAR_ALPHA, 100)
-    val hasTagSelectedColor = args.getBoolean(TopBarEditDialog.ARG_HAS_TAG_SELECTED_COLOR)
-    val tagSelectedColor = args.getInt(TopBarEditDialog.ARG_TAG_SELECTED_COLOR)
     val tagSelectedAlpha = args.getInt(TopBarEditDialog.ARG_TAG_SELECTED_ALPHA, 100)
 
     AppDialogFrame(
@@ -288,7 +189,6 @@ private fun TopBarEditDialogContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Name input
                 TopBarEditTextField(
                     value = name,
                     onValueChange = {
@@ -298,153 +198,37 @@ private fun TopBarEditDialogContent(
                     label = stringResource(R.string.top_bar_name),
                     style = style
                 )
-                // Style selector
                 TopBarEditOptionRow(
-                    title = stringResource(R.string.top_bar_style),
-                    value = topBarStyleLabelResource(currentStyle),
-                    palette = palette,
+                    title = stringResource(R.string.top_bar_wallpaper),
+                    value = wallpaperLabelResource(wallpaperPath),
                     style = style,
-                    onClick = onShowStyleSelector
+                    onClick = onShowWallpaperSelector
                 )
-                // Floating rounded chrome (both styles; geometry comes from TopBarChromeSpec)
                 TopBarEditOptionRow(
-                    title = stringResource(R.string.top_bar_floating_chrome),
-                    value = if (floatingChrome) "On" else "Off",
-                    palette = palette,
+                    title = stringResource(R.string.top_bar_wallpaper_alpha),
+                    value = "$wallpaperAlpha%",
                     style = style,
-                    onClick = { onToggleFloatingChrome(!floatingChrome) }
+                    onClick = { onShowWallpaperAlphaPicker(wallpaperAlpha) }
                 )
-                if (isRegular) {
-                    // Corner scale
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_corner_scale),
-                        value = String.format(
-                            Locale.ROOT,
-                            "%.1f",
-                            cornerScale.coerceIn(0f, 3f)
-                        ),
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowCornerScalePicker(cornerScale) }
-                    )
-                    // Background color
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_background_color),
-                        value = colorLabelResource(hasBgColor, bgColor),
-                        colorPreview = if (hasBgColor) bgColor else null,
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowColorPicker(5104, bgColor) }
-                    )
-                    // Wallpaper
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_wallpaper),
-                        value = wallpaperLabelResource(wallpaperPath),
-                        palette = palette,
-                        style = style,
-                        onClick = onShowWallpaperSelector
-                    )
-                    // Wallpaper alpha
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_wallpaper_alpha),
-                        value = "$wallpaperAlpha%",
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowWallpaperAlphaPicker(wallpaperAlpha) }
-                    )
-                    // Filter default
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_filter_default),
-                        value = filterDefaultLabelResource(filterExpanded),
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowFilterDefaultSelector(filterExpanded) }
-                    )
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_filter_toggle_button),
-                        value = filterToggleLabelResource(hideFilterToggle),
-                        palette = palette,
-                        style = style,
-                        onClick = { onToggleFilterToggleHidden(!hideFilterToggle) }
-                    )
-                    // Tag bar color
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_bar_color),
-                        value = colorLabelResource(hasTagBarColor, tagBarColor),
-                        colorPreview = if (hasTagBarColor) tagBarColor else null,
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowColorPicker(5101, tagBarColor) }
-                    )
-                    // Tag bar alpha
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_bar_alpha),
-                        value = "$tagBarAlpha%",
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowTagBarAlphaPicker(tagBarAlpha) }
-                    )
-                    // Tag selected color
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_selected_color),
-                        value = colorLabelResource(hasTagSelectedColor, tagSelectedColor),
-                        colorPreview = if (hasTagSelectedColor) tagSelectedColor else null,
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowColorPicker(5102, tagSelectedColor) }
-                    )
-                    // Tag selected alpha
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_selected_alpha),
-                        value = "$tagSelectedAlpha%",
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowTagSelectedAlphaPicker(tagSelectedAlpha) }
-                    )
-                } else {
-                    // Default style: search button toggle
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.search),
-                        value = if (showSearchInDefaultStyle) "On" else "Off",
-                        palette = palette,
-                        style = style,
-                        onClick = { onToggleSearchInDefaultStyle(!showSearchInDefaultStyle) }
-                    )
-                    // Default style: tag bar color
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_bar_color),
-                        value = colorLabelResource(hasTagBarColor, tagBarColor),
-                        colorPreview = if (hasTagBarColor) tagBarColor else null,
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowColorPicker(5101, tagBarColor) }
-                    )
-                    // Tag bar alpha
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_bar_alpha),
-                        value = "$tagBarAlpha%",
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowTagBarAlphaPicker(tagBarAlpha) }
-                    )
-                    // Tag selected color
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_selected_color),
-                        value = colorLabelResource(hasTagSelectedColor, tagSelectedColor),
-                        colorPreview = if (hasTagSelectedColor) tagSelectedColor else null,
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowColorPicker(5102, tagSelectedColor) }
-                    )
-                    // Tag selected alpha
-                    TopBarEditOptionRow(
-                        title = stringResource(R.string.top_bar_tag_selected_alpha),
-                        value = "$tagSelectedAlpha%",
-                        palette = palette,
-                        style = style,
-                        onClick = { onShowTagSelectedAlphaPicker(tagSelectedAlpha) }
-                    )
-                }
+                TopBarEditOptionRow(
+                    title = stringResource(R.string.top_bar_tag_bar_alpha),
+                    value = "$tagBarAlpha%",
+                    style = style,
+                    onClick = { onShowTagBarAlphaPicker(tagBarAlpha) }
+                )
+                TopBarEditOptionRow(
+                    title = stringResource(R.string.top_bar_tag_selected_alpha),
+                    value = "$tagSelectedAlpha%",
+                    style = style,
+                    onClick = { onShowTagSelectedAlphaPicker(tagSelectedAlpha) }
+                )
+                Text(
+                    text = stringResource(R.string.top_bar_edit_scope_hint),
+                    color = style.secondaryText,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp)
+                )
             }
         },
         actions = {
@@ -482,7 +266,7 @@ private fun TopBarEditTextField(
             color = style.secondaryText,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         OutlinedTextField(
@@ -512,10 +296,8 @@ private fun TopBarEditTextField(
 private fun TopBarEditOptionRow(
     title: String,
     value: String,
-    palette: LegadoMiuixPalette,
     style: AppDialogStyle,
-    onClick: () -> Unit,
-    colorPreview: Int? = null
+    onClick: () -> Unit
 ) {
     LegadoMiuixCard(
         modifier = Modifier
@@ -539,18 +321,7 @@ private fun TopBarEditOptionRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            if (colorPreview != null) {
-                Surface(
-                    modifier = Modifier
-                        .width(18.dp)
-                        .height(18.dp),
-                    shape = RoundedCornerShape(50),
-                    color = Color(colorPreview),
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp
-                ) {}
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = value,
                 color = style.secondaryText,
@@ -563,45 +334,10 @@ private fun TopBarEditOptionRow(
 }
 
 @Composable
-private fun topBarStyleLabelResource(style: String): String {
-    return stringResource(
-        when (style) {
-            TopBarConfig.STYLE_REGULAR -> R.string.top_bar_style_regular
-            else -> R.string.top_bar_style_default
-        }
-    )
-}
-
-@Composable
-private fun colorLabelResource(hasColor: Boolean, color: Int): String {
-    return if (hasColor) {
-        "#${Integer.toHexString(color).takeLast(6).uppercase(Locale.ROOT)}"
-    } else {
-        stringResource(R.string.top_bar_follow_theme)
-    }
-}
-
-@Composable
 private fun wallpaperLabelResource(path: String?): String {
     return if (path.isNullOrBlank()) {
         stringResource(R.string.theme_image_value_unselected)
     } else {
         stringResource(R.string.theme_image_selected)
     }
-}
-
-@Composable
-private fun filterDefaultLabelResource(expanded: Boolean): String {
-    return stringResource(
-        if (expanded) R.string.top_bar_filter_default_expanded
-        else R.string.top_bar_filter_default_collapsed
-    )
-}
-
-@Composable
-private fun filterToggleLabelResource(hiddenWhenExpanded: Boolean): String {
-    return stringResource(
-        if (hiddenWhenExpanded) R.string.top_bar_filter_toggle_hide_when_expanded
-        else R.string.top_bar_filter_toggle_show
-    )
 }

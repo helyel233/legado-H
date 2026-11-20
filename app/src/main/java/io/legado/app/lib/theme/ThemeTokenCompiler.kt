@@ -35,14 +35,6 @@ object ThemeTokenCompiler {
     private const val ARGB_EINK_MUTED = 0xFFF2F2F2.toInt()
     private const val ARGB_EINK_SECONDARY = 0xFF444444.toInt()
 
-    private fun isLightArgb(argb: Int): Boolean {
-        val r = (argb ushr 16) and 0xFF
-        val g = (argb ushr 8) and 0xFF
-        val b = argb and 0xFF
-        val darkness = 1.0 - (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-        return darkness < 0.5
-    }
-
     fun compileRaw(
         env: AppearanceEnv,
         primaryArgb: Int,
@@ -79,8 +71,9 @@ object ThemeTokenCompiler {
         val resolvedTitleText = if (env.isEInk) ARGB_BLACK else titleTextArgb
         val resolvedSecondaryText = if (env.isEInk) ARGB_EINK_SECONDARY else secondaryTextArgb
 
-        val onPrimary = if (isLightArgb(resolvedPrimary)) ARGB_BLACK else ARGB_WHITE
-        val onAccent = if (isLightArgb(resolvedAccent)) ARGB_BLACK else ARGB_WHITE
+        // 明度判定复用 SurfaceHierarchyDerivation.isLightArgb（R2 单一真相源，同包无需 import）
+        val onPrimary = if (SurfaceHierarchyDerivation.isLightArgb(resolvedPrimary)) ARGB_BLACK else ARGB_WHITE
+        val onAccent = if (SurfaceHierarchyDerivation.isLightArgb(resolvedAccent)) ARGB_BLACK else ARGB_WHITE
 
         val colors = ThemeTokenColors(
             primaryArgb = resolvedPrimary,
@@ -93,7 +86,7 @@ object ThemeTokenCompiler {
             cardArgb = resolvedCard,
             mutedArgb = resolvedMuted,
             dividerArgb = dividerArgb,
-            borderArgb = borderArgb,
+            borderArgb = if (env.isEInk) ARGB_BLACK else borderArgb,
             primaryTextArgb = resolvedPrimaryText,
             secondaryTextArgb = resolvedSecondaryText,
             titleTextArgb = resolvedTitleText,

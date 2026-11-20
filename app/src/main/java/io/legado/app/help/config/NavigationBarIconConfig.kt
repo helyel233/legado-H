@@ -67,6 +67,10 @@ object NavigationBarIconConfig {
     private const val activeNightKey = PreferKey.navigationBarPackageNight
     private const val legacyMigratedDayKey = "navigationBarLegacyMigratedDay"
     private const val legacyMigratedNightKey = "navigationBarLegacyMigratedNight"
+    private const val legacyLayoutMigratedKey = "legacyBottomLayoutMigratedV2"
+
+    @Volatile
+    private var legacyLayoutMigratedMem = false
     private const val maxIconBitmapCacheSize = 24
     private const val redImportIconSize = 192
     private val redSvgXmlDeclarationRegex = Regex("^\\s*<\\?xml[^>]*\\?>", RegexOption.IGNORE_CASE)
@@ -194,7 +198,43 @@ object NavigationBarIconConfig {
         )
     }
 
+    fun migrateLegacyLayoutToGlobalIfNeeded(context: Context = appCtx) {
+        if (legacyLayoutMigratedMem) return
+        synchronized(this) {
+            if (legacyLayoutMigratedMem) return
+            if (context.getPrefBoolean(legacyLayoutMigratedKey, false)) {
+                legacyLayoutMigratedMem = true
+                return
+            }
+            val isNight = AppConfig.isNightTheme
+            val dirName = activeDirName(isNight)
+            if (dirName != DEFAULT_DIR_NAME) {
+                readEntry(localDir(isNight, dirName))?.config?.let { legacy ->
+                    val mode = legacy.layoutMode.takeIf { it in setOf("floating", "standard", "sidebar") }
+                    if (mode != null && mode != "floating") {
+                        AppConfig.bottomBarLayoutMode = mode
+                        val preset = when (mode) {
+                            "standard" -> MainLayoutPresetConfig.PRESET_REGULAR
+                            "sidebar" -> MainLayoutPresetConfig.PRESET_SIDEBAR
+                            else -> MainLayoutPresetConfig.PRESET_DEFAULT
+                        }
+                        context.putPrefString(PreferKey.mainLayoutPreset, preset)
+                    }
+                    if (legacy.sidebarGravity == "end") {
+                        AppConfig.bottomBarSidebarGravity = "end"
+                    }
+                    if (legacy.hideSearchInFloatingStyle) {
+                        AppConfig.floatingBottomBarHideSearch = true
+                    }
+                }
+            }
+            context.putPrefBoolean(legacyLayoutMigratedKey, true)
+            legacyLayoutMigratedMem = true
+        }
+    }
+
     fun currentEntry(isNight: Boolean): Entry {
+        migrateLegacyLayoutToGlobalIfNeeded(appCtx)
         val dirName = activeDirName(isNight)
         if (dirName == DEFAULT_DIR_NAME) return defaultEntry(isNight)
         val dir = localDir(isNight, dirName)
@@ -224,14 +264,8 @@ object NavigationBarIconConfig {
     }
 
     fun apply(entry: Entry) {
-        val config = normalizeConfig(entry.config)
+        // R2-M2 职责纯化：底栏包仅管理导航图标与壁纸，不再覆写任何导航骨架/侧边栏方向/隐藏搜索开关
         select(entry)
-        AppConfig.bottomBarLayoutMode = config.layoutMode
-        AppConfig.bottomBarSidebarGravity = config.sidebarGravity
-        AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
-        if (config.layoutMode == "sidebar") {
-            appCtx.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
-        }
     }
 
     fun select(entry: Entry) {
@@ -239,17 +273,9 @@ object NavigationBarIconConfig {
         appCtx.putPrefString(key, entry.dirName)
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun applyCurrentBottomConfig(isNight: Boolean, preserveLayoutMode: Boolean = false) {
-        if (preserveLayoutMode) {
-            return
-        }
-        val config = normalizeConfig(currentEntry(isNight).config)
-        AppConfig.bottomBarLayoutMode = config.layoutMode
-        AppConfig.bottomBarSidebarGravity = config.sidebarGravity
-        AppConfig.floatingBottomBarHideSearch = config.layoutMode == "floating" && config.hideSearchInFloatingStyle
-        if (config.layoutMode == "sidebar") {
-            appCtx.putPrefBoolean(PreferKey.mergeDiscoveryRss, false)
-        }
+        // R2-M2 职责纯化：布局骨架与搜索入口统一由 UiLayoutConfigFragment / MainLayoutPresetConfig 唯一管理
     }
 
     suspend fun loadLocalOnlyForKit(isNight: Boolean): List<Entry> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -318,7 +344,7 @@ object NavigationBarIconConfig {
             throw IllegalArgumentException(appCtx.getString(R.string.navigation_bar_name_exists))
         }
         val dir = localDir(config.isNightMode, dirName).apply { mkdirs() }
-        val source = normalizeConfig(config)
+        val source = stripOutOfScopeFields(normalizeConfig(config))
         val normalized = source.copy(
             name = name,
             layoutMode = source.layoutMode,
@@ -839,7 +865,9 @@ object NavigationBarIconConfig {
             ZipUtils.unZipToPath(zipFile, unzipDir)
             val packageFile = unzipDir.walkTopDown().firstOrNull { it.isFile && it.name == packageFileName }
                 ?: throw IllegalArgumentException(appCtx.getString(R.string.navigation_bar_config_missing))
-            val config = normalizeConfig(GSON.fromJsonObject<Config>(packageFile.readText()).getOrThrow())
+            val config = stripOutOfScopeFields(
+                normalizeConfig(GSON.fromJsonObject<Config>(packageFile.readText()).getOrThrow())
+            )
             if (config.name.normalizeFileName() == DEFAULT_DIR_NAME) {
                 config.name = "${config.name}_${appCtx.getString(R.string.navigation_bar_import_suffix)}"
             }
@@ -1323,6 +1351,17 @@ object NavigationBarIconConfig {
         config.hideSearchInFloatingStyle = layoutMode == "floating" && hideSearchInFloatingStyle
         config.icons = icons.toMutableMap()
         return config
+    }
+
+    /**
+     * 落盘净化：剥离已收归「界面布局与系统栏」的越界字段，保持底栏包 JSON 纯视觉化。
+     */
+    private fun stripOutOfScopeFields(config: Config): Config {
+        return config.copy(
+            layoutMode = "floating",
+            sidebarGravity = "start",
+            hideSearchInFloatingStyle = false
+        )
     }
 
     private fun normalizeWallpaperPath(path: String?, dir: File): String? {

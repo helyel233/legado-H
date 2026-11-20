@@ -91,6 +91,8 @@ private val themeUiTypographyKeys = listOf(
 private val themeUiDependencyKeySet = (
     themeUiColorKeys + themeUiShapeKeys + themeUiTypographyKeys + listOf(
         PreferKey.themeMode,
+        PreferKey.bgImage,
+        PreferKey.bgImageN,
         PreferKey.cPrimary,
         PreferKey.cAccent,
         PreferKey.cBackground,
@@ -296,17 +298,30 @@ private fun Context.themePanelImageSignature(): String {
 
 @ColorInt
 fun Context.themeCardColorOrDefault(): Int {
-    return themeColorOrDefault(PreferKey.themeCardColor, R.color.background_card)
+    themeColorOrNull(PreferKey.themeCardColor)?.let { return it }
+    // 使用 ThemeStore.backgroundColor 跳过壁纸透明旁路，确保开启壁纸时也能派生出实色主题卡片
+    return SurfaceHierarchyDerivation.deriveCardColor(
+        backgroundArgb = ThemeStore.backgroundColor(this),
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
 }
 
 @ColorInt
 fun Context.themeMutedColorOrDefault(): Int {
-    return themeColorOrDefault(PreferKey.themeMutedColor, R.color.background_menu)
+    themeColorOrNull(PreferKey.themeMutedColor)?.let { return it }
+    return SurfaceHierarchyDerivation.deriveSlotColor(
+        cardArgb = themeCardColorOrDefault(),
+        accentArgb = accentColor,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
 }
 
 @ColorInt
 fun Context.themeSearchFieldBackgroundColorOrDefault(): Int {
-    return themeColorOrDefault(PreferKey.themeSearchFieldBackgroundColor, R.color.background_menu)
+    return themeColorOrNull(PreferKey.themeSearchFieldBackgroundColor)
+        ?: themeMutedColorOrDefault()
 }
 
 @ColorInt
@@ -316,7 +331,8 @@ fun Context.themeSearchFieldBackgroundColorOrNull(): Int? {
 
 @ColorInt
 fun Context.themeTabBackgroundColorOrDefault(): Int {
-    return themeColorOrDefault(PreferKey.themeTabBackgroundColor, R.color.background_menu)
+    return themeColorOrNull(PreferKey.themeTabBackgroundColor)
+        ?: themeMutedColorOrDefault()
 }
 
 @ColorInt

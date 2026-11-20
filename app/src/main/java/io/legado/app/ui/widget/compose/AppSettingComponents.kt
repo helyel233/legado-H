@@ -81,14 +81,17 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.lib.theme.toThemeTextColorOrNull
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.utils.ColorUtils as LegadoColorUtils
 
 @Immutable
 data class AppSettingPalette(
     val page: Color,
     val row: Int,
     val rowPressed: Int,
+    val slot: Int,
     val divider: Color,
     val bottomBar: Int,
     val bottomBarText: Color,
@@ -134,8 +137,18 @@ fun rememberAppSettingPalette(): AppSettingPalette {
         Color(tokens.colors.secondaryTextArgb)
     }
     val page = Color(tokens.colors.backgroundArgb)
-    val row = UiCorner.surfaceColor(rowBaseColor)
-    val rowPressed = UiCorner.surfaceColor(rowBaseColor, pressed = true)
+    val isGlassCardHost = tokens.wallpaperVisible && tokens.glassRef.mode != GlassMaterialPreset.SOLID
+    val row = if (tokens.env.isEInk) rowBaseColor else UiCorner.surfaceColor(rowBaseColor)
+    val rowPressed = if (tokens.env.isEInk) rowBaseColor else UiCorner.surfaceColor(rowBaseColor, pressed = true)
+    val slotBaseColor = tokens.colors.mutedArgb
+    val slot = when {
+        tokens.env.isEInk -> slotBaseColor
+        isGlassCardHost -> LegadoColorUtils.withAlpha(
+            slotBaseColor,
+            translucentRowSurfaceAlpha(UiCorner.layoutAlpha())
+        )
+        else -> UiCorner.surfaceColor(slotBaseColor)
+    }
     val divider = Color(tokens.colors.dividerArgb)
     val bottomBarBase = tokens.colors.bottomBarArgb
     val bottomBarText = Color(customUiText ?: tokens.colors.primaryTextArgb)
@@ -148,6 +161,7 @@ fun rememberAppSettingPalette(): AppSettingPalette {
         page,
         row,
         rowPressed,
+        slot,
         divider,
         bottomBarBase,
         bottomBarText,
@@ -166,6 +180,7 @@ fun rememberAppSettingPalette(): AppSettingPalette {
             page = page,
             row = row,
             rowPressed = rowPressed,
+            slot = slot,
             divider = divider,
             bottomBar = bottomBarBase,
             bottomBarText = bottomBarText,
@@ -195,8 +210,8 @@ fun rememberAppManagementPalette(): AppManagementPalette {
             settings = colors,
             miuix = LegadoMiuixPalette(
                 accent = colors.accent,
-                surface = colors.page,
-                surfaceVariant = Color(colors.row),
+                surface = Color(colors.row),
+                surfaceVariant = Color(colors.slot),
                 primaryText = colors.primaryText,
                 secondaryText = colors.secondaryText,
                 danger = colors.danger,

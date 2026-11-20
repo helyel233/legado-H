@@ -445,8 +445,6 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             NavigationBarIconConfig.Config(
                 name = nextPackageName(),
                 isNightMode = isNightMode,
-                layoutMode = AppConfig.bottomBarLayoutMode,
-                sidebarGravity = AppConfig.bottomBarSidebarGravity,
                 opacity = if (resolvedExploreGlassMode() == "frosted") {
                     AppConfig.frostedGlassLevel
                 } else {
@@ -515,76 +513,43 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             setPadding(2, 2, 2, 4)
             applyUiBodyTypefaceDeep(this@NavigationBarManageActivity.uiTypeface())
             addView(PackageManageUi.nameInput(this@NavigationBarManageActivity, config.name, getString(R.string.navigation_bar_name)))
-            addView(optionRow(getString(R.string.bottom_bar_layout_mode), layoutModeLabel(config.layoutMode)) {
+            addView(optionRow(getString(R.string.bottom_bar_wallpaper), wallpaperLabel(config.wallpaperPath)) {
+                showBottomWallpaperSelector()
+            })
+            addView(optionRow(
+                getString(R.string.navigation_bar_sidebar_background),
+                if (config.sidebarBackgroundPath.isNullOrBlank()) {
+                    getString(R.string.select_image)
+                } else {
+                    getString(R.string.theme_image_selected)
+                }
+            ) {
                 selector(
-                    getString(R.string.bottom_bar_layout_mode),
-                    listOf(
-                        getString(R.string.bottom_bar_layout_floating),
-                        getString(R.string.bottom_bar_layout_standard),
-                        getString(R.string.bottom_bar_layout_sidebar)
-                    )
-                ) { _, index ->
-                    config.layoutMode = when (index) {
-                        1 -> "standard"
-                        2 -> "sidebar"
-                        else -> "floating"
+                    getString(R.string.navigation_bar_sidebar_background),
+                    buildList {
+                        add(getString(R.string.select_image))
+                        if (!config.sidebarBackgroundPath.isNullOrBlank()) {
+                            add(getString(R.string.delete))
+                        }
                     }
-                    refreshEditDialog()
+                ) { _, index ->
+                    if (index == 0) {
+                        pendingSidebarBackgroundEntry = currentEntry
+                        selectSidebarBackground.launch {
+                            mode = HandleFileContract.IMAGE
+                            title = getString(R.string.navigation_bar_sidebar_background)
+                        }
+                    } else if (currentEntry != null) {
+                        editingEntry = NavigationBarIconConfig.clearSidebarBackground(currentEntry)
+                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
+                        notifyAppliedIfNeeded(editingEntry!!)
+                        refreshEditDialog()
+                        loadPackages()
+                    }
                 }
             })
-            if (config.layoutMode != "sidebar") {
-                if (config.layoutMode == "floating") {
-                    addView(optionRow(
-                        getString(R.string.search),
-                        getString(if (config.hideSearchInFloatingStyle) R.string.disabled else R.string.enabled)
-                    ) {
-                        config.hideSearchInFloatingStyle = !config.hideSearchInFloatingStyle
-                        refreshEditDialog()
-                    })
-                }
-                if (config.layoutMode == "standard") {
-                    addView(optionRow(getString(R.string.bottom_bar_wallpaper), wallpaperLabel(config.wallpaperPath)) {
-                        showBottomWallpaperSelector()
-                    })
-                }
-                // 不透明度配置项已移除：底栏现由全局「透明效果」档位统一控制，
-                // 主题包不再单独存 opacity。保留 config.opacity 字段仅为兼容旧包反序列化。
-            } else {
-                addView(optionRow(
-                    getString(R.string.navigation_bar_sidebar_background),
-                    if (config.sidebarBackgroundPath.isNullOrBlank()) {
-                        getString(R.string.select_image)
-                    } else {
-                        getString(R.string.theme_image_selected)
-                    }
-                ) {
-                    selector(
-                        getString(R.string.navigation_bar_sidebar_background),
-                        buildList {
-                            add(getString(R.string.select_image))
-                            if (!config.sidebarBackgroundPath.isNullOrBlank()) {
-                                add(getString(R.string.delete))
-                            }
-                        }
-                    ) { _, index ->
-                        if (index == 0) {
-                            pendingSidebarBackgroundEntry = currentEntry
-                            selectSidebarBackground.launch {
-                                mode = HandleFileContract.IMAGE
-                                title = getString(R.string.navigation_bar_sidebar_background)
-                            }
-                        } else if (currentEntry != null) {
-                            editingEntry = NavigationBarIconConfig.clearSidebarBackground(currentEntry)
-                            pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                            notifyAppliedIfNeeded(editingEntry!!)
-                            refreshEditDialog()
-                            loadPackages()
-                        }
-                    }
-                })
-            }
             NavigationBarIconConfig.items
-                .filter { config.layoutMode == "sidebar" || it.key != "ai" }
+                .filter { AppConfig.bottomBarLayoutMode == "sidebar" || it.key != "ai" }
                 .let { NavigationBarIconConfig.extraItems + it }
                 .forEach { item ->
                     if (item.menuId == 0) {
@@ -1020,17 +985,24 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun entryInfo(entry: NavigationBarIconConfig.Entry): String {
-        return buildString {
-            append(layoutModeLabel(entry.config.layoutMode))
-            if (entry.config.layoutMode == "standard" && !entry.config.wallpaperPath.isNullOrBlank()) {
-                append(" \u00B7 ")
-                append(getString(R.string.bottom_bar_wallpaper))
-            }
-            if (entry.config.updatedAt > 0) {
-                append(" \u00B7 ")
-                append(dateFormat.format(Date(maxOf(entry.config.updatedAt, entry.remoteUpdatedAt))))
-            }
+        val parts = mutableListOf<String>()
+        val iconCount = entry.config.icons.values.count { it.isNotBlank() }
+        if (iconCount > 0) {
+            parts.add("${getString(R.string.navigation_bar_manage)} ($iconCount)")
         }
+        if (!entry.config.wallpaperPath.isNullOrBlank()) {
+            parts.add(getString(R.string.bottom_bar_wallpaper))
+        }
+        if (!entry.config.sidebarBackgroundPath.isNullOrBlank()) {
+            parts.add(getString(R.string.navigation_bar_sidebar_background))
+        }
+        if (entry.config.updatedAt > 0 || entry.remoteUpdatedAt > 0) {
+            parts.add(dateFormat.format(Date(maxOf(entry.config.updatedAt, entry.remoteUpdatedAt))))
+        }
+        if (parts.isEmpty()) {
+            parts.add(getString(R.string.navigation_bar_default_readonly))
+        }
+        return parts.joinToString(" \u00B7 ")
     }
 
     private fun nextPackageName(): String {

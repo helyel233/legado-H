@@ -2452,6 +2452,18 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.floatingBottomBarHideSearch, false)
         set(value) = appCtx.putPrefBoolean(PreferKey.floatingBottomBarHideSearch, value)
 
+    var topBarFloatingChrome: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.topBarFloatingChrome, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.topBarFloatingChrome, value)
+
+    var topBarExpandFilters: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.topBarExpandFilters, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.topBarExpandFilters, value)
+
+    var topBarHideFilterToggle: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.topBarHideFilterToggle, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.topBarHideFilterToggle, value)
+
     var readUrlInBrowser: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readUrlOpenInBrowser)
         set(value) {

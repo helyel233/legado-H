@@ -78,7 +78,11 @@ object UiCorner {
     }
 
     fun actionRadius(context: Context): Float {
-        return context.resources.getDimension(R.dimen.ui_action_radius) * scale()
+        return SurfaceHierarchyDerivation.computeActionRadiusPx(
+            panelBasePx = context.resources.getDimension(R.dimen.ui_panel_radius),
+            scale = scale(),
+            density = context.resources.displayMetrics.density
+        )
     }
 
     fun scaledDp(value: Float): Float {
@@ -292,23 +296,35 @@ object UiCorner {
     }
 
     /**
-     * 边框线色的唯一读取入口：主题包「边框线色」 chosen 颜色优先，未选（跟随强调色）时
-     * 回落到全局描边覆盖色，再回落到主题强调色。所有卡片 / 弹窗 / 栏位 / 按钮 / bar
-     * 的描边都必须经这里取色，避免各处各存一份导致同档不同色。
-     *
-     * - 主题包自定义 HEX（`panelBorderColor` / `panelBorderColorN`）= 「选择颜色」；
-     * - 未设置 = 「跟随强调色」，取 [ThemeStore.accentColor]；
-     * - 兼容旧版「描边颜色」（`glassStrokeColor`，十进制 ARGB）：主题未选色时它仍生效，
-     *   让升级用户此前手调的描边不丢失。
-     * 最终统一套用主题包「边框不透明度」，返回 **非 null** 的固定色。
+     * 边框线色的唯一读取入口：
+     * - 墨水屏：强制返回纯黑 `#FF000000` 1dp 实线；
+     * - 主题包自定义 HEX（`panelBorderColor` / `panelBorderColorN`）或旧版 `glassStrokeColor`：
+     *   按用户选择的颜色与 `panelBorderAlpha` 渲染；
+     * - 未自定义（默认跟随）：不再回落 100% 不透明强调色，而是通过
+     *   [SurfaceHierarchyDerivation.deriveDefaultBorderLineColor] 派生 8.5%~12.5% 柔和同系微边，
+     *   若用户主动调低 `panelBorderAlpha` 则按比例缩放。
      */
     fun borderLineColor(context: Context): Int {
+        if (AppConfig.isEInkMode) {
+            return Color.BLACK
+        }
         val key = if (AppConfig.isNightTheme) PreferKey.panelBorderColorN else PreferKey.panelBorderColor
         val custom = context.getPrefString(key)?.takeIf { it.isNotBlank() }
             ?.let { runCatching { it.toColorInt() }.getOrNull() }
         val legacy = context.getPrefString(PreferKey.glassStrokeColor)?.toIntOrNull()
-        val base = custom ?: legacy ?: ThemeStore.accentColor(context)
-        return applyPanelBorderAlpha(context, base)
+        val explicit = custom ?: legacy
+        if (explicit != null) {
+            return applyPanelBorderAlpha(context, explicit)
+        }
+        val baseBorder = SurfaceHierarchyDerivation.deriveDefaultBorderLineColor(
+            surfaceArgb = context.themeCardColorOrDefault(),
+            accentArgb = ThemeStore.accentColor(context),
+            isNight = AppConfig.isNightTheme,
+            isEInk = false
+        )
+        val userAlphaFactor = panelBorderAlpha(context) / 100f
+        val finalAlpha = (Color.alpha(baseBorder) * userAlphaFactor).toInt().coerceIn(0, 255)
+        return ColorUtils.setAlphaComponent(baseBorder, finalAlpha)
     }
 
     /**

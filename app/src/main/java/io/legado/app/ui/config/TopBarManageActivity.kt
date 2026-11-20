@@ -293,7 +293,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private fun showEditDialog(entry: TopBarConfig.Entry?) {
         val base = entry ?: TopBarConfig.Entry(
-            TopBarConfig.defaultConfig(this, isNightMode).copy(name = nextPackageName()),
+            TopBarConfig.newPackageTemplate(nextPackageName(), isNightMode),
             TopBarConfig.Source.LOCAL,
             ""
         )
@@ -334,80 +334,6 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 onNameChanged = { name ->
                     pendingConfig?.name = name
                 },
-                onStyleChanged = { style ->
-                    pendingConfig?.style = style
-                    if (style == TopBarConfig.STYLE_REGULAR) {
-                        pendingConfig?.let { c ->
-                            if (c.backgroundColor == null) {
-                                c.backgroundColor = TopBarConfig.defaultBackgroundColor(c.isNightMode)
-                            }
-                            if (c.cornerScale == null) {
-                                c.cornerScale = 0f
-                            }
-                            if (c.tagBarColor == null) {
-                                c.tagBarColor = Color.WHITE
-                            }
-                            if (c.tagBarAlpha == 100) {
-                                c.tagBarAlpha = 0
-                            }
-                        }
-                    }
-                },
-                onShowStyleSelector = {
-                    showComposeSingleChoiceDialog(
-                        title = getString(R.string.top_bar_style),
-                        labels = listOf(
-                            getString(R.string.top_bar_style_default),
-                            getString(R.string.top_bar_style_regular)
-                        ),
-                        selectedIndex = if (pendingConfig?.style == TopBarConfig.STYLE_REGULAR) 1 else 0
-                    ) { index ->
-                        val newStyle = when (index) {
-                            1 -> TopBarConfig.STYLE_REGULAR
-                            else -> TopBarConfig.STYLE_DEFAULT
-                        }
-                        pendingConfig?.style = newStyle
-                        if (newStyle == TopBarConfig.STYLE_REGULAR) {
-                            pendingConfig?.let { c ->
-                                if (c.backgroundColor == null) {
-                                    c.backgroundColor = TopBarConfig.defaultBackgroundColor(c.isNightMode)
-                                }
-                                if (c.cornerScale == null) {
-                                    c.cornerScale = 0f
-                                }
-                                if (c.tagBarColor == null) {
-                                    c.tagBarColor = Color.WHITE
-                                }
-                                if (c.tagBarAlpha == 100) {
-                                    c.tagBarAlpha = 0
-                                }
-                            }
-                        }
-                        refreshEditDialog()
-                    }
-                },
-                onShowCornerScalePicker = { current ->
-                    showComposeNumberPickerDialog(
-                        title = getString(R.string.top_bar_corner_scale),
-                        value = ((current ?: 1f).coerceIn(0f, 3f) * 10).toInt(),
-                        minValue = 0,
-                        maxValue = 30,
-                        isDecimalMode = true,
-                        onValue = { value ->
-                            pendingConfig?.cornerScale = (value / 10f).coerceIn(0f, 3f)
-                            refreshEditDialog()
-                        }
-                    )
-                },
-                onShowColorPicker = { target, color ->
-                    pendingColorTarget = target
-                    ColorPickerDialog.newBuilder()
-                        .setDialogId(target)
-                        .setColor(color)
-                        .setShowAlphaSlider(false)
-                        .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                        .show(this@TopBarManageActivity)
-                },
                 onShowWallpaperSelector = {
                     showWallpaperSelector()
                 },
@@ -422,23 +348,6 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                             refreshEditDialog()
                         }
                     )
-                },
-                onShowFilterDefaultSelector = { current ->
-                    showComposeSingleChoiceDialog(
-                        title = getString(R.string.top_bar_filter_default),
-                        labels = listOf(
-                            getString(R.string.top_bar_filter_default_collapsed),
-                            getString(R.string.top_bar_filter_default_expanded)
-                        ),
-                        selectedIndex = if (current) 1 else 0
-                    ) { index ->
-                        pendingConfig?.expandFiltersByDefault = index == 1
-                        refreshEditDialog()
-                    }
-                },
-                onToggleFilterToggleHidden = { hidden ->
-                    pendingConfig?.hideFilterToggleWhenExpanded = hidden
-                    refreshEditDialog()
                 },
                 onShowTagBarAlphaPicker = { current ->
                     showComposeNumberPickerDialog(
@@ -463,14 +372,6 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                             refreshEditDialog()
                         }
                     )
-                },
-                onToggleSearchInDefaultStyle = { enabled ->
-                    pendingConfig?.showSearchInDefaultStyle = enabled
-                    refreshEditDialog()
-                },
-                onToggleFloatingChrome = { enabled ->
-                    pendingConfig?.floatingChrome = enabled
-                    refreshEditDialog()
                 },
                 onSave = { name ->
                     pendingConfig?.name = name.trim()
