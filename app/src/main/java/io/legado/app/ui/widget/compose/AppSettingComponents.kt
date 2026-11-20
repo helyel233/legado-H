@@ -78,15 +78,10 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryTextColor
-import io.legado.app.lib.theme.rememberThemeUiPalette
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
-import io.legado.app.lib.theme.secondaryTextColor
-import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.toThemeTextColorOrNull
-import io.legado.app.utils.ColorUtils
-import io.legado.app.lib.theme.composeActionRadius
-import io.legado.app.lib.theme.composePanelRadius
 import io.legado.app.ui.widget.ModernActionPopup
 
 @Immutable
@@ -127,34 +122,28 @@ data class AppManagementMenuAction(
 
 @Composable
 fun rememberAppSettingPalette(): AppSettingPalette {
-    val context = LocalContext.current
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
     val dialogStyle = rememberAppDialogStyle()
-    val themeUiPalette = rememberThemeUiPalette()
-    val rowBaseColor = themeUiPalette.cardColor
+    val rowBaseColor = tokens.colors.cardArgb
     // 文字/强调前景色按实际背景明暗推导，避免随 night 标志产生深底深字/浅底白字
     val customUiText = AppConfig.uiFontColor.toThemeTextColorOrNull()
     val customTitleText = AppConfig.titleFontColor.toThemeTextColorOrNull()
     val secondaryText = if (customUiText != null) {
         Color(customUiText).copy(alpha = 0.72f)
     } else {
-        Color(context.secondaryTextColor)
+        Color(tokens.colors.secondaryTextArgb)
     }
-    val page = Color(context.backgroundColor)
+    val page = Color(tokens.colors.backgroundArgb)
     val row = UiCorner.surfaceColor(rowBaseColor)
     val rowPressed = UiCorner.surfaceColor(rowBaseColor, pressed = true)
-    val divider = Color(themeUiPalette.dividerColor)
-    val bottomBarBase = if (themeUiPalette.hasCustomCardColor || themeUiPalette.hasCustomMutedColor) {
-        themeUiPalette.mutedColor
-    } else {
-        context.bottomBackground
-    }
-    val bottomBarText = Color(customUiText ?: context.primaryTextColor)
-    val border = UiCorner.panelBorderColor(context)
-    val primaryText = Color(customTitleText ?: customUiText ?: context.titleTextColor)
-    val accentArgb = context.accentColor
-    val accent = Color(accentArgb)
-    val onAccent = if (ColorUtils.isColorLight(accentArgb)) Color.Black else Color.White
-    val panelRadiusPx = UiCorner.panelRadius(context)
+    val divider = Color(tokens.colors.dividerArgb)
+    val bottomBarBase = tokens.colors.bottomBarArgb
+    val bottomBarText = Color(customUiText ?: tokens.colors.primaryTextArgb)
+    val border = tokens.colors.borderArgb
+    val primaryText = Color(customTitleText ?: customUiText ?: tokens.colors.titleTextArgb)
+    val accent = Color(tokens.colors.accentArgb)
+    val onAccent = Color(tokens.colors.onAccentArgb)
+    val panelRadiusPx = tokens.corners.panelRadiusPx
     return remember(
         page,
         row,
@@ -171,7 +160,7 @@ fun rememberAppSettingPalette(): AppSettingPalette {
         panelRadiusPx,
         dialogStyle.bodyFontFamily,
         dialogStyle.titleFontFamily,
-        themeUiPalette.signature
+        tokens.paletteSignature
     ) {
         AppSettingPalette(
             page = page,
@@ -184,23 +173,23 @@ fun rememberAppSettingPalette(): AppSettingPalette {
             primaryText = primaryText,
             secondaryText = secondaryText,
             accent = accent,
-            danger = dialogStyle.danger,
+            danger = Color(tokens.colors.dangerArgb),
             disabledText = secondaryText.copy(alpha = 0.48f),
             onAccent = onAccent,
             panelRadiusPx = panelRadiusPx,
             bodyFontFamily = dialogStyle.bodyFontFamily,
             titleFontFamily = dialogStyle.titleFontFamily,
-            themeSignature = themeUiPalette.signature
+            themeSignature = tokens.paletteSignature
         )
     }
 }
 
 @Composable
 fun rememberAppManagementPalette(): AppManagementPalette {
-    val context = LocalContext.current
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
     val colors = rememberAppSettingPalette()
-    val panelRadius = context.composePanelRadius()
-    val actionRadius = context.composeActionRadius()
+    val panelRadius = tokens.corners.panelRadiusDp.dp
+    val actionRadius = tokens.corners.actionRadiusDp.dp
     return remember(colors, panelRadius, actionRadius) {
         AppManagementPalette(
             settings = colors,

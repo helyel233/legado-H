@@ -67,6 +67,7 @@ import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
@@ -93,7 +94,7 @@ internal fun ComposePreferenceScreen(
     onSeekChange: (SeekBarPreference, Int) -> Unit,
     scrollTargetKey: String?,
     onScrollTargetConsumed: () -> Unit
-) {
+) = LegadoComposeTheme {
     val colors = rememberAppSettingPalette()
     val switchPalette = rememberAppDialogStyle().toMiuixPalette()
     val panelRadiusPx = colors.panelRadiusPx

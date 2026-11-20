@@ -10,7 +10,9 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.main.explore.ExploreGlassBackdrop
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.ui.main.explore.resolveGlassStrokeColor
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
@@ -129,7 +131,8 @@ object ThemeTokenCompiler {
     fun compileFromContext(
         context: Context,
         palette: ThemeUiPalette = context.themeUiPaletteCached(),
-        hasUsableWallpaper: Boolean = ThemeConfig.hasUsableBgImage(context)
+        hasUsableWallpaper: Boolean = ThemeConfig.hasUsableBgImage(context),
+        glassSignature: String = ExploreGlassBackdrop.configSignature(context)
     ): ResolvedThemeTokens {
         val env = AppearanceEnv(
             isNight = AppConfig.isNightTheme,
@@ -154,14 +157,6 @@ object ThemeTokenCompiler {
             palette.mutedColor
         } else {
             context.bottomBackground
-        }
-        val glassSignature = buildString {
-            append(mode).append('|').append(level).append('|').append(strokeRaw)
-            append('|').append(context.getPrefInt(PreferKey.exploreGlassBlurScale, 100))
-            append('|').append(context.getPrefInt(PreferKey.exploreGlassTintScale, 100))
-            append('|').append(context.getPrefInt(PreferKey.exploreGlassShellScale, 100))
-            append('|').append(context.getPrefInt(PreferKey.exploreGlassStrokeScale, 100))
-            append('|').append(context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true))
         }
 
         return compileRaw(
@@ -195,11 +190,13 @@ fun rememberResolvedThemeTokens(): ResolvedThemeTokens {
     val context = LocalContext.current
     val palette = rememberThemeUiPalette()
     val hasUsableWallpaper = rememberHasUsableBgImage()
-    return remember(context, palette, hasUsableWallpaper) {
+    val glassSignature = rememberGlassConfigSignature()
+    return remember(context, palette, hasUsableWallpaper, glassSignature) {
         ThemeTokenCompiler.compileFromContext(
             context = context,
             palette = palette,
-            hasUsableWallpaper = hasUsableWallpaper
+            hasUsableWallpaper = hasUsableWallpaper,
+            glassSignature = glassSignature
         )
     }
 }

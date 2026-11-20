@@ -41,11 +41,12 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.EventBus
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
-import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
-import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
@@ -136,11 +137,13 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
         titleComposeView.setContent {
-            ConfigTopBar(
-                title = titleText,
-                parentPath = parentPathText,
-                onBack = ::supportFinishAfterTransition
-            )
+            LegadoComposeTheme {
+                ConfigTopBar(
+                    title = titleText,
+                    parentPath = parentPathText,
+                    onBack = ::supportFinishAfterTransition
+                )
+            }
         }
         val configTag = intent.getStringExtra("configTag")
         parentPathText = breadcrumbOf(configTag)
@@ -256,13 +259,11 @@ private fun ConfigTopBar(
     parentPath: String?,
     onBack: () -> Unit
 ) {
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
     val palette = rememberAppSettingPalette()
     val hasPath = !parentPath.isNullOrBlank()
-    // 本页根布局无背景（BaseActivity 的背景图策略会把根 View 背景置空），顶栏这一条背后
-    // 正是壁纸；玻璃可用时补一层全宽玻璃条（圆角取 0：贴边矩形，加圆角会在屏幕顶部留缺口）。
-    // 无背景图 / 墨水屏保持原来的透明外观，与 RSS 阅读页标题栏同一判定口径。
-    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
-    val glassSignature = rememberGlassConfigSignature()
+    val wallpaperVisible = tokens.wallpaperVisible
+    val glassSignature = tokens.glassRef.signature
     val barContent: @Composable () -> Unit = {
         Row(
             modifier = Modifier
