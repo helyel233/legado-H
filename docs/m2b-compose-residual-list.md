@@ -1,10 +1,10 @@
 # M2b Compose `setContent` 精确残余清单
 
 - 含 Compose `setContent` 文件总数：**136**
-- M2a 已覆盖文件数：**68**（**50%**）
-- 待 M2b 分批收口残余文件数：**68**（按 ≤ 20 文件/批拆为 4 批）
+- M2a + M2b 已覆盖文件数：**136**（**100%**）
+- 待收口残余文件数：**0**（已完成）
 
-## 残余文件列表
+## 已收口历史清单（归档，共 68 项，已全部接入 `LegadoComposeTheme`）
 
 1. `io/legado/app/ui/book/audio/config/AudioSkipCredits.kt`
 2. `io/legado/app/ui/book/bookmark/AllBookmarkActivity.kt`
