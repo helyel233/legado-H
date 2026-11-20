@@ -1,6 +1,8 @@
 # Legado-H 第二轮 UI 底层架构重构方案（方案 B：单一色彩数据源 + 上游 L1/L2 收口修复）
 
-> **定稿状态**：已确认采用 **方案 B**，拆分为 **R2-M1 → R2-M2 → R2-M3** 三个独立可验收、可回滚的里程碑。
+> **状态更新（Superseded Notice）**：
+> - **R2-M1**（`SurfaceHierarchyDerivation` L1/L2 派生、柔和描边、同心圆角、Miuix 调色板对齐）与 **R2-M2**（顶/底栏越界布局剥离至 `UiLayoutConfigFragment`）**已落地并继续有效**；
+> - **R2-M3**（外观中心「外观快照」胶囊条）**已被第三轮定稿方案 [docs/ui-architecture-v3-plan.md](file:///Users/zego/个人/github/legado-H/docs/ui-architecture-v3-plan.md) 正式替代（Superseded）**——请勿再按本文档恢复或新建外观快照胶囊条。
 
 ---
 
