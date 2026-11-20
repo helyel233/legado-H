@@ -1,5 +1,26 @@
 # 更新日志
 
+## 1.33.1 版（2026-11-20）
+
+本版是一次 UI 配置系统大迭代：外观方案管理升级为「外观中心」，新增阅读装饰中心 / 界面布局中心，设置搜索支持路由直达管理页；同时完成 UI 架构 v2（单一色彩数据源 + 上游 L1/L2 派生）与 v3（一体化工作台 + UI 配置域 Compose 收口）两轮重构，并新增 Compose 主题覆盖率门禁。**新功能 + 重构（含修复）→ minor+0.1，跳过 1.x.0。**
+
+### 新功能
+
+- **外观中心落地**：`AppearanceKitActivity` 升级为外观方案管理中心（重命名 / 覆盖保存 / 删除 + 六槽位跳转 + `dirtySlots` 判脏提示），`AppearanceKitManager` 新增 `renameKit`/`createFromCurrent`/`overwriteKitFromCurrent`/`computeDirtySlots`/`currentSlotSummaries`；删除旧逐项编辑 `AppearanceKitEditActivity`，改「从当前配置回填覆盖保存」模型。新增 `ReadingDecorCenterActivity`（阅读装饰中心）与 `UiLayoutConfigFragment`（界面布局与系统栏），`MyFragment` 加两个入口行并接 Manifest / 设置搜索索引。
+- **设置搜索路由化（M4）**：新增 sealed `SearchDestination`（ConfigFragment / Activity），搜索结果不再只能跳二级配置页、也可直达独立管理 Activity；`SettingsSearchIndex` 维护 10 个管理页白名单（`isAllowedActivityDestination`），未登记目标 debug 抛错 / release 拦截，防搜索注入任意 Activity；新增 `ActivitySearchSource` 接口，10 个管理页伴生对象自述标题/摘要/别名，索引从硬编码影子文案改为各页自述并按 destination 去重；删旧 `PageLayoutConfigFragment`（三项布局归并到 `UiLayoutConfigFragment`）；我的页一级分组改「阅读体验 / 外观与界面」。
+- **UI 架构 v3 一体化工作台**：控件层新增 `LegadoSegmentedControl` + 纯 Compose 更多按钮；顶栏层 `AppComposeTopBar` 统一 UI 配置域顶栏（ConfigActivity + 12 管理 Activity + 5 手写 Row 页）；编辑弹窗 Compose 化（`ThemeEditDraft` 27 字段 + `onSaveInstanceState` JSON 往返 / `ThemePackageEditDialog` / `NavigationBarEditDialog`）；外观中心工作台 `updateActiveRuntimeOverride` 单一写入路径 + 亮暗模式切换 + 材质直调卡（拖动期零 SP 写入）。
+
+### 重构 / 架构
+
+- **UI 配置系统 M0–M2b**：M0 新增 `AppearanceEnv`/`ResolvedThemeTokens`/`ThemeTokenCompiler` 把主题色/圆角/玻璃参数编译成不可变 Token，`LegadoComposeTheme` 升级注入 colorScheme+shapes+typography+LocalLegadoTokens（嵌套幂等守卫）；M1a 外观方案 v2（`kitVersion=2` + 六槽位 + `AppearanceKitDiff` 判脏/版本校验/导入合并 + `BuiltinAppearanceDefaults`）与批量事务 `PrefBatchTransaction`（批内仅抑制视觉缓存、批末重算 signature 自愈）；M1b 批量事务生产接入 + 布局骨架/玻璃材质解耦 + 内置方案归一；M2a 设置页/配置页接统一 Token、玻璃签名单一真相源；M2b 66 个 Compose `setContent` 页面接入统一主题（136/136 覆盖）。
+- **UI 架构 v2 方案 B**：新增纯函数引擎 `SurfaceHierarchyDerivation`（L0 画布→L1 卡片→L2 凹槽同色相派生 / 柔和描边 / 3dp 同心圆角退让 / 墨水屏旁路 / 透明色防呆），View 侧与 Compose 侧共享同一上游、删除 `ThemeTokenCompiler` 私有副本；顶/底栏包剥离越界布局与重复颜色字段，形态/搜索/筛选开关迁入界面布局中心，新增三个全局开关 `topBarFloatingChrome`/`topBarExpandFilters`/`topBarHideFilterToggle`（旧顶栏包行为一次性迁移，`legacyBehaviorMigratedKey` 守卫不覆盖用户选择）；外观中心新增快照胶囊条与主题编辑器高级色折叠。
+
+### 门禁 / 文档 / 单测
+
+- 新增 `tools/check_compose_theme_coverage.py`（Compose 主题契约覆盖门禁，136/136）；归档旧设计稿到 `docs/archive/`，新增 UI 配置重构 v3 / 架构 v2 方案 B / v3 定稿（含 v2 R2-M3 Superseded 声明）。
+- 新增多组纯逻辑单测：`AppearanceKitDiffTest`(8)、`ThemeTokenCompilerTest`(4)、`PrefBatchTransactionTest`、`SurfaceHierarchyDerivationTest`(7)、`SettingsSearchRoutingTest`(2)、`AppearanceStudioSpecTest`、`NavigationBarEditSnapshotTest`、`ThemeEditDraftTest`、`LegadoSegmentedControlTest`、`AppearanceKitM1bTest`、`UiPackageBackupTest` 扩充。
+- 交付前自跑四门禁全 PASS：glass 治理、设置映射零断链、Compose 覆盖 136/136、r58 资源 629 节点；versionCode 29862306。
+
 ## 1.32.1 版（2026-11-19）
 
 本版把书籍详情页玻璃底图从「逐卡截图 + 后台裁剪」重构为「整页共享单图 + 绘制期按实时屏幕坐标采样」，从根消除材质跳变；阅读页顶栏接入悬浮圆角 chrome，状态栏图标极性跟随正文。**特性 + 修复 → minor+0.1。**
