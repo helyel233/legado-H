@@ -416,4 +416,18 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         LottieImageBitmapCache.clear()
         postEvent(EventBus.UP_CONFIG, arrayListOf(5, 8))
     }
+
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_advanced_title_manage",
+                title = context.getString(R.string.reading_decor_advanced_title),
+                summary = context.getString(R.string.reading_decor_center_summary),
+                aliases = listOf("高级标题", "高级标题包", "lottie title", "advanced title"),
+                destination = SearchDestination.Activity(AdvancedTitleManageActivity::class.java.name)
+            )
+        )
+    }
 }

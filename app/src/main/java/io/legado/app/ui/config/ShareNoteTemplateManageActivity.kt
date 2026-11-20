@@ -357,4 +357,18 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
         return name.trim().ifBlank { "share_note_template" }
             .replace(Regex("""[\\/:*?"<>|]"""), "_")
     }
+
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_share_note_template_manage",
+                title = context.getString(R.string.share_note_template_manage),
+                summary = context.getString(R.string.share_note_template_manage_summary),
+                aliases = listOf("分享模板", "笔记模板", "摘录模板", "share note"),
+                destination = SearchDestination.Activity(ShareNoteTemplateManageActivity::class.java.name)
+            )
+        )
+    }
 }

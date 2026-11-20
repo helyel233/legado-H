@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
+import io.legado.app.ui.config.SearchDestination
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.glass.GlassPanel
@@ -82,7 +83,8 @@ internal data class MySettingsSubSearchItem(
      * 用户记得住「沉浸式状态栏」，但可能搜「状态栏」；别名让这些口语词也能命中，
      * 而标题本身不必为了可搜性被塞满关键词。
      */
-    val aliases: List<String> = emptyList()
+    val aliases: List<String> = emptyList(),
+    val destination: SearchDestination = SearchDestination.ConfigFragment(ownerConfigTag, key)
 ) {
     val searchText: String =
         (listOf(title, summary, key) + aliases).joinToString(" ").lowercase()

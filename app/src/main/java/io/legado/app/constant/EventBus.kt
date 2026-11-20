@@ -27,7 +27,7 @@ object EventBus {
     /**
      * 主页需要重新读取配置并刷新（布局 / 顶栏 / 主题 / 页签等）。
      *
-     * 发布方：`PageLayoutConfigFragment`、`DiscoverySubscriptionConfigFragment`、
+     * 发布方：`UiLayoutConfigFragment`、`DiscoverySubscriptionConfigFragment`、
      * `ThemeConfigFragment`、`MainLayoutPresetConfig`、`BaseBookshelfFragment`、
      * `NavigationBarManageActivity`、`AiConfigFragment` 等设置入口。
      * 订阅方：`MainActivity.observeLiveBus`（按 payload 触发重读/重建）。
@@ -94,7 +94,7 @@ object EventBus {
      * payload 是发生变化的 PreferKey；订阅页与首页收到后按 AppConfig 当前值重排，
      * 避免「设置页改了、切回 Tab 仍是旧布局」。
      *
-     * 发布方：`PageLayoutConfigFragment.onSettingPreferenceChanged`（`UP_PAGE_LAYOUT` + `NOTIFY_MAIN` 双发）。
+     * 发布方：`UiLayoutConfigFragment.onSettingPreferenceChanged`（`UP_PAGE_LAYOUT` + `NOTIFY_MAIN` 双发）。
      * 订阅方：`RssFragment.observeLiveBus`（重排订阅列数）、`HomepageFragment.observeLiveBus`（重读首页布局）、
      * `ExploreFragment`（发现页布局联动，本轮补齐订阅/onResume 双保险）。
      * payload：`String`（发生变化的 PreferKey）。

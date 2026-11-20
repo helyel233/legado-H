@@ -1695,7 +1695,6 @@
     <string name="ai_chat_thinking_done">思考完成，点按展开</string>
     <string name="expand">展开</string>
     <string name="collapse">收起</string>
-    <string name="config_category_reading_ui">阅读与界面</string>
     <string name="config_category_data_tools">数据与工具</string>
     <string name="config_category_network_sync">网络与同步</string>
     <string name="config_category_advanced">高级与关于</string>

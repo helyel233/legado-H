@@ -683,7 +683,18 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         DELETE_BOTH(R.string.bubble_delete_both)
     }
 
-    private companion object {
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_bubble_manage",
+                title = context.getString(R.string.bubble_manage),
+                summary = context.getString(R.string.bubble_manage_summary),
+                aliases = listOf("气泡包", "段评气泡", "bubble"),
+                destination = SearchDestination.Activity(BubbleManageActivity::class.java.name)
+            )
+        )
         private const val CLOUD_SCOPE = "bubble"
         private const val MENU_CONTAINER = 0x6801
         private const val MENU_HELP = 0x6802

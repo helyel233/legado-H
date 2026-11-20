@@ -47,8 +47,35 @@ import kotlinx.coroutines.withContext
 
 class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
-    companion object {
+    companion object : ActivitySearchSource {
         const val EXTRA_SLOT = "slot"
+
+        override fun searchEntries(context: Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_header_tip_manage",
+                title = context.getString(R.string.reading_decor_header_tip),
+                summary = context.getString(R.string.reading_decor_center_summary),
+                aliases = listOf("页眉", "页眉模板", "header tip"),
+                destination = SearchDestination.Activity(
+                    AdvancedTipManageActivity::class.java.name,
+                    mapOf(EXTRA_SLOT to AdvancedTipSlot.HEADER.name)
+                )
+            ),
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_footer_tip_manage",
+                title = context.getString(R.string.reading_decor_footer_tip),
+                summary = context.getString(R.string.reading_decor_center_summary),
+                aliases = listOf("页脚", "页脚模板", "footer tip"),
+                destination = SearchDestination.Activity(
+                    AdvancedTipManageActivity::class.java.name,
+                    mapOf(EXTRA_SLOT to AdvancedTipSlot.FOOTER.name)
+                )
+            )
+        )
 
         fun start(context: Context, slot: AdvancedTipSlot) {
             context.startActivity(

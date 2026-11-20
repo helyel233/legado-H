@@ -53,4 +53,6 @@
     <string name="ui_layout_section_structure">页面结构与套件</string>
     <string name="ui_layout_discovery_suite">发现套件</string>
     <string name="ui_layout_discovery_suite_summary">管理内置与自定义的发现页布局套件</string>
+    <string name="config_category_reading_experience">阅读体验</string>
+    <string name="config_category_appearance">外观与界面</string>
 </resources>

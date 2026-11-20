@@ -881,7 +881,6 @@
     <string name="ai_chat_thinking_done">Thinking completed, tap to expand</string>
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
-    <string name="config_category_reading_ui">Reading and interface</string>
     <string name="config_category_data_tools">Data and tools</string>
     <string name="config_category_network_sync">Network and sync</string>
     <string name="config_category_advanced">Advanced and about</string>

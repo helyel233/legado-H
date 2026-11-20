@@ -187,4 +187,18 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
             ))
         })
     }
+
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "readingDecorCenter",
+                ownerConfigTag = "",
+                key = "activity_epub_loading_template_manage",
+                title = context.getString(R.string.epub_loading_templates),
+                summary = context.getString(R.string.reading_decor_center_summary),
+                aliases = listOf("EPUB加载", "加载模板", "加载画面", "epub loading"),
+                destination = SearchDestination.Activity(EpubLoadingTemplateManageActivity::class.java.name)
+            )
+        )
+    }
 }

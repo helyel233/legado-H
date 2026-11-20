@@ -2106,7 +2106,18 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         return this is CancellationException || cause?.isJobCancellation() == true
     }
 
-    companion object {
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_theme_manage",
+                title = context.getString(R.string.theme_list),
+                summary = context.getString(R.string.theme_list_summary),
+                aliases = listOf("主题包", "配色", "字体", "壁纸", "theme"),
+                destination = SearchDestination.Activity(ThemeManageActivity::class.java.name)
+            )
+        )
         private val themeRemoteSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private const val EDIT_DIALOG_WIDTH_RATIO = 0.94f
         private const val EDIT_DIALOG_HEIGHT_RATIO = 0.68f

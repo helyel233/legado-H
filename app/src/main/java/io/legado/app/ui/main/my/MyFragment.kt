@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.my
 
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.Menu
@@ -33,6 +34,7 @@ import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.config.AppearanceKitActivity
 import io.legado.app.ui.config.ReadingDecorCenterActivity
 import io.legado.app.ui.config.RelaySettingsActivity
+import io.legado.app.ui.config.SearchDestination
 import io.legado.app.ui.config.SettingsSearchIndex
 import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
@@ -222,9 +224,29 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     private fun handleRowClick(key: String, searchTarget: MySettingsSubSearchItem?) {
         if (searchTarget != null) {
-            startActivity<ConfigActivity> {
-                putExtra("configTag", searchTarget.ownerConfigTag)
-                putExtra("targetKey", searchTarget.key)
+            when (val dest = searchTarget.destination) {
+                is SearchDestination.ConfigFragment -> {
+                    startActivity<ConfigActivity> {
+                        putExtra("configTag", dest.configTag)
+                        putExtra("targetKey", dest.targetKey)
+                    }
+                }
+                is SearchDestination.Activity -> {
+                    if (SettingsSearchIndex.isAllowedActivityDestination(dest)) {
+                        runCatching {
+                            val clazz = Class.forName(dest.className)
+                            val intent = Intent(requireContext(), clazz)
+                            dest.extras.forEach { (k, v) -> intent.putExtra(k, v) }
+                            startActivity(intent)
+                        }.onFailure { e ->
+                            LogUtils.e("MyFragment", "打开设置搜索目标 ${dest.className} 失败: $e")
+                            if (BuildConfig.DEBUG) throw e
+                        }
+                    } else {
+                        LogUtils.e("MyFragment", "拦截未登记白名单的搜索目标: ${dest.className}")
+                        if (BuildConfig.DEBUG) error("未登记白名单的搜索目标: ${dest.className}")
+                    }
+                }
             }
             return
         }
@@ -249,7 +271,6 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ConfigTag.BOOKSHELF_CONFIG,
             ConfigTag.AUDIO_CONFIG,
             ConfigTag.MANGA_VIDEO_CONFIG,
-            ConfigTag.PAGE_LAYOUT_CONFIG,
             ConfigTag.EXPLORE_GLASS_CONFIG,
             ConfigTag.UI_LAYOUT_CONFIG -> startActivity<ConfigActivity> {
                 putExtra("configTag", key)
@@ -319,20 +340,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                         R.string.rss_source_manage_summary, R.drawable.ic_bottom_rss_feed_e
                     ),
                     // 发现/订阅页的形态（入口显隐、页面模式、合并发现）改的是「内容怎么呈现」，
-                    // 与书源/订阅源同属内容域；原先藏在「界面设置 › 模板」里，用户找不到。
-                    // 三处「页面布局」已另立 PAGE_LAYOUT_CONFIG 一级行，不再混在本页
+                    // 与书源/订阅源同属内容域；三处页面布局已归拢到「外观与界面 › 界面布局与系统栏」。
                     actionRow(
                         ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
                         R.string.discovery_subscription_settings_title,
                         R.string.discovery_subscription_settings_summary,
                         R.drawable.ic_bottom_explore_e
-                    ),
-                    // 发现/订阅/首页三处布局原先散落在各 Tab 菜单且不可搜，统一归到这一页
-                    actionRow(
-                        ConfigTag.PAGE_LAYOUT_CONFIG,
-                        R.string.page_layout_settings_title,
-                        R.string.page_layout_settings_summary,
-                        R.drawable.ic_image
                     ),
                     actionRow(
                         "replaceManage", R.string.replace_purify,
@@ -354,19 +367,22 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 )
             ),
             MySettingsSectionModel(
-                title = getString(R.string.config_category_reading_ui),
+                title = getString(R.string.config_category_reading_experience),
                 rows = listOf(
                     actionRow(
                         ConfigTag.READING_CONFIG, R.string.reading_setting,
                         R.string.reading_setting_s, R.drawable.ic_book_has
                     ),
-                    // 书架行为（加书提示/自动刷新/默认主页…）从阅读设置拆出，独立成页
+                    actionRow(
+                        "readingDecorCenter",
+                        R.string.reading_decor_center_title,
+                        R.string.reading_decor_center_summary,
+                        R.drawable.ic_image
+                    ),
                     actionRow(
                         ConfigTag.BOOKSHELF_CONFIG, R.string.bookshelf_setting,
                         R.string.bookshelf_setting_summary, R.drawable.ic_bottom_books_e
                     ),
-                    // 听书与漫画/视频原先只有「打开一本书→阅读页菜单」一条路可达，
-                    // 提到一级行后，改朗读或漫画显示不必先找一本书
                     actionRow(
                         ConfigTag.AUDIO_CONFIG, R.string.audio_config_title,
                         R.string.audio_config_summary, R.drawable.ic_volume_up
@@ -374,7 +390,12 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     actionRow(
                         ConfigTag.MANGA_VIDEO_CONFIG, R.string.manga_video_section,
                         R.string.manga_video_config_summary, R.drawable.ic_image
-                    ),
+                    )
+                )
+            ),
+            MySettingsSectionModel(
+                title = getString(R.string.config_category_appearance),
+                rows = listOf(
                     MySettingsRowModel(
                         key = PreferKey.themeMode,
                         title = getString(R.string.theme_mode),
@@ -383,35 +404,9 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                     ),
                     MySettingsRowModel(
                         key = "appearanceKit",
-                        title = getString(R.string.appearance_kit_manage),
-                        summary = getString(R.string.appearance_kit_summary),
+                        title = getString(R.string.appearance_studio_title),
+                        summary = getString(R.string.appearance_studio_slots_hint),
                         iconRes = R.drawable.ic_cfg_theme
-                    ),
-                    actionRow(
-                        "theme_setting", R.string.theme_setting,
-                        R.string.theme_setting_s, R.drawable.ic_interface_setting
-                    ),
-                    actionRow(
-                        ConfigTag.COVER_CONFIG, R.string.cover_config,
-                        R.string.cover_config_summary, R.drawable.ic_image
-                    ),
-                    actionRow(
-                        ConfigTag.WELCOME_CONFIG, R.string.welcome_style,
-                        R.string.welcome_style_summary, R.drawable.ic_screen
-                    ),
-                    // 全局毛玻璃效果管的是「读起来长什么样」（顶栏与发现页的玻璃材质），
-                    // 与主题、封面同属界面域；原先在「内容与规则」区，用户按外观诉求找不到。
-                    actionRow(
-                        ConfigTag.EXPLORE_GLASS_CONFIG,
-                        R.string.explore_glass_settings_title,
-                        R.string.explore_glass_settings_summary,
-                        R.drawable.ic_cfg_theme
-                    ),
-                    actionRow(
-                        "readingDecorCenter",
-                        R.string.reading_decor_center_title,
-                        R.string.reading_decor_center_summary,
-                        R.drawable.ic_image
                     ),
                     actionRow(
                         ConfigTag.UI_LAYOUT_CONFIG,
@@ -557,7 +552,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
                 summary = entry.summary,
                 key = entry.key,
                 ownerConfigTag = entry.ownerConfigTag,
-                aliases = entry.aliases
+                aliases = entry.aliases,
+                destination = entry.destination
             )
         }
         verifySubSearchOwners(items)

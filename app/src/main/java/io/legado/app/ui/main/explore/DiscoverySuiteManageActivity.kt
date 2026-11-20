@@ -580,7 +580,18 @@ class DiscoverySuiteManageActivity : BaseActivity<ActivityThemeManageBinding>() 
         }
     }
 
-    companion object {
+    companion object : io.legado.app.ui.config.ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<io.legado.app.ui.config.SettingsSearchIndex.Entry> = listOf(
+            io.legado.app.ui.config.SettingsSearchIndex.Entry(
+                ownerKey = io.legado.app.ui.config.ConfigTag.UI_LAYOUT_CONFIG,
+                ownerConfigTag = "",
+                key = "activity_discovery_suite_manage",
+                title = context.getString(R.string.ui_layout_discovery_suite),
+                summary = context.getString(R.string.ui_layout_discovery_suite_summary),
+                aliases = listOf("发现套件", "发现布局", "suite", "discovery suite"),
+                destination = io.legado.app.ui.config.SearchDestination.Activity(DiscoverySuiteManageActivity::class.java.name)
+            )
+        )
         private const val MAX_MANAGER_SOURCES = 200
         private const val MENU_CREATE_SUITE = 1
         private const val MENU_ADD_WIDGET = 2

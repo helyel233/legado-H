@@ -165,8 +165,6 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.AUDIO_CONFIG -> replaceFragment(configTag, AudioConfigFragment::class.java)
             ConfigTag.MANGA_VIDEO_CONFIG ->
                 replaceFragment(configTag, MangaVideoConfigFragment::class.java)
-    ConfigTag.PAGE_LAYOUT_CONFIG ->
-        replaceFragment(configTag, PageLayoutConfigFragment::class.java)
     ConfigTag.EXPLORE_GLASS_CONFIG ->
         replaceFragment(configTag, ExploreGlassConfigFragment::class.java)
     ConfigTag.UI_LAYOUT_CONFIG ->
@@ -196,42 +194,29 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
      */
     private fun breadcrumbOf(configTag: String?): String? {
         val parents = when (configTag) {
-            ConfigTag.READING_CONFIG -> listOf(R.string.config_category_reading_ui)
+            ConfigTag.READING_CONFIG,
+            ConfigTag.BOOKSHELF_CONFIG,
+            ConfigTag.AUDIO_CONFIG,
+            ConfigTag.MANGA_VIDEO_CONFIG -> listOf(R.string.config_category_reading_experience)
+
             ConfigTag.NETWORK_CONFIG -> listOf(R.string.config_category_network_sync)
             ConfigTag.STORAGE_CONFIG -> listOf(R.string.config_category_data_tools)
             ConfigTag.ADVANCED_CONFIG -> listOf(R.string.config_category_advanced)
             ConfigTag.NETWORK_DNS_CONFIG ->
                 listOf(R.string.config_category_network_sync, R.string.network_setting)
 
-            // 主题模式已上提到一级行，界面设置/封面/欢迎页都归属「阅读与界面」
             ConfigTag.THEME_CONFIG,
             ConfigTag.COVER_CONFIG,
-            ConfigTag.WELCOME_CONFIG -> listOf(R.string.config_category_reading_ui)
+            ConfigTag.WELCOME_CONFIG,
+            ConfigTag.EXPLORE_GLASS_CONFIG,
+            ConfigTag.UI_LAYOUT_CONFIG -> listOf(R.string.config_category_appearance)
 
             ConfigTag.AI_CONFIG -> listOf(R.string.config_category_ai_automation)
             ConfigTag.BACKUP_CONFIG -> listOf(R.string.config_category_network_sync)
-            // 发现/订阅页设置已上提为「内容与规则」下的一级行，不再是界面设置的下一层
             ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG ->
                 listOf(R.string.config_category_content)
 
-            // 发现/订阅/首页三处布局归拢为「内容与规则」下的独立页
-            ConfigTag.PAGE_LAYOUT_CONFIG ->
-                listOf(R.string.config_category_content)
-
-            // 全局毛玻璃效果与界面布局与系统栏均挂在「阅读与界面」下
-            ConfigTag.EXPLORE_GLASS_CONFIG,
-            ConfigTag.UI_LAYOUT_CONFIG ->
-                listOf(R.string.config_category_reading_ui)
-
-            // 评论抓取已从高级设置拆出，作为「高级与关于」下的独立二级页
             ConfigTag.COMMENT_CONFIG -> listOf(R.string.config_category_advanced)
-
-            // 书架设置从阅读设置拆出，归属「阅读与界面」
-            ConfigTag.BOOKSHELF_CONFIG -> listOf(R.string.config_category_reading_ui)
-
-            // 朗读与音频、漫画与视频同属「读起来是什么样」，都挂在「阅读与界面」下
-            ConfigTag.AUDIO_CONFIG,
-            ConfigTag.MANGA_VIDEO_CONFIG -> listOf(R.string.config_category_reading_ui)
 
             else -> return null
         }

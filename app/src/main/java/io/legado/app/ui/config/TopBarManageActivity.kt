@@ -844,7 +844,18 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         DELETE_BOTH(R.string.theme_delete_both)
     }
 
-    private companion object {
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_top_bar_manage",
+                title = context.getString(R.string.top_bar_manage),
+                summary = context.getString(R.string.top_bar_manage_summary),
+                aliases = listOf("顶栏包", "顶栏样式", "top bar"),
+                destination = SearchDestination.Activity(TopBarManageActivity::class.java.name)
+            )
+        )
         private const val CLOUD_SCOPE = "theme"
         private const val MENU_CONTAINER = 0x5401
         private const val MENU_SYNC_TASKS = 0x5402

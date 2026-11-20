@@ -1052,7 +1052,18 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         val single: Boolean = false
     )
 
-    private companion object {
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_navigation_bar_manage",
+                title = context.getString(R.string.navigation_bar_manage),
+                summary = context.getString(R.string.navigation_bar_manage_summary),
+                aliases = listOf("底栏包", "导航栏图标", "bottom bar", "navigation bar"),
+                destination = SearchDestination.Activity(NavigationBarManageActivity::class.java.name)
+            )
+        )
         private const val CLOUD_SCOPE = "theme"
         private const val MENU_CONTAINER = 0x5401
         private const val MENU_SYNC_TASKS = 0x5402

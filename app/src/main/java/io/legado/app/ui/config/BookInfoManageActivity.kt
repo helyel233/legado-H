@@ -101,4 +101,18 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         componentsState.value = current
         BookInfoComponentConfig.save(current)
     }
+
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = ConfigTag.UI_LAYOUT_CONFIG,
+                ownerConfigTag = "",
+                key = "activity_book_info_manage",
+                title = context.getString(R.string.book_info_manage),
+                summary = context.getString(R.string.book_info_manage_summary),
+                aliases = listOf("书籍详情", "详情页样式", "book info"),
+                destination = SearchDestination.Activity(BookInfoManageActivity::class.java.name)
+            )
+        )
+    }
 }

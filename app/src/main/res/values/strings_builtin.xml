@@ -54,4 +54,6 @@
     <string name="ui_layout_section_structure">Page Structure &amp; Suites</string>
     <string name="ui_layout_discovery_suite">Discovery Suites</string>
     <string name="ui_layout_discovery_suite_summary">Manage built-in and custom discovery layout suites</string>
+    <string name="config_category_reading_experience">Reading Experience</string>
+    <string name="config_category_appearance">Appearance &amp; UI</string>
 </resources>
