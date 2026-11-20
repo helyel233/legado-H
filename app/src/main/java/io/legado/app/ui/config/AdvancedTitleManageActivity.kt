@@ -85,7 +85,7 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.advanced_title_manage)
+        binding.titleBar.visibility = View.GONE
         initComposeContent()
         loadEntries()
     }
@@ -115,6 +115,7 @@ class AdvancedTitleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                         entries = entriesState.value,
                         activeId = activeIdState.value,
                         loading = loadingState.value,
+                        onBack = ::supportFinishAfterTransition,
                         onApply = ::applyEntry,
                         onEdit = ::editEntry,
                         onMoreActions = ::entryActions,

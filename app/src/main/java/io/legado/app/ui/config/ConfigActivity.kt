@@ -9,44 +9,20 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.widget.Toolbar
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.EventBus
-import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.rememberResolvedThemeTokens
-import io.legado.app.ui.glass.GlassPanel
-import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.lib.theme.TopBarChromeSpec
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
-import io.legado.app.ui.widget.compose.LocalLegadoTokens
-import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
@@ -60,6 +36,29 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
     private lateinit var menuToolbar: Toolbar
     private var titleText by mutableStateOf("")
     private var parentPathText by mutableStateOf<String?>(null)
+    private var lastStatusTop = 0
+    private var lastTopBarChrome: TopBarChromeSpec.Chrome? = null
+
+    private fun syncMenuToolbarMargins() {
+        val params = menuToolbar.layoutParams as? FrameLayoutParams ?: return
+        val chrome = lastTopBarChrome
+        val targetTop = if (chrome?.floating == true) {
+            lastStatusTop + chrome.topInsetPx
+        } else {
+            lastStatusTop
+        }
+        val targetBottom = if (chrome?.floating == true) chrome.bottomInsetPx else 0
+        val targetEnd = if (chrome?.floating == true) chrome.hInsetPx else 0
+        if (params.topMargin != targetTop ||
+            params.bottomMargin != targetBottom ||
+            params.marginEnd != targetEnd
+        ) {
+            params.topMargin = targetTop
+            params.bottomMargin = targetBottom
+            params.marginEnd = targetEnd
+            menuToolbar.layoutParams = params
+        }
+    }
 
     override val binding: ViewBinding by lazy {
         titleText = getString(R.string.setting)
@@ -89,13 +88,8 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
                 )
             )
             setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
-                val top = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-                (menuToolbar.layoutParams as? FrameLayoutParams)?.let { params ->
-                    if (params.topMargin != top) {
-                        params.topMargin = top
-                        menuToolbar.layoutParams = params
-                    }
-                }
+                lastStatusTop = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                syncMenuToolbarMargins()
                 windowInsets
             }
         }
@@ -138,10 +132,17 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
         )
         titleComposeView.setContent {
             LegadoComposeTheme {
-                ConfigTopBar(
+                AppComposeTopBar(
                     title = titleText,
-                    parentPath = parentPathText,
-                    onBack = ::supportFinishAfterTransition
+                    subtitle = parentPathText,
+                    trailingReservedWidth = CONFIG_MENU_HOST_WIDTH_DP.dp,
+                    onBack = ::supportFinishAfterTransition,
+                    onChromeResolved = { chrome ->
+                        if (lastTopBarChrome != chrome) {
+                            lastTopBarChrome = chrome
+                            syncMenuToolbarMargins()
+                        }
+                    }
                 )
             }
         }
@@ -239,75 +240,4 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
         }
     }
 
-}
-
-@Composable
-private fun ConfigTopBar(
-    title: String,
-    parentPath: String?,
-    onBack: () -> Unit
-) {
-    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
-    val palette = rememberAppSettingPalette()
-    val hasPath = !parentPath.isNullOrBlank()
-    val wallpaperVisible = tokens.wallpaperVisible
-    val glassSignature = tokens.glassRef.signature
-    val barContent: @Composable () -> Unit = {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .height(if (hasPath) 64.dp else 56.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.primaryText
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = palette.primaryText,
-                    fontFamily = palette.titleFontFamily,
-                    fontSize = if (hasPath) 18.sp else 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (hasPath) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = parentPath.orEmpty(),
-                        color = palette.secondaryText,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(CONFIG_MENU_HOST_WIDTH_DP.dp))
-        }
-    }
-    CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.bodyFontFamily)
-    ) {
-        if (wallpaperVisible) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = 0f,
-                configSignature = glassSignature,
-                modifier = Modifier.fillMaxWidth(),
-                fallback = Modifier
-            ) {
-                barContent()
-            }
-        } else {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                barContent()
-            }
-        }
-    }
 }

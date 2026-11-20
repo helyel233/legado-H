@@ -42,4 +42,17 @@ class PrefBatchTransactionTest {
         assertFalse(PrefBatchTransaction.isInBatch)
         assertTrue(exitCalled)
     }
+
+    @Test
+    fun batchRevisionBump_incrementsComposeObservableRevisionExactlyOnceOnOuterExit() {
+        val before = currentThemeUiBatchRevision()
+        PrefBatchTransaction.runWithCallback(onOuterExit = ::bumpThemeUiBatchRevision) {
+            assertEquals(before, currentThemeUiBatchRevision())
+            PrefBatchTransaction.runWithCallback(onOuterExit = ::bumpThemeUiBatchRevision) {
+                assertEquals(before, currentThemeUiBatchRevision())
+            }
+            assertEquals(before, currentThemeUiBatchRevision())
+        }
+        assertEquals(before + 1, currentThemeUiBatchRevision())
+    }
 }

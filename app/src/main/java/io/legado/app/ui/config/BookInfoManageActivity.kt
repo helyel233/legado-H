@@ -23,7 +23,7 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private val componentsState = mutableStateOf<List<BookInfoComponentItem>>(emptyList())
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.book_info_manage)
+        binding.titleBar.visibility = android.view.View.GONE
 
         // Load initial state
         styleState.value = BookInfoComponentConfig.loadStyle()
@@ -53,6 +53,7 @@ class BookInfoManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 BookInfoManageScreen(
                     style = styleState.value,
                     components = componentsState.value,
+                    onBack = ::supportFinishAfterTransition,
                     onStyleChanged = ::onStyleChanged,
                     onComponentToggle = ::onComponentToggle,
                     onReset = ::onReset,

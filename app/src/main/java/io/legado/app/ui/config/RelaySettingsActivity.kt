@@ -68,6 +68,7 @@ import io.legado.app.service.relay.RelayShareResult
 import io.legado.app.service.relay.RelayStateRepository
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
@@ -361,10 +362,15 @@ private fun RelaySettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                RelayTopBar(onBack)
+                AppComposeTopBar(
+                    title = stringResource(R.string.public_web_relay),
+                    palette = palette,
+                    onBack = onBack,
+                    wallpaperVisible = wallpaperVisible,
+                    glassSignature = glassSignature
+                )
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -632,46 +638,6 @@ private fun RelaySettingsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun RelayTopBar(onBack: () -> Unit) {
-    val palette = rememberAppManagementPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-            color = Color.Transparent
-        ) {
-            Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.settings.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.public_web_relay),
-            color = palette.settings.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = palette.settings.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(42.dp))
     }
 }
 

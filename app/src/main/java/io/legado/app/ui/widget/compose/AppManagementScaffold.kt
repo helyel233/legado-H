@@ -26,9 +26,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -43,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
@@ -71,6 +74,7 @@ data class AppManagementAction(
     @param:DrawableRes val iconRes: Int? = null,
     val primary: Boolean = false,
     val danger: Boolean = false,
+    val showText: Boolean = false,
     val onClick: () -> Unit = {},
     val menuActions: (() -> List<AppManagementMenuAction>)? = null
 )
@@ -105,7 +109,7 @@ fun AppManagementScaffold(
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        AppManagementTopBar(
+        AppComposeTopBar(
             title = title,
             palette = palette,
             searchQuery = searchQuery,
@@ -135,16 +139,20 @@ fun AppManagementScaffold(
 }
 
 @Composable
-private fun AppManagementTopBar(
+fun AppComposeTopBar(
     title: String,
-    palette: AppManagementPalette,
-    searchQuery: String?,
-    searchHint: String?,
-    onSearchChange: ((String) -> Unit)?,
-    actions: List<AppManagementAction>,
-    onBack: (() -> Unit)?,
-    wallpaperVisible: Boolean,
-    glassSignature: String
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    palette: AppManagementPalette = rememberAppManagementPalette(),
+    searchQuery: String? = null,
+    searchHint: String? = null,
+    onSearchChange: ((String) -> Unit)? = null,
+    actions: List<AppManagementAction> = emptyList(),
+    trailingReservedWidth: Dp = 0.dp,
+    onBack: (() -> Unit)? = null,
+    wallpaperVisible: Boolean = rememberHasUsableBgImage() && !AppConfig.isEInkMode,
+    glassSignature: String = rememberGlassConfigSignature(),
+    onChromeResolved: ((TopBarChromeSpec.Chrome) -> Unit)? = null
 ) {
     val context = LocalContext.current
     // 栏位边框统一取主题包「边框线色」，与卡片 / 弹窗 / 底栏同一份口径。
@@ -168,11 +176,22 @@ private fun AppManagementTopBar(
             0f
         ) to TopBarConfig.resolveBackgroundColor(config)
     }
+    if (onChromeResolved != null) {
+        SideEffect {
+            onChromeResolved(chrome)
+        }
+    }
     val floating = chrome.floating
     val density = LocalDensity.current
     val radiusDp = with(density) { chrome.radiusPx.toDp() }
     val chromeShape = RoundedCornerShape(radiusDp)
     val statusTopDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val hasSubtitle = !subtitle.isNullOrBlank()
+    val barHeight = when {
+        hasSubtitle -> 58.dp
+        trailingReservedWidth > 0.dp -> 56.dp
+        else -> 48.dp
+    }
     // 悬浮卡片的三向留白：左右/底部 0.6×半径、顶部 0.5×半径 + 状态栏让位（顶栏包语法定义）。
     // 状态栏让位从内容的 windowInsetsPadding 迁到表面外边距——卡片从状态栏下方起卡。
     val surfaceInsets = if (floating) {
@@ -186,57 +205,77 @@ private fun AppManagementTopBar(
         Modifier
     }
     val topBarContent: @Composable () -> Unit = {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (floating) Modifier
-                    else Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                )
+        CompositionLocalProvider(
+            LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = palette.settings.bodyFontFamily)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(start = 4.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .then(
+                        if (floating) Modifier
+                        else Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                    )
             ) {
-                onBack?.let {
-                    AppManagementIconAction(
-                        iconRes = R.drawable.ic_arrow_back,
-                        contentDescription = null,
-                        tint = topBarContentColor,
-                        onClick = it
-                    )
-                }
-                Text(
-                    text = title,
-                    color = topBarContentColor,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = palette.settings.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp)
-                )
-                actions.forEach { action ->
-                    AppManagementTopAction(
-                        action = action,
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .padding(start = 4.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    onBack?.let {
+                        AppManagementIconAction(
+                            iconRes = R.drawable.ic_arrow_back,
+                            contentDescription = null,
+                            tint = topBarContentColor,
+                            onClick = it
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            color = topBarContentColor,
+                            fontSize = if (hasSubtitle) 18.sp else 19.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = palette.settings.titleFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (hasSubtitle) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = subtitle.orEmpty(),
+                                color = topBarContentColor.copy(alpha = 0.72f),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    actions.forEach { action ->
+                        AppManagementTopAction(
+                            action = action,
+                            palette = palette,
+                            contentColor = topBarContentColor
+                        )
+                    }
+                    if (trailingReservedWidth > 0.dp) {
+                        Spacer(modifier = Modifier.width(trailingReservedWidth))
+                    }
+                }
+                if (onSearchChange != null) {
+                    AppManagementSearchField(
+                        query = searchQuery.orEmpty(),
+                        hint = searchHint.orEmpty(),
                         palette = palette,
-                        contentColor = topBarContentColor
+                        onQueryChange = onSearchChange,
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
                     )
                 }
-            }
-            if (onSearchChange != null) {
-                AppManagementSearchField(
-                    query = searchQuery.orEmpty(),
-                    hint = searchHint.orEmpty(),
-                    palette = palette,
-                    onQueryChange = onSearchChange,
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
-                )
             }
         }
     }
@@ -248,7 +287,7 @@ private fun AppManagementTopBar(
             cornerRadiusPx = if (floating) chrome.radiusPx else 0f,
             // chrome 进签名：半径 / 悬浮态变化必须重绑玻璃，不许 KEEP 住旧形状（红队既定项）。
             configSignature = "$glassSignature|chrome=$floating|${chrome.radiusPx}",
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .then(surfaceInsets)
                 .then(if (floating) Modifier.clip(chromeShape) else Modifier)
@@ -266,7 +305,7 @@ private fun AppManagementTopBar(
         }
     } else {
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .then(surfaceInsets)
                 .then(
@@ -290,23 +329,62 @@ private fun AppManagementTopAction(
     palette: AppManagementPalette,
     contentColor: Color
 ) {
-    val iconRes = action.iconRes ?: R.drawable.ic_more_vert
+    val resolvedTint = if (action.danger) palette.settings.danger else contentColor
     val menuActions = action.menuActions
-    if (menuActions != null) {
-        AppManagementMoreActionButton(
-            actionsProvider = menuActions,
-            palette = palette,
-            iconRes = iconRes,
-            contentDescription = action.text,
-            tint = if (action.danger) palette.settings.danger else contentColor
-        )
-    } else {
-        AppManagementIconAction(
-            iconRes = iconRes,
-            contentDescription = action.text,
-            tint = if (action.danger) palette.settings.danger else contentColor,
-            onClick = action.onClick
-        )
+    when {
+        action.showText && action.text.isNotBlank() && menuActions != null -> {
+            AppComposePopupAnchorButton(
+                actionsProvider = menuActions,
+                containerColor = resolvedTint.copy(alpha = 0.12f),
+                contentColor = resolvedTint,
+                cornerRadius = palette.miuix.actionRadius,
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .height(32.dp)
+            ) {
+                Text(
+                    text = action.text,
+                    color = resolvedTint,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 10.dp)
+                )
+            }
+        }
+        action.showText && action.text.isNotBlank() -> {
+            Text(
+                text = action.text,
+                color = resolvedTint,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .clip(RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
+                    .clickable(onClick = action.onClick)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+        menuActions != null -> {
+            AppManagementMoreActionButton(
+                actionsProvider = menuActions,
+                palette = palette,
+                iconRes = action.iconRes ?: R.drawable.ic_more_vert,
+                contentDescription = action.text,
+                tint = resolvedTint
+            )
+        }
+        else -> {
+            AppManagementIconAction(
+                iconRes = action.iconRes ?: R.drawable.ic_more_vert,
+                contentDescription = action.text,
+                tint = resolvedTint,
+                onClick = action.onClick
+            )
+        }
     }
 }
 

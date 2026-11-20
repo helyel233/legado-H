@@ -38,6 +38,7 @@ import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppPackageManageItemCard
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppPackageManageScreen
 import io.legado.app.ui.widget.compose.showComposeActionListDialog
 import io.legado.app.ui.widget.compose.showComposeConfirmDialog
@@ -70,7 +71,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private var entriesState by mutableStateOf<List<TopBarConfig.Entry>>(emptyList())
     private var activeDirNameState by mutableStateOf(TopBarConfig.DEFAULT_DIR_NAME)
-    private var isNightMode by mutableStateOf(false)
+    private var isNightMode by mutableStateOf(AppConfig.isNightTheme)
     private var summaryTextState by mutableStateOf("")
     private var editingEntry: TopBarConfig.Entry? = null
     private var pendingConfig: TopBarConfig.Config? = null
@@ -79,8 +80,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private val handledWebDavTasks = mutableSetOf<String>()
     private var loadVersion = 0
     private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
-    private var containerMenuPopup: ModernActionPopup.Handle? = null
+    private var containerMenuLabelState by mutableStateOf<String?>(null)
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
     private val importPackage = registerForActivityResult(HandleFileContract()) {
@@ -113,7 +113,8 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.top_bar_manage)
+        binding.titleBar.visibility = android.view.View.GONE
+        updateContainerMenu()
         initComposeContent()
         loadPackages()
         observeWebDavTasks()
@@ -121,7 +122,7 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     override fun onResume() {
         super.onResume()
-        invalidateOptionsMenu()
+        updateContainerMenu()
     }
 
     override fun observeLiveBus() {
@@ -152,6 +153,8 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     isNightMode = isNightMode,
                     summaryText = summaryTextState,
                     dateFormat = dateFormat,
+                    topActions = topBarActions(),
+                    onBack = ::supportFinishAfterTransition,
                     onSwitchDayNight = { night ->
                         if (night != isNightMode) {
                             isNightMode = night
@@ -188,81 +191,61 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.s3_bucket).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setActionView(R.layout.view_action_button)
-            actionView?.let { view ->
-                view.contentDescription = title
-                view.findViewById<ImageButton>(R.id.item)?.setImageDrawable(icon)
-                view.setOnClickListener { showContainerSelector(view) }
+    private fun topBarActions(): List<AppManagementAction> {
+        return buildList {
+            containerMenuLabelState?.let { label ->
+                add(
+                    AppManagementAction(
+                        text = label,
+                        iconRes = R.drawable.ic_outline_cloud_24,
+                        menuActions = ::containerSelectorActions
+                    )
+                )
             }
-        }
-        menu.add(0, MENU_SYNC_TASKS, 1, R.string.package_sync_task_menu).apply {
-            setIcon(R.drawable.ic_history)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerMenu()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_CONTAINER -> {
-                showContainerSelector(item.actionView)
-                true
-            }
-            MENU_SYNC_TASKS -> {
-                showTopBarSyncTasks()
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
+            add(
+                AppManagementAction(
+                    text = getString(R.string.package_sync_task_menu),
+                    iconRes = R.drawable.ic_history,
+                    onClick = ::showTopBarSyncTasks
+                )
+            )
         }
     }
 
     private fun updateContainerMenu() {
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
-        val item = containerMenuItem ?: return
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            item.isVisible = false
+            containerMenuLabelState = null
             return
         }
         cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
             ?: containers.firstOrNull()?.id
-        item.isVisible = true
-        val title = containers.firstOrNull { it.id == cloudContainerId }
+        containerMenuLabelState = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
-        item.title = title
-        item.actionView?.contentDescription = title
     }
 
-    private fun showContainerSelector(anchor: android.view.View? = null) {
-        lifecycleScope.launch {
-            val containers = withContext(Dispatchers.IO) {
-                AppCloudStorage.listContainers().filter { it.enabled }
-            }
-            if (containers.isEmpty()) {
-                toastOnUi(R.string.cloud_storage_config_required)
-                return@launch
-            }
-            val selected = cloudContainerId
-                ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-            val popupAnchor = anchor
-                ?: containerMenuItem?.actionView
-                ?: binding.titleBar.toolbar
-            val actions = containers.map { container ->
-                ModernActionPopup.Action(AppCloudStorage.containerDisplayLabel(container)) {
-                    if (container.id == selected) return@Action
-                    AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
-                    cloudContainerId = container.id
-                    updateContainerMenu()
-                    loadPackages()
+    private fun containerSelectorActions(): List<AppManagementMenuAction> {
+        val containers = AppCloudStorage.listContainers().filter { it.enabled }
+        if (containers.isEmpty()) {
+            toastOnUi(R.string.cloud_storage_config_required)
+            return emptyList()
+        }
+        val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
+        return containers.map { container ->
+            AppManagementMenuAction(
+                text = AppCloudStorage.containerDisplayLabel(container),
+                checked = container.id == selected,
+                onClick = {
+                    if (container.id != selected) {
+                        AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
+                        cloudContainerId = container.id
+                        updateContainerMenu()
+                        loadPackages()
+                    }
                 }
-            }
-            containerMenuPopup = ModernActionPopup.show(popupAnchor, actions, containerMenuPopup)
+            )
         }
     }
 
@@ -758,8 +741,6 @@ class TopBarManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             )
         )
         private const val CLOUD_SCOPE = "theme"
-        private const val MENU_CONTAINER = 0x5401
-        private const val MENU_SYNC_TASKS = 0x5402
         const val COLOR_TAG_BAR = 5101
         const val COLOR_TAG_SELECTED = 5102
         const val REQUEST_WALLPAPER = 5103
@@ -776,6 +757,8 @@ private fun TopBarManageScreen(
     isNightMode: Boolean,
     summaryText: String,
     dateFormat: SimpleDateFormat,
+    topActions: List<AppManagementAction>,
+    onBack: () -> Unit,
     onSwitchDayNight: (Boolean) -> Unit,
     onAdd: () -> Unit,
     onApply: (TopBarConfig.Entry) -> Unit,
@@ -786,6 +769,9 @@ private fun TopBarManageScreen(
     val appliedText = stringResource(R.string.theme_applied_state)
     val editText = stringResource(R.string.edit)
     AppPackageManageScreen(
+        title = stringResource(R.string.top_bar_manage),
+        onBack = onBack,
+        topActions = topActions,
         isNightMode = isNightMode,
         summaryText = summaryText,
         addText = stringResource(R.string.theme_add),

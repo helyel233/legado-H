@@ -49,6 +49,8 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.AppListSpacing
@@ -56,6 +58,7 @@ import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
+import io.legado.app.ui.widget.compose.AppPackageManageActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
@@ -78,6 +81,8 @@ internal fun BubbleManageScreen(
     summary: String,
     activeDirName: String,
     forceSoftwareBubble: Boolean,
+    topActions: List<AppManagementAction>,
+    onBack: () -> Unit,
     previewBitmapProvider: suspend (BubblePackageManager.Entry, Int, Boolean) -> Bitmap?,
     onForceSoftwareBubbleChange: (Boolean) -> Unit,
     onApply: (BubblePackageManager.Entry) -> Unit,
@@ -105,6 +110,14 @@ internal fun BubbleManageScreen(
                 .fillMaxSize()
                 .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
         ) {
+            AppComposeTopBar(
+                title = stringResource(R.string.bubble_manage),
+                palette = palette,
+                actions = topActions,
+                onBack = onBack,
+                wallpaperVisible = wallpaperVisible,
+                glassSignature = glassSignature
+            )
         // Summary
         if (summary.isNotBlank()) {
             Text(
@@ -264,16 +277,16 @@ private fun BubbleItemRow(
 
                 // Action buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionTextButton(
+                    AppPackageManageActionButton(
                         text = stringResource(if (active) R.string.bubble_applied else R.string.bubble_apply),
                         palette = palette.miuix,
-                        accent = true,
+                        selected = true,
                         onClick = onApply
                     )
                     val canEdit = entry.source == BubblePackageManager.Source.LOCAL ||
                         entry.source == BubblePackageManager.Source.BOTH
                     if (canEdit) {
-                        ActionTextButton(
+                        AppPackageManageActionButton(
                             text = stringResource(R.string.edit),
                             palette = palette.miuix,
                             onClick = onEdit
@@ -287,40 +300,6 @@ private fun BubbleItemRow(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ActionTextButton(
-    text: String,
-    palette: LegadoMiuixPalette,
-    accent: Boolean = false,
-    onClick: () -> Unit
-) {
-    val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
-    val minHeight = bubbleActionButtonMinHeight()
-    Surface(
-        modifier = Modifier
-            .defaultMinSize(minHeight = minHeight)
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(actionRadius),
-        color = if (accent) palette.accent.copy(alpha = 0.14f) else palette.surfaceVariant,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Text(
-            text = text,
-            color = if (accent) palette.accent else palette.primaryText,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .defaultMinSize(minHeight = minHeight)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

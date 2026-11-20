@@ -75,10 +75,9 @@ import io.legado.app.ui.widget.compose.LegadoResourceIcon
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
-import io.legado.app.ui.widget.compose.rememberAppDialogStyle
+import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
-import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.ColorUtils
 
 private val PanelHorizontalPadding = 12.dp
@@ -416,7 +415,7 @@ private fun SettingRow(
     )
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val dialogStyle = rememberAppDialogStyle()
+    val miuixPalette = rememberAppManagementPalette().miuix
     var choiceAnchor by remember(item.key) { mutableStateOf<View?>(null) }
     var choicePopupHandle by remember(item.key) { mutableStateOf<ModernActionPopup.Handle?>(null) }
     DisposableEffect(Unit) {
@@ -475,11 +474,10 @@ private fun SettingRow(
         when (item) {
             is SettingSwitchSpec -> {
                 Spacer(modifier = Modifier.width(12.dp))
-                val palette = dialogStyle.toMiuixPalette()
                 LegadoMiuixSwitch(
                     checked = item.checked,
                     onCheckedChange = item.onCheckedChange,
-                    palette = palette,
+                    palette = miuixPalette,
                     enabled = item.enabled
                 )
             }
@@ -489,7 +487,7 @@ private fun SettingRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(dialogStyle.actionRadius))
+                        .clip(RoundedCornerShape(miuixPalette.actionRadius ?: 12.dp))
                         .background(colors.accent.copy(alpha = if (item.enabled) 0.10f else 0.05f))
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
@@ -610,7 +608,7 @@ private fun SettingSliderRow(
     isHighlighted: Boolean,
     onTargetPositioned: (Float) -> Unit
 ) {
-    val palette = rememberAppDialogStyle().toMiuixPalette()
+    val palette = rememberAppManagementPalette().miuix
     val sliderValue = item.value.coerceIn(item.valueRange)
     val highlightAlpha by animateFloatAsState(
         targetValue = if (isHighlighted) 1f else 0f,

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.ui.main.ai.AiImageProviderConfig
+import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -65,13 +67,24 @@ internal fun AiImageProviderManageScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                AiImageProviderTopBar(
-                    onBack = onBack,
-                    onImportRules = onImportRules,
-                    onExportRules = onExportRules
+                AppComposeTopBar(
+                    title = stringResource(R.string.ai_image_provider_manage),
+                    palette = palette,
+                    actions = listOf(
+                        AppManagementAction(
+                            text = stringResource(R.string.import_str),
+                            iconRes = R.drawable.ic_import,
+                            onClick = onImportRules
+                        ),
+                        AppManagementAction(
+                            text = stringResource(R.string.export_str),
+                            iconRes = R.drawable.ic_export,
+                            onClick = onExportRules
+                        )
+                    ),
+                    onBack = onBack
                 )
                 Text(
                     text = stringResource(R.string.ai_image_provider_manage_summary),
@@ -116,99 +129,6 @@ internal fun AiImageProviderManageScreen(
                     minHeight = 46.dp
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun AiImageProviderTopBar(
-    onBack: () -> Unit,
-    onImportRules: () -> Unit,
-    onExportRules: () -> Unit
-) {
-    val palette = rememberAppManagementPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-            color = Color.Transparent,
-            contentColor = palette.settings.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.settings.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.ai_image_provider_manage),
-            color = palette.settings.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = palette.settings.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        AiImageProviderTopBarButton(
-            iconRes = R.drawable.ic_import,
-            contentDescription = stringResource(R.string.import_str),
-            palette = palette,
-            onClick = onImportRules
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        AiImageProviderTopBarButton(
-            iconRes = R.drawable.ic_export,
-            contentDescription = stringResource(R.string.export_str),
-            palette = palette,
-            onClick = onExportRules
-        )
-    }
-}
-
-@Composable
-private fun AiImageProviderTopBarButton(
-    iconRes: Int,
-    contentDescription: String,
-    palette: AppManagementPalette,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .size(42.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-        color = Color.Transparent,
-        contentColor = palette.settings.primaryText,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = contentDescription,
-                tint = palette.settings.primaryText,
-                modifier = Modifier.size(22.dp)
-            )
         }
     }
 }

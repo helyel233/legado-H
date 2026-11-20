@@ -43,13 +43,18 @@ import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LegadoSegmentedControl
 import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
+import io.legado.app.ui.widget.compose.SegmentedControlTone
+import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 
@@ -57,6 +62,8 @@ import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 internal fun CoverCollectionManageScreen(
     isNight: Boolean,
     entries: List<CoverCollectionManager.Entry>,
+    topActions: List<AppManagementAction>,
+    onBack: () -> Unit,
     onTabChanged: (Boolean) -> Unit,
     onItemClick: (CoverCollectionManager.Entry) -> Unit,
     itemActions: (CoverCollectionManager.Entry) -> List<AppManagementMenuAction>,
@@ -81,6 +88,14 @@ internal fun CoverCollectionManageScreen(
                 .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
                 .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
+            AppComposeTopBar(
+                title = stringResource(R.string.cover_collection_manage),
+                palette = palette,
+                actions = topActions,
+                onBack = onBack,
+                wallpaperVisible = wallpaperVisible,
+                glassSignature = glassSignature
+            )
             // Tab bar
             CoverCollectionTabBar(
                 isNight = isNight,
@@ -128,62 +143,21 @@ private fun CoverCollectionTabBar(
     palette: AppManagementPalette,
     onTabChanged: (Boolean) -> Unit
 ) {
-    AppManagementCard(
-        palette = palette,
+    LegadoSegmentedControl(
+        options = listOf(
+            SegmentedOption(value = false, label = stringResource(R.string.theme_day)),
+            SegmentedOption(value = true, label = stringResource(R.string.theme_night))
+        ),
+        selectedValue = isNight,
+        palette = palette.miuix,
+        onSelected = onTabChanged,
+        tone = SegmentedControlTone.SurfaceThumb,
+        fontSize = 14.sp,
+        glassSignature = LocalAppManagementGlassSignature.current,
         modifier = Modifier
-            .fillMaxWidth(),
-        insidePadding = PaddingValues(4.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TabButton(
-                text = stringResource(R.string.theme_day),
-                selected = !isNight,
-                palette = palette,
-                onClick = { onTabChanged(false) },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            TabButton(
-                text = stringResource(R.string.theme_night),
-                selected = isNight,
-                palette = palette,
-                onClick = { onTabChanged(true) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun TabButton(
-    text: String,
-    selected: Boolean,
-    palette: AppManagementPalette,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val actionRadius = palette.miuix.actionRadius ?: LocalContext.current.composeActionRadius()
-    androidx.compose.material3.Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(actionRadius),
-        color = if (selected) palette.settings.accent.copy(alpha = 0.14f) else Color.Transparent,
-        contentColor = if (selected) palette.settings.accent else palette.settings.primaryText,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Text(
-            text = text,
-            color = if (selected) palette.settings.accent else palette.settings.primaryText,
-            fontSize = 14.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-    }
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    )
 }
 
 @Composable

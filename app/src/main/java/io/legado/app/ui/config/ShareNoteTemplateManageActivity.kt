@@ -94,7 +94,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.share_note_template_manage)
+        binding.titleBar.visibility = android.view.View.GONE
         initComposeContent()
         loadTemplates()
     }
@@ -130,6 +130,7 @@ class ShareNoteTemplateManageActivity : BaseActivity<ActivityThemeManageBinding>
                     activeDirName = activeDirNameState.value,
                     shareStyle = shareStyleState.value,
                     previewFiles = previewFilesState.value,
+                    onBack = ::supportFinishAfterTransition,
                     onApply = ::applyTemplate,
                     onStyleChange = ::updateShareStyle,
                     onEdit = ::editTemplate,

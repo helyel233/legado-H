@@ -3,8 +3,7 @@ package io.legado.app.ui.config
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import android.net.Uri
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
+import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -14,9 +13,11 @@ import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityCoverCollectionManageBinding
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.compose.showComposeTextInputDialog
@@ -35,10 +36,10 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
 
     override val binding by viewBinding(ActivityCoverCollectionManageBinding::inflate)
 
-    private val isNightState = mutableStateOf(false)
+    private val isNightState = mutableStateOf(AppConfig.isNightTheme)
     private val entriesState = mutableStateOf<List<CoverCollectionManager.Entry>>(emptyList())
     private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
+    private val containerMenuLabelState = mutableStateOf<String?>(null)
     private val importZip = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri -> importZip(uri) }
     }
@@ -47,13 +48,14 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.visibility = View.GONE
+        updateContainerMenu()
         initComposeContent()
         loadCollections()
     }
 
     private fun initComposeContent() {
         val container = binding.recyclerView.parent as? ViewGroup ?: return
-        // Remove TabBar, RecyclerView, and AddButton (keep TitleBar at index 0)
         while (container.childCount > 1) {
             container.removeViewAt(1)
         }
@@ -68,6 +70,8 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
                 CoverCollectionManageScreen(
                     isNight = isNightState.value,
                     entries = entriesState.value,
+                    topActions = topBarActions(),
+                    onBack = ::supportFinishAfterTransition,
                     onTabChanged = { night ->
                         isNightState.value = night
                         loadCollections()
@@ -84,40 +88,30 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
 
     override fun onResume() {
         super.onResume()
-        invalidateOptionsMenu()
+        updateContainerMenu()
         loadCollections()
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.s3_bucket).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerMenu()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_CONTAINER -> {
-                showContainerSelector()
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
-        }
+    private fun topBarActions(): List<AppManagementAction> {
+        val label = containerMenuLabelState.value ?: return emptyList()
+        return listOf(
+            AppManagementAction(
+                text = label,
+                iconRes = R.drawable.ic_outline_cloud_24,
+                onClick = ::showContainerSelector
+            )
+        )
     }
 
     private fun updateContainerMenu() {
-        val item = containerMenuItem ?: return
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            item.isVisible = false
+            containerMenuLabelState.value = null
             return
         }
         cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-        item.isVisible = true
-        item.title = containers.firstOrNull { it.id == cloudContainerId }
+        containerMenuLabelState.value = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
     }
@@ -284,7 +278,6 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
 
     private companion object {
         private const val CLOUD_SCOPE = "coverCollection"
-        private const val MENU_CONTAINER = 0x5401
     }
 
     private enum class CoverAction(val titleRes: Int) {

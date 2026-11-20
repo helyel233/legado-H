@@ -1,11 +1,9 @@
 package io.legado.app.ui.main.my
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +53,9 @@ import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.LegadoSegmentedControl
+import io.legado.app.ui.widget.compose.SegmentedControlTone
+import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppSettingPalette
@@ -457,56 +458,18 @@ private fun ThemeModeRow(
         }
         Spacer(modifier = Modifier.height(10.dp))
         // 36dp = 行首图标 22dp + 间距 14dp，分段控件与标题左对齐
-        ThemeSegmentedControl(
-            options = options,
+        LegadoSegmentedControl(
+            options = options.map { SegmentedOption(value = it.value, label = it.label) },
             selectedValue = selectedValue,
-            colors = colors,
-            onSelect = onSelect,
+            palette = colors.toMiuixPalette(),
+            onSelected = onSelect,
+            tone = SegmentedControlTone.AccentThumb,
+            itemHeight = 28.dp,
+            fontSize = 11.sp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 36.dp)
         )
-    }
-}
-
-@Composable
-private fun ThemeSegmentedControl(
-    options: List<MySettingsThemeOption>,
-    selectedValue: String,
-    colors: AppSettingPalette,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(colors.rowPressed))
-            .selectableGroup(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        options.forEach { option ->
-            val selected = option.value == selectedValue
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 2.dp, vertical = 2.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (selected) colors.accent else Color.Transparent)
-                    .clickable(role = Role.RadioButton) { onSelect(option.value) }
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = option.label,
-                    color = if (selected) colors.onAccent else colors.secondaryText,
-                    fontSize = 11.sp,
-                    lineHeight = 13.sp,
-                    maxLines = 1,
-                    // 「E-Ink(墨水屏)」这类长标签在窄屏下放不下，跑马灯兜底
-                    modifier = Modifier.basicMarquee(iterations = 1)
-                )
-            }
-        }
     }
 }
 
@@ -708,7 +671,7 @@ private fun AppSettingPalette.toMiuixPalette(): LegadoMiuixPalette {
     return LegadoMiuixPalette(
         accent = accent,
         surface = Color(row),
-        surfaceVariant = Color(row),
+        surfaceVariant = Color(slot),
         primaryText = primaryText,
         secondaryText = secondaryText,
         danger = danger,

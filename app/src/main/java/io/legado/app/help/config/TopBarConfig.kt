@@ -10,7 +10,7 @@ import io.legado.app.help.AppCloudStorage
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeTabBackgroundColorOrDefault
-import io.legado.app.lib.theme.themeUiSignature
+import io.legado.app.lib.theme.themeUiSignatureCached
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.ImageTypeUtils
@@ -200,7 +200,7 @@ object TopBarConfig {
             append(AppConfig.topBarFloatingChrome).append('|')
             append(AppConfig.topBarExpandFilters).append('|')
             append(AppConfig.topBarHideFilterToggle).append('|')
-            append(appCtx.themeUiSignature())
+            append(appCtx.themeUiSignatureCached())
         }
         if (dirName == DEFAULT_DIR_NAME) {
             return "$isNight|$DEFAULT_DIR_NAME|$globalPart"

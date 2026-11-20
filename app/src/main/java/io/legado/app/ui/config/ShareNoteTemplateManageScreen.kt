@@ -51,6 +51,7 @@ internal fun ShareNoteTemplateManageScreen(
     activeDirName: String,
     shareStyle: ShareNoteTemplateManager.ShareStyle,
     previewFiles: Map<String, File>,
+    onBack: () -> Unit,
     onApply: (ShareNoteTemplateManager.Entry) -> Unit,
     onStyleChange: (ShareNoteTemplateManager.ShareStyle) -> Unit,
     onEdit: (ShareNoteTemplateManager.Entry) -> Unit,
@@ -61,6 +62,8 @@ internal fun ShareNoteTemplateManageScreen(
     val appliedText = stringResource(R.string.theme_applied_state)
     val editText = stringResource(R.string.edit)
     AppPackageManageScreen(
+        title = stringResource(R.string.share_note_template_manage),
+        onBack = onBack,
         isNightMode = false,
         summaryText = stringResource(R.string.share_note_manage_summary_full),
         addText = stringResource(R.string.theme_add),

@@ -2,6 +2,7 @@ package io.legado.app.ui.config
 
 import android.os.Bundle
 import android.view.View
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,15 +42,20 @@ import io.legado.app.help.config.AdvancedTipSlot
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.EpubLoadingTemplateStore
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ShareNoteTemplateManager
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.glass.glassPageBackgroundColor
+import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
+import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.startActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -67,7 +74,7 @@ class ReadingDecorCenterActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var summaryState by mutableStateOf(ReadingDecorSummaries())
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.reading_decor_center_title)
+        binding.titleBar.visibility = View.GONE
         binding.tabBar.visibility = View.GONE
         binding.tvSummary.visibility = View.GONE
         binding.recyclerView.visibility = View.GONE
@@ -81,6 +88,7 @@ class ReadingDecorCenterActivity : BaseActivity<ActivityThemeManageBinding>() {
                     ReadingDecorCenterScreen(
                         summaries = summaryState,
                         palette = palette,
+                        onBack = ::supportFinishAfterTransition,
                         onOpenBubble = { startActivity<BubbleManageActivity>() },
                         onOpenAdvancedTitle = { startActivity<AdvancedTitleManageActivity>() },
                         onOpenHeaderTip = {
@@ -159,6 +167,7 @@ private data class ReadingDecorSummaries(
 private fun ReadingDecorCenterScreen(
     summaries: ReadingDecorSummaries,
     palette: AppManagementPalette,
+    onBack: () -> Unit,
     onOpenBubble: () -> Unit,
     onOpenAdvancedTitle: () -> Unit,
     onOpenHeaderTip: () -> Unit,
@@ -166,87 +175,106 @@ private fun ReadingDecorCenterScreen(
     onOpenEpubLoading: () -> Unit,
     onOpenShareNote: () -> Unit
 ) {
-    val tokens = LocalLegadoTokens.current
-    val glassSignature = tokens?.glassRef?.signature?.takeIf { tokens.wallpaperVisible }
-    val panelRadiusDp = (tokens?.corners?.panelRadiusDp ?: 14f).dp
+    val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
+    val glassSignature = rememberGlassConfigSignature()
+    val effectiveGlassSignature = glassSignature.takeIf { wallpaperVisible }
+    val panelRadiusDp = palette.settings.panelRadiusPx.takeIf { it > 0f }?.let {
+        with(androidx.compose.ui.platform.LocalDensity.current) { it.toDp() }
+    } ?: (LocalLegadoTokens.current?.corners?.panelRadiusDp ?: 14f).dp
     val panelShape = RoundedCornerShape(panelRadiusDp)
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
     ) {
-        item("summary_hint") {
-            AppSettingSectionTitle(
-                title = stringResource(R.string.reading_decor_center_summary),
-                palette = palette.settings
-            )
-        }
-        item("decor_items") {
-            val cardContent: @Composable () -> Unit = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    DecorItemRow(
-                        title = stringResource(R.string.bubble_manage),
-                        summary = summaries.bubble.ifBlank { stringResource(R.string.bubble_manage_summary) },
-                        palette = palette,
-                        onClick = onOpenBubble
-                    )
-                    DecorItemRow(
-                        title = stringResource(R.string.reading_decor_advanced_title),
-                        summary = summaries.advancedTitle.ifBlank { "-" },
-                        palette = palette,
-                        onClick = onOpenAdvancedTitle
-                    )
-                    DecorItemRow(
-                        title = stringResource(R.string.reading_decor_header_tip),
-                        summary = summaries.headerTip.ifBlank { "-" },
-                        palette = palette,
-                        onClick = onOpenHeaderTip
-                    )
-                    DecorItemRow(
-                        title = stringResource(R.string.reading_decor_footer_tip),
-                        summary = summaries.footerTip.ifBlank { "-" },
-                        palette = palette,
-                        onClick = onOpenFooterTip
-                    )
-                    DecorItemRow(
-                        title = stringResource(R.string.epub_loading_templates),
-                        summary = summaries.epubLoading.ifBlank { "-" },
-                        palette = palette,
-                        onClick = onOpenEpubLoading
-                    )
-                    DecorItemRow(
-                        title = stringResource(R.string.share_note_template_manage),
-                        summary = summaries.shareNote.ifBlank { stringResource(R.string.share_note_template_manage_summary) },
-                        palette = palette,
-                        showDivider = false,
-                        onClick = onOpenShareNote
-                    )
-                }
+        AppComposeTopBar(
+            title = stringResource(R.string.reading_decor_center_title),
+            palette = palette,
+            onBack = onBack,
+            wallpaperVisible = wallpaperVisible,
+            glassSignature = glassSignature
+        )
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item("summary_hint") {
+                AppSettingSectionTitle(
+                    title = stringResource(R.string.reading_decor_center_summary),
+                    palette = palette.settings
+                )
             }
-            if (glassSignature != null) {
-                GlassPanel(
-                    domain = GlassSamplingDomain.WALLPAPER,
-                    cornerRadiusPx = palette.settings.panelRadiusPx,
-                    configSignature = glassSignature,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(panelShape)
-                ) {
-                    cardContent()
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .appSettingPanelBackground(
-                            normalColor = palette.settings.row,
-                            borderColor = palette.settings.border,
-                            panelImage = null,
-                            radiusPx = palette.settings.panelRadiusPx
+            item("decor_items") {
+                val cardContent: @Composable () -> Unit = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        DecorItemRow(
+                            title = stringResource(R.string.bubble_manage),
+                            summary = summaries.bubble.ifBlank { stringResource(R.string.bubble_manage_summary) },
+                            palette = palette,
+                            onClick = onOpenBubble
                         )
-                ) {
-                    cardContent()
+                        DecorItemRow(
+                            title = stringResource(R.string.reading_decor_advanced_title),
+                            summary = summaries.advancedTitle.ifBlank { "-" },
+                            palette = palette,
+                            onClick = onOpenAdvancedTitle
+                        )
+                        DecorItemRow(
+                            title = stringResource(R.string.reading_decor_header_tip),
+                            summary = summaries.headerTip.ifBlank { "-" },
+                            palette = palette,
+                            onClick = onOpenHeaderTip
+                        )
+                        DecorItemRow(
+                            title = stringResource(R.string.reading_decor_footer_tip),
+                            summary = summaries.footerTip.ifBlank { "-" },
+                            palette = palette,
+                            onClick = onOpenFooterTip
+                        )
+                        DecorItemRow(
+                            title = stringResource(R.string.epub_loading_templates),
+                            summary = summaries.epubLoading.ifBlank { "-" },
+                            palette = palette,
+                            onClick = onOpenEpubLoading
+                        )
+                        DecorItemRow(
+                            title = stringResource(R.string.share_note_template_manage),
+                            summary = summaries.shareNote.ifBlank { stringResource(R.string.share_note_template_manage_summary) },
+                            palette = palette,
+                            showDivider = false,
+                            onClick = onOpenShareNote
+                        )
+                    }
+                }
+                if (effectiveGlassSignature != null) {
+                    GlassPanel(
+                        domain = GlassSamplingDomain.WALLPAPER,
+                        cornerRadiusPx = palette.settings.panelRadiusPx,
+                        configSignature = effectiveGlassSignature,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(panelShape)
+                    ) {
+                        cardContent()
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .appSettingPanelBackground(
+                                normalColor = palette.settings.row,
+                                borderColor = palette.settings.border,
+                                panelImage = null,
+                                radiusPx = palette.settings.panelRadiusPx
+                            )
+                    ) {
+                        cardContent()
+                    }
                 }
             }
         }

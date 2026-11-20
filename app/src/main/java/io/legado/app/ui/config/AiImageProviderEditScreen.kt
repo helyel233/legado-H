@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import io.legado.app.R
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.main.ai.AiImageProviderConfig
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixCard
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
@@ -97,10 +98,12 @@ internal fun AiImageProviderEditScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                AiImageProviderEditTopBar(onBack = onBack)
+                AppComposeTopBar(
+                    title = stringResource(R.string.ai_image_provider_manage),
+                    onBack = onBack
+                )
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -247,52 +250,6 @@ internal fun AiImageProviderEditScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun AiImageProviderEditTopBar(onBack: () -> Unit) {
-    val style = rememberAppDialogStyle()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(style.actionRadius),
-            color = Color.Transparent,
-            contentColor = style.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = style.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.ai_image_provider_manage),
-            color = style.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = style.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(42.dp))
     }
 }
 

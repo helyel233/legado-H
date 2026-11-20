@@ -44,12 +44,16 @@ import io.legado.app.help.config.BookInfoComponentItem
 import io.legado.app.help.config.BookInfoPageStyle
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
+import io.legado.app.ui.widget.compose.LegadoSegmentedControl
 import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
+import io.legado.app.ui.widget.compose.SegmentedControlTone
+import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
@@ -58,6 +62,7 @@ import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 internal fun BookInfoManageScreen(
     style: BookInfoPageStyle,
     components: List<BookInfoComponentItem>,
+    onBack: () -> Unit,
     onStyleChanged: (BookInfoPageStyle) -> Unit,
     onComponentToggle: (Int, Boolean) -> Unit,
     onReset: () -> Unit,
@@ -80,6 +85,13 @@ internal fun BookInfoManageScreen(
                 .fillMaxSize()
                 .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
         ) {
+            AppComposeTopBar(
+                title = stringResource(R.string.book_info_manage),
+                palette = palette,
+                onBack = onBack,
+                wallpaperVisible = wallpaperVisible,
+                glassSignature = glassSignature
+            )
             // Tab bar
             StyleTabBar(
                 style = style,
@@ -190,61 +202,27 @@ private fun StyleTabBar(
     palette: AppManagementPalette,
     onStyleChanged: (BookInfoPageStyle) -> Unit
 ) {
-    val isClassic = style == BookInfoPageStyle.CLASSIC
-    Row(
+    LegadoSegmentedControl(
+        options = listOf(
+            SegmentedOption(
+                value = BookInfoPageStyle.CLASSIC,
+                label = stringResource(R.string.book_info_style_classic)
+            ),
+            SegmentedOption(
+                value = BookInfoPageStyle.IMMERSIVE_COMPOSE,
+                label = stringResource(R.string.book_info_style_immersive)
+            )
+        ),
+        selectedValue = style,
+        palette = palette.miuix,
+        onSelected = onStyleChanged,
+        tone = SegmentedControlTone.SurfaceThumb,
+        fontSize = 14.sp,
+        glassSignature = LocalAppManagementGlassSignature.current,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StyleTabButton(
-            text = stringResource(R.string.book_info_style_classic),
-            selected = isClassic,
-            palette = palette,
-            onClick = { onStyleChanged(BookInfoPageStyle.CLASSIC) },
-            modifier = Modifier.weight(1f)
-        )
-        StyleTabButton(
-            text = stringResource(R.string.book_info_style_immersive),
-            selected = !isClassic,
-            palette = palette,
-            onClick = { onStyleChanged(BookInfoPageStyle.IMMERSIVE_COMPOSE) },
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun StyleTabButton(
-    text: String,
-    selected: Boolean,
-    palette: AppManagementPalette,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor = if (selected) {
-        palette.settings.accent.copy(alpha = 0.14f)
-    } else {
-        palette.miuix.surfaceVariant
-    }
-    val textColor = if (selected) palette.settings.accent else palette.settings.secondaryText
-
-    Box(
-        modifier = modifier
-            .height(42.dp)
-            .background(backgroundColor, RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 14.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    )
 }
 
 @Composable

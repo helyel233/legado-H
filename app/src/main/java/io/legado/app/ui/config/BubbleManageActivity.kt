@@ -5,8 +5,7 @@ import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +32,7 @@ import io.legado.app.ui.book.cache.WebDavTaskStatus
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.ComposeActionListDialog
 import io.legado.app.ui.widget.compose.ComposeConfirmDialog
@@ -66,7 +66,7 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     private val activeDirNameState = mutableStateOf(BubblePackageManager.activeDirName())
     private val forceSoftwareBubbleState = mutableStateOf(AppConfig.forceSoftwareParagraphBubble)
     private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
+    private val containerMenuLabelState = mutableStateOf<String?>(null)
     private var editingConfig: BubblePackageManager.Config? = null
     private var editingEntry: BubblePackageManager.Entry? = null
     private var pendingColorPickId: Int = -1
@@ -122,15 +122,16 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initComposeContent()
+        binding.titleBar.visibility = View.GONE
         updateContainerMenu()
+        initComposeContent()
         loadPackages()
         observeWebDavTasks()
     }
 
     override fun onResume() {
         super.onResume()
-        invalidateOptionsMenu()
+        updateContainerMenu()
     }
 
     private fun initComposeContent() {
@@ -153,6 +154,8 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     summary = summaryState.value,
                     activeDirName = activeDirNameState.value,
                     forceSoftwareBubble = forceSoftwareBubbleState.value,
+                    topActions = topBarActions(),
+                    onBack = ::supportFinishAfterTransition,
                     previewBitmapProvider = previewCache::load,
                     onForceSoftwareBubbleChange = ::setForceSoftwareBubble,
                     onApply = ::applyEntry,
@@ -166,30 +169,24 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         container.addView(cv, index)
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.s3_bucket).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        menu.add(0, MENU_HELP, 1, R.string.help).apply {
-            setIcon(R.drawable.ic_help)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerMenu()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_CONTAINER -> {
-                showContainerSelector()
-                true
+    private fun topBarActions(): List<AppManagementAction> {
+        return buildList {
+            containerMenuLabelState.value?.let { label ->
+                add(
+                    AppManagementAction(
+                        text = label,
+                        iconRes = R.drawable.ic_outline_cloud_24,
+                        onClick = ::showContainerSelector
+                    )
+                )
             }
-            MENU_HELP -> {
-                showBubbleHelp()
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
+            add(
+                AppManagementAction(
+                    text = getString(R.string.help),
+                    iconRes = R.drawable.ic_help,
+                    onClick = ::showBubbleHelp
+                )
+            )
         }
     }
 
@@ -197,15 +194,12 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            val item = containerMenuItem ?: return
-            item.isVisible = false
+            containerMenuLabelState.value = null
             return
         }
         cloudContainerId =
             AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id ?: containers.firstOrNull()?.id
-        val item = containerMenuItem ?: return
-        item.isVisible = true
-        item.title = containers.firstOrNull { it.id == cloudContainerId }
+        containerMenuLabelState.value = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
     }
@@ -696,7 +690,5 @@ class BubbleManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             )
         )
         private const val CLOUD_SCOPE = "bubble"
-        private const val MENU_CONTAINER = 0x6801
-        private const val MENU_HELP = 0x6802
     }
 }

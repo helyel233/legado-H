@@ -8,9 +8,10 @@ import androidx.annotation.ColorRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
@@ -142,6 +143,13 @@ private object ThemeUiSignatureCache {
 
     private val listenersRegistered = AtomicBoolean(false)
 
+    var batchRevision by mutableIntStateOf(0)
+        private set
+
+    fun bumpBatchRevision() {
+        batchRevision += 1
+    }
+
     fun ensureListeners(context: Context) {
         if (!listenersRegistered.compareAndSet(false, true)) return
         val appContext = context.applicationContext
@@ -188,19 +196,28 @@ fun Context.themeUiSignatureCached(): String {
     }
 }
 
+internal fun currentThemeUiBatchRevision(): Int = ThemeUiSignatureCache.batchRevision
+
+internal fun bumpThemeUiBatchRevision() {
+    ThemeUiSignatureCache.bumpBatchRevision()
+    Snapshot.sendApplyNotifications()
+}
+
 /**
  * 批量事务退出后强制重算一次 signature 与 palette 缓存，
- * 对批窗口内跨线程的 SP 写入实现自愈。
+ * 对批窗口内跨线程的 SP 写入实现自愈，并通过 [batchRevision] 通知 Compose 订阅者立即同步。
  */
 fun Context.recomputeThemeUiSignatureAfterBatch(): String {
     ThemeUiSignatureCache.ensureListeners(this)
     val night = AppConfig.isNightTheme
-    return synchronized(ThemeUiSignatureCache) {
+    val computed = synchronized(ThemeUiSignatureCache) {
         ThemeUiSignatureCache.invalidate()
         themeUiSignature().also {
             ThemeUiSignatureCache.store(it, night)
         }
     }
+    bumpThemeUiBatchRevision()
+    return computed
 }
 
 fun Context.themeUiPaletteCached(): ThemeUiPalette {
@@ -217,21 +234,24 @@ fun Context.themeUiPaletteCached(): ThemeUiPalette {
 fun rememberThemeUiPalette(): ThemeUiPalette {
     val context = LocalContext.current
     // 签名/色板走进程级缓存（见 ThemeUiSignatureCache），
-    // 每个调用点只在缓存失效时才做全量 SP 读取与文件 stat
-    var signature by remember(context) {
-        mutableStateOf(context.themeUiSignatureCached())
+    // 每个调用点只在缓存失效或批事务退出（batchRevision 递增）时才同步最新签名
+    val batchRevision = ThemeUiSignatureCache.batchRevision
+    var prefRevision by remember(context) {
+        mutableIntStateOf(0)
     }
     DisposableEffect(context) {
         val defaultPrefs = context.defaultSharedPreferences
         val themeStorePrefs = ThemeStore.prefs(context)
         val defaultListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key != null && key in themeUiDependencyKeySet) {
-                signature = context.themeUiSignatureCached()
+            if (!PrefBatchTransaction.isInBatch &&
+                (key == null || key in themeUiDependencyKeySet)
+            ) {
+                prefRevision += 1
             }
         }
         val themeStoreListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == ThemeStorePrefKeys.VALUES_CHANGED) {
-                signature = context.themeUiSignatureCached()
+            if (!PrefBatchTransaction.isInBatch && key == ThemeStorePrefKeys.VALUES_CHANGED) {
+                prefRevision += 1
             }
         }
         defaultPrefs.registerOnSharedPreferenceChangeListener(defaultListener)
@@ -240,6 +260,9 @@ fun rememberThemeUiPalette(): ThemeUiPalette {
             defaultPrefs.unregisterOnSharedPreferenceChangeListener(defaultListener)
             themeStorePrefs.unregisterOnSharedPreferenceChangeListener(themeStoreListener)
         }
+    }
+    val signature = remember(context, prefRevision, batchRevision) {
+        context.themeUiSignatureCached()
     }
     return remember(context, signature) {
         context.themeUiPaletteCached()

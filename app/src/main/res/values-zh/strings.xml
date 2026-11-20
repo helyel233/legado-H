@@ -3434,4 +3434,10 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="theme_advanced_colors_toggle">高级表面与栏位覆写</string>
     <string name="theme_advanced_colors_summary_auto">默认由核心种子色自动派生</string>
     <string name="theme_advanced_colors_summary_custom">已自定义 %1$d 项</string>
+
+    <!-- R3-M3: 外观中心工作台 -->
+    <string name="appearance_studio_quick_themes">当前模式主题</string>
+    <string name="appearance_studio_tuning_title">圆角与材质直调</string>
+    <string name="appearance_studio_manage_all">管理全部</string>
+    <string name="appearance_studio_eink_glass_disabled">墨水屏模式下已自动关闭玻璃效果</string>
 </resources>

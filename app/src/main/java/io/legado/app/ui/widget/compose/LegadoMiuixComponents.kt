@@ -1,17 +1,20 @@
 package io.legado.app.ui.widget.compose
 
 import android.os.Build
+import android.view.View
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +64,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +73,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -78,6 +85,9 @@ import io.legado.app.R
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
+import io.legado.app.ui.glass.GlassPanel
+import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.widget.ModernActionPopup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -214,6 +224,7 @@ fun LegadoMiuixActionButton(
     palette: LegadoMiuixPalette,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     primary: Boolean = false,
     danger: Boolean = false,
     cornerRadius: Dp? = null,
@@ -234,10 +245,12 @@ fun LegadoMiuixActionButton(
         danger -> palette.danger
         else -> palette.primaryText
     }
+    val effectiveTextColor = if (enabled) content else content.copy(alpha = 0.45f)
     if (canUseRealMiuix()) {
         MiuixButton(
             onClick = onClick,
             modifier = modifier,
+            enabled = enabled,
             cornerRadius = resolvedCornerRadius,
             minWidth = minWidth,
             minHeight = effectiveMinHeight,
@@ -251,7 +264,7 @@ fun LegadoMiuixActionButton(
         ) {
             Text(
                 text = text,
-                color = content,
+                color = effectiveTextColor,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
@@ -264,10 +277,10 @@ fun LegadoMiuixActionButton(
     Surface(
         modifier = modifier
             .defaultMinSize(minWidth = minWidth, minHeight = effectiveMinHeight)
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(resolvedCornerRadius),
-        color = background,
-        contentColor = content,
+        color = if (enabled) background else background.copy(alpha = 0.46f),
+        contentColor = effectiveTextColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
@@ -281,7 +294,7 @@ fun LegadoMiuixActionButton(
         ) {
             Text(
                 text = text,
-                color = content,
+                color = effectiveTextColor,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
@@ -1051,6 +1064,231 @@ fun LegadoMiuixActionRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+@Immutable
+data class SegmentedOption<T>(
+    val value: T,
+    val label: String,
+    val enabled: Boolean = true
+)
+
+enum class SegmentedControlTone {
+    SurfaceThumb,
+    AccentThumb
+}
+
+@Immutable
+data class SegmentedControlVisualColors(
+    val trackColor: Color,
+    val selectedThumbColor: Color,
+    val selectedTextColor: Color,
+    val unselectedTextColor: Color
+)
+
+internal fun resolveSegmentedControlColors(
+    palette: LegadoMiuixPalette,
+    tone: SegmentedControlTone
+): SegmentedControlVisualColors {
+    return when (tone) {
+        SegmentedControlTone.SurfaceThumb -> SegmentedControlVisualColors(
+            trackColor = palette.surfaceVariant,
+            selectedThumbColor = palette.surface,
+            selectedTextColor = palette.accent,
+            unselectedTextColor = palette.secondaryText
+        )
+        SegmentedControlTone.AccentThumb -> SegmentedControlVisualColors(
+            trackColor = palette.surfaceVariant,
+            selectedThumbColor = palette.accent,
+            selectedTextColor = palette.onAccent,
+            unselectedTextColor = palette.secondaryText
+        )
+    }
+}
+
+internal fun resolveSegmentedInnerRadiusDp(
+    outerRadiusDp: Float,
+    insetDp: Float = 3f
+): Float {
+    val safeOuter = outerRadiusDp.coerceAtLeast(0f)
+    val safeInset = insetDp.coerceAtLeast(0f)
+    return (safeOuter - safeInset).coerceAtLeast(4f).coerceAtMost(safeOuter.coerceAtLeast(4f))
+}
+
+internal fun <T> resolveSegmentedSelectedIndex(
+    options: List<SegmentedOption<T>>,
+    selectedValue: T
+): Int = options.indexOfFirst { it.value == selectedValue }
+
+@Composable
+fun <T> LegadoSegmentedControl(
+    options: List<SegmentedOption<T>>,
+    selectedValue: T,
+    palette: LegadoMiuixPalette,
+    onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    tone: SegmentedControlTone = SegmentedControlTone.SurfaceThumb,
+    cornerRadius: Dp? = null,
+    itemHeight: Dp = 34.dp,
+    fontSize: TextUnit = 13.sp,
+    glassSignature: String? = null
+) {
+    if (options.isEmpty()) return
+    val outerRadius = cornerRadius ?: palette.actionRadius ?: LocalContext.current.composeActionRadius()
+    val innerRadius = resolveSegmentedInnerRadiusDp(outerRadius.value).dp
+    val visualColors = resolveSegmentedControlColors(palette = palette, tone = tone)
+    val outerShape = RoundedCornerShape(outerRadius)
+    val innerShape = RoundedCornerShape(innerRadius)
+    val trackContent: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(3.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            options.forEach { option ->
+                val selected = option.value == selectedValue
+                val textColor = when {
+                    !option.enabled -> visualColors.unselectedTextColor.copy(alpha = 0.45f)
+                    selected -> visualColors.selectedTextColor
+                    else -> visualColors.unselectedTextColor
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(itemHeight)
+                        .clip(innerShape)
+                        .background(
+                            color = if (selected) visualColors.selectedThumbColor else Color.Transparent,
+                            shape = innerShape
+                        )
+                        .clickable(
+                            enabled = option.enabled,
+                            role = Role.RadioButton
+                        ) {
+                            onSelected(option.value)
+                        }
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = option.label,
+                        color = textColor,
+                        fontSize = fontSize,
+                        lineHeight = (fontSize.value + 2f).sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee(iterations = 1)
+                    )
+                }
+            }
+        }
+    }
+
+    if (glassSignature != null) {
+        val outerRadiusPx = with(LocalDensity.current) { outerRadius.toPx() }
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = outerRadiusPx,
+            configSignature = glassSignature,
+            requireWallpaperHost = true,
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(outerShape),
+            fallback = Modifier.background(
+                color = visualColors.trackColor,
+                shape = outerShape
+            )
+        ) {
+            trackContent()
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(outerShape)
+                .background(
+                    color = visualColors.trackColor,
+                    shape = outerShape
+                )
+        ) {
+            trackContent()
+        }
+    }
+}
+
+fun AppManagementMenuAction.toPopupAction(): ModernActionPopup.Action {
+    return ModernActionPopup.Action(
+        title = text.toString(),
+        checked = checked,
+        enabled = enabled,
+        invoke = onClick
+    )
+}
+
+@Composable
+fun AppComposePopupAnchorButton(
+    actionsProvider: () -> List<AppManagementMenuAction>,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    containerColor: Color = Color.Transparent,
+    cornerRadius: Dp? = null,
+    enabled: Boolean = true,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val resolvedCornerRadius = cornerRadius ?: LocalContext.current.composeActionRadius()
+    val shape = RoundedCornerShape(resolvedCornerRadius)
+    var popupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
+    var anchorView by remember { mutableStateOf<View?>(null) }
+    DisposableEffect(Unit) {
+        onDispose {
+            popupHandle?.dismiss()
+            popupHandle = null
+        }
+    }
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+        propagateMinConstraints = true
+    ) {
+        AndroidView(
+            factory = { viewContext ->
+                View(viewContext).apply {
+                    isClickable = false
+                    isFocusable = false
+                }
+            },
+            update = { anchorView = it },
+            modifier = Modifier.matchParentSize()
+        )
+        Surface(
+            modifier = Modifier
+                .clip(shape)
+                .clickable(enabled = enabled) {
+                    val view = anchorView ?: return@clickable
+                    val actions = actionsProvider().filter { it.text.isNotBlank() }
+                    if (actions.isEmpty()) return@clickable
+                    popupHandle = ModernActionPopup.show(
+                        anchor = view,
+                        actions = actions.map { it.toPopupAction() },
+                        previousPopup = popupHandle
+                    )
+                },
+            shape = shape,
+            color = containerColor,
+            contentColor = contentColor,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                content = content
+            )
         }
     }
 }

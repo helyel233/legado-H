@@ -1322,7 +1322,7 @@ object NavigationBarIconConfig {
         return output
     }
 
-    private fun localDir(isNight: Boolean, dirName: String): File = typeDir(isNight).getFile(dirName)
+    internal fun localDir(isNight: Boolean, dirName: String): File = typeDir(isNight).getFile(dirName)
 
     private fun typeDir(isNight: Boolean): File {
         return rootDir.getFile(if (isNight) MODE_NIGHT else MODE_DAY).apply { mkdirs() }

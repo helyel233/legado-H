@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,6 +59,7 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
@@ -92,10 +94,14 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var entriesState by mutableStateOf<List<NavigationBarIconConfig.Entry>>(emptyList())
     private var activeDirNameState by mutableStateOf(NavigationBarIconConfig.DEFAULT_DIR_NAME)
     private var summaryTextState by mutableStateOf("")
-    private var isNightMode by mutableStateOf(false)
+    private var isNightMode by mutableStateOf(AppConfig.isNightTheme)
     private var bottomNavItemsState by mutableStateOf(MainBottomNavConfig.items())
     private var editingEntry: NavigationBarIconConfig.Entry? = null
-    private var editingDialog: LinearLayout? = null
+    private var editingEntryState by mutableStateOf<NavigationBarIconConfig.Entry?>(null)
+    private var editingConfigState by mutableStateOf<NavigationBarIconConfig.Config?>(null)
+    private var editingNameState by mutableStateOf("")
+    private var isSavingEditState by mutableStateOf(false)
+    private var editDialogVersion by mutableIntStateOf(0)
     private var pendingConfig: NavigationBarIconConfig.Config? = null
     private var pendingIconRequest: IconRequest? = null
     private var pendingSidebarBackgroundEntry: NavigationBarIconConfig.Entry? = null
@@ -103,8 +109,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private val handledWebDavTasks = mutableSetOf<String>()
     private var loadVersion = 0
     private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
-    private var containerMenuPopup: ModernActionPopup.Handle? = null
+    private var containerMenuLabelState by mutableStateOf<String?>(null)
     private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
     private val selectIcon = registerForActivityResult(HandleFileContract()) { result ->
@@ -213,16 +218,90 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(R.string.navigation_bar_manage)
+        binding.titleBar.visibility = View.GONE
+        restoreEditInstanceState(savedInstanceState)
+        updateContainerMenu()
         initView()
         loadPackages()
         observeWebDavTasks()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_IS_NIGHT, isNightMode)
+        val entry = editingEntry
+        val config = pendingConfig
+        if (entry != null && config != null) {
+            val snapshot = NavigationBarEditSnapshot(
+                entryDirName = entry.dirName,
+                entrySourceName = entry.source.name,
+                entryRemoteUpdatedAt = entry.remoteUpdatedAt,
+                editingName = editingNameState,
+                config = config.copy(icons = LinkedHashMap(config.icons))
+            )
+            outState.putString(STATE_EDIT_SNAPSHOT_JSON, snapshot.toJson())
+        }
+        pendingIconRequest?.let { req ->
+            outState.putInt(STATE_PENDING_ICON_CODE, req.code)
+            outState.putString(STATE_PENDING_ICON_KEY, req.item.key)
+            outState.putBoolean(STATE_PENDING_ICON_SELECTED, req.selected)
+            outState.putBoolean(STATE_PENDING_ICON_SINGLE, req.single)
+        }
+    }
+
+    private fun restoreEditInstanceState(savedInstanceState: Bundle?) {
+        val state = savedInstanceState ?: return
+        if (state.containsKey(STATE_IS_NIGHT)) {
+            isNightMode = state.getBoolean(STATE_IS_NIGHT)
+        }
+        NavigationBarEditSnapshot.fromJson(state.getString(STATE_EDIT_SNAPSHOT_JSON))?.let { snapshot ->
+            val source = runCatching {
+                NavigationBarIconConfig.Source.valueOf(snapshot.entrySourceName)
+            }.getOrDefault(NavigationBarIconConfig.Source.LOCAL)
+            val localDir = if (
+                snapshot.entryDirName.isNotBlank() &&
+                source != NavigationBarIconConfig.Source.REMOTE
+            ) {
+                NavigationBarIconConfig.localDir(snapshot.config.isNightMode, snapshot.entryDirName)
+            } else {
+                null
+            }
+            val restoredEntry = NavigationBarIconConfig.Entry(
+                config = snapshot.config.copy(icons = LinkedHashMap(snapshot.config.icons)),
+                source = source,
+                dirName = snapshot.entryDirName,
+                localDir = localDir,
+                remoteUpdatedAt = snapshot.entryRemoteUpdatedAt
+            )
+            editingEntry = restoredEntry
+            pendingConfig = restoredEntry.config.copy(icons = LinkedHashMap(restoredEntry.config.icons))
+            editingNameState = snapshot.editingName
+            refreshEditDialog()
+            if (state.containsKey(STATE_PENDING_ICON_CODE)) {
+                val itemKey = state.getString(STATE_PENDING_ICON_KEY).orEmpty()
+                val single = state.getBoolean(STATE_PENDING_ICON_SINGLE, false)
+                val navItem = (NavigationBarIconConfig.extraItems + NavigationBarIconConfig.items)
+                    .firstOrNull { it.key == itemKey }
+                if (navItem != null) {
+                    pendingIconRequest = IconRequest(
+                        code = state.getInt(STATE_PENDING_ICON_CODE),
+                        entry = restoredEntry,
+                        item = navItem,
+                        selected = state.getBoolean(STATE_PENDING_ICON_SELECTED, false),
+                        single = single
+                    )
+                }
+            }
+            if (restoredEntry.localDir != null) {
+                pendingSidebarBackgroundEntry = restoredEntry
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         bottomNavItemsState = MainBottomNavConfig.items()
-        invalidateOptionsMenu()
+        updateContainerMenu()
     }
 
     override fun observeLiveBus() {
@@ -253,6 +332,8 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     isNightMode = isNightMode,
                     summaryText = summaryTextState,
                     bottomNavSummary = bottomNavSummary(bottomNavItemsState),
+                    topActions = topBarActions(),
+                    onBack = ::supportFinishAfterTransition,
                     onSwitchDayNight = { night ->
                         if (night != isNightMode) {
                             isNightMode = night
@@ -266,42 +347,60 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     entryInfo = ::entryInfo,
                     entryActions = ::entryActions
                 )
+                val dialogEntry = editingEntryState
+                val dialogConfig = editingConfigState
+                if (dialogEntry != null && dialogConfig != null) {
+                    NavigationBarEditDialog(
+                        entry = dialogEntry,
+                        name = editingNameState,
+                        wallpaperValue = wallpaperLabel(dialogConfig.wallpaperPath),
+                        sidebarBackgroundValue = if (dialogConfig.sidebarBackgroundPath.isNullOrBlank()) {
+                            getString(R.string.select_image)
+                        } else {
+                            getString(R.string.theme_image_selected)
+                        },
+                        version = editDialogVersion,
+                        navItems = NavigationBarIconConfig.items
+                            .filter { AppConfig.bottomBarLayoutMode == "sidebar" || it.key != "ai" }
+                            .let { NavigationBarIconConfig.extraItems + it },
+                        onNameChange = { editingNameState = it },
+                        isSaving = isSavingEditState,
+                        onClickBottomWallpaper = ::showBottomWallpaperSelector,
+                        onClickSidebarBackground = ::showSidebarBackgroundSelector,
+                        onClickSingleIcon = ::showSingleIconSelector,
+                        onClickIcon = ::showIconSelector,
+                        onDismiss = {
+                            if (!isSavingEditState) dismissEditDialog()
+                        },
+                        onConfirm = {
+                            if (!isSavingEditState) saveEditingPackage()
+                        }
+                    )
+                }
                             }
             }
         }
         container.addView(cv, index.coerceAtMost(container.childCount))
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.s3_bucket).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setActionView(R.layout.view_action_button)
-            actionView?.let { view ->
-                view.contentDescription = title
-                view.findViewById<ImageButton>(R.id.item)?.setImageDrawable(icon)
-                view.setOnClickListener { showContainerSelector(view) }
+    private fun topBarActions(): List<AppManagementAction> {
+        return buildList {
+            containerMenuLabelState?.let { label ->
+                add(
+                    AppManagementAction(
+                        text = label,
+                        iconRes = R.drawable.ic_outline_cloud_24,
+                        menuActions = ::containerSelectorActions
+                    )
+                )
             }
-        }
-        menu.add(0, MENU_SYNC_TASKS, 1, R.string.package_sync_task_menu).apply {
-            setIcon(R.drawable.ic_history)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerMenu()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            MENU_CONTAINER -> {
-                showContainerSelector(item.actionView)
-                true
-            }
-            MENU_SYNC_TASKS -> {
-                showNavigationBarSyncTasks()
-                true
-            }
-            else -> super.onCompatOptionsItemSelected(item)
+            add(
+                AppManagementAction(
+                    text = getString(R.string.package_sync_task_menu),
+                    iconRes = R.drawable.ic_history,
+                    onClick = ::showNavigationBarSyncTasks
+                )
+            )
         }
     }
 
@@ -380,41 +479,38 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun updateContainerMenu() {
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
-        val item = containerMenuItem ?: return
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            item.isVisible = false
+            containerMenuLabelState = null
             return
         }
         cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
             ?: containers.firstOrNull()?.id
-        item.isVisible = true
-        val title = containers.firstOrNull { it.id == cloudContainerId }
+        containerMenuLabelState = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
-        item.title = title
-        item.actionView?.contentDescription = title
     }
 
-    private fun showContainerSelector(anchor: View? = null) {
-        lifecycleScope.launch {
-            val containers = withContext(Dispatchers.IO) { AppCloudStorage.listContainers().filter { it.enabled } }
-            if (containers.isEmpty()) {
-                toastOnUi(R.string.cloud_storage_config_required)
-                return@launch
-            }
-            val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-            val popupAnchor = anchor ?: containerMenuItem?.actionView ?: binding.titleBar.toolbar
-            val actions = containers.map { container ->
-                ModernActionPopup.Action(AppCloudStorage.containerDisplayLabel(container)) {
-                    if (container.id == selected) return@Action
-                    AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
-                    cloudContainerId = container.id
-                    updateContainerMenu()
-                    loadPackages()
+    private fun containerSelectorActions(): List<AppManagementMenuAction> {
+        val containers = AppCloudStorage.listContainers().filter { it.enabled }
+        if (containers.isEmpty()) {
+            toastOnUi(R.string.cloud_storage_config_required)
+            return emptyList()
+        }
+        val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
+        return containers.map { container ->
+            AppManagementMenuAction(
+                text = AppCloudStorage.containerDisplayLabel(container),
+                checked = container.id == selected,
+                onClick = {
+                    if (container.id != selected) {
+                        AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
+                        cloudContainerId = container.id
+                        updateContainerMenu()
+                        loadPackages()
+                    }
                 }
-            }
-            containerMenuPopup = ModernActionPopup.show(popupAnchor, actions, containerMenuPopup)
+            )
         }
     }
     private fun loadPackages() {
@@ -472,101 +568,48 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
         editingEntry = base
         pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-        val root = buildEditView()
-        editingDialog = root
-        alert(R.string.navigation_bar_edit) {
-            customView { editDialogScrollContainer(root) }
-            okButton {
-                saveEditingPackage()
-            }
-            cancelButton()
-        }
+        editingNameState = pendingConfig!!.name
+        refreshEditDialog()
     }
 
-    private fun editDialogScrollContainer(content: View): ScrollView {
-        return object : ScrollView(this) {
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val maxHeight = (resources.displayMetrics.heightPixels * 0.68f).toInt()
-                    .coerceAtLeast(320.dp)
-                val limitedHeightSpec = View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST)
-                super.onMeasure(widthMeasureSpec, limitedHeightSpec)
-            }
-        }.apply {
-            isFillViewport = false
-            isVerticalScrollBarEnabled = true
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(
-                content,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-        }
-    }
-
-    private fun buildEditView(): LinearLayout {
-        val config = pendingConfig!!
-        val currentEntry = editingEntry
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(2, 2, 2, 4)
-            applyUiBodyTypefaceDeep(this@NavigationBarManageActivity.uiTypeface())
-            addView(PackageManageUi.nameInput(this@NavigationBarManageActivity, config.name, getString(R.string.navigation_bar_name)))
-            addView(optionRow(getString(R.string.bottom_bar_wallpaper), wallpaperLabel(config.wallpaperPath)) {
-                showBottomWallpaperSelector()
-            })
-            addView(optionRow(
-                getString(R.string.navigation_bar_sidebar_background),
-                if (config.sidebarBackgroundPath.isNullOrBlank()) {
-                    getString(R.string.select_image)
-                } else {
-                    getString(R.string.theme_image_selected)
-                }
-            ) {
-                selector(
-                    getString(R.string.navigation_bar_sidebar_background),
-                    buildList {
-                        add(getString(R.string.select_image))
-                        if (!config.sidebarBackgroundPath.isNullOrBlank()) {
-                            add(getString(R.string.delete))
-                        }
-                    }
-                ) { _, index ->
-                    if (index == 0) {
-                        pendingSidebarBackgroundEntry = currentEntry
-                        selectSidebarBackground.launch {
-                            mode = HandleFileContract.IMAGE
-                            title = getString(R.string.navigation_bar_sidebar_background)
-                        }
-                    } else if (currentEntry != null) {
-                        editingEntry = NavigationBarIconConfig.clearSidebarBackground(currentEntry)
-                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                        notifyAppliedIfNeeded(editingEntry!!)
-                        refreshEditDialog()
-                        loadPackages()
-                    }
-                }
-            })
-            NavigationBarIconConfig.items
-                .filter { AppConfig.bottomBarLayoutMode == "sidebar" || it.key != "ai" }
-                .let { NavigationBarIconConfig.extraItems + it }
-                .forEach { item ->
-                    if (item.menuId == 0) {
-                        addView(singleIconRow(item))
-                    } else {
-                        addView(iconRow(item))
-                    }
-                }
-        }
+    private fun dismissEditDialog() {
+        isSavingEditState = false
+        editingEntryState = null
+        editingConfigState = null
+        editingEntry = null
+        pendingConfig = null
     }
 
     private fun refreshEditDialog() {
-        val root = editingDialog ?: return
-        root.removeAllViews()
-        buildEditView().let { rebuilt ->
-            while (rebuilt.childCount > 0) {
-                root.addView(rebuilt.getChildAt(0).also { rebuilt.removeView(it) })
+        editingEntryState = editingEntry
+        editingConfigState = pendingConfig
+        editDialogVersion++
+    }
+
+    private fun showSidebarBackgroundSelector() {
+        val config = pendingConfig ?: return
+        val currentEntry = editingEntry
+        selector(
+            getString(R.string.navigation_bar_sidebar_background),
+            buildList {
+                add(getString(R.string.select_image))
+                if (!config.sidebarBackgroundPath.isNullOrBlank()) {
+                    add(getString(R.string.delete))
+                }
+            }
+        ) { _, index ->
+            if (index == 0) {
+                pendingSidebarBackgroundEntry = currentEntry
+                selectSidebarBackground.launch {
+                    mode = HandleFileContract.IMAGE
+                    title = getString(R.string.navigation_bar_sidebar_background)
+                }
+            } else if (currentEntry != null) {
+                editingEntry = NavigationBarIconConfig.clearSidebarBackground(currentEntry)
+                pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
+                notifyAppliedIfNeeded(editingEntry!!)
+                refreshEditDialog()
+                loadPackages()
             }
         }
     }
@@ -608,156 +651,69 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
         cropBottomWallpaper.launch(request.params)
     }
 
-    private fun optionRow(title: String, value: String, onClick: () -> Unit): View {
-        return PackageManageUi.optionRow(this, title, value, onClick)
-    }
-
-    private fun showAlphaPicker(title: String, value: Int, apply: (Int) -> Unit) {
-        NumberPickerDialog(this)
-            .setTitle(title)
-            .setMinValue(0)
-            .setMaxValue(100)
-            .setValue(value)
-            .show {
-                apply(it.coerceIn(0, 100))
+    private fun showSingleIconSelector(item: NavigationBarIconConfig.NavItem) {
+        val entry = editingEntry ?: return
+        selector(
+            getString(item.titleRes),
+            listOf(getString(R.string.select_image), getString(R.string.delete))
+        ) { _, index ->
+            if (index == 0) {
+                val code = requestSingleIconBase + NavigationBarIconConfig.extraItems.indexOf(item)
+                pendingIconRequest = IconRequest(code, entry, item, selected = false, single = true)
+                selectIcon.launch {
+                    mode = HandleFileContract.FILE
+                    requestCode = code
+                    title = getString(R.string.navigation_icon_select_file)
+                    allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
+                }
+            } else {
+                editingEntry = NavigationBarIconConfig.clearSingleIcon(entry, item.key)
+                pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
+                notifyAppliedIfNeeded(editingEntry!!)
                 refreshEditDialog()
+                loadPackages()
             }
-    }
-
-    private fun iconRow(item: NavigationBarIconConfig.NavItem): View {
-        val entry = editingEntry ?: return View(this)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(14.dp, 8.dp, 14.dp, 8.dp)
-            background = UiCorner.opaqueRounded(
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 8.dp
-            }
-            addView(TextView(context).apply {
-                setText(item.titleRes)
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = this@NavigationBarManageActivity.uiTypeface()
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(previewButton(entry, item, false))
-            addView(previewButton(entry, item, true))
         }
     }
 
-    private fun singleIconRow(item: NavigationBarIconConfig.NavItem): View {
-        val entry = editingEntry ?: return View(this)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(14.dp, 8.dp, 14.dp, 8.dp)
-            background = UiCorner.opaqueRounded(
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 8.dp
-            }
-            addView(TextView(context).apply {
-                setText(item.titleRes)
-                textSize = 15f
-                setTextColor(primaryTextColor)
-                typeface = this@NavigationBarManageActivity.uiTypeface()
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            addView(singlePreviewButton(entry, item))
-        }
-    }
-
-    private fun singlePreviewButton(entry: NavigationBarIconConfig.Entry, item: NavigationBarIconConfig.NavItem): ImageView {
-        return ImageView(this).apply {
-            contentDescription = getString(item.titleRes)
-            setPadding(8.dp, 8.dp, 8.dp, 8.dp)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setImageDrawable(NavigationBarIconConfig.previewSingleDrawable(this@NavigationBarManageActivity, entry, item))
-            background = UiCorner.actionSelector(
-                context.themeMutedColorOrDefault(),
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(44.dp, 44.dp).apply { marginStart = 8.dp }
-            setOnClickListener {
-                selector(
-                    contentDescription,
-                    listOf(getString(R.string.select_image), getString(R.string.delete))
-                ) { _, index ->
-                    if (index == 0) {
-                        val code = requestSingleIconBase + NavigationBarIconConfig.extraItems.indexOf(item)
-                        pendingIconRequest = IconRequest(code, entry, item, selected = false, single = true)
-                        selectIcon.launch {
-                            mode = HandleFileContract.FILE
-                            requestCode = code
-                            title = getString(R.string.navigation_icon_select_file)
-                            allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
-                        }
-                    } else {
-                        editingEntry = NavigationBarIconConfig.clearSingleIcon(entry, item.key)
-                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                        notifyAppliedIfNeeded(editingEntry!!)
-                        refreshEditDialog()
-                        loadPackages()
-                    }
+    private fun showIconSelector(item: NavigationBarIconConfig.NavItem, selected: Boolean) {
+        val entry = editingEntry ?: return
+        selector(
+            getString(if (selected) R.string.navigation_icon_selected else R.string.navigation_icon_normal),
+            listOf(getString(R.string.select_image), getString(R.string.delete))
+        ) { _, index ->
+            if (index == 0) {
+                val code = NavigationBarIconConfig.items.indexOf(item) * 2 + if (selected) 1 else 0
+                pendingIconRequest = IconRequest(code, entry, item, selected)
+                selectIcon.launch {
+                    mode = HandleFileContract.FILE
+                    requestCode = code
+                    title = getString(R.string.navigation_icon_select_file)
+                    allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
                 }
-            }
-        }
-    }
-
-    private fun previewButton(entry: NavigationBarIconConfig.Entry, item: NavigationBarIconConfig.NavItem, selected: Boolean): ImageView {
-        return ImageView(this).apply {
-            contentDescription = getString(if (selected) R.string.navigation_icon_selected else R.string.navigation_icon_normal)
-            setPadding(8.dp, 8.dp, 8.dp, 8.dp)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setImageDrawable(NavigationBarIconConfig.previewDrawable(this@NavigationBarManageActivity, entry, item, selected))
-            background = UiCorner.actionSelector(
-                context.themeMutedColorOrDefault(),
-                context.themeCardColorOrDefault(),
-                UiCorner.actionRadius(context)
-            )
-            layoutParams = LinearLayout.LayoutParams(44.dp, 44.dp).apply { marginStart = 8.dp }
-            setOnClickListener {
-                selector(
-                    contentDescription,
-                    listOf(getString(R.string.select_image), getString(R.string.delete))
-                ) { _, index ->
-                    if (index == 0) {
-                        val code = NavigationBarIconConfig.items.indexOf(item) * 2 + if (selected) 1 else 0
-                        pendingIconRequest = IconRequest(code, entry, item, selected)
-                        selectIcon.launch {
-                            mode = HandleFileContract.FILE
-                            requestCode = code
-                            title = getString(R.string.navigation_icon_select_file)
-                            allowExtensions = arrayOf("ico", "svg", "png", "jpg", "jpeg")
-                        }
-                    } else {
-                        editingEntry = NavigationBarIconConfig.clearIcon(entry, item.key, selected)
-                        pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
-                        notifyAppliedIfNeeded(editingEntry!!)
-                        refreshEditDialog()
-                        loadPackages()
-                    }
-                }
+            } else {
+                editingEntry = NavigationBarIconConfig.clearIcon(entry, item.key, selected)
+                pendingConfig = editingEntry!!.config.copy(icons = editingEntry!!.config.icons.toMutableMap())
+                notifyAppliedIfNeeded(editingEntry!!)
+                refreshEditDialog()
+                loadPackages()
             }
         }
     }
 
     private fun saveEditingPackage() {
         val config = pendingConfig ?: return
-        val name = editingDialog?.findViewWithTag<EditText>("name")?.text?.toString()?.trim().orEmpty()
+        val name = editingNameState.trim()
+        if (isSavingEditState) return
+        isSavingEditState = true
         lifecycleScope.launch {
             kotlin.runCatching {
                 withContext(Dispatchers.IO) {
                     NavigationBarIconConfig.addOrUpdate(config.copy(name = name), editingEntry)
                 }
             }.onSuccess {
+                isSavingEditState = false
+                dismissEditDialog()
                 if (notifyAppliedIfNeeded(it)) {
                     AppearanceKitManager.syncCurrentNavigationBarRef(it.config.isNightMode, it)
                 }
@@ -767,6 +723,7 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                     showNavigationBarSyncTasks()
                 }
             }.onFailure {
+                isSavingEditState = false
                 toastOnUi(it.localizedMessage)
             }
         }
@@ -1037,8 +994,12 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             )
         )
         private const val CLOUD_SCOPE = "theme"
-        private const val MENU_CONTAINER = 0x5401
-        private const val MENU_SYNC_TASKS = 0x5402
+        private const val STATE_IS_NIGHT = "state_is_night"
+        private const val STATE_EDIT_SNAPSHOT_JSON = "state_edit_snapshot_json"
+        private const val STATE_PENDING_ICON_CODE = "state_pending_icon_code"
+        private const val STATE_PENDING_ICON_KEY = "state_pending_icon_key"
+        private const val STATE_PENDING_ICON_SELECTED = "state_pending_icon_selected"
+        private const val STATE_PENDING_ICON_SINGLE = "state_pending_icon_single"
         const val requestSidebarBackground = 7001
         const val requestBottomWallpaper = 7003
         const val requestSingleIconBase = 7100
@@ -1064,6 +1025,8 @@ private fun NavigationBarPackageManageScreen(
     isNightMode: Boolean,
     summaryText: String,
     bottomNavSummary: String,
+    topActions: List<AppManagementAction>,
+    onBack: () -> Unit,
     onSwitchDayNight: (Boolean) -> Unit,
     onAdd: () -> Unit,
     onManageBottomNavItems: () -> Unit,
@@ -1076,6 +1039,9 @@ private fun NavigationBarPackageManageScreen(
     val appliedText = stringResource(R.string.theme_applied_state)
     val editText = stringResource(R.string.edit)
     AppPackageManageScreen(
+        title = stringResource(R.string.navigation_bar_manage),
+        onBack = onBack,
+        topActions = topActions,
         isNightMode = isNightMode,
         summaryText = summaryText,
         addText = stringResource(R.string.theme_add),

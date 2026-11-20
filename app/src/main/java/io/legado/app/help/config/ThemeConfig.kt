@@ -15,6 +15,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.DefaultData
+import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.UiCorner
@@ -519,6 +520,30 @@ object ThemeConfig {
             }
         } catch (e: Exception) {
             AppLog.put("璁剧疆涓婚鍑洪敊\n$e", e, true)
+        }
+    }
+
+    internal fun applyRuntimeOverridePrefs(context: Context, config: Config) {
+        val isNightTheme = config.isNightTheme
+        PrefBatchTransaction.run(context) {
+            config.uiCornerScale?.let {
+                context.putPrefString(
+                    ThemeRuntimeKeys.uiCornerScale(isNightTheme),
+                    it.coerceIn(0f, 3f).toPlainScale()
+                )
+            }
+            config.uiLayoutAlpha?.let {
+                context.putPrefInt(ThemeRuntimeKeys.uiLayoutAlpha(isNightTheme), it.coerceIn(0, 100))
+            }
+            config.dialogAlpha?.let {
+                context.putPrefInt(ThemeRuntimeKeys.dialogAlpha(isNightTheme), it.coerceIn(0, 100))
+            }
+            config.panelBorderAlpha?.let {
+                context.putPrefInt(
+                    if (isNightTheme) PreferKey.panelBorderAlphaN else PreferKey.panelBorderAlpha,
+                    it.coerceIn(0, 100)
+                )
+            }
         }
     }
 

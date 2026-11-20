@@ -84,7 +84,7 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         editingId = savedInstanceState?.getString("editingId")
         previewNight.value = savedInstanceState?.getBoolean("previewNight") ?: AppConfig.isNightTheme
-        binding.titleBar.title = getString(R.string.epub_loading_templates)
+        binding.titleBar.visibility = View.GONE
         binding.tabBar.visibility = View.GONE
         binding.tvSummary.visibility = View.GONE
         binding.btnAdd.visibility = View.GONE
@@ -98,6 +98,7 @@ class EpubLoadingTemplateManageActivity : BaseActivity<ActivityThemeManageBindin
             setContent {
                 LegadoComposeTheme {
                     EpubLoadingTemplateManageScreen(templates.value, selectedId.value, previewNight.value,
+                        onBack = ::supportFinishAfterTransition,
                         onNightChanged = { previewNight.value = it },
                         onApply = {
                             EpubLoadingTemplateStore.apply(this@EpubLoadingTemplateManageActivity, it)

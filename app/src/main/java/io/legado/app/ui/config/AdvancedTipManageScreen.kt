@@ -40,17 +40,20 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementMoreActionButton
 import io.legado.app.ui.widget.compose.AppManagementPalette
+import io.legado.app.ui.widget.compose.AppPackageManageActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
+import androidx.compose.ui.res.stringResource
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,7 +65,9 @@ internal fun AdvancedTipManageScreen(
     entries: List<AdvancedTipPackageManager.Entry>,
     activeId: String,
     loading: Boolean,
+    titleRes: Int,
     summaryRes: Int,
+    onBack: () -> Unit,
     onApply: (AdvancedTipPackageManager.Entry) -> Unit,
     onMoreActions: (AdvancedTipPackageManager.Entry) -> List<AppManagementMenuAction>,
     onImport: () -> Unit
@@ -86,6 +91,13 @@ internal fun AdvancedTipManageScreen(
                 .fillMaxSize()
                 .background(glassPageBackgroundColor(palette.settings.page, wallpaperVisible))
         ) {
+            AppComposeTopBar(
+                title = stringResource(titleRes),
+                palette = palette,
+                onBack = onBack,
+                wallpaperVisible = wallpaperVisible,
+                glassSignature = glassSignature
+            )
             Text(
                 text = if (loading) {
                     LocalContext.current.getString(R.string.loading)
@@ -107,7 +119,7 @@ internal fun AdvancedTipManageScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
             ) {
                 items(entries, key = { it.id }) { entry ->
@@ -129,7 +141,7 @@ internal fun AdvancedTipManageScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 minHeight = 48.dp,
-                primary = true
+                primary = false
             )
             Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
@@ -179,12 +191,12 @@ private fun AdvancedTipItem(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AdvancedTipActionButton(
+                    AppPackageManageActionButton(
                         text = LocalContext.current.getString(
                             if (active) R.string.advanced_title_applied else R.string.advanced_title_apply
                         ),
                         palette = palette.miuix,
-                        accent = true,
+                        selected = true,
                         enabled = entry.isUsable && !active,
                         onClick = onApply
                     )
@@ -230,45 +242,6 @@ private fun AdvancedTipPreview(
                 },
                 fontSize = 12.sp,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun AdvancedTipActionButton(
-    text: String,
-    palette: LegadoMiuixPalette,
-    accent: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    val actionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
-    val minHeight = (38f * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
-    Surface(
-        modifier = Modifier
-            .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(actionRadius),
-        color = if (accent) palette.accent.copy(alpha = if (enabled) 0.14f else 0.08f)
-        else palette.surfaceVariant,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .defaultMinSize(minHeight = minHeight)
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = text,
-                color = if (enabled) palette.accent else palette.secondaryText,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }

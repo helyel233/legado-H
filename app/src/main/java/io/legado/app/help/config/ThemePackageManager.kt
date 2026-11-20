@@ -278,6 +278,68 @@ object ThemePackageManager {
         )
     }
 
+    fun activeEntryDirName(context: Context, isNightTheme: Boolean): String {
+        val storedDirName = context.getPrefString(
+            if (isNightTheme) PreferKey.dNThemeDirName else PreferKey.dThemeDirName
+        )?.trim().orEmpty()
+        if (storedDirName.isNotBlank()) return storedDirName
+        val storedThemeName = context.getPrefString(
+            if (isNightTheme) PreferKey.dNThemeName else PreferKey.dThemeName
+        )?.trim().orEmpty()
+        if (storedThemeName.isBlank() || isBuiltinTheme(isNightTheme, storedThemeName)) {
+            return builtinDirName(isNightTheme)
+        }
+        return storedThemeName.normalizeFileName()
+    }
+
+    /**
+     * 外观中心「单写入口」：写入当前生效模式下的运行时偏好（圆角/透明度等），
+     * 若当前激活的是本地自定义主题包，同步更新该包的 `theme.json` 与 `ThemeConfig.configList`；
+     * 若当前激活的是内置主题（`Source.BUILTIN`），显式跳过文件写回，仅保留运行时偏好。
+     */
+    suspend fun updateActiveRuntimeOverride(
+        context: Context,
+        isNightTheme: Boolean,
+        mutator: (ThemeConfig.Config) -> ThemeConfig.Config
+    ): Entry = withContext(IO) {
+        importMutex.withLock {
+            val currentRuntime = ThemeConfig.getThemeConfig(context, isNightTheme)
+            val updatedRuntime = mutator(currentRuntime).copy(isNightTheme = isNightTheme)
+            ThemeConfig.applyRuntimeOverridePrefs(context, updatedRuntime)
+
+            val storedDirName = context.getPrefString(
+                if (isNightTheme) PreferKey.dNThemeDirName else PreferKey.dThemeDirName
+            )?.trim().orEmpty()
+            val storedThemeName = currentRuntime.themeName.trim()
+            if (storedDirName == builtinDirName(isNightTheme) ||
+                isBuiltinTheme(isNightTheme, storedThemeName)
+            ) {
+                return@withLock builtinEntry(isNightTheme)
+            }
+
+            val localEntry = loadLocal(isNightTheme)
+                .matchStoredEntry(storedDirName, storedThemeName.normalizeFileName(), storedThemeName)
+                ?: return@withLock builtinEntry(isNightTheme)
+            val dir = localEntry.localDir ?: return@withLock localEntry
+            val baseConfig = runCatching { resolveConfigPaths(localEntry.packageInfo, dir) }
+                .getOrElse { currentRuntime }
+            val nextConfig = mutator(baseConfig).copy(
+                isNightTheme = isNightTheme,
+                themeName = baseConfig.themeName
+            )
+            val packagedConfig = copyAssetsIntoPackage(nextConfig, dir, isNightTheme)
+            val updatedPkg = localEntry.packageInfo.copy(
+                updatedAt = System.currentTimeMillis(),
+                config = packagedConfig
+            )
+            File(dir, packageFileName).writeText(GSON.toJson(updatedPkg))
+            ThemeConfig.addConfig(resolveConfigPaths(updatedPkg, dir))
+            val updatedEntry = localEntry.copy(packageInfo = updatedPkg)
+            AppearanceKitManager.syncCurrentThemeRef(isNightTheme, updatedEntry)
+            updatedEntry
+        }
+    }
+
     fun builtinEntryForKit(isNightTheme: Boolean): Entry {
         return builtinEntry(isNightTheme)
     }

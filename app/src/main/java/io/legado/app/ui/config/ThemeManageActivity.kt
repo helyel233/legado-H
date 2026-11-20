@@ -72,8 +72,6 @@ import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.databinding.DialogImageBlurringBinding
-import io.legado.app.databinding.DialogThemePackageEditBinding
-import io.legado.app.databinding.ItemThemePackageOptionBinding
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.config.AppearanceKitManager
@@ -109,10 +107,16 @@ import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.AppComposePopupAnchorButton
+import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.imageBgTextShadow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
+import io.legado.app.ui.widget.compose.LegadoSegmentedControl
+import io.legado.app.ui.widget.compose.SegmentedControlTone
+import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LocalAppManagementGlassSignature
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
@@ -163,40 +167,13 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private var entriesState by mutableStateOf<List<ThemePackageManager.Entry>>(emptyList())
     private var summaryTextState by mutableStateOf("")
-    private var isNightTheme by mutableStateOf(false)
-    private var editDialogBinding: DialogThemePackageEditBinding? = null
+    private var isNightTheme by mutableStateOf(AppConfig.isNightTheme)
+    private var editingDraftState by mutableStateOf<ThemeEditDraft?>(null)
+    private var isSavingDraftState by mutableStateOf(false)
     private var editingEntry: ThemePackageManager.Entry? = null
-    private var pendingBlur = 0
-    private var pendingMainBackgroundPath: String? = null
-    private var pendingMainBackgroundCrop: String? = null
-    private var pendingBookInfoBackgroundPath: String? = null
-    private var pendingPanelBackgroundPath: String? = null
-    private var pendingPanelBackgroundScaleType = ThemeConfig.PANEL_BG_CROP
-    private var pendingPanelBorderColor: String? = null
-    private var pendingPanelBorderAlpha = 100
-    private var pendingUiCornerScale = 1f
-    private var pendingUiLayoutAlpha = 100
-    private var pendingDialogAlpha = 100
-    private var pendingCardColor: String? = null
-    private var pendingMutedColor: String? = null
-    private var pendingSearchFieldBackgroundColor: String? = null
-    private var pendingTabBackgroundColor: String? = null
-    private var pendingShelfColor: String? = null
-    private var pendingCardShadow: Int? = null
-    private var pendingCardBackgroundBlur: Float? = null
-    private var pendingFontScale = 0
-    private var pendingUiCornerSearchFollow = false
-    private var pendingUiCornerReplyFollow = false
-    private var pendingUiFontPath: String? = null
-    private var pendingTitleFontPath: String? = null
-    private var editingConfigNight: Boolean? = null
-    private var pendingUiFontColor: String? = null
-    private var pendingTitleFontColor: String? = null
-    private var pendingFontTarget = FontTarget.UI
     private var loadVersion = 0
     private var cloudContainerId: String? = null
-    private var containerMenuItem: MenuItem? = null
-    private var containerMenuPopup: ModernActionPopup.Handle? = null
+    private var containerMenuLabelState by mutableStateOf<String?>(null)
     private val pendingRemoteSyncTasks = linkedMapOf<String, RemoteSyncTask>()
     @Volatile
     private var syncingRemoteTasks = false
@@ -217,20 +194,19 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
         val resultPath = result.path
         if (java.io.File(resultPath).exists()) {
-            when (request.requestCode) {
-                requestMainBackground -> {
-                    pendingMainBackgroundPath = resultPath
-                    pendingMainBackgroundCrop = formatMainBackgroundCrop(result)
-                    editDialogBinding?.let { binding -> updateImageRow(binding.rowMainBackground, ThemeImageTarget.MAIN) }
-                }
-                requestBookInfoBackground -> {
-                    pendingBookInfoBackgroundPath = resultPath
-                    editDialogBinding?.let { binding -> updateImageRow(binding.rowBookInfoBackground, ThemeImageTarget.BOOK_INFO) }
-                }
-                requestPanelBackground -> {
-                    pendingPanelBackgroundPath = resultPath
-                    editDialogBinding?.let { binding -> updateImageRow(binding.rowPanelBackground, ThemeImageTarget.PANEL) }
-                }
+            val current = editingDraftState ?: return@registerForActivityResult
+            editingDraftState = when (request.requestCode) {
+                requestMainBackground -> current.copy(
+                    mainBackgroundPath = resultPath,
+                    mainBackgroundCrop = formatMainBackgroundCrop(result)
+                )
+                requestBookInfoBackground -> current.copy(
+                    bookInfoBackgroundPath = resultPath
+                )
+                requestPanelBackground -> current.copy(
+                    panelBackgroundPath = resultPath
+                )
+                else -> current
             }
         } else {
             toastOnUi(getString(R.string.image_crop_failed, getString(R.string.unknown)))
@@ -251,6 +227,14 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.visibility = View.GONE
+        savedInstanceState?.let { state ->
+            if (state.containsKey(STATE_IS_NIGHT)) {
+                isNightTheme = state.getBoolean(STATE_IS_NIGHT)
+            }
+            editingDraftState = ThemeEditDraft.fromJson(state.getString(STATE_EDIT_DRAFT_JSON))
+        }
+        updateContainerButton()
         restorePendingRemoteSyncTasks()
         initView()
         lifecycleScope.launch {
@@ -264,9 +248,17 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         observeWebDavTasks()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_IS_NIGHT, isNightTheme)
+        editingDraftState?.let { draft ->
+            outState.putString(STATE_EDIT_DRAFT_JSON, draft.toJson())
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        invalidateOptionsMenu()
+        updateContainerButton()
     }
 
     private fun initView() {
@@ -289,6 +281,8 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     entries = entriesState,
                     isNightTheme = isNightTheme,
                     summaryText = summaryTextState,
+                    topActions = topBarActions(),
+                    onBack = ::supportFinishAfterTransition,
                     onSwitchDayNight = { night ->
                         if (night != isNightTheme) {
                             isNightTheme = night
@@ -303,73 +297,74 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     entryActions = ::entryActions,
                     previewData = ::previewData
                 )
+                editingDraftState?.let { draft ->
+                    ThemePackageEditDialog(
+                        draft = draft,
+                        callbacks = buildThemeEditCallbacks(),
+                        colorIds = themeEditColorIds,
+                        isSaving = isSavingDraftState
+                    )
+                }
                             }
             }
         }
         container.addView(cv, index.coerceAtMost(container.childCount))
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        containerMenuItem = menu.add(0, MENU_CONTAINER, 0, R.string.theme_s3_container_switch).apply {
-            setIcon(R.drawable.ic_outline_cloud_24)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    private fun topBarActions(): List<AppManagementAction> {
+        return buildList {
+            containerMenuLabelState?.let { label ->
+                add(
+                    AppManagementAction(
+                        text = label,
+                        iconRes = R.drawable.ic_outline_cloud_24,
+                        menuActions = ::containerSelectorActions
+                    )
+                )
+            }
+            add(
+                AppManagementAction(
+                    text = getString(R.string.package_sync_task_menu),
+                    iconRes = R.drawable.ic_history,
+                    onClick = ::showThemeSyncTasks
+                )
+            )
         }
-        menu.add(0, MENU_SYNC_TASKS, 1, R.string.package_sync_task_menu).apply {
-            setIcon(R.drawable.ic_history)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-        updateContainerButton()
-        return true
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == MENU_CONTAINER) {
-            showContainerSelector()
-            return true
-        }
-        if (item.itemId == MENU_SYNC_TASKS) {
-            showThemeSyncTasks()
-            return true
-        }
-        return super.onCompatOptionsItemSelected(item)
     }
 
     private fun updateContainerButton() {
         val containers = AppCloudStorage.listContainers().filter { it.enabled }
         if (AppCloudStorage.type != CloudStorageType.S3) {
             cloudContainerId = containers.firstOrNull()?.id
-            containerMenuItem?.isVisible = false
+            containerMenuLabelState = null
             return
         }
         cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
             ?: containers.firstOrNull()?.id
-        containerMenuItem?.isVisible = true
-        containerMenuItem?.title = containers.firstOrNull { it.id == cloudContainerId }
+        containerMenuLabelState = containers.firstOrNull { it.id == cloudContainerId }
             ?.let(AppCloudStorage::containerDisplayLabel)
             ?: getString(R.string.s3_bucket)
     }
 
-    private fun showContainerSelector() {
-        lifecycleScope.launch {
-            val containers = withContext(Dispatchers.IO) { AppCloudStorage.listContainers().filter { it.enabled } }
-            if (containers.isEmpty()) {
-                toastOnUi(R.string.cloud_storage_config_required)
-                return@launch
-            }
-            val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-            val actions = containers.map { container ->
-                ModernActionPopup.Action(AppCloudStorage.containerDisplayLabel(container)) {
-                    if (container.id == selected) return@Action
-                    AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
-                    cloudContainerId = container.id
-                    updateContainerButton()
-                    loadThemes()
+    private fun containerSelectorActions(): List<AppManagementMenuAction> {
+        val containers = AppCloudStorage.listContainers().filter { it.enabled }
+        if (containers.isEmpty()) {
+            toastOnUi(R.string.cloud_storage_config_required)
+            return emptyList()
+        }
+        val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
+        return containers.map { container ->
+            AppManagementMenuAction(
+                text = AppCloudStorage.containerDisplayLabel(container),
+                checked = container.id == selected,
+                onClick = {
+                    if (container.id != selected) {
+                        AppCloudStorage.selectContainer(CLOUD_SCOPE, container.id)
+                        cloudContainerId = container.id
+                        updateContainerButton()
+                        loadThemes()
+                    }
                 }
-            }
-            containerMenuPopup = ModernActionPopup.show(
-                anchor = binding.titleBar.toolbar,
-                actions = actions,
-                previousPopup = containerMenuPopup
             )
         }
     }
@@ -427,24 +422,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     private fun showManualAddDialog() {
-        val dialogBinding = createEditBinding(currentConfig(), null)
-        editDialogBinding = dialogBinding
-        editingEntry = null
-        val dialog = AndroidAlertBuilder(this).apply {
-            setTitle(getString(R.string.theme_manual_add))
-            customView { dialogBinding.root }
-            onDismiss {
-                editDialogBinding = null
-                editingEntry = null
-            }
-        }.build()
-        dialog.setOnShowListener {
-            dialog.applyTint()
-            applyThemeEditDialogSize(dialog)
-        }
-        applyThemeEditFonts(dialogBinding)
-        bindThemeEditDialogActions(dialog, dialogBinding)
-        dialog.show()
+        openEditDraft(currentConfig(), null)
     }
 
     private fun showEditDialog(entry: ThemePackageManager.Entry) {
@@ -460,24 +438,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     entry
                 }
             }.onSuccess { localEntry ->
-                val dialogBinding = createEditBinding(ThemePackageManager.getConfig(localEntry), localEntry)
-                editDialogBinding = dialogBinding
-                editingEntry = localEntry
-                val dialog = AndroidAlertBuilder(this@ThemeManageActivity).apply {
-                    setTitle(getString(R.string.theme_edit))
-                    customView { dialogBinding.root }
-                    onDismiss {
-                        editDialogBinding = null
-                        editingEntry = null
-                    }
-                }.build()
-                dialog.setOnShowListener {
-                    dialog.applyTint()
-                    applyThemeEditDialogSize(dialog)
-                }
-                applyThemeEditFonts(dialogBinding)
-                bindThemeEditDialogActions(dialog, dialogBinding)
-                dialog.show()
+                openEditDraft(ThemePackageManager.getConfig(localEntry), localEntry)
             }.onFailure {
                 if (it.isJobCancellation()) return@onFailure
                 toastOnUi(getString(R.string.theme_package_read_failed, it.localizedMessage))
@@ -485,685 +446,182 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }
     }
 
-    private fun createEditBinding(
+    private fun openEditDraft(
         current: ThemeConfig.Config,
         entry: ThemePackageManager.Entry?
-    ): DialogThemePackageEditBinding {
+    ) {
         val configNight = current.isNightTheme
-        editingConfigNight = configNight
-        pendingMainBackgroundPath = current.backgroundImgPath
-        pendingMainBackgroundCrop = current.backgroundImgCrop
-        pendingBookInfoBackgroundPath = current.bookInfoBackgroundImgPath
-        pendingPanelBackgroundPath = current.panelBackgroundImgPath
-        pendingPanelBackgroundScaleType = current.panelBackgroundScaleType ?: ThemeConfig.PANEL_BG_CROP
-        pendingPanelBorderColor = normalizeOptionalColor(current.panelBorderColor)
-        pendingPanelBorderAlpha = current.panelBorderAlpha ?: 100
-        pendingBlur = current.backgroundImgBlur
-        pendingUiCornerScale = current.uiCornerScale ?: themeUiCornerScale(configNight)
-        pendingUiLayoutAlpha = current.uiLayoutAlpha ?: themeUiLayoutAlpha(configNight)
-        pendingDialogAlpha = current.dialogAlpha ?: themeDialogAlpha(configNight)
-        pendingCardColor = normalizeOptionalColor(current.cardColor)
-        pendingMutedColor = normalizeOptionalColor(current.mutedColor)
-        pendingSearchFieldBackgroundColor = normalizeOptionalColor(current.searchFieldBackgroundColor)
-        pendingTabBackgroundColor = normalizeOptionalColor(current.tabBackgroundColor)
-        pendingShelfColor = normalizeOptionalColor(current.shelfColor)
-        pendingCardShadow = current.cardShadow
-        pendingCardBackgroundBlur = current.cardBackgroundBlur
-        pendingFontScale = current.fontScale ?: getPrefInt(ThemeRuntimeKeys.fontScale(configNight), 0)
-        pendingUiFontPath = current.uiFontPath ?: getPrefString(ThemeRuntimeKeys.uiFontPath(configNight)).orEmpty()
-        pendingTitleFontPath = current.titleFontPath ?: getPrefString(ThemeRuntimeKeys.titleFontPath(configNight)).orEmpty()
-        pendingUiFontColor = normalizeOptionalColor(
-            current.uiFontColor ?: getPrefString(ThemeRuntimeKeys.uiFontColor(configNight)).orEmpty()
-                .takeIf { it.isNotBlank() }
-            ?: defaultThemeTextColorHex(configNight)
-        )
-        pendingTitleFontColor = normalizeOptionalColor(
-            current.titleFontColor ?: getPrefString(ThemeRuntimeKeys.titleFontColor(configNight)).orEmpty()
-                .takeIf { it.isNotBlank() }
-            ?: defaultThemeTextColorHex(configNight)
-        )
-        pendingUiCornerSearchFollow = current.uiCornerSearchFollow ?: themeUiCornerSearchFollow(configNight)
-        pendingUiCornerReplyFollow = current.uiCornerReplyFollow ?: themeUiCornerReplyFollow(configNight)
-        return DialogThemePackageEditBinding.inflate(layoutInflater).apply {
-            etName.setText(current.themeName)
-            setupColorRow(
-                rowPrimary,
-                R.string.theme_color_primary,
-                current.primaryColor,
-                colorPrimary,
-                ThemeStore.primaryColor(this@ThemeManageActivity)
+        editingEntry = entry
+        editingDraftState = ThemeEditDraft(
+            themeName = current.themeName,
+            isNightTheme = isNightTheme,
+            editingConfigNight = configNight,
+            editingEntryDirName = entry?.dirName,
+            editingEntryNight = entry?.packageInfo?.isNightTheme,
+            nameEditable = entry?.source != ThemePackageManager.Source.REMOTE,
+            canDelete = entry?.source == ThemePackageManager.Source.LOCAL,
+            primaryColorHex = normalizeColor(current.primaryColor, ThemeStore.primaryColor(this)),
+            accentColorHex = normalizeColor(current.accentColor, ThemeStore.accentColor(this)),
+            backgroundColorHex = normalizeColor(current.backgroundColor, ThemeStore.backgroundColor(this)),
+            bottomBackgroundHex = normalizeColor(current.bottomBackground, ThemeStore.bottomBackground(this)),
+            blur = current.backgroundImgBlur.coerceIn(0, 25),
+            mainBackgroundPath = current.backgroundImgPath,
+            mainBackgroundCrop = current.backgroundImgCrop,
+            bookInfoBackgroundPath = current.bookInfoBackgroundImgPath,
+            panelBackgroundPath = current.panelBackgroundImgPath,
+            panelBackgroundScaleType = current.panelBackgroundScaleType ?: ThemeConfig.PANEL_BG_CROP,
+            panelBorderColor = normalizeOptionalColor(current.panelBorderColor),
+            panelBorderAlpha = (current.panelBorderAlpha ?: 100).coerceIn(0, 100),
+            uiCornerScale = (current.uiCornerScale ?: themeUiCornerScale(configNight)).coerceIn(0f, 3f),
+            uiLayoutAlpha = (current.uiLayoutAlpha ?: themeUiLayoutAlpha(configNight)).coerceIn(0, 100),
+            dialogAlpha = (current.dialogAlpha ?: themeDialogAlpha(configNight)).coerceIn(0, 100),
+            cardColor = normalizeOptionalColor(current.cardColor),
+            mutedColor = normalizeOptionalColor(current.mutedColor),
+            searchFieldBackgroundColor = normalizeOptionalColor(current.searchFieldBackgroundColor),
+            tabBackgroundColor = normalizeOptionalColor(current.tabBackgroundColor),
+            shelfColor = normalizeOptionalColor(current.shelfColor),
+            cardShadow = current.cardShadow,
+            cardBackgroundBlur = current.cardBackgroundBlur,
+            fontScale = current.fontScale ?: getPrefInt(ThemeRuntimeKeys.fontScale(configNight), 0),
+            uiCornerSearchFollow = current.uiCornerSearchFollow ?: themeUiCornerSearchFollow(configNight),
+            uiCornerReplyFollow = current.uiCornerReplyFollow ?: themeUiCornerReplyFollow(configNight),
+            uiFontPath = current.uiFontPath ?: getPrefString(ThemeRuntimeKeys.uiFontPath(configNight)).orEmpty(),
+            titleFontPath = current.titleFontPath ?: getPrefString(ThemeRuntimeKeys.titleFontPath(configNight)).orEmpty(),
+            uiFontColor = normalizeOptionalColor(
+                current.uiFontColor ?: getPrefString(ThemeRuntimeKeys.uiFontColor(configNight)).orEmpty()
+                    .takeIf { it.isNotBlank() }
+                ?: defaultThemeTextColorHex(configNight)
+            ),
+            titleFontColor = normalizeOptionalColor(
+                current.titleFontColor ?: getPrefString(ThemeRuntimeKeys.titleFontColor(configNight)).orEmpty()
+                    .takeIf { it.isNotBlank() }
+                ?: defaultThemeTextColorHex(configNight)
             )
-            setupColorRow(
-                rowAccent,
-                R.string.theme_color_accent,
-                current.accentColor,
-                colorAccent,
-                ThemeStore.accentColor(this@ThemeManageActivity)
-            )
-            setupColorRow(
-                rowBackground,
-                R.string.theme_color_background,
-                current.backgroundColor,
-                colorBackground,
-                ThemeStore.backgroundColor(this@ThemeManageActivity)
-            )
-            setupColorRow(
-                rowBottomBackground,
-                R.string.theme_color_bottom_background,
-                current.bottomBackground,
-                colorBottomBackground,
-                ThemeStore.bottomBackground(this@ThemeManageActivity)
-            )
-            setupOptionalColorRow(rowCardColor, R.string.theme_color_card, pendingCardColor, colorCard)
-            setupOptionalColorRow(rowMutedColor, R.string.theme_color_muted, pendingMutedColor, colorMuted)
-            setupOptionalColorRow(
-                rowSearchFieldBackgroundColor,
-                R.string.theme_color_search_field_background,
-                pendingSearchFieldBackgroundColor,
-                colorSearchFieldBackground
-            )
-            setupOptionalColorRow(
-                rowTabBackgroundColor,
-                R.string.theme_color_tab_background,
-                pendingTabBackgroundColor,
-                colorTabBackground
-            )
-            setupOptionalColorRow(rowShelfColor, R.string.theme_color_shelf, pendingShelfColor, colorShelf)
-            setupAdvancedColorToggle(this)
-            setupImageRow(rowMainBackground, R.string.theme_image_main_background, ThemeImageTarget.MAIN)
-            setupImageRow(rowBookInfoBackground, R.string.theme_image_book_info_background, ThemeImageTarget.BOOK_INFO)
-            setupImageRow(rowPanelBackground, R.string.theme_image_panel_background, ThemeImageTarget.PANEL)
-            setupPanelBackgroundModeRow(rowPanelBackgroundMode)
-            setupInterfaceRows(this)
-            setupEditGroups(this)
-            etName.isEnabled = entry?.source != ThemePackageManager.Source.REMOTE
-        }
-    }
-
-    private fun bindThemeEditDialogActions(
-        dialog: androidx.appcompat.app.AlertDialog,
-        binding: DialogThemePackageEditBinding
-    ) {
-        val entry = editingEntry
-        binding.btnDelete.visibility =
-            if (entry?.source == ThemePackageManager.Source.LOCAL) View.VISIBLE else View.GONE
-        binding.btnDelete.setOnClickListener {
-            val localEntry = editingEntry?.takeIf { it.source == ThemePackageManager.Source.LOCAL }
-                ?: return@setOnClickListener
-            confirmDeleteTheme(
-                localEntry,
-                getString(R.string.theme_delete_local_confirm)
-            ) {
-                ThemePackageManager.deleteLocal(localEntry)
-                withContext(Dispatchers.Main) {
-                    dialog.dismiss()
-                    loadThemes()
-                }
-            }
-        }
-        binding.btnCancel.setOnClickListener {
-            dialog.dismiss()
-        }
-        binding.btnConfirm.setOnClickListener {
-            if (saveTheme(binding)) {
-                dialog.dismiss()
-            }
-        }
-    }
-
-    private fun setupAdvancedColorToggle(binding: DialogThemePackageEditBinding) = binding.run {
-        var expanded = false
-        fun renderToggle() {
-            llAdvancedColorGroup.visibility = if (expanded) View.VISIBLE else View.GONE
-            updateAdvancedColorToggleSummary(this)
-        }
-        renderToggle()
-        rowAdvancedColorToggle.root.setOnClickListener {
-            expanded = !expanded
-            renderToggle()
-        }
-    }
-
-    private fun updateAdvancedColorToggleSummary(binding: DialogThemePackageEditBinding) = binding.run {
-        val overriddenCount = listOf(
-            pendingCardColor,
-            pendingMutedColor,
-            pendingSearchFieldBackgroundColor,
-            pendingTabBackgroundColor,
-            pendingShelfColor
-        ).count { it != null }
-        rowAdvancedColorToggle.tvTitle.setText(R.string.theme_advanced_colors_toggle)
-        rowAdvancedColorToggle.tvValue.text = if (overriddenCount > 0) {
-            getString(R.string.theme_advanced_colors_summary_custom, overriddenCount)
-        } else {
-            getString(R.string.theme_advanced_colors_summary_auto)
-        }
-        rowAdvancedColorToggle.viewSwatch.visibility = View.GONE
-    }
-
-    private fun setupEditGroups(binding: DialogThemePackageEditBinding) = binding.run {
-        val tabs = listOf(
-            btnColorGroup to llColorGroup,
-            btnImageGroup to llImageGroup,
-            btnInterfaceGroup to llInterfaceGroup,
-            btnFontGroup to llFontGroup
-        )
-        tabs.forEach { (button, _) ->
-            button.background = UiCorner.actionSelector(
-                Color.TRANSPARENT,
-                themeCardColorOrDefault(),
-                UiCorner.actionRadius(this@ThemeManageActivity)
-            )
-            button.applyUiTitleTypeface(this@ThemeManageActivity)
-        }
-        fun select(index: Int) {
-            tabs.forEachIndexed { tabIndex, (button, group) ->
-                val selected = tabIndex == index
-                button.isSelected = selected
-                button.setTextColor(if (selected) accentColor else primaryTextColor)
-                group.visibility = if (selected) View.VISIBLE else View.GONE
-            }
-        }
-        tabs.forEachIndexed { index, (button, _) ->
-            button.setOnClickListener { select(index) }
-        }
-        select(0)
-    }
-
-    private fun setupInterfaceRows(binding: DialogThemePackageEditBinding) = binding.run {
-        setupCornerScaleRow(rowCornerScale)
-        setupLayoutAlphaRow(rowLayoutAlpha)
-        setupDialogAlphaRow(rowDialogAlpha)
-        setupPanelBorderColorRow(rowPanelBorderColor)
-        setupPanelBorderAlphaRow(rowPanelBorderAlpha)
-        setupOptionalIntRow(rowCardShadow, R.string.theme_card_shadow, 0, 24, pendingCardShadow) {
-            pendingCardShadow = it
-        }
-        setupOptionalFloatRow(rowCardBackgroundBlur, R.string.theme_card_background_blur, pendingCardBackgroundBlur) {
-            pendingCardBackgroundBlur = it
-        }
-        setupFontScaleRow(rowFontScale)
-        setupUiFontRow(rowUiFont)
-        setupOptionalColorRow(rowUiFontColor, R.string.theme_ui_font_color, pendingUiFontColor, colorUiFont)
-        setupTitleFontRow(rowTitleFont)
-        setupOptionalColorRow(rowTitleFontColor, R.string.theme_title_font_color, pendingTitleFontColor, colorTitleFont)
-        setupSwitchRow(rowSearchFollow, R.string.ui_corner_search_follow) {
-            pendingUiCornerSearchFollow = !pendingUiCornerSearchFollow
-            updateSwitchRow(rowSearchFollow, pendingUiCornerSearchFollow)
-        }
-        setupSwitchRow(rowReplyFollow, R.string.ui_corner_reply_follow) {
-            pendingUiCornerReplyFollow = !pendingUiCornerReplyFollow
-            updateSwitchRow(rowReplyFollow, pendingUiCornerReplyFollow)
-        }
-        updateSwitchRow(rowSearchFollow, pendingUiCornerSearchFollow)
-        updateSwitchRow(rowReplyFollow, pendingUiCornerReplyFollow)
-        applyThemeEditFonts(this)
-    }
-
-    private fun applyThemeEditDialogSize(dialog: androidx.appcompat.app.AlertDialog) {
-        val metrics = resources.displayMetrics
-        val heightRatio = if (metrics.heightPixels < 1600) {
-            EDIT_DIALOG_HEIGHT_RATIO_COMPACT
-        } else {
-            EDIT_DIALOG_HEIGHT_RATIO
-        }
-        dialog.setLayout(
-            (metrics.widthPixels * EDIT_DIALOG_WIDTH_RATIO).toInt(),
-            (metrics.heightPixels * heightRatio).toInt()
         )
     }
 
-    private fun applyThemeEditFonts(binding: DialogThemePackageEditBinding) {
-        // 弹窗背景/卡片始终跟随当前界面模式；跨模式编辑（如白天编辑夜间主题）时
-        // 若再把文字染成另一模式的字体色，会出现"卡片不变、文字变夜间"的割裂，
-        // 甚至浅色文字叠浅色卡片不可读。模式不一致时文字保持当前主题色，颜色值看色板行。
-        val previewFontColors = editingConfigNight == AppConfig.isNightTheme
-        val uiTf = loadUiTypeface(pendingUiFontPath.orEmpty()) ?: uiTypeface()
-        binding.root.applyUiBodyTypefaceDeep(uiTf)
-        val titleTf = loadUiTypeface(pendingTitleFontPath.orEmpty()) ?: titleTypeface()
-        listOf(
-            binding.rowPrimary.tvTitle,
-            binding.rowAccent.tvTitle,
-            binding.rowBackground.tvTitle,
-            binding.rowBottomBackground.tvTitle,
-            binding.rowCardColor.tvTitle,
-            binding.rowMutedColor.tvTitle,
-            binding.rowSearchFieldBackgroundColor.tvTitle,
-            binding.rowTabBackgroundColor.tvTitle,
-            binding.rowShelfColor.tvTitle,
-            binding.rowMainBackground.tvTitle,
-            binding.rowBookInfoBackground.tvTitle,
-            binding.rowPanelBackground.tvTitle,
-            binding.rowPanelBackgroundMode.tvTitle,
-            binding.rowCornerScale.tvTitle,
-            binding.rowLayoutAlpha.tvTitle,
-            binding.rowDialogAlpha.tvTitle,
-            binding.rowPanelBorderColor.tvTitle,
-            binding.rowPanelBorderAlpha.tvTitle,
-            binding.rowCardShadow.tvTitle,
-            binding.rowCardBackgroundBlur.tvTitle,
-            binding.rowFontScale.tvTitle,
-            binding.rowUiFont.tvTitle,
-            binding.rowUiFontColor.tvTitle,
-            binding.rowTitleFont.tvTitle,
-            binding.rowTitleFontColor.tvTitle,
-            binding.rowSearchFollow.tvTitle,
-            binding.rowReplyFollow.tvTitle,
-            binding.btnColorGroup,
-            binding.btnImageGroup,
-            binding.btnInterfaceGroup,
-            binding.btnFontGroup,
-            binding.btnCancel,
-            binding.btnConfirm
-        ).forEach {
-            it.applyUiTitleTypeface(this)
-            it.typeface = titleTf
-            if (previewFontColors) {
-                pendingTitleFontColor?.toColorInt()?.let { color ->
-                    it.setTextColor(color)
+    private fun resolvedEditingEntry(): ThemePackageManager.Entry? {
+        editingEntry?.let { return it }
+        val draft = editingDraftState ?: return null
+        val dirName = draft.editingEntryDirName ?: return null
+        val night = draft.editingEntryNight ?: isNightTheme
+        return entriesState.firstOrNull {
+            it.dirName == dirName && it.packageInfo.isNightTheme == night
+        }
+    }
+
+    private val themeEditColorIds = ThemeEditColorIds(
+        primary = colorPrimary,
+        accent = colorAccent,
+        background = colorBackground,
+        bottomBackground = colorBottomBackground,
+        card = colorCard,
+        muted = colorMuted,
+        searchFieldBackground = colorSearchFieldBackground,
+        tabBackground = colorTabBackground,
+        shelf = colorShelf,
+        uiFont = colorUiFont,
+        titleFont = colorTitleFont
+    )
+
+    private fun buildThemeEditCallbacks(): ThemeEditDialogCallbacks {
+        return ThemeEditDialogCallbacks(
+            onDraftChange = { next -> editingDraftState = next },
+            onPickRequiredColor = { targetId, currentHex ->
+                val fallback = when (targetId) {
+                    colorPrimary -> ThemeStore.primaryColor(this)
+                    colorAccent -> ThemeStore.accentColor(this)
+                    colorBackground -> ThemeStore.backgroundColor(this)
+                    else -> ThemeStore.bottomBackground(this)
                 }
+                ColorPickerDialog.newBuilder()
+                    .setColor(colorIntOrDefault(currentHex, fallback))
+                    .setShowAlphaSlider(false)
+                    .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                    .setDialogId(targetId)
+                    .show(this)
+            },
+            onPickOptionalColor = { targetId, titleRes, currentHex ->
+                selector(
+                    getString(titleRes),
+                    listOf(getString(R.string.theme_value_follow_default), getString(R.string.select_color))
+                ) { _, index ->
+                    if (index == 0) {
+                        setOptionalColor(targetId, null)
+                    } else {
+                        ColorPickerDialog.newBuilder()
+                            .setColor(colorIntOrDefault(currentHex, optionalColorFallback(targetId)))
+                            .setShowAlphaSlider(false)
+                            .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                            .setDialogId(targetId)
+                            .show(this)
+                    }
+                }
+            },
+            onClearOptionalColor = { targetId -> setOptionalColor(targetId, null) },
+            onPickImage = ::showImageActions,
+            onPickPanelScaleMode = ::showPanelScaleModeSelector,
+            onPickBorderColor = ::showBorderColorSelector,
+            onPickCardShadow = ::showCardShadowPicker,
+            onPickCardBlur = ::showCardBlurPicker,
+            onPickFontScale = ::showFontScalePicker,
+            onPickFont = { target ->
+                editingDraftState = editingDraftState?.copy(fontTarget = target)
+                showDialogFragment<FontSelectDialog>()
+            },
+            fontDisplayName = ::uiFontDisplayName,
+            onDelete = {
+                val localEntry = resolvedEditingEntry()?.takeIf { it.source == ThemePackageManager.Source.LOCAL }
+                    ?: return@ThemeEditDialogCallbacks
+                confirmDeleteTheme(
+                    localEntry,
+                    getString(R.string.theme_delete_local_confirm)
+                ) {
+                    ThemePackageManager.deleteLocal(localEntry)
+                    withContext(Dispatchers.Main) {
+                        isSavingDraftState = false
+                        editingDraftState = null
+                        editingEntry = null
+                        loadThemes()
+                    }
+                }
+            },
+            onDismiss = {
+                if (isSavingDraftState) return@ThemeEditDialogCallbacks
+                editingDraftState = null
+                editingEntry = null
+            },
+            onConfirm = {
+                if (isSavingDraftState) return@ThemeEditDialogCallbacks
+                val draft = editingDraftState ?: return@ThemeEditDialogCallbacks
+                saveDraft(draft)
             }
-        }
-        if (previewFontColors) {
-            val uiFontDemoColor = pendingUiFontColor.toThemeManageColorOrNull() ?: defaultFontDemoColor()
-            val titleFontDemoColor = pendingTitleFontColor.toThemeManageColorOrNull() ?: defaultFontDemoColor()
-            listOf(binding.rowUiFont.tvValue, binding.rowUiFontColor.tvValue).forEach {
-                it.setTextColor(uiFontDemoColor)
-            }
-            listOf(binding.rowTitleFont.tvValue, binding.rowTitleFontColor.tvValue).forEach {
-                it.setTextColor(titleFontDemoColor)
-            }
-        }
-        val actionRadius = UiCorner.actionRadius(this)
-        binding.btnCancel.background = UiCorner.actionSelector(
-            Color.TRANSPARENT,
-            themeCardColorOrDefault(),
-            actionRadius
         )
-        binding.btnConfirm.background = UiCorner.actionSelector(
-            Color.TRANSPARENT,
-            themeCardColorOrDefault(),
-            actionRadius
-        )
-    }
-
-    private fun setupCornerScaleRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.ui_corner_scale)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = pendingUiCornerScale.toScaleText()
-        row.root.setOnClickListener {
-            NumberPickerDialog(this, isDecimalMode = true)
-                .setTitle(getString(R.string.ui_corner_scale))
-                .setMaxValue(30)
-                .setMinValue(0)
-                .setValue((pendingUiCornerScale * 10).toInt())
-                .setCustomButton(R.string.btn_default_s) {
-                    pendingUiCornerScale = 1f
-                    row.tvValue.text = pendingUiCornerScale.toScaleText()
-                }
-                .show {
-                    pendingUiCornerScale = (it / 10f).coerceIn(0f, 3f)
-                    row.tvValue.text = pendingUiCornerScale.toScaleText()
-                }
-        }
-    }
-
-    private fun setupLayoutAlphaRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.ui_layout_alpha)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingUiLayoutAlpha)
-        row.root.setOnClickListener {
-            NumberPickerDialog(this)
-                .setTitle(getString(R.string.ui_layout_alpha))
-                .setMaxValue(100)
-                .setMinValue(0)
-                .setValue(pendingUiLayoutAlpha)
-                .setCustomButton(R.string.btn_default_s) {
-                    pendingUiLayoutAlpha = 100
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingUiLayoutAlpha)
-                }
-                .show {
-                    pendingUiLayoutAlpha = it.coerceIn(0, 100)
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingUiLayoutAlpha)
-                }
-        }
-    }
-
-    private fun setupDialogAlphaRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.dialog_alpha)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingDialogAlpha)
-        row.root.setOnClickListener {
-            NumberPickerDialog(this)
-                .setTitle(getString(R.string.dialog_alpha))
-                .setMaxValue(100)
-                .setMinValue(0)
-                .setValue(pendingDialogAlpha)
-                .setCustomButton(R.string.btn_default_s) {
-                    pendingDialogAlpha = 100
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingDialogAlpha)
-                }
-                .show {
-                    pendingDialogAlpha = it.coerceIn(0, 100)
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingDialogAlpha)
-                }
-        }
-    }
-
-    private fun setupFontScaleRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.font_scale)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = if (pendingFontScale == 0) {
-            getString(R.string.btn_default_s)
-        } else {
-            "%.1f".format(Locale.US, pendingFontScale / 10f)
-        }
-        row.root.setOnClickListener {
-            NumberPickerDialog(this)
-                .setTitle(getString(R.string.font_scale))
-                .setMaxValue(16)
-                .setMinValue(8)
-                .setValue(if (pendingFontScale == 0) 10 else pendingFontScale)
-                .setCustomButton(R.string.btn_default_s) {
-                    pendingFontScale = 0
-                    setupFontScaleRow(row)
-                    editDialogBinding?.let { applyThemeEditFonts(it) }
-                }
-                .show {
-                    pendingFontScale = it.coerceIn(8, 16)
-                    setupFontScaleRow(row)
-                    editDialogBinding?.let { applyThemeEditFonts(it) }
-                }
-        }
-    }
-
-    private fun setupUiFontRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.ui_font)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = uiFontDisplayName(pendingUiFontPath)
-        row.root.setOnClickListener {
-            pendingFontTarget = FontTarget.UI
-            showDialogFragment<FontSelectDialog>()
-        }
-    }
-
-    private fun setupTitleFontRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.title_font)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = uiFontDisplayName(pendingTitleFontPath)
-        row.root.setOnClickListener {
-            pendingFontTarget = FontTarget.TITLE
-            showDialogFragment<FontSelectDialog>()
-        }
-    }
-
-    private fun setupSwitchRow(row: ItemThemePackageOptionBinding, titleRes: Int, onClick: () -> Unit) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.root.setOnClickListener { onClick() }
-    }
-
-    private fun updateSwitchRow(row: ItemThemePackageOptionBinding, checked: Boolean) {
-        row.tvValue.text = getString(if (checked) R.string.enable else R.string.disable)
-    }
-
-    private fun setupColorRow(
-        row: ItemThemePackageOptionBinding,
-        titleRes: Int,
-        colorText: String,
-        target: Int,
-        fallbackColor: Int
-    ) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        row.viewSwatch.visibility = View.VISIBLE
-        val normalized = normalizeColor(colorText, fallbackColor)
-        row.tvValue.text = normalized
-        updateSwatch(row, normalized.toColorInt())
-        row.root.setOnClickListener {
-            ColorPickerDialog.newBuilder()
-                .setColor(colorIntOrDefault(row.tvValue.text?.toString(), fallbackColor))
-                .setShowAlphaSlider(false)
-                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                .setDialogId(target)
-                .show(this)
-        }
-    }
-
-    private fun setupOptionalColorRow(
-        row: ItemThemePackageOptionBinding,
-        titleRes: Int,
-        colorText: String?,
-        target: Int
-    ) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        val normalized = normalizeOptionalColor(colorText)
-        row.viewSwatch.visibility = if (normalized == null) View.INVISIBLE else View.VISIBLE
-        row.tvValue.text = normalized ?: getString(R.string.theme_value_follow_default)
-        normalized?.toColorInt()?.let { updateSwatch(row, it) }
-        row.root.setOnClickListener {
-            selector(
-                getString(titleRes),
-                listOf(getString(R.string.theme_value_follow_default), getString(R.string.select_color))
-            ) { _, index ->
-                if (index == 0) {
-                    setOptionalColor(target, null)
-                } else {
-                    val currentColor = optionalColorForTarget(target)
-                    ColorPickerDialog.newBuilder()
-                        .setColor(colorIntOrDefault(currentColor, optionalColorFallback(target)))
-                        .setShowAlphaSlider(false)
-                        .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                        .setDialogId(target)
-                        .show(this)
-                }
-            }
-        }
-        row.root.setOnLongClickListener {
-            setOptionalColor(target, null)
-            true
-        }
-    }
-
-    private fun optionalColorForTarget(target: Int): String? {
-        return when (target) {
-            colorCard -> pendingCardColor
-            colorMuted -> pendingMutedColor
-            colorSearchFieldBackground -> pendingSearchFieldBackgroundColor
-            colorTabBackground -> pendingTabBackgroundColor
-            colorShelf -> pendingShelfColor
-            colorUiFont -> pendingUiFontColor
-            colorTitleFont -> pendingTitleFontColor
-            else -> null
-        }
     }
 
     private fun optionalColorFallback(target: Int): Int {
         return when (target) {
-            colorUiFont, colorTitleFont -> defaultFontDemoColor()
+            colorUiFont, colorTitleFont -> defaultThemeTextColor(isNightTheme)
             else -> accentColor
         }
     }
 
-    private fun defaultFontDemoColor(): Int {
-        return defaultThemeTextColor(isNightTheme)
-    }
-
-    private fun String?.toThemeManageColorOrNull(): Int? {
-        return normalizeOptionalColor(this)?.let { normalized ->
-            kotlin.runCatching { normalized.toColorInt() }.getOrNull()
-        }
-    }
-
-    private fun setupOptionalIntRow(
-        row: ItemThemePackageOptionBinding,
-        titleRes: Int,
-        min: Int,
-        max: Int,
-        value: Int?,
-        onChanged: (Int?) -> Unit
-    ) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = value?.toString() ?: getString(R.string.theme_value_follow_default)
-        row.root.setOnClickListener {
-            NumberPickerDialog(this)
-                .setTitle(getString(titleRes))
-                .setMinValue(min)
-                .setMaxValue(max)
-                .setValue(value ?: min)
-                .setCustomButton(R.string.btn_default_s) {
-                    onChanged(null)
-                    row.tvValue.text = getString(R.string.theme_value_follow_default)
-                }
-                .show {
-                    val next = it.coerceIn(min, max)
-                    onChanged(next)
-                    row.tvValue.text = next.toString()
-                }
-        }
-    }
-
-    private fun setupOptionalFloatRow(
-        row: ItemThemePackageOptionBinding,
-        titleRes: Int,
-        value: Float?,
-        onChanged: (Float?) -> Unit
-    ) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = value?.let { "%.1f".format(Locale.US, it) }
-            ?: getString(R.string.theme_value_follow_default)
-        row.root.setOnClickListener {
-            NumberPickerDialog(this, isDecimalMode = true)
-                .setTitle(getString(titleRes))
-                .setMinValue(0)
-                .setMaxValue(250)
-                .setValue(((value ?: 0f) * 10f).toInt())
-                .setCustomButton(R.string.btn_default_s) {
-                    onChanged(null)
-                    row.tvValue.text = getString(R.string.theme_value_follow_default)
-                }
-                .show {
-                    val next = (it / 10f).coerceIn(0f, 25f)
-                    onChanged(next)
-                    row.tvValue.text = "%.1f".format(Locale.US, next)
-                }
-        }
-    }
-
-    private fun updateSwatch(row: ItemThemePackageOptionBinding, color: Int) {
-        row.viewSwatch.background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = UiCorner.scaledDp(11f)
-            setColor(color)
-            setStroke((1f * resources.displayMetrics.density).toInt().coerceAtLeast(1), ColorUtils.adjustAlpha(primaryTextColor, 0.16f))
-        }
-    }
-
-    private fun setupImageRow(row: ItemThemePackageOptionBinding, titleRes: Int, target: ThemeImageTarget) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(titleRes)
-        row.viewSwatch.visibility = View.INVISIBLE
-        updateImageRow(row, target)
-        row.root.setOnClickListener {
-            showImageActions(target)
-        }
-    }
-
-    private fun setupPanelBorderColorRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.theme_panel_border_color)
-        val colorText = normalizeOptionalColor(pendingPanelBorderColor)
-        pendingPanelBorderColor = colorText
-        // null = 跟随强调色（渲染时由 UiCorner 取 ThemeStore.accentColor）；非 null HEX = 选择颜色。
-        row.viewSwatch.visibility = if (colorText == null) View.INVISIBLE else View.VISIBLE
-        row.tvValue.text = colorText?.uppercase(Locale.ROOT) ?: getString(R.string.theme_border_follow_accent)
-        colorText?.toColorInt()?.let { updateSwatch(row, it) }
-        row.root.setOnClickListener {
-            selector(
-                getString(R.string.theme_panel_border_color),
-                listOf(getString(R.string.theme_border_follow_accent), getString(R.string.select_color))
-            ) { _, index ->
-                if (index == 0) {
-                    pendingPanelBorderColor = null
-                    // 跟随强调色时同时清掉旧版全局「描边颜色」覆盖，否则统一取色器会
-                    // 优先命中那个遗留值，「跟随强调色」就名不副实了。
-                    removePref(PreferKey.glassStrokeColor)
-                    setupPanelBorderColorRow(row)
-                } else {
-                    val currentColor = normalizeOptionalColor(pendingPanelBorderColor) ?: "#${accentColor.hexString}"
-                    ColorPickerDialog.newBuilder()
-                        .setColor(colorIntOrDefault(currentColor, accentColor))
-                        .setShowAlphaSlider(false)
-                        .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
-                        .setDialogId(colorPanelBorder)
-                        .show(this)
-                }
-            }
-        }
-    }
-    private fun setupPanelBorderAlphaRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.theme_panel_border_alpha)
-        row.viewSwatch.visibility = View.INVISIBLE
-        row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingPanelBorderAlpha)
-        row.root.setOnClickListener {
-            NumberPickerDialog(this)
-                .setTitle(getString(R.string.theme_panel_border_alpha))
-                .setMaxValue(100)
-                .setMinValue(0)
-                .setValue(pendingPanelBorderAlpha)
-                .setCustomButton(R.string.btn_default_s) {
-                    pendingPanelBorderAlpha = 100
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingPanelBorderAlpha)
-                }
-                .show {
-                    pendingPanelBorderAlpha = it.coerceIn(0, 100)
-                    row.tvValue.text = getString(R.string.ui_layout_alpha_value, pendingPanelBorderAlpha)
-                }
-        }
-    }
-
-    private fun updateImageRow(row: ItemThemePackageOptionBinding, target: ThemeImageTarget) {
-        val path = when (target) {
-            ThemeImageTarget.MAIN -> pendingMainBackgroundPath
-            ThemeImageTarget.BOOK_INFO -> pendingBookInfoBackgroundPath
-            ThemeImageTarget.PANEL -> pendingPanelBackgroundPath
-        }
-        row.tvValue.text = when {
-            path.isNullOrBlank() && target == ThemeImageTarget.MAIN -> getString(R.string.theme_image_value_unselected_blur, pendingBlur)
-            path.isNullOrBlank() -> getString(R.string.theme_image_value_unselected)
-            target == ThemeImageTarget.MAIN -> getString(R.string.theme_image_value_file_blur, File(path).name, pendingBlur)
-            else -> File(path).name
-        }
-    }
-
-    private fun showImageActions(target: ThemeImageTarget) {
+    private fun showImageActions(target: ThemeEditImageTarget) {
+        val draft = editingDraftState ?: return
         val hasImage = when (target) {
-            ThemeImageTarget.MAIN -> !pendingMainBackgroundPath.isNullOrBlank()
-            ThemeImageTarget.BOOK_INFO -> !pendingBookInfoBackgroundPath.isNullOrBlank()
-            ThemeImageTarget.PANEL -> !pendingPanelBackgroundPath.isNullOrBlank()
+            ThemeEditImageTarget.MAIN -> !draft.mainBackgroundPath.isNullOrBlank()
+            ThemeEditImageTarget.BOOK_INFO -> !draft.bookInfoBackgroundPath.isNullOrBlank()
+            ThemeEditImageTarget.PANEL -> !draft.panelBackgroundPath.isNullOrBlank()
         }
         val actions = buildList {
-            if (target == ThemeImageTarget.MAIN) add(ThemeImageAction.BLUR)
+            if (target == ThemeEditImageTarget.MAIN) add(ThemeImageAction.BLUR)
             add(ThemeImageAction.SELECT)
             if (hasImage) add(ThemeImageAction.DELETE)
         }
         val title = when (target) {
-            ThemeImageTarget.MAIN -> R.string.theme_image_main_background
-            ThemeImageTarget.BOOK_INFO -> R.string.theme_image_book_info_background
-            ThemeImageTarget.PANEL -> R.string.theme_image_panel_background
+            ThemeEditImageTarget.MAIN -> R.string.theme_image_main_background
+            ThemeEditImageTarget.BOOK_INFO -> R.string.theme_image_book_info_background
+            ThemeEditImageTarget.PANEL -> R.string.theme_image_panel_background
         }
         selector(
             getString(title),
@@ -1173,73 +631,36 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 ThemeImageAction.BLUR -> showBlurDialog()
                 ThemeImageAction.SELECT -> selectImage.launch {
                     requestCode = when (target) {
-                        ThemeImageTarget.MAIN -> requestMainBackground
-                        ThemeImageTarget.BOOK_INFO -> requestBookInfoBackground
-                        ThemeImageTarget.PANEL -> requestPanelBackground
+                        ThemeEditImageTarget.MAIN -> requestMainBackground
+                        ThemeEditImageTarget.BOOK_INFO -> requestBookInfoBackground
+                        ThemeEditImageTarget.PANEL -> requestPanelBackground
                     }
                     mode = HandleFileContract.IMAGE
                 }
                 ThemeImageAction.DELETE -> {
-                    when (target) {
-                        ThemeImageTarget.MAIN -> {
-                            pendingMainBackgroundPath = ""
-                            pendingMainBackgroundCrop = null
-                            editDialogBinding?.let { updateImageRow(it.rowMainBackground, ThemeImageTarget.MAIN) }
-                        }
-                        ThemeImageTarget.BOOK_INFO -> {
-                            pendingBookInfoBackgroundPath = ""
-                            editDialogBinding?.let { updateImageRow(it.rowBookInfoBackground, ThemeImageTarget.BOOK_INFO) }
-                        }
-                        ThemeImageTarget.PANEL -> {
-                            pendingPanelBackgroundPath = ""
-                            editDialogBinding?.let { updateImageRow(it.rowPanelBackground, ThemeImageTarget.PANEL) }
-                        }
+                    editingDraftState = when (target) {
+                        ThemeEditImageTarget.MAIN -> editingDraftState?.copy(
+                            mainBackgroundPath = "",
+                            mainBackgroundCrop = null
+                        )
+                        ThemeEditImageTarget.BOOK_INFO -> editingDraftState?.copy(
+                            bookInfoBackgroundPath = ""
+                        )
+                        ThemeEditImageTarget.PANEL -> editingDraftState?.copy(
+                            panelBackgroundPath = ""
+                        )
                     }
                 }
             }
         }
     }
 
-    private fun setupPanelBackgroundModeRow(row: ItemThemePackageOptionBinding) {
-        applyOptionRowBackground(row)
-        row.tvTitle.text = getString(R.string.theme_image_panel_background_mode)
-        row.viewSwatch.visibility = View.INVISIBLE
-        updatePanelBackgroundModeRow(row)
-        row.root.setOnClickListener {
-            val modes = listOf(ThemeConfig.PANEL_BG_CROP, ThemeConfig.PANEL_BG_FIT)
-            selector(
-                getString(R.string.theme_image_panel_background_mode),
-                modes.map { panelBackgroundModeText(it) }
-            ) { _, index ->
-                pendingPanelBackgroundScaleType = modes[index]
-                updatePanelBackgroundModeRow(row)
-            }
-        }
-    }
-
-    private fun updatePanelBackgroundModeRow(row: ItemThemePackageOptionBinding) {
-        row.tvValue.text = panelBackgroundModeText(pendingPanelBackgroundScaleType)
-    }
-
-    private fun panelBackgroundModeText(mode: String): String {
-        return getString(
-            if (mode == ThemeConfig.PANEL_BG_FIT) R.string.theme_image_mode_fit
-            else R.string.theme_image_mode_crop
-        )
-    }
-
-    private fun applyOptionRowBackground(row: ItemThemePackageOptionBinding) {
-        row.root.background = UiCorner.opaqueRounded(
-            themeCardColorOrDefault(),
-            UiCorner.panelRadius(this)
-        )
-    }
-
     private fun showBlurDialog() {
+        val currentBlur = editingDraftState?.blur ?: 0
         alert(R.string.theme_image_blur) {
             val blurBinding = DialogImageBlurringBinding.inflate(layoutInflater).apply {
-                seekBar.progress = pendingBlur
-                textViewValue.text = pendingBlur.toString()
+                seekBar.progress = currentBlur
+                textViewValue.text = currentBlur.toString()
                 seekBar.setOnSeekBarChangeListener(object : SeekBarChangeListener {
                     override fun onProgressChanged(
                         seekBar: android.widget.SeekBar,
@@ -1252,65 +673,107 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             }
             customView { blurBinding.root }
             okButton {
-                pendingBlur = blurBinding.seekBar.progress.coerceIn(0, 25)
-                editDialogBinding?.let { updateImageRow(it.rowMainBackground, ThemeImageTarget.MAIN) }
+                val nextBlur = blurBinding.seekBar.progress.coerceIn(0, 25)
+                editingDraftState = editingDraftState?.copy(blur = nextBlur)
             }
             cancelButton()
         }
     }
 
-    private fun saveTheme(dialogBinding: DialogThemePackageEditBinding): Boolean {
-        val name = dialogBinding.etName.text?.toString()?.trim().orEmpty()
-            .ifBlank { getString(if (isNightTheme) R.string.theme_night else R.string.theme_day) }
-        val baseConfig = editingEntry?.let {
+    private fun showPanelScaleModeSelector() {
+        val modes = listOf(ThemeConfig.PANEL_BG_CROP, ThemeConfig.PANEL_BG_FIT)
+        selector(
+            getString(R.string.theme_image_panel_background_mode),
+            modes.map { mode ->
+                getString(
+                    if (mode == ThemeConfig.PANEL_BG_FIT) R.string.theme_image_mode_fit
+                    else R.string.theme_image_mode_crop
+                )
+            }
+        ) { _, index ->
+            editingDraftState = editingDraftState?.copy(panelBackgroundScaleType = modes[index])
+        }
+    }
+
+    private fun showBorderColorSelector() {
+        selector(
+            getString(R.string.theme_panel_border_color),
+            listOf(getString(R.string.theme_border_follow_accent), getString(R.string.select_color))
+        ) { _, index ->
+            if (index == 0) {
+                removePref(PreferKey.glassStrokeColor)
+                editingDraftState = editingDraftState?.copy(panelBorderColor = null)
+            } else {
+                val currentColor = normalizeOptionalColor(editingDraftState?.panelBorderColor)
+                    ?: "#${accentColor.hexString}"
+                ColorPickerDialog.newBuilder()
+                    .setColor(colorIntOrDefault(currentColor, accentColor))
+                    .setShowAlphaSlider(false)
+                    .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                    .setDialogId(colorPanelBorder)
+                    .show(this)
+            }
+        }
+    }
+
+    private fun showCardShadowPicker() {
+        val current = editingDraftState?.cardShadow
+        NumberPickerDialog(this)
+            .setTitle(getString(R.string.theme_card_shadow))
+            .setMinValue(0)
+            .setMaxValue(24)
+            .setValue(current ?: 0)
+            .setCustomButton(R.string.btn_default_s) {
+                editingDraftState = editingDraftState?.copy(cardShadow = null)
+            }
+            .show {
+                editingDraftState = editingDraftState?.copy(cardShadow = it.coerceIn(0, 24))
+            }
+    }
+
+    private fun showCardBlurPicker() {
+        val current = editingDraftState?.cardBackgroundBlur
+        NumberPickerDialog(this, isDecimalMode = true)
+            .setTitle(getString(R.string.theme_card_background_blur))
+            .setMinValue(0)
+            .setMaxValue(250)
+            .setValue(((current ?: 0f) * 10f).toInt())
+            .setCustomButton(R.string.btn_default_s) {
+                editingDraftState = editingDraftState?.copy(cardBackgroundBlur = null)
+            }
+            .show {
+                editingDraftState = editingDraftState?.copy(cardBackgroundBlur = (it / 10f).coerceIn(0f, 25f))
+            }
+    }
+
+    private fun showFontScalePicker() {
+        val current = editingDraftState?.fontScale ?: 0
+        NumberPickerDialog(this)
+            .setTitle(getString(R.string.font_scale))
+            .setMaxValue(16)
+            .setMinValue(8)
+            .setValue(if (current == 0) 10 else current)
+            .setCustomButton(R.string.btn_default_s) {
+                editingDraftState = editingDraftState?.copy(fontScale = 0)
+            }
+            .show {
+                editingDraftState = editingDraftState?.copy(fontScale = it.coerceIn(8, 16))
+            }
+    }
+
+    private fun saveDraft(draft: ThemeEditDraft): Boolean {
+        val oldEntry = resolvedEditingEntry()
+        val baseConfig = oldEntry?.let {
             kotlin.runCatching { ThemePackageManager.getConfig(it) }.getOrNull()
         } ?: currentConfig()
         val config = kotlin.runCatching {
-            baseConfig.copy(
-                themeName = name,
-                isNightTheme = isNightTheme,
-                primaryColor = normalizeColor(
-                    dialogBinding.rowPrimary.tvValue.text?.toString(),
-                    ThemeStore.primaryColor(this)
-                ),
-                accentColor = normalizeColor(
-                    dialogBinding.rowAccent.tvValue.text?.toString(),
-                    ThemeStore.accentColor(this)
-                ),
-                backgroundColor = normalizeColor(
-                    dialogBinding.rowBackground.tvValue.text?.toString(),
-                    ThemeStore.backgroundColor(this)
-                ),
-                bottomBackground = normalizeColor(
-                    dialogBinding.rowBottomBackground.tvValue.text?.toString(),
-                    ThemeStore.bottomBackground(this)
-                ),
-                transparentNavBar = true,
-                backgroundImgPath = pendingMainBackgroundPath,
-                backgroundImgBlur = pendingBlur,
-                backgroundImgCrop = ThemeConfig.normalizeBackgroundCrop(pendingMainBackgroundCrop),
-                bookInfoBackgroundImgPath = pendingBookInfoBackgroundPath,
-                panelBackgroundImgPath = pendingPanelBackgroundPath,
-                panelBackgroundScaleType = pendingPanelBackgroundScaleType,
-                panelBorderColor = pendingPanelBorderColor,
-                panelBorderAlpha = pendingPanelBorderAlpha,
-                uiCornerScale = pendingUiCornerScale,
-                uiLayoutAlpha = pendingUiLayoutAlpha,
-                dialogAlpha = pendingDialogAlpha,
-                cardColor = pendingCardColor,
-                mutedColor = pendingMutedColor,
-                searchFieldBackgroundColor = pendingSearchFieldBackgroundColor,
-                tabBackgroundColor = pendingTabBackgroundColor,
-                shelfColor = pendingShelfColor,
-                cardShadow = pendingCardShadow,
-                cardBackgroundBlur = pendingCardBackgroundBlur,
-                uiCornerSearchFollow = pendingUiCornerSearchFollow,
-                uiCornerReplyFollow = pendingUiCornerReplyFollow,
-                fontScale = pendingFontScale,
-                uiFontPath = pendingUiFontPath,
-                titleFontPath = pendingTitleFontPath,
-                uiFontColor = pendingUiFontColor,
-                titleFontColor = pendingTitleFontColor
+            draft.toThemeConfig(
+                baseConfig = baseConfig,
+                fallbackName = getString(if (draft.isNightTheme) R.string.theme_night else R.string.theme_day),
+                fallbackPrimaryHex = colorToHex(ThemeStore.primaryColor(this)),
+                fallbackAccentHex = colorToHex(ThemeStore.accentColor(this)),
+                fallbackBackgroundHex = colorToHex(ThemeStore.backgroundColor(this)),
+                fallbackBottomHex = colorToHex(ThemeStore.bottomBackground(this))
             )
         }.onFailure {
             toastOnUi(R.string.color_format_error)
@@ -1320,7 +783,8 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     private fun addTheme(config: ThemeConfig.Config) {
-        val oldEntry = editingEntry
+        val oldEntry = resolvedEditingEntry()
+        isSavingDraftState = true
         lifecycleScope.launch {
             kotlin.runCatching {
                 val wasApplied = oldEntry?.let { isApplied(it) } == true
@@ -1352,12 +816,16 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 }
                 entry to wasApplied
             }.onSuccess {
+                isSavingDraftState = false
+                editingDraftState = null
+                editingEntry = null
                 toastOnUi(getString(R.string.theme_saved_local))
                 loadThemes()
                 if (enqueueUploadIfNeeded(it.first)) {
                     showThemeSyncTasks()
                 }
             }.onFailure {
+                isSavingDraftState = false
                 if (it.isJobCancellation()) return@onFailure
                 toastOnUi(getString(R.string.theme_save_failed, it.localizedMessage))
             }
@@ -1511,31 +979,19 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     override val curFontPath: String
-        get() = when (pendingFontTarget) {
-            FontTarget.TITLE -> pendingTitleFontPath
-            FontTarget.UI -> pendingUiFontPath
+        get() = when (editingDraftState?.fontTarget ?: ThemeEditFontTarget.UI) {
+            ThemeEditFontTarget.TITLE -> editingDraftState?.titleFontPath
+            ThemeEditFontTarget.UI -> editingDraftState?.uiFontPath
         }.orEmpty()
 
     override val applySystemTypefaceOnDefault: Boolean
         get() = false
 
     override fun selectFont(path: String) {
-        when (pendingFontTarget) {
-            FontTarget.UI -> {
-                pendingUiFontPath = path
-                editDialogBinding?.let {
-                    setupUiFontRow(it.rowUiFont)
-                    applyThemeEditFonts(it)
-                }
-            }
-
-            FontTarget.TITLE -> {
-                pendingTitleFontPath = path
-                editDialogBinding?.let {
-                    setupTitleFontRow(it.rowTitleFont)
-                    applyThemeEditFonts(it)
-                }
-            }
+        val current = editingDraftState ?: return
+        editingDraftState = when (current.fontTarget) {
+            ThemeEditFontTarget.UI -> current.copy(uiFontPath = path)
+            ThemeEditFontTarget.TITLE -> current.copy(titleFontPath = path)
         }
     }
 
@@ -1568,11 +1024,6 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         }.getOrDefault(displayName).ifBlank {
             getString(R.string.default_font)
         }
-    }
-
-    private enum class FontTarget {
-        UI,
-        TITLE
     }
 
     private fun Float.toScaleText(): String {
@@ -1652,7 +1103,7 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 )
             } else {
                 if (requestCode == requestMainBackground) {
-                    pendingMainBackgroundCrop = null
+                    editingDraftState = editingDraftState?.copy(mainBackgroundCrop = null)
                 }
                 request.params
             }
@@ -2064,73 +1515,34 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         confirmDelete(message, block)
     }
     override fun onColorSelected(dialogId: Int, color: Int) {
-        val binding = editDialogBinding ?: return
+        val current = editingDraftState ?: return
         val hex = colorToHex(color)
         if (setOptionalColor(dialogId, hex)) {
             return
         }
-        val row = when (dialogId) {
-            colorPrimary -> binding.rowPrimary
-            colorAccent -> binding.rowAccent
-            colorBackground -> binding.rowBackground
-            colorBottomBackground -> binding.rowBottomBackground
-            colorPanelBorder -> binding.rowPanelBorderColor
-            else -> null
-        } ?: return
-        if (dialogId == colorPanelBorder) {
-            pendingPanelBorderColor = hex
+        editingDraftState = when (dialogId) {
+            colorPrimary -> current.copy(primaryColorHex = hex)
+            colorAccent -> current.copy(accentColorHex = hex)
+            colorBackground -> current.copy(backgroundColorHex = hex)
+            colorBottomBackground -> current.copy(bottomBackgroundHex = hex)
+            colorPanelBorder -> current.copy(panelBorderColor = hex)
+            else -> current
         }
-        row.tvValue.text = hex
-        updateSwatch(row, color)
     }
 
     private fun setOptionalColor(dialogId: Int, hex: String?): Boolean {
-        val binding = editDialogBinding ?: return false
-        val row = when (dialogId) {
-            colorCard -> {
-                pendingCardColor = hex
-                binding.rowCardColor
-            }
-            colorMuted -> {
-                pendingMutedColor = hex
-                binding.rowMutedColor
-            }
-            colorSearchFieldBackground -> {
-                pendingSearchFieldBackgroundColor = hex
-                binding.rowSearchFieldBackgroundColor
-            }
-            colorTabBackground -> {
-                pendingTabBackgroundColor = hex
-                binding.rowTabBackgroundColor
-            }
-            colorShelf -> {
-                pendingShelfColor = hex
-                binding.rowShelfColor
-            }
-            colorUiFont -> {
-                pendingUiFontColor = hex
-                binding.rowUiFontColor
-            }
-            colorTitleFont -> {
-                pendingTitleFontColor = hex
-                binding.rowTitleFontColor
-            }
+        val current = editingDraftState ?: return false
+        val updated = when (dialogId) {
+            colorCard -> current.copy(cardColor = hex)
+            colorMuted -> current.copy(mutedColor = hex)
+            colorSearchFieldBackground -> current.copy(searchFieldBackgroundColor = hex)
+            colorTabBackground -> current.copy(tabBackgroundColor = hex)
+            colorShelf -> current.copy(shelfColor = hex)
+            colorUiFont -> current.copy(uiFontColor = hex)
+            colorTitleFont -> current.copy(titleFontColor = hex)
             else -> return false
         }
-        if (hex == null) {
-            row.viewSwatch.visibility = View.INVISIBLE
-            row.tvValue.text = getString(R.string.theme_value_follow_default)
-        } else {
-            row.viewSwatch.visibility = View.VISIBLE
-            row.tvValue.text = hex
-            updateSwatch(row, hex.toColorInt())
-        }
-        if (dialogId == colorUiFont || dialogId == colorTitleFont) {
-            editDialogBinding?.let { applyThemeEditFonts(it) }
-        }
-        if (dialogId in setOf(colorCard, colorMuted, colorSearchFieldBackground, colorTabBackground, colorShelf)) {
-            updateAdvancedColorToggleSummary(binding)
-        }
+        editingDraftState = updated
         return true
     }
 
@@ -2153,9 +1565,8 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             )
         )
         private val themeRemoteSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        private const val EDIT_DIALOG_WIDTH_RATIO = 0.94f
-        private const val EDIT_DIALOG_HEIGHT_RATIO = 0.68f
-        private const val EDIT_DIALOG_HEIGHT_RATIO_COMPACT = 0.74f
+        private const val STATE_IS_NIGHT = "state_is_night"
+        private const val STATE_EDIT_DRAFT_JSON = "state_edit_draft_json"
         private const val requestMainBackground = 301
         private const val requestBookInfoBackground = 302
         private const val requestPanelBackground = 303
@@ -2172,8 +1583,6 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         private const val colorUiFont = 411
         private const val colorTitleFont = 412
         private const val CLOUD_SCOPE = "theme"
-        private const val MENU_CONTAINER = 0x5401
-        private const val MENU_SYNC_TASKS = 0x5402
     }
 
     private enum class ThemeAction(val titleRes: Int) {
@@ -2191,12 +1600,6 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         BLUR(R.string.theme_image_blur),
         SELECT(R.string.theme_image_select),
         DELETE(R.string.theme_image_delete)
-    }
-
-    private enum class ThemeImageTarget {
-        MAIN,
-        BOOK_INFO,
-        PANEL
     }
 
     private data class RemoteSyncTask(
@@ -2256,6 +1659,8 @@ private fun ThemePackageManageScreen(
     entries: List<ThemePackageManager.Entry>,
     isNightTheme: Boolean,
     summaryText: String,
+    topActions: List<AppManagementAction>,
+    onBack: () -> Unit,
     onSwitchDayNight: (Boolean) -> Unit,
     onAdd: () -> Unit,
     onApply: (ThemePackageManager.Entry) -> Unit,
@@ -2288,6 +1693,14 @@ private fun ThemePackageManageScreen(
                     .fillMaxSize()
                     .navigationBarsPadding()
             ) {
+                AppComposeTopBar(
+                    title = stringResource(R.string.theme_manage_title),
+                    palette = palette,
+                    actions = topActions,
+                    onBack = onBack,
+                    wallpaperVisible = wallpaperVisible,
+                    glassSignature = glassSignature
+                )
                 ThemePackageTabs(
                     isNightTheme = isNightTheme,
                     palette = palette,
@@ -2363,85 +1776,22 @@ private fun ThemePackageTabs(
     glassSignature: String,
     onSwitchDayNight: (Boolean) -> Unit
 ) {
-    val actionRadius = palette.miuix.actionRadius ?: 12.dp
-    val actionRadiusPx = with(LocalDensity.current) { actionRadius.toPx() }
-    // 胶囊底改走 GlassPanel：它是页面内表面，先经 requireWallpaperHost = true 问一句
-    // 「背后真的有壁纸吗」，不可用（solid 档 / 墨水屏 / 低内存 / 无壁纸）时由 fallback 铺回
-    // 原来的 palette.settings.row 实底胶囊，观感与改动前逐值一致。
-    // 圆角沿原 actionRadius，几何不变。
-    GlassPanel(
-        domain = GlassSamplingDomain.WALLPAPER,
-        cornerRadiusPx = actionRadiusPx,
-        configSignature = glassSignature,
-        requireWallpaperHost = true,
+    LegadoSegmentedControl(
+        options = listOf(
+            SegmentedOption(value = false, label = stringResource(R.string.theme_day)),
+            SegmentedOption(value = true, label = stringResource(R.string.theme_night))
+        ),
+        selectedValue = isNightTheme,
+        palette = palette.miuix,
+        onSelected = onSwitchDayNight,
+        tone = SegmentedControlTone.SurfaceThumb,
+        itemHeight = 32.dp,
+        fontSize = 14.sp,
+        glassSignature = glassSignature,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(actionRadius)),
-        fallback = Modifier.background(
-            color = ComposeColor(palette.settings.row),
-            shape = RoundedCornerShape(actionRadius)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            ThemePackageTabButton(
-                text = stringResource(R.string.theme_day),
-                selected = !isNightTheme,
-                palette = palette,
-                onClick = { onSwitchDayNight(false) },
-                modifier = Modifier.weight(1f)
-            )
-            ThemePackageTabButton(
-                text = stringResource(R.string.theme_night),
-                selected = isNightTheme,
-                palette = palette,
-                onClick = { onSwitchDayNight(true) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ThemePackageTabButton(
-    text: String,
-    selected: Boolean,
-    palette: AppManagementPalette,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp))
-            .background(if (selected) ComposeColor(palette.settings.rowPressed) else ComposeColor.Transparent),
-        shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-        color = if (selected) ComposeColor(palette.settings.rowPressed) else ComposeColor.Transparent,
-        contentColor = if (selected) palette.settings.accent else palette.settings.primaryText,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = text,
-                color = if (selected) palette.settings.accent else palette.settings.primaryText,
-                fontSize = 14.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -2526,51 +1876,20 @@ private fun ThemePackageMoreButton(
     palette: AppManagementPalette,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    var popupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
-    DisposableEffect(Unit) {
-        onDispose {
-            popupHandle?.dismiss()
-            popupHandle = null
-        }
-    }
-    AndroidView(
-        factory = { viewContext ->
-            TextView(viewContext).apply {
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                isSingleLine = true
-                textSize = 16f
-                text = "\u22EE"
-            }
-        },
-        update = { button ->
-            button.setTextColor(palette.settings.primaryText.toArgb())
-            button.typeface = context.uiTypeface()
-            button.background = UiCorner.actionSelector(
-                ComposeColor.Transparent.toArgb(),
-                palette.settings.rowPressed,
-                (12.dp.value * context.resources.displayMetrics.density)
-            )
-            button.setOnClickListener { view ->
-                val actions = actionsProvider().filter { it.text.isNotBlank() }
-                if (actions.isEmpty()) return@setOnClickListener
-                popupHandle = ModernActionPopup.show(
-                    anchor = view,
-                    actions = actions.map { action ->
-                        ModernActionPopup.Action(
-                            title = action.text.toString(),
-                            checked = action.checked,
-                            enabled = action.enabled,
-                            invoke = action.onClick
-                        )
-                    },
-                    previousPopup = popupHandle
-                )
-            }
-        },
+    AppComposePopupAnchorButton(
+        actionsProvider = actionsProvider,
+        containerColor = ComposeColor.Transparent,
+        contentColor = palette.settings.primaryText,
+        cornerRadius = palette.miuix.actionRadius,
         modifier = modifier.size(32.dp)
-    )
+    ) {
+        Text(
+            text = "\u22EE",
+            color = palette.settings.primaryText,
+            fontSize = 16.sp,
+            maxLines = 1
+        )
+    }
 }
 
 @Composable

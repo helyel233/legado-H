@@ -155,7 +155,7 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.titleBar.title = getString(slot.manageTitleRes)
+        binding.titleBar.visibility = View.GONE
         activeIdState.value = manager.activeId()
         initComposeContent()
         loadEntries()
@@ -186,7 +186,9 @@ class AdvancedTipManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                         entries = entriesState.value,
                         activeId = activeIdState.value,
                         loading = loadingState.value,
+                        titleRes = slot.manageTitleRes,
                         summaryRes = slot.manageSummaryRes,
+                        onBack = ::supportFinishAfterTransition,
                         onApply = ::applyEntry,
                         onMoreActions = ::entryActions,
                         onImport = ::showAddMenu

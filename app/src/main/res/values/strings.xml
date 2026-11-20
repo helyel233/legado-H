@@ -3505,4 +3505,10 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="theme_advanced_colors_toggle">Advanced surface &amp; bar overrides</string>
     <string name="theme_advanced_colors_summary_auto">Auto-derived from seed colors</string>
     <string name="theme_advanced_colors_summary_custom">%1$d overridden</string>
+
+    <!-- R3-M3: Appearance Studio Workbench -->
+    <string name="appearance_studio_quick_themes">Current Mode Themes</string>
+    <string name="appearance_studio_tuning_title">Corner &amp; Material Tuning</string>
+    <string name="appearance_studio_manage_all">Manage All</string>
+    <string name="appearance_studio_eink_glass_disabled">Glass effects are disabled in E-Ink mode</string>
 </resources>

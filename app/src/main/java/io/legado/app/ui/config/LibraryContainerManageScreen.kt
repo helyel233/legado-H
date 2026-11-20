@@ -38,6 +38,8 @@ import io.legado.app.help.book.library.LibraryContainerManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -77,12 +79,20 @@ internal fun LibraryContainerManageScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                LibraryContainerTopBar(
+                AppComposeTopBar(
+                    title = stringResource(R.string.library_container),
+                    palette = palette,
+                    actions = listOf(
+                        AppManagementAction(
+                            text = stringResource(R.string.more),
+                            menuActions = pageMenuActions
+                        )
+                    ),
                     onBack = onBack,
-                    pageMenuActions = pageMenuActions
+                    wallpaperVisible = wallpaperVisible,
+                    glassSignature = glassSignature
                 )
                 Text(
                     text = stringResource(R.string.library_container_summary_full),
@@ -128,59 +138,6 @@ internal fun LibraryContainerManageScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun LibraryContainerTopBar(
-    onBack: () -> Unit,
-    pageMenuActions: () -> List<AppManagementMenuAction>
-) {
-    val palette = rememberAppManagementPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-            color = Color.Transparent,
-            contentColor = palette.settings.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.settings.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.library_container),
-            color = palette.settings.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = palette.settings.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        AppManagementMoreActionButton(
-            actionsProvider = pageMenuActions,
-            palette = palette,
-            contentDescription = stringResource(R.string.more)
-        )
     }
 }
 

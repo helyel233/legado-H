@@ -22,11 +22,14 @@ import io.legado.app.ui.widget.compose.AppPackageManageScreen
 @Composable
 internal fun EpubLoadingTemplateManageScreen(
     templates: List<EpubLoadingTemplate>, selectedId: String, night: Boolean,
+    onBack: () -> Unit,
     onNightChanged: (Boolean) -> Unit, onApply: (EpubLoadingTemplate) -> Unit,
     onPreview: (EpubLoadingTemplate) -> Unit,
     onMoreActions: (EpubLoadingTemplate) -> List<AppManagementMenuAction>, onAdd: () -> Unit
 ) {
     AppPackageManageScreen(
+        title = stringResource(R.string.epub_loading_templates),
+        onBack = onBack,
         isNightMode = night,
         summaryText = stringResource(R.string.epub_loading_templates_help),
         addText = stringResource(R.string.epub_loading_add),

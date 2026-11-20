@@ -45,6 +45,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.databinding.ActivityAiProviderManageBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.main.ai.AiProviderConfig
+import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -169,10 +170,13 @@ private fun AiProviderManageScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                AiProviderTopBar(onBack = onBack)
+                AppComposeTopBar(
+                    title = stringResource(R.string.ai_provider_manage_title),
+                    palette = palette,
+                    onBack = onBack
+                )
                 Text(
                     text = stringResource(R.string.ai_provider_manage_summary),
                     color = palette.settings.secondaryText,
@@ -218,52 +222,6 @@ private fun AiProviderManageScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun AiProviderTopBar(onBack: () -> Unit) {
-    val palette = rememberAppManagementPalette()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier
-                .size(42.dp)
-                .clickable(onClick = onBack),
-            shape = RoundedCornerShape(palette.miuix.actionRadius ?: 12.dp),
-            color = Color.Transparent,
-            contentColor = palette.settings.primaryText,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_arrow_back),
-                    contentDescription = null,
-                    tint = palette.settings.primaryText,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.ai_provider_manage_title),
-            color = palette.settings.primaryText,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = palette.settings.titleFontFamily,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(42.dp))
     }
 }
 
