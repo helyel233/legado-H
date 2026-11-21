@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -53,7 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -231,7 +236,7 @@ fun AppDialogFrame(
                 Spacer(modifier = Modifier.height(8.dp))
                 AppDialogMessageText(message = message, style = style)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             val contentModifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 520.dp)
@@ -257,7 +262,7 @@ fun AppDialogFrame(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -350,6 +355,9 @@ private fun AppDialogTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     val style = rememberAppDialogStyle()
+    var isFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(style.actionRadius)
+    val borderColor = if (isFocused) style.accent.copy(alpha = 0.55f) else style.stroke
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -364,36 +372,35 @@ private fun AppDialogTextField(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            minLines = minLines,
-            maxLines = maxLines,
-            singleLine = singleLine,
-            readOnly = readOnly,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions,
-            shape = RoundedCornerShape(style.actionRadius),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = style.primaryText,
-                unfocusedTextColor = style.primaryText,
-                disabledTextColor = style.secondaryText,
-                focusedContainerColor = style.fieldSurface,
-                unfocusedContainerColor = style.fieldSurface,
-                disabledContainerColor = style.fieldSurface.copy(alpha = 0.58f),
-                cursorColor = style.accent,
-                focusedBorderColor = style.accent.copy(alpha = 0.55f),
-                unfocusedBorderColor = style.stroke,
-                disabledBorderColor = style.stroke.copy(alpha = 0.38f),
-                focusedPlaceholderColor = style.secondaryText,
-                unfocusedPlaceholderColor = style.secondaryText
-            ),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = style.primaryText,
-                fontFamily = style.bodyFontFamily
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 44.dp)
+                .clip(shape)
+                .background(style.fieldSurface)
+                .border(1.dp, borderColor, shape)
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+            contentAlignment = if (minLines > 1) Alignment.TopStart else Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isFocused = it.isFocused },
+                minLines = minLines,
+                maxLines = if (singleLine) 1 else maxLines,
+                singleLine = singleLine,
+                readOnly = readOnly,
+                visualTransformation = visualTransformation,
+                keyboardOptions = keyboardOptions,
+                cursorBrush = SolidColor(style.accent),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = style.primaryText,
+                    fontFamily = style.bodyFontFamily
+                )
             )
-        )
+        }
     }
 }
 

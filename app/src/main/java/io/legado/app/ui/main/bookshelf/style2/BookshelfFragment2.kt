@@ -62,6 +62,7 @@ import io.legado.app.ui.main.bookshelf.compose.BookshelfGridItem
 import io.legado.app.ui.main.bookshelf.compose.BookshelfItemUi
 import io.legado.app.ui.main.bookshelf.compose.computeLocalChangedBookUrls
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItem
+import io.legado.app.ui.main.bookshelf.compose.BookshelfListItemStyle
 import io.legado.app.ui.main.bookshelf.compose.BookshelfSnapshotStore
 import io.legado.app.ui.main.bookshelf.compose.buildBookshelfItems
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
@@ -344,14 +345,15 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                 }
             }
         }
+        val listHorizontalPadding = if (composeListItemStyle == BookshelfListItemStyle.RoundedCard) 12.dp else 8.dp
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
-                    start = 8.dp,
+                    start = listHorizontalPadding,
                     top = marginDp + 24.dp,
-                    end = 8.dp,
+                    end = listHorizontalPadding,
                     bottom = marginDp + bottomBarPadding + 12.dp
                 )
             ) {

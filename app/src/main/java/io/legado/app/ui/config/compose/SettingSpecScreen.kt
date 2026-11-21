@@ -159,8 +159,9 @@ fun SettingSpecScreen(
     // 否则从搜索进来会滚到错误的区块。
     val sectionIndexOffset = if (header != null) 1 else 0
     val targetTitleOffsetPx = with(density) { 38.dp.roundToPx() }
-    val targetRowOffsetPx = with(density) { 72.dp.roundToPx() }
-    // 目标行的实测位置：行高随摘要行数（1~3 行）和滑杆行变化，按固定 72dp 估算必然对不准，
+    val estimatedRowHeightPx = with(density) { 64.dp.roundToPx() }
+    val targetAnchorTopPx = with(density) { 72.dp.roundToPx() }
+    // 目标行的实测位置：行高随摘要行数（1~3 行）和滑杆行变化，按固定估算值必然对不准，
     // 所以先滚到估算位置，再按实测差值校正一次
     var listTopPx by remember { mutableStateOf(0f) }
     var targetRowTopPx by remember { mutableStateOf<Float?>(null) }
@@ -189,7 +190,7 @@ fun SettingSpecScreen(
         }
         if (targetSectionIndex >= 0) {
             val section = sections[targetSectionIndex]
-            val scrollOffset = targetRowIndex * targetRowOffsetPx +
+            val scrollOffset = targetRowIndex * estimatedRowHeightPx +
                 if (section.title.isNullOrBlank()) 0 else targetTitleOffsetPx
             listState.animateScrollToItem(targetSectionIndex + sectionIndexOffset, scrollOffset)
             // 先点亮高亮再校正：目标行只有处于高亮态才会回报实测位置
@@ -199,7 +200,7 @@ fun SettingSpecScreen(
             repeat(2) {
                 withFrameNanos { }
                 val rowTop = targetRowTopPx ?: return@repeat
-                val delta = rowTop - listTopPx - targetRowOffsetPx
+                val delta = rowTop - listTopPx - targetAnchorTopPx
                 if (abs(delta) < 2f) return@repeat
                 listState.scrollBy(delta)
             }
@@ -440,7 +441,7 @@ private fun SettingRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .onGloballyPositioned { coords ->
                 if (isHighlighted) onTargetPositioned(coords.positionInWindow().y)
             }
@@ -487,9 +488,10 @@ private fun SettingRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .defaultMinSize(minHeight = 32.dp)
                         .clip(RoundedCornerShape(miuixPalette.actionRadius ?: 12.dp))
                         .background(colors.accent.copy(alpha = if (item.enabled) 0.10f else 0.05f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     item.selectedOption?.iconName?.let { iconName ->
                         LegadoResourceIcon(
@@ -679,7 +681,7 @@ private fun SettingText(
             overflow = TextOverflow.Ellipsis
         )
         item.summary?.takeIf { it.isNotBlank() }?.let {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = it.toString(),
                 color = summaryColor,

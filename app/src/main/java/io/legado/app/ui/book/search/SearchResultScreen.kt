@@ -94,32 +94,38 @@ fun SearchResultScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 86.dp),
-                verticalArrangement = Arrangement.spacedBy(if (rounded) 4.dp else 2.dp)
-            ) {
-                itemsIndexed(
-                    items = books,
-                    key = { _, book -> book.stableSearchBookKey() }
-                ) { _, book ->
-                    val inBookshelf = remember(book.bookUrl, bookshelfTick) { isInBookshelf(book) }
-                    SearchBookListItem(
-                        book = book,
-                        inBookshelf = inBookshelf,
-                        rounded = rounded,
-                        renderConfig = renderConfig,
-                        lifecycle = lifecycle,
-                        showOriginCount = true,
-                        glassSignature = glassSignature,
-                        onClick = { onBookClick(book) },
-                        onPreview = { bounds ->
-                            previewState = SearchBookPreviewState(book, bounds)
-                        }
-                    )
+                val horizontalPadding = if (rounded) 12.dp else 8.dp
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = horizontalPadding,
+                        end = horizontalPadding,
+                        top = 8.dp,
+                        bottom = 86.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(if (rounded) 8.dp else 2.dp)
+                ) {
+                    itemsIndexed(
+                        items = books,
+                        key = { _, book -> book.stableSearchBookKey() }
+                    ) { _, book ->
+                        val inBookshelf = remember(book.bookUrl, bookshelfTick) { isInBookshelf(book) }
+                        SearchBookListItem(
+                            book = book,
+                            inBookshelf = inBookshelf,
+                            rounded = rounded,
+                            renderConfig = renderConfig,
+                            lifecycle = lifecycle,
+                            showOriginCount = true,
+                            glassSignature = glassSignature,
+                            onClick = { onBookClick(book) },
+                            onPreview = { bounds ->
+                                previewState = SearchBookPreviewState(book, bounds)
+                            }
+                        )
+                    }
                 }
-            }
             }
             ComposeLazyListFastScroller(
                 state = listState,

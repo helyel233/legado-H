@@ -95,12 +95,13 @@
     <dimen name="bookshelf_tag_bar_height">38dp</dimen>
     <dimen name="top_bar_immersive_action_size">36dp</dimen>
     <dimen name="bookshelf_tag_bar_margin_horizontal">16dp</dimen>
+    <dimen name="main_top_bar_tag_margin_horizontal">12dp</dimen>
     <dimen name="bookshelf_tag_bar_margin_top">8dp</dimen>
     <dimen name="bookshelf_tag_bar_radius">10dp</dimen>
     <dimen name="bookshelf_tag_bar_padding_horizontal">3dp</dimen>
-    <dimen name="bookshelf_tag_bar_padding_vertical">1dp</dimen>
+    <dimen name="bookshelf_tag_bar_padding_vertical">0dp</dimen>
     <dimen name="bookshelf_tag_recycler_padding_vertical">4dp</dimen>
-    <dimen name="bookshelf_tag_item_height">28dp</dimen>
+    <dimen name="bookshelf_tag_item_height">30dp</dimen>
     <dimen name="bookshelf_tag_item_margin_horizontal">2dp</dimen>
     <dimen name="bookshelf_tag_item_radius">9dp</dimen>
     <dimen name="bookshelf_tag_item_min_width">36dp</dimen>

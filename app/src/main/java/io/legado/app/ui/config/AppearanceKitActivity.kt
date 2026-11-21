@@ -77,7 +77,6 @@ import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingPalette
-import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LegadoSegmentedControl
@@ -541,6 +540,25 @@ private fun AppearanceStudioScreen(
 }
 
 @Composable
+private fun StudioSectionTitle(
+    title: String,
+    palette: AppSettingPalette
+) {
+    Text(
+        text = title,
+        color = palette.accent,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        fontFamily = palette.titleFontFamily,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 6.dp)
+    )
+}
+
+@Composable
 private fun StudioModeSwitcherSection(
     themeMode: String,
     options: List<SegmentedOption<String>>,
@@ -549,7 +567,7 @@ private fun StudioModeSwitcherSection(
     onSelectMode: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
+        StudioSectionTitle(
             title = stringResource(R.string.theme_mode),
             palette = palette.settings
         )
@@ -592,7 +610,7 @@ private fun StudioLivePreviewCard(
     val accentColor = palette.settings.accent
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
+        StudioSectionTitle(
             title = stringResource(R.string.appearance_studio_preview_title),
             palette = palette.settings
         )
@@ -852,7 +870,7 @@ private fun StudioTuningSection(
     val cornerStep = cornerScaleToSliderStep(cornerScale)
     val glassSliderEnabled = isStudioGlassSliderEnabled(isEInkMode, glassMode)
     Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
+        StudioSectionTitle(
             title = stringResource(R.string.appearance_studio_tuning_title),
             palette = palette.settings
         )
@@ -1005,7 +1023,7 @@ private fun StudioSlotsSection(
         Triple(AppearanceSlot.WELCOME, R.string.appearance_slot_welcome, summaries.welcome)
     )
     Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
+        StudioSectionTitle(
             title = stringResource(R.string.appearance_studio_slots_title),
             palette = palette.settings
         )
@@ -1071,7 +1089,7 @@ private fun ActionRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 62.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = palette.rowPressed,
@@ -1096,7 +1114,7 @@ private fun ActionRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = summary,
                 color = palette.secondaryText,

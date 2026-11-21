@@ -170,16 +170,18 @@ fun ExploreModernListScreen(
             .padding(top = topPadding)
             .clipToBounds()
     ) {
+        val isRounded = listItemStyle == BookshelfListItemStyle.RoundedCard
+        val horizontalPadding = if (isRounded) 12.dp else 8.dp
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 8.dp,
+                start = horizontalPadding,
                 top = 8.dp,
-                end = 8.dp,
+                end = horizontalPadding,
                 bottom = 86.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(if (listItemStyle == BookshelfListItemStyle.RoundedCard) 4.dp else 2.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isRounded) 8.dp else 2.dp)
         ) {
             lazyColumnItems(
                 items = books,
@@ -323,9 +325,9 @@ private fun ExploreModernGridScreen(
             state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 8.dp,
+                start = 12.dp,
                 top = 8.dp,
-                end = 8.dp,
+                end = 12.dp,
                 bottom = 86.dp
             ),
             horizontalArrangement = Arrangement.spacedBy(10.dp),

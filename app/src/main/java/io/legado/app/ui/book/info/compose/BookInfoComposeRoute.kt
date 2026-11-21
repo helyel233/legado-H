@@ -66,6 +66,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -418,6 +419,8 @@ fun BookInfoComposeRoute(
     var metricPreview by remember { mutableStateOf<BookInfoMetricPreview?>(null) }
     var metricPreviewVisible by remember { mutableStateOf(false) }
     var rootSize by remember { mutableStateOf(IntSize.Zero) }
+    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     val pageScrollState = rememberScrollState()
     val refreshAtTop by remember {
         derivedStateOf { pageScrollState.value == 0 }
@@ -512,10 +515,15 @@ fun BookInfoComposeRoute(
                     webIntroExpandPages = webIntroExpandPages
                 )
             }
+            val bottomSpacerHeight = if (bottomBarHeightPx > 0) {
+                with(density) { bottomBarHeightPx.toDp() } + 12.dp
+            } else {
+                116.dp
+            }
             Spacer(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(116.dp)
+                    .height(bottomSpacerHeight)
                     .background(style.colors.contentBackground)
             )
         }
@@ -526,6 +534,7 @@ fun BookInfoComposeRoute(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .onSizeChanged { bottomBarHeightPx = it.height }
         )
         BookInfoTopGradient(
             style = style,
@@ -641,12 +650,12 @@ private fun BookInfoStatusStrip(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(
             state = pagerState,
-            pageSpacing = 9.dp,
+            pageSpacing = 10.dp,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(9.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 pages[page].forEach { quickAction ->
                     BookInfoMetricBox(
@@ -802,7 +811,7 @@ private fun BookInfoMetricBox(
     var bounds by remember { mutableStateOf<Rect?>(null) }
     Box(
         modifier = modifier
-            .height(74.dp)
+            .heightIn(min = 72.dp)
             .shadow(2.dp, shape, clip = false)
             .clip(shape)
             // 第四轮：Compose 详情页状态条玻璃面。alpha 让位 + 1dp 描边，非玻璃档逐值不变。
@@ -1993,8 +2002,8 @@ private fun BookInfoIntroPanel(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = if (isWebIntro) 0.dp else 22.dp,
-                end = if (isWebIntro) 0.dp else 22.dp,
+                start = if (isWebIntro) 0.dp else 18.dp,
+                end = if (isWebIntro) 0.dp else 18.dp,
                 bottom = 12.dp
             ),
         verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -2085,11 +2094,12 @@ private fun BookInfoActionButton(
     val textColor = if (primary) style.colors.actionText else style.colors.primaryText
     Box(
         modifier = modifier
-            .height(52.dp)
+            .heightIn(min = 48.dp)
             .shadow(if (primary) 7.dp else 4.dp, RoundedCornerShape(style.metrics.actionRadius), clip = false)
             .clip(RoundedCornerShape(style.metrics.actionRadius))
             .background(background)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -2172,7 +2182,7 @@ private fun BookInfoRichIntro(
     val currentActions by rememberUpdatedState(actions)
     var contentWidth by remember { mutableStateOf(0) }
     val fallbackImageWidth = remember(context) {
-        (context.resources.displayMetrics.widthPixels - 44.dpToPx()).coerceAtLeast(1)
+        (context.resources.displayMetrics.widthPixels - 36.dpToPx()).coerceAtLeast(1)
     }
     val imageMaxWidth = contentWidth.takeIf { it > 0 } ?: fallbackImageWidth
     val markwon = if (rawIntro.startsWith("<md>", ignoreCase = true)) {

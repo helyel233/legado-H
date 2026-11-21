@@ -118,16 +118,17 @@ fun ExploreShowComposeScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
+        val horizontalPadding = if (rounded) 12.dp else 8.dp
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 8.dp,
+                start = horizontalPadding,
                 top = 8.dp,
-                end = 8.dp,
+                end = horizontalPadding,
                 bottom = bottomInset + 16.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(if (rounded) 4.dp else 2.dp)
+            verticalArrangement = Arrangement.spacedBy(if (rounded) 8.dp else 2.dp)
         ) {
             if (isLoadingPrevious || previousErrorMessage != null) {
                 item(key = "explore_show_previous_status", contentType = "status") {

@@ -164,7 +164,7 @@ class MainTopBarView @JvmOverloads constructor(
         orientation = VERTICAL
         clipChildren = true
         clipToPadding = false
-        val horizontal = resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
+        val horizontal = resources.getDimensionPixelSize(R.dimen.main_top_bar_tag_margin_horizontal)
         contentLayout.setPadding(horizontal, paddingTop, horizontal, 0)
         addView(surfaceLayout, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         surfaceLayout.addView(
@@ -491,7 +491,8 @@ class MainTopBarView @JvmOverloads constructor(
     private fun applyDefaultStyle() {
         contentLayout.layoutTransition = null
         val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-        val horizontal = resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
+        val horizontal = resources.getDimensionPixelSize(R.dimen.main_top_bar_tag_margin_horizontal)
+        val titleExtraHorizontal = (resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal) - horizontal).coerceAtLeast(0)
         val chrome = floatingChrome(config)
         if (chrome.floating) {
             // 悬浮卡片：实底交给圆角背景层，宿主自身保持透明；卡片内缩由
@@ -512,7 +513,7 @@ class MainTopBarView @JvmOverloads constructor(
             renderBackgroundLayer(null, 0f)
         }
         titleRow.background = null
-        titleRow.setPadding(0, resources.getDimensionPixelSize(R.dimen.bookshelf_title_row_margin_top), 0, 0)
+        titleRow.setPadding(titleExtraHorizontal, resources.getDimensionPixelSize(R.dimen.bookshelf_title_row_margin_top), titleExtraHorizontal, 0)
         updateTitleRowControlHeight(resources.getDimensionPixelSize(R.dimen.bookshelf_title_select_height))
         // 顶栏搜索按钮：包自身开启，或悬浮底栏隐藏了搜索时自动顶上来，保证搜索始终可达。
         val showSearch = config.showSearchInDefaultStyle || isFloatingSearchHidden()
@@ -529,6 +530,7 @@ class MainTopBarView @JvmOverloads constructor(
                 width = resources.getDimensionPixelSize(R.dimen.bookshelf_action_button_size)
                 height = resources.getDimensionPixelSize(R.dimen.bookshelf_action_button_size)
                 marginStart = 8.dp
+                marginEnd = if (it === filterToggleButton) titleExtraHorizontal else 0
             }
             val padding = resources.getDimensionPixelSize(R.dimen.bookshelf_action_button_padding)
             it.setPadding(padding, padding, padding, padding)
@@ -551,7 +553,8 @@ class MainTopBarView @JvmOverloads constructor(
         if (contentLayout.layoutTransition == null) {
             contentLayout.layoutTransition = createTopBarLayoutTransition()
         }
-        val horizontal = resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
+        val horizontal = resources.getDimensionPixelSize(R.dimen.main_top_bar_tag_margin_horizontal)
+        val titleExtraHorizontal = (resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal) - horizontal).coerceAtLeast(0)
         val vertical = 5.dp
         val chrome = floatingChrome(config)
         if (chrome.floating) {
@@ -574,7 +577,7 @@ class MainTopBarView @JvmOverloads constructor(
             contentLayout.setPadding(horizontal, statusBarInsetTop + vertical, horizontal, vertical)
         }
         titleRow.background = null
-        titleRow.setPadding(0, 0, 0, 0)
+        titleRow.setPadding(titleExtraHorizontal, 0, titleExtraHorizontal, 0)
         updateTitleRowControlHeight(resources.getDimensionPixelSize(R.dimen.top_bar_regular_action_size))
         titleSelect.isVisible = !searchEntryRequested
         searchEntry.isVisible = searchEntryRequested
@@ -589,6 +592,7 @@ class MainTopBarView @JvmOverloads constructor(
                 width = resources.getDimensionPixelSize(R.dimen.top_bar_regular_action_size)
                 height = resources.getDimensionPixelSize(R.dimen.top_bar_regular_action_size)
                 marginStart = 6.dp
+                marginEnd = if (it === filterToggleButton) titleExtraHorizontal else 0
             }
             val padding = 8.dp
             it.setPadding(padding, padding, padding, padding)

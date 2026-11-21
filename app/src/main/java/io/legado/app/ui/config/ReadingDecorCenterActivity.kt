@@ -4,11 +4,14 @@ import android.os.Bundle
 import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,10 +54,10 @@ import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
+import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.startActivity
@@ -204,9 +208,17 @@ private fun ReadingDecorCenterScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item("summary_hint") {
-                AppSettingSectionTitle(
-                    title = stringResource(R.string.reading_decor_center_summary),
-                    palette = palette.settings
+                Text(
+                    text = stringResource(R.string.reading_decor_center_summary),
+                    color = palette.settings.accent,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = palette.settings.titleFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, top = 6.dp, end = 4.dp, bottom = 2.dp)
                 )
             }
             item("decor_items") {
@@ -216,6 +228,7 @@ private fun ReadingDecorCenterScreen(
                             title = stringResource(R.string.bubble_manage),
                             summary = summaries.bubble.ifBlank { stringResource(R.string.bubble_manage_summary) },
                             palette = palette,
+                            isFirst = true,
                             onClick = onOpenBubble
                         )
                         DecorItemRow(
@@ -246,6 +259,7 @@ private fun ReadingDecorCenterScreen(
                             title = stringResource(R.string.share_note_template_manage),
                             summary = summaries.shareNote.ifBlank { stringResource(R.string.share_note_template_manage_summary) },
                             palette = palette,
+                            isLast = true,
                             showDivider = false,
                             onClick = onOpenShareNote
                         )
@@ -266,6 +280,9 @@ private fun ReadingDecorCenterScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            // 与玻璃分支保持一致地裁剪：appSettingPanelBackground 只画圆角路径、
+                            // 不限制子项绘制，行按压底色是直角矩形，不裁剪会把首/末行的圆角盖成方角。
+                            .clip(panelShape)
                             .appSettingPanelBackground(
                                 normalColor = palette.settings.row,
                                 borderColor = palette.settings.border,
@@ -286,48 +303,56 @@ private fun DecorItemRow(
     title: String,
     summary: String,
     palette: AppManagementPalette,
+    isFirst: Boolean = false,
+    isLast: Boolean = false,
     showDivider: Boolean = true,
     onClick: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = palette.settings.primaryText,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = summary,
-                    color = palette.settings.secondaryText,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Icon(
-                painter = painterResource(R.drawable.ic_arrow_right),
-                contentDescription = null,
-                tint = palette.settings.secondaryText
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 56.dp)
+            .appSettingRowDecoration(
+                pressed = pressed,
+                pressedColor = palette.settings.rowPressed,
+                dividerColor = palette.settings.divider,
+                showDivider = showDivider,
+                radiusPx = palette.settings.panelRadiusPx,
+                isFirst = isFirst,
+                isLast = isLast
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = palette.settings.primaryText,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = summary,
+                color = palette.settings.secondaryText,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        if (showDivider) {
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(0.5.dp)
-                    .padding(horizontal = 16.dp)
-            )
-        }
+        Icon(
+            painter = painterResource(R.drawable.ic_arrow_right),
+            contentDescription = null,
+            tint = palette.settings.secondaryText
+        )
     }
 }

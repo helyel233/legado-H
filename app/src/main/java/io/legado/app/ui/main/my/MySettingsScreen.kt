@@ -363,7 +363,7 @@ private fun SettingsActionRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = colors.rowPressed,
@@ -392,7 +392,7 @@ private fun SettingsActionRow(
                 overflow = TextOverflow.Ellipsis
             )
             if (item.summary.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = highlightMatches(item.summary, searchQuery, colors.accent),
                     color = colors.secondaryText,
@@ -433,7 +433,7 @@ private fun ThemeModeRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .appSettingRowDecoration(
                 pressed = false,
                 pressedColor = colors.rowPressed,
@@ -457,15 +457,15 @@ private fun ThemeModeRow(
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
-        // 36dp = 行首图标 22dp + 间距 14dp，分段控件与标题左对齐
+        // 36dp = 行首图标 22dp + 间距 14dp，保持分段控件与标题同一左对齐基线
         LegadoSegmentedControl(
             options = options.map { SegmentedOption(value = it.value, label = it.label) },
             selectedValue = selectedValue,
             palette = colors.toMiuixPalette(),
             onSelected = onSelect,
             tone = SegmentedControlTone.AccentThumb,
-            itemHeight = 28.dp,
-            fontSize = 11.sp,
+            itemHeight = 32.dp,
+            fontSize = 12.sp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 36.dp)
@@ -492,7 +492,7 @@ private fun ServiceSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 60.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = colors.rowPressed,
@@ -519,7 +519,7 @@ private fun ServiceSwitchRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = highlightMatches(state.summary, searchQuery, colors.accent),
                 color = colors.secondaryText,

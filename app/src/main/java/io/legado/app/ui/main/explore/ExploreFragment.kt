@@ -1989,7 +1989,13 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun applyDiscoverBookContainerMargins(useComposeList: Boolean) {
-        val margin = if (useComposeList) 0 else resources.getDimensionPixelSize(R.dimen.bookshelf_tag_bar_margin_horizontal)
+        // item_search_waterfall.xml 自身带 4dp 左右外边距，容器补齐余量使瀑布流外缘对齐顶栏 12dp。
+        val margin = if (useComposeList) {
+            0
+        } else {
+            (resources.getDimensionPixelSize(R.dimen.main_top_bar_tag_margin_horizontal) - 4.dpToPx())
+                .coerceAtLeast(0)
+        }
         val params = binding.flDiscoverBooks.layoutParams as? ViewGroup.MarginLayoutParams ?: return
         if (params.marginStart == margin && params.marginEnd == margin) return
         params.marginStart = margin
