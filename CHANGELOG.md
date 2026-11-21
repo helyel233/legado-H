@@ -1,5 +1,24 @@
 # 更新日志
 
+## 1.34.1 版（2026-11-21）
+
+本版继续 UI 架构收口：新增 UI 空间 token 契约（统一页面/卡片/行高/控件的空间度量与同心内边距公式）与 L3 内嵌控件底色派生，并完成第四轮 UI 布局打磨（统一 12dp 外边距基准、列表节奏、主题项样式收口），配套新增 UI 空间契约巡检脚本。**新功能 + 优化 → minor+0.1，跳过 1.x.0。**
+
+### 新功能
+
+- **UI 空间 token 契约 + L3 内嵌控件底色派生（M1–M4）**：新增 `AppLayoutTokens` 统一空间度量（页面/详情/区块/卡片/网格/行高/控件三档）与同心内边距公式，替换散落的裸 dp；`SurfaceHierarchyDerivation` 新增纯函数 `deriveL3ControlColor`（日间提亮 / 近白保底 / 深色微提 / 玻璃 alpha 补正 / 墨水屏纯白旁路）与 `resolveConcentricCardPaddingDp`，纯 JVM 可测。
+- **`LocalMiuixContainerSurfaceColor` 容器色作用域**：仅当控件与宿主底色同色时才派生 L3 色，避免无依据叠加第二描边；覆盖按钮/选择行/下拉/开关/滑杆/输入框/卡片。`AppManagementCard` 支持 `outerPadding` 与 `inCard` 模式，统一卡片去外边距后的行间距补偿。
+
+### 优化 / 收口
+
+- **第四轮 UI 布局打磨**：新增 `main_top_bar_tag_margin_horizontal=12dp` 作为顶栏/瀑布流外缘基准，顶栏标题行补等量内缩使图标与内容对齐；书籍详情/搜索/发现/书架列表圆角卡片外边距 8→12dp、项间距 4→8dp；底栏 Spacer 改按实测高度自适应，替代硬编码 116dp。
+- 设置/我的/阅读装饰中心行高统一 56dp + 摘要间距 3dp，Decorator 行接入按压/分隔线与面板裁剪消除首末行方角；外观工作台分组标题收敛为本地 `StudioSectionTitle`；对话框输入框改 `BasicTextField` 自绘统一聚焦/边框/底色口径；设置搜索定位变量语义化，书籍详情竖横屏按钮 padding/radius 微调。
+- 新增 `tools/check_ui_layout_tokens.py`（report-only UI 空间契约巡检，可选 `--strict`）扫描 743 文件 / 67 条待核查项（固定高度控件大字号裁切风险等提示，不阻断构建）。
+
+### 单测 / 门禁
+
+新增 6 个 L3/间距纯逻辑单测（`SurfaceHierarchyDerivationTest` 扩充 130 行），定向单测 65 例全绿；交付前自跑五门禁全 PASS：glass 治理、设置映射零断链、Compose 覆盖 136/136、r58 资源 629 节点、UI 空间契约巡检。versionCode 29862310。
+
 ## 1.33.1 版（2026-11-20）
 
 本版是一次 UI 配置系统大迭代：外观方案管理升级为「外观中心」，新增阅读装饰中心 / 界面布局中心，设置搜索支持路由直达管理页；同时完成 UI 架构 v2（单一色彩数据源 + 上游 L1/L2 派生）与 v3（一体化工作台 + UI 配置域 Compose 收口）两轮重构，并新增 Compose 主题覆盖率门禁。**新功能 + 重构（含修复）→ minor+0.1，跳过 1.x.0。**

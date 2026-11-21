@@ -4,6 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.34.1 · 2026/11/21**
+
+- UI 空间 token 契约：新增 AppLayoutTokens 统一页面/卡片/行高/控件空间度量 + 同心内边距公式，替换散落裸 dp
+- L3 内嵌控件底色派生：SurfaceHierarchyDerivation 新增 deriveL3ControlColor(日间提亮/近白保底/深色微提/玻璃 alpha 补正/墨水屏纯白) + 同心内边距纯函数；LocalMiuixContainerSurfaceColor 容器色作用域，仅控件与宿主同色时才派生避免重复描边
+- 第四轮 UI 布局打磨：统一 12dp 外边距基准、列表项间距 4→8dp、设置行高 56dp、底栏 Spacer 按实测高度自适应替代硬编码 116dp、主题项样式收口
+- 新增 UI 空间契约巡检脚本 check_ui_layout_tokens.py(report-only)
+- 新增 6 个 L3/间距纯逻辑单测(65 例全绿)，五门禁(glass/设置映射/Compose 覆盖/r58/UI 空间巡检)全 PASS
+
 **vH.1.33.1 · 2026/11/20**
 
 - UI 配置重构：外观方案管理升级为「外观中心」(重命名/覆盖保存/删除/六槽位跳转/判脏提示)，新增阅读装饰中心 + 界面布局与系统栏两中心，我的页分组改「阅读体验/外观与界面」
