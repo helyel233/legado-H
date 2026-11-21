@@ -14,6 +14,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,6 +60,7 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementListRow
@@ -1100,7 +1102,9 @@ private fun BottomNavItemsManageContent(
         state = listState,
         modifier = Modifier
             .heightIn(max = 460.dp)
-            .padding(bottom = 4.dp)
+            .padding(bottom = 4.dp),
+        // 卡片去掉 4dp 垂直外边距后，行间距不再由卡片自带，必须由列表显式给（否则拖拽行两两贴死）。
+        verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
     ) {
         items(
             items = orderedItems,

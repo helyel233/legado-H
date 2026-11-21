@@ -49,6 +49,7 @@ import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoMiuixPalette
@@ -126,7 +127,7 @@ private data class VisibleRow(
     val searchTarget: MySettingsSubSearchItem?
 )
 
-private val SettingsHorizontalPadding = 12.dp
+private val SettingsHorizontalPadding = AppLayoutTokens.PageHorizontal
 
 @Composable
 internal fun MySettingsScreen(
@@ -363,7 +364,7 @@ private fun SettingsActionRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = AppLayoutTokens.RowMinHeight)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = colors.rowPressed,
@@ -380,7 +381,10 @@ private fun SettingsActionRow(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(
+                horizontal = AppLayoutTokens.RowPaddingHorizontal,
+                vertical = AppLayoutTokens.RowPaddingVertical
+            )
     ) {
         SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
@@ -392,7 +396,7 @@ private fun SettingsActionRow(
                 overflow = TextOverflow.Ellipsis
             )
             if (item.summary.isNotBlank()) {
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(AppLayoutTokens.TextMetaSpacing))
                 Text(
                     text = highlightMatches(item.summary, searchQuery, colors.accent),
                     color = colors.secondaryText,
@@ -433,7 +437,7 @@ private fun ThemeModeRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = AppLayoutTokens.RowMinHeight)
             .appSettingRowDecoration(
                 pressed = false,
                 pressedColor = colors.rowPressed,
@@ -464,7 +468,7 @@ private fun ThemeModeRow(
             palette = colors.toMiuixPalette(),
             onSelected = onSelect,
             tone = SegmentedControlTone.AccentThumb,
-            itemHeight = 32.dp,
+            itemHeight = AppLayoutTokens.ControlHeightCompact,
             fontSize = 12.sp,
             modifier = Modifier
                 .fillMaxWidth()
@@ -492,7 +496,7 @@ private fun ServiceSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = AppLayoutTokens.RowMinHeight)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = colors.rowPressed,
@@ -508,7 +512,10 @@ private fun ServiceSwitchRow(
                 role = Role.Switch,
                 onClick = onClick
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(
+                horizontal = AppLayoutTokens.RowPaddingHorizontal,
+                vertical = AppLayoutTokens.RowPaddingVertical
+            )
     ) {
         SettingsLeadingIcon(item = item.row, colors = colors)
         Column(modifier = Modifier.weight(1f)) {
@@ -519,7 +526,7 @@ private fun ServiceSwitchRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(AppLayoutTokens.TextMetaSpacing))
             Text(
                 text = highlightMatches(state.summary, searchQuery, colors.accent),
                 color = colors.secondaryText,

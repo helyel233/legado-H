@@ -72,6 +72,7 @@ import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.ComposeDialogFragment
+import io.legado.app.ui.widget.compose.LocalMiuixContainerSurfaceColor
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.ColorUtils as AppColorUtils
@@ -380,7 +381,9 @@ fun ReaderSectionCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            content()
+            CompositionLocalProvider(LocalMiuixContainerSurfaceColor provides style.fieldSurface) {
+                content()
+            }
         }
     }
 }

@@ -123,7 +123,8 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                                         AppConfig.forceSoftwareParagraphBubble = checked
                                         ImageProvider.clear()
                                         (activity as? ReadBookActivity)?.refreshParagraphRuleLayout()
-                                    }
+                                    },
+                                    outerPadding = PaddingValues(0.dp)
                                 )
                             }
                             items(entries, key = { it.dirName }) { entry ->
@@ -136,7 +137,8 @@ class BubbleQuickSwitchDialog : ComposeDialogFragment() {
                                             dismissAllowingStateLoss()
                                             onSelected?.invoke(entry)
                                         },
-                                    insidePadding = PaddingValues(10.dp)
+                                    insidePadding = PaddingValues(10.dp),
+                                    outerPadding = PaddingValues(0.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),

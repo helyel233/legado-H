@@ -67,6 +67,7 @@ import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
@@ -80,7 +81,7 @@ import io.legado.app.ui.widget.compose.rememberAppSettingPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.utils.ColorUtils
 
-private val PanelHorizontalPadding = 12.dp
+private val PanelHorizontalPadding = AppLayoutTokens.PageHorizontal
 
 /**
  * 宿主页面此刻是否**真的露出 App 壁纸**（由宿主显式声明，不由本组件猜）。
@@ -441,7 +442,7 @@ private fun SettingRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = AppLayoutTokens.RowMinHeight)
             .onGloballyPositioned { coords ->
                 if (isHighlighted) onTargetPositioned(coords.positionInWindow().y)
             }
@@ -465,7 +466,10 @@ private fun SettingRow(
                     }
                 }
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(
+                horizontal = AppLayoutTokens.RowPaddingHorizontal,
+                vertical = AppLayoutTokens.RowPaddingVertical
+            )
     ) {
         SettingText(
             item = item,
@@ -488,7 +492,7 @@ private fun SettingRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 32.dp)
+                        .defaultMinSize(minHeight = AppLayoutTokens.ControlHeightCompact)
                         .clip(RoundedCornerShape(miuixPalette.actionRadius ?: 12.dp))
                         .background(colors.accent.copy(alpha = if (item.enabled) 0.10f else 0.05f))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -632,7 +636,10 @@ private fun SettingSliderRow(
                 isLast = isLast,
                 highlightColor = colors.accent.copy(alpha = 0.14f * highlightAlpha)
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(
+                horizontal = AppLayoutTokens.RowPaddingHorizontal,
+                vertical = AppLayoutTokens.RowPaddingVertical
+            )
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SettingText(
@@ -681,7 +688,7 @@ private fun SettingText(
             overflow = TextOverflow.Ellipsis
         )
         item.summary?.takeIf { it.isNotBlank() }?.let {
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(AppLayoutTokens.TextMetaSpacing))
             Text(
                 text = it.toString(),
                 color = summaryColor,

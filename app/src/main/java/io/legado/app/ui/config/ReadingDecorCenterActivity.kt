@@ -53,7 +53,9 @@ import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementPalette
+import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -204,21 +206,14 @@ private fun ReadingDecorCenterScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .navigationBarsPadding(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item("summary_hint") {
-                Text(
-                    text = stringResource(R.string.reading_decor_center_summary),
-                    color = palette.settings.accent,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = palette.settings.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, top = 6.dp, end = 4.dp, bottom = 2.dp)
+                AppSettingSectionTitle(
+                    title = stringResource(R.string.reading_decor_center_summary),
+                    palette = palette.settings,
+                    inCard = false
                 )
             }
             item("decor_items") {
@@ -313,7 +308,7 @@ private fun DecorItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = AppLayoutTokens.RowMinHeight)
             .appSettingRowDecoration(
                 pressed = pressed,
                 pressedColor = palette.settings.rowPressed,
@@ -328,7 +323,10 @@ private fun DecorItemRow(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(
+                horizontal = AppLayoutTokens.RowPaddingHorizontal,
+                vertical = AppLayoutTokens.RowPaddingVertical
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -340,7 +338,7 @@ private fun DecorItemRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(AppLayoutTokens.TextMetaSpacing))
             Text(
                 text = summary,
                 color = palette.settings.secondaryText,

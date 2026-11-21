@@ -109,6 +109,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.compose.releaseComposeImage
 import androidx.compose.ui.zIndex
@@ -485,7 +486,7 @@ fun BookInfoComposeRoute(
                         .align(Alignment.BottomCenter)
                         .statusBarsPadding()
                         .padding(top = 72.dp)
-                        .padding(horizontal = 18.dp)
+                        .padding(horizontal = AppLayoutTokens.DetailHorizontal)
                         .padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -1185,7 +1186,7 @@ private fun BookInfoMoreActionSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
-                .padding(horizontal = 18.dp, vertical = 8.dp),
+                .padding(horizontal = AppLayoutTokens.DetailHorizontal, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
@@ -2002,8 +2003,8 @@ private fun BookInfoIntroPanel(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = if (isWebIntro) 0.dp else 18.dp,
-                end = if (isWebIntro) 0.dp else 18.dp,
+                start = if (isWebIntro) 0.dp else AppLayoutTokens.DetailHorizontal,
+                end = if (isWebIntro) 0.dp else AppLayoutTokens.DetailHorizontal,
                 bottom = 12.dp
             ),
         verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -2053,7 +2054,7 @@ private fun BookInfoBottomActions(
                 )
             )
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .padding(horizontal = AppLayoutTokens.DetailHorizontal, vertical = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2094,7 +2095,7 @@ private fun BookInfoActionButton(
     val textColor = if (primary) style.colors.actionText else style.colors.primaryText
     Box(
         modifier = modifier
-            .heightIn(min = 48.dp)
+            .heightIn(min = AppLayoutTokens.ControlHeightProminent)
             .shadow(if (primary) 7.dp else 4.dp, RoundedCornerShape(style.metrics.actionRadius), clip = false)
             .clip(RoundedCornerShape(style.metrics.actionRadius))
             .background(background)

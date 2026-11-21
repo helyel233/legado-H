@@ -42,9 +42,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +61,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -82,6 +85,8 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.Text
 import io.legado.app.R
+import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.SurfaceHierarchyDerivation
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -115,10 +120,45 @@ data class LegadoMiuixPalette(
     val danger: Color,
     val onAccent: Color = Color.White,
     val panelRadius: Dp? = null,
-    val actionRadius: Dp? = null
+    val actionRadius: Dp? = null,
+    val nestedSurface: Color? = null
 )
 
+internal val LocalMiuixContainerSurfaceColor = compositionLocalOf { Color.Unspecified }
+
+internal fun sameSurfaceColor(a: Color, b: Color): Boolean {
+    if (a == Color.Unspecified || b == Color.Unspecified) return false
+    return abs(a.red - b.red) <= 0.015f &&
+        abs(a.green - b.green) <= 0.015f &&
+        abs(a.blue - b.blue) <= 0.015f &&
+        abs(a.alpha - b.alpha) <= 0.04f
+}
+
+internal fun resolveL3ControlSurfaceColor(
+    baseColor: Color,
+    containerColor: Color,
+    palette: LegadoMiuixPalette,
+    isNight: Boolean,
+    isEInk: Boolean
+): Color {
+    if (!sameSurfaceColor(containerColor, baseColor)) return baseColor
+    return palette.nestedSurface ?: Color(
+        SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = baseColor.toArgb(),
+            accentArgb = palette.accent.toArgb(),
+            isNight = isNight,
+            isEInk = isEInk
+        )
+    )
+}
+
 fun AppDialogStyle.toMiuixPalette(): LegadoMiuixPalette {
+    val nestedArgb = SurfaceHierarchyDerivation.deriveL3ControlColor(
+        slotArgb = fieldSurface.toArgb(),
+        accentArgb = accent.toArgb(),
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     return LegadoMiuixPalette(
         accent = accent,
         surface = surface,
@@ -128,7 +168,8 @@ fun AppDialogStyle.toMiuixPalette(): LegadoMiuixPalette {
         danger = danger,
         onAccent = onAccent,
         panelRadius = panelRadius,
-        actionRadius = actionRadius
+        actionRadius = actionRadius,
+        nestedSurface = Color(nestedArgb)
     )
 }
 
@@ -230,23 +271,44 @@ fun LegadoMiuixActionButton(
     cornerRadius: Dp? = null,
     minWidth: Dp = 76.dp,
     minHeight: Dp = 40.dp,
-    insidePadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+    insidePadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+    prominentOutline: Boolean = false
 ) {
     val resolvedCornerRadius = cornerRadius ?: palette.actionRadius ?: LocalContext.current.composeActionRadius()
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val effectiveMinHeight = minHeight.coerceAtLeast((40f * fontScale).dp)
+    val isEInk = AppConfig.isEInkMode
     val background = when {
         primary -> palette.accent
         danger -> palette.danger.copy(alpha = 0.13f)
-        else -> palette.surfaceVariant
+        prominentOutline -> if (isEInk) palette.surface else palette.accent.copy(alpha = 0.12f)
+        else -> resolveL3ControlSurfaceColor(
+            baseColor = palette.surfaceVariant,
+            containerColor = LocalMiuixContainerSurfaceColor.current,
+            palette = palette,
+            isNight = AppConfig.isNightTheme,
+            isEInk = isEInk
+        )
     }
     val content = when {
         primary -> palette.onAccent
         danger -> palette.danger
+        prominentOutline -> if (isEInk) palette.primaryText else palette.accent
         else -> palette.primaryText
     }
+    val prominentBorder = if (prominentOutline) {
+        val borderColor = if (isEInk) {
+            if (enabled) palette.primaryText else palette.primaryText.copy(alpha = 0.38f)
+        } else {
+            palette.accent.copy(alpha = if (enabled) 0.36f else 0.18f)
+        }
+        BorderStroke(1.dp, borderColor)
+    } else {
+        null
+    }
     val effectiveTextColor = if (enabled) content else content.copy(alpha = 0.45f)
-    if (canUseRealMiuix()) {
+    val fontWeight = if (primary || prominentOutline) FontWeight.SemiBold else FontWeight.Medium
+    if (canUseRealMiuix() && !prominentOutline) {
         MiuixButton(
             onClick = onClick,
             modifier = modifier,
@@ -267,20 +329,26 @@ fun LegadoMiuixActionButton(
                 color = effectiveTextColor,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
+                fontWeight = fontWeight,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
         return
     }
+    val surfaceColor = if (enabled || (prominentOutline && isEInk)) {
+        background
+    } else {
+        background.copy(alpha = 0.46f)
+    }
     Surface(
         modifier = modifier
             .defaultMinSize(minWidth = minWidth, minHeight = effectiveMinHeight)
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(resolvedCornerRadius),
-        color = if (enabled) background else background.copy(alpha = 0.46f),
+        color = surfaceColor,
         contentColor = effectiveTextColor,
+        border = prominentBorder,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
@@ -297,7 +365,7 @@ fun LegadoMiuixActionButton(
                 color = effectiveTextColor,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
+                fontWeight = fontWeight,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -434,6 +502,8 @@ fun AppThemedStepperSlider(
     val latestOnValueChange by rememberUpdatedState(onValueChange)
     val latestOnValueChangeFinished by rememberUpdatedState(onValueChangeFinished)
     val endpointWidthPx = with(density) { endpointWidth.toPx() }
+    val resolvedActionRadius = palette.actionRadius ?: LocalContext.current.composeActionRadius()
+    val sliderShape = if (resolvedActionRadius <= 0.dp) RoundedCornerShape(0.dp) else CircleShape
 
     BoxWithConstraints(
         modifier = modifier
@@ -536,7 +606,7 @@ fun AppThemedStepperSlider(
                         }
                     }
                 },
-            shape = CircleShape,
+            shape = sliderShape,
             color = if (enabled) {
                 palette.surfaceVariant
             } else {
@@ -573,7 +643,7 @@ fun AppThemedStepperSlider(
                         .align(Alignment.CenterStart)
                         .offset { IntOffset(thumbOffsetPx, 0) }
                         .size(thumbSize),
-                    shape = CircleShape,
+                    shape = sliderShape,
                     color = if (enabled) palette.surface else palette.surface.copy(alpha = 0.62f),
                     contentColor = palette.primaryText,
                     tonalElevation = 0.dp,
@@ -636,7 +706,9 @@ fun LegadoMiuixFloatingPanel(
         tonalElevation = 0.dp,
         shadowElevation = 12.dp
     ) {
-        Column(modifier = Modifier.padding(contentPadding), content = content)
+        CompositionLocalProvider(LocalMiuixContainerSurfaceColor provides palette.surface) {
+            Column(modifier = Modifier.padding(contentPadding), content = content)
+        }
     }
 }
 
@@ -675,7 +747,7 @@ fun LegadoMiuixChoiceRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     description: String? = null,
-    minHeight: Dp = 40.dp,
+    minHeight: Dp = 42.dp,
     compact: Boolean = false,
     showSelectedMark: Boolean = true,
     enabled: Boolean = true,
@@ -722,6 +794,13 @@ fun LegadoMiuixChoiceRow(
     val contentAlpha = if (enabled) 1f else 0.42f
     val selectedColor = palette.accent.copy(alpha = contentAlpha)
     val primaryColor = palette.primaryText.copy(alpha = contentAlpha)
+    val unselectedColor = resolveL3ControlSurfaceColor(
+        baseColor = palette.surfaceVariant,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -733,7 +812,7 @@ fun LegadoMiuixChoiceRow(
             translucentSurface -> palette.surfaceVariant.copy(
                 alpha = translucentRowSurfaceAlpha(palette.surface.alpha)
             )
-            else -> palette.surfaceVariant
+            else -> unselectedColor
         },
         // 行边界统一取主题包「边框线色」，与面板外框 / 卡片 / 底栏同一份口径。
         // 行底（palette.surfaceVariant）与面板 surface 是同族近色，填充色差很小，
@@ -883,9 +962,17 @@ fun <T> LegadoMiuixSelectField(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        val selectFieldColor = resolveL3ControlSurfaceColor(
+            baseColor = palette.surfaceVariant,
+            containerColor = LocalMiuixContainerSurfaceColor.current,
+            palette = palette,
+            isNight = AppConfig.isNightTheme,
+            isEInk = AppConfig.isEInkMode
+        )
         LegadoMiuixCard(
             modifier = Modifier
                 .fillMaxWidth()
+                .defaultMinSize(minHeight = if (compact) 40.dp else AppLayoutTokens.ControlHeightRegular)
                 .clickable {
                     if (expanded) {
                         dismissOptions()
@@ -894,7 +981,7 @@ fun <T> LegadoMiuixSelectField(
                         expanded = true
                     }
             },
-            color = palette.surfaceVariant,
+            color = selectFieldColor,
             contentColor = palette.primaryText,
             cornerRadius = resolvedCornerRadius,
             insidePadding = PaddingValues(
@@ -1005,12 +1092,13 @@ fun LegadoMiuixSection(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val horizontalPadding = AppLayoutTokens.concentricCardHorizontalPadding(cornerRadius)
     LegadoMiuixCard(
         modifier = modifier.fillMaxWidth(),
         color = palette.surfaceVariant,
         contentColor = palette.primaryText,
         cornerRadius = cornerRadius,
-        insidePadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+        insidePadding = PaddingValues(horizontal = horizontalPadding, vertical = 12.dp)
     ) {
         Text(
             text = title,
@@ -1021,7 +1109,9 @@ fun LegadoMiuixSection(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        content()
+        CompositionLocalProvider(LocalMiuixContainerSurfaceColor provides palette.surfaceVariant) {
+            content()
+        }
     }
 }
 
@@ -1036,11 +1126,18 @@ fun LegadoMiuixActionRow(
     cornerRadius: Dp? = null
 ) {
     val resolvedCornerRadius = cornerRadius ?: palette.actionRadius ?: LocalContext.current.composeActionRadius()
+    val normalBg = resolveL3ControlSurfaceColor(
+        baseColor = palette.surfaceVariant,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     LegadoMiuixCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = if (danger) palette.danger.copy(alpha = 0.12f) else palette.surfaceVariant,
+        color = if (danger) palette.danger.copy(alpha = 0.12f) else normalBg,
         contentColor = if (danger) palette.danger else palette.primaryText,
         cornerRadius = resolvedCornerRadius,
         insidePadding = PaddingValues(horizontal = 16.dp, vertical = 13.dp)

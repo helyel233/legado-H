@@ -250,7 +250,7 @@ private fun TagGroupContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
     ) {
         item(key = "summary:${group.groupId}") {

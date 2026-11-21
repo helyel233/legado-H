@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -109,6 +110,7 @@ import io.legado.app.ui.image.ImageCropContract
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.compose.AppComposePopupAnchorButton
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.imageBgTextShadow
@@ -1727,9 +1729,9 @@ private fun ThemePackageManageScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(start = 6.dp, top = 8.dp, end = 6.dp, bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    contentPadding = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(AppLayoutTokens.GridGap),
+                    verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.GridGap)
                 ) {
                     items(
                         entries,
@@ -1762,7 +1764,8 @@ private fun ThemePackageManageScreen(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     primary = false,
                     cornerRadius = palette.miuix.actionRadius,
-                    minHeight = 46.dp
+                    minHeight = AppLayoutTokens.ControlHeightProminent,
+                    prominentOutline = true
                 )
             }
         }
@@ -1810,16 +1813,17 @@ private fun ThemePackageGridCard(
         palette = palette,
         modifier = Modifier
             .fillMaxWidth()
-            .height(198.dp),
+            .heightIn(min = 198.dp),
         insidePadding = PaddingValues(8.dp),
         onClick = onApply,
-        onLongClick = if (canEdit) onEdit else null
+        onLongClick = if (canEdit) onEdit else null,
+        outerPadding = PaddingValues(0.dp)
     ) {
         ThemePackagePreview(
             preview = preview,
             active = isActive,
             palette = palette,
-            radius = palette.miuix.panelRadius ?: 12.dp,
+            radius = palette.miuix.actionRadius ?: 8.dp,
             modifier = Modifier.height(96.dp)
         )
         Spacer(modifier = Modifier.height(6.dp))

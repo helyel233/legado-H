@@ -137,4 +137,63 @@ object SurfaceHierarchyDerivation {
     fun withAlphaArgb(argb: Int, alpha: Int): Int {
         return (argb and 0x00FFFFFF) or (alpha.coerceIn(0, 255) shl 24)
     }
+
+    /**
+     * L2 槽内嵌 L3 控件底色派生（仅在控件与宿主底色相等时触发，禁止靠叠加第二条平行描边拉层次）。
+     *
+     * - 墨水屏：强制旁路返回纯白 `#FFFFFFFF`（与 L2 `#F2F2F2` 拉开明度阶梯，无半透明灰块）。
+     * - 日间浅色槽（`isLightArgb` 为真）：向纯白回提 `55%` 形成浮起控件感；若原槽底已接近纯白（最大通道差 < 6），改向深色微压 `5.5%` 防退化同色。
+     * - 夜间模式或日间自定义深色槽（`isNight || !isLightArgb`）：向「白混 10% 强调色」微提 `7%`，避免日间深色卡片内嵌控件被 55% 向白炸成浅灰板。
+     * - 玻璃半透明态（alpha < 255）：保留透明通道并补足 `+20` alpha（上限 `255`），避免高不透明度档位下倒挂更透或跳变。
+     */
+    fun deriveL3ControlColor(
+        slotArgb: Int,
+        accentArgb: Int,
+        isNight: Boolean,
+        isEInk: Boolean
+    ): Int {
+        if (isEInk) return ARGB_WHITE
+        val origAlpha = (slotArgb ushr 24) and 0xFF
+        val opaqueSlot = (slotArgb and 0x00FFFFFF) or (0xFF shl 24)
+        val shiftedRgb = if (!isNight && isLightArgb(opaqueSlot)) {
+            val lifted = blendArgb(opaqueSlot, ARGB_WHITE, 0.55f)
+            if (maxRgbChannelDiff(opaqueSlot, lifted) >= 6) {
+                lifted
+            } else {
+                val tintDark = blendArgb(ARGB_BLACK, accentArgb, 0.12f)
+                blendArgb(opaqueSlot, tintDark, 0.055f)
+            }
+        } else {
+            val tintLight = blendArgb(ARGB_WHITE, accentArgb, 0.10f)
+            blendArgb(opaqueSlot, tintLight, 0.07f)
+        }
+        val finalAlpha = if (origAlpha >= 255) 255 else (origAlpha + 20).coerceIn(0, 255)
+        return withAlphaArgb(shiftedRgb, finalAlpha)
+    }
+
+    /**
+     * 大圆角下的同心内边距防穿模公式：
+     * - `panelRadiusDp <= 14f`（默认 `0x~1.4x`）维持 `basePaddingDp` 不变；
+     * - 超过 `14f` 时按超额的 `0.25` 倍补偿内边距（上限 `maxBonusDp`，默认 `+4dp`），
+     *   避免超圆角档下内部子控件四角顶穿外卡圆弧。
+     */
+    fun resolveConcentricCardPaddingDp(
+        panelRadiusDp: Float,
+        basePaddingDp: Float = 14f,
+        maxBonusDp: Float = 4f
+    ): Float {
+        val safeBase = basePaddingDp.coerceAtLeast(0f)
+        val safeRadius = panelRadiusDp.coerceAtLeast(0f)
+        val safeBonus = maxBonusDp.coerceAtLeast(0f)
+        if (safeRadius <= 14f) return safeBase
+        val extra = ((safeRadius - 14f) * 0.25f).coerceIn(0f, safeBonus)
+        return safeBase + extra
+    }
+
+    private fun maxRgbChannelDiff(a: Int, b: Int): Int {
+        val dr = kotlin.math.abs(((a ushr 16) and 0xFF) - ((b ushr 16) and 0xFF))
+        val dg = kotlin.math.abs(((a ushr 8) and 0xFF) - ((b ushr 8) and 0xFF))
+        val db = kotlin.math.abs((a and 0xFF) - (b and 0xFF))
+        return max(dr, max(dg, db))
+    }
 }

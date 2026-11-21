@@ -92,6 +92,7 @@ import io.legado.app.model.ImageProvider
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.model.localBook.epubcore.facade.EpubChapterMetadata
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementIconAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -1137,7 +1138,8 @@ private fun TocBookmarkList(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.CardGap)
         ) {
             itemsIndexed(
                 items = bookmarks,

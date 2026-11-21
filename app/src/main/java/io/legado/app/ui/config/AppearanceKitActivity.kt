@@ -73,10 +73,12 @@ import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_SOLID
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingPalette
+import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LegadoSegmentedControl
@@ -477,8 +479,13 @@ private fun AppearanceStudioScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .navigationBarsPadding(),
-            contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(
+                start = AppLayoutTokens.PageHorizontal,
+                top = 10.dp,
+                end = AppLayoutTokens.PageHorizontal,
+                bottom = 18.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.SectionGap)
         ) {
             item("mode_switcher") {
                 StudioModeSwitcherSection(
@@ -540,25 +547,6 @@ private fun AppearanceStudioScreen(
 }
 
 @Composable
-private fun StudioSectionTitle(
-    title: String,
-    palette: AppSettingPalette
-) {
-    Text(
-        text = title,
-        color = palette.accent,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        fontFamily = palette.titleFontFamily,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 6.dp)
-    )
-}
-
-@Composable
 private fun StudioModeSwitcherSection(
     themeMode: String,
     options: List<SegmentedOption<String>>,
@@ -567,9 +555,10 @@ private fun StudioModeSwitcherSection(
     onSelectMode: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        StudioSectionTitle(
+        AppSettingSectionTitle(
             title = stringResource(R.string.theme_mode),
-            palette = palette.settings
+            palette = palette.settings,
+            inCard = false
         )
         LegadoSegmentedControl(
             options = options,
@@ -610,9 +599,10 @@ private fun StudioLivePreviewCard(
     val accentColor = palette.settings.accent
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        StudioSectionTitle(
+        AppSettingSectionTitle(
             title = stringResource(R.string.appearance_studio_preview_title),
-            palette = palette.settings
+            palette = palette.settings,
+            inCard = false
         )
         val body: @Composable () -> Unit = {
             Column(
@@ -870,9 +860,10 @@ private fun StudioTuningSection(
     val cornerStep = cornerScaleToSliderStep(cornerScale)
     val glassSliderEnabled = isStudioGlassSliderEnabled(isEInkMode, glassMode)
     Column(modifier = Modifier.fillMaxWidth()) {
-        StudioSectionTitle(
+        AppSettingSectionTitle(
             title = stringResource(R.string.appearance_studio_tuning_title),
-            palette = palette.settings
+            palette = palette.settings,
+            inCard = false
         )
         val content: @Composable () -> Unit = {
             Column(
@@ -1023,9 +1014,10 @@ private fun StudioSlotsSection(
         Triple(AppearanceSlot.WELCOME, R.string.appearance_slot_welcome, summaries.welcome)
     )
     Column(modifier = Modifier.fillMaxWidth()) {
-        StudioSectionTitle(
+        AppSettingSectionTitle(
             title = stringResource(R.string.appearance_studio_slots_title),
-            palette = palette.settings
+            palette = palette.settings,
+            inCard = false
         )
         Text(
             text = stringResource(R.string.appearance_studio_slots_hint),

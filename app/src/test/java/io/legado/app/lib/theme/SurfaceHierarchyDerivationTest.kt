@@ -170,4 +170,134 @@ class SurfaceHierarchyDerivationTest {
         assertEquals(SurfaceHierarchyDerivation.ARGB_WHITE, dayCard)
         assertEquals(0xFF232323.toInt(), nightCard)
     }
+
+    @Test
+    fun deriveL3ControlColor_dayWarmAndNearWhite_createsDirectionalStep() {
+        val accent = 0xFF8B5A2B.toInt()
+        val warmSlot = 0xFFF2ECE4.toInt()
+        val warmL3 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = warmSlot,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        assertNotEquals(warmSlot, warmL3)
+        assertEquals(0xFF, (warmL3 ushr 24) and 0xFF)
+        assertTrue(((warmL3 ushr 16) and 0xFF) > ((warmSlot ushr 16) and 0xFF))
+        assertTrue(((warmL3 ushr 8) and 0xFF) > ((warmSlot ushr 8) and 0xFF))
+        assertTrue((warmL3 and 0xFF) > (warmSlot and 0xFF))
+
+        val whiteSlot = SurfaceHierarchyDerivation.ARGB_WHITE
+        val whiteL3 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = whiteSlot,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        assertNotEquals(whiteSlot, whiteL3)
+        assertEquals(0xFF, (whiteL3 ushr 24) and 0xFF)
+        assertTrue(((whiteL3 ushr 8) and 0xFF) < 0xFF)
+    }
+
+    @Test
+    fun deriveL3ControlColor_dayModeDarkCustomSlot_liftsSubtlyWithoutExploding() {
+        val accent = 0xFF4F7CAC.toInt()
+        val darkSlot = 0xFF313131.toInt()
+        val darkL3 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = darkSlot,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        val slotRed = (darkSlot ushr 16) and 0xFF
+        val l3Red = (darkL3 ushr 16) and 0xFF
+        assertEquals(0xFF, (darkL3 ushr 24) and 0xFF)
+        assertTrue(l3Red > slotRed)
+        assertTrue(l3Red < 0x55)
+    }
+
+    @Test
+    fun deriveL3ControlColor_nightSlot_liftsAndPreservesAlpha() {
+        val accent = 0xFF4F7CAC.toInt()
+        val nightSlot = 0xFF232323.toInt()
+        val nightL3 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = nightSlot,
+            accentArgb = accent,
+            isNight = true,
+            isEInk = false
+        )
+        assertNotEquals(nightSlot, nightL3)
+        assertEquals(0xFF, (nightL3 ushr 24) and 0xFF)
+        val slotRed = (nightSlot ushr 16) and 0xFF
+        val l3Red = (nightL3 ushr 16) and 0xFF
+        assertTrue(l3Red > slotRed)
+    }
+
+    @Test
+    fun deriveL3ControlColor_eInkMode_returnsPureWhiteBypass() {
+        val resultDay = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = 0xFFEEEEEE.toInt(),
+            accentArgb = 0xFF000000.toInt(),
+            isNight = false,
+            isEInk = true
+        )
+        val resultNight = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = 0xFF222222.toInt(),
+            accentArgb = 0xFFFFFFFF.toInt(),
+            isNight = true,
+            isEInk = true
+        )
+        assertEquals(SurfaceHierarchyDerivation.ARGB_WHITE, resultDay)
+        assertEquals(SurfaceHierarchyDerivation.ARGB_WHITE, resultNight)
+    }
+
+    @Test
+    fun deriveL3ControlColor_glassAndHighOpacityBoundaries_monotonicAlphaWithoutInversion() {
+        val accent = 0xFF4F7CAC.toInt()
+        val baseRgb = 0x00EAEAEA
+        val glassAlpha128 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = (128 shl 24) or baseRgb,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        val opacity73Alpha186 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = (186 shl 24) or baseRgb,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        val opacity99Alpha252 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = (252 shl 24) or baseRgb,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+        val opacity100Alpha255 = SurfaceHierarchyDerivation.deriveL3ControlColor(
+            slotArgb = (255 shl 24) or baseRgb,
+            accentArgb = accent,
+            isNight = false,
+            isEInk = false
+        )
+
+        val a128 = (glassAlpha128 ushr 24) and 0xFF
+        val a186 = (opacity73Alpha186 ushr 24) and 0xFF
+        val a252 = (opacity99Alpha252 ushr 24) and 0xFF
+        val a255 = (opacity100Alpha255 ushr 24) and 0xFF
+
+        assertEquals(148, a128)
+        assertEquals(206, a186)
+        assertEquals(255, a252)
+        assertEquals(255, a255)
+        assertTrue(a128 < a186 && a186 <= a252 && a252 <= a255)
+    }
+
+    @Test
+    fun resolveConcentricCardPaddingDp_matchesContractAcrossRadii() {
+        assertEquals(14f, SurfaceHierarchyDerivation.resolveConcentricCardPaddingDp(0f), 0.001f)
+        assertEquals(14f, SurfaceHierarchyDerivation.resolveConcentricCardPaddingDp(14f), 0.001f)
+        assertEquals(15.5f, SurfaceHierarchyDerivation.resolveConcentricCardPaddingDp(20f), 0.001f)
+        assertEquals(18f, SurfaceHierarchyDerivation.resolveConcentricCardPaddingDp(30f), 0.001f)
+        assertEquals(18f, SurfaceHierarchyDerivation.resolveConcentricCardPaddingDp(40f), 0.001f)
+    }
 }

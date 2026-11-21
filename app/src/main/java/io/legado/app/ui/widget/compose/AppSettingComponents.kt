@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.SurfaceHierarchyDerivation
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
@@ -205,7 +207,17 @@ fun rememberAppManagementPalette(): AppManagementPalette {
     val colors = rememberAppSettingPalette()
     val panelRadius = tokens.corners.panelRadiusDp.dp
     val actionRadius = tokens.corners.actionRadiusDp.dp
-    return remember(colors, panelRadius, actionRadius) {
+    val nestedSurface = remember(colors.slot, colors.accent, tokens.env.isNight, tokens.env.isEInk) {
+        Color(
+            SurfaceHierarchyDerivation.deriveL3ControlColor(
+                slotArgb = colors.slot,
+                accentArgb = colors.accent.toArgb(),
+                isNight = tokens.env.isNight,
+                isEInk = tokens.env.isEInk
+            )
+        )
+    }
+    return remember(colors, panelRadius, actionRadius, nestedSurface) {
         AppManagementPalette(
             settings = colors,
             miuix = LegadoMiuixPalette(
@@ -217,7 +229,8 @@ fun rememberAppManagementPalette(): AppManagementPalette {
                 danger = colors.danger,
                 onAccent = colors.onAccent,
                 panelRadius = panelRadius,
-                actionRadius = actionRadius
+                actionRadius = actionRadius,
+                nestedSurface = nestedSurface
             )
         )
     }
@@ -270,8 +283,7 @@ fun AppManagementLazyColumn(
 fun AppManagementCard(
     palette: AppManagementPalette,
     modifier: Modifier = Modifier,
-    insidePadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+    insidePadding: androidx.compose.foundation.layout.PaddingValues? = null,
     enabled: Boolean = true,
     drawPanelImage: Boolean = true,
     /**
@@ -283,12 +295,19 @@ fun AppManagementCard(
     glassSignature: String? = LocalAppManagementGlassSignature.current,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    outerPadding: PaddingValues = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal),
     content: @Composable ColumnScope.() -> Unit
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val panelRadiusPx = palette.settings.panelRadiusPx
+    val panelRadiusDp = with(density) { panelRadiusPx.toDp() }
+    val resolvedInsidePadding = insidePadding ?: PaddingValues(
+        horizontal = AppLayoutTokens.concentricCardHorizontalPadding(panelRadiusDp),
+        vertical = AppLayoutTokens.CardPaddingVertical
+    )
     val panelImage = if (drawPanelImage) {
         remember(context, panelRadiusPx, palette.settings.themeSignature) {
             UiCorner.panelImageDrawable(context, panelRadiusPx)
@@ -327,9 +346,9 @@ fun AppManagementCard(
     )
     val outerModifier = modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 4.dp)
+        .padding(outerPadding)
     if (glassSurface && glassSignature != null) {
-        val shape = RoundedCornerShape(with(LocalDensity.current) { panelRadiusPx.toDp() })
+        val shape = RoundedCornerShape(panelRadiusDp)
         GlassPanel(
             domain = GlassSamplingDomain.WALLPAPER,
             cornerRadiusPx = panelRadiusPx,
@@ -338,26 +357,30 @@ fun AppManagementCard(
             modifier = outerModifier.clip(shape),
             fallback = solidBackground
         ) {
+            CompositionLocalProvider(LocalMiuixContainerSurfaceColor provides Color.Unspecified) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 玻璃 drawable 没有按下态，用主题行按下色叠在玻璃之上保留触摸反馈
+                        .background(
+                            if (pressed) Color(palette.settings.rowPressed) else Color.Transparent
+                        )
+                        .then(clickableModifier)
+                        .padding(resolvedInsidePadding),
+                    content = content
+                )
+            }
+        }
+    } else {
+        CompositionLocalProvider(LocalMiuixContainerSurfaceColor provides Color(palette.settings.row)) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 玻璃 drawable 没有按下态，用主题行按下色叠在玻璃之上保留触摸反馈
-                    .background(
-                        if (pressed) Color(palette.settings.rowPressed) else Color.Transparent
-                    )
+                modifier = outerModifier
+                    .then(solidBackground)
                     .then(clickableModifier)
-                    .padding(insidePadding),
+                    .padding(resolvedInsidePadding),
                 content = content
             )
         }
-    } else {
-        Column(
-            modifier = outerModifier
-                .then(solidBackground)
-                .then(clickableModifier)
-                .padding(insidePadding),
-            content = content
-        )
     }
 }
 
@@ -389,17 +412,22 @@ fun AppManagementListRow(
     moreIndicatorColor: Color? = null,
     headerContent: (@Composable ColumnScope.() -> Unit)? = null,
     trailingBeforeSwitch: (@Composable RowScope.() -> Unit)? = null,
-    leadingContent: (@Composable () -> Unit)? = null
+    leadingContent: (@Composable () -> Unit)? = null,
+    outerPadding: PaddingValues = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal)
 ) {
     AppManagementCard(
         palette = palette,
         modifier = modifier.fillMaxWidth(),
-        insidePadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        insidePadding = PaddingValues(
+            horizontal = AppLayoutTokens.CardPaddingHorizontal,
+            vertical = AppLayoutTokens.CardPaddingVertical
+        ),
         drawPanelImage = drawPanelImage,
         glassSurface = glassSurface,
         glassSignature = glassSignature,
         onClick = onClick,
-        onLongClick = onLongClick
+        onLongClick = onLongClick,
+        outerPadding = outerPadding
     ) {
         headerContent?.invoke(this)
         Row(
@@ -445,7 +473,7 @@ fun AppManagementListRow(
                         fontFamily = palette.settings.bodyFontFamily,
                         maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = AppLayoutTokens.TextMetaSpacing)
                     )
                 }
             }
@@ -687,9 +715,13 @@ fun AppSettingSectionTitle(
     modifier: Modifier = Modifier,
     collapsible: Boolean = false,
     expanded: Boolean = true,
-    onToggle: (() -> Unit)? = null
+    onToggle: (() -> Unit)? = null,
+    inCard: Boolean = true
 ) {
     if (title.isNullOrBlank()) return
+    val horizontalPad = if (inCard) 16.dp else 4.dp
+    val topPad = if (inCard) 16.dp else 8.dp
+    val bottomPad = if (inCard) 8.dp else 6.dp
     if (!collapsible || onToggle == null) {
         Text(
             text = title.toString(),
@@ -701,7 +733,7 @@ fun AppSettingSectionTitle(
             overflow = TextOverflow.Ellipsis,
             modifier = modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+                .padding(start = horizontalPad, top = topPad, end = horizontalPad, bottom = bottomPad)
         )
         return
     }
@@ -718,7 +750,12 @@ fun AppSettingSectionTitle(
                 role = Role.Button,
                 onClick = onToggle
             )
-            .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 8.dp)
+            .padding(
+                start = horizontalPad,
+                top = if (inCard) 12.dp else topPad,
+                end = horizontalPad,
+                bottom = bottomPad
+            )
     ) {
         Text(
             text = title.toString(),

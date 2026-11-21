@@ -114,7 +114,8 @@ class ShareNoteTemplateSelectDialog : ComposeDialogFragment() {
                                             ShareNoteTemplateManager.rememberLast(entry)
                                             onSelected?.invoke(entry)
                                         },
-                                    insidePadding = PaddingValues(10.dp)
+                                    insidePadding = PaddingValues(10.dp),
+                                    outerPadding = PaddingValues(0.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),

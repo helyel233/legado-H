@@ -274,8 +274,10 @@ fun AppDialogFrame(
             }
         }
     }
+    val frameSurfaceColor = if (dialogClear) style.clearSurface else style.surface
     CompositionLocalProvider(
-        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily)
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily),
+        LocalMiuixContainerSurfaceColor provides if (glassEnabled) Color.Unspecified else frameSurfaceColor
     ) {
         if (glassEnabled) {
             GlassPanel(
@@ -355,6 +357,14 @@ private fun AppDialogTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     val style = rememberAppDialogStyle()
+    val palette = style.toMiuixPalette()
+    val resolvedFieldColor = resolveL3ControlSurfaceColor(
+        baseColor = style.fieldSurface,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     var isFocused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(style.actionRadius)
     val borderColor = if (isFocused) style.accent.copy(alpha = 0.55f) else style.stroke
@@ -375,9 +385,9 @@ private fun AppDialogTextField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 44.dp)
+                .defaultMinSize(minHeight = AppLayoutTokens.ControlHeightRegular)
                 .clip(shape)
-                .background(style.fieldSurface)
+                .background(resolvedFieldColor)
                 .border(1.dp, borderColor, shape)
                 .padding(horizontal = 13.dp, vertical = 10.dp),
             contentAlignment = if (minLines > 1) Alignment.TopStart else Alignment.CenterStart
@@ -1968,11 +1978,18 @@ fun AppDialogSwitchRow(
 ) {
     val style = rememberAppDialogStyle()
     val palette = style.toMiuixPalette()
+    val switchCardColor = resolveL3ControlSurfaceColor(
+        baseColor = style.fieldSurface,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     LegadoMiuixCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) },
-        color = style.fieldSurface,
+        color = switchCardColor,
         contentColor = style.primaryText,
         cornerRadius = style.actionRadius,
         insidePadding = PaddingValues(horizontal = 13.dp, vertical = 10.dp)
@@ -2048,9 +2065,16 @@ fun AppDialogSliderRow(
     val safeStep = step.coerceAtLeast(1)
     val safeValue = value.coerceIn(range)
     val displayValue = valueFormatter(safeValue)
+    val sliderCardColor = resolveL3ControlSurfaceColor(
+        baseColor = style.fieldSurface,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     LegadoMiuixCard(
         modifier = modifier.fillMaxWidth(),
-        color = style.fieldSurface,
+        color = sliderCardColor,
         contentColor = style.primaryText,
         cornerRadius = style.actionRadius,
         insidePadding = PaddingValues(

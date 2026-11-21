@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
@@ -116,7 +116,7 @@ fun AppPackageManageScreen(
                         .weight(1f)
                         .fillMaxWidth(),
                     contentPadding = PaddingValues(vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
+                    verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.CardGap)
                 ) {
                     headerContent(palette)
                     listContent(palette)
@@ -130,7 +130,8 @@ fun AppPackageManageScreen(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     primary = false,
                     cornerRadius = palette.miuix.actionRadius,
-                    minHeight = 46.dp
+                    minHeight = AppLayoutTokens.ControlHeightProminent,
+                    prominentOutline = true
                 )
             }
         }
@@ -274,13 +275,18 @@ fun AppPackageManageActionButton(
     val background = if (selected) {
         palette.accent.copy(alpha = 0.14f)
     } else {
-        palette.surfaceVariant
+        resolveL3ControlSurfaceColor(
+            baseColor = palette.surfaceVariant,
+            containerColor = LocalMiuixContainerSurfaceColor.current,
+            palette = palette,
+            isNight = AppConfig.isNightTheme,
+            isEInk = AppConfig.isEInkMode
+        )
     }
     val content = if (selected) palette.accent else palette.primaryText
     Surface(
         modifier = modifier
-            .widthIn(min = 72.dp)
-            .height(34.dp)
+            .defaultMinSize(minWidth = 72.dp, minHeight = 34.dp)
             .alpha(if (enabled) 1f else 0.45f)
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(radius),
@@ -290,9 +296,7 @@ fun AppPackageManageActionButton(
         shadowElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -315,14 +319,19 @@ private fun AppPackageManageMoreButton(
     text: String,
     modifier: Modifier = Modifier
 ) {
+    val background = resolveL3ControlSurfaceColor(
+        baseColor = palette.miuix.surfaceVariant,
+        containerColor = LocalMiuixContainerSurfaceColor.current,
+        palette = palette.miuix,
+        isNight = AppConfig.isNightTheme,
+        isEInk = AppConfig.isEInkMode
+    )
     AppComposePopupAnchorButton(
         actionsProvider = actionsProvider,
-        containerColor = palette.miuix.surfaceVariant,
+        containerColor = background,
         contentColor = palette.miuix.primaryText,
         cornerRadius = palette.miuix.actionRadius,
-        modifier = modifier
-            .widthIn(min = 72.dp)
-            .height(34.dp)
+        modifier = modifier.defaultMinSize(minWidth = 72.dp, minHeight = 34.dp)
     ) {
         Text(
             text = text,
@@ -331,7 +340,7 @@ private fun AppPackageManageMoreButton(
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 12.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
         )
     }
 }
