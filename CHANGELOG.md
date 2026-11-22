@@ -1,5 +1,23 @@
 # 更新日志
 
+## 1.35.1 版（2026-11-22）
+
+本版落地 UI 架构 v4：三层正交解耦（数据层 / 编译层 / 呈现层），新增统一包仓库与美术包/参数包双包分离、级联 Scope Token、快照转场，并完成 v4.1 双槽激活、CoW 增量包与备份恢复收口，配套 P0 性能修复与墨水屏独立轴。**新功能 + 优化/修复 → minor+0.1，跳过 1.x.0。**
+
+### 新功能
+
+- **UI 架构 v4 基础层（P1–P4）**：新增 `PackageIoKernel` 原子写（`.tmp` + `.bak`）与 ZIP 安全解压；`UnifiedPackageCodec` / manifest（schemaVersion=1 + unknownFields 透传）与 `LegacyPackageMigrator` 静默拆解旧包为美术/参数双包；`ThemeTokenCompiler` 支持全局 + 4 Scope（顶层 / 底栏 / 书架卡片 / 弹窗）级联派生与密度缩放，8 路显式接线；`WindowSnapshotTransitionController`（PixelCopy + 输入拦截 + 首帧绘制门控 + 600ms 兜底 + 墨水屏 0ms 直切）包裹 recreate。
+- **美术包 / 参数包双槽激活（v4.1）**：新增 activeDay/Night Art/Param 四个分槽键，保留 `current*` 兼容读；`AppearanceKitActivity` 重写为美术/参数双槽管理 + 回滚开关面板。
+- **CoW 增量包 + 包编辑器**：子包 manifest 记 `basePackageId` 只存增量替换，overlay→base 解析；`clonePackageCoW` 纯增量克隆，导出物化为自包含 ZIP（去 base + 重算 hash），带路径穿越防护与内容 hash 去重；新增 `UnifiedPackageEditorDialogs`（命名/删除/美术包/参数包四类对话框），草稿停留 Compose 局部态、单一 onSave 出口。
+- **eInk 独立轴**：新增 `eInkMode` 独立布尔键 + `lastNonEInkThemeMode` 记忆进入墨水屏前的日/夜偏好，`themeMode=="3"` 仅作升级兼容回退。
+
+### 优化 / 收口
+
+- **P0 性能修复**：新增 `UiPerfMetrics` 基线度量；壁纸异步预解码 + 模糊 LruCache；全树字体递归优化；玻璃 4 连发定时器收敛为布局稳定一次性监听。
+- **备份恢复收口**：Backup / Restore / RestoreSnapshot / `UiPackageBackup` 接入统一包仓库；AppCloudStorage / S3 / WebDav 备份通道对齐。
+- **安全与红线**：两个 Kill Switch 偏好键单一写入；墨水屏三层强制熔断；严禁跨 Window 隐式继承（`updateActiveRuntimeOverride` 默认不再反写 theme.json，仅回滚开关开启时走旧路径）；下线四个旧管理 Activity 的 Manifest 注册与设置搜索白名单。
+- **测试与门禁**：新增 PackageIoKernel / LegacyPackageMigrator / UnifiedPackageCoW / UnifiedPackageCodec / ThemeTokenCompiler / WindowSnapshotTransitionPolicy / UiPerfMetrics 等定向单测；五项静态门禁（玻璃治理 / 设置映射 / Compose 主题覆盖 / r58 资源 / UI 空间契约巡检）全部通过。
+
 ## 1.34.1 版（2026-11-21）
 
 本版继续 UI 架构收口：新增 UI 空间 token 契约（统一页面/卡片/行高/控件的空间度量与同心内边距公式）与 L3 内嵌控件底色派生，并完成第四轮 UI 布局打磨（统一 12dp 外边距基准、列表节奏、主题项样式收口），配套新增 UI 空间契约巡检脚本。**新功能 + 优化 → minor+0.1，跳过 1.x.0。**

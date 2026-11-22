@@ -4,7 +4,16 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
-**vH.1.34.1 · 2026/11/21**
+**vH.1.35.1 · 2026/11/22**
+
+- UI 架构 v4 基础层：新增统一包仓库 PackageIoKernel(原子写+ZIP安全解压)、UnifiedPackageCodec/manifest(schemaVersion=1+unknownFields透传)、LegacyPackageMigrator 旧包静默拆解为美术/参数双包
+- 级联 Scope Token：ThemeTokenCompiler 全局+4 Scope(顶层/底栏/书架卡片/弹窗)级联派生+密度缩放，8 路显式接线
+- 快照转场：WindowSnapshotTransitionController(PixelCopy+输入拦截+首帧门控+600ms兜底+墨水屏0ms直切)包裹 recreate
+- v4.1 双槽激活：美术包/参数包 activeDay/Night 四槽键 + current* 兼容读；AppearanceKitActivity 重写双槽管理+回滚面板
+- CoW 增量包：子包只存增量、overlay→base 解析、导出物化自包含 ZIP；新增四类包编辑对话框，草稿局部态单一 onSave 出口
+- eInk 独立轴：eInkMode 独立布尔键 + lastNonEInkThemeMode 记忆，themeMode==3 仅升级兼容回退
+- P0 性能：UiPerfMetrics 基线度量、壁纸异步预解码+模糊 LruCache、全树字体递归优化、玻璃定时器收敛为布局稳定一次性监听
+- 备份恢复收口：Backup/Restore/RestoreSnapshot/UiPackageBackup 接入统一包仓库；安全红线——Kill Switch 单一写入、墨水屏三层熔断、禁跨 Window 隐式继承、下线四个旧管理 Activity
 
 - UI 空间 token 契约：新增 AppLayoutTokens 统一页面/卡片/行高/控件空间度量 + 同心内边距公式，替换散落裸 dp
 - L3 内嵌控件底色派生：SurfaceHierarchyDerivation 新增 deriveL3ControlColor(日间提亮/近白保底/深色微提/玻璃 alpha 补正/墨水屏纯白) + 同心内边距纯函数；LocalMiuixContainerSurfaceColor 容器色作用域，仅控件与宿主同色时才派生避免重复描边
