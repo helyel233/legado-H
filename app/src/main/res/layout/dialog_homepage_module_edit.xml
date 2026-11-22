@@ -31,19 +31,6 @@
         android:textSize="14sp"
         tools:text="标题" />
 
-    <EditText
-        android:id="@+id/et_url"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="18dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="18dp"
-        android:hint="@string/homepage_module_url"
-        android:importantForAutofill="no"
-        android:inputType="textUri"
-        android:maxLines="1"
-        android:textSize="14sp" />
-
     <LinearLayout
         android:id="@+id/ll_type_field"
         android:layout_width="match_parent"
@@ -55,9 +42,9 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="14dp"
-        android:paddingTop="6dp"
+        android:paddingTop="8dp"
         android:paddingEnd="14dp"
-        android:paddingBottom="6dp">
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -83,6 +70,17 @@
                 android:textSize="15sp"
                 tools:text="网格" />
 
+            <TextView
+                android:id="@+id/tv_type_desc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/secondaryText"
+                android:textSize="11sp"
+                tools:text="三列封面网格" />
+
         </LinearLayout>
 
         <TextView
@@ -95,31 +93,68 @@
 
     </LinearLayout>
 
-    <EditText
-        android:id="@+id/et_args"
+    <TextView
+        android:id="@+id/tv_categories_summary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="18dp"
         android:layout_marginTop="10dp"
         android:layout_marginEnd="18dp"
-        android:hint="@string/homepage_module_args"
-        android:importantForAutofill="no"
-        android:inputType="text"
-        android:maxLines="1"
-        android:textSize="14sp" />
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="@color/secondaryText"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:text="已选分类：玄幻、都市"
+        tools:visibility="visible" />
 
-    <EditText
-        android:id="@+id/et_layout_config"
+    <TextView
+        android:id="@+id/tv_toggle_advanced"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="8dp"
+        android:background="?android:attr/selectableItemBackground"
+        android:padding="6dp"
+        android:text="@string/homepage_advanced_options"
+        android:textColor="@color/secondaryText"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:id="@+id/ll_advanced_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="18dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="18dp"
-        android:hint="@string/homepage_module_layout_config"
-        android:importantForAutofill="no"
-        android:inputType="text"
-        android:maxLines="1"
-        android:textSize="14sp" />
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <EditText
+            android:id="@+id/et_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="18dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="18dp"
+            android:hint="@string/homepage_module_url"
+            android:importantForAutofill="no"
+            android:inputType="textUri"
+            android:maxLines="2"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_args"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="18dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="18dp"
+            android:hint="@string/homepage_module_args"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine"
+            android:maxLines="3"
+            android:textSize="13sp" />
+
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

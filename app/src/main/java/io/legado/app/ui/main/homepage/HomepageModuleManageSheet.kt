@@ -2,6 +2,8 @@ package io.legado.app.ui.main.homepage
 
 import android.content.Context
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -22,14 +24,14 @@ import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.databinding.DialogHomepageManageBinding
 import io.legado.app.databinding.ItemHomepageManageActionBinding
 import io.legado.app.databinding.ItemHomepageManageFieldBinding
+import io.legado.app.databinding.ItemHomepageManageKindPickerBinding
 import io.legado.app.databinding.ItemHomepageManageModuleBinding
 import io.legado.app.databinding.ItemHomepageManageSectionBinding
 import io.legado.app.databinding.ItemHomepageManageSetBinding
 import io.legado.app.databinding.ItemHomepageManageSourceBinding
 import io.legado.app.domain.model.HomepageModuleType
-import io.legado.app.domain.model.ModuleDef
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.utils.GSON
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
@@ -67,12 +69,17 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
     /** 源模块详情页当前 Tab：0 = 已加入，1 = 发现 */
     private var sourceDetailTab = 0
 
-    /** 发现页状态：分类加载状态 */
+    /** 搜索关键字（仅在浏览书源/订阅源/复制模块页生效） */
+    private var searchQuery = ""
+
+    /** 发现页状态：分类加载与内联勾选状态 */
     private var discoverState = DiscoverState()
 
     private data class DiscoverState(
         val loading: Boolean = false,
         val kinds: List<ExploreKind> = emptyList(),
+        val selectedKindKeys: Set<String> = emptySet(),
+        val selectedTypeKey: String = HomepageModuleType.Grid.key,
     )
 
     private sealed interface Page {
@@ -111,6 +118,8 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
         ) : Row
 
         data class Action(val label: String, val action: () -> Unit) : Row
+
+        data class KindPicker(val page: Page.SourceDetail) : Row
     }
 
     override fun onStart() {
@@ -125,6 +134,21 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
 
         binding.ivClose.setOnClickListener { dismiss() }
         binding.ivBack.setOnClickListener { popPage() }
+        binding.ivClearSearch.setOnClickListener {
+            binding.etSearch.setText("")
+        }
+        binding.etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                val next = s?.toString()?.trim().orEmpty()
+                binding.ivClearSearch.isVisible = next.isNotEmpty()
+                if (searchQuery != next) {
+                    searchQuery = next
+                    rebuildRows()
+                }
+            }
+        })
 
         binding.tvActionAddSet.setOnClickListener { showCreateSetDialog() }
         binding.tvActionBrowseBook.setOnClickListener { pushPage(Page.BrowseSources) }
@@ -155,8 +179,17 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
 
     private fun pushPage(page: Page) {
         pageStack.add(page)
+        resetSearchQuery()
         if (page is Page.SourceDetail) {
-            sourceDetailTab = 0
+            val effectiveSetId = page.setId ?: when (page.sourceType) {
+                "rss" -> "rss_${page.sourceUrl}"
+                else -> "src_${page.sourceUrl}"
+            }
+            val joinedCount = adapter.manageState.allJoinedModules.count {
+                it.sourceUrl == page.sourceUrl && it.customSetId == effectiveSetId
+            }
+            // 未加入任何模块的新源默认直接进「发现」页签勾选添加，减少一次切 Tab
+            sourceDetailTab = if (joinedCount > 0) 0 else 1
             discoverState = DiscoverState()
             loadDiscoverKinds(page)
         }
@@ -168,11 +201,19 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
     private fun popPage() {
         if (pageStack.size > 1) {
             pageStack.removeAt(pageStack.lastIndex)
+            resetSearchQuery()
             rebuildRows()
             upFooter()
             upHeader()
         } else {
             dismiss()
+        }
+    }
+
+    private fun resetSearchQuery() {
+        searchQuery = ""
+        if (binding.etSearch.text?.isNotEmpty() == true) {
+            binding.etSearch.setText("")
         }
     }
 
@@ -189,6 +230,9 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
             is Page.SourceDetail -> page.sourceName
             is Page.CustomSetAdd -> page.setName
         }
+        binding.llSearchBar.isVisible = page is Page.BrowseSources ||
+            page is Page.BrowseRssSources ||
+            page is Page.CustomSetAdd
         binding.tabSourceDetail.isVisible = page is Page.SourceDetail
         if (page is Page.SourceDetail && binding.tabSourceDetail.tabCount != 2) {
             binding.tabSourceDetail.removeAllTabs()
@@ -220,6 +264,27 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
                     rows.add(Row.Section(getString(R.string.homepage_empty_title)))
                 }
                 state.sets.forEach { rows.add(Row.Set(it)) }
+                rows.add(Row.Action(getString(R.string.homepage_auto_setup)) {
+                    if (viewModel.isAutoAssembling()) {
+                        viewModel.cancelAutoAssembleStarterHomepage()
+                        return@Action
+                    }
+                    requireContext().toastOnUi(getString(R.string.homepage_auto_setup_running))
+                    viewModel.autoAssembleStarterHomepage { result ->
+                        if (!isAdded) return@autoAssembleStarterHomepage
+                        val msg = when (result.status) {
+                            AutoSetupStatus.ADDED ->
+                                getString(R.string.homepage_auto_setup_done, result.addedCount)
+                            AutoSetupStatus.NO_SOURCES ->
+                                getString(R.string.homepage_auto_setup_empty)
+                            AutoSetupStatus.NO_CATEGORIES ->
+                                getString(R.string.homepage_auto_setup_no_categories)
+                            AutoSetupStatus.CANCELLED ->
+                                getString(R.string.homepage_auto_setup_cancelled)
+                        }
+                        requireContext().toastOnUi(msg)
+                    }
+                })
             }
 
             is Page.SetDetail -> {
@@ -265,17 +330,19 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
             }
 
             Page.BrowseSources -> {
-                state.browseSources.forEach {
+                val filtered = filterSources(state.browseSources, searchQuery)
+                filtered.forEach {
                     rows.add(Row.Source(it, "book"))
                 }
-                if (state.browseSources.isEmpty()) {
+                if (filtered.isEmpty()) {
                     rows.add(Row.Section(getString(R.string.homepage_empty_title)))
                 }
             }
 
             Page.BrowseRssSources -> {
-                state.rssSources.forEach { rows.add(Row.Source(it, "rss")) }
-                if (state.rssSources.isEmpty()) {
+                val filtered = filterSources(state.rssSources, searchQuery)
+                filtered.forEach { rows.add(Row.Source(it, "rss")) }
+                if (filtered.isEmpty()) {
                     rows.add(Row.Section(getString(R.string.homepage_empty_title)))
                 }
             }
@@ -289,7 +356,14 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
             }
 
             is Page.CustomSetAdd -> {
-                val others = state.allJoinedModules.filter { it.customSetId != page.setId }
+                val q = searchQuery.lowercase()
+                val others = state.allJoinedModules.filter { mod ->
+                    mod.customSetId != page.setId && (
+                        q.isEmpty() ||
+                            mod.title.lowercase().contains(q) ||
+                            mod.sourceName.lowercase().contains(q)
+                        )
+                }
                 rows.add(Row.Section(getString(R.string.homepage_copy_from_other_sets)))
                 others.forEach { rows.add(Row.Module(it, copyMode = true)) }
                 if (others.isEmpty()) {
@@ -298,6 +372,18 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
             }
         }
         adapter.submitRows(rows)
+    }
+
+    private fun filterSources(
+        sources: List<HomepageSourceManageUi>,
+        query: String,
+    ): List<HomepageSourceManageUi> {
+        if (query.isBlank()) return sources
+        val q = query.lowercase()
+        return sources.filter {
+            it.sourceName.lowercase().contains(q) ||
+                (it.sourceGroup?.lowercase()?.contains(q) == true)
+        }
     }
 
     /** 已加入 Tab：该源在当前集的模块列表，附同步入口 */
@@ -319,26 +405,32 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
         modules.forEach { rows.add(Row.Module(it)) }
         if (page.sourceType == "book") {
             rows.add(Row.Action(getString(R.string.homepage_sync)) {
-                viewModel.syncSourceModules(page.sourceUrl) {
-                    requireContext().toastOnUi(getString(R.string.homepage_sync_done))
+                viewModel.syncSourceModules(page.sourceUrl) { result ->
+                    if (!isAdded) return@syncSourceModules
+                    val msg = if (!result.hasConfig) {
+                        getString(R.string.homepage_sync_empty)
+                    } else {
+                        getString(R.string.homepage_sync_count, result.moduleCount)
+                    }
+                    requireContext().toastOnUi(msg)
                 }
             })
         }
     }
 
-    /** 发现 Tab：选择分类（1~N 个，多个即切换 tab）→ 手动添加，选完分类自动打开添加对话框 */
+    /** 发现 Tab：内联多选分类 + 一键选样式添加到首页，免去多层弹窗；底部保留高级手动添加入口 */
     private fun buildDiscoverRows(rows: MutableList<Row>, page: Page.SourceDetail) {
-        if (discoverState.loading) {
-            rows.add(Row.Section(getString(R.string.homepage_loading_categories)))
-        }
-        rows.add(
-            Row.Field(
-                label = getString(R.string.homepage_select_kinds),
-                value = "",
-            ) {
-                showKindSelectSheet(page)
+        when {
+            discoverState.loading -> {
+                rows.add(Row.Section(getString(R.string.homepage_loading_categories)))
             }
-        )
+            discoverState.kinds.isEmpty() -> {
+                rows.add(Row.Section(getString(R.string.homepage_no_categories)))
+            }
+            else -> {
+                rows.add(Row.KindPicker(page))
+            }
+        }
         rows.add(
             Row.Field(
                 label = getString(R.string.homepage_manual_add_module),
@@ -364,7 +456,11 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
 
     private fun loadDiscoverKinds(page: Page.SourceDetail) {
         viewLifecycleOwner.lifecycleScope.launch {
-            discoverState = discoverState.copy(loading = true, kinds = emptyList())
+            discoverState = discoverState.copy(
+                loading = true,
+                kinds = emptyList(),
+                selectedKindKeys = emptySet(),
+            )
             rebuildRows()
             val kinds = if (page.sourceType == "rss") {
                 viewModel.getRssKinds(page.sourceUrl).map { (title, url) ->
@@ -372,56 +468,14 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
                 }
             } else {
                 viewModel.getExploreKinds(page.sourceUrl)
-            }
-            discoverState = discoverState.copy(loading = false, kinds = kinds)
+            }.filter { !it.title.startsWith("ERROR:") && !it.url.isNullOrBlank() }
+            discoverState = discoverState.copy(
+                loading = false,
+                kinds = kinds,
+                selectedKindKeys = emptySet(),
+            )
             rebuildRows()
         }
-    }
-
-    private fun showKindSelectSheet(page: Page.SourceDetail) {
-        if (discoverState.loading || discoverState.kinds.isEmpty()) {
-            requireContext().toastOnUi(getString(R.string.homepage_loading_categories))
-            return
-        }
-        val sheet = HomepageKindSelectSheet()
-        sheet.arguments = Bundle().apply {
-            putString("sourceUrl", page.sourceUrl)
-            putString("sourceType", page.sourceType)
-        }
-        sheet.show(childFragmentManager, "homepageKindSelect")
-    }
-
-    /** 分类选择弹窗回调：1~N 个分类统一按多分类建模块（1 个即单 tab），打开添加对话框预填参数 */
-    internal fun onKindsSelected(kinds: List<ExploreKind>) {
-        if (kinds.isEmpty()) return
-        val page = currentPage()
-        if (page !is Page.SourceDetail) return
-        val def = ModuleDef(
-            key = "explore_" + kinds.joinToString("_") { it.title },
-            type = HomepageModuleType.Ranking.key,
-            title = kinds.joinToString("、") { it.title },
-            args = GSON.toJson(
-                kinds.map { mapOf("t" to it.title, "u" to (it.url ?: "")) }
-            ),
-            url = kinds.firstOrNull()?.url,
-            sourceUrl = page.sourceUrl,
-        )
-        showEditDialog(
-            HomepageModuleManageUi(
-                id = "",
-                sourceUrl = page.sourceUrl,
-                sourceName = page.sourceName,
-                moduleKey = def.key,
-                title = def.title,
-                type = def.type,
-                url = def.url,
-                args = def.args,
-                originalTitle = "",
-                sourceType = page.sourceType,
-            ),
-            isCreate = true,
-            setId = page.setId,
-        )
     }
 
     private fun resolveSetId(setUrl: String): String {
@@ -691,6 +745,7 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
             is Row.Source -> TYPE_SOURCE
             is Row.Field -> TYPE_FIELD
             is Row.Action -> TYPE_ACTION
+            is Row.KindPicker -> TYPE_KIND_PICKER
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ManageViewHolder {
@@ -700,6 +755,7 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
                 TYPE_MODULE -> ItemHomepageManageModuleBinding.inflate(inflater, parent, false)
                 TYPE_SOURCE -> ItemHomepageManageSourceBinding.inflate(inflater, parent, false)
                 TYPE_FIELD -> ItemHomepageManageFieldBinding.inflate(inflater, parent, false)
+                TYPE_KIND_PICKER -> ItemHomepageManageKindPickerBinding.inflate(inflater, parent, false)
                 else -> ItemHomepageManageActionBinding.inflate(inflater, parent, false)
             }
             return ManageViewHolder(binding)
@@ -776,7 +832,94 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
                     tv.text = row.label
                     tv.setOnClickListener { row.action() }
                 }
+
+                is Row.KindPicker -> holder.kindPickerBinding?.let { pickerBinding ->
+                    bindKindPicker(pickerBinding, row.page)
+                }
             }
+        }
+
+        private fun bindKindPicker(
+            picker: ItemHomepageManageKindPickerBinding,
+            page: Page.SourceDetail,
+        ) {
+            val ctx = picker.root.context
+            fun kindKey(kind: ExploreKind): String = kind.url ?: kind.title
+
+            fun renderState() {
+                val selectedKeys = discoverState.selectedKindKeys
+                val selectedCount = selectedKeys.size
+
+                picker.flKinds.removeAllViews()
+                discoverState.kinds.forEach { kind ->
+                    val key = kindKey(kind)
+                    val selected = key in selectedKeys
+                    val chip = createKindChip(ctx, kind.title) {
+                        val next = selectedKeys.toMutableSet()
+                        if (selected) next.remove(key) else next.add(key)
+                        discoverState = discoverState.copy(selectedKindKeys = next)
+                        renderState()
+                    }
+                    if (selected) {
+                        chip.setBackgroundResource(R.drawable.bg_homepage_field)
+                        chip.setTextColor(ctx.accentColor)
+                    }
+                    picker.flKinds.addView(chip)
+                }
+
+                picker.flStyles.removeAllViews()
+                HomepageModuleBuilder.quickModuleTypes.forEach { type ->
+                    val selected = discoverState.selectedTypeKey == type.key
+                    val chip = createKindChip(ctx, ctx.getString(type.titleRes)) {
+                        discoverState = discoverState.copy(selectedTypeKey = type.key)
+                        renderState()
+                    }
+                    if (selected) {
+                        chip.setBackgroundResource(R.drawable.bg_homepage_field)
+                        chip.setTextColor(ctx.accentColor)
+                    }
+                    picker.flStyles.addView(chip)
+                }
+
+                picker.tvQuickAdd.text = ctx.getString(R.string.homepage_quick_add_selected, selectedCount)
+                picker.tvQuickAdd.isEnabled = selectedCount > 0
+                picker.tvQuickAdd.alpha = if (selectedCount > 0) 1f else 0.45f
+                picker.tvQuickAdd.setTextColor(
+                    if (selectedCount > 0) ctx.accentColor else ctx.getColor(R.color.secondaryText)
+                )
+            }
+
+            picker.tvSelectAll.setTextColor(ctx.accentColor)
+            picker.tvSelectAll.setOnClickListener {
+                discoverState = discoverState.copy(
+                    selectedKindKeys = discoverState.kinds.map(::kindKey).toSet()
+                )
+                renderState()
+            }
+            picker.tvClearAll.setOnClickListener {
+                discoverState = discoverState.copy(selectedKindKeys = emptySet())
+                renderState()
+            }
+            picker.tvQuickAdd.setOnClickListener {
+                val selectedKinds = discoverState.kinds.filter {
+                    kindKey(it) in discoverState.selectedKindKeys
+                }
+                if (selectedKinds.isEmpty()) return@setOnClickListener
+                viewModel.quickAddExploreModule(
+                    sourceUrl = page.sourceUrl,
+                    sourceName = page.sourceName,
+                    sourceType = page.sourceType,
+                    setId = page.setId,
+                    typeKey = discoverState.selectedTypeKey,
+                    kinds = selectedKinds,
+                )
+                discoverState = discoverState.copy(selectedKindKeys = emptySet())
+                ctx.toastOnUi(ctx.getString(R.string.homepage_module_added))
+                sourceDetailTab = 0
+                upHeader()
+                rebuildRows()
+            }
+            renderState()
         }
 
         private fun moduleTypeLabel(type: String): String {
@@ -803,6 +946,9 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
 
         val actionBinding: ItemHomepageManageActionBinding? =
             binding as? ItemHomepageManageActionBinding
+
+        val kindPickerBinding: ItemHomepageManageKindPickerBinding? =
+            binding as? ItemHomepageManageKindPickerBinding
     }
 
     companion object {
@@ -812,6 +958,7 @@ class HomepageModuleManageSheet : BaseBottomSheetDialogFragment(R.layout.dialog_
         private const val TYPE_SOURCE = 3
         private const val TYPE_FIELD = 4
         private const val TYPE_ACTION = 5
+        private const val TYPE_KIND_PICKER = 6
 
         internal fun createKindChip(
             context: Context,

@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapLatest
@@ -44,10 +43,57 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import io.legado.app.R
 import splitties.init.appCtx
+
+internal data class TabSelectionState(
+    val index: Int = 0,
+    val setUrls: List<String> = emptyList(),
+)
+
+internal object HomepageTabSelectionPolicy {
+
+    fun toSetId(setUrl: String): String {
+        return if (HomepageViewModel.isCustomSetUrl(setUrl)) {
+            HomepageViewModel.customSetIdFromUrl(setUrl)
+        } else {
+            setUrl
+        }
+    }
+
+    fun resolveActiveSetId(
+        layoutMode: Int,
+        tabSelection: TabSelectionState,
+        fallbackSetUrls: List<String>,
+    ): String? {
+        if (layoutMode == 0) return null
+        val urls = tabSelection.setUrls.ifEmpty { fallbackSetUrls }
+        if (urls.isEmpty()) return null
+        val safeIndex = tabSelection.index.coerceIn(0, urls.lastIndex)
+        return toSetId(urls[safeIndex])
+    }
+
+    fun resolveLoadSetIds(
+        layoutMode: Int,
+        preloadMode: Int,
+        tabSelection: TabSelectionState,
+        fallbackSetUrls: List<String>,
+    ): Set<String>? {
+        if (layoutMode == 0) return null
+        val urls = tabSelection.setUrls.ifEmpty { fallbackSetUrls }
+        if (urls.isEmpty()) return emptySet()
+        val safeIndex = tabSelection.index.coerceIn(0, urls.lastIndex)
+        val preload = preloadMode == 1
+        val start = if (preload) (safeIndex - 1).coerceAtLeast(0) else safeIndex
+        val end = if (preload) (safeIndex + 1).coerceAtMost(urls.lastIndex) else safeIndex
+        return (start..end).mapNotNull { i ->
+            urls.getOrNull(i)?.let(::toSetId)
+        }.toSet()
+    }
+}
 
 /**
  * 聚合主页 ViewModel
@@ -111,22 +157,24 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     private val _effects = MutableSharedFlow<HomepageEffect>(extraBufferCapacity = 8)
     val effects = _effects.asSharedFlow()
 
-    private val loadJobs = ConcurrentHashMap<String, Job>()
+    private val cacheStore = HomepageCacheStore()
+    private val loadScheduler = HomepageLoadScheduler(viewModelScope)
 
-    /** 已派发但尚未在 [loadJobs] 注册的模块，防止并行 launch 的间隙里重复加载 */
-    private val loadingModuleIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** 已派发但尚未完成前置检查的模块/页签，防止多次 emit 间隙重复入队 */
+    private val dispatchedModuleIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val dispatchedTabKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val _isRefreshing = MutableStateFlow(false)
-    private val _refreshingModuleIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _pendingRefreshIds = MutableStateFlow<Set<String>>(emptySet())
     private val _configVersion = MutableStateFlow(0L)
     private val _moduleContentStates = MutableStateFlow<Map<String, ModuleLoadState>>(emptyMap())
     private val _bookSourcesCache =
         MutableStateFlow<Map<String, BookSourcePartLite>>(emptyMap())
     private val _rssSourceNames = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val _visibleModuleIds = MutableStateFlow<Set<String>>(emptySet())
 
-    /** 分源Tab 模式：当前选中页索引与页对应的集 URL 列表（由 UI 回传，用于按需加载） */
-    private var currentTabIndex = 0
-    private val _currentTabSetUrls = MutableStateFlow<List<String>>(emptyList())
+    /** 分源Tab 模式：当前选中页索引与页对应的集 URL 列表（响应式驱动按需加载） */
+    private val _tabSelection = MutableStateFlow(TabSelectionState())
 
     private val localModulesFlow = gateway.flowEnabled()
     val allModulesCache = gateway.flowAll()
@@ -319,16 +367,41 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomepageManageUiState())
 
+    /** 首页 Tab 所需的可见集列表（与管理弹窗解耦，避免模块加载频繁带动管理列表重算） */
+    private val visibleSetsFlow = combine(customSetsSync, allModulesCache, _configVersion) { sets, modules, _ ->
+        val hidden = hiddenSetUrls
+        sets.mapNotNull { cs ->
+            val isSourceSet = cs.id.startsWith("src_") || cs.id.startsWith("rss_")
+            val setUrl = if (isSourceSet) cs.id else customSetUrl(cs.id)
+            if (setUrl in hidden) return@mapNotNull null
+            val count = modules.count { it.customSetId == cs.id && it.isEnabled }
+            if (count <= 0) return@mapNotNull null
+            val sourceType = when {
+                cs.id.startsWith("src_") -> "book"
+                cs.id.startsWith("rss_") -> "rss"
+                else -> null
+            }
+            HomepageSourceManageUi(
+                sourceUrl = setUrl,
+                sourceName = cs.name,
+                isSelected = true,
+                moduleCount = count,
+                isCustomSet = !isSourceSet,
+                sourceType = sourceType,
+            )
+        }
+    }
+
     val uiState: StateFlow<HomepageUiState> = combine(
         displayModulesFlow,
         _isRefreshing,
-        manageStateFlow,
+        visibleSetsFlow,
         _configVersion
-    ) { modules, isRefreshing, manageState, _ ->
+    ) { modules, isRefreshing, visibleSets, _ ->
         HomepageUiState(
             modules = modules,
             isRefreshing = isRefreshing,
-            manageState = manageState,
+            visibleSets = visibleSets,
             layoutMode = AppConfig.homepageLayoutMode,
             preloadMode = AppConfig.homepagePreload,
         )
@@ -356,55 +429,68 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
             }
         }
 
-        // 自动加载进入 Loading 状态的模块；分源Tab 模式下只加载当前 Tab（含预加载相邻集）的模块
+        // 自动加载进入 Loading 状态的模块；同时监听 _tabSelection 确保分源Tab 切换立即触发加载
         viewModelScope.launch {
-            uiState.mapLatest { it.modules }.collect { modules ->
-                val loadSetIds = shouldLoadSetIds()
-                modules.forEach { ui ->
-                    if (ui.state is ModuleLoadState.Loading && loadJobs[ui.globalId]?.isActive != true) {
-                        val shouldLoad = when {
-                            _isRefreshing.value -> ui.globalId in _refreshingModuleIds.value
-                            loadSetIds != null -> ui.customSetId != null && ui.customSetId in loadSetIds
-                            else -> true
+            combine(uiState, _tabSelection) { state, tabSelection ->
+                state to tabSelection
+            }.collect { (state, tabSelection) ->
+                val fallbackUrls = state.visibleSets.map { it.sourceUrl }
+                val loadSetIds = HomepageTabSelectionPolicy.resolveLoadSetIds(
+                    layoutMode = state.layoutMode,
+                    preloadMode = state.preloadMode,
+                    tabSelection = tabSelection,
+                    fallbackSetUrls = fallbackUrls,
+                )
+                val activeSetId = HomepageTabSelectionPolicy.resolveActiveSetId(
+                    layoutMode = state.layoutMode,
+                    tabSelection = tabSelection,
+                    fallbackSetUrls = fallbackUrls,
+                )
+                val visibleIds = _visibleModuleIds.value
+                state.modules.forEachIndexed { index, ui ->
+                    if (ui.state !is ModuleLoadState.Loading) return@forEachIndexed
+                    val eligible = loadSetIds == null ||
+                        (ui.customSetId != null && ui.customSetId in loadSetIds)
+                    if (!eligible) return@forEachIndexed
+                    if (!dispatchedModuleIds.add(ui.globalId)) return@forEachIndexed
+
+                    val priority = when {
+                        state.layoutMode == 1 -> if (ui.customSetId == activeSetId) {
+                            HomepageLoadScheduler.PRIORITY_VISIBLE
+                        } else {
+                            HomepageLoadScheduler.PRIORITY_PRELOAD
                         }
-                        if (shouldLoad) {
-                            // 在飞集合去重：launch 到 loadJobs[id] 真正注册之间有 await 间隙，
-                            // 期间任一次 uiState 再发射都会对同一模块再 launch 一次
-                            if (!loadingModuleIds.add(ui.globalId)) return@forEach
-                            // loadModule 现在是 suspend（内部切 IO 查库），在 collect 里直接
-                            // await 会把所有模块串行化、还阻塞本 collect 响应后续状态变化，
-                            // 每个模块用子协程并行加载
-                            launch {
-                                try {
-                                    val module = gateway.getById(ui.globalId)
-                                    if (module != null) loadModule(module)
-                                } finally {
-                                    loadingModuleIds.remove(ui.globalId)
-                                }
+                        ui.globalId in visibleIds || (visibleIds.isEmpty() && index < 3) ->
+                            HomepageLoadScheduler.PRIORITY_VISIBLE
+                        else -> HomepageLoadScheduler.PRIORITY_PRELOAD
+                    }
+                    launch {
+                        try {
+                            if (loadScheduler.isActive(ui.globalId)) return@launch
+                            val module = gateway.getById(ui.globalId)
+                            if (module != null) {
+                                loadModule(
+                                    module = module,
+                                    priority = priority,
+                                    order = index,
+                                    forceRefresh = false,
+                                )
                             }
+                        } finally {
+                            dispatchedModuleIds.remove(ui.globalId)
                         }
                     }
                 }
             }
         }
 
-        // 监听模块状态变化，更新刷新状态
+        // 跟踪主动刷新任务完成状态，并在全量/当前Tab 刷新完成后收起进度圈
         viewModelScope.launch {
-            _moduleContentStates.collect { states ->
-                if (_isRefreshing.value) {
-                    val targetIds = _refreshingModuleIds.value
-                    val allLoaded = if (targetIds.isNotEmpty()) {
-                        targetIds.all { id ->
-                            val state = states[id]
-                            state != null && state !is ModuleLoadState.Loading
-                        }
-                    } else {
-                        states.values.none { it is ModuleLoadState.Loading } && states.isNotEmpty()
-                    }
-                    if (allLoaded) {
-                        kotlinx.coroutines.delay(400)
+            _pendingRefreshIds.collect { pending ->
+                if (_isRefreshing.value && pending.isEmpty()) {
+                    kotlinx.coroutines.delay(250)
+                    if (_pendingRefreshIds.value.isEmpty()) {
                         _isRefreshing.value = false
-                        _refreshingModuleIds.value = emptySet()
                     }
                 }
             }
@@ -413,17 +499,18 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        loadJobs.values.forEach { it.cancel() }
-        loadJobs.clear()
+        autoAssembleJob?.cancel()
+        loadScheduler.close()
     }
 
     // ==================== 模块加载 ====================
 
-    private suspend fun syncModulesFromSource(source: BookSource) {
-        val json = source.homepageModules ?: return
-        if (json.isBlank()) return
-        ensureSetForSource(source.bookSourceUrl, source.bookSourceName)
+    private suspend fun syncModulesFromSource(source: BookSource): SyncSourceResult {
+        val json = source.homepageModules
+        if (json.isNullOrBlank()) return SyncSourceResult(hasConfig = false, moduleCount = 0)
         val parsedDefs = parseModuleDefs(source.bookSourceUrl, json)
+        if (parsedDefs.isEmpty()) return SyncSourceResult(hasConfig = false, moduleCount = 0)
+        ensureSetForSource(source.bookSourceUrl, source.bookSourceName)
         val newHash = jsonHash(json)
 
         val existingModules = gateway.flowBySource(source.bookSourceUrl).first()
@@ -464,16 +551,49 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         }
         if (toUpsert.isNotEmpty()) gateway.upsertAll(toUpsert)
         if (parsedIds.isNotEmpty()) gateway.deleteStale(source.bookSourceUrl, parsedIds.toList())
+        return SyncSourceResult(hasConfig = true, moduleCount = parsedDefs.size)
     }
 
-    private suspend fun loadModule(module: ModuleItem) {
-        loadJobs[module.id]?.cancel()
+    private suspend fun loadModule(
+        module: ModuleItem,
+        priority: Int = HomepageLoadScheduler.PRIORITY_VISIBLE,
+        order: Int = 0,
+        forceRefresh: Boolean = false,
+    ) {
         if (module.type == HomepageModuleType.ButtonGroup.key) {
-            loadJobs[module.id] = viewModelScope.launch {
+            val cacheKey = HomepageCachePolicy.buttonsKey(module.id, module.sourceUrl, module.args)
+            val cacheHit = if (!forceRefresh) {
+                withContext(Dispatchers.IO) { cacheStore.readButtons(cacheKey) }
+            } else {
+                null
+            }
+            if (cacheHit != null) {
+                _moduleContentStates.update {
+                    it + (module.id to ModuleLoadState.Buttons(cacheHit.data.kinds))
+                }
+                if (cacheHit.isFresh) {
+                    finishRefreshTrack(module.id)
+                    return
+                }
+            }
+            val effectivePriority = if (cacheHit != null && !forceRefresh) {
+                HomepageLoadScheduler.PRIORITY_REVALIDATE
+            } else {
+                priority
+            }
+            val keepExisting = cacheHit != null ||
+                _moduleContentStates.value[module.id] is ModuleLoadState.Buttons
+            loadScheduler.enqueue(
+                key = module.id,
+                sourceUrl = module.sourceUrl,
+                priority = effectivePriority,
+                order = order,
+                onFinally = { finishRefreshTrack(module.id) },
+            ) {
                 kotlin.runCatching {
                     val selectedTitles = parseKindTitlesFromArgs(module.args)
                     if (selectedTitles.isNullOrEmpty()) {
-                        emptyList<ExploreKind>()
+                        emptyList()
                     } else {
                         val rssSource = withContext(Dispatchers.IO) {
                             appDb.rssSourceDao.getByKey(module.sourceUrl)
@@ -492,99 +612,233 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                         }
                     }
                 }.onSuccess { kinds ->
-                    _moduleContentStates.update { it + (module.id to ModuleLoadState.Buttons(kinds)) }
+                    withContext(Dispatchers.IO) { cacheStore.writeButtons(cacheKey, kinds) }
+                    _moduleContentStates.update {
+                        it + (module.id to ModuleLoadState.Buttons(kinds))
+                    }
                 }.onFailure { e ->
                     if (e is CancellationException) throw e
-                    _moduleContentStates.update { it + (module.id to ModuleLoadState.Error(e.stackTraceStr)) }
+                    if (!keepExisting) {
+                        _moduleContentStates.update {
+                            it + (module.id to ModuleLoadState.Error(e.stackTraceStr))
+                        }
+                    } else if (forceRefresh) {
+                        _effects.tryEmit(
+                            HomepageEffect.ShowSnackbar(
+                                e.localizedMessage ?: appCtx.getString(R.string.homepage_load_failed)
+                            )
+                        )
+                    }
                 }
-            }.also { it.invokeOnCompletion { loadJobs.remove(module.id) } }
+            }
             return
         }
-        // 多分类 tab 模式：args 包含 [{t:标题, u:URL}]（1~N 个），按钮组以外所有类型通用，
-        // 单分类即单 tab，头统一为 tab 样式，不再分单选多选
-        val rankingCategoryPairs = if (module.type == HomepageModuleType.ButtonGroup.key) {
-            null
-        } else {
-            parseRankingCategories(module.args)
-        }
 
+        // 多分类 tab 模式：args 包含 [{t:标题, u:URL}]（1~N 个），按钮组以外所有类型通用
+        val rankingCategoryPairs = parseRankingCategories(module.args)
         if (!rankingCategoryPairs.isNullOrEmpty()) {
             val rssSource = withContext(Dispatchers.IO) {
                 appDb.rssSourceDao.getByKey(module.sourceUrl)
             }
-            val initialTabs = rankingCategoryPairs.map { (title, url) ->
-                RankingTabData(
-                    title = title,
-                    exploreUrl = url.ifBlank { null },
-                    page = 1,
-                    hasMore = true,
-                    isLoadingMore = false
-                )
-            }
-            _moduleContentStates.update { it + (module.id to ModuleLoadState.RankingTabs(initialTabs)) }
-            if (rankingCategoryPairs.isNotEmpty()) {
-                val (title, url) = rankingCategoryPairs[0]
-                loadRankingTab(module.id, module.sourceUrl, rssSource, 0, title, url, page = 1)
-            }
-            return
-        }
-        loadJobs[module.id] = viewModelScope.launch {
-            kotlin.runCatching {
-                // 检查是否为订阅源模块
-                val rssSource = withContext(Dispatchers.IO) {
-                    appDb.rssSourceDao.getByKey(module.sourceUrl)
-                }
-                if (rssSource != null) {
-                    val sortUrl = module.url ?: rssSource.sourceUrl
-                    val sortName = module.title.ifBlank { rssSource.sourceName }
-                    val (articles, _) = withContext(Dispatchers.IO) {
-                        Rss.getArticlesAwait(sortName, sortUrl, rssSource, page = 1)
-                    }
-                    val books = articles.map { article ->
-                        val introText = article.description?.let {
-                            Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                        }
-                        SearchBook(
-                            bookUrl = article.link,
-                            origin = rssSource.sourceUrl,
-                            originName = rssSource.sourceName,
-                            name = article.title,
-                            coverUrl = article.image,
-                            intro = introText,
-                            author = rssSource.sourceName,
-                            latestChapterTitle = article.pubDate,
+            val existingState = _moduleContentStates.value[module.id] as? ModuleLoadState.RankingTabs
+            val selectedIndex = existingState?.selectedIndex
+                ?.coerceIn(0, rankingCategoryPairs.lastIndex) ?: 0
+
+            val cacheHits = if (!forceRefresh) {
+                withContext(Dispatchers.IO) {
+                    rankingCategoryPairs.mapIndexed { idx, (_, url) ->
+                        val tabKey = HomepageCachePolicy.rankingTabKey(
+                            module.id, module.sourceUrl, idx, url
                         )
+                        cacheStore.readBooks(tabKey)
                     }
-                    books to false
-                } else {
-                    // 有 args 的已在上面走 tab 流，到这里 args 为空，直接用模块 URL
-                    exploreBooks(
-                        sourceUrl = module.sourceUrl,
-                        moduleUrl = module.url,
-                        page = 1
+                }
+            } else {
+                List(rankingCategoryPairs.size) { null }
+            }
+
+            val initialTabs = rankingCategoryPairs.mapIndexed { idx, (title, url) ->
+                val hit = cacheHits[idx]
+                val existingTab = existingState?.tabs?.getOrNull(idx)
+                when {
+                    hit != null -> RankingTabData(
+                        title = title,
+                        exploreUrl = url.ifBlank { null },
+                        books = mapShelfItems(hit.data.books),
+                        page = 1,
+                        hasMore = hit.data.hasMore,
+                        isLoadingMore = false,
+                        isRevalidating = !hit.isFresh,
+                    )
+                    existingTab?.books != null -> existingTab.copy(
+                        title = title,
+                        exploreUrl = url.ifBlank { null },
+                        isRevalidating = forceRefresh && idx == selectedIndex,
+                    )
+                    else -> RankingTabData(
+                        title = title,
+                        exploreUrl = url.ifBlank { null },
+                        page = 1,
+                        hasMore = true,
+                        isLoadingMore = false,
                     )
                 }
+            }
+            _moduleContentStates.update {
+                it + (module.id to ModuleLoadState.RankingTabs(initialTabs, selectedIndex))
+            }
+
+            val (activeTitle, activeUrl) = rankingCategoryPairs[selectedIndex]
+            val activeHit = cacheHits[selectedIndex]
+            if (!forceRefresh && activeHit?.isFresh == true) {
+                finishRefreshTrack(module.id)
+                return
+            }
+            val activePriority = if (activeHit != null && !forceRefresh) {
+                HomepageLoadScheduler.PRIORITY_REVALIDATE
+            } else {
+                priority
+            }
+            val hasExistingActive = activeHit != null ||
+                existingState?.tabs?.getOrNull(selectedIndex)?.books != null
+            loadRankingTab(
+                moduleId = module.id,
+                sourceUrl = module.sourceUrl,
+                rssSource = rssSource,
+                index = selectedIndex,
+                title = activeTitle,
+                url = activeUrl,
+                page = 1,
+                priority = activePriority,
+                order = order,
+                keepExistingOnError = hasExistingActive,
+                showFailureToast = forceRefresh && hasExistingActive,
+                onDone = { finishRefreshTrack(module.id) },
+            )
+            return
+        }
+
+        // 单 URL 模块：先读 SWR 磁盘快照
+        val cacheKey = HomepageCachePolicy.moduleKey(module.id, module.sourceUrl, module.url)
+        val cacheHit = if (!forceRefresh) {
+            withContext(Dispatchers.IO) { cacheStore.readBooks(cacheKey) }
+        } else {
+            null
+        }
+        if (cacheHit != null) {
+            _moduleContentStates.update {
+                it + (module.id to ModuleLoadState.Loaded(
+                    books = mapShelfItems(cacheHit.data.books),
+                    hasMore = cacheHit.data.hasMore,
+                    page = 1,
+                    isLoadingMore = false,
+                    isRevalidating = !cacheHit.isFresh,
+                ))
+            }
+            if (cacheHit.isFresh) {
+                finishRefreshTrack(module.id)
+                return
+            }
+        }
+
+        val existingLoaded = _moduleContentStates.value[module.id] as? ModuleLoadState.Loaded
+        val keepExisting = cacheHit != null || existingLoaded != null
+        val effectivePriority = if (cacheHit != null && !forceRefresh) {
+            HomepageLoadScheduler.PRIORITY_REVALIDATE
+        } else {
+            priority
+        }
+        loadScheduler.enqueue(
+            key = module.id,
+            sourceUrl = module.sourceUrl,
+            priority = effectivePriority,
+            order = order,
+            onFinally = { finishRefreshTrack(module.id) },
+        ) {
+            kotlin.runCatching {
+                fetchSingleModuleBooks(module)
             }.onSuccess { (books, hasMore) ->
+                withContext(Dispatchers.IO) { cacheStore.writeBooks(cacheKey, books, hasMore) }
                 _moduleContentStates.update {
                     it + (module.id to ModuleLoadState.Loaded(
-                        books = books.map { book ->
-                            HomepageBookItemUi(
-                                book = book,
-                                shelfState = BookshelfMatcher.getState(
-                                    book.name, book.author, book.bookUrl
-                                )
-                            )
-                        },
+                        books = mapShelfItems(books),
                         hasMore = hasMore,
                         page = 1,
-                        isLoadingMore = false
+                        isLoadingMore = false,
+                        isRevalidating = false,
                     ))
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
-                _moduleContentStates.update { it + (module.id to ModuleLoadState.Error(e.stackTraceStr)) }
+                if (keepExisting) {
+                    _moduleContentStates.update { states ->
+                        val prev = states[module.id] as? ModuleLoadState.Loaded ?: return@update states
+                        states + (module.id to prev.copy(isRevalidating = false))
+                    }
+                    if (forceRefresh) {
+                        _effects.tryEmit(
+                            HomepageEffect.ShowSnackbar(
+                                e.localizedMessage ?: appCtx.getString(R.string.homepage_load_failed)
+                            )
+                        )
+                    }
+                } else {
+                    _moduleContentStates.update {
+                        it + (module.id to ModuleLoadState.Error(e.stackTraceStr))
+                    }
+                }
             }
-        }.also { it.invokeOnCompletion { loadJobs.remove(module.id) } }
+        }
+    }
+
+    private suspend fun fetchSingleModuleBooks(module: ModuleItem): Pair<List<SearchBook>, Boolean> {
+        val rssSource = withContext(Dispatchers.IO) {
+            appDb.rssSourceDao.getByKey(module.sourceUrl)
+        }
+        return if (rssSource != null) {
+            val sortUrl = module.url ?: rssSource.sourceUrl
+            val sortName = module.title.ifBlank { rssSource.sourceName }
+            val (articles, _) = withContext(Dispatchers.IO) {
+                Rss.getArticlesAwait(sortName, sortUrl, rssSource, page = 1)
+            }
+            val books = articles.map { article ->
+                val introText = article.description?.let {
+                    Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                }
+                SearchBook(
+                    bookUrl = article.link,
+                    origin = rssSource.sourceUrl,
+                    originName = rssSource.sourceName,
+                    name = article.title,
+                    coverUrl = article.image,
+                    intro = introText,
+                    author = rssSource.sourceName,
+                    latestChapterTitle = article.pubDate,
+                )
+            }
+            books to false
+        } else {
+            exploreBooks(
+                sourceUrl = module.sourceUrl,
+                moduleUrl = module.url,
+                page = 1
+            )
+        }
+    }
+
+    private fun mapShelfItems(books: List<SearchBook>): List<HomepageBookItemUi> {
+        return books.map { book ->
+            HomepageBookItemUi(
+                book = book,
+                shelfState = BookshelfMatcher.getState(book.name, book.author, book.bookUrl)
+            )
+        }
+    }
+
+    private fun finishRefreshTrack(moduleId: String) {
+        _pendingRefreshIds.update { ids ->
+            if (moduleId in ids) ids - moduleId else ids
+        }
     }
 
     private suspend fun exploreBooks(
@@ -645,49 +899,103 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    /** 切换排行榜 Tab 时按需加载当前选中分类的内容 */
+    /** 切换排行榜 Tab 时优先命中 SWR 缓存，未命中或过期再按需加载 */
     fun selectRankingTab(globalId: String, index: Int) {
         val prevState = _moduleContentStates.value[globalId] as? ModuleLoadState.RankingTabs ?: return
+        if (index !in prevState.tabs.indices) return
         _moduleContentStates.update { states ->
             val current = states[globalId] as? ModuleLoadState.RankingTabs ?: return@update states
             states + (globalId to current.copy(selectedIndex = index))
         }
         val tab = prevState.tabs.getOrNull(index) ?: return
+        if (tab.books != null && tab.errorMessage == null && !tab.isRevalidating) return
+
+        val tabDispatchKey = "${globalId}_tab_$index"
+        if (!dispatchedTabKeys.add(tabDispatchKey)) return
 
         viewModelScope.launch {
-            val module = gateway.getById(globalId) ?: return@launch
-            val rssSource = withContext(Dispatchers.IO) {
-                appDb.rssSourceDao.getByKey(module.sourceUrl)
-            }
-            val state = _moduleContentStates.value[globalId] as? ModuleLoadState.RankingTabs
-                ?: return@launch
-            val currentTab = state.tabs.getOrNull(index) ?: return@launch
-            if (currentTab.books == null && currentTab.errorMessage == null) {
-                val tabJobKey = "${globalId}_tab_$index"
-                if (loadJobs[tabJobKey]?.isActive != true) {
-                    loadRankingTab(
-                        globalId, module.sourceUrl, rssSource, index,
-                        currentTab.title, currentTab.exploreUrl ?: "", page = 1
-                    )
+            try {
+                if (loadScheduler.isActive(tabDispatchKey)) return@launch
+                val module = gateway.getById(globalId) ?: return@launch
+                val rssSource = withContext(Dispatchers.IO) {
+                    appDb.rssSourceDao.getByKey(module.sourceUrl)
                 }
+                val state = _moduleContentStates.value[globalId] as? ModuleLoadState.RankingTabs
+                    ?: return@launch
+                val currentTab = state.tabs.getOrNull(index) ?: return@launch
+                if (currentTab.books != null || currentTab.errorMessage != null) return@launch
+
+                val tabUrl = currentTab.exploreUrl ?: ""
+                val tabCacheKey = HomepageCachePolicy.rankingTabKey(
+                    globalId, module.sourceUrl, index, tabUrl
+                )
+                val cacheHit = withContext(Dispatchers.IO) { cacheStore.readBooks(tabCacheKey) }
+                if (cacheHit != null) {
+                    _moduleContentStates.update { states ->
+                        val cur = states[globalId] as? ModuleLoadState.RankingTabs
+                            ?: return@update states
+                        val updatedTabs = cur.tabs.toMutableList()
+                        val old = updatedTabs.getOrNull(index) ?: return@update states
+                        updatedTabs[index] = old.copy(
+                            books = mapShelfItems(cacheHit.data.books),
+                            page = 1,
+                            hasMore = cacheHit.data.hasMore,
+                            isLoadingMore = false,
+                            errorMessage = null,
+                            isRevalidating = !cacheHit.isFresh,
+                        )
+                        states + (globalId to cur.copy(tabs = updatedTabs))
+                    }
+                    if (cacheHit.isFresh) return@launch
+                }
+
+                val priority = if (cacheHit != null) {
+                    HomepageLoadScheduler.PRIORITY_REVALIDATE
+                } else {
+                    HomepageLoadScheduler.PRIORITY_VISIBLE
+                }
+                loadRankingTab(
+                    moduleId = globalId,
+                    sourceUrl = module.sourceUrl,
+                    rssSource = rssSource,
+                    index = index,
+                    title = currentTab.title,
+                    url = tabUrl,
+                    page = 1,
+                    priority = priority,
+                    keepExistingOnError = cacheHit != null,
+                )
+            } finally {
+                dispatchedTabKeys.remove(tabDispatchKey)
             }
         }
     }
 
     // ==================== 多分类 Tab 加载 ====================
 
-    private fun loadRankingTab(
+    private suspend fun loadRankingTab(
         moduleId: String,
         sourceUrl: String,
         rssSource: RssSource?,
         index: Int,
         title: String,
         url: String,
-        page: Int = 1
+        page: Int = 1,
+        priority: Int = HomepageLoadScheduler.PRIORITY_VISIBLE,
+        order: Int = 0,
+        keepExistingOnError: Boolean = false,
+        showFailureToast: Boolean = false,
+        onDone: (() -> Unit)? = null,
     ) {
         val jobKey = "${moduleId}_tab_$index"
-        loadJobs[jobKey]?.cancel()
-        loadJobs[jobKey] = viewModelScope.launch {
+        val tabCacheKey = HomepageCachePolicy.rankingTabKey(moduleId, sourceUrl, index, url)
+        loadScheduler.enqueue(
+            key = jobKey,
+            sourceUrl = sourceUrl,
+            priority = priority,
+            order = order,
+            onFinally = onDone,
+        ) {
             kotlin.runCatching {
                 val books = if (rssSource != null) {
                     val (articles, _) = withContext(Dispatchers.IO) {
@@ -716,30 +1024,34 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                         page = page
                     ).first
                 }
-                books.map { book ->
-                    HomepageBookItemUi(
-                        book = book,
-                        shelfState = BookshelfMatcher.getState(
-                            book.name, book.author, book.bookUrl
-                        )
-                    )
+                books to books.isNotEmpty()
+            }.onSuccess { (books, hasMore) ->
+                if (page == 1) {
+                    withContext(Dispatchers.IO) {
+                        cacheStore.writeBooks(tabCacheKey, books, hasMore && rssSource == null)
+                    }
                 }
-            }.onSuccess { bookItems ->
+                val bookItems = mapShelfItems(books)
                 _moduleContentStates.update { states ->
                     val current = states[moduleId] as? ModuleLoadState.RankingTabs
                         ?: return@update states
                     val updatedTabs = current.tabs.toMutableList()
-                    val oldTab = updatedTabs[index]
-                    val existingUrls = oldTab.books?.map { it.book.bookUrl }?.toSet() ?: emptySet()
-                    val deduped = bookItems.filter { it.book.bookUrl !in existingUrls }
-                    val newBooks = if (oldTab.books != null) oldTab.books + deduped else bookItems
-                    val hasMore = bookItems.isNotEmpty()
+                    val oldTab = updatedTabs.getOrNull(index) ?: return@update states
+                    val newBooks = if (page == 1) {
+                        bookItems
+                    } else {
+                        val existingUrls = oldTab.books?.map { it.book.bookUrl }?.toSet() ?: emptySet()
+                        val deduped = bookItems.filter { it.book.bookUrl !in existingUrls }
+                        (oldTab.books ?: emptyList()) + deduped
+                    }
+                    val finalHasMore = if (page == 1) hasMore else (hasMore && newBooks.size > (oldTab.books?.size ?: 0))
                     updatedTabs[index] = oldTab.copy(
                         books = newBooks,
                         page = page,
-                        hasMore = hasMore,
+                        hasMore = finalHasMore,
                         isLoadingMore = false,
-                        errorMessage = null
+                        errorMessage = null,
+                        isRevalidating = false,
                     )
                     states + (moduleId to current.copy(tabs = updatedTabs))
                 }
@@ -749,14 +1061,30 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     val current = states[moduleId] as? ModuleLoadState.RankingTabs
                         ?: return@update states
                     val updatedTabs = current.tabs.toMutableList()
-                    updatedTabs[index] = updatedTabs[index].copy(
-                        errorMessage = e.stackTraceStr,
-                        isLoadingMore = false
-                    )
+                    val oldTab = updatedTabs.getOrNull(index) ?: return@update states
+                    updatedTabs[index] = if (keepExistingOnError && oldTab.books != null) {
+                        oldTab.copy(
+                            isLoadingMore = false,
+                            isRevalidating = false,
+                        )
+                    } else {
+                        oldTab.copy(
+                            errorMessage = e.stackTraceStr,
+                            isLoadingMore = false,
+                            isRevalidating = false,
+                        )
+                    }
                     states + (moduleId to current.copy(tabs = updatedTabs))
                 }
+                if (showFailureToast) {
+                    _effects.tryEmit(
+                        HomepageEffect.ShowSnackbar(
+                            e.localizedMessage ?: appCtx.getString(R.string.homepage_load_failed)
+                        )
+                    )
+                }
             }
-        }.also { it.invokeOnCompletion { loadJobs.remove(jobKey) } }
+        }
     }
 
     fun loadMoreRankingTab(globalId: String, tabIndex: Int) {
@@ -796,28 +1124,65 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                 index = tabIndex,
                 title = tab.title,
                 url = tab.exploreUrl ?: "",
-                page = nextPage
+                page = nextPage,
+                priority = HomepageLoadScheduler.PRIORITY_VISIBLE,
+                keepExistingOnError = true,
+                showFailureToast = true,
             )
         }
     }
 
     /**
-     * 刷新主页模块内容（重新加载已存在的模块数据，不自动从书源同步新模块）
+     * 刷新主页模块内容（支持按当前 Tab 局部刷新；已有内容时保留旧数据并后台拉新，不回退整页骨架屏）
      */
-    fun onRefresh() {
+    fun onRefresh(targetSetUrl: String? = null) {
         viewModelScope.launch {
+            val state = uiState.value
+            val fallbackUrls = state.visibleSets.map { it.sourceUrl }
+            val targetSetId = when {
+                targetSetUrl != null -> HomepageTabSelectionPolicy.toSetId(targetSetUrl)
+                state.layoutMode == 1 -> HomepageTabSelectionPolicy.resolveActiveSetId(
+                    layoutMode = state.layoutMode,
+                    tabSelection = _tabSelection.value,
+                    fallbackSetUrls = fallbackUrls,
+                )
+                else -> null
+            }
+            val targetModules = state.modules.filter {
+                targetSetId == null || it.customSetId == targetSetId
+            }
+            if (targetModules.isEmpty()) {
+                _isRefreshing.value = false
+                return@launch
+            }
             _isRefreshing.value = true
-            loadJobs.values.forEach { it.cancel() }
-            loadJobs.clear()
-            val loadSetIds = shouldLoadSetIds()
-            _refreshingModuleIds.value = uiState.value.modules
-                .filter { loadSetIds?.let { ids -> it.customSetId != null && it.customSetId in ids } ?: true }
-                .map { it.globalId }.toSet()
-            _moduleContentStates.value = emptyMap()
+            _pendingRefreshIds.value = targetModules.map { it.globalId }.toSet()
+
+            targetModules.forEachIndexed { index, ui ->
+                val module = gateway.getById(ui.globalId)
+                if (module == null) {
+                    finishRefreshTrack(ui.globalId)
+                    return@forEachIndexed
+                }
+                if (ui.state is ModuleLoadState.Error) {
+                    _moduleContentStates.update { it + (ui.globalId to ModuleLoadState.Loading) }
+                }
+                val visiblePriority = if (ui.globalId in _visibleModuleIds.value || index < 3) {
+                    HomepageLoadScheduler.PRIORITY_VISIBLE
+                } else {
+                    HomepageLoadScheduler.PRIORITY_PRELOAD
+                }
+                loadModule(
+                    module = module,
+                    priority = visiblePriority,
+                    order = index,
+                    forceRefresh = true,
+                )
+            }
         }
     }
 
-    // ==================== 布局模式 ====================
+    // ==================== 布局模式与可见区追踪 ====================
 
     /** 设置主页布局模式（0: 混合列表, 1: 分源Tab） */
     fun setLayoutMode(mode: Int) {
@@ -832,34 +1197,71 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     }
 
     /**
-     * 更新分源Tab 模式下当前选中的页索引与集 URL 列表（由 UI 在页面稳定后回传），
-     * 用于限制仅加载当前 Tab（及开启预加载时的相邻 Tab）的模块。
+     * 更新分源Tab 模式下当前选中的页索引与集 URL 列表（驱动响应式按需加载）。
      */
     fun updateCurrentTab(tabIndex: Int, setUrls: List<String>) {
-        currentTabIndex = tabIndex
-        _currentTabSetUrls.value = setUrls
+        val next = TabSelectionState(tabIndex, setUrls)
+        if (_tabSelection.value != next) {
+            _tabSelection.value = next
+        }
     }
 
-    /**
-     * 计算分源Tab 模式下应当加载的集 ID 集合；混合列表模式返回 null（表示全部加载）。
-     * 集 URL 与模块 customSetId 的对应：源集（src_/rss_）URL 即 ID，自定义集需去掉 custom:// 前缀。
-     */
-    private fun shouldLoadSetIds(): Set<String>? {
-        if (AppConfig.homepageLayoutMode == 0) return null
-        val urls = _currentTabSetUrls.value
-        if (urls.isEmpty()) return emptySet()
-        val preload = AppConfig.homepagePreload == 1
-        val start = if (preload) (currentTabIndex - 1).coerceAtLeast(0) else currentTabIndex
-        val end = if (preload) (currentTabIndex + 1).coerceAtMost(urls.lastIndex) else currentTabIndex
-        return (start..end).mapNotNull { index ->
-            urls.getOrNull(index)?.let { url ->
-                if (isCustomSetUrl(url)) customSetIdFromUrl(url) else url
+    /** 上报当前可视区域模块 ID，动态提升队列中可视模块的加载优先级 */
+    fun updateVisibleModuleIds(ids: Set<String>) {
+        if (_visibleModuleIds.value == ids) return
+        _visibleModuleIds.value = ids
+        if (ids.isNotEmpty()) {
+            viewModelScope.launch {
+                loadScheduler.updateVisibleKeys(ids)
             }
-        }.toSet()
+        }
     }
 
     fun retryModule(globalId: String) {
-        _moduleContentStates.update { it + (globalId to ModuleLoadState.Loading) }
+        val currentState = _moduleContentStates.value[globalId]
+        if (currentState is ModuleLoadState.RankingTabs) {
+            retryRankingTab(globalId, currentState.selectedIndex)
+            return
+        }
+        viewModelScope.launch {
+            val module = gateway.getById(globalId) ?: return@launch
+            _moduleContentStates.update { it + (globalId to ModuleLoadState.Loading) }
+            loadModule(
+                module = module,
+                priority = HomepageLoadScheduler.PRIORITY_VISIBLE,
+                order = 0,
+                forceRefresh = true,
+            )
+        }
+    }
+
+    fun retryRankingTab(globalId: String, tabIndex: Int) {
+        val state = _moduleContentStates.value[globalId] as? ModuleLoadState.RankingTabs ?: return
+        val tab = state.tabs.getOrNull(tabIndex) ?: return
+        _moduleContentStates.update { states ->
+            val current = states[globalId] as? ModuleLoadState.RankingTabs ?: return@update states
+            val updatedTabs = current.tabs.toMutableList()
+            val old = updatedTabs.getOrNull(tabIndex) ?: return@update states
+            updatedTabs[tabIndex] = old.copy(errorMessage = null, isRevalidating = false)
+            states + (globalId to current.copy(tabs = updatedTabs))
+        }
+        viewModelScope.launch {
+            val module = gateway.getById(globalId) ?: return@launch
+            val rssSource = withContext(Dispatchers.IO) {
+                appDb.rssSourceDao.getByKey(module.sourceUrl)
+            }
+            loadRankingTab(
+                moduleId = globalId,
+                sourceUrl = module.sourceUrl,
+                rssSource = rssSource,
+                index = tabIndex,
+                title = tab.title,
+                url = tab.exploreUrl ?: "",
+                page = 1,
+                priority = HomepageLoadScheduler.PRIORITY_VISIBLE,
+                keepExistingOnError = false,
+            )
+        }
     }
 
     /** 确保书源对应的集存在（不存在则自动创建） */
@@ -915,14 +1317,147 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
         notifyConfigChanged()
     }
 
-    fun syncSourceModules(sourceUrl: String, onDone: (() -> Unit)? = null) {
+    fun syncSourceModules(sourceUrl: String, onDone: ((SyncSourceResult) -> Unit)? = null) {
         viewModelScope.launch {
             val fullSource = withContext(Dispatchers.IO) {
                 appDb.bookSourceDao.getBookSource(sourceUrl)
-            } ?: return@launch
-            syncModulesFromSource(fullSource)
+            }
+            if (fullSource == null) {
+                onDone?.invoke(SyncSourceResult(hasConfig = false, moduleCount = 0))
+                return@launch
+            }
+            val result = syncModulesFromSource(fullSource)
+            if (result.hasConfig) {
+                notifyConfigChanged()
+            }
+            onDone?.invoke(result)
+        }
+    }
+
+    private var autoAssembleJob: Job? = null
+
+    fun isAutoAssembling(): Boolean = autoAssembleJob?.isActive == true
+
+    fun cancelAutoAssembleStarterHomepage() {
+        autoAssembleJob?.cancel()
+        autoAssembleJob = null
+    }
+
+    /**
+     * 一键装配起步首页（带总超时 18s 与可取消控制）：
+     * 1. 优先同步已配置 homepageModules JSON 的启用发现书源；
+     * 2. 不足时并发扫描前几个启用发现书源（或订阅源）的分类，生成开箱即用的推荐模块。
+     */
+    fun autoAssembleStarterHomepage(onDone: ((AutoSetupResult) -> Unit)? = null) {
+        autoAssembleJob?.cancel()
+        autoAssembleJob = viewModelScope.launch {
+            var outcome = AutoSetupResult(AutoSetupStatus.NO_SOURCES)
+            try {
+                outcome = withTimeoutOrNull(18_000L) {
+                    var addedCount = 0
+                    val candidateParts = withContext(Dispatchers.IO) {
+                        appDb.bookSourceDao.flowEnabledExplore().first()
+                    }
+                    val fullSources = withContext(Dispatchers.IO) {
+                        candidateParts.take(12).mapNotNull { part ->
+                            appDb.bookSourceDao.getBookSource(part.bookSourceUrl)
+                        }
+                    }
+                    for (source in fullSources) {
+                        if (!source.homepageModules.isNullOrBlank()) {
+                            val result = syncModulesFromSource(source)
+                            if (result.hasConfig) {
+                                addedCount += result.moduleCount
+                            }
+                        }
+                    }
+                    val rssSources = if (addedCount == 0) {
+                        withContext(Dispatchers.IO) {
+                            appDb.rssSourceDao.flowAll().first().filter { it.enabled }
+                        }
+                    } else {
+                        emptyList()
+                    }
+                    if (addedCount == 0 && fullSources.isEmpty() && rssSources.isEmpty()) {
+                        return@withTimeoutOrNull AutoSetupResult(AutoSetupStatus.NO_SOURCES)
+                    }
+                    if (addedCount == 0) {
+                        val (sets, modules) = withContext(Dispatchers.IO) {
+                            HomepageModuleBuilder.buildStarterModules(
+                                bookSources = fullSources,
+                                rssSources = rssSources,
+                            )
+                        }
+                        if (modules.isNotEmpty()) {
+                            sets.forEach { set ->
+                                if (gateway.getCustomSetById(set.id) == null) {
+                                    gateway.upsertCustomSet(set)
+                                }
+                            }
+                            gateway.upsertAll(modules)
+                            addedCount = modules.size
+                        }
+                    }
+                    if (addedCount > 0) {
+                        notifyConfigChanged()
+                        AutoSetupResult(AutoSetupStatus.ADDED, addedCount)
+                    } else {
+                        AutoSetupResult(AutoSetupStatus.NO_CATEGORIES)
+                    }
+                } ?: AutoSetupResult(AutoSetupStatus.NO_CATEGORIES)
+            } catch (_: CancellationException) {
+                outcome = AutoSetupResult(AutoSetupStatus.CANCELLED)
+            } finally {
+                autoAssembleJob = null
+            }
+            onDone?.invoke(outcome)
+        }
+    }
+
+    /** 从源详情勾选分类后一步添加到首页（免去多层弹窗与 JSON 表单） */
+    fun quickAddExploreModule(
+        sourceUrl: String,
+        sourceName: String,
+        sourceType: String,
+        setId: String?,
+        typeKey: String,
+        kinds: List<ExploreKind>,
+        customTitle: String? = null,
+    ) {
+        if (kinds.isEmpty()) return
+        viewModelScope.launch {
+            val effectiveSetId = setId ?: if (sourceType == "rss") {
+                ensureRssSetForSource(sourceUrl, sourceName)
+            } else {
+                ensureSetForSource(sourceUrl, sourceName)
+            }
+            val def = HomepageModuleBuilder.buildExploreModuleDef(
+                sourceUrl = sourceUrl,
+                typeKey = typeKey,
+                kinds = kinds,
+                customTitle = customTitle,
+            )
+            val existingCount = allModulesCache.value.count { it.customSetId == effectiveSetId }
+            val globalId = ModuleDef.globalIdOf(sourceUrl, def.key, effectiveSetId)
+            gateway.upsertAll(
+                listOf(
+                    ModuleItem(
+                        id = globalId,
+                        sourceUrl = sourceUrl,
+                        moduleKey = def.key,
+                        type = def.type,
+                        title = def.title,
+                        args = def.args,
+                        url = def.url,
+                        isEnabled = true,
+                        customSetId = effectiveSetId,
+                        sortOrder = existingCount,
+                        isUserCreated = true,
+                        syncedAt = System.currentTimeMillis(),
+                    )
+                )
+            )
             notifyConfigChanged()
-            onDone?.invoke()
         }
     }
 
@@ -1080,6 +1615,14 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                     customTitle = newCustomTitle,
                 )
             ))
+            val contentChanged = existing.type != def.type ||
+                existing.url != def.url ||
+                existing.args != def.args
+            if (contentChanged) {
+                invalidateModuleCache(existing)
+                loadScheduler.cancel(globalId)
+                _moduleContentStates.update { it - globalId }
+            }
             notifyConfigChanged()
         }
     }
@@ -1090,6 +1633,8 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     fun deleteModule(globalId: String) {
         viewModelScope.launch {
             val module = gateway.getById(globalId) ?: return@launch
+            invalidateModuleCache(module)
+            loadScheduler.cancel(globalId)
             val isSourceSet = module.customSetId?.startsWith("src_") == true
                     || module.customSetId?.startsWith("rss_") == true
             if (isSourceSet) {
@@ -1103,6 +1648,22 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
                 }
             }
             notifyConfigChanged()
+        }
+    }
+
+    private suspend fun invalidateModuleCache(module: ModuleItem) {
+        withContext(Dispatchers.IO) {
+            cacheStore.invalidate(
+                HomepageCachePolicy.moduleKey(module.id, module.sourceUrl, module.url)
+            )
+            cacheStore.invalidate(
+                HomepageCachePolicy.buttonsKey(module.id, module.sourceUrl, module.args)
+            )
+            parseRankingCategories(module.args)?.forEachIndexed { idx, (_, url) ->
+                cacheStore.invalidate(
+                    HomepageCachePolicy.rankingTabKey(module.id, module.sourceUrl, idx, url)
+                )
+            }
         }
     }
 
@@ -1212,29 +1773,12 @@ class HomepageViewModel(application: Application) : BaseViewModel(application) {
     // ==================== args 解析 ====================
 
     /** 解析多分类 tab 的 args：[{t:标题, u:URL}]；1~N 个都按 tab 模式（单分类即单 tab） */
-    private fun parseRankingCategories(args: String?): List<Pair<String, String>>? {
-        if (args.isNullOrBlank()) return null
-        return runCatching {
-            GSON.fromJsonArray<Map<String, String>>(args).getOrDefault(emptyList())
-                .mapNotNull { item ->
-                    val t = item["t"] ?: return@mapNotNull null
-                    t to (item["u"] ?: "")
-                }
-        }.getOrNull()?.takeIf { it.isNotEmpty() }
-    }
+    private fun parseRankingCategories(args: String?): List<Pair<String, String>>? =
+        HomepageModuleBuilder.parseCategories(args)
 
     /** 解析按钮组 args 的分类标题，兼容新 [{t,u}] 与旧 ["title"] 两种格式 */
-    private fun parseKindTitlesFromArgs(args: String?): List<String>? {
-        if (args.isNullOrBlank()) return null
-        return runCatching {
-            val pairs = GSON.fromJsonArray<Map<String, String>>(args).getOrDefault(emptyList())
-            if (pairs.isNotEmpty() && pairs.all { it.containsKey("t") }) {
-                pairs.mapNotNull { it["t"] }
-            } else {
-                GSON.fromJsonArray<String>(args).getOrDefault(emptyList())
-            }
-        }.getOrNull()?.takeIf { it.isNotEmpty() }
-    }
+    private fun parseKindTitlesFromArgs(args: String?): List<String>? =
+        HomepageModuleBuilder.parseKindTitles(args)
 }
 
 /** 书源轻量缓存 DTO：避免大量书源时持有完整 BookSource */

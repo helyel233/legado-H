@@ -30,6 +30,15 @@
             android:textStyle="bold"
             tools:text="模块标题" />
 
+        <ProgressBar
+            android:id="@+id/pb_revalidating"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="6dp"
+            android:indeterminate="true"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
     </LinearLayout>
 
     <LinearLayout
@@ -50,6 +59,15 @@
             android:clipToPadding="false"
             android:orientation="horizontal"
             tools:listitem="@layout/item_homepage_ranking_tab" />
+
+        <ProgressBar
+            android:id="@+id/pb_tabs_revalidating"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="4dp"
+            android:indeterminate="true"
+            android:visibility="gone"
+            tools:visibility="visible" />
 
         <ImageView
             android:id="@+id/iv_tab_arrow"

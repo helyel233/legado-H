@@ -12,13 +12,17 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ActivityExploreShowBinding
+import io.legado.app.domain.model.HomepageModuleType
 import io.legado.app.help.webView.WebViewPool
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.book.SearchBookOpenHelper
+import io.legado.app.ui.main.homepage.HomepageModuleBuilder
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.stableSearchBookKey
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -80,6 +84,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.applyWallpaperGlass()
         binding.titleBar.title = intent.getStringExtra("exploreName")
+        initPinToHomepageMenu()
         initSwipeRefresh()
         initComposeList()
         viewModel.booksData.observe(this) { upData(it) }
@@ -106,6 +111,36 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             composeHasPrevious.value = it > 1
         }
         viewModel.initData(intent)
+    }
+
+    private fun initPinToHomepageMenu() {
+        val sourceUrl = intent.getStringExtra("sourceUrl")?.takeIf { it.isNotBlank() } ?: return
+        val exploreUrl = intent.getStringExtra("exploreUrl").orEmpty()
+        val exploreName = intent.getStringExtra("exploreName").orEmpty()
+        binding.titleBar.menu.add(R.string.homepage_pin_to_homepage).apply {
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+            setOnMenuItemClickListener {
+                val styleTypes = HomepageModuleBuilder.quickModuleTypes.filter {
+                    it != HomepageModuleType.ButtonGroup
+                }
+                val labels = styleTypes.map { type ->
+                    "${getString(type.titleRes)} · ${getString(HomepageModuleBuilder.styleDescriptionRes(type))}"
+                }
+                selector(getString(R.string.homepage_choose_style), labels) { _, index ->
+                    val chosen = styleTypes.getOrNull(index) ?: return@selector
+                    lifecycleScope.launch {
+                        HomepageModuleBuilder.pinExploreCategory(
+                            sourceUrl = sourceUrl,
+                            categoryTitle = exploreName,
+                            categoryUrl = exploreUrl,
+                            moduleType = chosen,
+                        )
+                        toastOnUi(getString(R.string.homepage_pinned_to_homepage, exploreName.ifBlank { chosen.key }))
+                    }
+                }
+                true
+            }
+        }
     }
 
     private fun initSwipeRefresh() {

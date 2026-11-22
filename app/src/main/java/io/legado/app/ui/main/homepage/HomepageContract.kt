@@ -20,6 +20,7 @@ data class RankingTabData(
     val page: Int = 1,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
+    val isRevalidating: Boolean = false,
 )
 
 /** 模块内容加载状态 */
@@ -31,6 +32,7 @@ sealed interface ModuleLoadState {
         val hasMore: Boolean = false,
         val page: Int = 1,
         val isLoadingMore: Boolean = false,
+        val isRevalidating: Boolean = false,
     ) : ModuleLoadState
 
     data class Buttons(
@@ -70,6 +72,7 @@ data class HomepageSourceManageUi(
     val moduleCount: Int = 0,
     val isCustomSet: Boolean = false,
     val sourceType: String? = null,
+    val hasHomepageJson: Boolean = false,
 )
 
 /** 管理界面的模块条目 */
@@ -103,7 +106,7 @@ data class HomepageManageUiState(
 data class HomepageUiState(
     val modules: List<HomepageModuleUi> = emptyList(),
     val isRefreshing: Boolean = false,
-    val manageState: HomepageManageUiState = HomepageManageUiState(),
+    val visibleSets: List<HomepageSourceManageUi> = emptyList(),
     /** 布局模式：0 = 混合列表，1 = 分源Tab */
     val layoutMode: Int = 0,
     /** 分源Tab 模式预加载：0 = 仅当前集，1 = 当前集 + 相邻集 */

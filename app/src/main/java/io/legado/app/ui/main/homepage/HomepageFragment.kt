@@ -82,11 +82,41 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
             rvModules.setEdgeEffectColor(accentColor)
             rvModules.applyMainBottomBarPadding()
             rvModules.adapter = adapter
+            rvModules.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                    viewModel.updateVisibleModuleIds(adapter.visibleModuleIds(recyclerView))
+                }
+            })
 
             tabSource.setSelectedTabIndicatorColor(accentColor)
             tabSource.setSelectedTabIndicatorHeight(2.dpToPx())
             tabSource.setTabTextColors(secondaryTextColor, accentColor)
             applySourceTabGlass()
+
+            tvAutoSetup.setTextColor(accentColor)
+            tvAutoSetup.setOnClickListener {
+                if (viewModel.isAutoAssembling()) {
+                    viewModel.cancelAutoAssembleStarterHomepage()
+                    return@setOnClickListener
+                }
+                tvAutoSetup.setText(R.string.homepage_auto_setup_running)
+                viewModel.autoAssembleStarterHomepage { result ->
+                    if (!isAdded) return@autoAssembleStarterHomepage
+                    tvAutoSetup.setText(R.string.homepage_auto_setup)
+                    val msg = when (result.status) {
+                        AutoSetupStatus.ADDED ->
+                            getString(R.string.homepage_auto_setup_done, result.addedCount)
+                        AutoSetupStatus.NO_SOURCES ->
+                            getString(R.string.homepage_auto_setup_empty)
+                        AutoSetupStatus.NO_CATEGORIES ->
+                            getString(R.string.homepage_auto_setup_no_categories)
+                        AutoSetupStatus.CANCELLED ->
+                            getString(R.string.homepage_auto_setup_cancelled)
+                    }
+                    requireContext().toastOnUi(msg)
+                }
+            }
+            tvOpenManage.setOnClickListener { showManageSheet() }
 
             viewPagerSource.adapter = sourcePagerAdapter
             viewPagerSource.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -103,6 +133,11 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
                         upSourceTabs(state)
                     } else {
                         adapter.submitModules(state.modules)
+                        rvModules.post {
+                            if (isAdded && view != null) {
+                                viewModel.updateVisibleModuleIds(adapter.visibleModuleIds(rvModules))
+                            }
+                        }
                         llEmpty.isVisible = state.modules.isEmpty() && !state.isRefreshing
                         swipeRefreshLayout.isRefreshing = state.isRefreshing
                     }
@@ -135,7 +170,7 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
      * 仅显示已选中且含模块的集；页按 setUrl 对齐复用，保持各页滚动位置与内嵌适配器。
      */
     private fun upSourceTabs(state: HomepageUiState) {
-        val sets = state.manageState.sets.filter { it.isSelected && it.moduleCount > 0 }
+        val sets = state.visibleSets
         val urlsChanged = sets.map { it.sourceUrl } != tabSets.map { it.sourceUrl }
         sourcePagerAdapter.submitSets(sets)
         sourcePagerAdapter.submitModules(state.modules)
@@ -294,6 +329,10 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
         viewModel.retryModule(module.globalId)
     }
 
+    override fun onRetryRankingTab(module: HomepageModuleUi, tabIndex: Int) {
+        viewModel.retryRankingTab(module.globalId, tabIndex)
+    }
+
     override fun onLoadMore(module: HomepageModuleUi) {
         viewModel.loadMoreModule(module.globalId)
     }
@@ -426,7 +465,7 @@ class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_h
                 binding.rvPage.canScrollVertically(-1)
             }
             binding.root.setOnRefreshListener {
-                fragment.viewModel.onRefresh()
+                fragment.viewModel.onRefresh(setUrl.ifBlank { null })
             }
             binding.root.isRefreshing = fragment.viewModel.uiState.value.isRefreshing
         }

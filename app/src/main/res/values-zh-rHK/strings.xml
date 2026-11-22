@@ -1387,14 +1387,12 @@
     <string name="homepage_empty_title">暫無首頁模組</string>
     <string name="homepage_expand_all">展開全部</string>
     <string name="homepage_collapse">收起</string>
-    <string name="homepage_kind_select_confirm">確定</string>
     <string name="homepage_kind_select_title">選擇分類</string>
     <string name="homepage_load_failed">加載失敗</string>
     <string name="homepage_load_more">加載更多</string>
     <string name="homepage_loading">加載中</string>
     <string name="homepage_loading_categories">正在加載分類</string>
     <string name="homepage_module_args">參數</string>
-    <string name="homepage_module_layout_config">佈局配置</string>
     <string name="homepage_module_manage">模組管理</string>
     <string name="homepage_module_title">標題</string>
     <string name="homepage_module_type">模組類型</string>

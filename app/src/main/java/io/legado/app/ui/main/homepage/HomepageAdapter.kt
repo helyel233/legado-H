@@ -59,6 +59,8 @@ class HomepageAdapter(
 
         fun onRetry(module: HomepageModuleUi)
 
+        fun onRetryRankingTab(module: HomepageModuleUi, tabIndex: Int) = onRetry(module)
+
         fun onLoadMore(module: HomepageModuleUi)
 
         fun onLoadMoreRankingTab(module: HomepageModuleUi, tabIndex: Int)
@@ -127,23 +129,35 @@ class HomepageAdapter(
             val newLoaded = newItem.state as? ModuleLoadState.Loaded
             if (oldLoaded != null && newLoaded != null &&
                 oldLoaded.books == newLoaded.books && oldLoaded.hasMore == newLoaded.hasMore &&
-                oldLoaded.page == newLoaded.page &&
-                oldLoaded.isLoadingMore != newLoaded.isLoadingMore
+                oldLoaded.page == newLoaded.page
             ) {
-                return LoadMorePayload(
-                    module = newItem,
-                    hasMore = newLoaded.hasMore,
-                    isLoadingMore = newLoaded.isLoadingMore
-                )
+                if (oldLoaded.isLoadingMore != newLoaded.isLoadingMore) {
+                    return LoadMorePayload(
+                        module = newItem,
+                        hasMore = newLoaded.hasMore,
+                        isLoadingMore = newLoaded.isLoadingMore
+                    )
+                }
+                if (oldLoaded.isRevalidating != newLoaded.isRevalidating) {
+                    return RevalidatingPayload(newLoaded.isRevalidating)
+                }
             }
             val oldTabs = oldItem.state as? ModuleLoadState.RankingTabs
             val newTabs = newItem.state as? ModuleLoadState.RankingTabs
             if (oldTabs != null && newTabs != null &&
-                oldTabs.tabs == newTabs.tabs && oldTabs.selectedIndex == newTabs.selectedIndex
+                oldTabs.selectedIndex == newTabs.selectedIndex
             ) {
                 val oldTab = oldTabs.tabs.getOrNull(oldTabs.selectedIndex)
                 val newTab = newTabs.tabs.getOrNull(newTabs.selectedIndex)
                 if (oldTab != null && newTab != null &&
+                    oldTab.books == newTab.books && oldTab.hasMore == newTab.hasMore &&
+                    oldTab.errorMessage == newTab.errorMessage &&
+                    oldTab.isLoadingMore == newTab.isLoadingMore &&
+                    oldTab.isRevalidating != newTab.isRevalidating
+                ) {
+                    return RevalidatingPayload(newTab.isRevalidating)
+                }
+                if (oldTabs.tabs == newTabs.tabs && oldTab != null && newTab != null &&
                     oldTab.books == newTab.books && oldTab.hasMore == newTab.hasMore &&
                     oldTab.isLoadingMore != newTab.isLoadingMore
                 ) {
@@ -163,6 +177,11 @@ class HomepageAdapter(
         val module: HomepageModuleUi,
         val hasMore: Boolean,
         val isLoadingMore: Boolean,
+    )
+
+    /** payload：只有后台 SWR 静默更新状态变化，书籍列表内容未变 */
+    private data class RevalidatingPayload(
+        val isRevalidating: Boolean,
     )
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
@@ -217,6 +236,20 @@ class HomepageAdapter(
         // （boundKey 会拦掉同模块重绑，`submitModules` 的 diff 也可能认为内容没变），
         // 所以挂载时按签名重铺一次**当前已显示**的卡面。同档重复挂载零开销。
         holder.refreshCardSurfaces()
+    }
+
+    fun visibleModuleIds(recyclerView: RecyclerView): Set<String> {
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return emptySet()
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION || last < first) {
+            return emptySet()
+        }
+        val result = LinkedHashSet<String>()
+        for (pos in first..last) {
+            modules.getOrNull(pos)?.globalId?.let(result::add)
+        }
+        return result
     }
 
     /**
@@ -314,21 +347,42 @@ class HomepageAdapter(
             // 标题行默认显示，多 tab 时由 bindRankingTabs 藏掉只留 tab
             binding.llTabs.gone()
             binding.llTitle.visible()
+            updateRevalidatingIndicator(false)
             hEndAction = null
             when (val state = module.state) {
                 is ModuleLoadState.Loading -> bindLoading(module)
                 is ModuleLoadState.Error -> bindError(module)
                 is ModuleLoadState.Buttons -> bindButtons(module, state)
-                is ModuleLoadState.Loaded -> bindLoaded(module, state)
-                is ModuleLoadState.RankingTabs -> bindRankingTabs(module, state)
+                is ModuleLoadState.Loaded -> {
+                    updateRevalidatingIndicator(state.isRevalidating)
+                    bindLoaded(module, state)
+                }
+                is ModuleLoadState.RankingTabs -> {
+                    val activeRevalidating = state.tabs.getOrNull(state.selectedIndex)?.isRevalidating == true
+                    updateRevalidatingIndicator(activeRevalidating)
+                    bindRankingTabs(module, state)
+                }
             }
         }
 
-        /** payload 轻量刷新：书籍列表不变，仅"加载更多"状态翻转；非本类 payload 返回 false 走全量绑定 */
+        private fun updateRevalidatingIndicator(revalidating: Boolean) {
+            binding.pbRevalidating.isVisible = revalidating
+            binding.pbTabsRevalidating.isVisible = revalidating
+        }
+
+        /** payload 轻量刷新：列表不变，仅加载更多或后台更新状态翻转 */
         fun handlePayload(payload: Any): Boolean {
-            if (payload !is LoadMorePayload) return false
-            updateLoadMore(payload)
-            return true
+            return when (payload) {
+                is LoadMorePayload -> {
+                    updateLoadMore(payload)
+                    true
+                }
+                is RevalidatingPayload -> {
+                    updateRevalidatingIndicator(payload.isRevalidating)
+                    true
+                }
+                else -> false
+            }
         }
 
         private fun updateLoadMore(payload: LoadMorePayload) {
@@ -585,35 +639,47 @@ class HomepageAdapter(
             tabsAdapter?.submitItems(state.tabs, state.selectedIndex)
 
             val currentTab = state.tabs.getOrNull(state.selectedIndex)
-            val tabBooks = currentTab?.books ?: emptyList()
-            val tabHasMore = currentTab?.hasMore == true
-            val tabLoading = currentTab?.isLoadingMore == true
-            val onTabLoadMore = { callBack.onLoadMoreRankingTab(module, state.selectedIndex) }
-
-            if (module.type == HomepageModuleType.GridRanking) {
-                bindGridRanking(
-                    books = tabBooks,
-                    hasMore = tabHasMore,
-                    isLoadingMore = tabLoading,
-                    tabKey = currentTab?.title,
-                    onLoadMore = onTabLoadMore,
-                )
-            } else if (module.type == HomepageModuleType.Ranking) {
-                showRankCard(rankStyle = true)
-                ensureBooksAdapter(HomepageModuleType.Ranking)
-                booksAdapter?.setItems(tabBooks.take(rankLimit(module)))
-                bindExpandFooter(module, tabBooks)
-                binding.llLoadMore.gone()
-            } else {
-                // 网格/瀑布流/卡片/横幅/无限网格的多分类：当前 tab 内容按本类型形态渲染
-                bindTypeContent(
-                    module = module,
-                    books = tabBooks,
-                    hasMore = tabHasMore,
-                    isLoadingMore = tabLoading,
-                    moreKey = "${module.globalId}#${state.selectedIndex}",
-                    onLoadMore = onTabLoadMore,
-                )
+            when {
+                currentTab?.books == null && currentTab?.errorMessage != null -> {
+                    hideAll()
+                    binding.llError.visible()
+                    applyErrorCardSurface()
+                    binding.llError.setOnClickListener {
+                        callBack.onRetryRankingTab(module, state.selectedIndex)
+                    }
+                }
+                currentTab?.books == null -> {
+                    hideAll()
+                    binding.flSkeleton.visible()
+                    buildSkeleton(module.type, binding.flSkeleton)
+                }
+                module.type == HomepageModuleType.GridRanking -> {
+                    bindGridRanking(
+                        books = currentTab.books,
+                        hasMore = currentTab.hasMore,
+                        isLoadingMore = currentTab.isLoadingMore,
+                        tabKey = currentTab.title,
+                        onLoadMore = { callBack.onLoadMoreRankingTab(module, state.selectedIndex) },
+                    )
+                }
+                module.type == HomepageModuleType.Ranking -> {
+                    showRankCard(rankStyle = true)
+                    ensureBooksAdapter(HomepageModuleType.Ranking)
+                    booksAdapter?.setItems(currentTab.books.take(rankLimit(module)))
+                    bindExpandFooter(module, currentTab.books)
+                    binding.llLoadMore.gone()
+                }
+                else -> {
+                    // 网格/瀑布流/卡片/横幅/无限网格的多分类：当前 tab 内容按本类型形态渲染
+                    bindTypeContent(
+                        module = module,
+                        books = currentTab.books,
+                        hasMore = currentTab.hasMore,
+                        isLoadingMore = currentTab.isLoadingMore,
+                        moreKey = "${module.globalId}#${state.selectedIndex}",
+                        onLoadMore = { callBack.onLoadMoreRankingTab(module, state.selectedIndex) },
+                    )
+                }
             }
 
             // Tab 行在内容绑定之后显示：显隐只由本方法管理；
