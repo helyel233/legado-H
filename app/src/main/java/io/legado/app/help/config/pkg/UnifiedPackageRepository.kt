@@ -1681,7 +1681,7 @@ object UnifiedPackageRepository {
             g.shellScale?.let { context.putPrefInt(PreferKey.exploreGlassShellScale, it) }
             g.tintScale?.let { context.putPrefInt(PreferKey.exploreGlassTintScale, it) }
             g.strokeScale?.let { context.putPrefInt(PreferKey.exploreGlassStrokeScale, it) }
-            g.strokeColor?.let { context.putPrefString(PreferKey.glassStrokeColor, it) }
+            putOrRemovePref(context, PreferKey.glassStrokeColor, g.strokeColor)
             g.presetMatched?.let { context.putPrefBoolean(PreferKey.glassPresetMatched, it) }
             g.hardwareBlur?.let { context.putPrefBoolean(PreferKey.exploreGlassHardwareBlur, it) }
             g.animatedSolid?.let { context.putPrefBoolean(PreferKey.exploreGlassAnimatedSolid, it) }

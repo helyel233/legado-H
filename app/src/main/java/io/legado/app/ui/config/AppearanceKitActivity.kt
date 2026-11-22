@@ -463,6 +463,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         ArtPackageEditorDialog(
                             entry = entry,
                             existingNames = artPackagesState.map { it.manifest.name },
+                            preferNightSlot = artSlotNightState,
                             onPickAssetFile = { _, onPicked ->
                                 pendingAssetFileCallback = onPicked
                                 pickAssetFileLauncher.launch {
@@ -1658,6 +1659,7 @@ private fun StudioDualSlotPackageSection(
                     val isAlsoOtherSlot = entry.manifest.id == (if (isNightSlot) dayMountedId else nightMountedId)
                     PackageEntryCard(
                         entry = entry,
+                        isNightSlot = isNightSlot,
                         isSelected = isSelected,
                         isAlsoOtherSlot = isAlsoOtherSlot,
                         otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
@@ -1702,6 +1704,7 @@ private typealias BooleanStringAlias = String
 @Composable
 private fun PackageEntryCard(
     entry: UnifiedPackageRepository.StoredEntry,
+    isNightSlot: Boolean,
     isSelected: Boolean,
     isAlsoOtherSlot: Boolean,
     otherSlotLabel: String,
@@ -1745,7 +1748,7 @@ private fun PackageEntryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                PackageSwatchDot(entry = entry, palette = palette)
+                PackageSwatchDot(entry = entry, isNightSlot = isNightSlot, palette = palette)
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1831,9 +1834,15 @@ private fun SmallPackageActionText(
 @Composable
 private fun PackageSwatchDot(
     entry: UnifiedPackageRepository.StoredEntry,
+    isNightSlot: Boolean,
     palette: AppManagementPalette
 ) {
-    val artPalette = entry.manifest.art?.dayPalette ?: entry.manifest.art?.nightPalette
+    val art = entry.manifest.art
+    val artPalette = if (isNightSlot) {
+        art?.nightPalette ?: art?.dayPalette
+    } else {
+        art?.dayPalette ?: art?.nightPalette
+    }
     val primary = parseSwatchColor(artPalette?.primaryColor, palette.settings.primaryText)
     val accent = parseSwatchColor(artPalette?.accentColor, palette.settings.accent)
     val bg = parseSwatchColor(artPalette?.backgroundColor, palette.settings.page)

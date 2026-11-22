@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -32,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.graphics.toColorInt
+import androidx.compose.ui.window.DialogProperties
 import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.ArtPaletteSpec
 import io.legado.app.help.config.pkg.ArtTypographySpec
@@ -46,9 +48,11 @@ import io.legado.app.help.config.pkg.UiScope
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.widget.compose.AppDialogFrame
+import io.legado.app.ui.widget.compose.AppDialogStyle
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LegadoMiuixPalette
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.LegadoSegmentedControl
 import io.legado.app.ui.widget.compose.SegmentedControlTone
@@ -165,6 +169,7 @@ internal fun DeletePackageConfirmDialog(
 internal fun ArtPackageEditorDialog(
     entry: UnifiedPackageRepository.StoredEntry,
     existingNames: List<String>,
+    preferNightSlot: Boolean = false,
     onPickAssetFile: ((currentPath: String?, onPicked: (String) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (newName: String, updatedArt: ArtPackagePayload) -> Unit
@@ -173,9 +178,12 @@ internal fun ArtPackageEditorDialog(
     val dialogPalette = style.toMiuixPalette()
     val mgmtPalette = rememberAppManagementPalette()
     val initialArt = entry.manifest.art ?: ArtPackagePayload()
-    val basePalette = initialArt.dayPalette ?: initialArt.nightPalette ?: ArtPaletteSpec()
-    val baseWallpapers = initialArt.dayWallpapers ?: initialArt.nightWallpapers ?: ArtWallpapersSpec()
-    val baseTypography = initialArt.dayTypography ?: initialArt.nightTypography ?: ArtTypographySpec()
+    val editSeed = remember(entry.manifest.id, preferNightSlot) {
+        ColorPaletteHelper.resolveArtSlotForEdit(initialArt, preferNightSlot)
+    }
+    val basePalette = editSeed.palette
+    val baseWallpapers = editSeed.wallpapers
+    val baseTypography = editSeed.typography
 
     var nameDraft by remember(entry.manifest.id) { mutableStateOf(entry.manifest.name) }
     var activeTab by remember { mutableIntStateOf(0) }
@@ -227,143 +235,201 @@ internal fun ArtPackageEditorDialog(
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        AppDialogFrame(
-            title = "编辑美术资源包",
-            content = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (entry.manifest.basePackageId != null) {
-                        Text(
-                            text = "写时复制派生包（基底 ID: ${entry.manifest.basePackageId}）· 仅存储增量替换文件，导出时自动物化为完整独立整包",
-                            color = style.secondaryText,
-                            fontSize = 11.sp
-                        )
-                    }
-                    OutlinedTextField(
-                        value = nameDraft,
-                        onValueChange = { nameDraft = it },
-                        label = { Text("美术包名称（严禁重名）") },
-                        singleLine = true,
-                        isError = !canSave,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (isDuplicateName) {
-                        Text(
-                            text = "包名称「$trimmedName」已存在，请更换名称",
-                            color = style.danger,
-                            fontSize = 12.sp
-                        )
-                    }
-                    LegadoSegmentedControl(
-                        options = tabs,
-                        selectedValue = activeTab,
-                        palette = dialogPalette,
-                        onSelected = { activeTab = it },
-                        tone = SegmentedControlTone.AccentThumb,
-                        fontSize = 11.sp
-                    )
-                    when (activeTab) {
-                        0 -> {
-                            ColorFieldRow("主色 (Primary)", primaryColor) { primaryColor = it }
-                            ColorFieldRow("强调色 (Accent)", accentColor) { accentColor = it }
-                            ColorFieldRow("背景色 (Background)", backgroundColor) { backgroundColor = it }
-                            ColorFieldRow("底栏背景 (BottomBar)", bottomBackground) { bottomBackground = it }
-                            ColorFieldRow("一级卡片色 (Card)", cardColor) { cardColor = it }
-                            ColorFieldRow("二级凹槽色 (Muted/Slot)", mutedColor) { mutedColor = it }
-                            ColorFieldRow("搜索框底色 (Search)", searchFieldBg) { searchFieldBg = it }
-                            ColorFieldRow("标签栏底色 (Tab)", tabBg) { tabBg = it }
-                            ColorFieldRow("书架隔板色 (Shelf)", shelfColor) { shelfColor = it }
-                            ColorFieldRow("面板边框色 (Border)", panelBorderColor) { panelBorderColor = it }
-                            ColorFieldRow("正文字体色 (UI Text)", uiFontColor) { uiFontColor = it }
-                            ColorFieldRow("标题字体色 (Title Text)", titleFontColor) { titleFontColor = it }
-                        }
-                        1 -> {
-                            AssetPathFieldRow("主界面壁纸", mainWallpaper, onPickAssetFile) { mainWallpaper = it }
-                            AssetPathFieldRow("顶栏壁纸", topBarWallpaper, onPickAssetFile) { topBarWallpaper = it }
-                            EditorSliderRow(
-                                title = "顶栏壁纸不透明度",
-                                valueText = "${topBarAlpha}%",
-                                value = topBarAlpha,
-                                range = 0..100,
-                                palette = mgmtPalette,
-                                onValueChange = { topBarAlpha = it }
-                            )
-                            AssetPathFieldRow("底栏壁纸", bottomBarWallpaper, onPickAssetFile) { bottomBarWallpaper = it }
-                            AssetPathFieldRow("书籍详情背景图", bookInfoWallpaper, onPickAssetFile) { bookInfoWallpaper = it }
-                            AssetPathFieldRow("弹窗面板背景图", panelWallpaper, onPickAssetFile) { panelWallpaper = it }
-                            AssetPathFieldRow("启动页背景图 (Welcome)", welcomeWallpaper, onPickAssetFile) { welcomeWallpaper = it }
-                        }
-                        2 -> {
-                            AssetPathFieldRow("界面正文字体 (.ttf/.otf)", uiFontPath, onPickAssetFile) { uiFontPath = it }
-                            AssetPathFieldRow("标题字体 (.ttf/.otf)", titleFontPath, onPickAssetFile) { titleFontPath = it }
-                            AssetPathFieldRow("默认书籍封面图", defaultCoverPath, onPickAssetFile) { defaultCoverPath = it }
+    var syncBothSlots by remember(entry.manifest.id, preferNightSlot) { mutableStateOf(false) }
+
+    val referenceColors = remember(
+        primaryColor,
+        accentColor,
+        backgroundColor,
+        bottomBackground,
+        cardColor,
+        mutedColor,
+        panelBorderColor,
+        uiFontColor,
+        titleFontColor
+    ) {
+        listOf(
+            "主色" to primaryColor,
+            "强调" to accentColor,
+            "背景" to backgroundColor,
+            "底栏" to bottomBackground,
+            "卡片" to cardColor,
+            "凹槽" to mutedColor,
+            "边框" to panelBorderColor,
+            "正文" to uiFontColor,
+            "标题" to titleFontColor
+        )
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 560.dp)
+        ) {
+            AppDialogFrame(
+                title = "编辑美术资源包",
+                content = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (entry.manifest.basePackageId != null) {
                             Text(
-                                text = "包内已含底栏图标 ${initialArt.icons.size} 项、封面集 ${initialArt.covers.size} 项。",
+                                text = "写时复制派生包（基底 ID: ${entry.manifest.basePackageId}）· 仅存储增量替换文件，导出时自动物化为完整独立整包",
                                 color = style.secondaryText,
+                                fontSize = 11.sp
+                            )
+                        }
+                        OutlinedTextField(
+                            value = nameDraft,
+                            onValueChange = { nameDraft = it },
+                            label = { Text("美术包名称（严禁重名）") },
+                            singleLine = true,
+                            isError = !canSave,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (isDuplicateName) {
+                            Text(
+                                text = "包名称「$trimmedName」已存在，请更换名称",
+                                color = style.danger,
                                 fontSize = 12.sp
                             )
                         }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { syncBothSlots = !syncBothSlots }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (preferNightSlot) {
+                                    "当前编辑夜间槽 · 同时同步到日间槽"
+                                } else {
+                                    "当前编辑日间槽 · 同时同步到夜间槽"
+                                },
+                                color = style.secondaryText,
+                                fontSize = 12.sp
+                            )
+                            LegadoMiuixSwitch(
+                                checked = syncBothSlots,
+                                onCheckedChange = { syncBothSlots = it },
+                                palette = dialogPalette
+                            )
+                        }
+                        LegadoSegmentedControl(
+                            options = tabs,
+                            selectedValue = activeTab,
+                            palette = dialogPalette,
+                            onSelected = { activeTab = it },
+                            tone = SegmentedControlTone.AccentThumb,
+                            fontSize = 11.sp
+                        )
+                        when (activeTab) {
+                            0 -> {
+                                ColorFieldRow("主色 (Primary)", primaryColor, style, dialogPalette, referenceColors = referenceColors) { primaryColor = it }
+                                ColorFieldRow("强调色 (Accent)", accentColor, style, dialogPalette, referenceColors = referenceColors) { accentColor = it }
+                                ColorFieldRow("背景色 (Background)", backgroundColor, style, dialogPalette, referenceColors = referenceColors) { backgroundColor = it }
+                                ColorFieldRow("底栏背景 (BottomBar)", bottomBackground, style, dialogPalette, referenceColors = referenceColors) { bottomBackground = it }
+                                ColorFieldRow("一级卡片色 (Card)", cardColor, style, dialogPalette, referenceColors = referenceColors) { cardColor = it }
+                                ColorFieldRow("二级凹槽色 (Muted/Slot)", mutedColor, style, dialogPalette, referenceColors = referenceColors) { mutedColor = it }
+                                ColorFieldRow("搜索框底色 (Search)", searchFieldBg, style, dialogPalette, referenceColors = referenceColors) { searchFieldBg = it }
+                                ColorFieldRow("标签栏底色 (Tab)", tabBg, style, dialogPalette, referenceColors = referenceColors) { tabBg = it }
+                                ColorFieldRow("书架隔板色 (Shelf)", shelfColor, style, dialogPalette, referenceColors = referenceColors) { shelfColor = it }
+                                ColorFieldRow("边框线颜色 (Border)", panelBorderColor, style, dialogPalette, referenceColors = referenceColors) { panelBorderColor = it }
+                                ColorFieldRow("正文字体色 (UI Text)", uiFontColor, style, dialogPalette, referenceColors = referenceColors) { uiFontColor = it }
+                                ColorFieldRow("标题字体色 (Title Text)", titleFontColor, style, dialogPalette, referenceColors = referenceColors) { titleFontColor = it }
+                            }
+                            1 -> {
+                                AssetPathFieldRow("主界面壁纸", mainWallpaper, onPickAssetFile) { mainWallpaper = it }
+                                AssetPathFieldRow("顶栏壁纸", topBarWallpaper, onPickAssetFile) { topBarWallpaper = it }
+                                EditorSliderRow(
+                                    title = "顶栏壁纸不透明度",
+                                    valueText = "${topBarAlpha}%",
+                                    value = topBarAlpha,
+                                    range = 0..100,
+                                    palette = mgmtPalette,
+                                    onValueChange = { topBarAlpha = it }
+                                )
+                                AssetPathFieldRow("底栏壁纸", bottomBarWallpaper, onPickAssetFile) { bottomBarWallpaper = it }
+                                AssetPathFieldRow("书籍详情背景图", bookInfoWallpaper, onPickAssetFile) { bookInfoWallpaper = it }
+                                AssetPathFieldRow("弹窗面板背景图", panelWallpaper, onPickAssetFile) { panelWallpaper = it }
+                                AssetPathFieldRow("启动页背景图 (Welcome)", welcomeWallpaper, onPickAssetFile) { welcomeWallpaper = it }
+                            }
+                            2 -> {
+                                AssetPathFieldRow("界面正文字体 (.ttf/.otf)", uiFontPath, onPickAssetFile) { uiFontPath = it }
+                                AssetPathFieldRow("标题字体 (.ttf/.otf)", titleFontPath, onPickAssetFile) { titleFontPath = it }
+                                AssetPathFieldRow("默认书籍封面图", defaultCoverPath, onPickAssetFile) { defaultCoverPath = it }
+                                Text(
+                                    text = "包内已含底栏图标 ${initialArt.icons.size} 项、封面集 ${initialArt.covers.size} 项。",
+                                    color = style.secondaryText,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                     }
+                },
+                actions = {
+                    LegadoMiuixActionButton(
+                        text = "取消",
+                        palette = dialogPalette,
+                        onClick = onDismiss
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    LegadoMiuixActionButton(
+                        text = "保存美术包",
+                        palette = dialogPalette,
+                        primary = true,
+                        enabled = canSave,
+                        onClick = {
+                            if (!canSave) return@LegadoMiuixActionButton
+                            val updatedPalette = basePalette.copy(
+                                primaryColor = primaryColor.trim().ifBlank { null },
+                                accentColor = accentColor.trim().ifBlank { null },
+                                backgroundColor = backgroundColor.trim().ifBlank { null },
+                                bottomBackground = bottomBackground.trim().ifBlank { null },
+                                cardColor = cardColor.trim().ifBlank { null },
+                                mutedColor = mutedColor.trim().ifBlank { null },
+                                searchFieldBackgroundColor = searchFieldBg.trim().ifBlank { null },
+                                tabBackgroundColor = tabBg.trim().ifBlank { null },
+                                shelfColor = shelfColor.trim().ifBlank { null },
+                                panelBorderColor = panelBorderColor.trim().ifBlank { null },
+                                uiFontColor = uiFontColor.trim().ifBlank { null },
+                                titleFontColor = titleFontColor.trim().ifBlank { null }
+                            )
+                            val updatedWallpapers = baseWallpapers.copy(
+                                main = mainWallpaper.trim().ifBlank { null },
+                                topBar = topBarWallpaper.trim().ifBlank { null },
+                                topBarAlpha = topBarAlpha,
+                                bottomBar = bottomBarWallpaper.trim().ifBlank { null },
+                                bookInfo = bookInfoWallpaper.trim().ifBlank { null },
+                                panel = panelWallpaper.trim().ifBlank { null },
+                                welcome = welcomeWallpaper.trim().ifBlank { null }
+                            )
+                            val updatedTypography = baseTypography.copy(
+                                uiFontPath = uiFontPath.trim().ifBlank { null },
+                                titleFontPath = titleFontPath.trim().ifBlank { null }
+                            )
+                            val newArt = ColorPaletteHelper.applyArtSlotEdit(
+                                original = initialArt,
+                                preferNightSlot = preferNightSlot,
+                                updatedPalette = updatedPalette,
+                                updatedWallpapers = updatedWallpapers,
+                                updatedTypography = updatedTypography,
+                                defaultCoverPath = defaultCoverPath,
+                                syncBothSlots = syncBothSlots
+                            )
+                            onSave(trimmedName, newArt)
+                        }
+                    )
                 }
-            },
-            actions = {
-                LegadoMiuixActionButton(
-                    text = "取消",
-                    palette = dialogPalette,
-                    onClick = onDismiss
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                LegadoMiuixActionButton(
-                    text = "保存美术包",
-                    palette = dialogPalette,
-                    primary = true,
-                    enabled = canSave,
-                    onClick = {
-                        if (!canSave) return@LegadoMiuixActionButton
-                        val updatedPalette = basePalette.copy(
-                            primaryColor = primaryColor.trim().ifBlank { null },
-                            accentColor = accentColor.trim().ifBlank { null },
-                            backgroundColor = backgroundColor.trim().ifBlank { null },
-                            bottomBackground = bottomBackground.trim().ifBlank { null },
-                            cardColor = cardColor.trim().ifBlank { null },
-                            mutedColor = mutedColor.trim().ifBlank { null },
-                            searchFieldBackgroundColor = searchFieldBg.trim().ifBlank { null },
-                            tabBackgroundColor = tabBg.trim().ifBlank { null },
-                            shelfColor = shelfColor.trim().ifBlank { null },
-                            panelBorderColor = panelBorderColor.trim().ifBlank { null },
-                            uiFontColor = uiFontColor.trim().ifBlank { null },
-                            titleFontColor = titleFontColor.trim().ifBlank { null }
-                        )
-                        val updatedWallpapers = baseWallpapers.copy(
-                            main = mainWallpaper.trim().ifBlank { null },
-                            topBar = topBarWallpaper.trim().ifBlank { null },
-                            topBarAlpha = topBarAlpha,
-                            bottomBar = bottomBarWallpaper.trim().ifBlank { null },
-                            bookInfo = bookInfoWallpaper.trim().ifBlank { null },
-                            panel = panelWallpaper.trim().ifBlank { null },
-                            welcome = welcomeWallpaper.trim().ifBlank { null }
-                        )
-                        val updatedTypography = baseTypography.copy(
-                            uiFontPath = uiFontPath.trim().ifBlank { null },
-                            titleFontPath = titleFontPath.trim().ifBlank { null }
-                        )
-                        val newArt = initialArt.copy(
-                            dayPalette = updatedPalette,
-                            nightPalette = updatedPalette,
-                            dayWallpapers = updatedWallpapers,
-                            nightWallpapers = updatedWallpapers,
-                            dayTypography = updatedTypography,
-                            nightTypography = updatedTypography,
-                            defaultCoverPath = defaultCoverPath.trim().ifBlank { null }
-                        )
-                        onSave(trimmedName, newArt)
-                    }
-                )
-            }
-        )
+            )
+        }
     }
 }
 
@@ -398,7 +464,13 @@ internal fun ParamPackageEditorDialog(
     var tintScale by remember { mutableIntStateOf((g.tintScale ?: 100).coerceIn(50, 200)) }
     var shellScale by remember { mutableIntStateOf((g.shellScale ?: 100).coerceIn(50, 200)) }
     var strokeScale by remember { mutableIntStateOf((g.strokeScale ?: 100).coerceIn(50, 200)) }
-    var strokeColor by remember { mutableStateOf(g.strokeColor.orEmpty()) }
+    var strokeColor by remember {
+        mutableStateOf(
+            ColorPaletteHelper.parseColorInput(g.strokeColor, allowDecimalArgb = true)
+                ?.let { ColorPaletteHelper.formatHex6(it) }
+                ?: g.strokeColor.orEmpty()
+        )
+    }
     var surfaceAlpha by remember { mutableIntStateOf((g.surfaceAlpha ?: 100).coerceIn(0, 100)) }
     var dialogAlpha by remember { mutableIntStateOf((g.dialogAlpha ?: 100).coerceIn(0, 100)) }
     var borderAlpha by remember { mutableIntStateOf((g.panelBorderAlpha ?: 100).coerceIn(0, 100)) }
@@ -471,8 +543,16 @@ internal fun ParamPackageEditorDialog(
         )
     }
 
-    Dialog(onDismissRequest = onDismiss) {
-        AppDialogFrame(
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 560.dp)
+        ) {
+            AppDialogFrame(
             title = "编辑参数设置包",
             content = {
                 Column(
@@ -574,7 +654,13 @@ internal fun ParamPackageEditorDialog(
                                     palette = mgmtPalette,
                                     onValueChange = { strokeScale = it }
                                 )
-                                ColorFieldRow("玻璃描边颜色 (选填)", strokeColor) { strokeColor = it }
+                                ColorFieldRow(
+                                    label = "玻璃描边颜色 (选填)",
+                                    value = strokeColor,
+                                    style = style,
+                                    palette = dialogPalette,
+                                    allowDecimalInput = true
+                                ) { strokeColor = it }
                             }
                             HorizontalDivider(color = mgmtPalette.settings.divider, thickness = 0.5.dp)
                             EditorSliderRow(
@@ -772,7 +858,9 @@ internal fun ParamPackageEditorDialog(
                             tintScale = tintScale,
                             shellScale = shellScale,
                             strokeScale = strokeScale,
-                            strokeColor = strokeColor.trim().ifBlank { null },
+                            strokeColor = strokeColor.trim().takeIf { it.isNotBlank() }?.let { raw ->
+                                ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
+                            },
                             cornerBaseScale = cornerStep / 10f,
                             surfaceAlpha = surfaceAlpha,
                             dialogAlpha = dialogAlpha,
@@ -803,7 +891,8 @@ internal fun ParamPackageEditorDialog(
                     }
                 )
             }
-        )
+            )
+        }
     }
 }
 
@@ -811,12 +900,18 @@ internal fun ParamPackageEditorDialog(
 private fun ColorFieldRow(
     label: String,
     value: String,
+    style: AppDialogStyle,
+    palette: LegadoMiuixPalette,
+    allowDecimalInput: Boolean = false,
+    referenceColors: List<Pair<String, String>> = emptyList(),
     onValueChange: (String) -> Unit
 ) {
-    val parsedColor = remember(value) {
-        runCatching {
-            if (value.isNotBlank()) Color(value.trim().toColorInt()) else null
-        }.getOrNull()
+    var showPicker by remember { mutableStateOf(false) }
+    val parsedArgb = remember(value, allowDecimalInput) {
+        ColorPaletteHelper.parseColorInput(value, allowDecimalInput)
+    }
+    val parsedColor = remember(parsedArgb) {
+        parsedArgb?.let { Color(it or 0xFF000000.toInt()) }
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -825,11 +920,22 @@ private fun ColorFieldRow(
     ) {
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(30.dp)
                 .clip(CircleShape)
-                .background(parsedColor ?: Color.Transparent)
-                .border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape)
-        )
+                .background(parsedColor ?: style.fieldSurface)
+                .border(1.dp, style.stroke, CircleShape)
+                .clickable { showPicker = true },
+            contentAlignment = Alignment.Center
+        ) {
+            if (parsedColor == null) {
+                Text(
+                    text = "自",
+                    color = style.secondaryText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -837,6 +943,28 @@ private fun ColorFieldRow(
             placeholder = { Text("#RRGGBB 或留空自动派生", fontSize = 11.sp) },
             singleLine = true,
             modifier = Modifier.weight(1f)
+        )
+        LegadoMiuixActionButton(
+            text = "调色盘",
+            palette = palette,
+            minWidth = 58.dp,
+            minHeight = 36.dp,
+            insidePadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            onClick = { showPicker = true }
+        )
+    }
+    if (showPicker) {
+        ColorPalettePickerDialog(
+            title = "选择$label",
+            initialColorRaw = value,
+            allowDecimalInput = allowDecimalInput,
+            allowClear = true,
+            referenceColors = referenceColors,
+            onDismiss = { showPicker = false },
+            onConfirm = { picked ->
+                showPicker = false
+                onValueChange(picked)
+            }
         )
     }
 }
