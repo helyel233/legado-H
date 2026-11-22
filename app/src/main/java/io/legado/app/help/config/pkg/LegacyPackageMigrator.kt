@@ -4,10 +4,13 @@ import android.content.Context
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
+import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.utils.getPrefInt
+import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import kotlinx.coroutines.Dispatchers.IO
@@ -86,18 +89,30 @@ object LegacyPackageMigrator {
         return DisassembledLegacyBundle(art = art, param = param)
     }
 
-    suspend fun migrateLocalPackagesIfNeeded(context: Context) = withContext(IO) {
-        if (context.getPrefInt(PreferKey.legacyPackageMigrationVersion, 0) >= CURRENT_MIGRATION_VERSION) {
+    suspend fun migrateLocalPackagesIfNeeded(
+        context: Context,
+        forceReconcile: Boolean = false,
+        overwriteExisting: Boolean = false
+    ) = withContext(IO) {
+        if (!forceReconcile &&
+            context.getPrefInt(PreferKey.legacyPackageMigrationVersion, 0) >= CURRENT_MIGRATION_VERSION
+        ) {
+            UnifiedPackageRepository.ensureDefaultPackagesExist(context)
             return@withContext
         }
         migrationMutex.withLock {
-            if (context.getPrefInt(PreferKey.legacyPackageMigrationVersion, 0) >= CURRENT_MIGRATION_VERSION) {
+            if (!forceReconcile &&
+                context.getPrefInt(PreferKey.legacyPackageMigrationVersion, 0) >= CURRENT_MIGRATION_VERSION
+            ) {
+                UnifiedPackageRepository.ensureDefaultPackagesExist(context)
                 return@withContext
             }
             // 1. Preserve currently active TopBar wallpaper directly into global Prefs so removing
-            // standalone TopBar management never loses the user's top bar image.
-            preserveActiveTopBarWallpaper(context, isNight = false)
-            preserveActiveTopBarWallpaper(context, isNight = true)
+            // standalone TopBar management never loses the user's top bar image, without overwriting
+            // active v2 topbar wallpapers during incremental reconciliation (unless explicit rollback).
+            val onlyIfUnset = forceReconcile && !overwriteExisting
+            preserveActiveTopBarWallpaper(context, isNight = false, onlyIfUnset = onlyIfUnset)
+            preserveActiveTopBarWallpaper(context, isNight = true, onlyIfUnset = onlyIfUnset)
 
             // 2. Migrate existing AppearanceKits (paired day/night themes + topbars + icon/cover mounts + glass)
             val existingKits = runCatching { AppearanceKitManager.importedThemeKits() }.getOrDefault(emptyList())
@@ -150,7 +165,8 @@ object LegacyPackageMigrator {
                     idSlug = kit.id.ifBlank { kit.name },
                     name = kit.name,
                     art = bundle.art,
-                    param = enrichedParam
+                    param = enrichedParam,
+                    overwriteExisting = overwriteExisting
                 )
             }
 
@@ -165,7 +181,8 @@ object LegacyPackageMigrator {
                     idSlug = "legacy_theme_$name",
                     name = name,
                     art = bundle.art,
-                    param = bundle.param
+                    param = bundle.param,
+                    overwriteExisting = overwriteExisting
                 )
             }
 
@@ -181,19 +198,51 @@ object LegacyPackageMigrator {
                         idSlug = "legacy_topbar_$name",
                         name = "$name (顶栏壁纸)",
                         art = bundle.art,
-                        param = null
+                        param = null,
+                        overwriteExisting = overwriteExisting
                     )
                 }
+
+            // 5. Ensure default Day/Night Art & Param packages exist and 4 pointers are valid
+            UnifiedPackageRepository.ensureDefaultPackagesExist(context)
+
+            // 6. Write non-destructive `.migrated` marker in legacy directories (never delete them
+            // so v1 Backup / Restore / RestoreSnapshot remain intact for at least 1 major version)
+            writeLegacyMigratedMarkers()
 
             context.putPrefInt(PreferKey.legacyPackageMigrationVersion, CURRENT_MIGRATION_VERSION)
         }
     }
 
-    private fun preserveActiveTopBarWallpaper(context: Context, isNight: Boolean) {
+    private fun writeLegacyMigratedMarkers() {
+        val markerContent = "migratedVersion=$CURRENT_MIGRATION_VERSION\ntimestamp=${System.currentTimeMillis()}\n"
+        listOf(
+            ThemePackageManager.rootDir,
+            TopBarConfig.rootDir,
+            NavigationBarIconConfig.rootDir,
+            CoverCollectionManager.rootDir,
+            AppearanceKitManager.rootDir
+        ).forEach { dir ->
+            runCatching {
+                if (dir.isDirectory) {
+                    PackageIoKernel.writeTextAtomic(File(dir, ".migrated"), markerContent)
+                }
+            }
+        }
+    }
+
+    private fun preserveActiveTopBarWallpaper(
+        context: Context,
+        isNight: Boolean,
+        onlyIfUnset: Boolean = false
+    ) {
         val wallpaperFile = TopBarConfig.currentWallpaperFile(context, isNight)
         val entry = TopBarConfig.currentEntry(context, isNight)
         val pathKey = if (isNight) PreferKey.topBarBgImageN else PreferKey.topBarBgImage
         val alphaKey = if (isNight) PreferKey.topBarWallpaperAlphaN else PreferKey.topBarWallpaperAlpha
+        if (onlyIfUnset && !context.getPrefString(pathKey).isNullOrBlank()) {
+            return
+        }
         if (wallpaperFile != null) {
             context.putPrefString(pathKey, wallpaperFile.absolutePath)
             context.putPrefInt(alphaKey, entry.config.wallpaperAlpha.coerceIn(0, 100))

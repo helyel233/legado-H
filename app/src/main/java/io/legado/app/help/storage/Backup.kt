@@ -29,6 +29,7 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.BookCover
 import io.legado.app.model.AutoTask
@@ -99,6 +100,7 @@ object Backup {
     internal const val topBarPackagesDirName = UiPackageBackup.TOP_BAR_PACKAGES
     internal const val coverCollectionsDirName = UiPackageBackup.COVER_COLLECTIONS
     internal const val appThemeKitsDirName = UiPackageBackup.APP_THEME_KITS
+    internal const val unifiedPackagesDirName = UiPackageBackup.UNIFIED_PACKAGES
 
     internal const val fontsDirName = "fonts"
     private const val fontsCollectDirName = "fonts_collect"
@@ -611,6 +613,10 @@ object Backup {
         UiPackageBackup.copyVisiblePackagesAndFiles(
             AppearanceKitManager.rootDir,
             File(backupPath, appThemeKitsDirName)
+        )
+        UiPackageBackup.copyUnifiedPackages(
+            UnifiedPackageRepository.rootDir,
+            File(backupPath, unifiedPackagesDirName)
         )
     }
 

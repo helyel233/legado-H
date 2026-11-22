@@ -21,6 +21,8 @@ data class UnifiedPackageManifest(
     val id: String,
     val name: String,
     val updatedAt: Long = 0L,
+    val basePackageId: String? = null,
+    val contentHash: String? = null,
     val art: ArtPackagePayload? = null,
     val param: ParamPackagePayload? = null,
     val unknownFields: Map<String, JsonElement> = emptyMap()
@@ -38,6 +40,9 @@ data class ArtPackagePayload(
     val nightWallpapers: ArtWallpapersSpec? = null,
     val dayTypography: ArtTypographySpec? = null,
     val nightTypography: ArtTypographySpec? = null,
+    val icons: Map<String, String> = emptyMap(),
+    val covers: List<String> = emptyList(),
+    val defaultCoverPath: String? = null,
     val mounts: ArtAssetMounts = ArtAssetMounts(),
     val unknownFields: Map<String, JsonElement> = emptyMap()
 )

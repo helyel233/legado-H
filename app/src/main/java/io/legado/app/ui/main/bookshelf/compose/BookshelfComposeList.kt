@@ -53,6 +53,7 @@ import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.ColorUtils as LegadoColorUtils
@@ -102,10 +103,15 @@ fun rememberBookshelfListPalette(): BookshelfListPalette {
     val themeUiPalette = rememberThemeUiPalette()
     val rowBaseColor = themeUiPalette.cardColor
     val rawRowColor = UiCorner.surfaceColor(rowBaseColor)
-    val rowColor = if (!tokens.env.isEInk && cardScope.isCustomOverride) {
-        LegadoColorUtils.withAlpha(rawRowColor, cardScope.alphaFraction)
-    } else {
-        rawRowColor
+    val rowColor = when {
+        tokens.env.isEInk -> rawRowColor
+        cardScope.isClearMode -> LegadoColorUtils.withAlpha(
+            rawRowColor,
+            (android.graphics.Color.alpha(rawRowColor) / 255f) * GlassMaterialPreset.CLEAR_SURFACE_ALPHA
+        )
+        cardScope.isCustomOverride && cardScope.alphaPercent != AppConfig.uiLayoutAlpha ->
+            LegadoColorUtils.withAlpha(rawRowColor, cardScope.alphaFraction)
+        else -> rawRowColor
     }
     val rowPressedColor = UiCorner.surfaceColor(rowBaseColor, pressed = true)
     val primaryText = Color(tokens.colors.titleTextArgb)

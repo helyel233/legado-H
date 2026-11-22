@@ -195,8 +195,10 @@ object Restore {
                 val snapshot = RestoreSnapshot.create(path)
                 try {
                     restore(path)
+                    io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
                 } catch (e: Throwable) {
                     snapshot.rollback(appCtx.getString(R.string.misc_restore_failed_2, e.localizedMessage))
+                    io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
                     throw e
                 } finally {
                     snapshot.delete()
@@ -359,6 +361,7 @@ object Restore {
         restoreTopBarPackages(path)
         restoreCoverCollections(path)
         restoreAppearanceKits(path)
+        restoreUnifiedPackages(path)
         restoreVisualResourcePackages(path)
         restoreSourceRuntime(path)
         // 直接以文件形式读取 config.xml：SharedPreferences 进程级缓存只在首次
@@ -1066,6 +1069,32 @@ object Restore {
             AppearanceKitManager.reconcileKitsAfterRestore()
         }.onFailure {
             AppLog.put("对账外观方案索引出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    /**
+     * 恢复 V4 统一双包目录（`unifiedPackages`），并在恢复了任何 V1 旧包目录时
+     * 自动触发幂等合成迁移，防止老用户恢复 V1 备份后落入静默黑洞。
+     */
+    private suspend fun restoreUnifiedPackages(path: String) {
+        restorePackageDirectory(
+            File(path, Backup.unifiedPackagesDirName),
+            io.legado.app.help.config.pkg.UnifiedPackageRepository.rootDir
+        )
+        val hasRestoredUnifiedDir = File(path, Backup.unifiedPackagesDirName).isDirectory
+        val hasRestoredLegacyDirs = UiPackageBackup.legacyPackageDirNames.any { dirName ->
+            File(path, dirName).isDirectory
+        }
+        if (hasRestoredLegacyDirs) {
+            runCatching {
+                io.legado.app.help.config.pkg.LegacyPackageMigrator.migrateLocalPackagesIfNeeded(
+                    context = appCtx,
+                    forceReconcile = true,
+                    overwriteExisting = !hasRestoredUnifiedDir
+                )
+            }.onFailure {
+                AppLog.put("恢复旧版外观包后合成迁移出错\n${it.localizedMessage}", it)
+            }
         }
     }
 

@@ -711,11 +711,7 @@ class TitleBar @JvmOverloads constructor(
         chromeBgSignature = signature
         val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
         val baseColor = TopBarConfig.resolveBackgroundColor(config)
-        val color = if (!AppConfig.isEInkMode && topScope.isCustomOverride) {
-            ColorUtils.withAlpha(baseColor, topScope.alphaFraction)
-        } else {
-            baseColor
-        }
+        val color = topScope.resolveSurfaceColorIfActive(baseColor, AppConfig.isEInkMode)
         // 与 setBackground(ColorDrawable) 的存量语义一致：半透明底保留 0.1f，
         // 避免横屏下文字 / 图标颜色异常。
         elevation = if (Color.alpha(color) < 255) GLASS_ELEVATION else 0f
@@ -769,7 +765,7 @@ class TitleBar @JvmOverloads constructor(
             return false
         }
         val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
-        val effectiveEnabled = enabled && topScope.materialMode != GlassMaterialPreset.SOLID
+        val effectiveEnabled = enabled && topScope.usesGlassSampling
         val glassRadius = if (chrome.floating) chrome.radiusPx else cornerRadiusPx
         val signature = titleBarChromeSurfaceSignature(
             packageSignature = TopBarConfig.currentSignature(AppConfig.isNightTheme),

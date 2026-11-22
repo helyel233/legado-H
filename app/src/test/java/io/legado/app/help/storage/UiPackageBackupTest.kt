@@ -26,10 +26,36 @@ class UiPackageBackupTest {
                 "navigationBarPackages",
                 "topBarPackages",
                 "coverCollections",
-                "appThemeKits"
+                "appThemeKits",
+                "unifiedPackages"
             ),
             UiPackageBackup.packageDirNames
         )
+    }
+
+    @Test
+    fun copyUnifiedPackages_copiesArtAndParamAndSkipsStagingOrBuiltin() {
+        val source = temporary.newFolder("unified_src")
+        val target = File(temporary.root, "unified_dst")
+
+        File(source, "art/ink_art/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("""{"kind":"art","id":"ink_art","name":"水墨"}""")
+        }
+        File(source, "art/.staging-123/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("staging")
+        }
+        File(source, "param/glass_param/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("""{"kind":"param","id":"glass_param","name":"液态参数"}""")
+        }
+
+        UiPackageBackup.copyUnifiedPackages(source, target)
+
+        assertTrue(File(target, "art/ink_art/manifest.json").isFile)
+        assertFalse(File(target, "art/.staging-123").exists())
+        assertTrue(File(target, "param/glass_param/manifest.json").isFile)
     }
 
     @Test

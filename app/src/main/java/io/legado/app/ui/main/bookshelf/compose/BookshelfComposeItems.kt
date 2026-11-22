@@ -313,17 +313,18 @@ fun BookshelfGridItem(
             // 自定义背景图下主题文字色直接压图难分辨：背景图模式时给标签加自适应衬底条
             // （浅色文字配深衬底、深色文字配浅衬底）；无背景图时不加，普通主题观感不变
             val baseScrim = imageBgAdaptiveScrim(titleColor)
-            val scrimColor = if (!tokens.env.isEInk && cardScope.isCustomOverride) {
-                baseScrim.copy(alpha = baseScrim.alpha * cardScope.alphaFraction)
-            } else {
-                baseScrim
+            val scrimColor = when {
+                tokens.env.isEInk -> baseScrim
+                cardScope.isClearMode -> baseScrim.copy(alpha = baseScrim.alpha * GlassMaterialPreset.CLEAR_SURFACE_ALPHA)
+                cardScope.isCustomOverride -> baseScrim.copy(alpha = baseScrim.alpha * cardScope.alphaFraction)
+                else -> baseScrim
             }
             val labelCorner = if (cardScope.isCustomOverride) {
                 cardScope.actionRadiusDp.coerceAtLeast(2f).dp
             } else {
                 6.dp
             }
-            val useGlassLabel = !tokens.env.isEInk && cardScope.materialMode != GlassMaterialPreset.SOLID
+            val useGlassLabel = !tokens.env.isEInk && cardScope.usesGlassSampling
             if (useGlassLabel) {
                 GlassPanel(
                     domain = GlassSamplingDomain.WALLPAPER,

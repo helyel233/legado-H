@@ -140,6 +140,8 @@ private fun taskRow(context: Context, task: WebDavTaskState): View {
 
 private fun WebDavTaskType.titleRes(): Int {
     return when (this) {
+        WebDavTaskType.ART_PACKAGE_UPLOAD -> R.string.package_sync_task_type_art
+        WebDavTaskType.PARAM_PACKAGE_UPLOAD -> R.string.package_sync_task_type_param
         WebDavTaskType.THEME_PACKAGE_UPLOAD -> R.string.package_sync_task_type_theme
         WebDavTaskType.TOP_BAR_PACKAGE_UPLOAD -> R.string.package_sync_task_type_top_bar
         WebDavTaskType.NAVIGATION_BAR_PACKAGE_UPLOAD -> R.string.package_sync_task_type_navigation_bar

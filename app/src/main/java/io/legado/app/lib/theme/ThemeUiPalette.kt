@@ -93,6 +93,14 @@ private val themeUiTypographyKeys = listOf(
 private val themeUiDependencyKeySet = (
     themeUiColorKeys + themeUiShapeKeys + themeUiTypographyKeys + listOf(
         PreferKey.themeMode,
+        PreferKey.eInkMode,
+        PreferKey.activeDayArtPackageId,
+        PreferKey.activeNightArtPackageId,
+        PreferKey.activeDayParamPackageId,
+        PreferKey.activeNightParamPackageId,
+        PreferKey.currentArtPackageId,
+        PreferKey.currentParamPackageId,
+        PreferKey.paramPackageDirty,
         PreferKey.bgImage,
         PreferKey.bgImageN,
         PreferKey.topBarBgImage,
@@ -321,7 +329,16 @@ fun Context.themeUiSignature(): String {
         "shelf=${themeShelfColorOrDefault()}",
         "divider=${themeDividerColorOrDefault()}"
     ).joinToString("|")
-    return "mode=$themeMode|night=${AppConfig.isNightTheme}|eInk=${AppConfig.isEInkMode}|themeStore=${ThemeStore.valuesChanged(this)}|$rawPrefs|$shapePrefs|$computedColors"
+    val activePkgSig = listOf(
+        "dArt=${getPrefString(PreferKey.activeDayArtPackageId).orEmpty()}",
+        "nArt=${getPrefString(PreferKey.activeNightArtPackageId).orEmpty()}",
+        "dParam=${getPrefString(PreferKey.activeDayParamPackageId).orEmpty()}",
+        "nParam=${getPrefString(PreferKey.activeNightParamPackageId).orEmpty()}",
+        "cArt=${getPrefString(PreferKey.currentArtPackageId).orEmpty()}",
+        "cParam=${getPrefString(PreferKey.currentParamPackageId).orEmpty()}",
+        "dirty=${getPrefBoolean(PreferKey.paramPackageDirty, false)}"
+    ).joinToString("|")
+    return "mode=$themeMode|night=${AppConfig.isNightTheme}|eInk=${AppConfig.isEInkMode}|themeStore=${ThemeStore.valuesChanged(this)}|$activePkgSig|$rawPrefs|$shapePrefs|$computedColors"
 }
 
 private fun Context.themePanelImageSignature(): String {

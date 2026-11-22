@@ -2,6 +2,7 @@ package io.legado.app.help.config
 
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.core.content.edit
 import io.legado.app.BuildConfig
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
@@ -13,6 +14,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.utils.GSON
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getPrefBoolean
@@ -101,7 +103,46 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var editTheme = appCtx.getPrefInt(PreferKey.editTheme, 0)
     var editThemeDark = appCtx.getPrefInt(PreferKey.editThemeDark, 0)
     var editThemeAuto = appCtx.getPrefBoolean(PreferKey.editThemeAuto)
-    var isEInkMode = appCtx.getPrefString(PreferKey.themeMode) == "3"
+    private const val KEY_LAST_NON_EINK_THEME_MODE = "lastNonEInkThemeMode"
+    private val NON_EINK_THEME_MODES = setOf("0", "1", "2")
+
+    private var lastNonEInkThemeMode: String = (
+        appCtx.getPrefString(PreferKey.themeMode, "0")?.takeIf { it in NON_EINK_THEME_MODES }
+            ?: appCtx.getPrefString(KEY_LAST_NON_EINK_THEME_MODE, "0")?.takeIf { it in NON_EINK_THEME_MODES }
+            ?: "0"
+        )
+
+    var isEInkMode = appCtx.getPrefBoolean(PreferKey.eInkMode, false) ||
+        appCtx.getPrefString(PreferKey.themeMode) == "3"
+
+    fun setEInkModeEnabled(enabled: Boolean) {
+        val currentMode = appCtx.getPrefString(PreferKey.themeMode, "0")
+        if (currentMode in NON_EINK_THEME_MODES) {
+            lastNonEInkThemeMode = currentMode!!
+        }
+        val targetRestoredMode = if (!enabled && currentMode == "3") {
+            appCtx.getPrefString(KEY_LAST_NON_EINK_THEME_MODE, lastNonEInkThemeMode)
+                ?.takeIf { it in NON_EINK_THEME_MODES }
+                ?: "0"
+        } else {
+            null
+        }
+        isEInkMode = enabled
+        if (targetRestoredMode != null) {
+            themeMode = targetRestoredMode
+        }
+        // 单次 SharedPreferences.Editor 提交保证内存态在首次监听回调前即已同步，
+        // 并持久化 lastNonEInkThemeMode，跨进程重启也能恢复进墨水屏前的日/夜偏好。
+        appCtx.defaultSharedPreferences.edit {
+            if (currentMode in NON_EINK_THEME_MODES) {
+                putString(KEY_LAST_NON_EINK_THEME_MODE, currentMode)
+            }
+            if (targetRestoredMode != null) {
+                putString(PreferKey.themeMode, targetRestoredMode)
+            }
+            putBoolean(PreferKey.eInkMode, enabled)
+        }
+    }
     var clickActionTL = appCtx.getPrefInt(PreferKey.clickActionTL, 2)
     var clickActionTC = appCtx.getPrefInt(PreferKey.clickActionTC, 2)
     var clickActionTR = appCtx.getPrefInt(PreferKey.clickActionTR, 1)
@@ -143,21 +184,35 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.showBoardLine -> showBoardLine = appCtx.getPrefInt(PreferKey.showBoardLine, 1)
             PreferKey.adaptSpecialStyle -> adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
 
+            PreferKey.eInkMode -> {
+                isEInkMode = appCtx.getPrefBoolean(PreferKey.eInkMode, false) ||
+                    appCtx.getPrefString(PreferKey.themeMode) == "3"
+            }
+
             PreferKey.themeMode -> {
-                themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
-                isEInkMode = themeMode == "3"
+                val nextMode = appCtx.getPrefString(PreferKey.themeMode, "0")
+                if (nextMode in NON_EINK_THEME_MODES) {
+                    lastNonEInkThemeMode = nextMode!!
+                    appCtx.defaultSharedPreferences.edit {
+                        putString(KEY_LAST_NON_EINK_THEME_MODE, nextMode)
+                    }
+                }
+                themeMode = nextMode
+                isEInkMode = appCtx.getPrefBoolean(PreferKey.eInkMode, false) || themeMode == "3"
                 val expectedNight = isNightTheme
-                Coroutine.async(Coroutine.defaultScope) {
-                    runCatching {
-                        // 调用方在写入 themeMode 后会立刻同步 applyDayNight 重建界面，
-                        // 套件投影异步完成时界面可能已用旧偏好重建，需补发刷新事件；
-                        // 投影未改变本模式主题时返回 false，此时无需（也不能）再重建。
-                        if (AppearanceKitManager.applyCurrentModeTheme(appCtx, expectedNight)) {
-                            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, expectedNight)
-                            postEvent(EventBus.RECREATE, "")
+                if (appCtx.getPrefBoolean(PreferKey.useLegacyPackageManager, false)) {
+                    Coroutine.async(Coroutine.defaultScope) {
+                        runCatching {
+                            // 调用方在写入 themeMode 后会立刻同步 applyDayNight 重建界面，
+                            // 套件投影异步完成时界面可能已用旧偏好重建，需补发刷新事件；
+                            // 投影未改变本模式主题时返回 false，此时无需（也不能）再重建。
+                            if (AppearanceKitManager.applyCurrentModeTheme(appCtx, expectedNight)) {
+                                postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, expectedNight)
+                                postEvent(EventBus.RECREATE, "")
+                            }
+                        }.onFailure {
+                            AppLog.put("apply current appearance kit theme failed\n${it.localizedMessage}", it)
                         }
-                    }.onFailure {
-                        AppLog.put("apply current appearance kit theme failed\n${it.localizedMessage}", it)
                     }
                 }
             }

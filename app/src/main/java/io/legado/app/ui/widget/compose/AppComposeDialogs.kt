@@ -146,7 +146,7 @@ fun rememberAppDialogStyle(): AppDialogStyle {
     val glassSignature = rememberGlassConfigSignature()
     val dialogGlass = remember(context, glassSignature, dialogScope.materialMode, isEInk) {
         !isEInk &&
-            dialogScope.materialMode != GlassMaterialPreset.SOLID &&
+            dialogScope.usesGlassSampling &&
             GlassSurface.dialogGlassAllowed(context)
     }
     val uiFontPath = AppConfig.uiFontPath
@@ -220,13 +220,17 @@ fun AppDialogFrame(
     val glassSignature = rememberGlassConfigSignature()
     val glassEnabled = remember(context, glassSignature, dialogScope.materialMode, dialogTokens.env.isEInk) {
         !dialogTokens.env.isEInk &&
-            dialogScope.materialMode != GlassMaterialPreset.SOLID &&
+            dialogScope.usesGlassSampling &&
             GlassSurface.dialogGlassAllowed(context)
     }
     // CLEAR 档：内容域宿主（阅读 / 详情 / 视频 / 音频）在 dialogGlassAllowed 被判否，
-    // 但透明无玻璃档本就不采样壁纸，应像 View 弹窗一样铺主题色半透明壳。
-    val dialogClear = remember(context, glassSignature, dialogTokens.env.isEInk) {
-        !dialogTokens.env.isEInk && GlassSurface.dialogClearAllowed(context)
+    // 但透明无玻璃档本就不采样壁纸，应像 View 弹窗一样铺主题色半透明壳；
+    // 若 DIALOG Scope 显式覆写为 CLEAR，同样走 clearSurfaceColor（CLEAR_SURFACE_ALPHA = 0.86f）。
+    val dialogClear = remember(context, glassSignature, dialogScope.materialMode, dialogScope.isCustomOverride, dialogTokens.env.isEInk) {
+        !dialogTokens.env.isEInk && (
+            dialogScope.isClearMode ||
+                (!dialogScope.isCustomOverride && GlassSurface.dialogClearAllowed(context))
+            )
     }
     val dialogShadow = when {
         dialogTokens.env.isEInk -> 0.dp

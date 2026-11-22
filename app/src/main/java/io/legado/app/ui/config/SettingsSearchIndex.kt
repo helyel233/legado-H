@@ -46,8 +46,7 @@ object SettingsSearchIndex {
     )
 
     private val activitySourceRegistry: List<Pair<String, ActivitySearchSource>> = listOf(
-        ThemeManageActivity::class.java.name to ThemeManageActivity,
-        NavigationBarManageActivity::class.java.name to NavigationBarManageActivity,
+        AppearanceKitActivity::class.java.name to AppearanceKitActivity,
         BubbleManageActivity::class.java.name to BubbleManageActivity,
         AdvancedTitleManageActivity::class.java.name to AdvancedTitleManageActivity,
         AdvancedTipManageActivity::class.java.name to AdvancedTipManageActivity,
@@ -80,13 +79,9 @@ object SettingsSearchIndex {
         PageSource(ConfigTag.MANGA_VIDEO_CONFIG, ConfigTag.MANGA_VIDEO_CONFIG) {
             MangaVideoConfigFragment()
         },
-        // 以下 4 页现在由「外观中心」(appearanceKit) 统一入口承载
+        // 以下设置页挂载在「外观中心」(appearanceKit) 统一入口下
         PageSource("appearanceKit", ConfigTag.THEME_CONFIG) { ThemeConfigFragment() },
         PageSource("appearanceKit", ConfigTag.COVER_CONFIG) { CoverConfigFragment() },
-        PageSource("appearanceKit", ConfigTag.WELCOME_CONFIG) { WelcomeConfigFragment() },
-        PageSource("appearanceKit", ConfigTag.EXPLORE_GLASS_CONFIG) {
-            ExploreGlassConfigFragment()
-        },
         PageSource(ConfigTag.UI_LAYOUT_CONFIG, ConfigTag.UI_LAYOUT_CONFIG) {
             UiLayoutConfigFragment()
         },

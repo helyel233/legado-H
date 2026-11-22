@@ -160,6 +160,53 @@ class ThemeTokenCompilerTest {
     }
 
     @Test
+    fun resolveScope_supportsAllFourGlassMaterialPresetModesIncludingClear() {
+        val env = AppearanceEnv(isNight = false, isEInk = false, hasUsableWallpaper = true, hardwareBlurSupported = true)
+        val tokens = ThemeTokenCompiler.compileRaw(
+            env = env,
+            primaryArgb = 0xFF212121.toInt(),
+            accentArgb = 0xFF1E88E5.toInt(),
+            backgroundArgb = 0xFFF5F5F5.toInt(),
+            bottomBarArgb = 0xFFFFFFFF.toInt(),
+            cardArgb = 0xFFFFFFFF.toInt(),
+            mutedArgb = 0xFFEEEEEE.toInt(),
+            dividerArgb = 0x1F000000,
+            borderArgb = 0x33000000,
+            primaryTextArgb = 0xFF212121.toInt(),
+            secondaryTextArgb = 0xFF757575.toInt(),
+            titleTextArgb = 0xFF111111.toInt(),
+            dangerArgb = 0xFFF44336.toInt(),
+            panelRadiusDp = 12f,
+            actionRadiusDp = 9f,
+            panelRadiusPx = 36f,
+            glassMode = GlassMaterialPreset.CLEAR,
+            glassLevel = 0,
+            glassStrokeColorArgb = null,
+            glassSignature = "clear|0",
+            paletteSignature = "p-clear",
+            rawScopeOverrides = mapOf(
+                UiScope.TOP_BAR to SurfaceScopeOverride(materialMode = GlassMaterialPreset.CLEAR),
+                UiScope.BOTTOM_BAR to SurfaceScopeOverride(materialMode = GlassMaterialPreset.SOLID),
+                UiScope.BOOKSHELF_CARD to SurfaceScopeOverride(materialMode = GlassMaterialPreset.FROSTED),
+                UiScope.DIALOG to SurfaceScopeOverride(materialMode = GlassMaterialPreset.GLASS)
+            )
+        )
+
+        assertTrue(tokens.topBar.isClearMode)
+        assertFalse(tokens.topBar.usesGlassSampling)
+        assertEquals(
+            GlassMaterialPreset.clearSurfaceColor(0xFFFFFFFF.toInt()),
+            tokens.topBar.resolveSurfaceColor(0xFFFFFFFF.toInt())
+        )
+        assertTrue(tokens.bottomBar.isSolidMode)
+        assertFalse(tokens.bottomBar.usesGlassSampling)
+        assertTrue(tokens.bookshelfCard.usesGlassSampling)
+        assertEquals(GlassMaterialPreset.FROSTED, tokens.bookshelfCard.materialMode)
+        assertTrue(tokens.dialog.usesGlassSampling)
+        assertEquals(GlassMaterialPreset.GLASS, tokens.dialog.materialMode)
+    }
+
+    @Test
     fun resolveScope_eInkForcesSolidOpaqueZeroShadowAndZeroTransitionDuration() {
         val env = AppearanceEnv(isNight = false, isEInk = true, hasUsableWallpaper = true, hardwareBlurSupported = true)
         val tokens = ThemeTokenCompiler.compileRaw(
@@ -246,6 +293,47 @@ class ThemeTokenCompilerTest {
         assertEquals(90, tokens.bookshelfCard.alphaPercent)
         assertEquals(0, tokens.bookshelfCard.shadowElevationDp)
         assertEquals(220, tokens.transitionDurationMs(220))
+    }
+
+    @Test
+    fun globalClearModeWithoutScopeOverrides_appliesClearSurfaceAcrossAllFourScopes() {
+        val env = AppearanceEnv(isNight = false, isEInk = false, hasUsableWallpaper = true, hardwareBlurSupported = true)
+        val tokens = ThemeTokenCompiler.compileRaw(
+            env = env,
+            primaryArgb = 0xFF212121.toInt(),
+            accentArgb = 0xFF1E88E5.toInt(),
+            backgroundArgb = 0xFFF5F5F5.toInt(),
+            bottomBarArgb = 0xFFFFFFFF.toInt(),
+            cardArgb = 0xFFFFFFFF.toInt(),
+            mutedArgb = 0xFFEEEEEE.toInt(),
+            dividerArgb = 0x1F000000,
+            borderArgb = 0x33000000,
+            primaryTextArgb = 0xFF212121.toInt(),
+            secondaryTextArgb = 0xFF757575.toInt(),
+            titleTextArgb = 0xFF111111.toInt(),
+            dangerArgb = 0xFFF44336.toInt(),
+            panelRadiusDp = 12f,
+            actionRadiusDp = 9f,
+            panelRadiusPx = 36f,
+            glassMode = GlassMaterialPreset.CLEAR,
+            glassLevel = 0,
+            glassStrokeColorArgb = null,
+            glassSignature = "clear|0",
+            paletteSignature = "p-global-clear",
+            globalAlphaPercent = 100,
+            dialogAlphaPercent = 100,
+            rawScopeOverrides = emptyMap()
+        )
+
+        val expectedClear = GlassMaterialPreset.clearSurfaceColor(0xFFFFFFFF.toInt())
+        listOf(tokens.topBar, tokens.bottomBar, tokens.bookshelfCard, tokens.dialog).forEach { scope ->
+            assertFalse("Expected un-overridden scope: ${scope.scope}", scope.isCustomOverride)
+            assertTrue("Expected clear mode: ${scope.scope}", scope.isClearMode)
+            assertFalse("CLEAR must not trigger glass sampling: ${scope.scope}", scope.usesGlassSampling)
+            assertTrue("CLEAR must apply surface fill even when isCustomOverride=false", scope.shouldApplySurfaceFill)
+            assertEquals(expectedClear, scope.resolveSurfaceColorIfActive(0xFFFFFFFF.toInt(), isEInk = false))
+            assertEquals(0xFFFFFFFF.toInt(), scope.resolveSurfaceColorIfActive(0xFFFFFFFF.toInt(), isEInk = true))
+        }
     }
 
     private fun compileSample(

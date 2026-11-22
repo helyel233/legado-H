@@ -174,11 +174,15 @@ fun AppComposeTopBar(
     } else {
         context.primaryColor
     }
-    val topBarColor = Color(baseTopBarColor).let { c ->
-        if (!tokens.env.isEInk && topScope.isCustomOverride) {
-            c.copy(alpha = c.alpha * topScope.alphaFraction)
-        } else {
-            c
+    val topBarColor = if (!tokens.env.isEInk && topScope.isClearMode) {
+        Color(GlassMaterialPreset.clearSurfaceColor(baseTopBarColor))
+    } else {
+        Color(baseTopBarColor).let { c ->
+            if (!tokens.env.isEInk && topScope.isCustomOverride) {
+                c.copy(alpha = c.alpha * topScope.alphaFraction)
+            } else {
+                c
+            }
         }
     }
     val topBarContentColor = Color(context.titleTextColor)
@@ -198,16 +202,20 @@ fun AppComposeTopBar(
             0f
         ) to TopBarConfig.resolveBackgroundColor(config)
     }
-    val chromeColor = Color(chromeColorInt).let { c ->
-        if (!tokens.env.isEInk && topScope.isCustomOverride) {
-            c.copy(alpha = c.alpha * topScope.alphaFraction)
-        } else {
-            c
+    val chromeColor = if (!tokens.env.isEInk && topScope.isClearMode) {
+        Color(GlassMaterialPreset.clearSurfaceColor(chromeColorInt))
+    } else {
+        Color(chromeColorInt).let { c ->
+            if (!tokens.env.isEInk && topScope.isCustomOverride) {
+                c.copy(alpha = c.alpha * topScope.alphaFraction)
+            } else {
+                c
+            }
         }
     }
     val effectiveWallpaperVisible = wallpaperVisible &&
         !tokens.env.isEInk &&
-        topScope.materialMode != GlassMaterialPreset.SOLID
+        topScope.usesGlassSampling
     if (onChromeResolved != null) {
         SideEffect {
             onChromeResolved(chrome)
@@ -509,16 +517,20 @@ private fun AppManagementSelectionBottomBar(
             borderColor
         }
     )
-    val barBgColor = Color(palette.settings.bottomBar).let { c ->
-        if (!tokens.env.isEInk && bottomScope.isCustomOverride) {
-            c.copy(alpha = c.alpha * bottomScope.alphaFraction)
-        } else {
-            c
+    val barBgColor = if (!tokens.env.isEInk && bottomScope.isClearMode) {
+        Color(GlassMaterialPreset.clearSurfaceColor(palette.settings.bottomBar))
+    } else {
+        Color(palette.settings.bottomBar).let { c ->
+            if (!tokens.env.isEInk && bottomScope.isCustomOverride) {
+                c.copy(alpha = c.alpha * bottomScope.alphaFraction)
+            } else {
+                c
+            }
         }
     }
     val bottomGlassActive = wallpaperVisible &&
         !tokens.env.isEInk &&
-        bottomScope.materialMode != GlassMaterialPreset.SOLID
+        bottomScope.usesGlassSampling
     AnimatedVisibility(visible = selectedCount > 0) {
         val mainAction = actions.lastOrNull { it.danger } ?: actions.lastOrNull()
         val moreActions = if (mainAction == null) actions else actions.filterNot { it === mainAction }

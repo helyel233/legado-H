@@ -10,6 +10,7 @@ import io.legado.app.help.book.CacheCloudIndex
 import io.legado.app.help.book.CacheCloudIndexStore
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.pkg.PackageKind
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.Restore
 import io.legado.app.lib.cloud.CloudStorageBackend
@@ -55,6 +56,7 @@ object AppCloudStorage {
     private const val COVER_COLLECTIONS_DIR = "coverCollections/"
     private const val BUBBLES_DIR = "bubbles/"
     private const val COVERS_DIR = "covers/"
+    private const val UI_PACKAGES_DIR = "uiPackages/"
 
     private val webDavBackend = WebDavCloudStorageBackend()
     private val s3Backend = S3CloudStorageBackend()
@@ -332,6 +334,61 @@ object AppCloudStorage {
 
     suspend fun deleteBubblePackage(remoteDirName: String, containerId: String? = null, scope: String? = null) {
         deleteZip(BUBBLES_DIR, remoteDirName, scopedBackend(S3ContainerScope.BUBBLE, containerId, scope))
+    }
+
+    suspend fun listUnifiedPackages(
+        kind: PackageKind,
+        containerId: String? = null,
+        scope: String? = null
+    ): List<CloudStorageFile> {
+        return listZipFiles(
+            getUnifiedPackagePath(kind),
+            scopedBackend(S3ContainerScope.UI_PACKAGE, containerId, scope),
+            emptyOnError = true
+        )
+    }
+
+    suspend fun uploadUnifiedPackage(
+        kind: PackageKind,
+        remoteDirName: String,
+        zipFile: File,
+        containerId: String? = null,
+        scope: String? = null
+    ) {
+        uploadZip(
+            getUnifiedPackagePath(kind),
+            remoteDirName,
+            zipFile,
+            scopedBackend(S3ContainerScope.UI_PACKAGE, containerId, scope)
+        )
+    }
+
+    suspend fun downloadUnifiedPackage(
+        kind: PackageKind,
+        remoteDirName: String,
+        zipFile: File,
+        containerId: String? = null,
+        scope: String? = null
+    ) {
+        downloadZip(
+            getUnifiedPackagePath(kind),
+            remoteDirName,
+            zipFile,
+            scopedBackend(S3ContainerScope.UI_PACKAGE, containerId, scope)
+        )
+    }
+
+    suspend fun deleteUnifiedPackage(
+        kind: PackageKind,
+        remoteDirName: String,
+        containerId: String? = null,
+        scope: String? = null
+    ) {
+        deleteZip(
+            getUnifiedPackagePath(kind),
+            remoteDirName,
+            scopedBackend(S3ContainerScope.UI_PACKAGE, containerId, scope)
+        )
     }
     suspend fun uploadCachePackage(fileName: String, zipFile: File) {
         ensureNetwork()
@@ -710,6 +767,7 @@ object AppCloudStorage {
     private fun getNavigationBarTypePath(isNightTheme: Boolean): String = NAVIGATION_BARS_DIR + if (isNightTheme) "night/" else "day/"
     private fun getTopBarTypePath(isNightTheme: Boolean): String = TOP_BARS_DIR + if (isNightTheme) "night/" else "day/"
     private fun getCoverCollectionTypePath(isNightTheme: Boolean): String = COVER_COLLECTIONS_DIR + if (isNightTheme) "night/" else "day/"
+    private fun getUnifiedPackagePath(kind: PackageKind): String = UI_PACKAGES_DIR + "${kind.id}/"
 
     private fun getProgressPath(name: String, author: String): String = BOOK_PROGRESS_DIR + getProgressFileName(name, author)
 

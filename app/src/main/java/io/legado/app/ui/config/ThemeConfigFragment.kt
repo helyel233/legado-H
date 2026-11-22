@@ -104,29 +104,12 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                                 postEvent(EventBus.NOTIFY_MAIN, true)
                             },
                             searchKeys = listOf("统计", "stats", "底部导航", "底部导航栏")
-                        ),
-                        SettingActionSpec(
-                            key = KEY_NAVIGATION_BAR_MANAGE,
-                            navigates = true,
-                            title = str(R.string.navigation_bar_manage),
-                            summary = str(R.string.navigation_bar_manage_summary),
-                            onClick = { startActivity<NavigationBarManageActivity>() }
                         )
                     )
                 ),
-                // 「外观」区只留改「长什么样」的素材入口：主题包、书籍详情、气泡。
-                // 模板类（加载画面、分享样式）和页面形态（发现/订阅版本）另起一区，
-                // 它们改的是「某一屏的内容结构」，不是全局外观
                 SettingSectionSpec(
                     title = str(R.string.theme_category_appearance),
                     items = listOf(
-                        SettingActionSpec(
-                            key = KEY_THEME_MANAGE,
-                            navigates = true,
-                            title = str(R.string.theme_list),
-                            summary = str(R.string.theme_list_summary),
-                            onClick = { startActivity<ThemeManageActivity>() }
-                        ),
                         SettingActionSpec(
                             key = KEY_BOOK_INFO_MANAGE,
                             navigates = true,
@@ -141,8 +124,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             summary = str(R.string.bubble_manage_summary),
                             onClick = { startActivity<BubbleManageActivity>() }
                         )
-                        // 封面设置不再重复挂在这里：它已经是「我的」页的一级行，
-                        // 同一个 ConfigTag 两个入口只会让用户纠结该从哪进
                     )
                 )
                 // 「模板」区已清空：
@@ -215,10 +196,8 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     companion object {
         private const val DEFAULT_LAUNCHER_ICON = "ic_launcher"
-        private const val KEY_THEME_MANAGE = "theme_manage"
         private const val KEY_HOMEPAGE_VISIBLE = "homepage_visible"
         private const val KEY_STATS_VISIBLE = "stats_visible"
-        private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
         private const val KEY_BOOK_INFO_MANAGE = "book_info_manage"
         private const val KEY_BUBBLE_MANAGE = "bubble_manage"
     }

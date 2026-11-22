@@ -20,13 +20,11 @@ object ConfigTag {
     const val BACKUP_CONFIG = "backupConfig"
     const val AI_CONFIG = "aiConfig"
     const val COVER_CONFIG = "coverConfig"
-    const val WELCOME_CONFIG = "welcomeConfig"
     const val DISCOVERY_SUBSCRIPTION_CONFIG = "discoverySubscriptionConfig"
     const val COMMENT_CONFIG = "commentConfig"
     const val BOOKSHELF_CONFIG = "bookshelfConfig"
     const val AUDIO_CONFIG = "audioConfig"
     const val MANGA_VIDEO_CONFIG = "mangaVideoConfig"
-    const val EXPLORE_GLASS_CONFIG = "exploreGlassConfig"
     const val UI_LAYOUT_CONFIG = "uiLayoutConfig"
 
 }

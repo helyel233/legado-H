@@ -1,10 +1,14 @@
 package io.legado.app.help.config.pkg
 
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
+import io.legado.app.utils.isSameOrSubFileOf
+import java.io.File
+import java.security.MessageDigest
 
 /**
  * Schema-versioned codec for [UnifiedPackageManifest] with full unknown-field round-trip
@@ -12,7 +16,13 @@ import com.google.gson.JsonPrimitive
  */
 object UnifiedPackageCodec {
 
+    const val CONTENT_HASH_PREFIX = "v2:"
+
     private val prettyGson = GsonBuilder().setPrettyPrinting().create()
+
+    fun isCurrentContentHash(hash: String?): Boolean {
+        return hash?.startsWith(CONTENT_HASH_PREFIX) == true
+    }
 
     fun encode(manifest: UnifiedPackageManifest): String {
         val root = JsonObject()
@@ -21,6 +31,8 @@ object UnifiedPackageCodec {
         root.addProperty("id", manifest.id)
         root.addProperty("name", manifest.name)
         root.addProperty("updatedAt", manifest.updatedAt)
+        manifest.basePackageId?.takeIf { it.isNotBlank() }?.let { root.addProperty("basePackageId", it) }
+        manifest.contentHash?.takeIf { it.isNotBlank() }?.let { root.addProperty("contentHash", it) }
         manifest.art?.let { root.add("art", encodeArt(it)) }
         manifest.param?.let { root.add("param", encodeParam(it)) }
         appendUnknownFields(root, manifest.unknownFields)
@@ -35,19 +47,121 @@ object UnifiedPackageCodec {
         val id = root.stringOrNull("id").orEmpty()
         val name = root.stringOrNull("name").orEmpty()
         val updatedAt = root.longOrNull("updatedAt") ?: 0L
+        val basePackageId = root.stringOrNull("basePackageId")?.takeIf { it.isNotBlank() }
+        val contentHash = root.stringOrNull("contentHash")?.takeIf { it.isNotBlank() }
         val art = root.objOrNull("art")?.let(::decodeArt)
         val param = root.objOrNull("param")?.let(::decodeParam)
-        val known = setOf("schemaVersion", "kind", "id", "name", "updatedAt", "art", "param")
+        val known = setOf(
+            "schemaVersion", "kind", "id", "name", "updatedAt",
+            "basePackageId", "contentHash", "art", "param"
+        )
         return UnifiedPackageManifest(
             schemaVersion = schemaVersion,
             kind = kind,
             id = id,
             name = name,
             updatedAt = updatedAt,
+            basePackageId = basePackageId,
+            contentHash = contentHash,
             art = art,
             param = param,
             unknownFields = collectUnknownFields(root, known)
         )
+    }
+
+    /**
+     * Computes a deterministic SHA-256 content fingerprint ignoring volatile identity metadata
+     * (`id`, `name`, `updatedAt`, `basePackageId`, `contentHash`), hashing both structured
+     * payload fields and local/CoW-resolved asset file bytes.
+     */
+    fun computeContentHash(
+        manifest: UnifiedPackageManifest,
+        packageDir: File? = null,
+        assetResolver: ((String) -> File?)? = null
+    ): String {
+        val canonical = JsonObject()
+        canonical.addProperty("kind", manifest.kind.id)
+        manifest.art?.let { canonical.add("art", encodeArt(it)) }
+        manifest.param?.let { canonical.add("param", encodeParam(it)) }
+        val md = MessageDigest.getInstance("SHA-256")
+        md.update(canonical.toString().toByteArray(Charsets.UTF_8))
+
+        val hashedCanonicalPaths = hashSetOf<String>()
+        val buf = ByteArray(8192)
+        fun updateFile(tag: String, file: File) {
+            if (!file.isFile) return
+            md.update(0)
+            md.update(tag.toByteArray(Charsets.UTF_8))
+            md.update(0)
+            file.inputStream().use { input ->
+                while (true) {
+                    val n = input.read(buf)
+                    if (n <= 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+            runCatching { file.canonicalPath }.getOrNull()?.let(hashedCanonicalPaths::add)
+        }
+
+        manifest.art?.let { art ->
+            val refs = linkedMapOf<String, String?>()
+            fun collectWallpapers(prefix: String, w: ArtWallpapersSpec?) {
+                if (w == null) return
+                refs["$prefix.main"] = w.main
+                refs["$prefix.topBar"] = w.topBar
+                refs["$prefix.bottomBar"] = w.bottomBar
+                refs["$prefix.sidebar"] = w.sidebar
+                refs["$prefix.bookInfo"] = w.bookInfo
+                refs["$prefix.panel"] = w.panel
+                refs["$prefix.welcome"] = w.welcome
+            }
+            fun collectTypography(prefix: String, t: ArtTypographySpec?) {
+                if (t == null) return
+                refs["$prefix.uiFont"] = t.uiFontPath
+                refs["$prefix.titleFont"] = t.titleFontPath
+            }
+            collectWallpapers("day", art.dayWallpapers)
+            collectWallpapers("night", art.nightWallpapers)
+            collectTypography("day", art.dayTypography)
+            collectTypography("night", art.nightTypography)
+            art.icons.toSortedMap().forEach { (k, v) -> refs["icon.$k"] = v }
+            art.covers.sorted().forEachIndexed { idx, v -> refs["cover.$idx"] = v }
+            refs["defaultCoverPath"] = art.defaultCoverPath
+
+            refs.forEach { (slot, rawPath) ->
+                val trimmed = rawPath?.trim()?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (trimmed.startsWith("http", ignoreCase = true)) return@forEach
+                val resolved = assetResolver?.invoke(trimmed) ?: packageDir?.let { dir ->
+                    val candidate = File(dir, trimmed)
+                    candidate.takeIf { it.isSameOrSubFileOf(dir) && it.isFile }
+                }
+                if (resolved != null && resolved.isFile) {
+                    updateFile("slot:$slot", resolved)
+                }
+            }
+        }
+
+        if (manifest.art != null && packageDir != null && packageDir.isDirectory) {
+            packageDir.walkTopDown()
+                .onEnter { dir -> dir == packageDir || !dir.name.startsWith(".") }
+                .filter { file ->
+                    file.isFile &&
+                        file.name != UnifiedPackageManifest.MANIFEST_FILE_NAME &&
+                        !file.name.startsWith(".")
+                }
+                .map { file ->
+                    file.relativeTo(packageDir).path.replace('\\', '/') to file
+                }
+                .sortedBy { it.first }
+                .forEach { (relPath, file) ->
+                    val canonicalPath = runCatching { file.canonicalPath }.getOrNull()
+                    if (canonicalPath == null || canonicalPath !in hashedCanonicalPaths) {
+                        updateFile("file:$relPath", file)
+                    }
+                }
+        }
+
+        return CONTENT_HASH_PREFIX + md.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun encodeScopeOverride(override: SurfaceScopeOverride): String {
@@ -79,6 +193,17 @@ object UnifiedPackageCodec {
         art.nightTypography?.let { typography.add("night", encodeTypography(it)) }
         if (typography.size() > 0) obj.add("typography", typography)
 
+        if (art.icons.isNotEmpty()) {
+            val iconsObj = JsonObject()
+            art.icons.forEach { (k, v) -> iconsObj.addProperty(k, v) }
+            obj.add("icons", iconsObj)
+        }
+        if (art.covers.isNotEmpty()) {
+            val coversArr = JsonArray()
+            art.covers.forEach { coversArr.add(it) }
+            obj.add("covers", coversArr)
+        }
+        art.defaultCoverPath?.takeIf { it.isNotBlank() }?.let { obj.addProperty("defaultCoverPath", it) }
         obj.add("mounts", encodeMounts(art.mounts))
         appendUnknownFields(obj, art.unknownFields)
         return obj
@@ -88,7 +213,23 @@ object UnifiedPackageCodec {
         val palettes = obj.objOrNull("palettes")
         val wallpapers = obj.objOrNull("wallpapers")
         val typography = obj.objOrNull("typography")
-        val known = setOf("palettes", "wallpapers", "typography", "mounts")
+        val iconsObj = obj.objOrNull("icons")
+        val iconsMap = linkedMapOf<String, String>()
+        iconsObj?.entrySet()?.forEach { (k, v) ->
+            if (v.isJsonPrimitive && v.asJsonPrimitive.isString) {
+                iconsMap[k] = v.asString
+            }
+        }
+        val coversList = mutableListOf<String>()
+        val coversElem = obj.get("covers")
+        if (coversElem != null && coversElem.isJsonArray) {
+            coversElem.asJsonArray.forEach { elem ->
+                if (elem.isJsonPrimitive && elem.asJsonPrimitive.isString) {
+                    coversList.add(elem.asString)
+                }
+            }
+        }
+        val known = setOf("palettes", "wallpapers", "typography", "icons", "covers", "defaultCoverPath", "mounts")
         return ArtPackagePayload(
             dayPalette = palettes?.objOrNull("day")?.let(::decodePalette),
             nightPalette = palettes?.objOrNull("night")?.let(::decodePalette),
@@ -96,6 +237,9 @@ object UnifiedPackageCodec {
             nightWallpapers = wallpapers?.objOrNull("night")?.let(::decodeWallpapers),
             dayTypography = typography?.objOrNull("day")?.let(::decodeTypography),
             nightTypography = typography?.objOrNull("night")?.let(::decodeTypography),
+            icons = iconsMap,
+            covers = coversList,
+            defaultCoverPath = obj.stringOrNull("defaultCoverPath"),
             mounts = obj.objOrNull("mounts")?.let(::decodeMounts) ?: ArtAssetMounts(),
             unknownFields = collectUnknownFields(obj, known)
         )

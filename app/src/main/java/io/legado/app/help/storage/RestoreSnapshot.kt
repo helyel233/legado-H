@@ -11,6 +11,7 @@ import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.config.BubblePackageManager
+import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.model.VideoPlay.VIDEO_PREF_NAME
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
 import io.legado.app.utils.externalFiles
@@ -141,6 +142,11 @@ internal object RestoreSnapshot {
         }
         if (File(backupDir, Backup.appThemeKitsDirName).isDirectory) {
             targets.add(AppearanceKitManager.rootDir)
+        }
+        val hasUnifiedOrLegacyUiPackages = File(backupDir, Backup.unifiedPackagesDirName).isDirectory ||
+            UiPackageBackup.legacyPackageDirNames.any { File(backupDir, it).isDirectory }
+        if (hasUnifiedOrLegacyUiPackages) {
+            targets.add(UnifiedPackageRepository.rootDir)
         }
         if (File(backupDir, Backup.advancedTitlePackagesDirName).isDirectory) {
             targets.add(AdvancedTitlePackageManager.rootDir)

@@ -159,7 +159,6 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.BACKUP_CONFIG -> replaceFragment(configTag, BackupConfigFragment::class.java)
             ConfigTag.AI_CONFIG -> replaceFragment(configTag, AiConfigFragment::class.java)
             ConfigTag.COVER_CONFIG -> replaceFragment(configTag, CoverConfigFragment::class.java)
-            ConfigTag.WELCOME_CONFIG -> replaceFragment(configTag, WelcomeConfigFragment::class.java)
             ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG ->
                 replaceFragment(configTag, DiscoverySubscriptionConfigFragment::class.java)
             ConfigTag.COMMENT_CONFIG -> replaceFragment(configTag, CommentConfigFragment::class.java)
@@ -167,11 +166,9 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
             ConfigTag.AUDIO_CONFIG -> replaceFragment(configTag, AudioConfigFragment::class.java)
             ConfigTag.MANGA_VIDEO_CONFIG ->
                 replaceFragment(configTag, MangaVideoConfigFragment::class.java)
-    ConfigTag.EXPLORE_GLASS_CONFIG ->
-        replaceFragment(configTag, ExploreGlassConfigFragment::class.java)
-    ConfigTag.UI_LAYOUT_CONFIG ->
-        replaceFragment(configTag, UiLayoutConfigFragment::class.java)
-    else -> finish()
+            ConfigTag.UI_LAYOUT_CONFIG ->
+                replaceFragment(configTag, UiLayoutConfigFragment::class.java)
+            else -> finish()
         }
     }
 
@@ -209,8 +206,6 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
 
             ConfigTag.THEME_CONFIG,
             ConfigTag.COVER_CONFIG,
-            ConfigTag.WELCOME_CONFIG,
-            ConfigTag.EXPLORE_GLASS_CONFIG,
             ConfigTag.UI_LAYOUT_CONFIG -> listOf(R.string.config_category_appearance)
 
             ConfigTag.AI_CONFIG -> listOf(R.string.config_category_ai_automation)

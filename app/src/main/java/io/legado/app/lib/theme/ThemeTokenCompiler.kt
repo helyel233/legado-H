@@ -38,11 +38,7 @@ object ThemeTokenCompiler {
     private const val ARGB_EINK_MUTED = 0xFFF2F2F2.toInt()
     private const val ARGB_EINK_SECONDARY = 0xFF444444.toInt()
 
-    private val VALID_MATERIAL_MODES = setOf(
-        GlassMaterialPreset.SOLID,
-        GlassMaterialPreset.FROSTED,
-        GlassMaterialPreset.GLASS
-    )
+    private val VALID_MATERIAL_MODES = GlassMaterialPreset.modes
 
     fun compileRaw(
         env: AppearanceEnv,

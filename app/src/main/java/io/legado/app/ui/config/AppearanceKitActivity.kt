@@ -3,36 +3,32 @@ package io.legado.app.ui.config
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -52,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -61,19 +58,21 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
-import io.legado.app.help.config.AppearanceSlotSummaries
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
-import io.legado.app.help.config.appearance.AppearanceSlot
+import io.legado.app.help.config.pkg.ArtPackagePayload
+import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.help.config.pkg.PackageKind
-import io.legado.app.help.config.pkg.SurfaceScopeOverride
-import io.legado.app.help.config.pkg.UiScope
-import io.legado.app.help.config.pkg.UnifiedPackageCodec
+import io.legado.app.help.config.pkg.ParamPackagePayload
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
+import io.legado.app.lib.cloud.CloudStorageFile
+import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.theme.PrefBatchTransaction
-import io.legado.app.lib.theme.ThemeTokenCompiler
+import io.legado.app.lib.theme.SurfaceHierarchyDerivation
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
+import io.legado.app.ui.book.cache.WebDavTaskManager
 import io.legado.app.ui.book.cache.WebDavTaskType
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
@@ -88,7 +87,6 @@ import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
@@ -99,13 +97,10 @@ import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.SegmentedControlTone
 import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
-import io.legado.app.ui.widget.compose.appSettingRowDecoration
 import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.toMiuixPalette
-import io.legado.app.utils.externalFiles
-import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
@@ -113,13 +108,11 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
-import io.legado.app.utils.removePref
-import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
@@ -127,24 +120,65 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         ActivityThemeManageBinding.inflate(layoutInflater)
     }
 
+    private data class CloneDialogTarget(
+        val kind: PackageKind,
+        val source: UnifiedPackageRepository.StoredEntry,
+        val suggestedName: String
+    )
+
+    private data class CreateDialogTarget(
+        val kind: PackageKind,
+        val suggestedName: String
+    )
+
+    private data class DeleteDialogTarget(
+        val kind: PackageKind,
+        val entry: UnifiedPackageRepository.StoredEntry,
+        val mountedSlots: List<String>
+    )
+
+    private data class ImportConflictTarget(
+        val file: File,
+        val applySurface: Boolean,
+        val applyLayout: Boolean,
+        val conflictName: String,
+        val existingNames: List<String>
+    )
+
     private var themeModeState by mutableStateOf("0")
     private var isNightState by mutableStateOf(AppConfig.isNightTheme)
     private var isEInkState by mutableStateOf(AppConfig.isEInkMode)
-    private var themesState by mutableStateOf<List<ThemePackageManager.Entry>>(emptyList())
-    private var activeThemeDirState by mutableStateOf("")
+
+    private var artSlotNightState by mutableStateOf(AppConfig.isNightTheme)
+    private var paramSlotNightState by mutableStateOf(AppConfig.isNightTheme)
+
+    private var artPackagesState by mutableStateOf<List<UnifiedPackageRepository.StoredEntry>>(emptyList())
+    private var paramPackagesState by mutableStateOf<List<UnifiedPackageRepository.StoredEntry>>(emptyList())
+
+    private var activeDayArtIdState by mutableStateOf("")
+    private var activeNightArtIdState by mutableStateOf("")
+    private var activeDayParamIdState by mutableStateOf("")
+    private var activeNightParamIdState by mutableStateOf("")
+
     private var cornerScaleState by mutableFloatStateOf(AppConfig.uiCornerScale)
     private var layoutAlphaState by mutableIntStateOf(AppConfig.uiLayoutAlpha)
     private var glassModeState by mutableStateOf(EXPLORE_GLASS_MODE_SOLID)
     private var glassLevelState by mutableIntStateOf(GlassMaterialPreset.DEFAULT_LIQUID_LEVEL)
-    private var slotSummariesState by mutableStateOf(
-        AppearanceSlotSummaries("", "", "", "", "", "")
-    )
-    private var selectedScopeState by mutableStateOf(UiScope.TOP_BAR)
-    private var scopeOverridesState by mutableStateOf<Map<UiScope, SurfaceScopeOverride>>(emptyMap())
-    private var densityScaleState by mutableFloatStateOf(1f)
+
     private var useLegacyTokenPipelineState by mutableStateOf(false)
     private var useLegacyPackageManagerState by mutableStateOf(false)
+
     private var pendingParamImportFileState by mutableStateOf<File?>(null)
+    private var importConflictTargetState by mutableStateOf<ImportConflictTarget?>(null)
+    private var cloneTargetState by mutableStateOf<CloneDialogTarget?>(null)
+    private var createTargetState by mutableStateOf<CreateDialogTarget?>(null)
+    private var deleteTargetState by mutableStateOf<DeleteDialogTarget?>(null)
+    private var editingArtEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
+    private var editingParamEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
+    private var cloudContainerId: String? = null
+    private var containerMenuLabelState by mutableStateOf<String?>(null)
+    private val handledWebDavTasks = hashSetOf<String>()
+    private var pendingAssetFileCallback: ((String) -> Unit)? = null
 
     private val importPackage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let(::importAppearanceKit)
@@ -156,6 +190,27 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
+    private val pickAssetFileLauncher = registerForActivityResult(HandleFileContract()) { result ->
+        val uri = result.uri ?: return@registerForActivityResult
+        val callback = pendingAssetFileCallback ?: return@registerForActivityResult
+        pendingAssetFileCallback = null
+        lifecycleScope.launch {
+            runCatching {
+                PackageManageUiDelegate.stageImportUriToTempFile(
+                    context = this@AppearanceKitActivity,
+                    uri = uri,
+                    dirName = "uiPackageImport",
+                    filePrefix = "art_asset",
+                    extension = "dat"
+                )
+            }.onSuccess { staged ->
+                callback(staged.absolutePath)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         AppearanceKitManager.alignBaselineAfterMigration(this)
         binding.titleBar.visibility = View.GONE
@@ -164,6 +219,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         binding.recyclerView.visibility = View.GONE
         binding.btnAdd.visibility = View.GONE
         installComposeContent()
+        observeWebDavTasks()
         refreshStudioState()
     }
 
@@ -172,73 +228,123 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         refreshStudioState()
     }
 
-    private fun topBarMenuActions(): List<AppManagementMenuAction> = listOf(
-        AppManagementMenuAction(
-            text = getString(R.string.appearance_kit_import),
-            onClick = ::selectImportPackage
-        ),
-        AppManagementMenuAction(
-            text = "导出当前美术包",
-            onClick = ::exportCurrentArtPackage
-        ),
-        AppManagementMenuAction(
-            text = "导出当前参数包",
-            onClick = ::exportCurrentParamPackage
-        ),
-        AppManagementMenuAction(
-            text = getString(R.string.appearance_kit_export),
-            onClick = ::exportCurrentKit
-        ),
-        AppManagementMenuAction(
-            text = getString(R.string.package_sync_task_title),
-            onClick = ::showSyncTasks
+    private fun updateCloudContainerState() {
+        val state = PackageManageUiDelegate.resolveCloudContainerState(this, S3ContainerScope.UI_PACKAGE.key)
+        cloudContainerId = state.selectedContainerId
+        containerMenuLabelState = state.menuLabel
+    }
+
+    private fun observeWebDavTasks() {
+        PackageManageUiDelegate.observeWebDavTasks(
+            activity = this,
+            taskTypes = setOf(WebDavTaskType.ART_PACKAGE_UPLOAD, WebDavTaskType.PARAM_PACKAGE_UPLOAD),
+            handledTaskTokens = handledWebDavTasks,
+            onCompleted = { state ->
+                toastOnUi("「${state.bookName}」${getString(R.string.package_sync_task_status_completed)}")
+            },
+            onFailed = { state ->
+                toastOnUi("「${state.bookName}」上传失败: ${state.message}")
+            }
         )
-    )
+    }
+
+    private fun topBarMenuActions(): List<AppManagementMenuAction> = buildList {
+        containerMenuLabelState?.let { label ->
+            add(
+                AppManagementMenuAction(
+                    text = "存储桶：$label",
+                    onClick = ::selectCloudContainer
+                )
+            )
+        }
+        add(
+            AppManagementMenuAction(
+                text = "导入美术包 / 参数包",
+                onClick = ::selectImportPackage
+            )
+        )
+        add(
+            AppManagementMenuAction(
+                text = "从云端下载外观包",
+                onClick = ::showCloudPackagesMenu
+            )
+        )
+        add(
+            AppManagementMenuAction(
+                text = "新建美术资源包（从当前状态）",
+                onClick = { promptCreatePackage(PackageKind.ART) }
+            )
+        )
+        add(
+            AppManagementMenuAction(
+                text = "新建参数设置包（从当前状态）",
+                onClick = { promptCreatePackage(PackageKind.PARAM) }
+            )
+        )
+        add(
+            AppManagementMenuAction(
+                text = getString(R.string.package_sync_task_menu),
+                onClick = ::showSyncTasks
+            )
+        )
+    }
 
     private fun installComposeContent() {
         val composeView = ComposeView(this).apply {
             layoutParams = binding.recyclerView.layoutParams
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                val themeModeLabels = resources.getStringArray(R.array.theme_mode)
-                val themeModeValues = resources.getStringArray(R.array.theme_mode_v)
-                val modeOptions = remember(themeModeLabels, themeModeValues) {
-                    themeModeValues.mapIndexed { index, value ->
-                        SegmentedOption(
-                            value = value,
-                            label = themeModeLabels.getOrNull(index) ?: value
-                        )
-                    }
+                val modeOptions = remember {
+                    listOf(
+                        SegmentedOption("0", "跟随系统"),
+                        SegmentedOption("1", "日间模式"),
+                        SegmentedOption("2", "夜间模式")
+                    )
                 }
-                val glassLabels = resources.getStringArray(R.array.explore_glass_mode_entries)
-                val glassValues = resources.getStringArray(R.array.explore_glass_mode_values)
-                val glassOptions = remember(glassLabels, glassValues) {
-                    glassValues.mapIndexed { index, value ->
-                        SegmentedOption(
-                            value = value,
-                            label = glassLabels.getOrNull(index) ?: value
-                        )
-                    }
+                val glassOptions = remember {
+                    listOf(
+                        SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
+                        SegmentedOption(GlassMaterialPreset.CLEAR, "透明"),
+                        SegmentedOption(GlassMaterialPreset.FROSTED, "磨砂"),
+                        SegmentedOption(GlassMaterialPreset.GLASS, "液态")
+                    )
                 }
                 LegadoComposeTheme {
                     AppearanceStudioScreen(
-                        themeMode = themeModeState,
+                        themeMode = themeModeState.takeUnless { it == "3" } ?: "0",
                         modeOptions = modeOptions,
-                        isNightTheme = isNightState,
                         isEInkMode = isEInkState,
-                        themes = themesState,
-                        activeThemeDir = activeThemeDirState,
+                        artSlotNight = artSlotNightState,
+                        paramSlotNight = paramSlotNightState,
+                        artPackages = artPackagesState,
+                        paramPackages = paramPackagesState,
+                        activeDayArtId = activeDayArtIdState,
+                        activeNightArtId = activeNightArtIdState,
+                        activeDayParamId = activeDayParamIdState,
+                        activeNightParamId = activeNightParamIdState,
                         cornerScale = cornerScaleState,
                         layoutAlpha = layoutAlphaState,
                         glassMode = glassModeState,
                         glassOptions = glassOptions,
                         glassLevel = glassLevelState,
-                        slotSummaries = slotSummariesState,
+                        useLegacyTokenPipeline = useLegacyTokenPipelineState,
+                        useLegacyPackageManager = useLegacyPackageManagerState,
                         topMenuActions = ::topBarMenuActions,
                         onBack = ::supportFinishAfterTransition,
                         onSwitchThemeMode = ::switchThemeMode,
-                        onApplyTheme = ::applyQuickTheme,
-                        onManageAllThemes = { openSlotTarget(AppearanceSlot.THEME) },
+                        onToggleEInkMode = ::toggleEInkMode,
+                        onSelectArtSlotNight = { artSlotNightState = it },
+                        onSelectParamSlotNight = { paramSlotNightState = it },
+                        onMountArtPackage = { entry -> mountArtPackage(entry, artSlotNightState) },
+                        onMountParamPackage = { entry -> mountParamPackage(entry, paramSlotNightState) },
+                        onCreatePackage = ::promptCreatePackage,
+                        onImportPackage = ::selectImportPackage,
+                        onClonePackage = ::promptClonePackage,
+                        onEditArtPackage = { editingArtEntryState = it },
+                        onEditParamPackage = { editingParamEntryState = it },
+                        onExportPackage = ::exportPackageEntry,
+                        onUploadPackage = ::uploadPackageEntry,
+                        onDeletePackage = ::promptDeletePackage,
                         onCornerScaleDrag = { step ->
                             cornerScaleState = sliderStepToCornerScale(step)
                         },
@@ -258,22 +364,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onGlassLevelCommit = {
                             commitGlassLevel(glassLevelState)
                         },
-                        onOpenSlot = ::openSlotTarget,
-                        selectedScope = selectedScopeState,
-                        scopeOverrides = scopeOverridesState,
-                        densityScale = densityScaleState,
-                        useLegacyTokenPipeline = useLegacyTokenPipelineState,
-                        useLegacyPackageManager = useLegacyPackageManagerState,
-                        onSelectScope = { selectedScopeState = it },
-                        onUpdateScopeOverride = ::updateScopeOverride,
-                        onResetScopeOverride = ::resetScopeOverride,
-                        onDensityScaleDrag = { step ->
-                            densityScaleState = (step.coerceIn(8, 13) / 10f)
-                        },
-                        onDensityScaleCommit = { commitDensityScale(densityScaleState) },
                         onToggleLegacyTokenPipeline = ::toggleLegacyTokenPipeline,
                         onToggleLegacyPackageManager = ::toggleLegacyPackageManager
                     )
+
                     pendingParamImportFileState?.let { pendingFile ->
                         ParamImportLayerDialog(
                             onDismiss = {
@@ -282,7 +376,116 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                             },
                             onConfirm = { applySurface, applyLayout ->
                                 pendingParamImportFileState = null
-                                executeUnifiedImport(pendingFile, applySurface, applyLayout)
+                                executeUnifiedImport(pendingFile, applySurface, applyLayout, customName = null)
+                            }
+                        )
+                    }
+
+                    importConflictTargetState?.let { target ->
+                        PackageNamePromptDialog(
+                            title = "导入包重名冲突",
+                            subtitle = "本地已存在名为「${target.conflictName}」且内容不同的包，请修改名称后导入：",
+                            initialName = UnifiedPackageRepository.suggestUniquePackageName(
+                                target.existingNames,
+                                target.conflictName
+                            ),
+                            existingNames = target.existingNames,
+                            confirmText = "改名导入",
+                            onDismiss = {
+                                target.file.delete()
+                                importConflictTargetState = null
+                            },
+                            onConfirm = { newName ->
+                                importConflictTargetState = null
+                                executeUnifiedImport(
+                                    target.file,
+                                    target.applySurface,
+                                    target.applyLayout,
+                                    customName = newName
+                                )
+                            }
+                        )
+                    }
+
+                    createTargetState?.let { target ->
+                        val existingNames = if (target.kind == PackageKind.ART) {
+                            artPackagesState.map { it.manifest.name }
+                        } else {
+                            paramPackagesState.map { it.manifest.name }
+                        }
+                        PackageNamePromptDialog(
+                            title = if (target.kind == PackageKind.ART) "新建美术资源包" else "新建参数设置包",
+                            subtitle = "将从当前界面状态捕获并生成新包（同类型内包名唯一）：",
+                            initialName = target.suggestedName,
+                            existingNames = existingNames,
+                            confirmText = "创建",
+                            onDismiss = { createTargetState = null },
+                            onConfirm = { newName ->
+                                createTargetState = null
+                                executeCreatePackage(target.kind, newName)
+                            }
+                        )
+                    }
+
+                    cloneTargetState?.let { target ->
+                        val existingNames = if (target.kind == PackageKind.ART) {
+                            artPackagesState.map { it.manifest.name }
+                        } else {
+                            paramPackagesState.map { it.manifest.name }
+                        }
+                        PackageNamePromptDialog(
+                            title = "复制包（写时复制克隆）",
+                            subtitle = "基于「${target.source.manifest.name}」创建派生包（仅存储增量修改文件，导出时自动物化）：",
+                            initialName = target.suggestedName,
+                            existingNames = existingNames,
+                            confirmText = "复制并编辑",
+                            onDismiss = { cloneTargetState = null },
+                            onConfirm = { newName ->
+                                cloneTargetState = null
+                                executeClonePackage(target.kind, target.source.manifest.id, newName)
+                            }
+                        )
+                    }
+
+                    deleteTargetState?.let { target ->
+                        DeletePackageConfirmDialog(
+                            packageName = target.entry.manifest.name,
+                            mountedSlots = target.mountedSlots,
+                            onDismiss = { deleteTargetState = null },
+                            onConfirm = {
+                                deleteTargetState = null
+                                executeDeletePackage(target.kind, target.entry.manifest.id)
+                            }
+                        )
+                    }
+
+                    editingArtEntryState?.let { entry ->
+                        ArtPackageEditorDialog(
+                            entry = entry,
+                            existingNames = artPackagesState.map { it.manifest.name },
+                            onPickAssetFile = { _, onPicked ->
+                                pendingAssetFileCallback = onPicked
+                                pickAssetFileLauncher.launch {
+                                    mode = HandleFileContract.FILE
+                                    title = "选择美术资源文件"
+                                }
+                            },
+                            onDismiss = { editingArtEntryState = null },
+                            onSave = { newName, updatedArt ->
+                                editingArtEntryState = null
+                                executeSaveEditedArt(entry.manifest.id, newName, updatedArt)
+                            }
+                        )
+                    }
+
+                    editingParamEntryState?.let { entry ->
+                        ParamPackageEditorDialog(
+                            entry = entry,
+                            existingNames = paramPackagesState.map { it.manifest.name },
+                            onDismiss = { editingParamEntryState = null },
+                            onSave = { newName, updatedParam ->
+                                editingParamEntryState = null
+                                executeSaveEditedParam(entry.manifest.id, newName, updatedParam)
                             }
                         )
                     }
@@ -293,6 +496,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun refreshStudioState() {
+        updateCloudContainerState()
         val night = AppConfig.isNightTheme
         val eInk = AppConfig.isEInkMode
         themeModeState = getPrefString(PreferKey.themeMode, "0") ?: "0"
@@ -307,22 +511,20 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val frosted = getPrefInt(PreferKey.frostedGlassLevel, AppConfig.frostedGlassLevel)
         val liquid = getPrefInt(PreferKey.liquidGlassLevel, AppConfig.liquidGlassLevel)
         glassLevelState = GlassMaterialPreset.levelFor(resolvedGlassMode, frosted, liquid).coerceIn(0, 100)
-        scopeOverridesState = ThemeTokenCompiler.readScopeOverridesFromPrefs(this)
-        densityScaleState = getPrefString(PreferKey.uiDensityScale, "1.0")
-            ?.toFloatOrNull()
-            ?.coerceIn(0.8f, 1.3f) ?: 1f
         useLegacyTokenPipelineState = getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)
         useLegacyPackageManagerState = getPrefBoolean(PreferKey.useLegacyPackageManager, false)
 
         lifecycleScope.launch {
-            val loadedThemes = ThemePackageManager.loadLocalOnly(night)
-            val activeDir = ThemePackageManager.activeEntryDirName(this@AppearanceKitActivity, night)
-            val summaries = AppearanceKitManager.currentSlotSummaries(this@AppearanceKitActivity)
-            if (isNightState == night) {
-                themesState = loadedThemes
-                activeThemeDirState = activeDir
-            }
-            slotSummariesState = summaries
+            LegacyPackageMigrator.migrateLocalPackagesIfNeeded(this@AppearanceKitActivity)
+            UnifiedPackageRepository.ensureDefaultPackagesExist(this@AppearanceKitActivity)
+            val arts = UnifiedPackageRepository.listArtPackages()
+            val params = UnifiedPackageRepository.listParamPackages()
+            artPackagesState = arts
+            paramPackagesState = params
+            activeDayArtIdState = UnifiedPackageRepository.activeArtPackageId(this@AppearanceKitActivity, false)
+            activeNightArtIdState = UnifiedPackageRepository.activeArtPackageId(this@AppearanceKitActivity, true)
+            activeDayParamIdState = UnifiedPackageRepository.activeParamPackageId(this@AppearanceKitActivity, false)
+            activeNightParamIdState = UnifiedPackageRepository.activeParamPackageId(this@AppearanceKitActivity, true)
         }
     }
 
@@ -330,24 +532,216 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         if (nextMode == themeModeState) return
         themeModeState = nextMode
         putPrefString(PreferKey.themeMode, nextMode)
+        val nextNight = AppConfig.isNightTheme
+        artSlotNightState = nextNight
+        paramSlotNightState = nextNight
         window.decorView.post {
             ThemeConfig.applyDayNight(this@AppearanceKitActivity)
         }
     }
 
-    private fun applyQuickTheme(entry: ThemePackageManager.Entry) {
+    private fun toggleEInkMode(enabled: Boolean) {
+        AppConfig.setEInkModeEnabled(enabled)
+        isEInkState = AppConfig.isEInkMode
+        recomputeThemeUiSignatureAfterBatch()
+        window.decorView.post {
+            ThemeConfig.applyDayNight(this@AppearanceKitActivity)
+        }
+    }
+
+    private fun mountArtPackage(entry: UnifiedPackageRepository.StoredEntry, forNight: Boolean) {
         lifecycleScope.launch {
             runCatching {
-                ThemePackageManager.apply(
+                UnifiedPackageRepository.mountArtPackage(
                     context = this@AppearanceKitActivity,
                     entry = entry,
-                    switchNightMode = false,
-                    notify = true
+                    forNight = forNight
                 )
-                AppearanceKitManager.syncCurrentThemeRef(entry.packageInfo.isNightTheme, entry)
             }.onSuccess {
                 refreshStudioState()
                 toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun mountParamPackage(entry: UnifiedPackageRepository.StoredEntry, forNight: Boolean) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.mountParamPackage(
+                    context = this@AppearanceKitActivity,
+                    entry = entry,
+                    forNight = forNight,
+                    applyGeometryGlobal = true
+                )
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun promptCreatePackage(kind: PackageKind) {
+        val existing = if (kind == PackageKind.ART) {
+            artPackagesState.map { it.manifest.name }
+        } else {
+            paramPackagesState.map { it.manifest.name }
+        }
+        val base = if (kind == PackageKind.ART) "自定义美术包" else "自定义参数包"
+        createTargetState = CreateDialogTarget(
+            kind = kind,
+            suggestedName = UnifiedPackageRepository.suggestUniquePackageName(existing, base)
+        )
+    }
+
+    private fun executeCreatePackage(kind: PackageKind, newName: String) {
+        lifecycleScope.launch {
+            runCatching {
+                if (kind == PackageKind.ART) {
+                    val created = UnifiedPackageRepository.captureArtFromCurrent(
+                        context = this@AppearanceKitActivity,
+                        name = newName,
+                        enforceUniqueName = true
+                    )
+                    UnifiedPackageRepository.mountArtPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = created,
+                        forNight = artSlotNightState
+                    )
+                    created
+                } else {
+                    val created = UnifiedPackageRepository.captureParamFromCurrent(
+                        context = this@AppearanceKitActivity,
+                        name = newName,
+                        enforceUniqueName = true
+                    )
+                    UnifiedPackageRepository.mountParamPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = created,
+                        forNight = paramSlotNightState,
+                        applyGeometryGlobal = true
+                    )
+                    created
+                }
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun promptClonePackage(kind: PackageKind, source: UnifiedPackageRepository.StoredEntry) {
+        val existing = if (kind == PackageKind.ART) {
+            artPackagesState.map { it.manifest.name }
+        } else {
+            paramPackagesState.map { it.manifest.name }
+        }
+        cloneTargetState = CloneDialogTarget(
+            kind = kind,
+            source = source,
+            suggestedName = UnifiedPackageRepository.suggestUniquePackageName(existing, source.manifest.name)
+        )
+    }
+
+    private fun executeClonePackage(kind: PackageKind, sourceId: String, newName: String) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.clonePackageCoW(kind, sourceId, newName)
+            }.onSuccess { cloned ->
+                refreshStudioState()
+                if (kind == PackageKind.ART) {
+                    editingArtEntryState = cloned
+                } else {
+                    editingParamEntryState = cloned
+                }
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun executeSaveEditedArt(entryId: String, newName: String, updatedArt: ArtPackagePayload) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.saveEditedArtPackage(
+                    context = this@AppearanceKitActivity,
+                    entryId = entryId,
+                    newName = newName,
+                    updatedArt = updatedArt
+                )
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun executeSaveEditedParam(entryId: String, newName: String, updatedParam: ParamPackagePayload) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.saveEditedParamPackage(
+                    context = this@AppearanceKitActivity,
+                    entryId = entryId,
+                    newName = newName,
+                    updatedParam = updatedParam
+                )
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun promptDeletePackage(kind: PackageKind, entry: UnifiedPackageRepository.StoredEntry) {
+        val list = if (kind == PackageKind.ART) artPackagesState else paramPackagesState
+        if (list.size <= 1) {
+            toastOnUi("至少需保留 1 个预设包，无法删除最后一个包")
+            return
+        }
+        deleteTargetState = DeleteDialogTarget(
+            kind = kind,
+            entry = entry,
+            mountedSlots = UnifiedPackageRepository.getMountedSlotLabels(this, entry.manifest.id)
+        )
+    }
+
+    private fun executeDeletePackage(kind: PackageKind, entryId: String) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.deletePackage(this@AppearanceKitActivity, kind, entryId)
+            }.onSuccess { result ->
+                refreshStudioState()
+                if (result.affectedSlots.isNotEmpty() && result.fallbackEntry != null) {
+                    toastOnUi("已删除，[${result.affectedSlots.joinToString("、")}] 已回退至「${result.fallbackEntry.manifest.name}」")
+                } else {
+                    toastOnUi(R.string.delete_success)
+                }
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun exportPackageEntry(entry: UnifiedPackageRepository.StoredEntry) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.exportEntryZip(entry)
+            }.onSuccess { zipFile ->
+                val suffix = if (entry.manifest.kind == PackageKind.ART) "lart.zip" else "lparam.zip"
+                PackageManageUiDelegate.launchExportZip(
+                    exportPackage,
+                    zipFile,
+                    "${entry.manifest.name}.$suffix"
+                )
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
@@ -389,6 +783,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun selectGlassMode(nextMode: String) {
+        if (nextMode == glassModeState) return
         val point = GlassMaterialPreset.presetPoint(nextMode)
         glassModeState = nextMode
         glassLevelState = point.level
@@ -403,6 +798,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             putPrefBoolean(PreferKey.glassPresetMatched, true)
         }
         UnifiedPackageRepository.markParamDirty(this, true)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
     }
 
     private fun commitGlassLevel(level: Int) {
@@ -412,56 +808,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             putPrefInt(PreferKey.liquidGlassLevel, clamped)
             putPrefBoolean(PreferKey.glassPresetMatched, false)
         }
-        UnifiedPackageRepository.markParamDirty(this, true)
-    }
-
-    private fun scopePrefKey(scope: UiScope): String = when (scope) {
-        UiScope.TOP_BAR -> PreferKey.scopeOverrideTopBar
-        UiScope.BOTTOM_BAR -> PreferKey.scopeOverrideBottomBar
-        UiScope.BOOKSHELF_CARD -> PreferKey.scopeOverrideBookshelfCard
-        UiScope.DIALOG -> PreferKey.scopeOverrideDialog
-    }
-
-    private fun updateScopeOverride(
-        scope: UiScope,
-        transform: (SurfaceScopeOverride) -> SurfaceScopeOverride
-    ) {
-        val current = scopeOverridesState[scope] ?: SurfaceScopeOverride()
-        val updated = transform(current)
-        val key = scopePrefKey(scope)
-        PrefBatchTransaction.run(this) {
-            if (updated.isEmpty()) {
-                removePref(key)
-            } else {
-                putPrefString(key, UnifiedPackageCodec.encodeScopeOverride(updated))
-            }
-        }
-        recomputeThemeUiSignatureAfterBatch()
-        val nextMap = scopeOverridesState.toMutableMap()
-        if (updated.isEmpty()) {
-            nextMap.remove(scope)
-        } else {
-            nextMap[scope] = updated
-        }
-        scopeOverridesState = nextMap
-        UnifiedPackageRepository.markParamDirty(this, true)
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
-    }
-
-    private fun resetScopeOverride(scope: UiScope) {
-        updateScopeOverride(scope) { SurfaceScopeOverride() }
-    }
-
-    private fun commitDensityScale(scale: Float) {
-        val clamped = scale.coerceIn(0.8f, 1.3f)
-        densityScaleState = clamped
-        PrefBatchTransaction.run(this) {
-            putPrefString(
-                PreferKey.uiDensityScale,
-                String.format(Locale.US, "%.2f", clamped)
-            )
-        }
-        recomputeThemeUiSignatureAfterBatch()
         UnifiedPackageRepository.markParamDirty(this, true)
         postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
     }
@@ -480,23 +826,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
     }
 
-    private fun openSlotTarget(slot: AppearanceSlot) {
-        when (slot) {
-            AppearanceSlot.THEME -> startActivity<ThemeManageActivity>()
-            AppearanceSlot.TOP_BAR -> startActivity<ThemeManageActivity>()
-            AppearanceSlot.NAVIGATION_BAR -> startActivity<NavigationBarManageActivity>()
-            AppearanceSlot.GLASS -> startActivity<ConfigActivity> {
-                putExtra("configTag", ConfigTag.EXPLORE_GLASS_CONFIG)
-            }
-            AppearanceSlot.COVER -> startActivity<ConfigActivity> {
-                putExtra("configTag", ConfigTag.COVER_CONFIG)
-            }
-            AppearanceSlot.WELCOME -> startActivity<ConfigActivity> {
-                putExtra("configTag", ConfigTag.WELCOME_CONFIG)
-            }
-        }
-    }
-
     private fun selectImportPackage() {
         importPackage.launch {
             mode = HandleFileContract.FILE
@@ -511,15 +840,16 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 val file = PackageManageUiDelegate.stageImportUriToTempFile(
                     context = this@AppearanceKitActivity,
                     uri = uri,
-                    dirName = "appearanceKitImports",
-                    filePrefix = "import"
+                    dirName = "uiPackageImport",
+                    filePrefix = "import_appearance_pkg",
+                    extension = "zip"
                 )
                 val kind = UnifiedPackageRepository.peekKind(file)
                 if (kind == PackageKind.PARAM || kind == PackageKind.KIT) {
                     pendingParamImportFileState = file
-                    return@launch
+                } else {
+                    executeUnifiedImport(file, applySurface = true, applyLayout = false, customName = null)
                 }
-                executeUnifiedImport(file, importSurface = true, importLayout = false)
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
@@ -528,86 +858,210 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun executeUnifiedImport(
         file: File,
-        importSurface: Boolean,
-        importLayout: Boolean
+        applySurface: Boolean,
+        applyLayout: Boolean,
+        customName: String?
     ) {
         lifecycleScope.launch {
             runCatching {
                 val result = UnifiedPackageRepository.importFile(
                     context = this@AppearanceKitActivity,
                     file = file,
-                    importSurface = importSurface,
-                    importLayout = importLayout
+                    importSurface = applySurface,
+                    importLayout = applyLayout,
+                    customNameOverride = customName
                 )
-                result.importedArt?.let {
-                    UnifiedPackageRepository.applyArtPackage(this@AppearanceKitActivity, it)
+                if (result.nameConflictName != null) {
+                    val kind = UnifiedPackageRepository.peekKind(file)
+                    val existingNames = if (kind == PackageKind.PARAM) {
+                        paramPackagesState.map { it.manifest.name }
+                    } else {
+                        artPackagesState.map { it.manifest.name }
+                    }
+                    importConflictTargetState = ImportConflictTarget(
+                        file = file,
+                        applySurface = applySurface,
+                        applyLayout = applyLayout,
+                        conflictName = result.nameConflictName,
+                        existingNames = existingNames
+                    )
+                    return@runCatching null
                 }
-                result.importedParam?.let {
-                    UnifiedPackageRepository.applyParamPackage(
+                file.delete()
+                result.duplicateArt?.let { dup ->
+                    UnifiedPackageRepository.mountArtPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = dup,
+                        forNight = artSlotNightState
+                    )
+                }
+                result.duplicateParam?.let { dup ->
+                    UnifiedPackageRepository.mountParamPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = dup,
+                        forNight = paramSlotNightState,
+                        applyGeometryGlobal = applySurface
+                    )
+                }
+                result.importedArt?.let {
+                    UnifiedPackageRepository.mountArtPackage(
                         context = this@AppearanceKitActivity,
                         entry = it,
-                        applySurface = importSurface,
-                        applyLayout = importLayout
+                        forNight = artSlotNightState
+                    )
+                }
+                result.importedParam?.let {
+                    UnifiedPackageRepository.mountParamPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = it,
+                        forNight = paramSlotNightState,
+                        applyGeometryGlobal = applySurface
                     )
                 }
                 result
             }.onSuccess { result ->
-                toastOnUi(getString(R.string.appearance_kit_imported, result.total))
+                if (result == null) return@onSuccess
                 refreshStudioState()
-            }.onFailure {
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }.also {
-                file.delete()
-            }
-        }
-    }
-
-    private fun exportCurrentArtPackage() {
-        lifecycleScope.launch {
-            runCatching {
-                val entry = UnifiedPackageRepository.captureArtFromCurrent(
-                    context = this@AppearanceKitActivity,
-                    name = getString(R.string.appearance_slot_theme)
+                val newItems = listOfNotNull(
+                    result.importedArt?.manifest?.name,
+                    result.importedParam?.manifest?.name
                 )
-                UnifiedPackageRepository.exportEntryZip(entry)
-            }.onSuccess { zipFile ->
-                PackageManageUiDelegate.launchExportZip(exportPackage, zipFile, "art_package.zip")
-            }.onFailure {
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }
-        }
-    }
-
-    private fun exportCurrentParamPackage() {
-        lifecycleScope.launch {
-            runCatching {
-                val entry = UnifiedPackageRepository.captureParamFromCurrent(
-                    context = this@AppearanceKitActivity,
-                    name = "Param Preset"
+                val reusedItems = listOfNotNull(
+                    result.duplicateArt?.manifest?.name,
+                    result.duplicateParam?.manifest?.name
                 )
-                UnifiedPackageRepository.exportEntryZip(entry)
-            }.onSuccess { zipFile ->
-                PackageManageUiDelegate.launchExportZip(exportPackage, zipFile, "param_package.zip")
-            }.onFailure {
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }
-        }
-    }
-
-    private fun exportCurrentKit() {
-        lifecycleScope.launch {
-            runCatching {
-                AppearanceKitManager.exportCurrent(this@AppearanceKitActivity)
-            }.onSuccess { file ->
-                exportPackage.launch {
-                    mode = HandleFileContract.EXPORT
-                    showUploadUrl = false
-                    fileData = HandleFileContract.FileData(
-                        file.name.ifBlank { "appearance_kit.zip" },
-                        file,
-                        "application/zip"
-                    )
+                val message = when {
+                    newItems.isNotEmpty() && reusedItems.isNotEmpty() ->
+                        "已导入「${newItems.joinToString("、")}」，并复用相同内容的「${reusedItems.joinToString("、")}」"
+                    newItems.isNotEmpty() ->
+                        "成功导入并挂载「${newItems.joinToString("、")}」"
+                    reusedItems.isNotEmpty() ->
+                        "已存在相同内容的包「${reusedItems.joinToString("、")}」，已直接挂载"
+                    result.legacyTotal > 0 ->
+                        "已从旧版套件转换导入 ${result.legacyTotal} 项配置"
+                    else ->
+                        "未识别到可导入的美术包或参数包"
                 }
+                toastOnUi(message)
+            }.onFailure {
+                file.delete()
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun uploadPackageEntry(entry: UnifiedPackageRepository.StoredEntry) {
+        val type = if (entry.manifest.kind == PackageKind.ART) {
+            WebDavTaskType.ART_PACKAGE_UPLOAD
+        } else {
+            WebDavTaskType.PARAM_PACKAGE_UPLOAD
+        }
+        val queued = WebDavTaskManager.enqueueUpload(
+            key = "unified_upload:${entry.manifest.kind.id}:${entry.manifest.id}",
+            name = entry.manifest.name,
+            type = type,
+            runningMessage = "正在上传至云端...",
+            successMessage = "已上传至云端"
+        ) {
+            UnifiedPackageRepository.uploadEntry(
+                entry = entry,
+                containerId = cloudContainerId,
+                scope = S3ContainerScope.UI_PACKAGE.key
+            )
+        }
+        if (queued) {
+            toastOnUi("已加入云端上传队列")
+            showSyncTasks()
+        } else {
+            toastOnUi("该外观包正在上传中")
+        }
+    }
+
+    private fun selectCloudContainer() {
+        val actions = PackageManageUiDelegate.buildContainerSelectorActions(
+            context = this,
+            scope = S3ContainerScope.UI_PACKAGE.key,
+            currentSelectedId = cloudContainerId
+        ) {
+            updateCloudContainerState()
+        }
+        if (actions.isEmpty()) return
+        showComposeChoiceListDialog(
+            title = getString(R.string.s3_bucket),
+            labels = actions.map { it.text },
+            selectedIndex = actions.indexOfFirst { it.checked }.coerceAtLeast(0)
+        ) { idx ->
+            actions.getOrNull(idx)?.onClick?.invoke()
+        }
+    }
+
+    private fun showCloudPackagesMenu() {
+        lifecycleScope.launch {
+            runCatching {
+                val arts = UnifiedPackageRepository.listCloudPackages(
+                    kind = PackageKind.ART,
+                    containerId = cloudContainerId,
+                    scope = S3ContainerScope.UI_PACKAGE.key
+                ).map { PackageKind.ART to it }
+                val params = UnifiedPackageRepository.listCloudPackages(
+                    kind = PackageKind.PARAM,
+                    containerId = cloudContainerId,
+                    scope = S3ContainerScope.UI_PACKAGE.key
+                ).map { PackageKind.PARAM to it }
+                arts + params
+            }.onSuccess { remoteItems ->
+                if (remoteItems.isEmpty()) {
+                    toastOnUi("云端 uiPackages/{art,param}/ 目录暂无可用外观包")
+                    return@onSuccess
+                }
+                showComposeChoiceListDialog(
+                    title = "云端外观包（点击下载并导入）",
+                    labels = remoteItems.map { (kind, file) ->
+                        val prefix = if (kind == PackageKind.ART) "[美术]" else "[参数]"
+                        "$prefix ${file.displayName.removeSuffix(".zip")}"
+                    },
+                    selectedIndex = -1
+                ) { idx ->
+                    val chosen = remoteItems.getOrNull(idx) ?: return@showComposeChoiceListDialog
+                    downloadCloudPackage(chosen.first, chosen.second)
+                }
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun downloadCloudPackage(kind: PackageKind, remoteFile: CloudStorageFile) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.downloadAndImportCloudPackage(
+                    context = this@AppearanceKitActivity,
+                    kind = kind,
+                    remoteName = remoteFile.displayName,
+                    importSurface = true,
+                    importLayout = false,
+                    containerId = cloudContainerId,
+                    scope = S3ContainerScope.UI_PACKAGE.key
+                )
+            }.onSuccess { result ->
+                if (result.nameConflictName != null) {
+                    toastOnUi("本地已有同名不同内容包「${result.nameConflictName}」，已取消覆盖")
+                    return@onSuccess
+                }
+                result.duplicateArt?.let {
+                    UnifiedPackageRepository.mountArtPackage(this@AppearanceKitActivity, it, artSlotNightState)
+                }
+                result.importedArt?.let {
+                    UnifiedPackageRepository.mountArtPackage(this@AppearanceKitActivity, it, artSlotNightState)
+                }
+                result.duplicateParam?.let {
+                    UnifiedPackageRepository.mountParamPackage(this@AppearanceKitActivity, it, paramSlotNightState, applyGeometryGlobal = true)
+                }
+                result.importedParam?.let {
+                    UnifiedPackageRepository.mountParamPackage(this@AppearanceKitActivity, it, paramSlotNightState, applyGeometryGlobal = true)
+                }
+                refreshStudioState()
+                toastOnUi("已从云端下载并挂载「${remoteFile.displayName.removeSuffix(".zip")}」")
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
@@ -617,9 +1071,40 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun showSyncTasks() {
         showPackageSyncTaskDialog(
             setOf(
+                WebDavTaskType.ART_PACKAGE_UPLOAD,
+                WebDavTaskType.PARAM_PACKAGE_UPLOAD,
                 WebDavTaskType.THEME_PACKAGE_UPLOAD,
                 WebDavTaskType.TOP_BAR_PACKAGE_UPLOAD,
                 WebDavTaskType.NAVIGATION_BAR_PACKAGE_UPLOAD
+            )
+        )
+    }
+
+    companion object : ActivitySearchSource {
+        override fun searchEntries(context: android.content.Context): List<SettingsSearchIndex.Entry> = listOf(
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_appearance_kit_art",
+                title = "美术资源包（日/夜）",
+                summary = "在外观中心自由搭配与编辑主题色板、全套壁纸、启动页图、字体、图标与封面集",
+                aliases = listOf(
+                    "美术包", "美术资源包", "主题包", "主题管理", "配色", "字体", "壁纸",
+                    "背景图", "启动页", "图标", "封面套系", "appearance", "theme", "welcome", "cover"
+                ),
+                destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
+            ),
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_appearance_kit_param",
+                title = "参数设置包与外观微调",
+                summary = "调整全局及顶栏/底栏/卡片/弹窗四区域材质（实底/透明/磨砂/液态玻璃）、圆角、阴影、密度与墨水屏开关",
+                aliases = listOf(
+                    "参数包", "参数设置包", "外观中心", "顶栏包", "底栏包", "发现玻璃", "液态玻璃",
+                    "毛玻璃", "实底", "透明", "圆角", "阴影", "密度", "墨水屏", "eink", "glass", "topbar", "navbar"
+                ),
+                destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
             )
         )
     }
@@ -629,21 +1114,38 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 private fun AppearanceStudioScreen(
     themeMode: String,
     modeOptions: List<SegmentedOption<String>>,
-    isNightTheme: Boolean,
     isEInkMode: Boolean,
-    themes: List<ThemePackageManager.Entry>,
-    activeThemeDir: String,
+    artSlotNight: Boolean,
+    paramSlotNight: Boolean,
+    artPackages: List<UnifiedPackageRepository.StoredEntry>,
+    paramPackages: List<UnifiedPackageRepository.StoredEntry>,
+    activeDayArtId: String,
+    activeNightArtId: String,
+    activeDayParamId: String,
+    activeNightParamId: String,
     cornerScale: Float,
     layoutAlpha: Int,
     glassMode: String,
     glassOptions: List<SegmentedOption<String>>,
     glassLevel: Int,
-    slotSummaries: AppearanceSlotSummaries,
+    useLegacyTokenPipeline: Boolean,
+    useLegacyPackageManager: Boolean,
     topMenuActions: () -> List<AppManagementMenuAction>,
     onBack: () -> Unit,
     onSwitchThemeMode: (String) -> Unit,
-    onApplyTheme: (ThemePackageManager.Entry) -> Unit,
-    onManageAllThemes: () -> Unit,
+    onToggleEInkMode: (Boolean) -> Unit,
+    onSelectArtSlotNight: (Boolean) -> Unit,
+    onSelectParamSlotNight: (Boolean) -> Unit,
+    onMountArtPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onMountParamPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onCreatePackage: (PackageKind) -> Unit,
+    onImportPackage: () -> Unit,
+    onClonePackage: (PackageKind, UnifiedPackageRepository.StoredEntry) -> Unit,
+    onEditArtPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onEditParamPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onExportPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onUploadPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onDeletePackage: (PackageKind, UnifiedPackageRepository.StoredEntry) -> Unit,
     onCornerScaleDrag: (Int) -> Unit,
     onCornerScaleCommit: () -> Unit,
     onLayoutAlphaDrag: (Int) -> Unit,
@@ -651,17 +1153,6 @@ private fun AppearanceStudioScreen(
     onSelectGlassMode: (String) -> Unit,
     onGlassLevelDrag: (Int) -> Unit,
     onGlassLevelCommit: () -> Unit,
-    onOpenSlot: (AppearanceSlot) -> Unit,
-    selectedScope: UiScope,
-    scopeOverrides: Map<UiScope, SurfaceScopeOverride>,
-    densityScale: Float,
-    useLegacyTokenPipeline: Boolean,
-    useLegacyPackageManager: Boolean,
-    onSelectScope: (UiScope) -> Unit,
-    onUpdateScopeOverride: (UiScope, (SurfaceScopeOverride) -> SurfaceScopeOverride) -> Unit,
-    onResetScopeOverride: (UiScope) -> Unit,
-    onDensityScaleDrag: (Int) -> Unit,
-    onDensityScaleCommit: () -> Unit,
     onToggleLegacyTokenPipeline: (Boolean) -> Unit,
     onToggleLegacyPackageManager: (Boolean) -> Unit
 ) {
@@ -697,48 +1188,33 @@ private fun AppearanceStudioScreen(
                 start = AppLayoutTokens.PageHorizontal,
                 top = 10.dp,
                 end = AppLayoutTokens.PageHorizontal,
-                bottom = 18.dp
+                bottom = 24.dp
             ),
             verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.SectionGap)
         ) {
-            item("mode_switcher") {
+            // 1. 主题模式（跟随系统 / 日间 / 夜间）+ 独立正交墨水屏开关
+            item("1_mode_switcher") {
                 StudioModeSwitcherSection(
                     themeMode = themeMode,
                     options = modeOptions,
+                    isEInkMode = isEInkMode,
                     palette = palette,
                     glassSignature = effectiveGlassSig,
-                    onSelectMode = onSwitchThemeMode
+                    onSelectMode = onSwitchThemeMode,
+                    onToggleEInkMode = onToggleEInkMode
                 )
             }
-            item("live_preview") {
+            // 2. 实时预览卡（内嵌可折叠「快速微调」抽屉）
+            item("2_live_preview") {
                 StudioLivePreviewCard(
                     palette = palette,
                     glassSignature = effectiveGlassSig,
                     previewCornerScale = cornerScale,
-                    previewLayoutAlpha = layoutAlpha
-                )
-            }
-            item("quick_themes") {
-                StudioQuickThemeSection(
-                    themes = themes,
-                    activeThemeDir = activeThemeDir,
-                    isNightTheme = isNightTheme,
-                    palette = palette,
-                    glassSignature = effectiveGlassSig,
-                    onApplyTheme = onApplyTheme,
-                    onManageAll = onManageAllThemes
-                )
-            }
-            item("tuning") {
-                StudioTuningSection(
-                    cornerScale = cornerScale,
-                    layoutAlpha = layoutAlpha,
+                    previewLayoutAlpha = layoutAlpha,
                     isEInkMode = isEInkMode,
                     glassMode = glassMode,
                     glassOptions = glassOptions,
                     glassLevel = glassLevel,
-                    palette = palette,
-                    glassSignature = effectiveGlassSig,
                     onCornerScaleDrag = onCornerScaleDrag,
                     onCornerScaleCommit = onCornerScaleCommit,
                     onLayoutAlphaDrag = onLayoutAlphaDrag,
@@ -748,35 +1224,56 @@ private fun AppearanceStudioScreen(
                     onGlassLevelCommit = onGlassLevelCommit
                 )
             }
-            item("slots") {
-                StudioSlotsSection(
-                    summaries = slotSummaries,
+            // 3. 美术资源包选择（日 / 夜双槽）
+            item("3_art_packages") {
+                StudioDualSlotPackageSection(
+                    title = "美术资源包（日 / 夜）",
+                    subtitle = "包含色板、全套壁纸、启动页图、字体、底栏图标与封面集",
+                    isNightSlot = artSlotNight,
+                    dayMountedId = activeDayArtId,
+                    nightMountedId = activeNightArtId,
+                    entries = artPackages,
                     palette = palette,
                     glassSignature = effectiveGlassSig,
-                    onOpenSlot = onOpenSlot
+                    onSelectSlotNight = onSelectArtSlotNight,
+                    onSelectEntry = onMountArtPackage,
+                    onCreateNew = { onCreatePackage(PackageKind.ART) },
+                    onImport = onImportPackage,
+                    onCloneEntry = { onClonePackage(PackageKind.ART, it) },
+                    onEditEntry = onEditArtPackage,
+                    onExportEntry = onExportPackage,
+                    onUploadEntry = onUploadPackage,
+                    onDeleteEntry = { onDeletePackage(PackageKind.ART, it) }
                 )
             }
-            item("scope_overrides") {
-                StudioScopeOverrideSection(
-                    selectedScope = selectedScope,
-                    override = scopeOverrides[selectedScope] ?: SurfaceScopeOverride(),
-                    isEInkMode = isEInkMode,
+            // 4. 参数设置包选择（日 / 夜双槽）
+            item("4_param_packages") {
+                StudioDualSlotPackageSection(
+                    title = "参数设置包（日 / 夜）",
+                    subtitle = "材质氛围随日/夜槽切换；圆角、阴影、空间密度与 4 区域覆写保持全局统一",
+                    isNightSlot = paramSlotNight,
+                    dayMountedId = activeDayParamId,
+                    nightMountedId = activeNightParamId,
+                    entries = paramPackages,
                     palette = palette,
                     glassSignature = effectiveGlassSig,
-                    onSelectScope = onSelectScope,
-                    onUpdateOverride = { transform -> onUpdateScopeOverride(selectedScope, transform) },
-                    onResetScope = { onResetScopeOverride(selectedScope) }
+                    onSelectSlotNight = onSelectParamSlotNight,
+                    onSelectEntry = onMountParamPackage,
+                    onCreateNew = { onCreatePackage(PackageKind.PARAM) },
+                    onImport = onImportPackage,
+                    onCloneEntry = { onClonePackage(PackageKind.PARAM, it) },
+                    onEditEntry = onEditParamPackage,
+                    onExportEntry = onExportPackage,
+                    onUploadEntry = onUploadPackage,
+                    onDeleteEntry = { onDeletePackage(PackageKind.PARAM, it) }
                 )
             }
-            item("layout_and_switches") {
-                StudioDensityAndSwitchesSection(
-                    densityScale = densityScale,
+            // 底部折叠的兼容回滚开关（保留 1 个大版本）
+            item("5_rollback_switches") {
+                StudioRollbackSwitchesSection(
                     useLegacyTokenPipeline = useLegacyTokenPipeline,
                     useLegacyPackageManager = useLegacyPackageManager,
                     palette = palette,
-                    glassSignature = effectiveGlassSig,
-                    onDensityScaleDrag = onDensityScaleDrag,
-                    onDensityScaleCommit = onDensityScaleCommit,
                     onToggleLegacyTokenPipeline = onToggleLegacyTokenPipeline,
                     onToggleLegacyPackageManager = onToggleLegacyPackageManager
                 )
@@ -789,10 +1286,13 @@ private fun AppearanceStudioScreen(
 private fun StudioModeSwitcherSection(
     themeMode: String,
     options: List<SegmentedOption<String>>,
+    isEInkMode: Boolean,
     palette: AppManagementPalette,
     glassSignature: String?,
-    onSelectMode: (String) -> Unit
+    onSelectMode: (String) -> Unit,
+    onToggleEInkMode: (Boolean) -> Unit
 ) {
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
     Column(modifier = Modifier.fillMaxWidth()) {
         AppSettingSectionTitle(
             title = stringResource(R.string.theme_mode),
@@ -808,6 +1308,41 @@ private fun StudioModeSwitcherSection(
             fontSize = 12.sp,
             glassSignature = glassSignature
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(panelShape)
+                .appSettingPanelBackground(
+                    normalColor = palette.settings.row,
+                    borderColor = palette.settings.border,
+                    panelImage = null,
+                    radiusPx = palette.settings.panelRadiusPx
+                )
+                .clickable { onToggleEInkMode(!isEInkMode) }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "墨水屏渲染降级（E-Ink 独立开关）",
+                    color = palette.settings.primaryText,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "与日/夜模式正交；开启后强制高对比实底、零模糊与 0ms 直切",
+                    color = palette.settings.secondaryText,
+                    fontSize = 11.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            LegadoMiuixSwitch(
+                checked = isEInkMode,
+                onCheckedChange = onToggleEInkMode,
+                palette = palette.miuix
+            )
+        }
     }
 }
 
@@ -816,16 +1351,32 @@ private fun StudioLivePreviewCard(
     palette: AppManagementPalette,
     glassSignature: String?,
     previewCornerScale: Float,
-    previewLayoutAlpha: Int
+    previewLayoutAlpha: Int,
+    isEInkMode: Boolean,
+    glassMode: String,
+    glassOptions: List<SegmentedOption<String>>,
+    glassLevel: Int,
+    onCornerScaleDrag: (Int) -> Unit,
+    onCornerScaleCommit: () -> Unit,
+    onLayoutAlphaDrag: (Int) -> Unit,
+    onLayoutAlphaCommit: () -> Unit,
+    onSelectGlassMode: (String) -> Unit,
+    onGlassLevelDrag: (Int) -> Unit,
+    onGlassLevelCommit: () -> Unit
 ) {
     val tokens = LocalLegadoTokens.current
-    val previewRadii = resolveStudioPreviewRadii(previewCornerScale)
+    val previewRadii = remember(previewCornerScale) {
+        resolveStudioPreviewRadii(previewCornerScale)
+    }
+    val alphaFactor = remember(previewLayoutAlpha) {
+        resolveStudioPreviewAlphaFactor(previewLayoutAlpha)
+    }
+    var quickDrawerExpanded by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
     val panelRadius = previewRadii.panelRadiusDp.dp
+    val panelRadiusPx = with(density) { panelRadius.toPx() }
     val actionRadius = previewRadii.actionRadiusDp.dp
     val innerRadius = previewRadii.innerRadiusDp.dp
-    val panelRadiusPx = with(LocalDensity.current) { panelRadius.toPx() }
-    val alphaFactor = resolveStudioPreviewAlphaFactor(previewLayoutAlpha)
-
     val panelShape = RoundedCornerShape(panelRadius)
     val slotShape = RoundedCornerShape(actionRadius)
     val innerShape = RoundedCornerShape(innerRadius)
@@ -838,11 +1389,29 @@ private fun StudioLivePreviewCard(
     val accentColor = palette.settings.accent
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = stringResource(R.string.appearance_studio_preview_title),
-            palette = palette.settings,
-            inCard = false
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            AppSettingSectionTitle(
+                title = stringResource(R.string.appearance_studio_preview_title),
+                palette = palette.settings,
+                inCard = true
+            )
+            Text(
+                text = if (quickDrawerExpanded) "收起快速微调 ▴" else "快速微调 ▾",
+                color = palette.settings.accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { quickDrawerExpanded = !quickDrawerExpanded }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
         val body: @Composable () -> Unit = {
             Column(
                 modifier = Modifier
@@ -886,14 +1455,14 @@ private fun StudioLivePreviewCard(
                     Box(
                         modifier = Modifier
                             .width(34.dp)
-                            .height(46.dp)
+                            .heightIn(min = 46.dp)
                             .clip(innerShape)
                             .background(accentColor.copy(alpha = (0.28f * alphaFactor).coerceIn(0.08f, 0.5f)))
                     )
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .heightIn(min = 46.dp)
                             .clip(slotShape)
                             .background(cardColor.copy(alpha = (0.88f * alphaFactor).coerceIn(0.12f, 1f)))
                             .padding(8.dp),
@@ -922,6 +1491,58 @@ private fun StudioLivePreviewCard(
                         .clip(pillShape)
                         .background(bottomColor.copy(alpha = (0.90f * alphaFactor).coerceIn(0.12f, 1f)))
                 )
+                AnimatedVisibility(visible = quickDrawerExpanded) {
+                    val cornerStep = cornerScaleToSliderStep(previewCornerScale)
+                    val glassSliderEnabled = isStudioGlassSliderEnabled(isEInkMode, glassMode)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                        StudioSliderItem(
+                            title = stringResource(R.string.ui_corner_scale),
+                            valueText = String.format(Locale.US, "%.1fx", previewCornerScale),
+                            value = cornerStep,
+                            range = 0..30,
+                            palette = palette,
+                            onValueChange = onCornerScaleDrag,
+                            onValueChangeFinished = onCornerScaleCommit
+                        )
+                        StudioSliderItem(
+                            title = stringResource(R.string.ui_layout_alpha),
+                            valueText = stringResource(R.string.ui_layout_alpha_value, previewLayoutAlpha),
+                            value = previewLayoutAlpha.coerceIn(0, 100),
+                            range = 0..100,
+                            palette = palette,
+                            onValueChange = onLayoutAlphaDrag,
+                            onValueChangeFinished = onLayoutAlphaCommit
+                        )
+                        if (!isEInkMode) {
+                            LegadoSegmentedControl(
+                                options = glassOptions,
+                                selectedValue = glassMode,
+                                palette = palette.miuix,
+                                onSelected = onSelectGlassMode,
+                                tone = SegmentedControlTone.SurfaceThumb,
+                                fontSize = 11.sp
+                            )
+                            if (glassSliderEnabled) {
+                                StudioSliderItem(
+                                    title = stringResource(R.string.explore_glass_level),
+                                    valueText = "$glassLevel%",
+                                    value = glassLevel.coerceIn(0, 100),
+                                    range = 0..100,
+                                    enabled = true,
+                                    palette = palette,
+                                    onValueChange = onGlassLevelDrag,
+                                    onValueChangeFinished = onGlassLevelCommit
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         if (glassSignature != null) {
@@ -949,222 +1570,109 @@ private fun StudioLivePreviewCard(
 }
 
 @Composable
-private fun StudioQuickThemeSection(
-    themes: List<ThemePackageManager.Entry>,
-    activeThemeDir: String,
-    isNightTheme: Boolean,
+private fun StudioDualSlotPackageSection(
+    title: String,
+    subtitle: String,
+    isNightSlot: Boolean,
+    dayMountedId: String,
+    nightMountedId: BooleanStringAlias,
+    entries: List<UnifiedPackageRepository.StoredEntry>,
     palette: AppManagementPalette,
     glassSignature: String?,
-    onApplyTheme: (ThemePackageManager.Entry) -> Unit,
-    onManageAll: () -> Unit
+    onSelectSlotNight: (Boolean) -> Unit,
+    onSelectEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onCreateNew: () -> Unit,
+    onImport: () -> Unit,
+    onCloneEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onEditEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onExportEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onUploadEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onDeleteEntry: (UnifiedPackageRepository.StoredEntry) -> Unit
 ) {
-    val chipShape = RoundedCornerShape(palette.miuix.actionRadius ?: 8.dp)
-    val borderColor = palette.settings.border?.let(::Color) ?: palette.settings.divider
-    val modeLabel = stringResource(if (isNightTheme) R.string.theme_night_short else R.string.theme_day_short)
+    val dayName = entries.firstOrNull { it.manifest.id == dayMountedId }?.manifest?.name ?: "默认"
+    val nightName = entries.firstOrNull { it.manifest.id == nightMountedId }?.manifest?.name ?: "默认"
+    val slotOptions = remember(dayName, nightName) {
+        listOf(
+            SegmentedOption(false, "☀ 日间预设 ($dayName)"),
+            SegmentedOption(true, "🌙 夜间预设 ($nightName)")
+        )
+    }
+    val currentMountedId = if (isNightSlot) nightMountedId else dayMountedId
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = stringResource(R.string.appearance_studio_quick_themes),
-                    color = palette.settings.accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = modeLabel,
-                    color = palette.settings.secondaryText,
-                    fontSize = 12.sp,
-                    maxLines = 1
-                )
-            }
-            Text(
-                text = "${stringResource(R.string.appearance_studio_manage_all)} ›",
-                color = palette.settings.accent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable(onClick = onManageAll)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            AppSettingSectionTitle(
+                title = title,
+                palette = palette.settings,
+                inCard = true
             )
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
-        ) {
-            items(themes, key = { it.dirName }) { entry ->
-                val isSelected = entry.dirName == activeThemeDir
-                val config = entry.packageInfo.config
-                val primarySwatch = parseSwatchColor(config?.primaryColor, palette.settings.accent)
-                val accentSwatch = parseSwatchColor(config?.accentColor, palette.settings.accent)
-                val bgSwatch = parseSwatchColor(config?.backgroundColor, palette.settings.page)
-                Surface(
-                    shape = chipShape,
-                    color = if (isSelected) {
-                        palette.settings.accent.copy(alpha = 0.12f)
-                    } else if (glassSignature != null) {
-                        Color(palette.settings.slot).copy(alpha = 0.72f)
-                    } else {
-                        Color(palette.settings.row)
-                    },
-                    border = BorderStroke(
-                        width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) palette.settings.accent else borderColor
-                    ),
-                    modifier = Modifier
-                        .width(126.dp)
-                        .clip(chipShape)
-                        .clickable { onApplyTheme(entry) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(bgSwatch)
-                                .border(1.dp, borderColor, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(primarySwatch)
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(accentSwatch)
-                                )
-                            }
-                        }
-                        Text(
-                            text = entry.packageInfo.name.ifBlank { entry.dirName },
-                            color = if (isSelected) palette.settings.accent else palette.settings.primaryText,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "+ 新建",
+                    color = palette.settings.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(onClick = onCreateNew)
+                )
+                Text(
+                    text = "导入",
+                    color = palette.settings.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(onClick = onImport)
+                )
             }
         }
-    }
-}
-
-private fun parseSwatchColor(raw: String?, fallback: Color): Color {
-    if (raw.isNullOrBlank()) return fallback
-    return runCatching { Color(raw.trim().toColorInt()) }.getOrElse { fallback }
-}
-
-@Composable
-private fun StudioTuningSection(
-    cornerScale: Float,
-    layoutAlpha: Int,
-    isEInkMode: Boolean,
-    glassMode: String,
-    glassOptions: List<SegmentedOption<String>>,
-    glassLevel: Int,
-    palette: AppManagementPalette,
-    glassSignature: String?,
-    onCornerScaleDrag: (Int) -> Unit,
-    onCornerScaleCommit: () -> Unit,
-    onLayoutAlphaDrag: (Int) -> Unit,
-    onLayoutAlphaCommit: () -> Unit,
-    onSelectGlassMode: (String) -> Unit,
-    onGlassLevelDrag: (Int) -> Unit,
-    onGlassLevelCommit: () -> Unit
-) {
-    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-    val cornerStep = cornerScaleToSliderStep(cornerScale)
-    val glassSliderEnabled = isStudioGlassSliderEnabled(isEInkMode, glassMode)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = stringResource(R.string.appearance_studio_tuning_title),
-            palette = palette.settings,
-            inCard = false
+        Text(
+            text = subtitle,
+            color = palette.settings.secondaryText,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
         )
-        val content: @Composable () -> Unit = {
+        Spacer(modifier = Modifier.height(4.dp))
+
+        val body: @Composable () -> Unit = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StudioSliderItem(
-                    title = stringResource(R.string.ui_corner_scale),
-                    valueText = String.format(Locale.US, "%.1fx", cornerScale),
-                    value = cornerStep,
-                    range = 0..30,
-                    palette = palette,
-                    onValueChange = onCornerScaleDrag,
-                    onValueChangeFinished = onCornerScaleCommit
+                LegadoSegmentedControl(
+                    options = slotOptions,
+                    selectedValue = isNightSlot,
+                    palette = palette.miuix,
+                    onSelected = onSelectSlotNight,
+                    tone = SegmentedControlTone.AccentThumb,
+                    fontSize = 11.sp
                 )
-                StudioSliderItem(
-                    title = stringResource(R.string.ui_layout_alpha),
-                    valueText = stringResource(R.string.ui_layout_alpha_value, layoutAlpha),
-                    value = layoutAlpha.coerceIn(0, 100),
-                    range = 0..100,
-                    palette = palette,
-                    onValueChange = onLayoutAlphaDrag,
-                    onValueChangeFinished = onLayoutAlphaCommit
-                )
-                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
-                if (isEInkMode) {
-                    Text(
-                        text = stringResource(R.string.appearance_studio_eink_glass_disabled),
-                        color = palette.settings.secondaryText,
-                        fontSize = 13.sp
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.explore_glass_effect_mode),
-                        color = palette.settings.primaryText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    LegadoSegmentedControl(
-                        options = glassOptions,
-                        selectedValue = glassMode,
-                        palette = palette.miuix,
-                        onSelected = onSelectGlassMode,
-                        tone = SegmentedControlTone.SurfaceThumb,
-                        fontSize = 11.sp,
-                        glassSignature = null
-                    )
-                    StudioSliderItem(
-                        title = stringResource(R.string.explore_glass_level),
-                        valueText = "$glassLevel%",
-                        value = glassLevel.coerceIn(0, 100),
-                        range = 0..100,
-                        enabled = glassSliderEnabled,
+                entries.forEach { entry ->
+                    val isSelected = entry.manifest.id == currentMountedId
+                    val isAlsoOtherSlot = entry.manifest.id == (if (isNightSlot) dayMountedId else nightMountedId)
+                    PackageEntryCard(
+                        entry = entry,
+                        isSelected = isSelected,
+                        isAlsoOtherSlot = isAlsoOtherSlot,
+                        otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
                         palette = palette,
-                        onValueChange = onGlassLevelDrag,
-                        onValueChangeFinished = onGlassLevelCommit
+                        onSelect = { onSelectEntry(entry) },
+                        onEdit = { onEditEntry(entry) },
+                        onClone = { onCloneEntry(entry) },
+                        onExport = { onExportEntry(entry) },
+                        onUpload = { onUploadEntry(entry) },
+                        onDelete = { onDeleteEntry(entry) }
                     )
                 }
             }
         }
+
         if (glassSignature != null) {
             GlassPanel(
                 domain = GlassSamplingDomain.WALLPAPER,
@@ -1173,7 +1681,7 @@ private fun StudioTuningSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(panelShape)
-            ) { content() }
+            ) { body() }
         } else {
             Column(
                 modifier = Modifier
@@ -1184,7 +1692,259 @@ private fun StudioTuningSection(
                         panelImage = null,
                         radiusPx = palette.settings.panelRadiusPx
                     )
-            ) { content() }
+            ) { body() }
+        }
+    }
+}
+
+private typealias BooleanStringAlias = String
+
+@Composable
+private fun PackageEntryCard(
+    entry: UnifiedPackageRepository.StoredEntry,
+    isSelected: Boolean,
+    isAlsoOtherSlot: Boolean,
+    otherSlotLabel: String,
+    palette: AppManagementPalette,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onClone: () -> Unit,
+    onExport: () -> Unit,
+    onUpload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val cardShape = RoundedCornerShape(palette.miuix.actionRadius ?: 8.dp)
+    val borderColor = if (isSelected) {
+        palette.settings.accent
+    } else {
+        palette.settings.border?.let(::Color) ?: palette.settings.divider
+    }
+    val containerColor = if (isSelected) {
+        palette.settings.accent.copy(alpha = 0.12f)
+    } else {
+        Color(palette.settings.slot)
+    }
+
+    Surface(
+        shape = cardShape,
+        color = containerColor,
+        border = BorderStroke(if (isSelected) 1.5.dp else 0.75.dp, borderColor),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .clickable(onClick = onSelect)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PackageSwatchDot(entry = entry, palette = palette)
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = entry.manifest.name,
+                            color = if (isSelected) palette.settings.accent else palette.settings.primaryText,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (entry.manifest.basePackageId != null) {
+                            Text(
+                                text = "CoW克隆",
+                                color = palette.settings.secondaryText,
+                                fontSize = 10.sp
+                            )
+                        }
+                        if (isAlsoOtherSlot) {
+                            Text(
+                                text = otherSlotLabel,
+                                color = palette.settings.secondaryText,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = buildPackageMetaSummary(entry),
+                        color = palette.settings.secondaryText,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (isSelected) {
+                    Text(
+                        text = "当前使用",
+                        color = palette.settings.accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SmallPackageActionText("编辑", palette.settings.accent, onEdit)
+                Spacer(modifier = Modifier.width(10.dp))
+                SmallPackageActionText("复制", palette.settings.primaryText, onClone)
+                Spacer(modifier = Modifier.width(10.dp))
+                SmallPackageActionText("上传", palette.settings.primaryText, onUpload)
+                Spacer(modifier = Modifier.width(10.dp))
+                SmallPackageActionText("导出", palette.settings.primaryText, onExport)
+                Spacer(modifier = Modifier.width(10.dp))
+                SmallPackageActionText("删除", palette.settings.danger, onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallPackageActionText(
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Text(
+        text = label,
+        color = color,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
+}
+
+@Composable
+private fun PackageSwatchDot(
+    entry: UnifiedPackageRepository.StoredEntry,
+    palette: AppManagementPalette
+) {
+    val artPalette = entry.manifest.art?.dayPalette ?: entry.manifest.art?.nightPalette
+    val primary = parseSwatchColor(artPalette?.primaryColor, palette.settings.primaryText)
+    val accent = parseSwatchColor(artPalette?.accentColor, palette.settings.accent)
+    val bg = parseSwatchColor(artPalette?.backgroundColor, palette.settings.page)
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .border(1.dp, palette.settings.divider, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Row {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(primary)
+            )
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(accent)
+            )
+        }
+    }
+}
+
+private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry): String {
+    return if (entry.manifest.kind == PackageKind.ART) {
+        val art = entry.manifest.art
+        val w = art?.dayWallpapers ?: art?.nightWallpapers
+        val hasBg = !w?.main.isNullOrBlank() || !w?.topBar.isNullOrBlank() || !w?.welcome.isNullOrBlank()
+        val fontCount = listOfNotNull(
+            (art?.dayTypography ?: art?.nightTypography)?.uiFontPath,
+            (art?.dayTypography ?: art?.nightTypography)?.titleFontPath
+        ).count { it.isNotBlank() }
+        buildString {
+            append("12色板")
+            if (hasBg) append(" · 含壁纸/启动图")
+            if (fontCount > 0) append(" · ${fontCount}项字体")
+        }
+    } else {
+        val g = entry.manifest.param?.surfaceGlobal
+        val modeLabel = when (g?.materialMode) {
+            GlassMaterialPreset.SOLID -> "实底"
+            GlassMaterialPreset.CLEAR -> "透明无玻璃"
+            GlassMaterialPreset.FROSTED -> "磨砂玻璃"
+            GlassMaterialPreset.GLASS -> "液态玻璃"
+            else -> "默认材质"
+        }
+        val corner = String.format(Locale.US, "%.1fx", g?.cornerBaseScale ?: 1f)
+        val alpha = "${g?.surfaceAlpha ?: 100}%"
+        "$modeLabel · 圆角 $corner · 不透明度 $alpha"
+    }
+}
+
+private fun parseSwatchColor(raw: String?, fallback: Color): Color {
+    if (raw.isNullOrBlank()) return fallback
+    return runCatching { Color(raw.trim().toColorInt()) }.getOrElse { fallback }
+}
+
+@Composable
+private fun StudioRollbackSwitchesSection(
+    useLegacyTokenPipeline: Boolean,
+    useLegacyPackageManager: Boolean,
+    palette: AppManagementPalette,
+    onToggleLegacyTokenPipeline: (Boolean) -> Unit,
+    onToggleLegacyPackageManager: (Boolean) -> Unit
+) {
+    var expanded by remember { mutableStateOf(useLegacyTokenPipeline || useLegacyPackageManager) }
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = if (expanded) "收起兼容回滚开关 ▴" else "高级兼容回滚开关（保留 1 个版本）▾",
+            color = palette.settings.secondaryText,
+            fontSize = 12.sp,
+            modifier = Modifier
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+        )
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+                    .appSettingPanelBackground(
+                        normalColor = palette.settings.row,
+                        borderColor = palette.settings.border,
+                        panelImage = null,
+                        radiusPx = palette.settings.panelRadiusPx
+                    )
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StudioSwitchRow(
+                    title = "回退旧版 Token 管线（停用级联覆写）",
+                    subtitle = "开启后忽略 4 区域级联覆写并沿用全局默认值",
+                    checked = useLegacyTokenPipeline,
+                    onCheckedChange = onToggleLegacyTokenPipeline,
+                    palette = palette
+                )
+                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                StudioSwitchRow(
+                    title = "回退旧版分体包读写（Kill Switch）",
+                    subtitle = "开启后暂停日夜双包重投影，保留旧版兼容行为",
+                    checked = useLegacyPackageManager,
+                    onCheckedChange = onToggleLegacyPackageManager,
+                    palette = palette
+                )
+            }
         }
     }
 }
@@ -1238,367 +1998,6 @@ private fun StudioSliderItem(
 }
 
 @Composable
-private fun StudioSlotsSection(
-    summaries: AppearanceSlotSummaries,
-    palette: AppManagementPalette,
-    glassSignature: String?,
-    onOpenSlot: (AppearanceSlot) -> Unit
-) {
-    val rows = listOf(
-        Triple(AppearanceSlot.THEME, R.string.appearance_slot_theme, summaries.theme),
-        Triple(AppearanceSlot.NAVIGATION_BAR, R.string.appearance_slot_nav_bar, summaries.navigationBar),
-        Triple(AppearanceSlot.GLASS, R.string.appearance_slot_glass, summaries.glass),
-        Triple(AppearanceSlot.COVER, R.string.appearance_slot_cover, summaries.cover),
-        Triple(AppearanceSlot.WELCOME, R.string.appearance_slot_welcome, summaries.welcome)
-    )
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = stringResource(R.string.appearance_studio_slots_title),
-            palette = palette.settings,
-            inCard = false
-        )
-        Text(
-            text = stringResource(R.string.appearance_studio_slots_hint),
-            color = palette.settings.secondaryText,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-        val content: @Composable () -> Unit = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                rows.forEachIndexed { index, (slot, titleRes, summary) ->
-                    val isLast = index == rows.lastIndex
-                    ActionRow(
-                        title = stringResource(titleRes),
-                        summary = summary,
-                        trailing = "",
-                        palette = palette.settings,
-                        isLast = isLast,
-                        onClick = { onOpenSlot(slot) }
-                    )
-                }
-            }
-        }
-        if (glassSignature != null) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = palette.settings.panelRadiusPx,
-                configSignature = glassSignature,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
-            ) { content() }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = palette.settings.panelRadiusPx
-                    )
-            ) { content() }
-        }
-    }
-}
-
-@Composable
-private fun ActionRow(
-    title: String,
-    summary: String,
-    trailing: String,
-    palette: AppSettingPalette,
-    isLast: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
-            .appSettingRowDecoration(
-                pressed = pressed,
-                pressedColor = palette.rowPressed,
-                dividerColor = palette.divider,
-                showDivider = !isLast,
-                radiusPx = palette.panelRadiusPx,
-                isFirst = false,
-                isLast = isLast
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = palette.primaryText,
-                fontSize = 16.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = summary,
-                color = palette.secondaryText,
-                fontSize = 14.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (trailing.isNotBlank()) {
-            Text(
-                text = trailing,
-                color = palette.accent,
-                fontSize = 14.sp,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-private fun StudioScopeOverrideSection(
-    selectedScope: UiScope,
-    override: SurfaceScopeOverride,
-    isEInkMode: Boolean,
-    palette: AppManagementPalette,
-    glassSignature: String?,
-    onSelectScope: (UiScope) -> Unit,
-    onUpdateOverride: ((SurfaceScopeOverride) -> SurfaceScopeOverride) -> Unit,
-    onResetScope: () -> Unit
-) {
-    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-    val scopeOptions = remember {
-        listOf(
-            SegmentedOption(UiScope.TOP_BAR, "顶栏"),
-            SegmentedOption(UiScope.BOTTOM_BAR, "底栏"),
-            SegmentedOption(UiScope.BOOKSHELF_CARD, "书架卡"),
-            SegmentedOption(UiScope.DIALOG, "弹窗")
-        )
-    }
-    val materialOptions = remember {
-        listOf(
-            SegmentedOption("", "继承"),
-            SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
-            SegmentedOption(GlassMaterialPreset.FROSTED, "磨砂"),
-            SegmentedOption(GlassMaterialPreset.GLASS, "液态")
-        )
-    }
-    var cornerDraft by remember(selectedScope, override.cornerScale) {
-        mutableIntStateOf(((override.cornerScale ?: 1.0f) * 10f).toInt().coerceIn(0, 30))
-    }
-    var alphaDraft by remember(selectedScope, override.alpha) {
-        mutableIntStateOf((override.alpha ?: 100).coerceIn(0, 100))
-    }
-    var shadowDraft by remember(selectedScope, override.shadowElevation) {
-        mutableIntStateOf((override.shadowElevation ?: 0).coerceIn(0, 24))
-    }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = "区域质感覆写（Scope Overrides）",
-            palette = palette.settings,
-            inCard = false
-        )
-        val content: @Composable () -> Unit = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                LegadoSegmentedControl(
-                    options = scopeOptions,
-                    selectedValue = selectedScope,
-                    palette = palette.miuix,
-                    onSelected = onSelectScope,
-                    tone = SegmentedControlTone.AccentThumb,
-                    fontSize = 11.sp,
-                    glassSignature = null
-                )
-                if (isEInkMode) {
-                    Text(
-                        text = stringResource(R.string.appearance_studio_eink_glass_disabled),
-                        color = palette.settings.secondaryText,
-                        fontSize = 13.sp
-                    )
-                } else {
-                    LegadoSegmentedControl(
-                        options = materialOptions,
-                        selectedValue = override.materialMode.orEmpty(),
-                        palette = palette.miuix,
-                        onSelected = { mode ->
-                            onUpdateOverride { cur ->
-                                cur.copy(materialMode = mode.ifBlank { null })
-                            }
-                        },
-                        tone = SegmentedControlTone.SurfaceThumb,
-                        fontSize = 11.sp,
-                        glassSignature = null
-                    )
-                    StudioSliderItem(
-                        title = "区域圆角倍率",
-                        valueText = if (override.cornerScale == null) {
-                            "继承"
-                        } else {
-                            String.format(Locale.US, "%.1fx", cornerDraft / 10f)
-                        },
-                        value = cornerDraft,
-                        range = 0..30,
-                        palette = palette,
-                        onValueChange = { cornerDraft = it.coerceIn(0, 30) },
-                        onValueChangeFinished = {
-                            onUpdateOverride { cur -> cur.copy(cornerScale = cornerDraft / 10f) }
-                        }
-                    )
-                    StudioSliderItem(
-                        title = "区域不透明度",
-                        valueText = if (override.alpha == null) "继承" else "${alphaDraft}%",
-                        value = alphaDraft,
-                        range = 0..100,
-                        palette = palette,
-                        onValueChange = { alphaDraft = it.coerceIn(0, 100) },
-                        onValueChangeFinished = {
-                            onUpdateOverride { cur -> cur.copy(alpha = alphaDraft) }
-                        }
-                    )
-                    StudioSliderItem(
-                        title = "区域阴影高度",
-                        valueText = if (override.shadowElevation == null) "继承" else "${shadowDraft}dp",
-                        value = shadowDraft,
-                        range = 0..24,
-                        palette = palette,
-                        onValueChange = { shadowDraft = it.coerceIn(0, 24) },
-                        onValueChangeFinished = {
-                            onUpdateOverride { cur -> cur.copy(shadowElevation = shadowDraft) }
-                        }
-                    )
-                    if (!override.isEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            LegadoMiuixActionButton(
-                                text = "恢复继承全局",
-                                palette = palette.miuix,
-                                onClick = onResetScope,
-                                minHeight = 32.dp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        if (glassSignature != null) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = palette.settings.panelRadiusPx,
-                configSignature = glassSignature,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
-            ) { content() }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = palette.settings.panelRadiusPx
-                    )
-            ) { content() }
-        }
-    }
-}
-
-@Composable
-private fun StudioDensityAndSwitchesSection(
-    densityScale: Float,
-    useLegacyTokenPipeline: Boolean,
-    useLegacyPackageManager: Boolean,
-    palette: AppManagementPalette,
-    glassSignature: String?,
-    onDensityScaleDrag: (Int) -> Unit,
-    onDensityScaleCommit: () -> Unit,
-    onToggleLegacyTokenPipeline: (Boolean) -> Unit,
-    onToggleLegacyPackageManager: (Boolean) -> Unit
-) {
-    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-    val densityStep = (densityScale * 10f).toInt().coerceIn(8, 13)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = "布局密度与兼容开关",
-            palette = palette.settings,
-            inCard = false
-        )
-        val content: @Composable () -> Unit = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StudioSliderItem(
-                    title = "空间间距密度（Density Scale）",
-                    valueText = String.format(Locale.US, "%.1fx", densityScale),
-                    value = densityStep,
-                    range = 8..13,
-                    palette = palette,
-                    onValueChange = onDensityScaleDrag,
-                    onValueChangeFinished = onDensityScaleCommit
-                )
-                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
-                StudioSwitchRow(
-                    title = "回退旧版 Token 管线（停用级联覆写）",
-                    subtitle = "开启后忽略区域级联覆写并沿用全局默认值",
-                    checked = useLegacyTokenPipeline,
-                    onCheckedChange = onToggleLegacyTokenPipeline,
-                    palette = palette
-                )
-                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
-                StudioSwitchRow(
-                    title = "兼容旧版分体包管理（Kill Switch）",
-                    subtitle = "开启后暂停自动迁移，滑块调参保留旧版兼容行为",
-                    checked = useLegacyPackageManager,
-                    onCheckedChange = onToggleLegacyPackageManager,
-                    palette = palette
-                )
-            }
-        }
-        if (glassSignature != null) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = palette.settings.panelRadiusPx,
-                configSignature = glassSignature,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
-            ) { content() }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = palette.settings.panelRadiusPx
-                    )
-            ) { content() }
-        }
-    }
-}
-
-@Composable
 private fun StudioSwitchRow(
     title: String,
     subtitle: String,
@@ -1617,14 +2016,14 @@ private fun StudioSwitchRow(
             Text(
                 text = title,
                 color = palette.settings.primaryText,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 color = palette.settings.secondaryText,
-                fontSize = 12.sp
+                fontSize = 11.sp
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -1647,75 +2046,58 @@ private fun ParamImportLayerDialog(
     var applyLayout by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss) {
         AppDialogFrame(
-            title = "选择要应用的配置分区",
+            title = stringResource(R.string.appearance_kit_import),
             content = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { applySurface = !applySurface }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 4.dp)
                     ) {
                         Checkbox(checked = applySurface, onCheckedChange = { applySurface = it })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "材质与形状参数 (@surface)",
-                                color = style.primaryText,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "应用圆角曲率、透明度、材质档位与核心区域覆写",
-                                color = style.secondaryText,
-                                fontSize = 12.sp
-                            )
-                        }
+                        Text(
+                            text = "应用材质与几何参数 (@atmosphere + @geometry)",
+                            color = style.primaryText,
+                            fontSize = 14.sp
+                        )
                     }
                     Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { applyLayout = !applyLayout }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 4.dp)
                     ) {
                         Checkbox(checked = applyLayout, onCheckedChange = { applyLayout = it })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "界面布局与间距参数 (@layout)",
-                                color = style.primaryText,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "覆盖导航骨架、间距密度与页面分布列数",
-                                color = style.secondaryText,
-                                fontSize = 12.sp
-                            )
-                        }
+                        Text(
+                            text = "应用界面布局骨架 (@layout · 谨慎覆盖)",
+                            color = style.primaryText,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             },
             actions = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.cancel),
-                        palette = palette,
-                        onClick = onDismiss
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    LegadoMiuixActionButton(
-                        text = stringResource(R.string.ok),
-                        palette = palette,
-                        primary = true,
-                        onClick = { onConfirm(applySurface, applyLayout) }
-                    )
-                }
+                LegadoMiuixActionButton(
+                    text = stringResource(R.string.cancel),
+                    palette = palette,
+                    onClick = onDismiss
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                LegadoMiuixActionButton(
+                    text = stringResource(R.string.ok),
+                    palette = palette,
+                    primary = true,
+                    enabled = applySurface || applyLayout,
+                    onClick = { onConfirm(applySurface, applyLayout) }
+                )
             }
         )
     }

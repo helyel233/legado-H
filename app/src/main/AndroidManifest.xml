@@ -327,19 +327,10 @@
             android:launchMode="standard"
             android:windowSoftInputMode="adjustResize|stateHidden" />
         <activity
-            android:name=".ui.config.ThemeManageActivity"
-            android:launchMode="standard" />
-        <activity
             android:name=".ui.config.AppearanceKitActivity"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.ReadingDecorCenterActivity"
-            android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.NavigationBarManageActivity"
-            android:launchMode="standard" />
-        <activity
-            android:name=".ui.config.TopBarManageActivity"
             android:launchMode="standard" />
         <activity
             android:name=".ui.config.BookInfoManageActivity"
@@ -391,9 +382,6 @@
             android:name=".ui.config.AiImageProviderEditActivity"
             android:launchMode="standard"
             android:windowSoftInputMode="adjustResize|stateHidden" />
-        <activity
-            android:name=".ui.config.CoverCollectionManageActivity"
-            android:launchMode="standard" />
         <activity
             android:name=".ui.config.CoverCollectionDetailActivity"
             android:launchMode="standard" />

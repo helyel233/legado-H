@@ -73,11 +73,7 @@ object SurfaceStyles {
         val baseTint = dialogSurfaceColor(
             ContextCompat.getColor(context, R.color.dialog_surface)
         )
-        val tintColor = if (!tokens.env.isEInk && (dialogScope.isCustomOverride || dialogScope.alphaPercent < 100)) {
-            ColorUtils.withAlpha(baseTint, dialogScope.alphaFraction)
-        } else {
-            baseTint
-        }
+        val tintColor = dialogScope.resolveSurfaceColorIfActive(baseTint, tokens.env.isEInk)
         val radiusPx = if (!tokens.env.isEInk && dialogScope.isCustomOverride) {
             dialogScope.panelRadiusPx
         } else {

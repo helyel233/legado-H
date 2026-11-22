@@ -24,9 +24,11 @@ internal object UiPackageBackup {
     const val COVER_COLLECTIONS = "coverCollections"
     /** 外观方案（kits.json 与方案预览图等）目录名，与 Restore.restoreAppearanceKits 一致。 */
     const val APP_THEME_KITS = "appThemeKits"
+    /** V4 统一双包（art / param）目录名，与 Restore.restoreUnifiedPackages 一致。 */
+    const val UNIFIED_PACKAGES = "unifiedPackages"
 
-    /** 备份↔恢复两端共享的目录名清单，单一真相源。 */
-    val packageDirNames = listOf(
+    /** V1 历史包目录清单（供 Restore 检测旧版备份并触发自动合成迁移）。 */
+    val legacyPackageDirNames = listOf(
         THEME_PACKAGES,
         NAVIGATION_BAR_PACKAGES,
         TOP_BAR_PACKAGES,
@@ -34,8 +36,11 @@ internal object UiPackageBackup {
         APP_THEME_KITS
     )
 
+    /** 备份↔恢复两端共享的目录名清单（V1 + V2 双轨兼容），单一真相源。 */
+    val packageDirNames = legacyPackageDirNames + UNIFIED_PACKAGES
+
     /** 临时目录与云端缓存，不跨设备迁移。 */
-    private val excludedDirs = setOf("temp", "remote_cache", "appearanceKitTemp")
+    private val excludedDirs = setOf("temp", "remote_cache", "appearanceKitTemp", "unifiedPackageTemp")
 
     /**
      * 美术资产包子目录是否纳入备份：排除临时/缓存/隐藏目录，
@@ -74,6 +79,20 @@ internal object UiPackageBackup {
                 val targetFile = File(targetRoot, entry.name)
                 targetFile.parentFile?.mkdirs()
                 entry.copyTo(targetFile, overwrite = true)
+            }
+        }
+    }
+
+    /**
+     * 导出 V4 统一双包目录（`unifiedPackages/{art,param}/<pkgId>`）：
+     * 过滤掉 `art/` 与 `param/` 下的临时/内置/隐藏子目录。
+     */
+    fun copyUnifiedPackages(sourceRoot: File, targetRoot: File) {
+        if (!sourceRoot.isDirectory) return
+        listOf("art", "param").forEach { kindDirName ->
+            val kindSource = File(sourceRoot, kindDirName)
+            if (kindSource.isDirectory) {
+                copyVisiblePackages(kindSource, File(targetRoot, kindDirName))
             }
         }
     }

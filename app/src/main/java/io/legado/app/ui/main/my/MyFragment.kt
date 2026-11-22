@@ -265,13 +265,11 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
             ConfigTag.STORAGE_CONFIG,
             ConfigTag.ADVANCED_CONFIG,
             ConfigTag.COVER_CONFIG,
-            ConfigTag.WELCOME_CONFIG,
             ConfigTag.DISCOVERY_SUBSCRIPTION_CONFIG,
             ConfigTag.COMMENT_CONFIG,
             ConfigTag.BOOKSHELF_CONFIG,
             ConfigTag.AUDIO_CONFIG,
             ConfigTag.MANGA_VIDEO_CONFIG,
-            ConfigTag.EXPLORE_GLASS_CONFIG,
             ConfigTag.UI_LAYOUT_CONFIG -> startActivity<ConfigActivity> {
                 putExtra("configTag", key)
             }

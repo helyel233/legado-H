@@ -70,6 +70,42 @@ data class ResolvedScopeTokens(
 
     val borderAlphaFraction: Float
         get() = borderAlphaPercent.coerceIn(0, 100) / 100f
+
+    val isSolidMode: Boolean
+        get() = materialMode == GlassMaterialPreset.SOLID
+
+    val isClearMode: Boolean
+        get() = materialMode == GlassMaterialPreset.CLEAR
+
+    val usesGlassSampling: Boolean
+        get() = materialMode == GlassMaterialPreset.GLASS ||
+            materialMode == GlassMaterialPreset.FROSTED
+
+    val shouldApplySurfaceFill: Boolean
+        get() = isCustomOverride || isClearMode || alphaPercent < 100
+
+    /**
+     * Resolves a surface fill color for this scope, delegating `CLEAR` mode directly
+     * to [GlassMaterialPreset.clearSurfaceColor] (single source of truth).
+     */
+    fun resolveSurfaceColor(baseColorArgb: Int): Int {
+        if (isClearMode) {
+            return GlassMaterialPreset.clearSurfaceColor(baseColorArgb)
+        }
+        val clamped = alphaPercent.coerceIn(0, 100)
+        if (clamped >= 100) return baseColorArgb
+        return SurfaceHierarchyDerivation.withAlphaArgb(baseColorArgb, (clamped * 255) / 100)
+    }
+
+    /**
+     * Applies [resolveSurfaceColor] whenever surface modulation is active (custom scope override,
+     * global `CLEAR` mode, or `alphaPercent < 100`), returning [baseColorArgb] untouched under E-Ink
+     * or solid opaque defaults.
+     */
+    fun resolveSurfaceColorIfActive(baseColorArgb: Int, isEInk: Boolean): Int {
+        if (isEInk || !shouldApplySurfaceFill) return baseColorArgb
+        return resolveSurfaceColor(baseColorArgb)
+    }
 }
 
 @Immutable

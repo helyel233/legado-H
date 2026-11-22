@@ -2469,6 +2469,8 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="package_sync_task_status_completed">已完成</string>
     <string name="package_sync_task_status_cancelled">已取消</string>
     <string name="package_sync_task_status_failed">失败</string>
+    <string name="package_sync_task_type_art">美术资源包</string>
+    <string name="package_sync_task_type_param">参数设置包</string>
     <string name="package_sync_task_type_theme">主题</string>
     <string name="package_sync_task_type_top_bar">顶栏</string>
     <string name="package_sync_task_type_navigation_bar">底栏</string>

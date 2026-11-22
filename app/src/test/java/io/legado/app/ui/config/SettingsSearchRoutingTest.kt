@@ -13,8 +13,7 @@ class SettingsSearchRoutingTest {
     @Test
     fun allowedManageActivities_passWhitelistCheck() {
         val allowed = listOf(
-            ThemeManageActivity::class.java.name,
-            NavigationBarManageActivity::class.java.name,
+            AppearanceKitActivity::class.java.name,
             BubbleManageActivity::class.java.name,
             AdvancedTitleManageActivity::class.java.name,
             AdvancedTipManageActivity::class.java.name,
@@ -31,20 +30,20 @@ class SettingsSearchRoutingTest {
 
     @Test
     fun arbitraryOrUnknownActivity_isRejectedByWhitelist() {
-        assertFalse(
-            SettingsSearchIndex.isAllowedActivityDestination(
-                SearchDestination.Activity(TopBarManageActivity::class.java.name)
+        listOf(
+            ThemeManageActivity::class.java.name,
+            TopBarManageActivity::class.java.name,
+            NavigationBarManageActivity::class.java.name,
+            CoverCollectionManageActivity::class.java.name,
+            "io.legado.app.ui.main.MainActivity",
+            "com.example.EvilActivity"
+        ).forEach { className ->
+            assertFalse(
+                "Expected rejected: $className",
+                SettingsSearchIndex.isAllowedActivityDestination(
+                    SearchDestination.Activity(className)
+                )
             )
-        )
-        assertFalse(
-            SettingsSearchIndex.isAllowedActivityDestination(
-                SearchDestination.Activity("io.legado.app.ui.main.MainActivity")
-            )
-        )
-        assertFalse(
-            SettingsSearchIndex.isAllowedActivityDestination(
-                SearchDestination.Activity("com.example.EvilActivity")
-            )
-        )
+        }
     }
 }

@@ -138,6 +138,14 @@ object ThemeConfig {
 
     fun applyDayNight(context: Context, isNightTheme: Boolean = AppConfig.isNightTheme) {
         clearUsableBgImageCache()
+        runCatching {
+            io.legado.app.help.config.pkg.UnifiedPackageRepository.applyDayNightMountedSync(
+                context,
+                isNightTheme
+            )
+        }.onFailure {
+            AppLog.put("applyDayNight mounted package projection failed\n${it.localizedMessage}", it)
+        }
         //每步各自容错：任何一环异常都不能阻断末尾两个事件投递，
         //否则 RECREATE 漏发，View 版页面（如经典发现页书源框）会停留旧主题
         runCatching { applyTheme(context, isNightTheme) }.onFailure {

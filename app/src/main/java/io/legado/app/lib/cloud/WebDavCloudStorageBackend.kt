@@ -89,7 +89,7 @@ class WebDavCloudStorageBackend : CloudStorageBackend {
 
     private suspend fun makeRootDirs(rootUrl: String, auth: Authorization) {
         val elapsed = measureTimeMillis {
-            listOf("", "bookProgress/", "books/", "background/", "themes/", "navigationBars/", "topBars/", "coverCollections/", "bubbles/")
+            listOf("", "bookProgress/", "books/", "background/", "themes/", "navigationBars/", "topBars/", "coverCollections/", "bubbles/", "uiPackages/", "uiPackages/art/", "uiPackages/param/")
                 .forEach { WebDav(rootUrl + it, auth).makeAsDir() }
         }
         AppLog.put("WebDAV目录初始化完成: ${elapsed}ms")
