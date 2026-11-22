@@ -4,7 +4,12 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
-**vH.1.36.1 · 2026/11/22**
+**vH.1.36.2 · 2026/11/22**
+
+- 修复主题模式/eInk 多入口状态不同步：AppConfig 新增统一入口 setThemeModeSelection + resolveDisplayThemeMode，切日/夜/跟随系统时一次提交同步 themeMode+eInkMode+lastNonEInkThemeMode
+- 外观中心移除重复的主题模式段控件，只保留独立正交 eInk 开关；我的页改经统一入口切换并同时监听 themeMode/eInkMode 刷新
+- eInk 开关切换时同步刷新美术/参数包日夜槽（仅日夜真变化时），避免编辑到错误槽
+- 移除 4 个不再引用的外观工作台字符串；新增 ThemeModeEInkSyncTest(3例)覆盖三向同步路径；五项静态门禁全通过
 
 - 聚合主页 SWR 缓存 HomepageCacheStore：10分钟新鲜窗+7天磁盘上限，复用发现页512KB单行上限+SearchBook字段裁剪防 CursorWindow 溢出，模块/榜单分键+LRU 索引
 - 首页模块并发调度器 HomepageLoadScheduler：全局并发上限3、同源串行防限流，三级优先级(首屏>预加载>SWR刷新)按可见性动态升降
