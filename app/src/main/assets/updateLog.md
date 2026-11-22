@@ -4,7 +4,14 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
-**vH.1.35.1 · 2026/11/22**
+**vH.1.36.1 · 2026/11/22**
+
+- 聚合主页 SWR 缓存 HomepageCacheStore：10分钟新鲜窗+7天磁盘上限，复用发现页512KB单行上限+SearchBook字段裁剪防 CursorWindow 溢出，模块/榜单分键+LRU 索引
+- 首页模块并发调度器 HomepageLoadScheduler：全局并发上限3、同源串行防限流，三级优先级(首屏>预加载>SWR刷新)按可见性动态升降
+- 模块构建器 HomepageModuleBuilder：书源/RSS 分类与榜单构建、配置同步与自动布置收敛为纯函数+明确结果类型
+- 首页结构重构：HomepageViewModel 分层收敛、排名 tab 状态独立化；移除独立分类选择 Sheet 内联进模块管理；新增缓存/调度/tab 三个定向测试类(20例)
+- 美术包编辑器统一调色盘：新增纯JVM ColorPaletteHelper(HEX/ARGB解析、RGB↔HSV、18色系×10色阶+中性色、对比色) + ColorPalettePickerDialog(预设色板+SV面板/色相滑条/HEX双向取色)，12个颜色字段+玻璃描边色接入，默认只改当前日夜槽、可勾选同步双槽，修此前日夜同值覆盖
+- 美术包编辑器接入调色盘 feat 已先行提交；五项静态门禁全通过
 
 - UI 架构 v4 基础层：新增统一包仓库 PackageIoKernel(原子写+ZIP安全解压)、UnifiedPackageCodec/manifest(schemaVersion=1+unknownFields透传)、LegacyPackageMigrator 旧包静默拆解为美术/参数双包
 - 级联 Scope Token：ThemeTokenCompiler 全局+4 Scope(顶层/底栏/书架卡片/弹窗)级联派生+密度缩放，8 路显式接线

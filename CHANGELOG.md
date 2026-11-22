@@ -1,5 +1,21 @@
 # 更新日志
 
+## 1.36.1 版（2026-11-22）
+
+本版重做首页模块体系：新增聚合主页 SWR 缓存、按源串行的并发优先级调度器与模块构建器，重构排名 tab 状态与模块管理对话框（移除独立的分类选择 Sheet），配套新增缓存/调度/tab 三个定向测试类；并让美术包编辑器接入统一调色盘，支持日夜分槽编辑与自定义取色。**新功能 + 重构 → minor+0.1，跳过 1.x.0。**
+
+### 新功能
+
+- **聚合主页 SWR 缓存（`HomepageCacheStore`）**：Stale-While-Revalidate 策略，10 分钟新鲜窗口 + 7 天磁盘上限；复用发现页 512KB 单行字节上限与 `SearchBook` 字段裁剪，避免 Room CursorWindow 溢出；模块/按钮/榜单 tab 分键存储 + LRU 索引，单模块最多缓存 40 本、全局 80 条。
+- **首页模块并发调度器（`HomepageLoadScheduler`）**：全局最大并发 3，同一书源串行排队防止单站被打爆或限流；三级优先级（首屏可见 > 预加载 > 后台 SWR 刷新），按 `visibleKeys` 动态升降排队任务优先级（滑入提升、滑出回基准）。
+- **模块构建器（`HomepageModuleBuilder`）**：统一书源/RSS 模块的分类与榜单构建、书源配置自动同步与自动布置，收敛原先散落在 ViewModel 的构建逻辑为纯函数 + 明确结果类型（`SyncSourceResult` / `AutoSetupResult`）。
+- **美术包编辑器统一调色盘**：新增纯 JVM `ColorPaletteHelper`（HEX/十进制 ARGB 解析、RGB↔HSV 往返、18 色系×10 色阶 + 纸墨中性色、对比色），新增 `ColorPalettePickerDialog`（预设色板 + SV 面板/色相滑条/HEX 双向自定义取色）；美术包 12 个颜色字段与玻璃描边色全部接入，默认只改当前日/夜槽，可勾选同步双槽，修此前日夜同值覆盖。
+
+### 优化 / 收口
+
+- **首页结构与交互重构**：`HomepageViewModel` 收敛为缓存 + 调度 + 构建分层，排名 tab 状态独立化；移除 `HomepageKindSelectSheet` 与 `dialog_homepage_kind_select.xml`，分类选择内联进模块管理；管理/编辑对话框与首页布局、项布局同步调整，中英文资源补齐。
+- **测试与门禁**：新增 `HomepageCacheAndTabPolicyTest` / `HomepageLoadSchedulerTest` / `HomepageRankingTabStateTest`（20 例）与 `ColorPaletteHelperTest`（6 例）；五项静态门禁（玻璃治理 / 设置映射 / Compose 主题覆盖 / r58 资源 / UI 空间契约巡检）全部通过。
+
 ## 1.35.1 版（2026-11-22）
 
 本版落地 UI 架构 v4：三层正交解耦（数据层 / 编译层 / 呈现层），新增统一包仓库与美术包/参数包双包分离、级联 Scope Token、快照转场，并完成 v4.1 双槽激活、CoW 增量包与备份恢复收口，配套 P0 性能修复与墨水屏独立轴。**新功能 + 优化/修复 → minor+0.1，跳过 1.x.0。**
