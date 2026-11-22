@@ -18,6 +18,7 @@ import io.legado.app.base.BaseFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.FragmentMyConfigBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
@@ -50,7 +51,6 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.observeEventSticky
 import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.putPrefString
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -118,8 +118,9 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
-            PreferKey.themeMode -> {
-                themeModeState.value = requireContext().getPrefString(PreferKey.themeMode, "0") ?: "0"
+            PreferKey.themeMode,
+            PreferKey.eInkMode -> {
+                themeModeState.value = resolveDisplayThemeMode()
             }
 
             PreferKey.autoTaskService -> updateAutoTaskServiceState()
@@ -185,8 +186,16 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
         settingsSearchView.applyGlassDomain(GlassSamplingDomain.WALLPAPER)
     }
 
+    private fun resolveDisplayThemeMode(): String {
+        val ctx = requireContext()
+        return AppConfig.resolveDisplayThemeMode(
+            rawThemeMode = ctx.getPrefString(PreferKey.themeMode, "0"),
+            eInkPrefEnabled = ctx.getPrefBoolean(PreferKey.eInkMode, false)
+        )
+    }
+
     private fun updateSettingsState() {
-        themeModeState.value = requireContext().getPrefString(PreferKey.themeMode, "0") ?: "0"
+        themeModeState.value = resolveDisplayThemeMode()
         updateAutoTaskServiceState()
     }
 
@@ -199,8 +208,8 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config),
     }
 
     private fun setThemeMode(value: String) {
-        requireContext().putPrefString(PreferKey.themeMode, value)
-        themeModeState.value = value
+        AppConfig.setThemeModeSelection(value)
+        themeModeState.value = resolveDisplayThemeMode()
         view?.post {
             //延迟到下一帧执行时 Fragment 可能已分离，requireContext 会抛 IllegalStateException
             val context = context ?: return@post

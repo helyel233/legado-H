@@ -145,7 +145,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val existingNames: List<String>
     )
 
-    private var themeModeState by mutableStateOf("0")
     private var isNightState by mutableStateOf(AppConfig.isNightTheme)
     private var isEInkState by mutableStateOf(AppConfig.isEInkMode)
 
@@ -294,13 +293,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             layoutParams = binding.recyclerView.layoutParams
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                val modeOptions = remember {
-                    listOf(
-                        SegmentedOption("0", "跟随系统"),
-                        SegmentedOption("1", "日间模式"),
-                        SegmentedOption("2", "夜间模式")
-                    )
-                }
                 val glassOptions = remember {
                     listOf(
                         SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
@@ -311,8 +303,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 }
                 LegadoComposeTheme {
                     AppearanceStudioScreen(
-                        themeMode = themeModeState.takeUnless { it == "3" } ?: "0",
-                        modeOptions = modeOptions,
                         isEInkMode = isEInkState,
                         artSlotNight = artSlotNightState,
                         paramSlotNight = paramSlotNightState,
@@ -331,7 +321,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         useLegacyPackageManager = useLegacyPackageManagerState,
                         topMenuActions = ::topBarMenuActions,
                         onBack = ::supportFinishAfterTransition,
-                        onSwitchThemeMode = ::switchThemeMode,
                         onToggleEInkMode = ::toggleEInkMode,
                         onSelectArtSlotNight = { artSlotNightState = it },
                         onSelectParamSlotNight = { paramSlotNightState = it },
@@ -500,7 +489,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         updateCloudContainerState()
         val night = AppConfig.isNightTheme
         val eInk = AppConfig.isEInkMode
-        themeModeState = getPrefString(PreferKey.themeMode, "0") ?: "0"
         isNightState = night
         isEInkState = eInk
         cornerScaleState = AppConfig.uiCornerScale
@@ -529,20 +517,15 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun switchThemeMode(nextMode: String) {
-        if (nextMode == themeModeState) return
-        themeModeState = nextMode
-        putPrefString(PreferKey.themeMode, nextMode)
-        val nextNight = AppConfig.isNightTheme
-        artSlotNightState = nextNight
-        paramSlotNightState = nextNight
-        window.decorView.post {
-            ThemeConfig.applyDayNight(this@AppearanceKitActivity)
-        }
-    }
-
     private fun toggleEInkMode(enabled: Boolean) {
+        val prevNight = isNightState
         AppConfig.setEInkModeEnabled(enabled)
+        val nextNight = AppConfig.isNightTheme
+        isNightState = nextNight
+        if (nextNight != prevNight) {
+            artSlotNightState = nextNight
+            paramSlotNightState = nextNight
+        }
         isEInkState = AppConfig.isEInkMode
         recomputeThemeUiSignatureAfterBatch()
         window.decorView.post {
@@ -1113,8 +1096,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
 @Composable
 private fun AppearanceStudioScreen(
-    themeMode: String,
-    modeOptions: List<SegmentedOption<String>>,
     isEInkMode: Boolean,
     artSlotNight: Boolean,
     paramSlotNight: Boolean,
@@ -1133,7 +1114,6 @@ private fun AppearanceStudioScreen(
     useLegacyPackageManager: Boolean,
     topMenuActions: () -> List<AppManagementMenuAction>,
     onBack: () -> Unit,
-    onSwitchThemeMode: (String) -> Unit,
     onToggleEInkMode: (Boolean) -> Unit,
     onSelectArtSlotNight: (Boolean) -> Unit,
     onSelectParamSlotNight: (Boolean) -> Unit,
@@ -1193,15 +1173,11 @@ private fun AppearanceStudioScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.SectionGap)
         ) {
-            // 1. 主题模式（跟随系统 / 日间 / 夜间）+ 独立正交墨水屏开关
-            item("1_mode_switcher") {
-                StudioModeSwitcherSection(
-                    themeMode = themeMode,
-                    options = modeOptions,
+            // 1. 独立正交墨水屏开关
+            item("1_eink_mode") {
+                StudioEInkSwitchSection(
                     isEInkMode = isEInkMode,
                     palette = palette,
-                    glassSignature = effectiveGlassSig,
-                    onSelectMode = onSwitchThemeMode,
                     onToggleEInkMode = onToggleEInkMode
                 )
             }
@@ -1284,32 +1260,18 @@ private fun AppearanceStudioScreen(
 }
 
 @Composable
-private fun StudioModeSwitcherSection(
-    themeMode: String,
-    options: List<SegmentedOption<String>>,
+private fun StudioEInkSwitchSection(
     isEInkMode: Boolean,
     palette: AppManagementPalette,
-    glassSignature: String?,
-    onSelectMode: (String) -> Unit,
     onToggleEInkMode: (Boolean) -> Unit
 ) {
     val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
     Column(modifier = Modifier.fillMaxWidth()) {
         AppSettingSectionTitle(
-            title = stringResource(R.string.theme_mode),
+            title = "显示模式",
             palette = palette.settings,
             inCard = false
         )
-        LegadoSegmentedControl(
-            options = options,
-            selectedValue = themeMode,
-            palette = palette.miuix,
-            onSelected = onSelectMode,
-            tone = SegmentedControlTone.AccentThumb,
-            fontSize = 12.sp,
-            glassSignature = glassSignature
-        )
-        Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()

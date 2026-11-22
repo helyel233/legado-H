@@ -115,6 +115,41 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var isEInkMode = appCtx.getPrefBoolean(PreferKey.eInkMode, false) ||
         appCtx.getPrefString(PreferKey.themeMode) == "3"
 
+    fun resolveDisplayThemeMode(
+        rawThemeMode: String? = appCtx.getPrefString(PreferKey.themeMode, "0"),
+        eInkPrefEnabled: Boolean = appCtx.getPrefBoolean(PreferKey.eInkMode, false)
+    ): String {
+        return if (eInkPrefEnabled || rawThemeMode == "3") "3" else (rawThemeMode ?: "0")
+    }
+
+    fun setThemeModeSelection(mode: String) {
+        val currentMode = appCtx.getPrefString(PreferKey.themeMode, "0")
+        if (mode == "3") {
+            if (currentMode in NON_EINK_THEME_MODES) {
+                lastNonEInkThemeMode = currentMode!!
+            }
+            themeMode = "3"
+            isEInkMode = true
+            appCtx.defaultSharedPreferences.edit {
+                if (currentMode in NON_EINK_THEME_MODES) {
+                    putString(KEY_LAST_NON_EINK_THEME_MODE, currentMode)
+                }
+                putString(PreferKey.themeMode, "3")
+                putBoolean(PreferKey.eInkMode, true)
+            }
+        } else {
+            val normalizedMode = mode.takeIf { it in NON_EINK_THEME_MODES } ?: "0"
+            lastNonEInkThemeMode = normalizedMode
+            themeMode = normalizedMode
+            isEInkMode = false
+            appCtx.defaultSharedPreferences.edit {
+                putString(KEY_LAST_NON_EINK_THEME_MODE, normalizedMode)
+                putString(PreferKey.themeMode, normalizedMode)
+                putBoolean(PreferKey.eInkMode, false)
+            }
+        }
+    }
+
     fun setEInkModeEnabled(enabled: Boolean) {
         val currentMode = appCtx.getPrefString(PreferKey.themeMode, "0")
         if (currentMode in NON_EINK_THEME_MODES) {
