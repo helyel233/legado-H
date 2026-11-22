@@ -69,6 +69,7 @@ import io.legado.app.service.relay.RelayStateRepository
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppManagementPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
@@ -375,6 +376,8 @@ private fun RelaySettingsScreen(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
+                        // 四张卡已不再自带 12dp 外层边距，水平基准由本滚动容器唯一持有。
+                        .padding(horizontal = AppLayoutTokens.PageHorizontal)
                         .padding(bottom = 20.dp)
                 ) {
                     AppSettingSectionTitle(

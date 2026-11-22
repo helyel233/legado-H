@@ -40,6 +40,7 @@ import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -106,7 +107,7 @@ internal fun S3ContainerManageScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 10.dp),
+                    contentPadding = AppLayoutTokens.pageContentPadding(top = 10.dp, bottom = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
                 ) {
                     items(containers, key = { it.id }) { container ->

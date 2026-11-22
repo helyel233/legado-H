@@ -59,8 +59,7 @@ internal fun TxtTocRuleScreen(
     AppManagementLazyColumn(
         palette = palette,
         state = lazyListState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        modifier = modifier.fillMaxSize()
     ) {
         items(
             items = orderedRules,

@@ -243,7 +243,9 @@ fun AppManagementLazyColumn(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState(),
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+        AppLayoutTokens.pageContentPadding(
+            horizontal = LocalLayoutTokens.current.pageHorizontalDp.dp
+        ),
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(AppListSpacing.Normal),
     showFastScroller: Boolean = true,
     reserveFastScrollerSpace: Boolean = false,
@@ -295,7 +297,7 @@ fun AppManagementCard(
     glassSignature: String? = LocalAppManagementGlassSignature.current,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
-    outerPadding: PaddingValues = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal),
+    outerPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -413,7 +415,7 @@ fun AppManagementListRow(
     headerContent: (@Composable ColumnScope.() -> Unit)? = null,
     trailingBeforeSwitch: (@Composable RowScope.() -> Unit)? = null,
     leadingContent: (@Composable () -> Unit)? = null,
-    outerPadding: PaddingValues = PaddingValues(horizontal = AppLayoutTokens.PageHorizontal)
+    outerPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     AppManagementCard(
         palette = palette,
@@ -719,7 +721,11 @@ fun AppSettingSectionTitle(
     inCard: Boolean = true
 ) {
     if (title.isNullOrBlank()) return
-    val horizontalPad = if (inCard) 16.dp else 4.dp
+    val horizontalPad = if (inCard) {
+        AppLayoutTokens.RowPaddingHorizontal
+    } else {
+        AppLayoutTokens.SectionTitleOutsideHorizontal
+    }
     val topPad = if (inCard) 16.dp else 8.dp
     val bottomPad = if (inCard) 8.dp else 6.dp
     if (!collapsible || onToggle == null) {

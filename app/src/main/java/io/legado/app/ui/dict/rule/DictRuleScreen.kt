@@ -57,8 +57,7 @@ internal fun DictRuleScreen(
     AppManagementLazyColumn(
         palette = palette,
         state = lazyListState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
         items(
             items = orderedRules,

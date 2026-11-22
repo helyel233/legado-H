@@ -8,6 +8,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.pkg.PackageIoKernel
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.compress.ZipUtils
@@ -500,33 +501,35 @@ object CoverCollectionManager {
 
     private fun readRemoteCache(isNight: Boolean, containerId: String? = null): List<Entry> {
         val file = remoteCacheFile(isNight, containerId)
-        if (!file.exists()) return emptyList()
-        return GSON.fromJsonArray<RemoteCache>(file.readText()).getOrDefault(emptyList())
-            .filter { it.isNight == isNight }
-            .map { cache ->
-                Entry(
-                    collection = Collection(
-                        id = cache.dirName,
-                        name = cache.name.ifBlank { cache.dirName },
-                        dirName = cache.dirName,
-                        isNight = cache.isNight,
-                        updatedAt = cache.updatedAt
-                    ),
-                    source = Source.REMOTE,
-                    remoteUpdatedAt = cache.updatedAt
-                )
-            }
+        return PackageIoKernel.readRemoteCache(file) { text ->
+            GSON.fromJsonArray<RemoteCache>(text).getOrDefault(emptyList())
+                .filter { it.isNight == isNight }
+                .map { cache ->
+                    Entry(
+                        collection = Collection(
+                            id = cache.dirName,
+                            name = cache.name.ifBlank { cache.dirName },
+                            dirName = cache.dirName,
+                            isNight = cache.isNight,
+                            updatedAt = cache.updatedAt
+                        ),
+                        source = Source.REMOTE,
+                        remoteUpdatedAt = cache.updatedAt
+                    )
+                }
+        }
     }
 
     private fun writeRemoteCache(isNight: Boolean, entries: List<Entry>, containerId: String? = null) {
-        remoteCacheFile(isNight, containerId).writeText(GSON.toJson(entries.map {
+        val json = GSON.toJson(entries.map {
             RemoteCache(
                 name = it.collection.name,
                 dirName = it.dirName,
                 isNight = it.collection.isNight,
                 updatedAt = it.remoteUpdatedAt.takeIf { time -> time > 0L } ?: it.collection.updatedAt
             )
-        }))
+        })
+        PackageIoKernel.writeRemoteCache(remoteCacheFile(isNight, containerId), json)
     }
 
     private fun typeDir(isNight: Boolean): File {
@@ -539,9 +542,9 @@ object CoverCollectionManager {
 
     private fun loadIndex(isNight: Boolean): List<Collection> {
         (if (isNight) nightCache else dayCache)?.let { return it }
-        val file = indexFile(isNight)
-        if (!file.exists()) return emptyList()
-        val list = GSON.fromJsonArray<Collection>(file.readText()).getOrDefault(emptyList())
+        val text = PackageIoKernel.readTextWithRecovery(indexFile(isNight), 2L * 1024L * 1024L)
+            ?: return emptyList()
+        val list = GSON.fromJsonArray<Collection>(text).getOrDefault(emptyList())
             .map { collection ->
                 collection.copy(images = collection.images.filter { File(it).exists() })
             }
@@ -555,8 +558,7 @@ object CoverCollectionManager {
 
     private fun saveIndex(isNight: Boolean, list: List<Collection>) {
         val file = indexFile(isNight)
-        file.parentFile?.mkdirs()
-        file.writeText(GSON.toJson(list))
+        PackageIoKernel.writeTextAtomic(file, GSON.toJson(list))
         if (isNight) {
             nightCache = list
         } else {

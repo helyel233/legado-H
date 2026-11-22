@@ -1,8 +1,12 @@
 package io.legado.app.ui.main.bookshelf.style1.books
 
 import android.content.Context
+import android.graphics.Outline
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import androidx.core.os.bundleOf
 import androidx.viewbinding.ViewBinding
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
@@ -13,6 +17,8 @@ import io.legado.app.databinding.ItemBookshelfGridBinding
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isShortcut
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.ResolvedScopeTokens
+import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.ui.main.bookshelf.BookCollectionShelfItem
 import io.legado.app.ui.book.bindBookMediaBadge
@@ -24,6 +30,48 @@ import io.legado.app.utils.visible
 class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
     BaseBooksAdapter<ViewBinding>(context) {
     private val showBookname = AppConfig.showBookname
+    private var bookshelfCardScope: ResolvedScopeTokens =
+        ThemeTokenCompiler.compileFromContext(context).bookshelfCard
+
+    fun updateBookshelfScope(
+        scope: ResolvedScopeTokens = ThemeTokenCompiler.compileFromContext(context).bookshelfCard
+    ) {
+        if (scope == bookshelfCardScope) return
+        bookshelfCardScope = scope
+        if (itemCount > 0) {
+            notifyItemRangeChanged(0, itemCount, bundleOf("scope" to true))
+        }
+    }
+
+    private fun applyCardScope(coverView: View) {
+        val scope = bookshelfCardScope
+        val isEInk = AppConfig.isEInkMode
+        coverView.alpha = if (isEInk) {
+            1f
+        } else if (scope.isCustomOverride) {
+            scope.alphaFraction
+        } else {
+            UiCorner.bookshelfCoverAlpha()
+        }
+        val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
+        coverView.elevation = if (!isEInk && scope.isCustomOverride) {
+            scope.shadowElevationDp * density
+        } else {
+            0f
+        }
+        if (scope.isCustomOverride) {
+            val radiusPx = scope.actionRadiusDp.coerceAtLeast(0f) * density
+            coverView.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, radiusPx)
+                }
+            }
+            coverView.clipToOutline = radiusPx > 0f
+        } else {
+            coverView.outlineProvider = ViewOutlineProvider.BACKGROUND
+            coverView.clipToOutline = false
+        }
+    }
     override fun getViewBinding(parent: ViewGroup): ViewBinding {
         return getViewBinding(parent, VIEW_TYPE_BOOK)
     }
@@ -64,7 +112,7 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
         if (item !is Book) return
         when (binding) {
             is ItemBookshelfGridBinding -> binding.run {
-                ivCover.alpha = UiCorner.bookshelfCoverAlpha()
+                applyCardScope(ivCover)
                 renderSelectionMark(selectionOuter, selectionDot, item, callBack)
                 ivShortcut.visible(item.isShortcut)
                 if (payloads.isEmpty()) {
@@ -80,7 +128,7 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
                     upRefresh(binding, item)
                 } else {
                     for (i in payloads.indices) {
-                        val bundle = payloads[i] as Bundle
+                        val bundle = payloads[i] as? Bundle ?: continue
                         bundle.keySet().forEach {
                             when (it) {
                                 "name" -> tvName.text = item.name
@@ -94,13 +142,14 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
                                     root.bindBookMediaBadge(item.type)
                                     ivLocal.visible(AppConfig.showLocalBookIcon && item.isLocal)
                                 }
+                                "scope" -> applyCardScope(ivCover)
                             }
                         }
                     }
                 }
             }
             is ItemBookshelfGrid2Binding -> binding.run {
-                ivCover.alpha = UiCorner.bookshelfCoverAlpha()
+                applyCardScope(ivCover)
                 renderSelectionMark(selectionOuter, selectionDot, item, callBack)
                 ivShortcut.visible(item.isShortcut)
                 if (payloads.isEmpty()) {
@@ -111,7 +160,7 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
                     upRefresh(binding, item)
                 } else {
                     for (i in payloads.indices) {
-                        val bundle = payloads[i] as Bundle
+                        val bundle = payloads[i] as? Bundle ?: continue
                         bundle.keySet().forEach {
                             when (it) {
                                 "name" -> tvName.text = item.name
@@ -125,6 +174,7 @@ class BooksAdapterGrid(context: Context, private val callBack: CallBack) :
                                     root.bindBookMediaBadge(item.type)
                                     ivLocal.visible(AppConfig.showLocalBookIcon && item.isLocal)
                                 }
+                                "scope" -> applyCardScope(ivCover)
                             }
                         }
                     }

@@ -31,6 +31,7 @@ import io.legado.app.help.config.appearance.BuiltinAppearanceDefaults
 import io.legado.app.help.config.appearance.GlassSlotSnapshot
 import io.legado.app.help.config.appearance.ThemeSlotSnapshot
 import io.legado.app.help.config.appearance.WelcomeSlotSnapshot
+import io.legado.app.help.config.pkg.PackageIoKernel
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
@@ -606,9 +607,7 @@ object AppearanceKitManager {
             val zipFile = tempDir.getFile("appearance_kit_${System.currentTimeMillis()}.zip")
             if (zipFile.exists()) zipFile.delete()
             val packageFiles = packageDir.listFiles()?.toList().orEmpty()
-            if (!ZipUtils.zipFiles(packageFiles, zipFile) || !zipFile.isFile || zipFile.length() <= 0L) {
-                throw IllegalStateException("Export failed")
-            }
+            PackageIoKernel.zipFilesAtomic(packageFiles, zipFile)
             zipFile
         } finally {
             FileUtils.delete(packageDir, deleteRootDir = true)
@@ -1097,13 +1096,14 @@ object AppearanceKitManager {
     }
 
     private fun loadIndex(): List<StoredAppearanceKit> {
-        if (!indexFile.isFile) return emptyList()
-        return GSON.fromJsonArray<StoredAppearanceKit>(indexFile.readText()).getOrDefault(emptyList())
+        val text = PackageIoKernel.readTextWithRecovery(indexFile, maxKitManifestBytes * 4L)
+            ?: return emptyList()
+        return GSON.fromJsonArray<StoredAppearanceKit>(text).getOrDefault(emptyList())
     }
 
     private fun saveIndex(kits: List<StoredAppearanceKit>) {
-        indexFile.parentFile?.mkdirs()
-        indexFile.writeText(GSON.toJson(kits.sortedBy { it.name }))
+        val json = GSON.toJson(kits.sortedBy { it.name })
+        PackageIoKernel.writeTextAtomic(indexFile, json)
     }
 
     private fun saveOrReplaceKit(kit: StoredAppearanceKit): StoredAppearanceKit {
@@ -1113,7 +1113,7 @@ object AppearanceKitManager {
     }
 
     private fun unzipSecure(zipFile: File, targetDir: File) {
-        SafeZipExtractor.extract(zipFile, targetDir, kitZipLimits)
+        PackageIoKernel.extractZipSafe(zipFile, targetDir, kitZipLimits)
     }
 
     private suspend fun exportThemes(

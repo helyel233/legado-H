@@ -29,6 +29,7 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.UiCorner
@@ -392,10 +393,14 @@ class MainTopBarView @JvmOverloads constructor(
      * 非悬浮态三个 inset 全为 0，保证存量用户 padding 逐字节不变（dormant by default）。
      */
     private fun floatingChrome(config: TopBarConfig.Config): TopBarChromeSpec.Chrome {
-        val base = resources.getDimension(R.dimen.ui_panel_radius)
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        val base = if (topScope.isCustomOverride) {
+            topScope.panelRadiusPx
+        } else {
+            resources.getDimension(R.dimen.ui_panel_radius)
+        }
         val height = measuredHeight.takeIf { it > 0 }?.toFloat() ?: 0f
-        val result = TopBarChromeSpec.resolve(base, config, height)
-        return result
+        return TopBarChromeSpec.resolve(base, config, height)
     }
 
     /**
@@ -471,22 +476,34 @@ class MainTopBarView @JvmOverloads constructor(
      * 旧总开关 false → solid，未设置回落默认 frosted。「跟随底栏」已废弃，
      * 升级用户由启动一次性迁移固化为显式档位。
      */
-    private fun resolvedTopBarGlassMode(): String = resolveExploreGlassMode(
-        context.getPrefString(PreferKey.exploreGlassEffectMode),
-        context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
-    )
+    private fun resolvedTopBarGlassMode(): String {
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        if (topScope.isCustomOverride || AppConfig.isEInkMode) {
+            return topScope.materialMode
+        }
+        return resolveExploreGlassMode(
+            context.getPrefString(PreferKey.exploreGlassEffectMode),
+            context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
+        )
+    }
 
     /**
      * 顶栏毛玻璃参数签名：与底栏 / 发现页行共用 [GlassMaterialPreset.signature]，
      * 档位、两个强度与四个倍率任一变化都会使样式缓存失效，
      * 保证「全局改档/改强度/调倍率 → 返回主界面 → 顶栏即时生效」；未变化则跳过重绑。
      */
-    private fun topBarGlassSignature(): String = listOf(
-        GlassMaterialPreset.signature(
-            GlassMaterialPreset.current(resolvedTopBarGlassMode())
-        ),
-        AppConfig.isNightTheme
-    ).joinToString("|")
+    private fun topBarGlassSignature(): String {
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        return listOf(
+            GlassMaterialPreset.signature(
+                GlassMaterialPreset.current(resolvedTopBarGlassMode())
+            ),
+            AppConfig.isNightTheme,
+            topScope.materialMode,
+            topScope.alphaPercent,
+            topScope.panelRadiusDp
+        ).joinToString("|")
+    }
 
     private fun applyDefaultStyle() {
         contentLayout.layoutTransition = null

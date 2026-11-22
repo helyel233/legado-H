@@ -1,10 +1,12 @@
 package io.legado.app.help.config
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.util.DisplayMetrics
+import android.util.LruCache
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.graphics.toColorInt
@@ -15,6 +17,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.DefaultData
+import io.legado.app.help.UiPerfMetrics
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.ThemeRuntimeKeys
@@ -53,21 +56,51 @@ import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 @Keep
 object ThemeConfig {
 
+    data class BgImageSpec(
+        val cacheKey: String,
+        val path: String,
+        val isHttpResolved: Boolean,
+        val blurRadius: Int,
+        val widthPixels: Int,
+        val heightPixels: Int,
+        val isNinePatch: Boolean
+    )
+
+    private sealed interface BgCacheEntry {
+        val sizeKb: Int
+
+        data class BitmapEntry(val bitmap: Bitmap) : BgCacheEntry {
+            override val sizeKb: Int = (bitmap.allocationByteCount / 1024).coerceAtLeast(1)
+        }
+
+        data class NinePatchEntry(val constantState: Drawable.ConstantState) : BgCacheEntry {
+            override val sizeKb: Int = 512
+        }
+    }
+
+    private const val MAX_BG_CACHE_KB = 24 * 1024
     private const val MAX_REMOTE_BACKGROUND_BYTES = 32L * 1024L * 1024L
     private const val MAX_REMOTE_BACKGROUND_PIXELS = 100_000_000L
     private const val MAX_NINE_PATCH_BACKGROUND_PIXELS = 4_000_000L
     private const val MAX_NINE_PATCH_DIMENSION = 4096
     private const val VALIDATION_DECODE_PIXELS = 1_000_000L
     private val backgroundDownloadLocks = ConcurrentHashMap<String, Mutex>()
+    private val bgBitmapCache = object : LruCache<String, BgCacheEntry>(MAX_BG_CACHE_KB) {
+        override fun sizeOf(key: String, value: BgCacheEntry): Int = value.sizeKb
+    }
+    private val inFlightBgLoads = ConcurrentHashMap<String, CompletableDeferred<BgCacheEntry?>>()
     private var usableBgImageCacheKey: String? = null
     private var usableBgImageCacheValue: Boolean = false
     const val configFileName = "themeConfig.json"
@@ -151,45 +184,136 @@ object ThemeConfig {
         return MD5Utils.md5Encode16(url) + suffix
     }
 
-    fun getBgImage(context: Context, metrics: DisplayMetrics): Drawable? {
+    fun resolveBgImageSpec(context: Context, metrics: DisplayMetrics): BgImageSpec? {
         val themeMode = getTheme()
         val preferenceKey = when (themeMode) {
             Theme.Light -> PreferKey.bgImage
             Theme.Dark -> PreferKey.bgImageN
-            else -> return  null
+            else -> return null
         }
-        var path = context.getPrefString(preferenceKey)
-        if (path.isNullOrBlank()) return null
-        if (path.startsWith("http")) {
-            val name = getUrlToFile(path)
-            val fileRoot = context.externalFiles
-            val filePath = FileUtils.getPath(fileRoot, preferenceKey, name)
-            if (!isUsableThemeImage(File(filePath))) return null
-            path = filePath
+        val rawPath = context.getPrefString(preferenceKey)?.takeIf { it.isNotBlank() } ?: return null
+        val isHttp = rawPath.startsWith("http", ignoreCase = true)
+        val path = if (isHttp) {
+            val name = getUrlToFile(rawPath)
+            FileUtils.getPath(context.externalFiles, preferenceKey, name)
+        } else {
+            rawPath
         }
-        if (path.endsWith(".9.png")) {
-            val bgDrawable = BitmapUtils.decodeNinePatchDrawable(path)
-            return bgDrawable
-        }
-        val bgImgBlu = when (themeMode) {
+        val file = File(path)
+        if (!file.isFile || file.length() <= 0L) return null
+        val blur = when (themeMode) {
             Theme.Light -> context.getPrefInt(PreferKey.bgImageBlurring, 0)
             Theme.Dark -> context.getPrefInt(PreferKey.bgImageNBlurring, 0)
             else -> 0
+        }.coerceAtLeast(0)
+        val width = metrics.widthPixels.coerceAtLeast(1)
+        val height = metrics.heightPixels.coerceAtLeast(1)
+        val isNinePatch = path.endsWith(".9.png", ignoreCase = true)
+        val cacheKey = "$path|${file.length()}|${file.lastModified()}|blur=$blur|${width}x$height"
+        return BgImageSpec(
+            cacheKey = cacheKey,
+            path = path,
+            isHttpResolved = isHttp,
+            blurRadius = blur,
+            widthPixels = width,
+            heightPixels = height,
+            isNinePatch = isNinePatch
+        )
+    }
+
+    fun getCachedBgDrawable(context: Context, spec: BgImageSpec): Drawable? {
+        val entry = bgBitmapCache.get(spec.cacheKey) ?: return null
+        return entryToDrawable(context, entry).also {
+            if (it == null) {
+                bgBitmapCache.remove(spec.cacheKey)
+            }
         }
-        val bgImage = BitmapUtils
-            .decodeBitmap(path, metrics.widthPixels, metrics.heightPixels)
-        if (bgImgBlu == 0) {
-            return bgImage?.let { CenterCropBitmapDrawable(context.resources, it) }
+    }
+
+    suspend fun loadBgDrawableAsync(context: Context, spec: BgImageSpec): Drawable? {
+        getCachedBgDrawable(context, spec)?.let { return it }
+        val newDeferred = CompletableDeferred<BgCacheEntry?>()
+        val existing = inFlightBgLoads.putIfAbsent(spec.cacheKey, newDeferred)
+        val entry = if (existing != null) {
+            existing.await()
+        } else {
+            try {
+                val decoded = withContext(IO) {
+                    decodeAndCacheBgEntry(spec)
+                }
+                newDeferred.complete(decoded)
+                decoded
+            } catch (t: Throwable) {
+                newDeferred.completeExceptionally(t)
+                throw t
+            } finally {
+                inFlightBgLoads.remove(spec.cacheKey, newDeferred)
+            }
         }
-        val source = bgImage ?: return null
-        val blurred = try {
-            source.stackBlur(bgImgBlu)
-        } catch (error: Throwable) {
-            if (!source.isRecycled) source.recycle()
-            throw error
+        return entry?.let { entryToDrawable(context, it) }
+    }
+
+    suspend fun prewarmBgImage(context: Context) {
+        val spec = resolveBgImageSpec(context, context.resources.displayMetrics) ?: return
+        if (bgBitmapCache.get(spec.cacheKey) != null) return
+        runCatching { loadBgDrawableAsync(context, spec) }
+    }
+
+    fun getBgImage(context: Context, metrics: DisplayMetrics): Drawable? {
+        val spec = resolveBgImageSpec(context, metrics) ?: return null
+        getCachedBgDrawable(context, spec)?.let { return it }
+        val entry = decodeAndCacheBgEntry(spec) ?: return null
+        return entryToDrawable(context, entry)
+    }
+
+    private fun entryToDrawable(context: Context, entry: BgCacheEntry): Drawable? {
+        return when (entry) {
+            is BgCacheEntry.BitmapEntry -> {
+                if (entry.bitmap.isRecycled) null
+                else CenterCropBitmapDrawable(context.resources, entry.bitmap)
+            }
+            is BgCacheEntry.NinePatchEntry -> {
+                entry.constantState.newDrawable(context.resources)
+            }
         }
-        if (blurred !== source && !source.isRecycled) source.recycle()
-        return CenterCropBitmapDrawable(context.resources, blurred)
+    }
+
+    private fun decodeAndCacheBgEntry(spec: BgImageSpec): BgCacheEntry? {
+        bgBitmapCache.get(spec.cacheKey)?.let { return it }
+        val startNs = System.nanoTime()
+        if (spec.isHttpResolved && !isUsableThemeImage(File(spec.path))) {
+            return null
+        }
+        val entry: BgCacheEntry? = if (spec.isNinePatch) {
+            val state = BitmapUtils.decodeNinePatchDrawable(spec.path)?.constantState
+            state?.let { BgCacheEntry.NinePatchEntry(it) }
+        } else {
+            val bgImage = BitmapUtils.decodeBitmap(spec.path, spec.widthPixels, spec.heightPixels)
+            if (bgImage == null) {
+                null
+            } else if (spec.blurRadius == 0) {
+                BgCacheEntry.BitmapEntry(bgImage)
+            } else {
+                val blurred = try {
+                    bgImage.stackBlur(spec.blurRadius)
+                } catch (error: Throwable) {
+                    if (!bgImage.isRecycled) bgImage.recycle()
+                    throw error
+                }
+                if (blurred !== bgImage && !bgImage.isRecycled) bgImage.recycle()
+                BgCacheEntry.BitmapEntry(blurred)
+            }
+        }
+        if (entry != null) {
+            bgBitmapCache.put(spec.cacheKey, entry)
+        }
+        val elapsedMs = (System.nanoTime() - startNs).coerceAtLeast(0L) / 1_000_000.0
+        UiPerfMetrics.record(
+            UiPerfMetrics.METRIC_BG_DECODE_IO,
+            elapsedMs,
+            "blur=${spec.blurRadius}"
+        )
+        return entry
     }
 
     fun hasUsableBgImage(context: Context): Boolean {

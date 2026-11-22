@@ -107,8 +107,7 @@ internal fun RssSourceScreen(
     AppManagementLazyColumn(
         palette = palette,
         modifier = Modifier.fillMaxSize(),
-        state = lazyListState,
-        contentPadding = PaddingValues(bottom = 24.dp)
+        state = lazyListState
     ) {
         if (reorderEnabled) {
             items(

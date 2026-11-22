@@ -28,9 +28,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -54,6 +56,7 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
+import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppConfig
@@ -62,7 +65,14 @@ import io.legado.app.help.config.AppearanceSlotSummaries
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.appearance.AppearanceSlot
+import io.legado.app.help.config.pkg.PackageKind
+import io.legado.app.help.config.pkg.SurfaceScopeOverride
+import io.legado.app.help.config.pkg.UiScope
+import io.legado.app.help.config.pkg.UnifiedPackageCodec
+import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.lib.theme.PrefBatchTransaction
+import io.legado.app.lib.theme.ThemeTokenCompiler
+import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.ui.book.cache.WebDavTaskType
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.glass.GlassPanel
@@ -73,6 +83,7 @@ import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.ui.main.explore.EXPLORE_GLASS_MODE_SOLID
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppDialogFrame
 import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
@@ -81,25 +92,32 @@ import io.legado.app.ui.widget.compose.AppSettingPalette
 import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
+import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.LegadoSegmentedControl
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.SegmentedControlTone
 import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.appSettingRowDecoration
+import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
+import io.legado.app.ui.widget.compose.toMiuixPalette
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
+import io.legado.app.utils.removePref
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 
@@ -121,6 +139,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var slotSummariesState by mutableStateOf(
         AppearanceSlotSummaries("", "", "", "", "", "")
     )
+    private var selectedScopeState by mutableStateOf(UiScope.TOP_BAR)
+    private var scopeOverridesState by mutableStateOf<Map<UiScope, SurfaceScopeOverride>>(emptyMap())
+    private var densityScaleState by mutableFloatStateOf(1f)
+    private var useLegacyTokenPipelineState by mutableStateOf(false)
+    private var useLegacyPackageManagerState by mutableStateOf(false)
+    private var pendingParamImportFileState by mutableStateOf<File?>(null)
 
     private val importPackage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let(::importAppearanceKit)
@@ -152,6 +176,14 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         AppManagementMenuAction(
             text = getString(R.string.appearance_kit_import),
             onClick = ::selectImportPackage
+        ),
+        AppManagementMenuAction(
+            text = "导出当前美术包",
+            onClick = ::exportCurrentArtPackage
+        ),
+        AppManagementMenuAction(
+            text = "导出当前参数包",
+            onClick = ::exportCurrentParamPackage
         ),
         AppManagementMenuAction(
             text = getString(R.string.appearance_kit_export),
@@ -226,8 +258,34 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onGlassLevelCommit = {
                             commitGlassLevel(glassLevelState)
                         },
-                        onOpenSlot = ::openSlotTarget
+                        onOpenSlot = ::openSlotTarget,
+                        selectedScope = selectedScopeState,
+                        scopeOverrides = scopeOverridesState,
+                        densityScale = densityScaleState,
+                        useLegacyTokenPipeline = useLegacyTokenPipelineState,
+                        useLegacyPackageManager = useLegacyPackageManagerState,
+                        onSelectScope = { selectedScopeState = it },
+                        onUpdateScopeOverride = ::updateScopeOverride,
+                        onResetScopeOverride = ::resetScopeOverride,
+                        onDensityScaleDrag = { step ->
+                            densityScaleState = (step.coerceIn(8, 13) / 10f)
+                        },
+                        onDensityScaleCommit = { commitDensityScale(densityScaleState) },
+                        onToggleLegacyTokenPipeline = ::toggleLegacyTokenPipeline,
+                        onToggleLegacyPackageManager = ::toggleLegacyPackageManager
                     )
+                    pendingParamImportFileState?.let { pendingFile ->
+                        ParamImportLayerDialog(
+                            onDismiss = {
+                                pendingFile.delete()
+                                pendingParamImportFileState = null
+                            },
+                            onConfirm = { applySurface, applyLayout ->
+                                pendingParamImportFileState = null
+                                executeUnifiedImport(pendingFile, applySurface, applyLayout)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -249,6 +307,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val frosted = getPrefInt(PreferKey.frostedGlassLevel, AppConfig.frostedGlassLevel)
         val liquid = getPrefInt(PreferKey.liquidGlassLevel, AppConfig.liquidGlassLevel)
         glassLevelState = GlassMaterialPreset.levelFor(resolvedGlassMode, frosted, liquid).coerceIn(0, 100)
+        scopeOverridesState = ThemeTokenCompiler.readScopeOverridesFromPrefs(this)
+        densityScaleState = getPrefString(PreferKey.uiDensityScale, "1.0")
+            ?.toFloatOrNull()
+            ?.coerceIn(0.8f, 1.3f) ?: 1f
+        useLegacyTokenPipelineState = getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)
+        useLegacyPackageManagerState = getPrefBoolean(PreferKey.useLegacyPackageManager, false)
 
         lifecycleScope.launch {
             val loadedThemes = ThemePackageManager.loadLocalOnly(night)
@@ -338,6 +402,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             putPrefString(PreferKey.exploreGlassEffectMode, nextMode)
             putPrefBoolean(PreferKey.glassPresetMatched, true)
         }
+        UnifiedPackageRepository.markParamDirty(this, true)
     }
 
     private fun commitGlassLevel(level: Int) {
@@ -347,12 +412,78 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             putPrefInt(PreferKey.liquidGlassLevel, clamped)
             putPrefBoolean(PreferKey.glassPresetMatched, false)
         }
+        UnifiedPackageRepository.markParamDirty(this, true)
+    }
+
+    private fun scopePrefKey(scope: UiScope): String = when (scope) {
+        UiScope.TOP_BAR -> PreferKey.scopeOverrideTopBar
+        UiScope.BOTTOM_BAR -> PreferKey.scopeOverrideBottomBar
+        UiScope.BOOKSHELF_CARD -> PreferKey.scopeOverrideBookshelfCard
+        UiScope.DIALOG -> PreferKey.scopeOverrideDialog
+    }
+
+    private fun updateScopeOverride(
+        scope: UiScope,
+        transform: (SurfaceScopeOverride) -> SurfaceScopeOverride
+    ) {
+        val current = scopeOverridesState[scope] ?: SurfaceScopeOverride()
+        val updated = transform(current)
+        val key = scopePrefKey(scope)
+        PrefBatchTransaction.run(this) {
+            if (updated.isEmpty()) {
+                removePref(key)
+            } else {
+                putPrefString(key, UnifiedPackageCodec.encodeScopeOverride(updated))
+            }
+        }
+        recomputeThemeUiSignatureAfterBatch()
+        val nextMap = scopeOverridesState.toMutableMap()
+        if (updated.isEmpty()) {
+            nextMap.remove(scope)
+        } else {
+            nextMap[scope] = updated
+        }
+        scopeOverridesState = nextMap
+        UnifiedPackageRepository.markParamDirty(this, true)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+    }
+
+    private fun resetScopeOverride(scope: UiScope) {
+        updateScopeOverride(scope) { SurfaceScopeOverride() }
+    }
+
+    private fun commitDensityScale(scale: Float) {
+        val clamped = scale.coerceIn(0.8f, 1.3f)
+        densityScaleState = clamped
+        PrefBatchTransaction.run(this) {
+            putPrefString(
+                PreferKey.uiDensityScale,
+                String.format(Locale.US, "%.2f", clamped)
+            )
+        }
+        recomputeThemeUiSignatureAfterBatch()
+        UnifiedPackageRepository.markParamDirty(this, true)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+    }
+
+    private fun toggleLegacyTokenPipeline(enabled: Boolean) {
+        useLegacyTokenPipelineState = enabled
+        putPrefBoolean(PreferKey.useLegacyTokenPipeline, enabled)
+        recomputeThemeUiSignatureAfterBatch()
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+    }
+
+    private fun toggleLegacyPackageManager(enabled: Boolean) {
+        useLegacyPackageManagerState = enabled
+        putPrefBoolean(PreferKey.useLegacyPackageManager, enabled)
+        recomputeThemeUiSignatureAfterBatch()
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
     }
 
     private fun openSlotTarget(slot: AppearanceSlot) {
         when (slot) {
             AppearanceSlot.THEME -> startActivity<ThemeManageActivity>()
-            AppearanceSlot.TOP_BAR -> startActivity<TopBarManageActivity>()
+            AppearanceSlot.TOP_BAR -> startActivity<ThemeManageActivity>()
             AppearanceSlot.NAVIGATION_BAR -> startActivity<NavigationBarManageActivity>()
             AppearanceSlot.GLASS -> startActivity<ConfigActivity> {
                 putExtra("configTag", ConfigTag.EXPLORE_GLASS_CONFIG)
@@ -370,22 +501,93 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         importPackage.launch {
             mode = HandleFileContract.FILE
             title = getString(R.string.appearance_kit_import)
-            allowExtensions = arrayOf("red", "zip")
+            allowExtensions = arrayOf("red", "zip", "json")
         }
     }
 
     private fun importAppearanceKit(uri: Uri) {
         lifecycleScope.launch {
             runCatching {
-                val file = externalFiles.getFile("appearanceKitImports", "import_${System.currentTimeMillis()}.zip")
-                file.parentFile?.mkdirs()
-                contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(file).use { output -> input.copyTo(output) }
-                } ?: throw IllegalArgumentException(getString(R.string.theme_zip_read_failed))
-                AppearanceKitManager.importPackage(file)
+                val file = PackageManageUiDelegate.stageImportUriToTempFile(
+                    context = this@AppearanceKitActivity,
+                    uri = uri,
+                    dirName = "appearanceKitImports",
+                    filePrefix = "import"
+                )
+                val kind = UnifiedPackageRepository.peekKind(file)
+                if (kind == PackageKind.PARAM || kind == PackageKind.KIT) {
+                    pendingParamImportFileState = file
+                    return@launch
+                }
+                executeUnifiedImport(file, importSurface = true, importLayout = false)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun executeUnifiedImport(
+        file: File,
+        importSurface: Boolean,
+        importLayout: Boolean
+    ) {
+        lifecycleScope.launch {
+            runCatching {
+                val result = UnifiedPackageRepository.importFile(
+                    context = this@AppearanceKitActivity,
+                    file = file,
+                    importSurface = importSurface,
+                    importLayout = importLayout
+                )
+                result.importedArt?.let {
+                    UnifiedPackageRepository.applyArtPackage(this@AppearanceKitActivity, it)
+                }
+                result.importedParam?.let {
+                    UnifiedPackageRepository.applyParamPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = it,
+                        applySurface = importSurface,
+                        applyLayout = importLayout
+                    )
+                }
+                result
             }.onSuccess { result ->
                 toastOnUi(getString(R.string.appearance_kit_imported, result.total))
                 refreshStudioState()
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }.also {
+                file.delete()
+            }
+        }
+    }
+
+    private fun exportCurrentArtPackage() {
+        lifecycleScope.launch {
+            runCatching {
+                val entry = UnifiedPackageRepository.captureArtFromCurrent(
+                    context = this@AppearanceKitActivity,
+                    name = getString(R.string.appearance_slot_theme)
+                )
+                UnifiedPackageRepository.exportEntryZip(entry)
+            }.onSuccess { zipFile ->
+                PackageManageUiDelegate.launchExportZip(exportPackage, zipFile, "art_package.zip")
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun exportCurrentParamPackage() {
+        lifecycleScope.launch {
+            runCatching {
+                val entry = UnifiedPackageRepository.captureParamFromCurrent(
+                    context = this@AppearanceKitActivity,
+                    name = "Param Preset"
+                )
+                UnifiedPackageRepository.exportEntryZip(entry)
+            }.onSuccess { zipFile ->
+                PackageManageUiDelegate.launchExportZip(exportPackage, zipFile, "param_package.zip")
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
@@ -449,7 +651,19 @@ private fun AppearanceStudioScreen(
     onSelectGlassMode: (String) -> Unit,
     onGlassLevelDrag: (Int) -> Unit,
     onGlassLevelCommit: () -> Unit,
-    onOpenSlot: (AppearanceSlot) -> Unit
+    onOpenSlot: (AppearanceSlot) -> Unit,
+    selectedScope: UiScope,
+    scopeOverrides: Map<UiScope, SurfaceScopeOverride>,
+    densityScale: Float,
+    useLegacyTokenPipeline: Boolean,
+    useLegacyPackageManager: Boolean,
+    onSelectScope: (UiScope) -> Unit,
+    onUpdateScopeOverride: (UiScope, (SurfaceScopeOverride) -> SurfaceScopeOverride) -> Unit,
+    onResetScopeOverride: (UiScope) -> Unit,
+    onDensityScaleDrag: (Int) -> Unit,
+    onDensityScaleCommit: () -> Unit,
+    onToggleLegacyTokenPipeline: (Boolean) -> Unit,
+    onToggleLegacyPackageManager: (Boolean) -> Unit
 ) {
     val palette = rememberAppManagementPalette()
     val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
@@ -540,6 +754,31 @@ private fun AppearanceStudioScreen(
                     palette = palette,
                     glassSignature = effectiveGlassSig,
                     onOpenSlot = onOpenSlot
+                )
+            }
+            item("scope_overrides") {
+                StudioScopeOverrideSection(
+                    selectedScope = selectedScope,
+                    override = scopeOverrides[selectedScope] ?: SurfaceScopeOverride(),
+                    isEInkMode = isEInkMode,
+                    palette = palette,
+                    glassSignature = effectiveGlassSig,
+                    onSelectScope = onSelectScope,
+                    onUpdateOverride = { transform -> onUpdateScopeOverride(selectedScope, transform) },
+                    onResetScope = { onResetScopeOverride(selectedScope) }
+                )
+            }
+            item("layout_and_switches") {
+                StudioDensityAndSwitchesSection(
+                    densityScale = densityScale,
+                    useLegacyTokenPipeline = useLegacyTokenPipeline,
+                    useLegacyPackageManager = useLegacyPackageManager,
+                    palette = palette,
+                    glassSignature = effectiveGlassSig,
+                    onDensityScaleDrag = onDensityScaleDrag,
+                    onDensityScaleCommit = onDensityScaleCommit,
+                    onToggleLegacyTokenPipeline = onToggleLegacyTokenPipeline,
+                    onToggleLegacyPackageManager = onToggleLegacyPackageManager
                 )
             }
         }
@@ -1007,7 +1246,6 @@ private fun StudioSlotsSection(
 ) {
     val rows = listOf(
         Triple(AppearanceSlot.THEME, R.string.appearance_slot_theme, summaries.theme),
-        Triple(AppearanceSlot.TOP_BAR, R.string.appearance_slot_top_bar, summaries.topBar),
         Triple(AppearanceSlot.NAVIGATION_BAR, R.string.appearance_slot_nav_bar, summaries.navigationBar),
         Triple(AppearanceSlot.GLASS, R.string.appearance_slot_glass, summaries.glass),
         Triple(AppearanceSlot.COVER, R.string.appearance_slot_cover, summaries.cover),
@@ -1123,5 +1361,362 @@ private fun ActionRow(
                 maxLines = 1
             )
         }
+    }
+}
+
+@Composable
+private fun StudioScopeOverrideSection(
+    selectedScope: UiScope,
+    override: SurfaceScopeOverride,
+    isEInkMode: Boolean,
+    palette: AppManagementPalette,
+    glassSignature: String?,
+    onSelectScope: (UiScope) -> Unit,
+    onUpdateOverride: ((SurfaceScopeOverride) -> SurfaceScopeOverride) -> Unit,
+    onResetScope: () -> Unit
+) {
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
+    val scopeOptions = remember {
+        listOf(
+            SegmentedOption(UiScope.TOP_BAR, "顶栏"),
+            SegmentedOption(UiScope.BOTTOM_BAR, "底栏"),
+            SegmentedOption(UiScope.BOOKSHELF_CARD, "书架卡"),
+            SegmentedOption(UiScope.DIALOG, "弹窗")
+        )
+    }
+    val materialOptions = remember {
+        listOf(
+            SegmentedOption("", "继承"),
+            SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
+            SegmentedOption(GlassMaterialPreset.FROSTED, "磨砂"),
+            SegmentedOption(GlassMaterialPreset.GLASS, "液态")
+        )
+    }
+    var cornerDraft by remember(selectedScope, override.cornerScale) {
+        mutableIntStateOf(((override.cornerScale ?: 1.0f) * 10f).toInt().coerceIn(0, 30))
+    }
+    var alphaDraft by remember(selectedScope, override.alpha) {
+        mutableIntStateOf((override.alpha ?: 100).coerceIn(0, 100))
+    }
+    var shadowDraft by remember(selectedScope, override.shadowElevation) {
+        mutableIntStateOf((override.shadowElevation ?: 0).coerceIn(0, 24))
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AppSettingSectionTitle(
+            title = "区域质感覆写（Scope Overrides）",
+            palette = palette.settings,
+            inCard = false
+        )
+        val content: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LegadoSegmentedControl(
+                    options = scopeOptions,
+                    selectedValue = selectedScope,
+                    palette = palette.miuix,
+                    onSelected = onSelectScope,
+                    tone = SegmentedControlTone.AccentThumb,
+                    fontSize = 11.sp,
+                    glassSignature = null
+                )
+                if (isEInkMode) {
+                    Text(
+                        text = stringResource(R.string.appearance_studio_eink_glass_disabled),
+                        color = palette.settings.secondaryText,
+                        fontSize = 13.sp
+                    )
+                } else {
+                    LegadoSegmentedControl(
+                        options = materialOptions,
+                        selectedValue = override.materialMode.orEmpty(),
+                        palette = palette.miuix,
+                        onSelected = { mode ->
+                            onUpdateOverride { cur ->
+                                cur.copy(materialMode = mode.ifBlank { null })
+                            }
+                        },
+                        tone = SegmentedControlTone.SurfaceThumb,
+                        fontSize = 11.sp,
+                        glassSignature = null
+                    )
+                    StudioSliderItem(
+                        title = "区域圆角倍率",
+                        valueText = if (override.cornerScale == null) {
+                            "继承"
+                        } else {
+                            String.format(Locale.US, "%.1fx", cornerDraft / 10f)
+                        },
+                        value = cornerDraft,
+                        range = 0..30,
+                        palette = palette,
+                        onValueChange = { cornerDraft = it.coerceIn(0, 30) },
+                        onValueChangeFinished = {
+                            onUpdateOverride { cur -> cur.copy(cornerScale = cornerDraft / 10f) }
+                        }
+                    )
+                    StudioSliderItem(
+                        title = "区域不透明度",
+                        valueText = if (override.alpha == null) "继承" else "${alphaDraft}%",
+                        value = alphaDraft,
+                        range = 0..100,
+                        palette = palette,
+                        onValueChange = { alphaDraft = it.coerceIn(0, 100) },
+                        onValueChangeFinished = {
+                            onUpdateOverride { cur -> cur.copy(alpha = alphaDraft) }
+                        }
+                    )
+                    StudioSliderItem(
+                        title = "区域阴影高度",
+                        valueText = if (override.shadowElevation == null) "继承" else "${shadowDraft}dp",
+                        value = shadowDraft,
+                        range = 0..24,
+                        palette = palette,
+                        onValueChange = { shadowDraft = it.coerceIn(0, 24) },
+                        onValueChangeFinished = {
+                            onUpdateOverride { cur -> cur.copy(shadowElevation = shadowDraft) }
+                        }
+                    )
+                    if (!override.isEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            LegadoMiuixActionButton(
+                                text = "恢复继承全局",
+                                palette = palette.miuix,
+                                onClick = onResetScope,
+                                minHeight = 32.dp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (glassSignature != null) {
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = palette.settings.panelRadiusPx,
+                configSignature = glassSignature,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+            ) { content() }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .appSettingPanelBackground(
+                        normalColor = palette.settings.row,
+                        borderColor = palette.settings.border,
+                        panelImage = null,
+                        radiusPx = palette.settings.panelRadiusPx
+                    )
+            ) { content() }
+        }
+    }
+}
+
+@Composable
+private fun StudioDensityAndSwitchesSection(
+    densityScale: Float,
+    useLegacyTokenPipeline: Boolean,
+    useLegacyPackageManager: Boolean,
+    palette: AppManagementPalette,
+    glassSignature: String?,
+    onDensityScaleDrag: (Int) -> Unit,
+    onDensityScaleCommit: () -> Unit,
+    onToggleLegacyTokenPipeline: (Boolean) -> Unit,
+    onToggleLegacyPackageManager: (Boolean) -> Unit
+) {
+    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
+    val densityStep = (densityScale * 10f).toInt().coerceIn(8, 13)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AppSettingSectionTitle(
+            title = "布局密度与兼容开关",
+            palette = palette.settings,
+            inCard = false
+        )
+        val content: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StudioSliderItem(
+                    title = "空间间距密度（Density Scale）",
+                    valueText = String.format(Locale.US, "%.1fx", densityScale),
+                    value = densityStep,
+                    range = 8..13,
+                    palette = palette,
+                    onValueChange = onDensityScaleDrag,
+                    onValueChangeFinished = onDensityScaleCommit
+                )
+                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                StudioSwitchRow(
+                    title = "回退旧版 Token 管线（停用级联覆写）",
+                    subtitle = "开启后忽略区域级联覆写并沿用全局默认值",
+                    checked = useLegacyTokenPipeline,
+                    onCheckedChange = onToggleLegacyTokenPipeline,
+                    palette = palette
+                )
+                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                StudioSwitchRow(
+                    title = "兼容旧版分体包管理（Kill Switch）",
+                    subtitle = "开启后暂停自动迁移，滑块调参保留旧版兼容行为",
+                    checked = useLegacyPackageManager,
+                    onCheckedChange = onToggleLegacyPackageManager,
+                    palette = palette
+                )
+            }
+        }
+        if (glassSignature != null) {
+            GlassPanel(
+                domain = GlassSamplingDomain.WALLPAPER,
+                cornerRadiusPx = palette.settings.panelRadiusPx,
+                configSignature = glassSignature,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(panelShape)
+            ) { content() }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .appSettingPanelBackground(
+                        normalColor = palette.settings.row,
+                        borderColor = palette.settings.border,
+                        panelImage = null,
+                        radiusPx = palette.settings.panelRadiusPx
+                    )
+            ) { content() }
+        }
+    }
+}
+
+@Composable
+private fun StudioSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    palette: AppManagementPalette
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = palette.settings.primaryText,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = palette.settings.secondaryText,
+                fontSize = 12.sp
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        LegadoMiuixSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            palette = palette.miuix
+        )
+    }
+}
+
+@Composable
+private fun ParamImportLayerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (applySurface: Boolean, applyLayout: Boolean) -> Unit
+) {
+    val style = rememberAppDialogStyle()
+    val palette = style.toMiuixPalette()
+    var applySurface by remember { mutableStateOf(true) }
+    var applyLayout by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onDismiss) {
+        AppDialogFrame(
+            title = "选择要应用的配置分区",
+            content = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { applySurface = !applySurface }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = applySurface, onCheckedChange = { applySurface = it })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "材质与形状参数 (@surface)",
+                                color = style.primaryText,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "应用圆角曲率、透明度、材质档位与核心区域覆写",
+                                color = style.secondaryText,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { applyLayout = !applyLayout }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = applyLayout, onCheckedChange = { applyLayout = it })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "界面布局与间距参数 (@layout)",
+                                color = style.primaryText,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "覆盖导航骨架、间距密度与页面分布列数",
+                                color = style.secondaryText,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            },
+            actions = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    LegadoMiuixActionButton(
+                        text = stringResource(R.string.cancel),
+                        palette = palette,
+                        onClick = onDismiss
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    LegadoMiuixActionButton(
+                        text = stringResource(R.string.ok),
+                        palette = palette,
+                        primary = true,
+                        onClick = { onConfirm(applySurface, applyLayout) }
+                    )
+                }
+            }
+        )
     }
 }

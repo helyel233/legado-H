@@ -47,12 +47,15 @@ import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.image.CoverImageView
+import io.legado.app.utils.ColorUtils as LegadoColorUtils
 import io.legado.app.utils.BookIntroUtils
 import splitties.init.appCtx
 
@@ -94,17 +97,29 @@ data class BookshelfListRenderConfig(
 @Composable
 fun rememberBookshelfListPalette(): BookshelfListPalette {
     val context = LocalContext.current
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val cardScope = tokens.bookshelfCard
     val themeUiPalette = rememberThemeUiPalette()
     val rowBaseColor = themeUiPalette.cardColor
-    val rowColor = UiCorner.surfaceColor(rowBaseColor)
+    val rawRowColor = UiCorner.surfaceColor(rowBaseColor)
+    val rowColor = if (!tokens.env.isEInk && cardScope.isCustomOverride) {
+        LegadoColorUtils.withAlpha(rawRowColor, cardScope.alphaFraction)
+    } else {
+        rawRowColor
+    }
     val rowPressedColor = UiCorner.surfaceColor(rowBaseColor, pressed = true)
-    val primaryText = Color(context.titleTextColor)
-    val secondaryText = Color(context.secondaryTextColor)
-    val accent = Color(context.accentColor)
-    val border = UiCorner.panelBorderColor(context)
-    val panelRadiusPx = UiCorner.panelRadius(context)
-    val panelRadius = context.composePanelRadius()
-    val actionRadius = context.composeActionRadius()
+    val primaryText = Color(tokens.colors.titleTextArgb)
+    val secondaryText = Color(tokens.colors.secondaryTextArgb)
+    val accent = Color(tokens.colors.accentArgb)
+    val rawBorder = UiCorner.panelBorderColor(context)
+    val border = if (rawBorder != null && !tokens.env.isEInk && cardScope.isCustomOverride) {
+        LegadoColorUtils.withAlpha(rawBorder, cardScope.borderAlphaFraction)
+    } else {
+        rawBorder
+    }
+    val panelRadiusPx = cardScope.panelRadiusPx
+    val panelRadius = cardScope.panelRadiusDp.dp
+    val actionRadius = cardScope.actionRadiusDp.dp
     val titleFontFamily = FontFamily(context.titleTypeface())
     val bodyFontFamily = FontFamily(context.uiTypeface())
     return remember(
@@ -119,6 +134,7 @@ fun rememberBookshelfListPalette(): BookshelfListPalette {
         actionRadius,
         titleFontFamily,
         bodyFontFamily,
+        tokens.signature,
         themeUiPalette.signature
     ) {
         BookshelfListPalette(

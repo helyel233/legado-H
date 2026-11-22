@@ -9,6 +9,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.ImageTypeUtils
@@ -17,6 +18,7 @@ import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.normalizeFileName
@@ -293,9 +295,11 @@ object ThemePackageManager {
     }
 
     /**
-     * 外观中心「单写入口」：写入当前生效模式下的运行时偏好（圆角/透明度等），
-     * 若当前激活的是本地自定义主题包，同步更新该包的 `theme.json` 与 `ThemeConfig.configList`；
-     * 若当前激活的是内置主题（`Source.BUILTIN`），显式跳过文件写回，仅保留运行时偏好。
+     * 外观中心「单写入口」：写入当前生效模式下的运行时偏好（圆角/透明度等）。
+     *
+     * V4 架构裁决：运行时 `PreferKey` 为唯一运行时状态真相源，预设包文件只读。
+     * 拖动外观中心滑块仅更新运行时偏好并置位 `paramPackageDirty = true`，绝不反写磁盘 `theme.json`；
+     * 仅当显式开启 `PreferKey.useLegacyPackageManager` 回滚开关时，才走旧版反写路径。
      */
     suspend fun updateActiveRuntimeOverride(
         context: Context,
@@ -306,6 +310,7 @@ object ThemePackageManager {
             val currentRuntime = ThemeConfig.getThemeConfig(context, isNightTheme)
             val updatedRuntime = mutator(currentRuntime).copy(isNightTheme = isNightTheme)
             ThemeConfig.applyRuntimeOverridePrefs(context, updatedRuntime)
+            UnifiedPackageRepository.markParamDirty(context, true)
 
             val storedDirName = context.getPrefString(
                 if (isNightTheme) PreferKey.dNThemeDirName else PreferKey.dThemeDirName
@@ -320,6 +325,9 @@ object ThemePackageManager {
             val localEntry = loadLocal(isNightTheme)
                 .matchStoredEntry(storedDirName, storedThemeName.normalizeFileName(), storedThemeName)
                 ?: return@withLock builtinEntry(isNightTheme)
+            if (!context.getPrefBoolean(PreferKey.useLegacyPackageManager, false)) {
+                return@withLock localEntry
+            }
             val dir = localEntry.localDir ?: return@withLock localEntry
             val baseConfig = runCatching { resolveConfigPaths(localEntry.packageInfo, dir) }
                 .getOrElse { currentRuntime }

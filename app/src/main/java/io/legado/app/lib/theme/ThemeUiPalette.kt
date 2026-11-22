@@ -20,6 +20,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.defaultSharedPreferences
+import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
 import java.io.File
@@ -94,6 +95,16 @@ private val themeUiDependencyKeySet = (
         PreferKey.themeMode,
         PreferKey.bgImage,
         PreferKey.bgImageN,
+        PreferKey.topBarBgImage,
+        PreferKey.topBarBgImageN,
+        PreferKey.topBarWallpaperAlpha,
+        PreferKey.topBarWallpaperAlphaN,
+        PreferKey.uiDensityScale,
+        PreferKey.scopeOverrideTopBar,
+        PreferKey.scopeOverrideBottomBar,
+        PreferKey.scopeOverrideBookshelfCard,
+        PreferKey.scopeOverrideDialog,
+        PreferKey.useLegacyTokenPipeline,
         PreferKey.cPrimary,
         PreferKey.cAccent,
         PreferKey.cBackground,
@@ -293,7 +304,14 @@ fun Context.themeUiSignature(): String {
         "titleFont=${getPrefString(ThemeRuntimeKeys.titleFontPath()).orEmpty()}",
         "uiFontColor=${getPrefString(ThemeRuntimeKeys.uiFontColor()).orEmpty()}",
         "titleFontColor=${getPrefString(ThemeRuntimeKeys.titleFontColor()).orEmpty()}",
-        "panelImage=${themePanelImageSignature()}"
+        "panelImage=${themePanelImageSignature()}",
+        "densityScale=${getPrefString(PreferKey.uiDensityScale, "1.0").orEmpty()}",
+        "legacyToken=${getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)}",
+        "scopeTop=${getPrefString(PreferKey.scopeOverrideTopBar).orEmpty()}",
+        "scopeBot=${getPrefString(PreferKey.scopeOverrideBottomBar).orEmpty()}",
+        "scopeCard=${getPrefString(PreferKey.scopeOverrideBookshelfCard).orEmpty()}",
+        "scopeDlg=${getPrefString(PreferKey.scopeOverrideDialog).orEmpty()}",
+        "topBg=${getPrefString(PreferKey.topBarBgImage).orEmpty()}|${getPrefString(PreferKey.topBarBgImageN).orEmpty()}|${getPrefInt(PreferKey.topBarWallpaperAlpha, 100)}|${getPrefInt(PreferKey.topBarWallpaperAlphaN, 100)}"
     ).joinToString("|")
     val computedColors = listOf(
         "card=${themeCardColorOrDefault()}",

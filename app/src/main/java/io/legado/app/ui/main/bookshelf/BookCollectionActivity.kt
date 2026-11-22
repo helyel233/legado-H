@@ -84,6 +84,11 @@ class BookCollectionActivity : BaseActivity<ActivityBookCollectionBinding>(),
         val stackOffsetY: Float
     )
 
+    override fun onResume() {
+        super.onResume()
+        adapter.updateBookshelfScope()
+    }
+
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.applyWallpaperGlass()
         applyBookActionBarBackground()

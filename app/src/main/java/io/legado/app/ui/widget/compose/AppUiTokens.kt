@@ -1,5 +1,6 @@
 package io.legado.app.ui.widget.compose
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.legado.app.lib.theme.SurfaceHierarchyDerivation
@@ -29,7 +30,8 @@ object AppListSpacing {
  */
 object AppLayoutTokens {
     val PageHorizontal = 12.dp
-    val DetailHorizontal = 18.dp
+    val DetailHorizontal = 16.dp
+    val SectionTitleOutsideHorizontal = 4.dp
     val SectionGap = 12.dp
     val CardGap = 8.dp
     val GridGap = 10.dp
@@ -44,6 +46,17 @@ object AppLayoutTokens {
     val ControlHeightCompact = 32.dp
     val ControlHeightRegular = 44.dp
     val ControlHeightProminent = 48.dp
+
+    fun pageContentPadding(
+        top: Dp = 0.dp,
+        bottom: Dp = 24.dp,
+        horizontal: Dp = PageHorizontal
+    ): PaddingValues = PaddingValues(
+        start = horizontal,
+        top = top,
+        end = horizontal,
+        bottom = bottom
+    )
 
     fun concentricCardHorizontalPadding(
         panelRadiusDp: Dp,

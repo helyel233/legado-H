@@ -50,6 +50,7 @@ import io.legado.app.data.dao.BookTagInfo
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.book.BookTagManagement
 import io.legado.app.help.config.AppConfig
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
@@ -250,7 +251,7 @@ private fun TagGroupContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+        contentPadding = AppLayoutTokens.pageContentPadding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
     ) {
         item(key = "summary:${group.groupId}") {

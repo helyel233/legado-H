@@ -53,8 +53,7 @@ internal fun RuleSubScreen(
     Box(modifier = modifier.fillMaxSize()) {
         AppManagementLazyColumn(
             palette = palette,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
             itemsIndexed(
                 items = subscriptions,

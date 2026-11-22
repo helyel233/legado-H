@@ -75,8 +75,7 @@ internal fun ReplaceRuleScreen(
     AppManagementLazyColumn(
         palette = palette,
         state = lazyListState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
         val displayedRules = if (reorderEnabled) orderedRules else rulesSnapshot
         items(

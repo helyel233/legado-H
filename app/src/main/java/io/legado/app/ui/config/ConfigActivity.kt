@@ -21,6 +21,7 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.EventBus
 import io.legado.app.lib.theme.TopBarChromeSpec
+import io.legado.app.lib.theme.WindowSnapshotTransitionController
 import io.legado.app.ui.widget.compose.AppComposeTopBar
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.utils.dpToPx
@@ -236,7 +237,11 @@ class ConfigActivity : VMBaseActivity<ViewBinding, ConfigViewModel>() {
     override fun observeLiveBus() {
         super.observeLiveBus()
         observeEvent<String>(EventBus.RECREATE) {
-            recreate()
+            WindowSnapshotTransitionController.captureAndRun(this) {
+                if (!isFinishing && !isDestroyed) {
+                    recreate()
+                }
+            }
         }
     }
 

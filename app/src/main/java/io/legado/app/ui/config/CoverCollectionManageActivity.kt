@@ -104,16 +104,9 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
     }
 
     private fun updateContainerMenu() {
-        val containers = AppCloudStorage.listContainers().filter { it.enabled }
-        if (AppCloudStorage.type != CloudStorageType.S3) {
-            cloudContainerId = containers.firstOrNull()?.id
-            containerMenuLabelState.value = null
-            return
-        }
-        cloudContainerId = AppCloudStorage.selectedContainer(CLOUD_SCOPE)?.id
-        containerMenuLabelState.value = containers.firstOrNull { it.id == cloudContainerId }
-            ?.let(AppCloudStorage::containerDisplayLabel)
-            ?: getString(R.string.s3_bucket)
+        val state = PackageManageUiDelegate.resolveCloudContainerState(this, CLOUD_SCOPE)
+        cloudContainerId = state.selectedContainerId
+        containerMenuLabelState.value = state.menuLabel
     }
 
     private fun showContainerSelector() {
@@ -200,14 +193,12 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
     private fun importZip(uri: Uri) {
         lifecycleScope.launch {
             kotlin.runCatching {
-                val file = withContext(Dispatchers.IO) {
-                    val dir = externalFiles.getFile("coverCollectionImports").apply { mkdirs() }
-                    val target = File(dir, "cover_${System.currentTimeMillis()}.zip")
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        FileOutputStream(target).use { output -> input.copyTo(output) }
-                    }
-                    target
-                }
+                val file = PackageManageUiDelegate.stageImportUriToTempFile(
+                    context = this@CoverCollectionManageActivity,
+                    uri = uri,
+                    dirName = "coverCollectionImports",
+                    filePrefix = "cover"
+                )
                 CoverCollectionManager.importPackage(this@CoverCollectionManageActivity, file, isNightState.value)
             }.onFailure {
                 toastOnUi(it.localizedMessage)
@@ -232,11 +223,7 @@ class CoverCollectionManageActivity : BaseActivity<ActivityCoverCollectionManage
         lifecycleScope.launch {
             kotlin.runCatching { CoverCollectionManager.exportZip(entry) }
                 .onSuccess { zipFile ->
-                    exportZip.launch {
-                        mode = HandleFileContract.EXPORT
-                        showUploadUrl = false
-                        fileData = HandleFileContract.FileData(zipFile.name, zipFile, "application/zip")
-                    }
+                    PackageManageUiDelegate.launchExportZip(exportZip, zipFile, "cover.zip")
                 }
                 .onFailure { toastOnUi(it.localizedMessage) }
         }

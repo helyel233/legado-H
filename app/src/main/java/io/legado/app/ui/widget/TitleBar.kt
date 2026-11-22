@@ -25,6 +25,7 @@ import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.elevation
 import io.legado.app.lib.theme.primaryColor
@@ -33,6 +34,8 @@ import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.transparentNavBar
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.activity
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import splitties.views.bottomPadding
@@ -646,7 +649,12 @@ class TitleBar @JvmOverloads constructor(
      */
     private fun resolveChrome(): Pair<TopBarChromeSpec.Chrome, TopBarConfig.Config> {
         val config = TopBarConfig.currentConfig(context, AppConfig.isNightTheme)
-        val base = resources.getDimension(R.dimen.ui_panel_radius)
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        val base = if (topScope.isCustomOverride) {
+            topScope.panelRadiusPx
+        } else {
+            resources.getDimension(R.dimen.ui_panel_radius)
+        }
         val height = measuredHeight.takeIf { it > 0 }?.toFloat() ?: 0f
         return TopBarChromeSpec.resolve(base, config, height) to config
     }
@@ -701,7 +709,13 @@ class TitleBar @JvmOverloads constructor(
     private fun applyPackageChromeSurface(chrome: TopBarChromeSpec.Chrome, signature: String, config: TopBarConfig.Config) {
         if (chromeBgSignature == signature) return
         chromeBgSignature = signature
-        val color = TopBarConfig.resolveBackgroundColor(config)
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        val baseColor = TopBarConfig.resolveBackgroundColor(config)
+        val color = if (!AppConfig.isEInkMode && topScope.isCustomOverride) {
+            ColorUtils.withAlpha(baseColor, topScope.alphaFraction)
+        } else {
+            baseColor
+        }
         // 与 setBackground(ColorDrawable) 的存量语义一致：半透明底保留 0.1f，
         // 避免横屏下文字 / 图标颜色异常。
         elevation = if (Color.alpha(color) < 255) GLASS_ELEVATION else 0f
@@ -754,14 +768,16 @@ class TitleBar @JvmOverloads constructor(
         if (yieldToPage) {
             return false
         }
+        val topScope = ThemeTokenCompiler.compileFromContext(context).topBar
+        val effectiveEnabled = enabled && topScope.materialMode != GlassMaterialPreset.SOLID
         val glassRadius = if (chrome.floating) chrome.radiusPx else cornerRadiusPx
         val signature = titleBarChromeSurfaceSignature(
             packageSignature = TopBarConfig.currentSignature(AppConfig.isNightTheme),
-            glassSignature = GlassSurface.configSignature(context),
+            glassSignature = "${GlassSurface.configSignature(context)}|top=${topScope.materialMode}:${topScope.alphaPercent}:${topScope.panelRadiusDp}",
             radiusPx = glassRadius,
             floating = chrome.floating
         )
-        return when (titleBarChromeSurface(enabled, chrome.floating)) {
+        return when (titleBarChromeSurface(effectiveEnabled, chrome.floating)) {
             TitleBarChromeSurface.PACKAGE -> {
                 // 悬浮但玻璃判定不过：撤掉已铺玻璃（若有）再铺包背景卡片。
                 restoreTitleBarSurface(this, glassLedger)
@@ -773,7 +789,7 @@ class TitleBar @JvmOverloads constructor(
                 // yieldToPage 已在上面整体让位早退，这里恒 false（SKIP 分支只为
                 // 穷尽性保留，titleBarGlassAction 的让位语义由单测锁定）。
                 val action = titleBarGlassAction(
-                    enabled = enabled,
+                    enabled = effectiveEnabled,
                     signature = signature,
                     appliedSignature = glassLedger.appliedSignature,
                     yieldToPage = false

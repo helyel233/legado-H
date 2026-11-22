@@ -50,6 +50,7 @@ import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.imageBgTextShadow
@@ -132,7 +133,7 @@ internal fun BubbleManageScreen(
                 style = LocalTextStyle.current.copy(
                     shadow = imageBgTextShadow(palette.settings.secondaryText)
                 ),
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = AppLayoutTokens.DetailHorizontal, vertical = 10.dp)
             )
         }
 
@@ -142,7 +143,8 @@ internal fun BubbleManageScreen(
             palette = palette,
             switchChecked = forceSoftwareBubble,
             onSwitchChange = onForceSoftwareBubbleChange,
-            onClick = { onForceSoftwareBubbleChange(!forceSoftwareBubble) }
+            onClick = { onForceSoftwareBubbleChange(!forceSoftwareBubble) },
+            modifier = Modifier.padding(horizontal = AppLayoutTokens.PageHorizontal)
         )
 
         // List
@@ -150,7 +152,7 @@ internal fun BubbleManageScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 8.dp),
+            contentPadding = AppLayoutTokens.pageContentPadding(top = 8.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
         ) {
             itemsIndexed(

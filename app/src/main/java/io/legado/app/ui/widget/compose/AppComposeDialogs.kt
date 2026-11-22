@@ -133,23 +133,32 @@ data class AppDialogStyle(
 @Composable
 fun rememberAppDialogStyle(): AppDialogStyle {
     val context = LocalContext.current
-    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    // 禁止依赖跨 Window CompositionLocal 继承（红线 3）：独立 Dialog Window 始终直接求值。
+    val tokens = rememberResolvedThemeTokens()
+    val dialogScope = tokens.dialog
     val night = tokens.env.isNight
     val isEInk = tokens.env.isEInk
     val layoutAlpha = if (isEInk) {
         1f
     } else {
-        AppConfig.dialogAlpha.coerceIn(0, 100) / 100f
+        dialogScope.alphaFraction
     }
     val glassSignature = rememberGlassConfigSignature()
-    val dialogGlass = remember(context, glassSignature) {
-        GlassSurface.dialogGlassAllowed(context)
+    val dialogGlass = remember(context, glassSignature, dialogScope.materialMode, isEInk) {
+        !isEInk &&
+            dialogScope.materialMode != GlassMaterialPreset.SOLID &&
+            GlassSurface.dialogGlassAllowed(context)
     }
     val uiFontPath = AppConfig.uiFontPath
     val titleFontPath = AppConfig.titleFontPath
-    val panelRadius = tokens.corners.panelRadiusDp.dp
-    val actionRadius = tokens.corners.actionRadiusDp.dp
-    val panelBorderColor = tokens.colors.borderArgb ?: UiCorner.borderLineColor(context)
+    val panelRadius = dialogScope.panelRadiusDp.dp
+    val actionRadius = dialogScope.actionRadiusDp.dp
+    val baseBorderColor = tokens.colors.borderArgb ?: UiCorner.borderLineColor(context)
+    val panelBorderColor = if (!isEInk && dialogScope.isCustomOverride) {
+        ColorUtils.withAlpha(baseBorderColor, dialogScope.borderAlphaFraction)
+    } else {
+        baseBorderColor
+    }
     val accent = tokens.colors.accentArgb
     val onAccent = tokens.colors.onAccentArgb
     val surfaceBase = tokens.colors.cardArgb
@@ -159,6 +168,7 @@ fun rememberAppDialogStyle(): AppDialogStyle {
     val dangerColor = tokens.colors.dangerArgb
     return remember(
         tokens.signature,
+        dialogScope,
         layoutAlpha,
         dialogGlass,
         uiFontPath,
@@ -199,6 +209,8 @@ fun AppDialogFrame(
     content: @Composable () -> Unit,
     actions: @Composable () -> Unit
 ) = LegadoComposeTheme {
+    val dialogTokens = rememberResolvedThemeTokens()
+    val dialogScope = dialogTokens.dialog
     val style = rememberAppDialogStyle()
     val frameShape = RoundedCornerShape(style.panelRadius)
     val density = LocalDensity.current
@@ -206,13 +218,20 @@ fun AppDialogFrame(
     // 与 View 对话框同一口径：只有宿主页面背后真是壁纸、且处于玻璃档时才铺玻璃；
     // 阅读页 / 书籍详情封面 / 视频 / 音频等页面弹出时仍用主题实底表面。
     val glassSignature = rememberGlassConfigSignature()
-    val glassEnabled = remember(context, glassSignature) {
-        GlassSurface.dialogGlassAllowed(context)
+    val glassEnabled = remember(context, glassSignature, dialogScope.materialMode, dialogTokens.env.isEInk) {
+        !dialogTokens.env.isEInk &&
+            dialogScope.materialMode != GlassMaterialPreset.SOLID &&
+            GlassSurface.dialogGlassAllowed(context)
     }
     // CLEAR 档：内容域宿主（阅读 / 详情 / 视频 / 音频）在 dialogGlassAllowed 被判否，
     // 但透明无玻璃档本就不采样壁纸，应像 View 弹窗一样铺主题色半透明壳。
-    val dialogClear = remember(context, glassSignature) {
-        GlassSurface.dialogClearAllowed(context)
+    val dialogClear = remember(context, glassSignature, dialogTokens.env.isEInk) {
+        !dialogTokens.env.isEInk && GlassSurface.dialogClearAllowed(context)
+    }
+    val dialogShadow = when {
+        dialogTokens.env.isEInk -> 0.dp
+        dialogScope.isCustomOverride -> dialogScope.shadowElevationDp.coerceAtLeast(0).dp
+        else -> 14.dp
     }
     val outerModifier = modifier
         .fillMaxWidth()
@@ -276,6 +295,8 @@ fun AppDialogFrame(
     }
     val frameSurfaceColor = if (dialogClear) style.clearSurface else style.surface
     CompositionLocalProvider(
+        LocalLegadoTokens provides dialogTokens,
+        LocalLayoutTokens provides dialogTokens.layout,
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily),
         LocalMiuixContainerSurfaceColor provides if (glassEnabled) Color.Unspecified else frameSurfaceColor
     ) {
@@ -283,7 +304,7 @@ fun AppDialogFrame(
             GlassPanel(
                 domain = GlassSamplingDomain.WALLPAPER,
                 cornerRadiusPx = with(density) { style.panelRadius.toPx() },
-                configSignature = glassSignature,
+                configSignature = "$glassSignature|dlg=${dialogScope.materialMode}:${dialogScope.alphaPercent}:${dialogScope.panelRadiusDp}",
                 // 对话框是独立窗口：采样必须按屏幕对齐，不能用窗口根视图当基准。
                 screenAligned = true,
                 modifier = outerModifier.clip(frameShape)
@@ -302,7 +323,10 @@ fun AppDialogFrame(
         } else {
             LegadoMiuixCard(
                 modifier = outerModifier
-                    .shadow(14.dp, frameShape, clip = false)
+                    .then(
+                        if (dialogShadow > 0.dp) Modifier.shadow(dialogShadow, frameShape, clip = false)
+                        else Modifier
+                    )
                     .border(1.dp, style.stroke, frameShape),
                 color = if (dialogClear) style.clearSurface else style.surface,
                 contentColor = style.primaryText,

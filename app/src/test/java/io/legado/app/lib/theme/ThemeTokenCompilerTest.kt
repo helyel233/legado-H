@@ -1,5 +1,7 @@
 package io.legado.app.lib.theme
 
+import io.legado.app.help.config.pkg.SurfaceScopeOverride
+import io.legado.app.help.config.pkg.UiScope
 import io.legado.app.ui.main.GlassMaterialPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -81,6 +83,169 @@ class ThemeTokenCompilerTest {
         val shapes = tokens.toMaterialShapes()
         // 验证构造成功且不抛异常
         assertTrue(shapes.small != shapes.medium)
+    }
+
+    @Test
+    fun resolveScope_inheritsGlobalAndAppliesPartialOverridesOnlyToTargetScope() {
+        val env = AppearanceEnv(isNight = false, isEInk = false, hasUsableWallpaper = true, hardwareBlurSupported = true)
+        val tokens = ThemeTokenCompiler.compileRaw(
+            env = env,
+            primaryArgb = 0xFF212121.toInt(),
+            accentArgb = 0xFF1E88E5.toInt(),
+            backgroundArgb = 0xFFF5F5F5.toInt(),
+            bottomBarArgb = 0xFFFFFFFF.toInt(),
+            cardArgb = 0xFFFFFFFF.toInt(),
+            mutedArgb = 0xFFEEEEEE.toInt(),
+            dividerArgb = 0x1F000000,
+            borderArgb = 0x33000000,
+            primaryTextArgb = 0xFF212121.toInt(),
+            secondaryTextArgb = 0xFF757575.toInt(),
+            titleTextArgb = 0xFF111111.toInt(),
+            dangerArgb = 0xFFF44336.toInt(),
+            panelRadiusDp = 12f,
+            actionRadiusDp = 9f,
+            panelRadiusPx = 36f,
+            glassMode = GlassMaterialPreset.GLASS,
+            glassLevel = 68,
+            glassStrokeColorArgb = null,
+            glassSignature = "glass|68",
+            paletteSignature = "p1",
+            density = 3f,
+            densityScale = 1.2f,
+            globalAlphaPercent = 85,
+            dialogAlphaPercent = 94,
+            globalShadowDp = 4,
+            globalBlurRadiusDp = 8f,
+            borderAlphaPercent = 60,
+            rawScopeOverrides = mapOf(
+                UiScope.DIALOG to SurfaceScopeOverride(
+                    materialMode = GlassMaterialPreset.FROSTED,
+                    cornerScale = 1.5f,
+                    alpha = null // null -> inherits dialogAlphaPercent (94)
+                ),
+                UiScope.BOOKSHELF_CARD to SurfaceScopeOverride(
+                    alpha = 72,
+                    shadowElevation = 8
+                )
+            )
+        )
+
+        // Density scale scales spatial baselines
+        assertEquals(1.2f, tokens.layout.densityScale, 0.001f)
+        assertEquals(14.4f, tokens.layout.pageHorizontalDp, 0.01f)
+        assertEquals(19.2f, tokens.layout.detailHorizontalDp, 0.01f)
+
+        // TOP_BAR & BOTTOM_BAR inherit global untouched
+        assertFalse(tokens.topBar.isCustomOverride)
+        assertEquals(GlassMaterialPreset.GLASS, tokens.topBar.materialMode)
+        assertEquals(85, tokens.topBar.alphaPercent)
+        assertEquals(12f, tokens.topBar.panelRadiusDp, 0.01f)
+        assertEquals(4, tokens.topBar.shadowElevationDp)
+        assertEquals(60, tokens.bottomBar.borderAlphaPercent)
+
+        // DIALOG overrides material + cornerScale while alpha inherits dialogAlphaPercent (94)
+        assertTrue(tokens.dialog.isCustomOverride)
+        assertEquals(GlassMaterialPreset.FROSTED, tokens.dialog.materialMode)
+        assertEquals(18f, tokens.dialog.panelRadiusDp, 0.01f)
+        assertEquals(15f, tokens.dialog.actionRadiusDp, 0.01f)
+        assertEquals(94, tokens.dialog.alphaPercent)
+        assertEquals(8f, tokens.dialog.blurRadiusDp, 0.01f)
+
+        // BOOKSHELF_CARD overrides alpha + shadow while inheriting material & corner
+        assertTrue(tokens.bookshelfCard.isCustomOverride)
+        assertEquals(GlassMaterialPreset.GLASS, tokens.bookshelfCard.materialMode)
+        assertEquals(72, tokens.bookshelfCard.alphaPercent)
+        assertEquals(8, tokens.bookshelfCard.shadowElevationDp)
+        assertEquals(12f, tokens.bookshelfCard.panelRadiusDp, 0.01f)
+    }
+
+    @Test
+    fun resolveScope_eInkForcesSolidOpaqueZeroShadowAndZeroTransitionDuration() {
+        val env = AppearanceEnv(isNight = false, isEInk = true, hasUsableWallpaper = true, hardwareBlurSupported = true)
+        val tokens = ThemeTokenCompiler.compileRaw(
+            env = env,
+            primaryArgb = 0xFF212121.toInt(),
+            accentArgb = 0xFF1E88E5.toInt(),
+            backgroundArgb = 0xFFF5F5F5.toInt(),
+            bottomBarArgb = 0xFFFFFFFF.toInt(),
+            cardArgb = 0xFFFFFFFF.toInt(),
+            mutedArgb = 0xFFEEEEEE.toInt(),
+            dividerArgb = 0x1F000000,
+            borderArgb = 0x33000000,
+            primaryTextArgb = 0xFF212121.toInt(),
+            secondaryTextArgb = 0xFF757575.toInt(),
+            titleTextArgb = 0xFF111111.toInt(),
+            dangerArgb = 0xFFF44336.toInt(),
+            panelRadiusDp = 10f,
+            actionRadiusDp = 7f,
+            panelRadiusPx = 30f,
+            glassMode = GlassMaterialPreset.GLASS,
+            glassLevel = 80,
+            glassStrokeColorArgb = null,
+            glassSignature = "glass|80",
+            paletteSignature = "p-eink",
+            globalAlphaPercent = 60,
+            dialogAlphaPercent = 50,
+            globalShadowDp = 12,
+            globalBlurRadiusDp = 20f,
+            rawScopeOverrides = mapOf(
+                UiScope.TOP_BAR to SurfaceScopeOverride(
+                    materialMode = GlassMaterialPreset.GLASS,
+                    alpha = 40,
+                    blurRadiusDp = 18f,
+                    shadowElevation = 6
+                )
+            )
+        )
+
+        assertEquals(0, tokens.transitionDurationMs(260))
+        assertEquals(0f, tokens.animationDurationScale, 0.001f)
+        listOf(tokens.topBar, tokens.bottomBar, tokens.bookshelfCard, tokens.dialog).forEach { scope ->
+            assertEquals(GlassMaterialPreset.SOLID, scope.materialMode)
+            assertEquals(100, scope.alphaPercent)
+            assertEquals(0, scope.shadowElevationDp)
+            assertEquals(0f, scope.blurRadiusDp, 0.001f)
+            assertFalse(scope.isCustomOverride)
+        }
+    }
+
+    @Test
+    fun compileRaw_legacyPipelineKillSwitchBypassesScopeOverrides() {
+        val env = AppearanceEnv(isNight = false, isEInk = false, hasUsableWallpaper = false, hardwareBlurSupported = true)
+        val tokens = ThemeTokenCompiler.compileRaw(
+            env = env,
+            primaryArgb = 0xFF212121.toInt(),
+            accentArgb = 0xFF1E88E5.toInt(),
+            backgroundArgb = 0xFFF5F5F5.toInt(),
+            bottomBarArgb = 0xFFFFFFFF.toInt(),
+            cardArgb = 0xFFFFFFFF.toInt(),
+            mutedArgb = 0xFFEEEEEE.toInt(),
+            dividerArgb = 0x1F000000,
+            borderArgb = 0x33000000,
+            primaryTextArgb = 0xFF212121.toInt(),
+            secondaryTextArgb = 0xFF757575.toInt(),
+            titleTextArgb = 0xFF111111.toInt(),
+            dangerArgb = 0xFFF44336.toInt(),
+            panelRadiusDp = 10f,
+            actionRadiusDp = 7f,
+            panelRadiusPx = 30f,
+            glassMode = GlassMaterialPreset.SOLID,
+            glassLevel = 0,
+            glassStrokeColorArgb = null,
+            glassSignature = "solid|0",
+            paletteSignature = "p-leg",
+            globalAlphaPercent = 90,
+            rawScopeOverrides = mapOf(
+                UiScope.BOOKSHELF_CARD to SurfaceScopeOverride(alpha = 50, shadowElevation = 10)
+            ),
+            useLegacyTokenPipeline = true
+        )
+
+        assertTrue(tokens.legacyPipelineActive)
+        assertFalse(tokens.bookshelfCard.isCustomOverride)
+        assertEquals(90, tokens.bookshelfCard.alphaPercent)
+        assertEquals(0, tokens.bookshelfCard.shadowElevationDp)
+        assertEquals(220, tokens.transitionDurationMs(220))
     }
 
     private fun compileSample(

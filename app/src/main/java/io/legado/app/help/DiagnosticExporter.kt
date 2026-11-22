@@ -121,6 +121,8 @@ object DiagnosticExporter {
         } else {
             sb.append("\n（没有已记录的崩溃文件）\n")
         }
+        sb.append("\n===== UI 性能度量 =====\n")
+        sb.append(UiPerfMetrics.dumpSummary()).append('\n')
         return sb.toString()
     }
 

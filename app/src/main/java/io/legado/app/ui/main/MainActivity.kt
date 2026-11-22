@@ -65,6 +65,7 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.LocalNetworkAccess
 import io.legado.app.help.DiagnosticExporter
+import io.legado.app.help.UiPerfMetrics
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.MainBottomNavConfig
@@ -72,6 +73,8 @@ import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.lib.theme.ThemeTokenCompiler
+import io.legado.app.lib.theme.WindowSnapshotTransitionController
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ThemeStore
@@ -291,15 +294,33 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
     private var mainBackgroundVersion by mutableIntStateOf(0)
     private var mainBackgroundSignature: MainThemeBackgroundSignature? = null
-    private val bottomBarCornerRadius by lazy {
-        resources.getDimension(R.dimen.main_bottom_bar_corner_radius)
-    }
-    private val searchButtonCornerRadius by lazy {
-        resources.getDimension(R.dimen.main_bottom_bar_corner_radius)
-    }
-    private val bottomIndicatorCornerRadius by lazy {
-        resources.getDimension(R.dimen.main_bottom_indicator_corner_radius)
-    }
+    private fun currentBottomScopeTokens() =
+        ThemeTokenCompiler.compileFromContext(this).bottomBar
+
+    private val bottomBarCornerRadius: Float
+        get() {
+            val scope = currentBottomScopeTokens()
+            val dimenDefault = resources.getDimension(R.dimen.main_bottom_bar_corner_radius)
+            return if (scope.isCustomOverride) scope.panelRadiusPx else dimenDefault
+        }
+
+    private val searchButtonCornerRadius: Float
+        get() {
+            val scope = currentBottomScopeTokens()
+            val dimenDefault = resources.getDimension(R.dimen.main_bottom_bar_corner_radius)
+            return if (scope.isCustomOverride) scope.panelRadiusPx else dimenDefault
+        }
+
+    private val bottomIndicatorCornerRadius: Float
+        get() {
+            val scope = currentBottomScopeTokens()
+            val dimenDefault = resources.getDimension(R.dimen.main_bottom_indicator_corner_radius)
+            return if (scope.isCustomOverride) {
+                scope.actionRadiusDp * resources.displayMetrics.density
+            } else {
+                dimenDefault
+            }
+        }
     private val bottomIndicatorWidth by lazy {
         resources.getDimensionPixelSize(R.dimen.main_bottom_indicator_width)
     }
@@ -311,11 +332,14 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
     private val bottomGlassPulseInterpolator by lazy { AccelerateDecelerateInterpolator() }
     private var liquidGlassReady = false
-    private val liquidGlassWarmupRunnables = arrayListOf<Runnable>()
-    private val liquidGlassWarmupDelays = longArrayOf(48L, 180L, 420L, 900L)
     private val liquidGlassSetupRunnable = Runnable {
         if (!isFinishing && !isDestroyed && !isSidebarMode()) {
             setupLiquidGlass()
+        }
+    }
+    private val liquidGlassSampleRefreshRunnable = Runnable {
+        if (!isFinishing && !isDestroyed && isLiquidOrFrostedGlassActive()) {
+            invalidateLiquidGlassSampleTarget()
         }
     }
     private var mergedDiscoveryLongClickView: View? = null
@@ -373,6 +397,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         upBottomMenu()
         initView()
         handleTargetIntent(intent)
+        binding.root.doOnPreDraw {
+            UiPerfMetrics.markMainFirstFrameIfNeeded()
+            UiPerfMetrics.markRecreateFirstFrameIfPending("main")
+        }
         onBackPressedDispatcher.addCallback(this) {
             if (isSidebarMode() && sideNavigationOpen) {
                 closeSideNavigation()
@@ -462,8 +490,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
         refreshMainThemeBackground()
         refreshBottomNavigationConfig()
-        binding.root.post {
-            scheduleLiquidGlassWarmup()
+        if (!liquidGlassReady) {
+            scheduleLiquidGlassSetup()
+        } else if (isLiquidOrFrostedGlassActive()) {
+            scheduleLiquidGlassSampleRefresh()
         }
         if (isSidebarMode()) {
             updateSideGoalHeader()
@@ -642,10 +672,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             true
         }
         syncLiquidGlassSampleBackground()
-        scheduleLiquidGlassWarmup()
         contentContainer.doOnPreDraw {
             liquidGlassReady = true
-            scheduleLiquidGlassWarmup()
+            scheduleLiquidGlassSetup()
         }
         bottomNavigationView.doOnLayout {
             updateBottomNavigationIndicator(animate = false)
@@ -724,6 +753,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
+    private fun isLiquidOrFrostedGlassActive(): Boolean {
+        if (AppConfig.isEInkMode || isSidebarMode() || isStandardBottomMode()) return false
+        val mode = resolvedExploreGlassMode()
+        return mode == GlassMaterialPreset.GLASS || mode == GlassMaterialPreset.FROSTED
+    }
+
     private fun scheduleLiquidGlassSetup(delayMillis: Long = 0L) {
         if (isFinishing || isDestroyed || isSidebarMode()) return
         binding.bottomControls.removeCallbacks(liquidGlassSetupRunnable)
@@ -734,26 +769,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    private fun scheduleLiquidGlassWarmup() {
-        if (isFinishing || isDestroyed || isSidebarMode()) return
-        clearLiquidGlassCallbacks()
-        scheduleLiquidGlassSetup()
-        liquidGlassWarmupDelays.forEach { delay ->
-            val runnable = Runnable {
-                if (!isFinishing && !isDestroyed && !isSidebarMode()) {
-                    invalidateLiquidGlassSampleTarget()
-                    setupLiquidGlass()
-                }
-            }
-            liquidGlassWarmupRunnables.add(runnable)
-            binding.bottomControls.postDelayed(runnable, delay)
-        }
+    private fun scheduleLiquidGlassSampleRefresh() {
+        if (isFinishing || isDestroyed || !isLiquidOrFrostedGlassActive()) return
+        binding.bottomControls.removeCallbacks(liquidGlassSampleRefreshRunnable)
+        binding.bottomControls.post(liquidGlassSampleRefreshRunnable)
     }
 
     private fun clearLiquidGlassCallbacks() = binding.run {
         bottomControls.removeCallbacks(liquidGlassSetupRunnable)
-        liquidGlassWarmupRunnables.forEach { bottomControls.removeCallbacks(it) }
-        liquidGlassWarmupRunnables.clear()
+        bottomControls.removeCallbacks(liquidGlassSampleRefreshRunnable)
     }
 
     private fun resetLiquidGlassBindingState() {
@@ -802,9 +826,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         super.upBackgroundImage()
         syncLiquidGlassSampleBackground()
         if (scheduleWarmup) {
-            binding.root.post {
-                scheduleLiquidGlassWarmup()
-            }
+            scheduleLiquidGlassSetup()
         }
     }
 
@@ -826,7 +848,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomNavigationGlassSignature = glassSignature
         }
         if (packageChanged || glassChanged) {
-            scheduleLiquidGlassWarmup()
+            scheduleLiquidGlassSetup()
             if (packageChanged) {
                 binding.bottomNavigationView.doOnLayout {
                     updateBottomNavigationIndicator(animate = false)
@@ -840,12 +862,21 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 材质签名取自 [GlassMaterialPreset.signature]，与顶栏 / 发现页同一口径，
      * 新增可调维度时三处会一起感知，不会漏键。
      */
-    private fun bottomBarGlassSignature(): String = listOf(
-        GlassMaterialPreset.signature(
-            GlassMaterialPreset.current(resolvedExploreGlassMode())
-        ),
-        appCtx.getPrefString(PreferKey.glassStrokeColor).orEmpty()
-    ).joinToString("|")
+    private fun bottomBarGlassSignature(): String {
+        val bottomScope = currentBottomScopeTokens()
+        return listOf(
+            GlassMaterialPreset.signature(
+                GlassMaterialPreset.current(
+                    if (bottomScope.isCustomOverride) bottomScope.materialMode else resolvedExploreGlassMode()
+                )
+            ),
+            appCtx.getPrefString(PreferKey.glassStrokeColor).orEmpty(),
+            bottomScope.materialMode,
+            bottomScope.alphaPercent,
+            bottomScope.panelRadiusDp,
+            bottomScope.borderAlphaPercent
+        ).joinToString("|")
+    }
 
     private fun refreshMainTopBars(view: View) {
         if (view is MainTopBarView) {
@@ -1737,6 +1768,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun setupLiquidGlass() {
+        UiPerfMetrics.trace(UiPerfMetrics.METRIC_LIQUID_GLASS_SETUP) {
+            setupLiquidGlassInternal()
+        }
+    }
+
+    private fun setupLiquidGlassInternal() {
         binding.run {
             val standardMode = isStandardBottomMode()
             val bottomPillRadius = measuredPillRadius(bottomNavigationGlass, bottomBarCornerRadius)
@@ -1769,9 +1806,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 syncSearchButtonTint()
                 return
             }
-            // 材质档位单一事实来源：与发现页 / 顶栏 / 设置页同一解析函数，
-            // 「全局毛玻璃效果」切档后底栏即时生效（旧 bottomBarEffectMode 已废弃）。
-            val effectMode = resolvedExploreGlassMode()
+            // 材质档位单一事实来源：优先消费 BOTTOM_BAR Scope 覆写，否则与发现页 / 顶栏 / 设置页共用全局档位。
+            val bottomScope = currentBottomScopeTokens()
+            val effectMode = if (bottomScope.isCustomOverride) {
+                bottomScope.materialMode
+            } else {
+                resolvedExploreGlassMode()
+            }
             if (standardMode) {
                 bottomNavigationGlassView.visibility = android.view.View.GONE
                 bottomNavigationIndicatorGlassView.visibility = android.view.View.GONE
@@ -1941,8 +1982,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         refreshMainThemeBackground(force = true, scheduleWarmup = false)
         applyBottomLayoutMode()
         refreshMainTopBars(root)
+        WindowSnapshotTransitionController.invalidateOutlinesRecursively(bottomControls)
         updateAiFloatingBall()
-        scheduleLiquidGlassWarmup()
+        scheduleLiquidGlassSetup()
         bottomNavigationView.doOnLayout {
             updateBottomNavigationIndicator(animate = false)
         }
@@ -2281,7 +2323,15 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 描边统一色：取主题包「边框线色」（[UiCorner.borderLineColor]，跟随强调色或选色），
      * 与卡片 / 弹窗 / 栏位 / 按钮共用同一份口径，不再单独读底栏包或全局描边键。
      */
-    private fun bottomBarBorderColor(): Int? = UiCorner.borderLineColor(appCtx)
+    private fun bottomBarBorderColor(): Int? {
+        val raw = UiCorner.borderLineColor(appCtx) ?: return null
+        val scope = currentBottomScopeTokens()
+        return if (!AppConfig.isEInkMode && scope.isCustomOverride) {
+            AppColorUtils.withAlpha(raw, scope.borderAlphaFraction)
+        } else {
+            raw
+        }
+    }
 
     private fun setupLiquidGlassView(
         liquidGlassView: StableLiquidGlassView,
@@ -2682,6 +2732,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 重建期间 Fragment 先于 Activity 销毁 View 的那个窗口同样会命中，所以这里必须问一句。
      */
     override fun recreate() {
+        UiPerfMetrics.markRecreateRequested("main")
         (fragmentMap[getFragmentId(bookshelfPosition())] as? BaseBookshelfFragment)
             ?.takeIf { it.isViewReady() }
             ?.upSort()
@@ -2700,13 +2751,16 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.root.removeCallbacks(resetRecreatePendingRunnable)
             binding.root.postDelayed(resetRecreatePendingRunnable, 1500L)
             refreshMainThemeBackground(force = true, scheduleWarmup = false)
-            //脱离系统配置分发/appcompat 配置应用的同帧再请求重建：
-            //recreate() 在该窗口内可能被 ActivityThread 合并丢弃，导致 View 版
-            //页面（如经典发现页书源框）停留旧主题
+            // 硬件离屏快照包裹 recreate()：PixelCopy 捕获 + 首帧绘制完成门控（墨水屏强制 0ms 直切），
+            // 掩盖 128 个 XML layout 静态 @color 重建瞬间并脱离同帧丢弃窗口。
             binding.root.post {
                 if (!isFinishing && !isDestroyed && !recreateRequested) {
                     recreateRequested = true
-                    recreate()
+                    WindowSnapshotTransitionController.captureAndRun(this) {
+                        if (!isFinishing && !isDestroyed) {
+                            recreate()
+                        }
+                    }
                 }
             }
         }
@@ -2837,11 +2891,22 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private inner class PageChangeCallback : ViewPager.SimpleOnPageChangeListener() {
 
         override fun onPageSelected(position: Int) {
+            val markKey = "tab_switch_$position"
+            UiPerfMetrics.markStart(markKey)
             pagePosition = position
             binding.bottomNavigationView.menu.findItem(getBottomNavigationItemId(position))?.isChecked = true
             updateSideNavigationItems()
             updateBottomNavigationIndicator(animate = true)
-            scheduleLiquidGlassWarmup()
+            binding.viewPagerMain.doOnPreDraw {
+                UiPerfMetrics.markEnd(markKey, UiPerfMetrics.METRIC_MAIN_TAB_SWITCH, "pos=$position")
+            }
+            scheduleLiquidGlassSampleRefresh()
+        }
+
+        override fun onPageScrollStateChanged(state: Int) {
+            if (state == ViewPager.SCROLL_STATE_IDLE) {
+                scheduleLiquidGlassSampleRefresh()
+            }
         }
 
     }

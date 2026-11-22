@@ -80,8 +80,7 @@ internal fun AutoTaskScreen(
     AppManagementLazyColumn(
         palette = palette,
         state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
         val displayed = if (reorderEnabled) orderedRules else snapshot
         if (displayed.isEmpty()) {

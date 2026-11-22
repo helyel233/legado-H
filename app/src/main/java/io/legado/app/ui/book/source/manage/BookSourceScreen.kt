@@ -110,8 +110,7 @@ internal fun BookSourceScreen(
 
     AppManagementLazyColumn(
         palette = palette,
-        state = lazyListState,
-        contentPadding = PaddingValues(bottom = 24.dp)
+        state = lazyListState
     ) {
         if (sourceSnapshot.isEmpty() && !emptyHint.isNullOrBlank()) {
             item(key = "empty", contentType = "empty") {

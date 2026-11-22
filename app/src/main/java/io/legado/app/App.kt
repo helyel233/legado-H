@@ -42,15 +42,19 @@ import io.legado.app.ui.debuglog.DebugFloatingBallManager
 import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
+import io.legado.app.help.UiPerfMetrics
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.BookshelfMatcher
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
+import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.lib.theme.ThemeRuntimeKeys
+import io.legado.app.lib.theme.prewarmUiTypefaces
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
 import io.legado.app.help.http.ObsoleteUrlFactory
@@ -96,6 +100,7 @@ class App : Application() {
     private val themeConfigurationGeneration = AtomicLong()
 
     override fun onCreate() {
+        UiPerfMetrics.markAppColdStartBegin()
         super.onCreate()
         CrashHandler(this)
         if (isDebuggable) {
@@ -123,6 +128,15 @@ class App : Application() {
         DebugFloatingBallManager.init()
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         Coroutine.async(Coroutine.defaultScope) {
+            // Prewarm wallpaper bitmap+blur and custom UI typeface on IO before Activity first draw.
+            launch { ThemeConfig.prewarmBgImage(this@App) }
+            launch { runCatching { this@App.prewarmUiTypefaces() } }
+            // Silently disassemble legacy packages into Art + Param packages once on upgrade.
+            if (!getPrefBoolean(PreferKey.useLegacyPackageManager, false)) {
+                launch {
+                    runCatching { LegacyPackageMigrator.migrateLocalPackagesIfNeeded(this@App) }
+                }
+            }
             // 敏感凭据（WebDav 密码/S3 密钥/AI Key/Web 口令）明文遗留迁移为密文，
             // 幂等：已是密文或无数据时为空操作；首次启动只付一次 KeyStore 加解密成本
             runCatching {
@@ -187,6 +201,7 @@ class App : Application() {
             }
             AutoTaskService.restoreSchedule(appCtx)
         }
+        UiPerfMetrics.markAppColdStartEnd()
     }
 
     private fun repairReaderDataBeforeUi() {

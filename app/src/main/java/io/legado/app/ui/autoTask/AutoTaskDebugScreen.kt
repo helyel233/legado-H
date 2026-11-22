@@ -48,7 +48,7 @@ internal fun AutoTaskDebugScreen(
         palette = palette,
         state = listState,
         showFastScroller = false,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = AppLayoutTokens.pageContentPadding(),
         verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.CardGap)
     ) {
         item(key = "status") {

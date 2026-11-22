@@ -3,10 +3,13 @@ package io.legado.app.lib.theme
 import android.content.Context
 import android.graphics.Typeface
 import android.os.Build
-import android.widget.EditText
+import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
+import android.widget.EditText
 import android.widget.TextView
+import androidx.compose.ui.platform.ComposeView
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.widget.TitleBar
@@ -19,6 +22,19 @@ private fun Context.baseSystemTypeface(): Typeface {
         1 -> Typeface.SERIF
         2 -> Typeface.MONOSPACE
         else -> Typeface.SANS_SERIF
+    }
+}
+
+fun Context.needsCustomUiBodyTypeface(): Boolean {
+    return AppConfig.uiFontPath.isNotBlank() || AppConfig.systemTypefaces != 0
+}
+
+fun Context.prewarmUiTypefaces() {
+    if (AppConfig.uiFontPath.isNotBlank()) {
+        loadUiTypeface(AppConfig.uiFontPath)
+    }
+    if (AppConfig.titleFontPath.isNotBlank()) {
+        loadUiTypeface(AppConfig.titleFontPath)
     }
 }
 
@@ -51,11 +67,14 @@ fun Context.loadUiTypeface(fontPath: String): Typeface? {
 
 private object UiTypefaceCache {
 
+    private val lock = Any()
     private val cache = linkedMapOf<String, Typeface>()
 
     fun get(context: Context, fontPath: String): Typeface? {
-        cache[fontPath]?.let { return it }
-        return runCatching {
+        synchronized(lock) {
+            cache[fontPath]?.let { return it }
+        }
+        val loaded = runCatching {
             when {
                 fontPath.startsWith("content://", ignoreCase = true) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
                     context.contentResolver.openFileDescriptor(android.net.Uri.parse(fontPath), "r")?.use {
@@ -70,19 +89,24 @@ private object UiTypefaceCache {
                 File(fontPath).exists() -> Typeface.createFromFile(fontPath)
                 else -> null
             }
-        }.getOrNull().also {
-            if (it != null) {
-                cache[fontPath] = it
+        }.getOrNull()
+        if (loaded != null) {
+            synchronized(lock) {
+                cache[fontPath] = loaded
                 if (cache.size > 8) {
                     cache.remove(cache.keys.first())
                 }
             }
         }
+        return loaded
     }
 }
 
 fun View.applyUiTypefaceDeep(typeface: Typeface) {
     when (this) {
+        is ComposeView,
+        is WebView,
+        is SurfaceView -> return
         is TextView -> {
             if (this.typeface != typeface) {
                 this.typeface = typeface
@@ -98,7 +122,10 @@ fun View.applyUiTypefaceDeep(typeface: Typeface) {
 
 fun View.applyUiBodyTypefaceDeep(typeface: Typeface) {
     when (this) {
-        is TitleBar -> return
+        is TitleBar,
+        is ComposeView,
+        is WebView,
+        is SurfaceView -> return
         is TextView -> {
             if (getTag(R.id.ui_title_typeface_role) == true) return
             if (this.typeface != typeface) {

@@ -16,6 +16,7 @@ import androidx.activity.addCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
 import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.R
@@ -23,14 +24,20 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.Theme
+import io.legado.app.help.UiPerfMetrics
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.lib.theme.WindowSnapshotTransitionController
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.applyUiMenuTypefaceDeep
+import io.legado.app.lib.theme.needsCustomUiBodyTypeface
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.widget.TitleBar
@@ -59,6 +66,7 @@ abstract class BaseActivity<VB : ViewBinding>(
     protected abstract val binding: VB
     private var lastThemeValuesChanged = 0L
     private var lastNightMode = false
+    private var bgImageLoadJob: Job? = null
 
     val isInMultiWindow: Boolean
         @SuppressLint("ObsoleteSdkInt")
@@ -200,8 +208,10 @@ abstract class BaseActivity<VB : ViewBinding>(
                     upBackgroundImage()
                 }
             }
-        if (!AppConfig.isEInkMode) {
-            binding.root.applyUiBodyTypefaceDeep(uiTypeface())
+        if (!AppConfig.isEInkMode && needsCustomUiBodyTypeface()) {
+            UiPerfMetrics.trace(UiPerfMetrics.METRIC_TYPEFACE_DEEP, javaClass.simpleName) {
+                binding.root.applyUiBodyTypefaceDeep(uiTypeface())
+            }
         }
         applyRootBackgroundPolicy()
         upBackgroundImage()
@@ -216,6 +226,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         }
         observeLiveBus()
         onActivityCreated(savedInstanceState)
+        WindowSnapshotTransitionController.attachAndRevealPendingIfAny(this)
     }
 
     override fun onResume() {
@@ -336,6 +347,7 @@ abstract class BaseActivity<VB : ViewBinding>(
     }
 
     private fun applyWindowBackgroundColor() {
+        window.decorView.setTag(DECOR_BG_CACHE_KEY_TAG, null)
         ViewCompat.setBackgroundTintList(window.decorView, null)
         window.decorView.setBackgroundColor(ThemeConfig.getFallbackBackgroundColor(this))
     }
@@ -352,35 +364,60 @@ abstract class BaseActivity<VB : ViewBinding>(
     }
 
     open fun upBackgroundImage() {
+        val startNs = System.nanoTime()
         if (!imageBg || AppConfig.isEInkMode) {
+            bgImageLoadJob?.cancel()
+            bgImageLoadJob = null
             applyWindowBackgroundColor()
             return
         }
-        val hasBgImage = ThemeConfig.hasUsableBgImage(this)
-        try {
-            val drawable = ThemeConfig.getBgImage(this, windowManager.windowSize)
-            if (drawable != null) {
-                ViewCompat.setBackgroundTintList(window.decorView, null)
-                window.decorView.background = drawable
-            } else if (hasBgImage) {
-                applyWindowBackgroundColor()
-            } else {
-                applyWindowBackgroundColor()
+        val metrics = windowManager.windowSize
+        val spec = ThemeConfig.resolveBgImageSpec(this, metrics)
+        if (spec == null) {
+            bgImageLoadJob?.cancel()
+            bgImageLoadJob = null
+            applyWindowBackgroundColor()
+            return
+        }
+        if (window.decorView.getTag(DECOR_BG_CACHE_KEY_TAG) == spec.cacheKey) {
+            val elapsedMs = (System.nanoTime() - startNs).coerceAtLeast(0L) / 1_000_000.0
+            UiPerfMetrics.record(UiPerfMetrics.METRIC_BG_APPLY_MAIN, elapsedMs, "same_key")
+            return
+        }
+        val cached = ThemeConfig.getCachedBgDrawable(this, spec)
+        if (cached != null) {
+            bgImageLoadJob?.cancel()
+            bgImageLoadJob = null
+            ViewCompat.setBackgroundTintList(window.decorView, null)
+            window.decorView.background = cached
+            window.decorView.setTag(DECOR_BG_CACHE_KEY_TAG, spec.cacheKey)
+            val elapsedMs = (System.nanoTime() - startNs).coerceAtLeast(0L) / 1_000_000.0
+            UiPerfMetrics.record(UiPerfMetrics.METRIC_BG_APPLY_MAIN, elapsedMs, "cache_hit")
+            return
+        }
+        // Cache miss: never block main thread with Bitmap decode / stackBlur; show fallback color and decode on IO.
+        applyWindowBackgroundColor()
+        val elapsedMs = (System.nanoTime() - startNs).coerceAtLeast(0L) / 1_000_000.0
+        UiPerfMetrics.record(UiPerfMetrics.METRIC_BG_APPLY_MAIN, elapsedMs, "async_miss")
+        bgImageLoadJob?.cancel()
+        bgImageLoadJob = lifecycleScope.launch {
+            try {
+                val drawable = ThemeConfig.loadBgDrawableAsync(this@BaseActivity, spec)
+                if (isFinishing || isDestroyed) return@launch
+                val currentSpec = ThemeConfig.resolveBgImageSpec(this@BaseActivity, windowManager.windowSize)
+                if (currentSpec?.cacheKey != spec.cacheKey) return@launch
+                if (drawable != null) {
+                    ViewCompat.setBackgroundTintList(window.decorView, null)
+                    window.decorView.background = drawable
+                    window.decorView.setTag(DECOR_BG_CACHE_KEY_TAG, spec.cacheKey)
+                }
+            } catch (_: CancellationException) {
+                // Superseded by newer background request or lifecycle destruction.
+            } catch (_: OutOfMemoryError) {
+                toastOnUi(R.string.background_image_too_large)
+            } catch (e: Exception) {
+                AppLog.put(getString(R.string.background_image_load_error, e.localizedMessage), e)
             }
-        } catch (_: OutOfMemoryError) {
-            if (hasBgImage) {
-                applyWindowBackgroundColor()
-            } else {
-                applyWindowBackgroundColor()
-            }
-            toastOnUi(R.string.background_image_too_large)
-        } catch (e: Exception) {
-            if (hasBgImage) {
-                applyWindowBackgroundColor()
-            } else {
-                applyWindowBackgroundColor()
-            }
-            AppLog.put(getString(R.string.background_image_load_error, e.localizedMessage), e)
         }
     }
 
@@ -484,5 +521,6 @@ abstract class BaseActivity<VB : ViewBinding>(
          * （`GLASS_POSITION_TRACKING_TAG_KEY`）一致：应用私有 key，`key >>> 24 >= 2`。
          */
         const val POPUP_MENU_SURFACE_TAG = 0x5F_4753_52
+        const val DECOR_BG_CACHE_KEY_TAG = 0x5F_4247_4B
     }
 }

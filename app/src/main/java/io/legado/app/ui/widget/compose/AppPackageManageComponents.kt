@@ -115,7 +115,7 @@ fun AppPackageManageScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 10.dp),
+                    contentPadding = AppLayoutTokens.pageContentPadding(top = 10.dp, bottom = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.CardGap)
                 ) {
                     headerContent(palette)

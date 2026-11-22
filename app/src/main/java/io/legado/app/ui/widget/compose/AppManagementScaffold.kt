@@ -55,10 +55,12 @@ import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.rememberGlassConfigSignature
+import io.legado.app.ui.main.GlassMaterialPreset
 
 /**
  * 列表页玻璃配置签名。非空表示本页背后真的露出壁纸（有背景图、非墨水屏），
@@ -155,27 +157,57 @@ fun AppComposeTopBar(
     onChromeResolved: ((TopBarChromeSpec.Chrome) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    // 栏位边框统一取主题包「边框线色」，与卡片 / 弹窗 / 底栏同一份口径。
-    val barBorder = BorderStroke(1.dp, Color(UiCorner.borderLineColor(context)))
-    val topBarColor = if (AppConfig.immersiveManageBar) {
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val topScope = tokens.topBar
+    val borderColor = Color(UiCorner.borderLineColor(context))
+    // 栏位边框统一取主题包「边框线色」，支持 TOP_BAR Scope 覆写透明度
+    val barBorder = BorderStroke(
+        1.dp,
+        if (!tokens.env.isEInk && topScope.isCustomOverride) {
+            borderColor.copy(alpha = borderColor.alpha * topScope.borderAlphaFraction)
+        } else {
+            borderColor
+        }
+    )
+    val baseTopBarColor = if (AppConfig.immersiveManageBar) {
         context.backgroundColor
     } else {
         context.primaryColor
     }
+    val topBarColor = Color(baseTopBarColor).let { c ->
+        if (!tokens.env.isEInk && topScope.isCustomOverride) {
+            c.copy(alpha = c.alpha * topScope.alphaFraction)
+        } else {
+            c
+        }
+    }
     val topBarContentColor = Color(context.titleTextColor)
     // 悬浮 chrome 几何：与 A/B 两系共用 TopBarChromeSpec 单一真相源（方案 I′：只共享数，
     // 不共享渲染——GlassPanel 本就是 Compose 侧唯一玻璃渲染入口，radius 是既有参数）。
-    // remember key = 顶栏包签名：挡住搜索框逐字符重组时的 JSON 重解析；包切换 / 编辑保存
-    // 会写偏好键，经 rememberGlassConfigSignature 的偏好监听触发重组，这里随之拿到新几何。
     val isNight = AppConfig.isNightTheme
-    val (chrome, chromeColor) = remember(isNight, TopBarConfig.currentSignature(isNight)) {
+    val (chrome, chromeColorInt) = remember(isNight, TopBarConfig.currentSignature(isNight), topScope) {
         val config = TopBarConfig.currentConfig(context, isNight)
+        val basePanelPx = if (topScope.isCustomOverride) {
+            topScope.panelRadiusPx
+        } else {
+            context.resources.getDimension(R.dimen.ui_panel_radius)
+        }
         TopBarChromeSpec.resolve(
-            context.resources.getDimension(R.dimen.ui_panel_radius),
+            basePanelPx,
             config,
             0f
         ) to TopBarConfig.resolveBackgroundColor(config)
     }
+    val chromeColor = Color(chromeColorInt).let { c ->
+        if (!tokens.env.isEInk && topScope.isCustomOverride) {
+            c.copy(alpha = c.alpha * topScope.alphaFraction)
+        } else {
+            c
+        }
+    }
+    val effectiveWallpaperVisible = wallpaperVisible &&
+        !tokens.env.isEInk &&
+        topScope.materialMode != GlassMaterialPreset.SOLID
     if (onChromeResolved != null) {
         SideEffect {
             onChromeResolved(chrome)
@@ -279,14 +311,14 @@ fun AppComposeTopBar(
             }
         }
     }
-    if (wallpaperVisible) {
+    if (effectiveWallpaperVisible) {
         GlassPanel(
             domain = GlassSamplingDomain.WALLPAPER,
             // 非悬浮：贴边全宽、四角直角（玻璃层单一半径会在屏幕顶角留缺口），取 0；
             // 悬浮：整卡内缩，圆角不再留缺口，取顶栏包半径（半高钳制在 spec 层，0f=不钳，卡高含搜索框足够）。
             cornerRadiusPx = if (floating) chrome.radiusPx else 0f,
-            // chrome 进签名：半径 / 悬浮态变化必须重绑玻璃，不许 KEEP 住旧形状（红队既定项）。
-            configSignature = "$glassSignature|chrome=$floating|${chrome.radiusPx}",
+            // chrome 与 topScope 进签名：半径 / 悬浮态 / 作用域覆写变化必须重绑玻璃。
+            configSignature = "$glassSignature|chrome=$floating|${chrome.radiusPx}|top=${topScope.materialMode}:${topScope.alphaPercent}:${topScope.panelRadiusDp}",
             modifier = modifier
                 .fillMaxWidth()
                 .then(surfaceInsets)
@@ -296,9 +328,9 @@ fun AppComposeTopBar(
                     else Modifier.border(barBorder)
                 ),
             fallback = if (floating) {
-                Modifier.clip(chromeShape).background(Color(chromeColor))
+                Modifier.clip(chromeShape).background(chromeColor)
             } else {
-                Modifier.background(Color(topBarColor))
+                Modifier.background(topBarColor)
             }
         ) {
             topBarContent()
@@ -311,10 +343,10 @@ fun AppComposeTopBar(
                 .then(
                     if (floating) {
                         Modifier.clip(chromeShape)
-                            .background(Color(chromeColor))
+                            .background(chromeColor)
                             .border(barBorder, chromeShape)
                     } else {
-                        Modifier.background(Color(topBarColor)).border(barBorder)
+                        Modifier.background(topBarColor).border(barBorder)
                     }
                 )
         ) {
@@ -466,7 +498,27 @@ private fun AppManagementSelectionBottomBar(
     glassSignature: String
 ) {
     val context = LocalContext.current
-    val barBorder = BorderStroke(1.dp, Color(UiCorner.borderLineColor(context)))
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val bottomScope = tokens.bottomBar
+    val borderColor = Color(UiCorner.borderLineColor(context))
+    val barBorder = BorderStroke(
+        1.dp,
+        if (!tokens.env.isEInk && bottomScope.isCustomOverride) {
+            borderColor.copy(alpha = borderColor.alpha * bottomScope.borderAlphaFraction)
+        } else {
+            borderColor
+        }
+    )
+    val barBgColor = Color(palette.settings.bottomBar).let { c ->
+        if (!tokens.env.isEInk && bottomScope.isCustomOverride) {
+            c.copy(alpha = c.alpha * bottomScope.alphaFraction)
+        } else {
+            c
+        }
+    }
+    val bottomGlassActive = wallpaperVisible &&
+        !tokens.env.isEInk &&
+        bottomScope.materialMode != GlassMaterialPreset.SOLID
     AnimatedVisibility(visible = selectedCount > 0) {
         val mainAction = actions.lastOrNull { it.danger } ?: actions.lastOrNull()
         val moreActions = if (mainAction == null) actions else actions.filterNot { it === mainAction }
@@ -517,15 +569,15 @@ private fun AppManagementSelectionBottomBar(
                 }
             }
         }
-        if (wallpaperVisible) {
+        if (bottomGlassActive) {
             GlassPanel(
                 domain = GlassSamplingDomain.WALLPAPER,
                 cornerRadiusPx = 0f,
-                configSignature = glassSignature,
+                configSignature = "$glassSignature|bot=${bottomScope.materialMode}:${bottomScope.alphaPercent}",
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(barBorder),
-                fallback = Modifier.background(Color(palette.settings.bottomBar))
+                fallback = Modifier.background(barBgColor)
             ) {
                 barContent()
             }
@@ -533,7 +585,7 @@ private fun AppManagementSelectionBottomBar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(palette.settings.bottomBar))
+                    .background(barBgColor)
                     .border(barBorder)
             ) {
                 barContent()

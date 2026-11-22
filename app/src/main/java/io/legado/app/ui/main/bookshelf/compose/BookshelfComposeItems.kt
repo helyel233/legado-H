@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -42,11 +43,14 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
+import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.ui.widget.compose.LocalLegadoTokens
 import io.legado.app.ui.widget.compose.imageBgAdaptiveScrim
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isUri
@@ -228,15 +232,28 @@ fun BookshelfGridItem(
     onLongClick: (BookshelfItemUi) -> Unit
 ) {
     val context = LocalContext.current
-    val themeSignature = rememberThemeUiPalette().signature
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val cardScope = tokens.bookshelfCard
+    val themeSignature = tokens.paletteSignature
     val showBookName = AppConfig.showBookname
     val titleFontFamily = remember(context, themeSignature) {
         FontFamily(context.titleTypeface())
     }
-    val titleColorArgb = context.titleTextColor
-    val titleColor = remember(context, themeSignature, titleColorArgb) {
+    val titleColorArgb = tokens.colors.titleTextArgb
+    val titleColor = remember(titleColorArgb) {
         Color(titleColorArgb)
     }
+    val coverCorner = if (cardScope.isCustomOverride) {
+        cardScope.actionRadiusDp.coerceAtLeast(2f).dp
+    } else {
+        4.dp
+    }
+    val coverShadow = if (!tokens.env.isEInk && cardScope.isCustomOverride && cardScope.shadowElevationDp > 0) {
+        cardScope.shadowElevationDp.dp
+    } else {
+        0.dp
+    }
+    val coverShape = RoundedCornerShape(coverCorner)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -250,7 +267,8 @@ fun BookshelfGridItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(4.dp)),
+                .then(if (coverShadow > 0.dp) Modifier.shadow(coverShadow, coverShape, clip = false) else Modifier)
+                .clip(coverShape),
             contentAlignment = Alignment.TopEnd
         ) {
             BookshelfCover(
@@ -294,43 +312,69 @@ fun BookshelfGridItem(
         if (showBookName == 0) {
             // 自定义背景图下主题文字色直接压图难分辨：背景图模式时给标签加自适应衬底条
             // （浅色文字配深衬底、深色文字配浅衬底）；无背景图时不加，普通主题观感不变
-            val scrimColor = imageBgAdaptiveScrim(titleColor)
-            // 标签是压在图上的浮层，采样域取壁纸域；圆角必须与原先 clip 的 6dp 逐值一致，
-            // 否则玻璃层比回退表面更方，两档切换时肉眼可见
-            val labelCorner = 6.dp
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = with(LocalDensity.current) { labelCorner.toPx() },
-                configSignature = glassSignature,
-                // 网格项背后到底有没有壁纸只有页面知道（无背景图 / solid 档 / 墨水屏 /
-                // 低内存 / 书架页不露壁纸）。不要求时普通主题下也会建出采样隐藏壁纸的宿主，
-                // 那条原本不存在的横条会凭空出现
-                requireWallpaperHost = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                // 回退逐值等于改动前的衬底条：圆角 6dp + 自适应 scrim（无背景图时是
-                // Color.Transparent，即今天根本没有横条）
-                fallback = Modifier
-                    .clip(RoundedCornerShape(labelCorner))
-                    .background(scrimColor)
-            ) {
-                // GlassPanel 的 content 是 BoxScope：文字要自己撑满宽度并居中，
-                // 否则会退化成左对齐的单行块
-                Text(
-                    text = item.displayName,
+            val baseScrim = imageBgAdaptiveScrim(titleColor)
+            val scrimColor = if (!tokens.env.isEInk && cardScope.isCustomOverride) {
+                baseScrim.copy(alpha = baseScrim.alpha * cardScope.alphaFraction)
+            } else {
+                baseScrim
+            }
+            val labelCorner = if (cardScope.isCustomOverride) {
+                cardScope.actionRadiusDp.coerceAtLeast(2f).dp
+            } else {
+                6.dp
+            }
+            val useGlassLabel = !tokens.env.isEInk && cardScope.materialMode != GlassMaterialPreset.SOLID
+            if (useGlassLabel) {
+                GlassPanel(
+                    domain = GlassSamplingDomain.WALLPAPER,
+                    cornerRadiusPx = with(LocalDensity.current) { labelCorner.toPx() },
+                    configSignature = "$glassSignature|card=${cardScope.materialMode}:${cardScope.alphaPercent}:${cardScope.actionRadiusDp}",
+                    requireWallpaperHost = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
-                    color = titleColor,
-                    fontSize = 12.sp,
-                    fontFamily = titleFontFamily,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    minLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                        .padding(top = 6.dp),
+                    fallback = Modifier
+                        .clip(RoundedCornerShape(labelCorner))
+                        .background(scrimColor)
+                ) {
+                    Text(
+                        text = item.displayName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 3.dp),
+                        color = titleColor,
+                        fontSize = 12.sp,
+                        fontFamily = titleFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        minLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(labelCorner))
+                        .background(scrimColor)
+                ) {
+                    Text(
+                        text = item.displayName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 3.dp),
+                        color = titleColor,
+                        fontSize = 12.sp,
+                        fontFamily = titleFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        minLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

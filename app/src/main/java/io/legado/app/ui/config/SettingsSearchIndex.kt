@@ -47,7 +47,6 @@ object SettingsSearchIndex {
 
     private val activitySourceRegistry: List<Pair<String, ActivitySearchSource>> = listOf(
         ThemeManageActivity::class.java.name to ThemeManageActivity,
-        TopBarManageActivity::class.java.name to TopBarManageActivity,
         NavigationBarManageActivity::class.java.name to NavigationBarManageActivity,
         BubbleManageActivity::class.java.name to BubbleManageActivity,
         AdvancedTitleManageActivity::class.java.name to AdvancedTitleManageActivity,

@@ -44,6 +44,7 @@ import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
@@ -108,7 +109,8 @@ internal fun CoverCollectionManageScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(vertical = 4.dp),
+                // 行卡不再自带 12dp 外层边距，水平基准由滚动容器唯一持有。
+                contentPadding = AppLayoutTokens.pageContentPadding(top = 4.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
             ) {
                 itemsIndexed(

@@ -216,6 +216,14 @@ object TopBarConfig {
     }
 
     fun currentWallpaperFile(context: Context, isNight: Boolean): File? {
+        val artPathKey = if (isNight) PreferKey.topBarBgImageN else PreferKey.topBarBgImage
+        val runtimeArtWallpaper = context.getPrefString(artPathKey)?.takeIf { it.isNotBlank() }
+        if (runtimeArtWallpaper != null) {
+            val runtimeFile = File(runtimeArtWallpaper)
+            if (runtimeFile.exists() && runtimeFile.isFile) {
+                return runtimeFile
+            }
+        }
         val entry = currentEntry(context, isNight)
         val path = entry.config.wallpaperPath?.takeIf { it.isNotBlank() } ?: return null
         val file = File(path)

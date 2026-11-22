@@ -111,13 +111,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
                             title = str(R.string.navigation_bar_manage),
                             summary = str(R.string.navigation_bar_manage_summary),
                             onClick = { startActivity<NavigationBarManageActivity>() }
-                        ),
-                        SettingActionSpec(
-                            key = KEY_TOP_BAR_MANAGE,
-                            navigates = true,
-                            title = str(R.string.top_bar_manage),
-                            summary = str(R.string.top_bar_manage_summary),
-                            onClick = { startActivity<TopBarManageActivity>() }
                         )
                     )
                 ),
@@ -226,7 +219,6 @@ class ThemeConfigFragment : ComposeSettingFragment(), MenuProvider {
         private const val KEY_HOMEPAGE_VISIBLE = "homepage_visible"
         private const val KEY_STATS_VISIBLE = "stats_visible"
         private const val KEY_NAVIGATION_BAR_MANAGE = "navigation_bar_manage"
-        private const val KEY_TOP_BAR_MANAGE = "top_bar_manage"
         private const val KEY_BOOK_INFO_MANAGE = "book_info_manage"
         private const val KEY_BUBBLE_MANAGE = "bubble_manage"
     }

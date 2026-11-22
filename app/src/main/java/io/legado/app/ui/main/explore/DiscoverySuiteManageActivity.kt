@@ -88,6 +88,7 @@ import io.legado.app.help.source.exploreKinds
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
 import io.legado.app.ui.main.bookshelf.compose.rememberBookshelfListRenderConfig
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementListRow
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -678,7 +679,9 @@ private fun DiscoverySuiteListScreen(
         modifier = Modifier
             .fillMaxSize()
             .navigationBarsPadding(),
-        contentPadding = PaddingValues(bottom = 18.dp),
+        // 卡片外层 12dp 由滚动容器唯一持有（AppManagementListRow 已不再自带水平外边距），
+        // 这里必须给水平 contentPadding，否则列表行贴屏边。
+        contentPadding = AppLayoutTokens.pageContentPadding(bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {

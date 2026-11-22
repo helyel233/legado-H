@@ -45,6 +45,7 @@ import io.legado.app.help.config.BookInfoPageStyle
 import io.legado.app.ui.glass.glassPageBackgroundColor
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.widget.compose.AppComposeTopBar
+import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementCard
 import io.legado.app.ui.widget.compose.AppListSpacing
 import io.legado.app.ui.widget.compose.AppManagementPalette
@@ -115,7 +116,7 @@ internal fun BookInfoManageScreen(
                 style = LocalTextStyle.current.copy(
                     shadow = imageBgTextShadow(palette.settings.secondaryText)
                 ),
-                modifier = Modifier.padding(horizontal = 18.dp),
+                modifier = Modifier.padding(horizontal = AppLayoutTokens.DetailHorizontal),
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
@@ -129,7 +130,7 @@ internal fun BookInfoManageScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 4.dp),
+                        contentPadding = AppLayoutTokens.pageContentPadding(top = 4.dp, bottom = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(AppListSpacing.Normal)
                     ) {
                         itemsIndexed(
@@ -167,7 +168,8 @@ internal fun BookInfoManageScreen(
                     AppManagementCard(
                         palette = palette,
                         modifier = Modifier
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .padding(horizontal = AppLayoutTokens.PageHorizontal),
                         insidePadding = PaddingValues(16.dp)
                     ) {
                         Text(
