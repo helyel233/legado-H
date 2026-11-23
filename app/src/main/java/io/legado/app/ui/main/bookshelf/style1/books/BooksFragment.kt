@@ -129,6 +129,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     private var upLastUpdateTimeJob: Job? = null
     private var enableRefresh = true
     private var onlyUpdateRead = false
+    private var stateInitialized = false
     private var bookTagFilter = ""
     private var bookshelfMargin by mutableIntStateOf(AppConfig.bookshelfMargin)
     private var itemCount = 0
@@ -149,15 +150,40 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     private var composeListIntroLines by mutableIntStateOf(AppConfig.bookshelfListIntroLines)
     private var scrollToTopWhenReturnFromRead = false
 
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+    private fun ensureArgsInitialized() {
+        if (stateInitialized) return
         arguments?.let {
-            position = it.getInt("position", 0)
-            groupId = it.getLong("groupId", -1)
-            bookSort = it.getInt("bookSort", 0)
-            enableRefresh = it.getBoolean("enableRefresh", true)
-            onlyUpdateRead = it.getBoolean("onlyUpdateRead", false)
-            binding.refreshLayout.isEnabled = enableRefresh
+            position = it.getInt("position", position)
+            groupId = it.getLong("groupId", groupId)
+            bookSort = it.getInt("bookSort", bookSort)
+            enableRefresh = it.getBoolean("enableRefresh", enableRefresh)
+            onlyUpdateRead = it.getBoolean("onlyUpdateRead", onlyUpdateRead)
         }
+        stateInitialized = true
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        ensureArgsInitialized()
+        outState.putInt("position", position)
+        outState.putLong("groupId", groupId)
+        outState.putInt("bookSort", bookSort)
+        outState.putBoolean("enableRefresh", enableRefresh)
+        outState.putBoolean("onlyUpdateRead", onlyUpdateRead)
+    }
+
+    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        if (savedInstanceState != null) {
+            position = savedInstanceState.getInt("position", position)
+            groupId = savedInstanceState.getLong("groupId", groupId)
+            bookSort = savedInstanceState.getInt("bookSort", bookSort)
+            enableRefresh = savedInstanceState.getBoolean("enableRefresh", enableRefresh)
+            onlyUpdateRead = savedInstanceState.getBoolean("onlyUpdateRead", onlyUpdateRead)
+            stateInitialized = true
+        } else {
+            ensureArgsInitialized()
+        }
+        binding.refreshLayout.isEnabled = enableRefresh
         initRecyclerView()
         upRecyclerData()
         initEmptyShelfGuide()
@@ -569,16 +595,30 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
         }
     }
 
+    fun updatePosition(newPosition: Int) {
+        ensureArgsInitialized()
+        val wasRoot = position == 0
+        position = newPosition
+        val isRoot = position == 0
+        if (wasRoot != isRoot && isAdded && view != null) {
+            upRecyclerData()
+        }
+    }
+
     fun upBookSort(sort: Int) {
+        ensureArgsInitialized()
+        bookSort = sort
+        if (!isAdded || view == null) return
         binding.root.post {
-            arguments?.putInt("bookSort", sort)
-            bookSort = sort
+            if (!isAdded || view == null) return@post
             upRecyclerData()
         }
     }
 
     fun setEnableRefresh(enable: Boolean) {
+        ensureArgsInitialized()
         enableRefresh = enable
+        if (!isAdded || view == null) return
         binding.refreshLayout.isEnabled = enable
     }
 
@@ -586,6 +626,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
         val normalized = tag.trim()
         if (bookTagFilter == normalized) return
         bookTagFilter = normalized
+        if (!isAdded || view == null) return
         upRecyclerData()
     }
 
@@ -766,6 +807,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     }
 
     private fun scrollBookshelfToTop(immediate: Boolean) {
+        if (!isAdded || view == null) return
         if (useComposeBookshelf) {
             if (immediate) {
                 composeImmediateScrollToTopTick++

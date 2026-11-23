@@ -4,6 +4,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.LogUtils
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -67,9 +68,18 @@ class UiPerfTracker(
         }
     }
 
-    private val lock = Any()
-    private val buckets = linkedMapOf<String, MetricBucket>()
+    private val buckets = ConcurrentHashMap<String, MetricBucket>()
+    private val metricOrder = CopyOnWriteArrayList<String>()
     private val activeMarks = ConcurrentHashMap<String, Long>()
+
+    private fun getOrCreateBucket(metric: String): MetricBucket {
+        buckets[metric]?.let { return it }
+        val created = MetricBucket(maxSamplesPerMetric.coerceAtLeast(1))
+        val existing = buckets.putIfAbsent(metric, created)
+        if (existing != null) return existing
+        metricOrder.addIfAbsent(metric)
+        return created
+    }
 
     fun markStart(key: String) {
         activeMarks[key] = nanoClock()
@@ -83,18 +93,37 @@ class UiPerfTracker(
     }
 
     fun record(metric: String, durationMs: Double, tag: String? = null) {
-        synchronized(lock) {
-            val bucket = buckets.getOrPut(metric) { MetricBucket(maxSamplesPerMetric.coerceAtLeast(1)) }
+        val bucket = getOrCreateBucket(metric)
+        synchronized(bucket) {
             bucket.add(durationMs, tag)
         }
     }
 
-    fun snapshot(metric: String): MetricSummary? = synchronized(lock) {
-        buckets[metric]?.summary(metric)
+    fun snapshot(metric: String): MetricSummary? {
+        val bucket = buckets[metric] ?: return null
+        return synchronized(bucket) {
+            bucket.summary(metric)
+        }
     }
 
-    fun allSummaries(): List<MetricSummary> = synchronized(lock) {
-        buckets.entries.mapNotNull { (name, bucket) -> bucket.summary(name) }
+    fun allSummaries(): List<MetricSummary> {
+        val orderedKeys = metricOrder.toList()
+        val seen = HashSet<String>(orderedKeys.size)
+        val result = ArrayList<MetricSummary>(orderedKeys.size)
+        for (name in orderedKeys) {
+            if (!seen.add(name)) continue
+            val bucket = buckets[name] ?: continue
+            synchronized(bucket) {
+                bucket.summary(name)
+            }?.let(result::add)
+        }
+        for ((name, bucket) in buckets) {
+            if (!seen.add(name)) continue
+            synchronized(bucket) {
+                bucket.summary(name)
+            }?.let(result::add)
+        }
+        return result
     }
 
     fun dumpSummary(): String {
@@ -124,9 +153,8 @@ class UiPerfTracker(
 
     fun clear() {
         activeMarks.clear()
-        synchronized(lock) {
-            buckets.clear()
-        }
+        buckets.clear()
+        metricOrder.clear()
     }
 }
 
@@ -140,6 +168,8 @@ object UiPerfMetrics {
     const val METRIC_TYPEFACE_DEEP = "typeface_apply_deep"
     const val METRIC_ACTIVITY_RECREATE = "activity_recreate"
     const val METRIC_LIQUID_GLASS_SETUP = "liquid_glass_setup"
+    const val METRIC_CHAPTER_LOAD = "reader_chapter_load"
+    const val METRIC_CHAPTER_LAYOUT = "reader_chapter_layout"
 
     private const val TAG = "UiPerfMetrics"
     private val tracker = UiPerfTracker()

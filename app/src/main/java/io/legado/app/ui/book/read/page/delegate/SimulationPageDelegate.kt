@@ -143,37 +143,9 @@ class SimulationPageDelegate(readView: ReadView) : HorizontalPageDelegate(readVi
         mFrontShadowDrawableHBT.gradientType = GradientDrawable.LINEAR_GRADIENT
     }
 
-    override fun prewarmPageSnapshots(step: Int) {
-        if (isRunning || isStarted) return
-        when (step) {
-            0 -> ensureBmp(curPage, curBitmap, curBmpRev) { bmp, rev ->
-                curBitmap = bmp
-                curBmpRev = rev
-            }
-            1 -> ensureBmp(nextPage, nextBitmap, nextBmpRev) { bmp, rev ->
-                nextBitmap = bmp
-                nextBmpRev = rev
-            }
-            2 -> ensureBmp(prevPage, prevBitmap, prevBmpRev) { bmp, rev ->
-                prevBitmap = bmp
-                prevBmpRev = rev
-            }
-            else -> {
-                ensureBmp(curPage, curBitmap, curBmpRev) { bmp, rev ->
-                    curBitmap = bmp
-                    curBmpRev = rev
-                }
-                ensureBmp(nextPage, nextBitmap, nextBmpRev) { bmp, rev ->
-                    nextBitmap = bmp
-                    nextBmpRev = rev
-                }
-                ensureBmp(prevPage, prevBitmap, prevBmpRev) { bmp, rev ->
-                    prevBitmap = bmp
-                    prevBmpRev = rev
-                }
-            }
-        }
-    }
+    override val supportsSafePrewarm: Boolean = false
+
+    override fun prewarmPageSnapshots(step: Int) = Unit
 
     private fun ensureBmp(
         page: io.legado.app.ui.book.read.page.PageView,
@@ -312,7 +284,20 @@ class SimulationPageDelegate(readView: ReadView) : HorizontalPageDelegate(readVi
                 (1 - touchY) // 防止mTouchY最终变为0
             }
         }
-        startScroll(touchX.toInt(), touchY.toInt(), dx.toInt(), dy.toInt(), animationSpeed)
+        startScroll(touchX, touchY, dx, dy, animationSpeed)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        curBitmap?.takeUnless(Bitmap::isRecycled)?.recycle()
+        prevBitmap?.takeUnless(Bitmap::isRecycled)?.recycle()
+        nextBitmap?.takeUnless(Bitmap::isRecycled)?.recycle()
+        curBitmap = null
+        prevBitmap = null
+        nextBitmap = null
+        curBmpRev = -1L
+        prevBmpRev = -1L
+        nextBmpRev = -1L
     }
 
     override fun onAnimStop() {

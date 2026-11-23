@@ -11,6 +11,8 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.CacheManifestHelper
+import io.legado.app.help.book.ChapterFetchCoordinator
+import io.legado.app.help.book.ChapterFetchKey
 import io.legado.app.help.cache.CacheBodyWorkerRegistry
 import io.legado.app.help.cache.CacheWorkerLease
 import io.legado.app.help.book.library.LibraryCloudSync
@@ -393,15 +395,14 @@ object CacheBook {
                 }
                 return
             }
-            WebBook.getContent(
+            Coroutine.async(
                 scope,
-                bookSource,
-                book,
-                chapter,
-                context = context,
+                context,
                 start = CoroutineStart.LAZY,
                 executeContext = context
-            ).onSuccess { content ->
+            ) {
+                fetchChapterContent(chapter)
+            }.onSuccess { content ->
                 onSuccess(chapter)
                 downloadFinish(chapter, content)
             }.onError {
@@ -433,7 +434,7 @@ object CacheBook {
                     ReadBook.downloadFailChapters.remove(chapter.index)
                     return content
                 }
-                val content = WebBook.getContentAwait(bookSource, book, chapter)
+                val content = fetchChapterContent(chapter)
                 AppLog.put("chapter content fetched: ${book.name} #${chapter.index}, length=${content.length}")
                 onSuccess(chapter)
                 ReadBook.downloadedChapters.add(chapter.index)
@@ -509,21 +510,29 @@ object CacheBook {
             downloadFromSource(scope, chapter, semaphore, resetPageOffset)
         }
 
+        private suspend fun fetchChapterContent(chapter: BookChapter): String {
+            return ChapterFetchCoordinator.fetchOrJoin(
+                ChapterFetchKey(book.bookUrl, chapter.url, chapter.index)
+            ) {
+                WebBook.getContentAwait(bookSource, book, chapter)
+            }
+        }
+
         private fun downloadFromSource(
             scope: CoroutineScope,
             chapter: BookChapter,
             semaphore: Semaphore?,
             resetPageOffset: Boolean = false
         ) {
-            WebBook.getContent(
+            Coroutine.async(
                 scope,
-                bookSource,
-                book,
-                chapter,
+                IO,
                 start = CoroutineStart.LAZY,
                 executeContext = IO,
                 semaphore = semaphore
-            ).onSuccess { content ->
+            ) {
+                fetchChapterContent(chapter)
+            }.onSuccess { content ->
                 AppLog.put("chapter content fetched: ${book.name} #${chapter.index}, length=${content.length}")
                 onSuccess(chapter)
                 ReadBook.downloadedChapters.add(chapter.index)

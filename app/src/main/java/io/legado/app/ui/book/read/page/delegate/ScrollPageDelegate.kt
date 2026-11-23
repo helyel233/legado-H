@@ -11,6 +11,8 @@ import io.legado.app.ui.book.read.page.provider.ChapterProvider
 
 class ScrollPageDelegate(readView: ReadView) : PageDelegate(readView) {
 
+    override val supportsSafePrewarm: Boolean = false
+
     // 滑动追踪的时间
     private val velocityDuration = 1000
 
@@ -106,12 +108,22 @@ class ScrollPageDelegate(readView: ReadView) : PageDelegate(readView) {
     }
 
     override fun computeScroll() {
-        if (scroller.computeScrollOffset()) {
-            readView.setTouchPoint(scroller.currX.toFloat(), scroller.currY.toFloat(), false)
-            // Scroller exposes integer coordinates. On a high refresh-rate display two
-            // consecutive frames can therefore have the same currY even though the fling is
-            // still active. In that case onScroll() has no pixel to apply and does not
-            // invalidate the content view, so explicitly keep the animation clock running.
+        val active = if (isFlingScrolling) {
+            if (scroller.computeScrollOffset()) {
+                readView.setTouchPoint(scroller.currX.toFloat(), scroller.currY.toFloat(), false)
+                true
+            } else {
+                false
+            }
+        } else if (floatScroller.computeScrollOffset()) {
+            readView.setTouchPoint(floatScroller.currX, floatScroller.currY, false)
+            true
+        } else {
+            false
+        }
+        if (active) {
+            // Keep the animation clock running across frames where Scroller's integer output
+            // or FloatPageScroller's sub-pixel delta has not yet crossed a whole pixel in scrollRemainder.
             readView.postInvalidateOnAnimation()
         } else if (isStarted) {
             onAnimStop()
@@ -130,9 +142,9 @@ class ScrollPageDelegate(readView: ReadView) : PageDelegate(readView) {
         isMoved = false
         isRunning = false
         scrollRemainder = 0f
-        if (!scroller.isFinished) {
+        if (!isScrollerFinished()) {
             readView.isAbortAnim = true
-            scroller.abortAnimation()
+            abortScroller()
         } else {
             readView.isAbortAnim = false
         }

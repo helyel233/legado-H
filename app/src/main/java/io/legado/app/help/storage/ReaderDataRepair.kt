@@ -51,6 +51,7 @@ object ReaderDataRepair {
         PreferKey.textFullJustify,
         PreferKey.textBottomJustify,
         PreferKey.optimizeRender,
+        PreferKey.pageTurnPrewarm,
         PreferKey.bookshelfReturnToTopAfterRead,
         PreferKey.bookCoverShadow,
         PreferKey.aiChatAutoSpeakEnabled,

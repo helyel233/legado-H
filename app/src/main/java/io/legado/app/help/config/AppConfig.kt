@@ -202,6 +202,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.immersiveManageBar, true)
     var optimizeRender = CanvasRecorderFactory.isSupport
             && appCtx.getPrefBoolean(PreferKey.optimizeRender, true)
+    var pageTurnPrewarm = appCtx.getPrefBoolean(PreferKey.pageTurnPrewarm, true)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
     var editFontScale = appCtx.getPrefInt(PreferKey.editFontScale, 16)
     var editNonPrintable = appCtx.getPrefInt(PreferKey.editNonPrintable, 0)
@@ -314,6 +315,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.optimizeRender -> optimizeRender = CanvasRecorderFactory.isSupport
                     && appCtx.getPrefBoolean(PreferKey.optimizeRender, true)
 
+            PreferKey.pageTurnPrewarm -> pageTurnPrewarm =
+                appCtx.getPrefBoolean(PreferKey.pageTurnPrewarm, true)
+
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
 
         }
@@ -327,6 +331,17 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
         runCatching {
             AppLog.put("正文优化绘制失败，已回退为直接绘制\n${error.localizedMessage}", error)
+        }
+    }
+
+    fun disablePageTurnPrewarm(error: Throwable) {
+        if (!pageTurnPrewarm) return
+        pageTurnPrewarm = false
+        runCatching {
+            appCtx.putPrefBoolean(PreferKey.pageTurnPrewarm, false)
+        }
+        runCatching {
+            AppLog.put("翻页离屏预热失败，已自动关闭预热\n${error.localizedMessage}", error)
         }
     }
 

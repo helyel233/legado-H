@@ -41,7 +41,6 @@ import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.article.RssArticlesFragment
 import io.legado.app.ui.rss.article.RssSearchActivity
@@ -87,16 +86,8 @@ import kotlinx.coroutines.launch
 /**
  * 订阅页面
  */
-class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainFragmentInterface,
+class RssFragment : VMBaseFragment<RssViewModel>(R.layout.fragment_rss),
     RssAdapter.CallBack {
-
-    constructor(position: Int) : this() {
-        val bundle = Bundle()
-        bundle.putInt("position", position)
-        arguments = bundle
-    }
-
-    override val position: Int? get() = arguments?.getInt("position")
 
     private val binding by viewBinding(FragmentRssBinding::bind)
     override val viewModel by viewModels<RssViewModel>()

@@ -29,7 +29,6 @@ import io.legado.app.ui.book.import.remote.RemoteBookActivity
 import io.legado.app.ui.book.manage.BookshelfManageActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.main.librarysearch.LibrarySearchActivity
 import io.legado.app.ui.widget.ModernActionPopup
@@ -48,10 +47,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfViewModel>(layoutId),
-    MainFragmentInterface {
-
-    override val position: Int? get() = arguments?.getInt("position")
+abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfViewModel>(layoutId) {
 
     val activityViewModel by activityViewModels<MainViewModel>()
     override val viewModel by viewModels<BookshelfViewModel>()

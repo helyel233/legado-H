@@ -5,6 +5,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.UiPerfMetrics
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
@@ -135,6 +136,9 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
     /** 正在等待自动重试的章节，防止同一章堆出多个重试任务。 */
     private val contentRetryPending = ConcurrentHashMap.newKeySet<Int>()
 
+    /** Start timestamps (nanos) keyed by load generation for end-to-end chapter load metrics. */
+    private val loadStartNanos = ConcurrentHashMap<Long, Long>()
+
     /** Records that the next load of this chapter comes from read-aloud navigation. */
     fun markReadAloudPendingLoad(index: Int) {
         readAloudPendingLoadChapterIndex = index
@@ -200,6 +204,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             val generation = host.chapterLoads.begin(index, requestedLayoutKey)
             if (generation != null) {
                 requestGeneration = generation
+                loadStartNanos[generation] = System.nanoTime()
                 BookHelp.getContent(book, chapter)?.let {
                     contentLoadFinish(
                         book,
@@ -224,7 +229,10 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 recoverStalledLoad(index)
             }
         }.onError {
-            requestGeneration?.let { generation -> host.finishChapterLoad(index, generation) }
+            requestGeneration?.let { generation ->
+                loadStartNanos.remove(generation)
+                host.finishChapterLoad(index, generation)
+            }
             val message = it.localizedMessage ?: it.toString()
             host.showCurrentChapterLoadError(index, message, it)
             if (index != host.durChapterIndex) {
@@ -252,6 +260,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         val requestedLayoutKey = host.currentChapterLayoutKey()
         val initialGeneration = host.chapterLoads.begin(index, requestedLayoutKey)
         if (initialGeneration != null) {
+            val loadStartNs = System.nanoTime()
             try {
                 val book = host.book
                 if (book == null) {
@@ -283,7 +292,10 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     resetPageOffset,
                     requestGeneration = generation
                 )
-                if (applied) success?.invoke()
+                if (applied) {
+                    recordChapterLoadTiming(loadStartNs, "await", index)
+                    success?.invoke()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -385,6 +397,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         }
         for ((index, generation) in host.chapterLoads.allGenerations()) {
             if (clearAll || index !in host.durChapterIndex - 1..host.durChapterIndex + 1) {
+                loadStartNanos.remove(generation)
                 host.cancelChapterLoading(index, generation)
             }
         }
@@ -392,6 +405,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
 
     /** Cancels every fetch: the reader is leaving this book. */
     fun release() {
+        loadStartNanos.clear()
         downloadScope.coroutineContext.cancelChildren()
     }
 
@@ -495,13 +509,13 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
 
     // ---- 安装：把加载到的正文装进槽位（自 ReadBook 搬入）----
 
-    private fun isChapterLoadRequestCurrent(
+    private fun evaluateChapterLoadRequest(
         bookUrl: String,
         chapterIndex: Int,
         layoutKey: String,
         generation: Long
-    ): Boolean {
-        return ChapterLoadGuard.isRequestCurrent(
+    ): ChapterLoadGuard.RequestValidity {
+        return ChapterLoadGuard.evaluateRequest(
             activeBookUrl = host.book?.bookUrl,
             requestBookUrl = bookUrl,
             chapterIndex = chapterIndex,
@@ -511,6 +525,50 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             recordedLayoutKey = host.chapterLoads.layoutKeyOf(chapterIndex),
             requestLayoutKey = layoutKey,
             currentLayoutKey = host.currentChapterLayoutKey()
+        )
+    }
+
+    /**
+     * Returns the layout key to apply for this request, refreshing [ChapterLoadRegistry] in place
+     * when only the layout key drifted while the chapter content was in flight.
+     */
+    private fun resolveEffectiveLayoutKey(
+        bookUrl: String,
+        chapterIndex: Int,
+        requestedLayoutKey: String,
+        generation: Long
+    ): String? {
+        val currentLayoutKey = host.currentChapterLayoutKey()
+        return when (evaluateChapterLoadRequest(bookUrl, chapterIndex, requestedLayoutKey, generation)) {
+            ChapterLoadGuard.RequestValidity.CURRENT -> requestedLayoutKey
+            ChapterLoadGuard.RequestValidity.LAYOUT_DRIFTED -> {
+                host.chapterLoads.updateLayoutKey(chapterIndex, generation, currentLayoutKey)
+                    ?: return null
+                currentLayoutKey
+            }
+            ChapterLoadGuard.RequestValidity.STALE -> null
+        }
+    }
+
+    private fun chapterPerfTag(path: String, chapterIndex: Int): String {
+        return "path=$path,idx=$chapterIndex"
+    }
+
+    private fun recordChapterLoadTiming(startNanos: Long, path: String, chapterIndex: Int) {
+        val elapsedMs = (System.nanoTime() - startNanos).coerceAtLeast(0L) / 1_000_000.0
+        UiPerfMetrics.record(
+            UiPerfMetrics.METRIC_CHAPTER_LOAD,
+            elapsedMs,
+            chapterPerfTag(path, chapterIndex)
+        )
+    }
+
+    private fun recordChapterLayoutTiming(startNanos: Long, path: String, chapterIndex: Int) {
+        val elapsedMs = (System.nanoTime() - startNanos).coerceAtLeast(0L) / 1_000_000.0
+        UiPerfMetrics.record(
+            UiPerfMetrics.METRIC_CHAPTER_LAYOUT,
+            elapsedMs,
+            chapterPerfTag(path, chapterIndex)
         )
     }
 
@@ -641,13 +699,14 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
         }
         val requestedLayoutKey = host.chapterLoads.layoutKeyOf(chapter.index)
         if (requestedLayoutKey == null || chapter.bookUrl != book.bookUrl || canceled ||
-            !isChapterLoadRequestCurrent(
+            evaluateChapterLoadRequest(
                 book.bookUrl,
                 chapter.index,
                 requestedLayoutKey,
                 generation
-            )
+            ) == ChapterLoadGuard.RequestValidity.STALE
         ) {
+            loadStartNanos.remove(generation)
             logContentLoadDrop(book, chapter, requestedLayoutKey, generation, canceled)
             host.finishChapterLoad(chapter.index, generation)
             // 当前章的正文被丢弃后就再也没有人触发加载了，界面会永远停在占位页。
@@ -660,19 +719,28 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             // 提前清掉 generation 会让它安装时自我否决。
             return
         }
+        val initialEffectiveLayoutKey = resolveEffectiveLayoutKey(
+            book.bookUrl,
+            chapter.index,
+            requestedLayoutKey,
+            generation
+        ) ?: run {
+            loadStartNanos.remove(generation)
+            logContentLoadDrop(book, chapter, requestedLayoutKey, generation, canceled)
+            host.finishChapterLoad(chapter.index, generation)
+            retryMissingCurrentChapter(chapter.index, "request_dropped")
+            return
+        }
         var installedTextChapter: TextChapter? = null
         var contentApplied = false
         lateinit var job: Coroutine<Boolean>
         job = Coroutine.async(this, start = CoroutineStart.LAZY) {
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    generation
-                )
-            ) {
-                return@async false
-            }
+            var effectiveLayoutKey = resolveEffectiveLayoutKey(
+                book.bookUrl,
+                chapter.index,
+                initialEffectiveLayoutKey,
+                generation
+            ) ?: return@async false
             val contentProcessor = ContentProcessor.get(book.name, book.origin)
             val fallbackDisplayTitle = if (book.usesDirectReader) chapter.title.trim() else chapter.getDisplayTitle(
                 contentProcessor.getTitleReplaceRules(),
@@ -688,27 +756,25 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             }
             val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
             ensureActive()
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    generation
-                )
-            ) {
-                return@async false
-            }
+            effectiveLayoutKey = resolveEffectiveLayoutKey(
+                book.bookUrl,
+                chapter.index,
+                effectiveLayoutKey,
+                generation
+            ) ?: return@async false
+            val layoutStartNs = System.nanoTime()
             val textChapter = ChapterProvider.getTextChapterAsync(
                 this, book, chapter, displayTitle, contents, host.simulatedChapterSize
             )
             installedTextChapter = textChapter
-            when (val offset = chapter.index - host.durChapterIndex) {
+            val applied = when (val offset = chapter.index - host.durChapterIndex) {
                 0 -> curChapterLoadingLock.withLock {
                     val installed = withContext(Main) {
                         ensureActive()
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -718,7 +784,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     if (!isChapterLoadSlotCurrent(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -730,7 +796,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 generation,
                                 offset,
                                 textChapter
@@ -756,7 +822,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     if (!isChapterLoadSlotCurrent(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -772,7 +838,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         generation,
                         offset,
                         textChapter
@@ -785,7 +851,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -796,7 +862,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 generation,
                                 offset,
                                 textChapter
@@ -809,7 +875,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     if (!isChapterLoadSlotCurrent(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -819,7 +885,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         generation,
                         offset,
                         textChapter
@@ -832,7 +898,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             generation,
                             offset,
                             textChapter
@@ -843,7 +909,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 generation,
                                 offset,
                                 textChapter
@@ -860,7 +926,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         generation,
                         offset,
                         textChapter
@@ -869,6 +935,10 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
 
                 else -> false
             }
+            if (applied) {
+                recordChapterLayoutTiming(layoutStartNs, "async", chapter.index)
+            }
+            applied
         }.onError {
             if (it is CancellationException) {
                 return@onError
@@ -885,11 +955,17 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             appCtx.toastOnUi("ChapterProvider ERROR:\n${it.stackTraceStr}")
         }.onSuccess { applied ->
             contentApplied = applied
-            if (applied) success?.invoke()
+            if (applied) {
+                loadStartNanos.remove(generation)?.let { startNs ->
+                    recordChapterLoadTiming(startNs, "async", chapter.index)
+                }
+                success?.invoke()
+            }
         }
         host.chapterLoads.setJob(chapter.index, job)
         job.invokeOnCompletion {
             if (host.chapterLoads.removeJob(chapter.index, job)) {
+                loadStartNanos.remove(generation)
                 clearIncompleteChapterSlot(chapter.index, installedTextChapter)
                 host.finishChapterLoad(chapter.index, generation)
                 if (!contentApplied) {
@@ -913,13 +989,12 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
     ): Boolean {
         if (chapter.bookUrl != book.bookUrl) return false
         val requestedLayoutKey = host.chapterLoads.layoutKeyOf(chapter.index) ?: return false
-        if (!isChapterLoadRequestCurrent(
-                book.bookUrl,
-                chapter.index,
-                requestedLayoutKey,
-                requestGeneration
-            )
-        ) return false
+        var effectiveLayoutKey = resolveEffectiveLayoutKey(
+            book.bookUrl,
+            chapter.index,
+            requestedLayoutKey,
+            requestGeneration
+        ) ?: return false
         var textChapter: TextChapter? = null
         var applied = false
         try {
@@ -938,13 +1013,13 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             }
             val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
             ensureActive()
-            if (!isChapterLoadRequestCurrent(
-                    book.bookUrl,
-                    chapter.index,
-                    requestedLayoutKey,
-                    requestGeneration
-                )
-            ) return false
+            effectiveLayoutKey = resolveEffectiveLayoutKey(
+                book.bookUrl,
+                chapter.index,
+                effectiveLayoutKey,
+                requestGeneration
+            ) ?: return false
+            val layoutStartNs = System.nanoTime()
             val createdChapter = ChapterProvider.getTextChapterAsync(
                 this, book, chapter, displayTitle, contents, host.simulatedChapterSize
             )
@@ -956,7 +1031,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             requestGeneration,
                             offset,
                             createdChapter
@@ -969,7 +1044,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 requestGeneration,
                                 offset,
                                 createdChapter
@@ -995,7 +1070,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     if (!isChapterLoadSlotCurrent(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             requestGeneration,
                             offset,
                             createdChapter
@@ -1011,7 +1086,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         requestGeneration,
                         offset,
                         createdChapter
@@ -1024,7 +1099,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             requestGeneration,
                             offset,
                             createdChapter
@@ -1035,7 +1110,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 requestGeneration,
                                 offset,
                                 createdChapter
@@ -1049,7 +1124,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         requestGeneration,
                         offset,
                         createdChapter
@@ -1062,7 +1137,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
-                            requestedLayoutKey,
+                            effectiveLayoutKey,
                             requestGeneration,
                             offset,
                             createdChapter
@@ -1073,7 +1148,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         if (!isChapterLoadSlotCurrent(
                                 book.bookUrl,
                                 chapter.index,
-                                requestedLayoutKey,
+                                effectiveLayoutKey,
                                 requestGeneration,
                                 offset,
                                 createdChapter
@@ -1090,7 +1165,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     isChapterLoadSlotCurrent(
                         book.bookUrl,
                         chapter.index,
-                        requestedLayoutKey,
+                        effectiveLayoutKey,
                         requestGeneration,
                         offset,
                         createdChapter
@@ -1098,6 +1173,9 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 }
 
                 else -> false
+            }
+            if (applied) {
+                recordChapterLayoutTiming(layoutStartNs, "await", chapter.index)
             }
             return applied
         } catch (e: CancellationException) {

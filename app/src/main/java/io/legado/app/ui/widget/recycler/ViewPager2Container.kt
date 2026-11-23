@@ -7,7 +7,6 @@ import android.widget.RelativeLayout
 import androidx.viewpager2.widget.ViewPager2
 import kotlin.math.abs
 
-@Suppress("unused")
 class ViewPager2Container @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -21,86 +20,95 @@ class ViewPager2Container @JvmOverloads constructor(
 
     override fun onFinishInflate() {
         super.onFinishInflate()
-        for (i in 0 until childCount) {
-            val childView = getChildAt(i)
-            if (childView is ViewPager2) {
-                mViewPager2 = childView
-                break
-            }
-        }
-        if (mViewPager2 == null) {
-            throw IllegalStateException("The root child of ViewPager2Container must contains a ViewPager2")
+        mViewPager2 = findViewPager2()
+    }
+
+    override fun onViewAdded(child: android.view.View?) {
+        super.onViewAdded(child)
+        if (mViewPager2 == null && child is ViewPager2) {
+            mViewPager2 = child
         }
     }
 
+    override fun onViewRemoved(child: android.view.View?) {
+        super.onViewRemoved(child)
+        if (child === mViewPager2) {
+            mViewPager2 = findViewPager2()
+        }
+    }
+
+    private fun findViewPager2(): ViewPager2? {
+        for (i in 0 until childCount) {
+            val childView = getChildAt(i)
+            if (childView is ViewPager2) {
+                return childView
+            }
+        }
+        return null
+    }
+
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-        val doNotNeedIntercept = (!mViewPager2!!.isUserInputEnabled
-                || (mViewPager2?.adapter != null
-                && mViewPager2?.adapter!!.itemCount <= 1))
-        if (doNotNeedIntercept) {
+        val pager = mViewPager2 ?: findViewPager2()?.also { mViewPager2 = it }
+            ?: return super.onInterceptTouchEvent(ev)
+        val itemCount = pager.adapter?.itemCount ?: 0
+        if (!pager.isUserInputEnabled || itemCount <= 1) {
             return super.onInterceptTouchEvent(ev)
         }
-        when (ev.action) {
+        when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 startX = ev.x.toInt()
                 startY = ev.y.toInt()
-                parent.requestDisallowInterceptTouchEvent(!disallowParentInterceptDownEvent)
+                parent?.requestDisallowInterceptTouchEvent(!disallowParentInterceptDownEvent)
             }
             MotionEvent.ACTION_MOVE -> {
                 val endX = ev.x.toInt()
                 val endY = ev.y.toInt()
                 val disX = abs(endX - startX)
                 val disY = abs(endY - startY)
-                if (mViewPager2!!.orientation == ViewPager2.ORIENTATION_VERTICAL) {
-                    onVerticalActionMove(endY, disX, disY)
-                } else if (mViewPager2!!.orientation == ViewPager2.ORIENTATION_HORIZONTAL) {
-                    onHorizontalActionMove(endX, disX, disY)
+                if (pager.orientation == ViewPager2.ORIENTATION_VERTICAL) {
+                    onVerticalActionMove(pager, endY, disX, disY)
+                } else if (pager.orientation == ViewPager2.ORIENTATION_HORIZONTAL) {
+                    onHorizontalActionMove(pager, endX, disX, disY)
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> parent.requestDisallowInterceptTouchEvent(
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(
                 false
             )
         }
         return super.onInterceptTouchEvent(ev)
     }
 
-    private fun onHorizontalActionMove(endX: Int, disX: Int, disY: Int) {
-        if (mViewPager2?.adapter == null) {
-            return
-        }
+    private fun onHorizontalActionMove(pager: ViewPager2, endX: Int, disX: Int, disY: Int) {
+        val itemCount = pager.adapter?.itemCount ?: return
         if (disX > disY) {
-            val currentItem = mViewPager2?.currentItem
-            val itemCount = mViewPager2?.adapter!!.itemCount
+            val currentItem = pager.currentItem
             if (currentItem == 0 && endX - startX > 0) {
-                parent.requestDisallowInterceptTouchEvent(false)
+                parent?.requestDisallowInterceptTouchEvent(false)
             } else {
-                parent.requestDisallowInterceptTouchEvent(
+                parent?.requestDisallowInterceptTouchEvent(
                     currentItem != itemCount - 1
                             || endX - startX >= 0
                 )
             }
         } else if (disY > disX) {
-            parent.requestDisallowInterceptTouchEvent(false)
+            parent?.requestDisallowInterceptTouchEvent(false)
         }
     }
 
-    private fun onVerticalActionMove(endY: Int, disX: Int, disY: Int) {
-        if (mViewPager2?.adapter == null) {
-            return
-        }
-        val currentItem = mViewPager2?.currentItem
-        val itemCount = mViewPager2?.adapter!!.itemCount
+    private fun onVerticalActionMove(pager: ViewPager2, endY: Int, disX: Int, disY: Int) {
+        val itemCount = pager.adapter?.itemCount ?: return
+        val currentItem = pager.currentItem
         if (disY > disX) {
             if (currentItem == 0 && endY - startY > 0) {
-                parent.requestDisallowInterceptTouchEvent(false)
+                parent?.requestDisallowInterceptTouchEvent(false)
             } else {
-                parent.requestDisallowInterceptTouchEvent(
+                parent?.requestDisallowInterceptTouchEvent(
                     currentItem != itemCount - 1
                             || endY - startY >= 0
                 )
             }
         } else if (disX > disY) {
-            parent.requestDisallowInterceptTouchEvent(false)
+            parent?.requestDisallowInterceptTouchEvent(false)
         }
     }
 

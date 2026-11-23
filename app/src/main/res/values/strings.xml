@@ -1976,6 +1976,7 @@ Note: custom buttons are meant for reading and helper actions; modifying chapter
     <string name="record_heap_dump_t">Capture heap dump</string>
     <string name="font_weight_text">N/B/L</string>
     <string name="enable_optimize_render">Enable render optimization</string>
+    <string name="enable_page_turn_prewarm">Prewarm page-turn snapshots</string>
     <string name="ignore_battery_permission_rationale">Legado needs background permission to keep its services running</string>
     <string name="simulated_reading">Simulated Reading</string>
     <string name="switch_on">Switch</string>

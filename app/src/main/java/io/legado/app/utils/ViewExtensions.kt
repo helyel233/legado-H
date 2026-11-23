@@ -38,7 +38,6 @@ import androidx.core.view.get
 import androidx.core.view.marginBottom
 import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager.widget.ViewPager
 import io.legado.app.help.GlideImageGetter
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.TintHelper
@@ -110,19 +109,6 @@ fun RecyclerView.setEdgeEffectColor(@ColorInt color: Int) {
             edgeEffect.color = color
             return edgeEffect
         }
-    }
-}
-
-fun ViewPager.setEdgeEffectColor(@ColorInt color: Int) {
-    try {
-        val clazz = ViewPager::class.java
-        for (name in arrayOf("mLeftEdge", "mRightEdge")) {
-            val field = clazz.getDeclaredField(name)
-            field.isAccessible = true
-            val edge = field.get(this)
-            (edge as EdgeEffect).color = color
-        }
-    } catch (ignored: Exception) {
     }
 }
 

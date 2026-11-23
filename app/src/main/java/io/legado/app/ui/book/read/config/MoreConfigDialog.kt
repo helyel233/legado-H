@@ -384,6 +384,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
             super.onCreate(savedInstanceState)
             if (!CanvasRecorderFactory.isSupport) {
                 removePref(PreferKey.optimizeRender)
+                removePref(PreferKey.pageTurnPrewarm)
             }
         }
 
@@ -532,6 +533,14 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                                 defaultValue = true,
                                 visible = CanvasRecorderFactory.isSupport
                             ),
+                            switch(
+                                key = PreferKey.pageTurnPrewarm,
+                                title = getString(R.string.enable_page_turn_prewarm),
+                                defaultValue = true,
+                                visible = CanvasRecorderFactory.isSupport &&
+                                    booleanSetting(PreferKey.optimizeRender, true) &&
+                                    !AppConfig.isEInkMode
+                            ),
                             SettingActionSpec(
                                 key = KEY_CLICK_REGIONAL_CONFIG,
                                 title = getString(R.string.click_regional_config),
@@ -572,7 +581,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                             )
                         ).filterNot { ReadBookConfig.usingEpubLayout && it.key in setOf(
                             PreferKey.doublePageHorizontal, PreferKey.useZhLayout, PreferKey.textBottomJustify,
-                            PreferKey.adaptSpecialStyle, PreferKey.optimizeRender
+                            PreferKey.adaptSpecialStyle, PreferKey.optimizeRender, PreferKey.pageTurnPrewarm
                         ) }.filterNot { ReadBook.usesPageTemplate() && it.key in setOf(
                             PreferKey.textFullJustify, PreferKey.epubLayoutPrefix + PreferKey.textFullJustify,
                             PreferKey.showReadTitleAddition, PreferKey.paddingDisplayCutouts
@@ -640,9 +649,17 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 }
 
                 PreferKey.optimizeRender -> {
+                    AppConfig.optimizeRender = CanvasRecorderFactory.isSupport &&
+                        booleanSetting(PreferKey.optimizeRender, true)
                     ChapterProvider.upStyle()
                     ReadBook.callBack?.upPageAnim(true)
                     ReadBook.loadContent(false)
+                    refreshSettings()
+                }
+
+                PreferKey.pageTurnPrewarm -> {
+                    AppConfig.pageTurnPrewarm = booleanSetting(PreferKey.pageTurnPrewarm, true)
+                    ReadBook.callBack?.upPageAnim()
                 }
 
                 PreferKey.paddingDisplayCutouts -> {

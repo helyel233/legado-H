@@ -493,6 +493,7 @@ object PreferKey {
     const val mouseWheelPage = "mouseWheelPage"
     const val recordHeapDump = "recordHeapDump"
     const val optimizeRender = "optimizeRender"
+    const val pageTurnPrewarm = "pageTurnPrewarm"
     const val readerDataRepairVersion = "readerDataRepairVersion"
     const val updateToVariant = "updateToVariant"
     const val updateSourceStrategy = "updateSourceStrategy"

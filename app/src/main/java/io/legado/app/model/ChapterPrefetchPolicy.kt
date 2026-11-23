@@ -16,7 +16,7 @@ internal object ChapterPrefetchPolicy {
      * @param networkAvailable 当前是否有可用网络
      * @param hasNextChapter 是否存在下一章
      * @param alreadyCached 下一章是否已有本地缓存
-     * @param downloading 下一章是否已在下载中
+     * @param inFlight 下一章是否已在下载中（[io.legado.app.model.CacheBook] 下载中或 [io.legado.app.help.book.ChapterFetchCoordinator] 在途预取中）
      */
     fun shouldPrefetch(
         enabled: Boolean,
@@ -24,14 +24,14 @@ internal object ChapterPrefetchPolicy {
         networkAvailable: Boolean,
         hasNextChapter: Boolean,
         alreadyCached: Boolean,
-        downloading: Boolean
+        inFlight: Boolean
     ): Boolean {
         if (!enabled) return false
         if (isLocal) return false
         if (!networkAvailable) return false
         if (!hasNextChapter) return false
         if (alreadyCached) return false
-        if (downloading) return false
+        if (inFlight) return false
         return true
     }
 

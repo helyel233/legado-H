@@ -32,6 +32,7 @@ import io.legado.app.ui.book.read.page.delegate.HorizontalPageDelegate
 import io.legado.app.ui.book.read.page.delegate.LinkedCoverPageDelegate
 import io.legado.app.ui.book.read.page.delegate.NoAnimPageDelegate
 import io.legado.app.ui.book.read.page.delegate.PageDelegate
+import io.legado.app.ui.book.read.page.delegate.PageTurnPrewarmPolicy
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.delegate.SimulationPageDelegate
 import io.legado.app.ui.book.read.page.delegate.SlidePageDelegate
@@ -229,17 +230,75 @@ class ReadView(context: Context, attrs: AttributeSet) :
     val autoPager = AutoPager(this)
     val isAutoPage get() = autoPager.isRunning
     private var pageTurnPrewarmGeneration = 0L
+    private var hasPendingPageTurnPrewarm = false
     private val pageTurnPrewarmCurRunnable = Runnable { runPageTurnPrewarmStep(0) }
     private val pageTurnPrewarmNextRunnable = Runnable { runPageTurnPrewarmStep(1) }
     private val pageTurnPrewarmPrevRunnable = Runnable { runPageTurnPrewarmStep(2) }
-    private val pageTurnPrewarmAllRunnable = Runnable { runPageTurnPrewarmStep(3) }
+
+    private fun isPageTurnPrewarmEligibleWhenIdle(delegate: PageDelegate): Boolean {
+        return PageTurnPrewarmPolicy.canPrewarm(
+            optimizeRender = AppConfig.optimizeRender,
+            prewarmEnabled = AppConfig.pageTurnPrewarm,
+            isEInkMode = AppConfig.isEInkMode,
+            isScroll = isScroll,
+            supportsSafePrewarm = delegate.supportsSafePrewarm,
+            isAnimating = false
+        )
+    }
+
+    private fun canRunPageTurnPrewarm(delegate: PageDelegate): Boolean {
+        return PageTurnPrewarmPolicy.canPrewarm(
+            optimizeRender = AppConfig.optimizeRender,
+            prewarmEnabled = AppConfig.pageTurnPrewarm,
+            isEInkMode = AppConfig.isEInkMode,
+            isScroll = isScroll,
+            supportsSafePrewarm = delegate.supportsSafePrewarm,
+            isAnimating = pressDown || delegate.isRunning || delegate.isStarted
+        )
+    }
+
+    private fun cancelPageTurnPrewarm() {
+        hasPendingPageTurnPrewarm = false
+        pageTurnPrewarmGeneration++
+        removeCallbacks(pageTurnPrewarmCurRunnable)
+        removeCallbacks(pageTurnPrewarmNextRunnable)
+        removeCallbacks(pageTurnPrewarmPrevRunnable)
+    }
+
+    private fun resumePendingPageTurnPrewarmIfIdle() {
+        val delegate = pageDelegate ?: return
+        if (hasPendingPageTurnPrewarm && !pressDown && !delegate.isRunning && !delegate.isStarted) {
+            schedulePageTurnPrewarm()
+        }
+    }
 
     private fun runPageTurnPrewarmStep(step: Int) {
-        if (isScroll) return
-        val delegate = pageDelegate ?: return
-        if (delegate.isRunning || delegate.isStarted) return
-        // One page per frame-ish step: avoids multi-page screenshot hitch on open.
-        delegate.prewarmPageSnapshots(step)
+        val generation = pageTurnPrewarmGeneration
+        val delegate = pageDelegate ?: run {
+            hasPendingPageTurnPrewarm = false
+            return
+        }
+        if (!canRunPageTurnPrewarm(delegate)) {
+            if (!isPageTurnPrewarmEligibleWhenIdle(delegate)) {
+                hasPendingPageTurnPrewarm = false
+            }
+            return
+        }
+        try {
+            // One page per idle frame: avoids multi-page capture hitch on open.
+            delegate.prewarmPageSnapshots(step)
+        } catch (t: Throwable) {
+            AppConfig.disablePageTurnPrewarm(t)
+            (delegate as? HorizontalPageDelegate)?.upRecorder()
+            cancelPageTurnPrewarm()
+            return
+        }
+        if (generation != pageTurnPrewarmGeneration) return
+        when (step) {
+            0 -> postDelayed(pageTurnPrewarmNextRunnable, 32L)
+            1 -> postDelayed(pageTurnPrewarmPrevRunnable, 32L)
+            else -> hasPendingPageTurnPrewarm = false
+        }
     }
 
     internal val isHorizontalPageTurnActive: Boolean
@@ -443,6 +502,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                         // A tap may synchronously start a page turn. This only commits when
                         // release really left the horizontal delegate idle.
                         flushPendingAdvancedTitleCompositions()
+                        resumePendingPageTurnPrewarmIfIdle()
                         return true
                     }
                 }
@@ -453,6 +513,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 }
                 pressOnTextSelected = false
                 flushPendingAdvancedTitleCompositions()
+                resumePendingPageTurnPrewarmIfIdle()
             }
 
             MotionEvent.ACTION_CANCEL -> {
@@ -470,6 +531,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 pressOnTextSelected = false
                 autoPager.resume()
                 flushPendingAdvancedTitleCompositions()
+                resumePendingPageTurnPrewarmIfIdle()
             }
         }
         return true
@@ -795,6 +857,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
      * 销毁事件
      */
     fun onDestroy() {
+        cancelPageTurnPrewarm()
         selectionAutoPager.cancel()
         removeCallbacks(longPressRunnable)
         dismissSelectionMagnifier()
@@ -874,6 +937,9 @@ class ReadView(context: Context, attrs: AttributeSet) :
         } else {
             curPage.setAutoPager(null)
         }
+        if (constructed) {
+            schedulePageTurnPrewarm()
+        }
     }
 
     /**
@@ -882,21 +948,16 @@ class ReadView(context: Context, attrs: AttributeSet) :
      * @param resetPageOffset 滚动阅读是是否重置位置
      */
     /**
-     * Pre-capture cover/slide/simulation page bitmaps after Lottie binds, so the first
-     * finger flip does not stall on full-page Lottie hierarchy draw.
-     */
-    /**
-     * Disabled automatic full-page ARGB prewarm.
-     * Open/chapter-switch already constructs 3 live PageViews; eagerly screenshot-ing them
-     * caused black ReadBook screens and process kills (no Java crash dialog) on mid-range
-     * Android 12 / HarmonyOS devices. Page-turn still screenshots on demand in setBitmap().
+     * Stagger RenderNode/Picture page-turn snapshot prewarm after content and overlays settle.
+     * Gated strictly by [PageTurnPrewarmPolicy] with an OOM/error circuit breaker.
      */
     fun schedulePageTurnPrewarm() {
-        pageTurnPrewarmGeneration++
-        removeCallbacks(pageTurnPrewarmCurRunnable)
-        removeCallbacks(pageTurnPrewarmNextRunnable)
-        removeCallbacks(pageTurnPrewarmPrevRunnable)
-        removeCallbacks(pageTurnPrewarmAllRunnable)
+        cancelPageTurnPrewarm()
+        val delegate = pageDelegate ?: return
+        if (!isPageTurnPrewarmEligibleWhenIdle(delegate)) return
+        hasPendingPageTurnPrewarm = true
+        if (pressDown || delegate.isRunning || delegate.isStarted) return
+        postOnAnimation(pageTurnPrewarmCurRunnable)
     }
 
     fun ensurePageTurnSnapshotsForGesture() = Unit
@@ -983,6 +1044,7 @@ class ReadView(context: Context, attrs: AttributeSet) :
     }
 
     override fun onDetachedFromWindow() {
+        cancelPageTurnPrewarm()
         selectionAutoPager.cancel()
         removeCallbacks(longPressRunnable)
         super.onDetachedFromWindow()

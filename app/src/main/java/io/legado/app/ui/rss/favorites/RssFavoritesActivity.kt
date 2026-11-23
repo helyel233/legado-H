@@ -1,14 +1,14 @@
-@file:Suppress("DEPRECATION")
-
 package io.legado.app.ui.rss.favorites
 
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.lifecycle.lifecycleScope
-import androidx.viewpager.widget.ViewPager
+import androidx.recyclerview.widget.DiffUtil
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayoutMediator
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppLog
@@ -16,6 +16,8 @@ import io.legado.app.data.appDb
 import io.legado.app.databinding.ActivityRssFavoritesBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.ui.rss.RssTabDiffCallback
+import io.legado.app.ui.rss.RssTabIdRegistry
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.utils.gone
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -34,10 +36,17 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
 
     override val binding by viewBinding(ActivityRssFavoritesBinding::inflate)
     private val adapter by lazy { TabFragmentPageAdapter() }
+    private val groupIdRegistry = RssTabIdRegistry<String>()
     private var groupList = mutableListOf<String>()
+    private var tabMediator: TabLayoutMediator? = null
     /** 「分组」自绘菜单（ModernActionPopup）的句柄，销毁时收起防泄漏。 */
     private var groupsMenuPopup: ModernActionPopup.Handle? = null
     private var currentGroup = ""
+    private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
+        override fun onPageSelected(position: Int) {
+            groupList.getOrNull(position)?.let { currentGroup = it }
+        }
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.applyWallpaperGlass()
@@ -61,30 +70,17 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
             lifecycleScope.launch {
                 delay(100)
                 if (isDestroyed || isFinishing) return@launch
-                binding.tabLayout.getTabAt(item)?.select()
+                binding.viewPager.setCurrentItem(item, false)
             }
         }
     }
 
     private fun initView() {
         binding.viewPager.adapter = adapter
-        binding.viewPager.addOnPageChangeListener(object : ViewPager.OnPageChangeListener {
-            override fun onPageScrolled(
-                position: Int,
-                positionOffset: Float,
-                positionOffsetPixels: Int
-            ) {
-            }
-
-            override fun onPageSelected(position: Int) {
-                // notifyDataSetChanged 后 ViewPager 可能回传越界 position
-                groupList.getOrNull(position)?.let { currentGroup = it }
-            }
-
-            override fun onPageScrollStateChanged(state: Int) {}
-
-        })
-        binding.tabLayout.setupWithViewPager(binding.viewPager)
+        binding.viewPager.registerOnPageChangeCallback(pageChangeCallback)
+        tabMediator = TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+            tab.text = adapter.groupAt(position)
+        }.also { it.attach() }
         binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
     }
 
@@ -111,7 +107,7 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
         ) ?: binding.titleBar.toolbar
         val actions = groupList.mapIndexed { index, group ->
             ModernActionPopup.Action(title = group) {
-                binding.viewPager.setCurrentItem(index)
+                binding.viewPager.setCurrentItem(index, true)
             }
         }
         groupsMenuPopup = ModernActionPopup.show(
@@ -136,6 +132,9 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
     override fun onDestroy() {
         groupsMenuPopup?.dismiss()
         groupsMenuPopup = null
+        tabMediator?.detach()
+        tabMediator = null
+        binding.viewPager.unregisterOnPageChangeCallback(pageChangeCallback)
         super.onDestroy()
     }
 
@@ -151,7 +150,10 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
                 } else {
                     binding.tabLayout.visible()
                 }
-                adapter.notifyDataSetChanged()
+                adapter.submitGroups(it)
+                if (currentGroup !in groupList) {
+                    currentGroup = groupList.getOrNull(binding.viewPager.currentItem).orEmpty()
+                }
             }
         }
     }
@@ -186,25 +188,51 @@ class RssFavoritesActivity : BaseActivity<ActivityRssFavoritesBinding>() {
         }
     }
 
-    private inner class TabFragmentPageAdapter :
-        FragmentStatePagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+    private data class GroupTabItem(
+        val group: String,
+        val itemId: Long
+    )
 
-        override fun getItemPosition(`object`: Any): Int {
-            return POSITION_NONE
+    private inner class TabFragmentPageAdapter : FragmentStateAdapter(this) {
+
+        private var items: List<GroupTabItem> = emptyList()
+        private var itemIds: Set<Long> = emptySet()
+
+        fun groupAt(position: Int): String? = items.getOrNull(position)?.group
+
+        @Suppress("NotifyDataSetChanged")
+        fun submitGroups(groups: List<String>) {
+            if (items.size == groups.size && items.indices.all { items[it].group == groups[it] }) {
+                return
+            }
+            groupIdRegistry.retainAll(groups)
+            val newItems = groups.map { group ->
+                GroupTabItem(group = group, itemId = groupIdRegistry.idFor(group))
+            }
+            val newItemIds = newItems.mapTo(HashSet(newItems.size)) { it.itemId }
+            if (items.isEmpty() || groups.isEmpty()) {
+                items = newItems
+                itemIds = newItemIds
+                notifyDataSetChanged()
+                return
+            }
+            val oldItems = items
+            val diffResult = DiffUtil.calculateDiff(
+                RssTabDiffCallback(oldItems, newItems) { it.itemId }
+            )
+            items = newItems
+            itemIds = newItemIds
+            diffResult.dispatchUpdatesTo(this)
         }
 
-        override fun getPageTitle(position: Int): CharSequence {
-            return groupList[position]
-        }
+        override fun getItemCount(): Int = items.size
 
-        override fun getItem(position: Int): Fragment {
-            val group = groupList[position]
-            return RssFavoritesFragment(group)
-        }
+        override fun getItemId(position: Int): Long = items[position].itemId
 
-        override fun getCount(): Int {
-            return groupList.size
-        }
+        override fun containsItem(itemId: Long): Boolean = itemIds.contains(itemId)
 
+        override fun createFragment(position: Int): Fragment {
+            return RssFavoritesFragment(items[position].group)
+        }
     }
 }

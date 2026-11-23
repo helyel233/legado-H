@@ -27,7 +27,6 @@ import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.glass.applyWallpaperGlassBackground
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.RssSortActivity
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.dpToPx
@@ -43,17 +42,8 @@ import kotlinx.coroutines.launch
  * 数据由 [HomepageViewModel] 提供，界面遵循本项目主题语义（UiCorner/ThemeStore UI 组）。
  * 支持两种布局：混合列表（所有模块单列表）与分源Tab（按集分页，Tab 切换）。
  */
-class HomepageFragment() : VMBaseFragment<HomepageViewModel>(R.layout.fragment_homepage),
-    MainFragmentInterface,
+class HomepageFragment : VMBaseFragment<HomepageViewModel>(R.layout.fragment_homepage),
     HomepageAdapter.CallBack {
-
-    constructor(position: Int) : this() {
-        val bundle = Bundle()
-        bundle.putInt("position", position)
-        arguments = bundle
-    }
-
-    override val position: Int? get() = arguments?.getInt("position")
 
     public override val viewModel by viewModels<HomepageViewModel>()
 

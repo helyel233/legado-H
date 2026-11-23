@@ -1,5 +1,6 @@
 package io.legado.app.model
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -180,5 +181,87 @@ class ChapterLoadGuardTest {
 
         assertFalse(isSlotCurrent(chapterIndex = 5, expectedOffset = -1, slotMatches = true))
         assertFalse(isSlotCurrent(chapterIndex = 5, expectedOffset = 0, slotMatches = false))
+    }
+
+    @Test
+    fun evaluateRequestDistinguishesCurrentLayoutDriftedAndStale() {
+        assertEquals(
+            ChapterLoadGuard.RequestValidity.CURRENT,
+            ChapterLoadGuard.evaluateRequest(
+                activeBookUrl = "bookA",
+                requestBookUrl = "bookA",
+                chapterIndex = 5,
+                currentChapterIndex = 5,
+                recordedGeneration = 7L,
+                requestGeneration = 7L,
+                recordedLayoutKey = "layout-1",
+                requestLayoutKey = "layout-1",
+                currentLayoutKey = "layout-1"
+            )
+        )
+
+        // Token still matches (book, generation, recordedLayoutKey, window), only currentLayoutKey drifted.
+        assertEquals(
+            ChapterLoadGuard.RequestValidity.LAYOUT_DRIFTED,
+            ChapterLoadGuard.evaluateRequest(
+                activeBookUrl = "bookA",
+                requestBookUrl = "bookA",
+                chapterIndex = 5,
+                currentChapterIndex = 5,
+                recordedGeneration = 7L,
+                requestGeneration = 7L,
+                recordedLayoutKey = "layout-1",
+                requestLayoutKey = "layout-1",
+                currentLayoutKey = "layout-2"
+            )
+        )
+
+        // Book switched -> STALE even if layout keys happen to match.
+        assertEquals(
+            ChapterLoadGuard.RequestValidity.STALE,
+            ChapterLoadGuard.evaluateRequest(
+                activeBookUrl = "bookB",
+                requestBookUrl = "bookA",
+                chapterIndex = 5,
+                currentChapterIndex = 5,
+                recordedGeneration = 7L,
+                requestGeneration = 7L,
+                recordedLayoutKey = "layout-1",
+                requestLayoutKey = "layout-1",
+                currentLayoutKey = "layout-1"
+            )
+        )
+
+        // Generation superseded -> STALE.
+        assertEquals(
+            ChapterLoadGuard.RequestValidity.STALE,
+            ChapterLoadGuard.evaluateRequest(
+                activeBookUrl = "bookA",
+                requestBookUrl = "bookA",
+                chapterIndex = 5,
+                currentChapterIndex = 5,
+                recordedGeneration = 8L,
+                requestGeneration = 7L,
+                recordedLayoutKey = "layout-1",
+                requestLayoutKey = "layout-1",
+                currentLayoutKey = "layout-2"
+            )
+        )
+
+        // Outside 3-chapter window -> STALE.
+        assertEquals(
+            ChapterLoadGuard.RequestValidity.STALE,
+            ChapterLoadGuard.evaluateRequest(
+                activeBookUrl = "bookA",
+                requestBookUrl = "bookA",
+                chapterIndex = 9,
+                currentChapterIndex = 5,
+                recordedGeneration = 7L,
+                requestGeneration = 7L,
+                recordedLayoutKey = "layout-1",
+                requestLayoutKey = "layout-1",
+                currentLayoutKey = "layout-2"
+            )
+        )
     }
 }

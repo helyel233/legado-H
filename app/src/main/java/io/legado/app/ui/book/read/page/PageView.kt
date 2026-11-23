@@ -790,6 +790,7 @@ class PageView(context: Context) : FrameLayout(context) {
         }.onFailure { error ->
             AppLog.put("PageView advanced tip prewarm failed", error)
         }
+        schedulePageTurnPrewarm()
     }
 
     /** Update classic tip labels without touching Lottie. */

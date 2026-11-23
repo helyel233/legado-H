@@ -1,17 +1,16 @@
-@file:Suppress("DEPRECATION")
-
 package io.legado.app.ui.main.bookshelf.style1
 
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import androidx.constraintlayout.widget.ConstraintSet
-import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
-import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
@@ -21,7 +20,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf1Binding
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
@@ -31,7 +29,6 @@ import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.RoundedTagBarView
 import io.legado.app.ui.widget.compose.ComposeMultiChoiceDialog
 import io.legado.app.utils.applyStatusBarPadding
-import io.legado.app.utils.isCreated
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.setEdgeEffectColor
@@ -44,23 +41,19 @@ import kotlinx.coroutines.launch
 /**
  * 书架界面
  */
-class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1) {
-
-    constructor(position: Int) : this() {
-        val bundle = Bundle()
-        bundle.putInt("position", position)
-        arguments = bundle
-    }
+class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf1) {
 
     private val binding by viewBinding(FragmentBookshelf1Binding::bind)
-    private val adapter by lazy { TabFragmentPageAdapter(childFragmentManager) }
+    private val adapter by lazy { TabFragmentPageAdapter(this) }
     private val bookGroups = mutableListOf<BookGroup>()
+    private val tabRegistry = BookshelfTabRegistry()
     private val fragmentMap = hashMapOf<Long, BooksFragment>()
     private var groupMenuPopup: ModernActionPopup.Handle? = null
     private var bookTags = emptyList<String>()
     private var selectedBookTag = ""
     private val groupShelfCache = hashMapOf<Long, List<BookShelfDisplay>>()
     private var currentGroupIndex = 0
+    private var hasPreservedGroupIndex = false
     private var topOverlaySpace = 0
     private var topOverlayEnabled = false
     private var structureVersion = 0
@@ -68,23 +61,114 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
 
     override val books: List<Book>
         get() {
-            val fragment = fragmentMap[groupId]
+            val fragment = findBooksFragment(groupId)
             return fragment?.getBooks() ?: emptyList()
         }
 
     override var onlyUpdateRead = false
 
+    private val childFragmentLifecycleCallbacks =
+        object : FragmentManager.FragmentLifecycleCallbacks() {
+            override fun onFragmentCreated(
+                fm: FragmentManager,
+                f: Fragment,
+                savedInstanceState: Bundle?
+            ) {
+                val fragment = f as? BooksFragment ?: return
+                val id = fragment.arguments?.getLong("groupId", Long.MIN_VALUE)
+                    ?.takeIf { it != Long.MIN_VALUE }
+                    ?: return
+                fragmentMap[id] = fragment
+            }
+
+            override fun onFragmentDestroyed(fm: FragmentManager, f: Fragment) {
+                val fragment = f as? BooksFragment ?: return
+                val id = fragment.arguments?.getLong("groupId", Long.MIN_VALUE)
+                    ?.takeIf { it != Long.MIN_VALUE }
+                    ?: fragment.groupId
+                if (fragmentMap[id] === fragment) {
+                    fragmentMap.remove(id)
+                }
+            }
+        }
+
+    private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
+        override fun onPageSelected(position: Int) {
+            if (position !in bookGroups.indices) return
+            currentGroupIndex = position
+            selectedBookTag = ""
+            updateHeaderTitle()
+            val group = bookGroups[position]
+            findBooksFragment(group.groupId)?.setBookTagFilter("")
+            renderBookTags(groupShelfCache[group.groupId].orEmpty())
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        childFragmentManager.registerFragmentLifecycleCallbacks(childFragmentLifecycleCallbacks, false)
+    }
+
+    override fun onDestroy() {
+        childFragmentManager.unregisterFragmentLifecycleCallbacks(childFragmentLifecycleCallbacks)
+        super.onDestroy()
+    }
+
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        if (savedInstanceState != null && savedInstanceState.containsKey(STATE_CURRENT_GROUP_INDEX)) {
+            currentGroupIndex = savedInstanceState.getInt(STATE_CURRENT_GROUP_INDEX, 0)
+            hasPreservedGroupIndex = true
+        }
         initView()
         initBookGroupData()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val indexToSave = if (view != null && bookGroups.isNotEmpty()) {
+            binding.viewPagerBookshelfPager.currentItem
+        } else {
+            currentGroupIndex
+        }
+        outState.putInt(STATE_CURRENT_GROUP_INDEX, indexToSave)
+    }
+
+    override fun onDestroyView() {
+        binding.viewPagerBookshelfPager.unregisterOnPageChangeCallback(pageChangeCallback)
+        binding.viewPagerBookshelfPager.adapter = null
+        super.onDestroyView()
+    }
+
     private val selectedGroup: BookGroup?
-        get() = bookGroups.getOrNull(binding.viewPagerBookshelf.currentItem)
+        get() {
+            val index = if (view != null) {
+                binding.viewPagerBookshelfPager.currentItem
+            } else {
+                currentGroupIndex
+            }
+            return bookGroups.getOrNull(index)
+        }
+
+    private fun findBooksFragment(groupId: Long): BooksFragment? {
+        val cached = fragmentMap[groupId]
+        if (cached != null && cached.isAdded) {
+            return cached
+        }
+        val itemId = adapter.itemIdForGroup(groupId)
+        if (itemId != null) {
+            val fromManager = childFragmentManager.findFragmentByTag("f$itemId") as? BooksFragment
+            if (fromManager != null) {
+                fragmentMap[groupId] = fromManager
+                return fromManager
+            }
+        }
+        return cached
+    }
 
     private fun initView() {
         binding.topBar.applyStatusBarPadding(withInitialPadding = true)
-        binding.viewPagerBookshelf.setEdgeEffectColor(primaryColor)
+        (binding.viewPagerBookshelfPager.getChildAt(0) as? RecyclerView)
+            ?.setEdgeEffectColor(primaryColor)
         binding.topBar.setMode(MainTopBarView.Mode.BOOKSHELF)
         binding.topBar.moreButton.setOnClickListener {
             showModernBookshelfMenu(it)
@@ -111,7 +195,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
             val tag = bookTags.getOrNull(index).orEmpty()
             if (tag == selectedBookTag) {
                 selectedGroup?.let { group ->
-                    fragmentMap[group.groupId]?.let { fragment ->
+                    findBooksFragment(group.groupId)?.let { fragment ->
                         val label = tag.ifBlank { getString(R.string.bookshelf_tag_all) }
                         toastOnUi("${group.groupName} · $label(${fragment.getBooksCount()})")
                     }
@@ -119,30 +203,22 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
             } else {
                 selectedBookTag = tag
                 binding.topBar.tagsBar.setSelectedIndex(index, smooth = true)
-                fragmentMap[groupId]?.setBookTagFilter(tag)
+                findBooksFragment(groupId)?.setBookTagFilter(tag)
             }
         }
         binding.topBar.tagsBar.setOnTagLongClickListener { index ->
             selectedBookTag = bookTags.getOrNull(index).orEmpty()
-            fragmentMap[groupId]?.setBookTagFilter(selectedBookTag)
+            findBooksFragment(groupId)?.setBookTagFilter(selectedBookTag)
             true
         }
-        binding.viewPagerBookshelf.offscreenPageLimit = 1
-        binding.viewPagerBookshelf.swipeEnabled = AppConfig.bottomBarLayoutMode != "sidebar"
-        binding.viewPagerBookshelf.adapter = adapter
-        binding.viewPagerBookshelf.addOnPageChangeListener(
-            object : androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener() {
-                override fun onPageSelected(position: Int) {
-                    if (position !in bookGroups.indices) return
-                    currentGroupIndex = position
-                    selectedBookTag = ""
-                    updateHeaderTitle()
-                    val group = bookGroups[position]
-                    fragmentMap[group.groupId]?.setBookTagFilter("")
-                    renderBookTags(groupShelfCache[group.groupId].orEmpty())
-                }
-            }
-        )
+        binding.viewPagerBookshelf.disallowParentInterceptDownEvent(false)
+        binding.viewPagerBookshelfPager.offscreenPageLimit = 1
+        binding.viewPagerBookshelfPager.isUserInputEnabled = AppConfig.bottomBarLayoutMode != "sidebar"
+        binding.viewPagerBookshelfPager.adapter = adapter
+        if (currentGroupIndex in bookGroups.indices) {
+            binding.viewPagerBookshelfPager.setCurrentItem(currentGroupIndex, false)
+        }
+        binding.viewPagerBookshelfPager.registerOnPageChangeCallback(pageChangeCallback)
         binding.topBar.doOnLayout {
             updateTopBarOverlay()
         }
@@ -154,7 +230,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
 
     override fun onResume() {
         super.onResume()
-        binding.viewPagerBookshelf.swipeEnabled = AppConfig.bottomBarLayoutMode != "sidebar"
+        binding.viewPagerBookshelfPager.isUserInputEnabled = AppConfig.bottomBarLayoutMode != "sidebar"
         binding.root.post {
             updateTopBarOverlay()
         }
@@ -192,8 +268,8 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         }
         topOverlayEnabled = overlay
         topOverlaySpace = newSpace
-        fragmentMap.values.forEach { fragment ->
-            fragment.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
+        bookGroups.forEach { group ->
+            findBooksFragment(group.groupId)?.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
         }
         // 1.25.10 顶栏液态玻璃：采样源取 view_pager_bookshelf —— 与 top_bar 在同一个
         // ConstraintLayout 下**平级**，是唯一合法的「兄弟子树」形态。
@@ -216,11 +292,41 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         if (data.isEmpty()) {
             appDb.bookGroupDao.enableGroup(BookGroup.IdAll)
         } else if (data != bookGroups) {
+            val hadGroups = bookGroups.isNotEmpty()
+            val previousGroupId = if (hadGroups) selectedGroup?.groupId else null
             bookGroups.clear()
             bookGroups.addAll(data)
-            adapter.notifyDataSetChanged()
+            val newItems = tabRegistry.buildItems(structureVersion, bookGroups)
+            adapter.submitItems(newItems)
+            bookGroups.forEachIndexed { index, group ->
+                findBooksFragment(group.groupId)?.let { fragment ->
+                    fragment.updatePosition(index)
+                    fragment.setEnableRefresh(group.enableRefresh)
+                    val sort = group.getRealBookSort()
+                    if (fragment.bookSort != sort) {
+                        fragment.upBookSort(sort)
+                    }
+                    fragment.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
+                }
+            }
             renderGroupSelector()
-            selectSavedGroup()
+            val preservedIndex = when {
+                hadGroups && previousGroupId != null ->
+                    bookGroups.indexOfFirst { it.groupId == previousGroupId }
+                hasPreservedGroupIndex && currentGroupIndex in bookGroups.indices ->
+                    currentGroupIndex
+                else -> -1
+            }
+            hasPreservedGroupIndex = false
+            if (preservedIndex >= 0) {
+                currentGroupIndex = preservedIndex
+                if (binding.viewPagerBookshelfPager.currentItem != preservedIndex) {
+                    binding.viewPagerBookshelfPager.setCurrentItem(preservedIndex, false)
+                }
+                AppConfig.saveTabPosition = preservedIndex
+            } else {
+                selectSavedGroup()
+            }
         } else {
             renderGroupSelector()
             renderGroupTags()
@@ -232,11 +338,21 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         // 与 BookshelfFragment2 同源：View 已销毁时 adapter 已经跟着 RecyclerView 走掉，
         // 保持同一套「先问一句」的调用约定
         if (!isViewReady()) return
-        adapter.notifyDataSetChanged()
+        bookGroups.forEach { group ->
+            val sort = group.getRealBookSort()
+            findBooksFragment(group.groupId)?.let { fragment ->
+                fragment.setEnableRefresh(group.enableRefresh)
+                if (fragment.bookSort != sort) {
+                    fragment.upBookSort(sort)
+                }
+            }
+        }
     }
 
     private fun selectSavedGroup() {
-        binding.viewPagerBookshelf.post {
+        if (view == null) return
+        binding.viewPagerBookshelfPager.post {
+            if (!isAdded || view == null) return@post
             if (bookGroups.isEmpty()) {
                 binding.topBar.setPrimaryItems(emptyList(), -1)
                 binding.topBar.tagsBar.submitItems(emptyList(), -1)
@@ -249,7 +365,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     override fun gotoTop() {
-        fragmentMap[groupId]?.gotoTop()
+        findBooksFragment(groupId)?.gotoTop()
     }
 
     private fun renderGroupTags() {
@@ -300,7 +416,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         bookTags = listOf("") + tags
         if (selectedBookTag.isNotBlank() && selectedBookTag !in tags) {
             selectedBookTag = ""
-            fragmentMap[groupId]?.setBookTagFilter("")
+            findBooksFragment(groupId)?.setBookTagFilter("")
         }
         binding.topBar.tagsBar.submitItems(
             bookTags.map { tag ->
@@ -331,10 +447,10 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     private fun switchToGroup(index: Int) {
         if (index !in bookGroups.indices) return
         currentGroupIndex = index
-        binding.viewPagerBookshelf.setCurrentItem(index, false)
+        binding.viewPagerBookshelfPager.setCurrentItem(index, false)
         AppConfig.saveTabPosition = index
         selectedBookTag = ""
-        fragmentMap[groupId]?.setBookTagFilter("")
+        findBooksFragment(groupId)?.setBookTagFilter("")
         renderBookTags(groupShelfCache[groupId].orEmpty())
         updateHeaderTitle()
     }
@@ -403,7 +519,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     private fun rebuildBookshelfContent() {
-        if (!isAdded) return
+        if (!isAdded || view == null) return
         val targetGroupId = groupId
         dismissBookshelfTransientUi()
         groupMenuPopup?.dismiss()
@@ -411,9 +527,9 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         structureVersion++
         fragmentMap.clear()
         selectedBookTag = ""
-        binding.viewPagerBookshelf.post {
-            if (!isAdded) return@post
-            adapter.notifyDataSetChanged()
+        binding.viewPagerBookshelfPager.post {
+            if (!isAdded || view == null) return@post
+            adapter.submitItems(tabRegistry.buildItems(structureVersion, bookGroups))
             if (bookGroups.any { it.groupId == targetGroupId }) {
                 switchToGroupId(targetGroupId)
             } else {
@@ -424,59 +540,39 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         }
     }
 
-    private inner class TabFragmentPageAdapter(fm: FragmentManager) :
-        FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+    private inner class TabFragmentPageAdapter(fragment: Fragment) :
+        FragmentStateAdapter(fragment) {
 
-        override fun getPageTitle(position: Int): CharSequence {
-            return bookGroups[position].groupName
+        private var adapterItems: List<BookshelfTabItem> = emptyList()
+
+        fun itemIdForGroup(groupId: Long): Long? {
+            return adapterItems.firstOrNull { it.group.groupId == groupId }?.itemId
         }
 
-        /**
-         * 确定视图位置是否更改时调用
-         * @return POSITION_NONE 已更改,刷新视图. POSITION_UNCHANGED 未更改,不刷新视图
-         */
-        override fun getItemPosition(any: Any): Int {
-            val fragment = any as BooksFragment
-            if (fragment.structureVersion != structureVersion) {
-                return POSITION_NONE
-            }
-            val position = fragment.position
-            val group = bookGroups.getOrNull(position)
-            if (fragment.groupId != group?.groupId) {
-                return POSITION_NONE
-            }
-            val bookSort = group.getRealBookSort()
-            fragment.setEnableRefresh(group.enableRefresh)
-            if (fragment.bookSort != bookSort) {
-                fragment.upBookSort(bookSort)
-            }
-            return POSITION_UNCHANGED
+        fun submitItems(newItems: List<BookshelfTabItem>) {
+            val oldItems = adapterItems
+            if (oldItems == newItems) return
+            val diffResult = DiffUtil.calculateDiff(BookshelfTabDiffCallback(oldItems, newItems))
+            adapterItems = newItems
+            diffResult.dispatchUpdatesTo(this)
         }
 
-        override fun getItem(position: Int): Fragment {
-            val group = bookGroups[position]
+        override fun getItemCount(): Int = adapterItems.size
+
+        override fun getItemId(position: Int): Long = adapterItems[position].itemId
+
+        override fun containsItem(itemId: Long): Boolean =
+            adapterItems.any { it.itemId == itemId }
+
+        override fun createFragment(position: Int): Fragment {
+            val item = adapterItems[position]
+            val group = item.group
             onlyUpdateRead = group.onlyUpdateRead
-            return BooksFragment(position, group)
-        }
-
-        override fun getCount(): Int {
-            return bookGroups.size
-        }
-
-        override fun instantiateItem(container: ViewGroup, position: Int): Any {
-            var fragment = super.instantiateItem(container, position) as BooksFragment
-            val group = bookGroups[position]
-            /**
-             * Activity recreate 会复用之前的 Fragment，不正确的需要重新创建
-             */
-            if (fragment.isCreated && getItemPosition(fragment) == POSITION_NONE) {
-                destroyItem(container, position, fragment)
-                fragment = super.instantiateItem(container, position) as BooksFragment
+            return BooksFragment(position, group).also { fragment ->
+                fragment.structureVersion = structureVersion
+                fragment.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
+                fragmentMap[group.groupId] = fragment
             }
-            fragmentMap[group.groupId] = fragment
-            fragment.structureVersion = structureVersion
-            fragment.setTopOverlaySpace(topOverlaySpace, topOverlayEnabled)
-            return fragment
         }
 
     }
@@ -506,5 +602,9 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
             order = order,
             readConfig = readConfig
         )
+    }
+
+    companion object {
+        private const val STATE_CURRENT_GROUP_INDEX = "currentGroupIndex"
     }
 }

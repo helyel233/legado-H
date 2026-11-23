@@ -5,6 +5,7 @@ import io.legado.app.ui.book.read.page.ReadView
 
 class NoAnimPageDelegate(readView: ReadView) : HorizontalPageDelegate(readView) {
 
+    override val supportsSafePrewarm: Boolean = false
     protected override val capturesPageSnapshots = false
 
     override fun onAnimStart(animationSpeed: Int) {

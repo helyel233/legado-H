@@ -18,7 +18,7 @@
             android:focusable="false"
             android:importantForAccessibility="no" />
 
-        <io.legado.app.ui.widget.LockableViewPager
+        <androidx.viewpager2.widget.ViewPager2
             android:id="@+id/view_pager_main"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

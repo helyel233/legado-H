@@ -10,6 +10,7 @@ import io.legado.app.model.CacheBook
 import io.legado.app.model.ChapterPrefetchPolicy
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.NetworkUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -55,20 +56,32 @@ object ChapterPrefetcher {
         val newJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val next = appDb.bookChapterDao.getChapter(book.bookUrl, current.index + 1)
                 ?: return@launch
+            val fetchKey = ChapterFetchKey(book.bookUrl, next.url, next.index)
             val shouldPrefetch = ChapterPrefetchPolicy.shouldPrefetch(
                 enabled = true,
                 isLocal = book.isLocal,
                 networkAvailable = NetworkUtils.isAvailable(),
                 hasNextChapter = true,
                 alreadyCached = BookHelp.hasContent(book, next),
-                downloading = CacheBook.isDownloading(next)
+                inFlight = CacheBook.isDownloading(next) || ChapterFetchCoordinator.isInFlight(fetchKey)
             )
             if (!shouldPrefetch) return@launch
-            runCatching {
+            try {
                 // needSave 默认 true：抓到即落盘，下次读直接命中本地缓存
-                WebBook.getContentAwait(source, book, next)
-            }.onFailure {
-                AppLog.put("预取下一章失败 " + book.name + " #" + next.index + ": " + it.localizedMessage)
+                ChapterFetchCoordinator.fetchOrJoin(fetchKey) {
+                    WebBook.getContentAwait(source, book, next)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                AppLog.put("预取下一章失败 " + book.name + " #" + next.index + ": " + e.localizedMessage)
+            }
+        }
+        newJob.invokeOnCompletion {
+            synchronized(this) {
+                if (prefetchJob === newJob) {
+                    prefetchJob = null
+                }
             }
         }
         synchronized(this) {

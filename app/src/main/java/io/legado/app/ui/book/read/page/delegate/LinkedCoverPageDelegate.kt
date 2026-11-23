@@ -140,10 +140,10 @@ class LinkedCoverPageDelegate(readView: ReadView) : HorizontalPageDelegate(readV
             }
         }
         startScroll(
-            touchX.toInt(),
-            0,
-            distanceX.toInt(),
-            0,
+            touchX,
+            0f,
+            distanceX,
+            0f,
             (animationSpeed * 1.35f).toInt()
         )
     }

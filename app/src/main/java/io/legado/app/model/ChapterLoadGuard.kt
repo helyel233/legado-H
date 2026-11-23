@@ -11,6 +11,12 @@ package io.legado.app.model
  */
 internal object ChapterLoadGuard {
 
+    enum class RequestValidity {
+        CURRENT,
+        LAYOUT_DRIFTED,
+        STALE
+    }
+
     /**
      * Only the chapter before, the current one and the one after are kept in memory.
      */
@@ -41,6 +47,41 @@ internal object ChapterLoadGuard {
     }
 
     /**
+     * Evaluates whether a chapter load request is current, only experienced layout key drift
+     * (fetched text can be kept and re-bound to [currentLayoutKey]), or is truly stale.
+     */
+    fun evaluateRequest(
+        activeBookUrl: String?,
+        requestBookUrl: String,
+        chapterIndex: Int,
+        currentChapterIndex: Int,
+        recordedGeneration: Long?,
+        requestGeneration: Long,
+        recordedLayoutKey: String?,
+        requestLayoutKey: String,
+        currentLayoutKey: String
+    ): RequestValidity {
+        if (!isTokenCurrent(
+                activeBookUrl = activeBookUrl,
+                requestBookUrl = requestBookUrl,
+                chapterIndex = chapterIndex,
+                currentChapterIndex = currentChapterIndex,
+                recordedGeneration = recordedGeneration,
+                requestGeneration = requestGeneration,
+                recordedLayoutKey = recordedLayoutKey,
+                requestLayoutKey = requestLayoutKey
+            )
+        ) {
+            return RequestValidity.STALE
+        }
+        return if (currentLayoutKey == requestLayoutKey) {
+            RequestValidity.CURRENT
+        } else {
+            RequestValidity.LAYOUT_DRIFTED
+        }
+    }
+
+    /**
      * True when the request may still be answered: the token is current and the layout
      * of the content did not change while the chapter was loading.
      */
@@ -55,20 +96,17 @@ internal object ChapterLoadGuard {
         requestLayoutKey: String,
         currentLayoutKey: String
     ): Boolean {
-        if (!isTokenCurrent(
-                activeBookUrl = activeBookUrl,
-                requestBookUrl = requestBookUrl,
-                chapterIndex = chapterIndex,
-                currentChapterIndex = currentChapterIndex,
-                recordedGeneration = recordedGeneration,
-                requestGeneration = requestGeneration,
-                recordedLayoutKey = recordedLayoutKey,
-                requestLayoutKey = requestLayoutKey
-            )
-        ) {
-            return false
-        }
-        return currentLayoutKey == requestLayoutKey
+        return evaluateRequest(
+            activeBookUrl = activeBookUrl,
+            requestBookUrl = requestBookUrl,
+            chapterIndex = chapterIndex,
+            currentChapterIndex = currentChapterIndex,
+            recordedGeneration = recordedGeneration,
+            requestGeneration = requestGeneration,
+            recordedLayoutKey = recordedLayoutKey,
+            requestLayoutKey = requestLayoutKey,
+            currentLayoutKey = currentLayoutKey
+        ) == RequestValidity.CURRENT
     }
 
     /**

@@ -41,7 +41,6 @@ import io.legado.app.ui.dict.rule.DictRuleActivity
 import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.source.recycle.SourceRecycleBinActivity
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.autoTask.AutoTaskActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
@@ -56,17 +55,8 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.LogUtils
 
-class MyFragment() : BaseFragment(R.layout.fragment_my_config),
-    MainFragmentInterface,
+class MyFragment : BaseFragment(R.layout.fragment_my_config),
     SharedPreferences.OnSharedPreferenceChangeListener {
-
-    constructor(position: Int) : this() {
-        arguments = Bundle().apply {
-            putInt("position", position)
-        }
-    }
-
-    override val position: Int? get() = arguments?.getInt("position")
 
     private val binding by viewBinding(FragmentMyConfigBinding::bind)
     private val settingsSearchView by lazy(LazyThreadSafetyMode.NONE) {

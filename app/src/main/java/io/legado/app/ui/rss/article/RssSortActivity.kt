@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package io.legado.app.ui.rss.article
 
 import android.content.Context
@@ -24,8 +22,11 @@ import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentStatePagerAdapter
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityRssArtivlesBinding
@@ -41,6 +42,11 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.glass.wallpaperGlassSignature
+import io.legado.app.ui.rss.RssSortTabKey
+import io.legado.app.ui.rss.RssTabDiffCallback
+import io.legado.app.ui.rss.RssTabIdRegistry
+import io.legado.app.ui.rss.RssTabItem
+import io.legado.app.ui.rss.buildRssSortTabItems
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.utils.*
@@ -48,7 +54,6 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.viewpager.widget.ViewPager
 import io.legado.app.utils.startActivity
 import splitties.init.appCtx
 
@@ -72,19 +77,44 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     override val binding by viewBinding(ActivityRssArtivlesBinding::inflate)
     override val viewModel by viewModels<RssSortViewModel>()
     private val adapter by lazy { TabFragmentPageAdapter() }
+    private val tabIdRegistry = RssTabIdRegistry<RssSortTabKey>()
     private var sortUrls: List<Pair<String, String>>? = null
     private val sortList = mutableListOf<Pair<String, String>>()
     private val fragmentMap = hashMapOf<String, Fragment>()
     private val orientation by lazy { resources.configuration.orientation }
     private var shouldFocusSearch = false
     private var pureSearch = false
+    private var pendingRestorePosition: Int? = null
     private var favoriteMenuItem: MenuItem? = null
+    private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
+        override fun onPageSelected(position: Int) {
+            updateTabSelection(position)
+        }
+    }
+    private val fragmentLifecycleCallbacks = object : FragmentManager.FragmentLifecycleCallbacks() {
+        override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
+            if (f is RssArticlesFragment) {
+                val sortName = f.arguments?.getString("sortName") ?: return
+                fragmentMap[sortName] = f
+            }
+        }
+
+        override fun onFragmentDestroyed(fm: FragmentManager, f: Fragment) {
+            if (f is RssArticlesFragment) {
+                val sortName = f.arguments?.getString("sortName") ?: return
+                if (fragmentMap[sortName] === f) {
+                    fragmentMap.remove(sortName)
+                }
+            }
+        }
+    }
     private val editSourceResult = registerForActivityResult(
         StartActivityContract(RssSourceEditActivity::class.java)
     ) {
         if (it.resultCode == RESULT_OK) {
             viewModel.initData(intent) {
                 sortUrls = null
+                tabIdRegistry.invalidateAll()
                 upFragments()
             }
         }
@@ -182,7 +212,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
                 marginEnd = 6.dpToPx()
             }
             setOnClickListener {
-                binding.viewPager.currentItem = position
+                binding.viewPager.setCurrentItem(position, false)
                 updateTabSelection(position)
             }
         }
@@ -350,12 +380,9 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         binding.titleBar.applyWallpaperGlass()
         shouldFocusSearch = intent.getBooleanExtra("focusSearch", false)
         pureSearch = intent.getBooleanExtra("pureSearch", false)
+        supportFragmentManager.registerFragmentLifecycleCallbacks(fragmentLifecycleCallbacks, false)
         binding.viewPager.adapter = adapter
-        binding.viewPager.addOnPageChangeListener(object : ViewPager.SimpleOnPageChangeListener() {
-            override fun onPageSelected(position: Int) {
-                updateTabSelection(position)
-            }
-        })
+        binding.viewPager.registerOnPageChangeCallback(pageChangeCallback)
         viewModel.initData(intent) {
             upFragments()
         }
@@ -395,19 +422,26 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
     // 保存当前选中位置
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt("CURRENT_POSITION", binding.viewPager.currentItem)
+        outState.putInt(STATE_CURRENT_POSITION, binding.viewPager.currentItem)
     }
 
     // 恢复状态
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
-        val position = savedInstanceState.getInt("CURRENT_POSITION", 0)
-        binding.viewPager.currentItem = position
-        updateTabSelection(position)
+        val position = savedInstanceState.getInt(STATE_CURRENT_POSITION, 0)
+        if (adapter.itemCount > 0) {
+            val target = position.coerceIn(0, adapter.itemCount - 1)
+            binding.viewPager.setCurrentItem(target, false)
+            updateTabSelection(target)
+        } else {
+            pendingRestorePosition = position
+        }
     }
 
     // 在onDestroy中释放资源
     override fun onDestroy() {
+        binding.viewPager.unregisterOnPageChangeCallback(pageChangeCallback)
+        supportFragmentManager.unregisterFragmentLifecycleCallbacks(fragmentLifecycleCallbacks)
         super.onDestroy()
         fragmentMap.clear()
         tabScrollViews.clear()
@@ -519,6 +553,7 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
 
             R.id.menu_switch_layout -> {
                 viewModel.switchLayout()
+                tabIdRegistry.invalidateAll()
                 upFragments()
                 // 样式切换后没有任何提示，用户不知道当前是第几种排版
                 toastOnUi(getString(R.string.rss_article_style_toast, (viewModel.articleStyle ?: 0) + 1))
@@ -587,10 +622,13 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         }
     }
     private fun upFragmentsView() {
+        val tabs = buildRssSortTabItems(sortList, viewModel.searchKey, tabIdRegistry)
         if (pureSearch) {
             binding.titleBar.title = viewModel.searchKey ?: getString(R.string.rss_search_hint)
             binding.tabsContainer.gone()
-            adapter.notifyDataSetChanged()
+            adapter.submitTabs(tabs)
+            syncFragmentMap(tabs)
+            applyPendingRestoreOrSelection(tabs)
             return
         }
         if (sortList.size == 1) {
@@ -603,10 +641,36 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
             binding.tabsContainer.visible()
             setupMultiLineTabs()
         }
-        adapter.notifyDataSetChanged()
-        if (sortList.isNotEmpty()) {
-            updateTabSelection(binding.viewPager.currentItem)
+        adapter.submitTabs(tabs)
+        syncFragmentMap(tabs)
+        applyPendingRestoreOrSelection(tabs)
+    }
+
+    private fun applyPendingRestoreOrSelection(tabs: List<RssTabItem>) {
+        if (tabs.isEmpty()) {
+            pendingRestorePosition = null
+            return
         }
+        val restorePos = pendingRestorePosition
+        if (restorePos != null) {
+            pendingRestorePosition = null
+            val target = restorePos.coerceIn(0, tabs.lastIndex)
+            binding.viewPager.setCurrentItem(target, false)
+            updateTabSelection(target)
+        } else {
+            updateTabSelection(binding.viewPager.currentItem.coerceIn(0, tabs.lastIndex))
+        }
+    }
+
+    private fun syncFragmentMap(tabs: List<RssTabItem>) {
+        val activeSortNames = HashSet<String>(tabs.size)
+        for (tab in tabs) {
+            activeSortNames.add(tab.sortName)
+            supportFragmentManager.findFragmentByTag("f${tab.itemId}")?.let { fragment ->
+                fragmentMap[tab.sortName] = fragment
+            }
+        }
+        fragmentMap.keys.retainAll(activeSortNames)
     }
 
     private fun setSourceVariable() {
@@ -675,34 +739,37 @@ class RssSortActivity : VMBaseActivity<ActivityRssArtivlesBinding, RssSortViewMo
         viewModel.rssSource?.setVariable(variable)
     }
 
-    private inner class TabFragmentPageAdapter :
-        FragmentStatePagerAdapter(supportFragmentManager, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+    private inner class TabFragmentPageAdapter : FragmentStateAdapter(this) {
 
-        override fun getItemPosition(`object`: Any): Int {
-            return POSITION_NONE
+        private var tabs: List<RssTabItem> = emptyList()
+        private var itemIds: Set<Long> = emptySet()
+
+        fun submitTabs(newTabs: List<RssTabItem>) {
+            if (tabs == newTabs) return
+            val oldTabs = tabs
+            val diffResult = DiffUtil.calculateDiff(
+                RssTabDiffCallback(oldTabs, newTabs) { it.itemId }
+            )
+            tabs = newTabs
+            itemIds = newTabs.mapTo(HashSet(newTabs.size)) { it.itemId }
+            diffResult.dispatchUpdatesTo(this)
         }
 
-        override fun getPageTitle(position: Int): CharSequence {
-            return sortList[position].first
-        }
+        override fun getItemCount(): Int = tabs.size
 
-        override fun getItem(position: Int): Fragment {
-            val sort = sortList[position]
-            return RssArticlesFragment(sort.first, sort.second, viewModel.searchKey) //获取内容界面
-        }
+        override fun getItemId(position: Int): Long = tabs[position].itemId
 
-        override fun getCount(): Int {
-            return sortList.size
-        }
+        override fun containsItem(itemId: Long): Boolean = itemIds.contains(itemId)
 
-        override fun instantiateItem(container: ViewGroup, position: Int): Any {
-            val fragment = super.instantiateItem(container, position) as Fragment
-            fragmentMap[sortList[position].first] = fragment
-            return fragment
+        override fun createFragment(position: Int): Fragment {
+            val tab = tabs[position]
+            return RssArticlesFragment(tab.sortName, tab.sortUrl, tab.searchKey)
         }
     }
 
     companion object {
+        private const val STATE_CURRENT_POSITION = "CURRENT_POSITION"
+
         fun start(
             context: Context,
             sortUrl: String?,

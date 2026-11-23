@@ -38,19 +38,14 @@ abstract class HorizontalPageDelegate(readView: ReadView) : PageDelegate(readVie
     /**
      * Capture page-turn bitmaps while idle so the first finger swipe does not pay
      * full Lottie hierarchy draw cost on the gesture thread.
-     * step 0/1/2 capture one page; 3 refreshes any still-dirty pages.
+     * step 0/1/2 capture cur/next/prev page respectively.
      */
     override fun prewarmPageSnapshots(step: Int) {
         if (isRunning || isStarted) return
         when (step) {
-            0 -> ensurePageSnap(curPage, curRecorder, curSnapRev) { curSnapRev = it }
-            1 -> ensurePageSnap(nextPage, nextRecorder, nextSnapRev) { nextSnapRev = it }
-            2 -> ensurePageSnap(prevPage, prevRecorder, prevSnapRev) { prevSnapRev = it }
-            else -> {
-                ensurePageSnap(curPage, curRecorder, curSnapRev) { curSnapRev = it }
-                ensurePageSnap(nextPage, nextRecorder, nextSnapRev) { nextSnapRev = it }
-                ensurePageSnap(prevPage, prevRecorder, prevSnapRev) { prevSnapRev = it }
-            }
+            0 -> ensurePageSnap(curPage, curRecorder, curSnapRev, rethrowOnFailure = true) { curSnapRev = it }
+            1 -> ensurePageSnap(nextPage, nextRecorder, nextSnapRev, rethrowOnFailure = true) { nextSnapRev = it }
+            2 -> ensurePageSnap(prevPage, prevRecorder, prevSnapRev, rethrowOnFailure = true) { prevSnapRev = it }
         }
     }
 
@@ -58,6 +53,7 @@ abstract class HorizontalPageDelegate(readView: ReadView) : PageDelegate(readVie
         page: PageView,
         recorder: io.legado.app.utils.canvasrecorder.CanvasRecorder,
         cachedRev: Long,
+        rethrowOnFailure: Boolean = false,
         commitRev: (Long) -> Unit,
     ): Boolean {
         if (page.width <= 0 || page.height <= 0) {
@@ -69,14 +65,15 @@ abstract class HorizontalPageDelegate(readView: ReadView) : PageDelegate(readVie
         if (cachedRev == rev && recorder.width == page.width && recorder.height == page.height && !recorder.isDirty()) {
             return true
         }
-        return runCatching {
+        return try {
             page.screenshot(recorder)
             commitRev(rev)
             true
-        }.getOrElse { error ->
+        } catch (error: Throwable) {
             recorder.invalidate()
             commitRev(-1L)
             AppLog.put("Page-turn recorder capture failed", error)
+            if (rethrowOnFailure) throw error
             false
         }
     }
@@ -128,7 +125,7 @@ abstract class HorizontalPageDelegate(readView: ReadView) : PageDelegate(readVie
     internal fun rejectSnapshotCapture() {
         snapshotCaptureReady = false
         isCancel = true
-        if (!scroller.isFinished) scroller.abortAnimation()
+        abortScroller()
         isStarted = false
         isMoved = false
         isRunning = false
@@ -222,9 +219,9 @@ abstract class HorizontalPageDelegate(readView: ReadView) : PageDelegate(readVie
         isStarted = false
         isMoved = false
         isRunning = false
-        if (!scroller.isFinished) {
+        if (!isScrollerFinished()) {
             readView.isAbortAnim = true
-            scroller.abortAnimation()
+            abortScroller()
             if (!isCancel) {
                 readView.fillPage(mDirection)
                 flushDeferredAnimationRefresh()

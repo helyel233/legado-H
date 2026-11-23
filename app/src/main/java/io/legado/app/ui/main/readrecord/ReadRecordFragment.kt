@@ -59,7 +59,6 @@ import io.legado.app.ui.glass.GlassSurface
 import io.legado.app.ui.glass.panelContentBaseColor
 import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.image.ImageCropContract
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.widget.MainTopBarView
 import io.legado.app.ui.widget.RoundedTagBarView
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
@@ -86,15 +85,7 @@ import java.time.format.TextStyle
 import java.util.Date
 import java.util.Locale
 
-class ReadRecordFragment() : BaseFragment(R.layout.activity_read_record), MainFragmentInterface {
-
-    constructor(position: Int) : this() {
-        arguments = Bundle().apply {
-            putInt("position", position)
-        }
-    }
-
-    override val position: Int? get() = arguments?.getInt("position")
+class ReadRecordFragment : BaseFragment(R.layout.activity_read_record) {
 
     private val binding by viewBinding(ActivityReadRecordBinding::bind)
     private val headlineFormatter by lazy {

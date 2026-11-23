@@ -45,6 +45,15 @@ abstract class PageDelegate(protected val readView: ReadView) {
         Scroller(readView.context, scrollInterpolator())
     }
 
+    protected val floatScroller: FloatPageScroller by lazy {
+        FloatPageScroller(scrollInterpolator())
+    }
+
+    protected var isFlingScrolling = false
+        private set
+
+    open val supportsSafePrewarm: Boolean = true
+
     private val snackBar: Snackbar by lazy {
         Snackbar.make(readView, "", Snackbar.LENGTH_SHORT)
     }
@@ -69,37 +78,72 @@ abstract class PageDelegate(protected val readView: ReadView) {
         startX: Int, startY: Int, velocityX: Int, velocityY: Int,
         minX: Int, maxX: Int, minY: Int, maxY: Int
     ) {
+        if (!floatScroller.isFinished) {
+            floatScroller.abortAnimation()
+        }
         scroller.fling(startX, startY, velocityX, velocityY, minX, maxX, minY, maxY)
+        isFlingScrolling = true
         isRunning = true
         isStarted = true
         readView.postInvalidateOnAnimation()
     }
 
     protected fun startScroll(startX: Int, startY: Int, dx: Int, dy: Int, animationSpeed: Int) {
-        if (dx == 0 && dy == 0) {
+        startScroll(startX.toFloat(), startY.toFloat(), dx.toFloat(), dy.toFloat(), animationSpeed)
+    }
+
+    protected fun startScroll(
+        startX: Float,
+        startY: Float,
+        dx: Float,
+        dy: Float,
+        animationSpeed: Int
+    ) {
+        if (dx == 0f && dy == 0f) {
             isStarted = true
             onAnimStop()
             stopScroll()
             return
         }
-        val duration = if (dx != 0) {
-            (animationSpeed * abs(dx)) / viewWidth
+        val duration = if (dx != 0f) {
+            (animationSpeed * abs(dx) / viewWidth.coerceAtLeast(1)).toInt()
         } else {
-            (animationSpeed * abs(dy)) / viewHeight
+            (animationSpeed * abs(dy) / viewHeight.coerceAtLeast(1)).toInt()
         }.coerceAtLeast(1)
-        scroller.startScroll(startX, startY, dx, dy, duration)
+        if (isFlingScrolling && !scroller.isFinished) {
+            scroller.abortAnimation()
+        }
+        isFlingScrolling = false
+        floatScroller.setInterpolator(scrollInterpolator())
+        floatScroller.startScroll(startX, startY, dx, dy, duration)
         isRunning = true
         isStarted = true
         readView.postInvalidateOnAnimation()
     }
 
+    protected fun isScrollerFinished(): Boolean {
+        return if (isFlingScrolling) scroller.isFinished else floatScroller.isFinished
+    }
+
+    protected fun abortScroller() {
+        if (isFlingScrolling && !scroller.isFinished) {
+            scroller.abortAnimation()
+        }
+        isFlingScrolling = false
+        if (!floatScroller.isFinished) {
+            floatScroller.abortAnimation()
+        }
+    }
+
     protected fun stopScroll() {
         isStarted = false
+        isFlingScrolling = false
         readView.post {
             isMoved = false
             isRunning = false
             flushDeferredAnimationRefresh()
             readView.flushPendingAdvancedTitleCompositions()
+            readView.schedulePageTurnPrewarm()
             readView.postInvalidateOnAnimation()
         }
     }
@@ -111,8 +155,16 @@ abstract class PageDelegate(protected val readView: ReadView) {
     }
 
     open fun computeScroll() {
-        if (scroller.computeScrollOffset()) {
-            readView.setTouchPoint(scroller.currX.toFloat(), scroller.currY.toFloat())
+        if (isFlingScrolling) {
+            if (scroller.computeScrollOffset()) {
+                readView.setTouchPoint(scroller.currX.toFloat(), scroller.currY.toFloat())
+            } else if (isStarted) {
+                isFlingScrolling = false
+                onAnimStop()
+                stopScroll()
+            }
+        } else if (floatScroller.computeScrollOffset()) {
+            readView.setTouchPoint(floatScroller.currX, floatScroller.currY)
         } else if (isStarted) {
             onAnimStop()
             stopScroll()
@@ -234,10 +286,10 @@ abstract class PageDelegate(protected val readView: ReadView) {
 
     /**
      * Idle pre-capture for page-turn bitmaps (cover/slide/simulation).
-     * step: 0=cur, 1=next, 2=prev, 3=all dirty pages.
+     * step: 0=cur, 1=next, 2=prev.
      * Scroll mode no-ops.
      */
-    open fun prewarmPageSnapshots(step: Int = 3) = Unit
+    open fun prewarmPageSnapshots(step: Int) = Unit
 
     open fun onDestroy() {
         // run on destroy

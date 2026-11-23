@@ -2,13 +2,22 @@ package io.legado.app.ui.book.read.page.delegate
 
 import android.graphics.Canvas
 import android.graphics.drawable.GradientDrawable
+import android.view.animation.Interpolator
+import android.view.animation.LinearInterpolator
+import android.view.animation.PathInterpolator
 import androidx.core.graphics.withClip
 import androidx.core.graphics.withTranslation
+import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.read.page.ReadView
 import io.legado.app.ui.book.read.page.entities.PageDirection
 
 class CoverPageDelegate(readView: ReadView) : HorizontalPageDelegate(readView) {
     private val shadowDrawableR: GradientDrawable
+    private val easeOutInterpolator by lazy { PathInterpolator(0.25f, 0.1f, 0.25f, 1f) }
+    private val linearInterpolator by lazy { LinearInterpolator() }
+
+    override fun scrollInterpolator(): Interpolator =
+        if (AppConfig.isEInkMode) linearInterpolator else easeOutInterpolator
 
     init {
         val shadowColors = intArrayOf(0x66111111, 0x00000000)
@@ -115,7 +124,7 @@ class CoverPageDelegate(readView: ReadView) : HorizontalPageDelegate(readView) {
                     viewWidth - (touchX - startX)
                 }
         }
-        startScroll(touchX.toInt(), 0, distanceX.toInt(), 0, animationSpeed)
+        startScroll(touchX, 0f, distanceX, 0f, animationSpeed)
     }
 
 }

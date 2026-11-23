@@ -1495,6 +1495,7 @@
     <string name="record_heap_dump_t">记录堆转储</string>
     <string name="font_weight_text">中/粗/细</string>
     <string name="enable_optimize_render">启用绘制优化</string>
+    <string name="enable_page_turn_prewarm">预热翻页渲染缓存</string>
     <string name="ignore_battery_permission_rationale">阅读需要请求后台权限以保持服务正常运行</string>
     <string name="simulated_reading">模拟追读</string>
     <string name="switch_on">开关</string>

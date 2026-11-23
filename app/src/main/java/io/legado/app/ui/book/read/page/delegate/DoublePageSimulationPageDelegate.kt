@@ -1,13 +1,12 @@
 package io.legado.app.ui.book.read.page.delegate
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
+import androidx.core.graphics.withClip
 import io.legado.app.ui.book.read.page.ReadView
 import io.legado.app.ui.book.read.page.entities.PageDirection
+import io.legado.app.utils.canvasrecorder.CanvasRecorder
 import kotlin.math.abs
 import kotlin.math.cos
 
@@ -15,8 +14,6 @@ class DoublePageSimulationPageDelegate(readView: ReadView) : HorizontalPageDeleg
 
     private val pagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val shadePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val srcRect = Rect()
-    private val dstRect = RectF()
     private val seamShadow = GradientDrawable(
         GradientDrawable.Orientation.LEFT_RIGHT,
         intArrayOf(0x22111111, 0x00000000, 0x22111111)
@@ -25,33 +22,6 @@ class DoublePageSimulationPageDelegate(readView: ReadView) : HorizontalPageDeleg
         GradientDrawable.Orientation.LEFT_RIGHT,
         intArrayOf(0x55111111, 0x00111111)
     )
-
-    private var curBitmap: Bitmap? = null
-    private var prevBitmap: Bitmap? = null
-    private var nextBitmap: Bitmap? = null
-    private val bitmapCanvas = Canvas()
-
-    override fun setBitmap(): Boolean {
-        return when (mDirection) {
-            PageDirection.PREV -> {
-                val previous = captureBitmapSnapshot(prevPage, prevBitmap, bitmapCanvas)
-                prevBitmap = previous
-                val current = captureBitmapSnapshot(curPage, curBitmap, bitmapCanvas)
-                curBitmap = current
-                previous != null && current != null
-            }
-
-            PageDirection.NEXT -> {
-                val next = captureBitmapSnapshot(nextPage, nextBitmap, bitmapCanvas)
-                nextBitmap = next
-                val current = captureBitmapSnapshot(curPage, curBitmap, bitmapCanvas)
-                curBitmap = current
-                next != null && current != null
-            }
-
-            else -> true
-        }
-    }
 
     override fun onDraw(canvas: Canvas) {
         if (!isRunning || viewWidth <= 0 || viewHeight <= 0) return
@@ -63,44 +33,42 @@ class DoublePageSimulationPageDelegate(readView: ReadView) : HorizontalPageDeleg
     }
 
     private fun drawNext(canvas: Canvas) {
-        val cur = curBitmap ?: return
-        val next = nextBitmap ?: return
+        if (curRecorder.width <= 0 || nextRecorder.width <= 0) return
         val halfWidth = viewWidth / 2f
         val progress = displayProgress((-horizontalOffset() / viewWidth).coerceIn(0f, 1f))
         val foldWidth = projectedWidth(halfWidth, progress)
 
-        drawHalf(canvas, cur, leftPage = true, left = 0f, right = halfWidth)
-        drawHalf(canvas, next, leftPage = false, left = halfWidth, right = viewWidth.toFloat())
+        drawHalf(canvas, curRecorder, leftPage = true, left = 0f, right = halfWidth)
+        drawHalf(canvas, nextRecorder, leftPage = false, left = halfWidth, right = viewWidth.toFloat())
         drawSeam(canvas, halfWidth)
 
         if (progress < 0.5f) {
-            drawHalf(canvas, cur, leftPage = false, left = halfWidth, right = halfWidth + foldWidth)
+            drawHalf(canvas, curRecorder, leftPage = false, left = halfWidth, right = halfWidth + foldWidth)
             drawMovingPageShade(canvas, halfWidth, halfWidth + foldWidth, progress)
             drawEdgeShadow(canvas, halfWidth + foldWidth, leftFacing = false)
         } else {
-            drawHalf(canvas, next, leftPage = true, left = halfWidth - foldWidth, right = halfWidth)
+            drawHalf(canvas, nextRecorder, leftPage = true, left = halfWidth - foldWidth, right = halfWidth)
             drawMovingPageShade(canvas, halfWidth - foldWidth, halfWidth, progress)
             drawEdgeShadow(canvas, halfWidth - foldWidth, leftFacing = true)
         }
     }
 
     private fun drawPrev(canvas: Canvas) {
-        val cur = curBitmap ?: return
-        val prev = prevBitmap ?: return
+        if (curRecorder.width <= 0 || prevRecorder.width <= 0) return
         val halfWidth = viewWidth / 2f
         val progress = displayProgress((horizontalOffset() / viewWidth).coerceIn(0f, 1f))
         val foldWidth = projectedWidth(halfWidth, progress)
 
-        drawHalf(canvas, prev, leftPage = true, left = 0f, right = halfWidth)
-        drawHalf(canvas, cur, leftPage = false, left = halfWidth, right = viewWidth.toFloat())
+        drawHalf(canvas, prevRecorder, leftPage = true, left = 0f, right = halfWidth)
+        drawHalf(canvas, curRecorder, leftPage = false, left = halfWidth, right = viewWidth.toFloat())
         drawSeam(canvas, halfWidth)
 
         if (progress < 0.5f) {
-            drawHalf(canvas, cur, leftPage = true, left = halfWidth - foldWidth, right = halfWidth)
+            drawHalf(canvas, curRecorder, leftPage = true, left = halfWidth - foldWidth, right = halfWidth)
             drawMovingPageShade(canvas, halfWidth - foldWidth, halfWidth, progress)
             drawEdgeShadow(canvas, halfWidth - foldWidth, leftFacing = true)
         } else {
-            drawHalf(canvas, prev, leftPage = false, left = halfWidth, right = halfWidth + foldWidth)
+            drawHalf(canvas, prevRecorder, leftPage = false, left = halfWidth, right = halfWidth + foldWidth)
             drawMovingPageShade(canvas, halfWidth, halfWidth + foldWidth, progress)
             drawEdgeShadow(canvas, halfWidth + foldWidth, leftFacing = false)
         }
@@ -123,20 +91,34 @@ class DoublePageSimulationPageDelegate(readView: ReadView) : HorizontalPageDeleg
 
     private fun drawHalf(
         canvas: Canvas,
-        bitmap: Bitmap,
+        recorder: CanvasRecorder,
         leftPage: Boolean,
         left: Float,
         right: Float
     ) {
-        if (right <= left) return
-        val sourceHalf = bitmap.width / 2
-        if (leftPage) {
-            srcRect.set(0, 0, sourceHalf, bitmap.height)
-        } else {
-            srcRect.set(sourceHalf, 0, bitmap.width, bitmap.height)
+        val targetWidth = right - left
+        val sourceWidth = recorder.width.toFloat()
+        val sourceHeight = recorder.height.toFloat()
+        if (targetWidth <= 0f || sourceWidth <= 0f || sourceHeight <= 0f) return
+        val sourceHalf = sourceWidth / 2f
+        val scaleX = targetWidth / sourceHalf
+        val tx = if (leftPage) left else left - targetWidth
+        canvas.withClip(left, 0f, right, viewHeight.toFloat()) {
+            if (scaleX < 0.999f) {
+                val saveCount = saveLayer(left, 0f, right, viewHeight.toFloat(), pagePaint)
+                try {
+                    translate(tx, 0f)
+                    scale(scaleX, 1f)
+                    recorder.draw(this)
+                } finally {
+                    restoreToCount(saveCount)
+                }
+            } else {
+                translate(tx, 0f)
+                scale(scaleX, 1f)
+                recorder.draw(this)
+            }
         }
-        dstRect.set(left, 0f, right, viewHeight.toFloat())
-        canvas.drawBitmap(bitmap, srcRect, dstRect, pagePaint)
     }
 
     private fun drawSeam(canvas: Canvas, centerX: Float) {
@@ -194,22 +176,12 @@ class DoublePageSimulationPageDelegate(readView: ReadView) : HorizontalPageDeleg
 
             else -> 0f
         }
-        startScroll(touchX.toInt(), 0, distanceX.toInt(), 0, animationSpeed)
+        startScroll(touchX, 0f, distanceX, 0f, animationSpeed)
     }
 
     override fun onAnimStop() {
         if (!isCancel) {
             readView.fillPage(mDirection)
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        curBitmap?.recycle()
-        prevBitmap?.recycle()
-        nextBitmap?.recycle()
-        curBitmap = null
-        prevBitmap = null
-        nextBitmap = null
     }
 }

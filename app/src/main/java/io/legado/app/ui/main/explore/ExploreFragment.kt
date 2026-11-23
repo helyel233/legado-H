@@ -107,7 +107,6 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.common.UiErrorMapper
 import io.legado.app.ui.common.UiErrorType
-import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.wallpaperGlassSignature
 import io.legado.app.ui.video.VideoBookPreloader
@@ -171,18 +170,9 @@ import splitties.init.appCtx
 /**
  * 发现页面
  */
-class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explore),
-    MainFragmentInterface,
+class ExploreFragment : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explore),
     ExploreAdapter.CallBack,
     ExploreShowBookCallback {
-
-    constructor(position: Int) : this() {
-        val bundle = Bundle()
-        bundle.putInt("position", position)
-        arguments = bundle
-    }
-
-    override val position: Int? get() = arguments?.getInt("position")
 
     override val viewModel by viewModels<ExploreViewModel>()
     private val binding by viewBinding(FragmentExploreBinding::bind)
@@ -4413,7 +4403,7 @@ private const val DISCOVERY_CLASSIC_FLOW_COALESCE_DELAY_MS = 120L
 
 /**
  * 进程内记忆经典发现模式的浏览位置与展开的源。
- * 主页 ViewPager 用 FragmentStatePagerAdapter，tab 切远后 Fragment 实例会被销毁，
+ * 主页 ViewPager2 用 FragmentStateAdapter，tab 切远后 Fragment 实例会被销毁，
  * 仅靠实例成员无法恢复，须放在跨实例存活的地方（不落盘，重启后从头浏览）。
  */
 private var classicLastScrollPosition = -1
