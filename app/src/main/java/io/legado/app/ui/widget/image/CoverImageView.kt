@@ -38,7 +38,7 @@ import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
 import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
-import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.fallbackCoverStrokeColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.titleTextColor
 import io.legado.app.model.BookCover
@@ -232,7 +232,7 @@ class CoverImageView @JvmOverloads constructor(
         val bitmapCanvas = Canvas(bitmap)
         var startX = width * 0.2f
         var startY = viewHeight * 0.2f
-        val backgroundColor = appCtx.backgroundColor
+        val strokeColor = appCtx.fallbackCoverStrokeColor
         val nameColor = appCtx.titleTextColor
         val authorColor = appCtx.secondaryTextColor
         val namePaint = TextPaint().apply {
@@ -245,7 +245,7 @@ class CoverImageView @JvmOverloads constructor(
             namePaint.textSize = viewWidth / 7
             namePaint.strokeWidth = namePaint.textSize / 6
             name.forEachIndexed { index, char ->
-                namePaint.color = backgroundColor
+                namePaint.color = strokeColor
                 namePaint.style = Paint.Style.STROKE
                 bitmapCanvas.drawText(char, startX, startY, namePaint)
                 namePaint.color = nameColor
@@ -284,7 +284,7 @@ class CoverImageView @JvmOverloads constructor(
             startY = viewHeight * 0.95f - author.size * authorPaint.textHeight
             startY = maxOf(startY, viewHeight * 0.3f)
             author.forEach {
-                authorPaint.color = backgroundColor
+                authorPaint.color = strokeColor
                 authorPaint.style = Paint.Style.STROKE
                 bitmapCanvas.drawText(it, startX, startY, authorPaint)
                 authorPaint.color = authorColor
@@ -303,7 +303,7 @@ class CoverImageView @JvmOverloads constructor(
         return listOf(
             pathName,
             width.toString(),
-            appCtx.backgroundColor.toString(),
+            appCtx.fallbackCoverStrokeColor.toString(),
             appCtx.titleTextColor.toString(),
             appCtx.secondaryTextColor.toString()
         ).joinToString("|")

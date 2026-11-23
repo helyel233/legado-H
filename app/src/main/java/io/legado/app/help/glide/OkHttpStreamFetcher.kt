@@ -32,7 +32,64 @@ import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
+
+internal class FailedUrlCache(
+    private val maxEntries: Int = DEFAULT_MAX_FAIL_URLS,
+    private val ttlMs: Long = DEFAULT_FAIL_URL_TTL_MS,
+    private val timeProvider: () -> Long = { System.currentTimeMillis() }
+) {
+    private val lock = Any()
+    private val map = object : LinkedHashMap<String, Long>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>): Boolean {
+            return size > maxEntries
+        }
+    }
+
+    fun add(url: String) {
+        if (maxEntries <= 0 || ttlMs <= 0L) return
+        val now = timeProvider()
+        synchronized(lock) {
+            map[url] = now
+        }
+    }
+
+    fun contains(url: String): Boolean {
+        if (maxEntries <= 0 || ttlMs <= 0L) return false
+        val now = timeProvider()
+        synchronized(lock) {
+            val failedAt = map[url] ?: return false
+            if (now - failedAt >= ttlMs) {
+                map.remove(url)
+                return false
+            }
+            return true
+        }
+    }
+
+    fun remove(url: String) {
+        synchronized(lock) {
+            map.remove(url)
+        }
+    }
+
+    fun clear() {
+        synchronized(lock) {
+            map.clear()
+        }
+    }
+
+    fun size(): Int {
+        synchronized(lock) {
+            return map.size
+        }
+    }
+
+    companion object {
+        const val DEFAULT_MAX_FAIL_URLS = 512
+        const val DEFAULT_FAIL_URL_TTL_MS = 60_000L
+    }
+}
 
 
 class OkHttpStreamFetcher(
@@ -53,8 +110,8 @@ class OkHttpStreamFetcher(
     private var call: Call? = null
 
     companion object {
-        // loadData 在 Glide 线程读取，onResponse/onFailure 在 OkHttp 回调线程写入，需线程安全集合
-        private val failUrl: MutableSet<String> = ConcurrentHashMap.newKeySet()
+        // loadData 在 Glide 线程读取，onResponse/onFailure 在 OkHttp 回调线程写入，需有界 TTL LRU 缓存
+        internal val failUrl = FailedUrlCache()
     }
 
     override fun loadData(priority: Priority, callback: DataFetcher.DataCallback<in InputStream>) {
@@ -170,6 +227,9 @@ class OkHttpStreamFetcher(
             }
             callback?.onLoadFailed(NoStackTraceException("封面二次解密失败"))
         } else {
+            if (!manga) {
+                failUrl.remove(url.toStringUrl())
+            }
             val contentLength: Long =
                 if (inputStream is ByteArrayInputStream) inputStream.available().toLong()
                 else responseBody!!.contentLength()

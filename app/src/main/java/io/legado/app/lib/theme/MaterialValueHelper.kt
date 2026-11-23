@@ -82,6 +82,35 @@ val Context.backgroundColor: Int
         ThemeStore.backgroundColor(this)
     }
 
+/**
+ * 解析无封面（或默认封面）标题/作者文字描边色：
+ * 开启主题壁纸时 [Context.backgroundColor] 会返回 [Color.TRANSPARENT]，
+ * 此时回落到不透明的主题卡片底色，再由 [resolveFallbackCoverStrokeColor] 强制满不透明度，
+ * 避免描边变为全透明而消失。
+ */
+val Context.fallbackCoverStrokeColor: Int
+    @ColorInt
+    get() = resolveFallbackCoverStrokeColor(
+        backgroundColor = backgroundColor,
+        surfaceFallbackColor = themeCardColorOrDefault(),
+        isNight = AppConfig.isNightTheme
+    )
+
+@ColorInt
+fun resolveFallbackCoverStrokeColor(
+    @ColorInt backgroundColor: Int,
+    @ColorInt surfaceFallbackColor: Int,
+    isNight: Boolean
+): Int {
+    val chosen = when {
+        (backgroundColor ushr 24) != 0 -> backgroundColor
+        (surfaceFallbackColor ushr 24) != 0 -> surfaceFallbackColor
+        isNight -> 0xFF121212.toInt()
+        else -> 0xFFFFFFFF.toInt()
+    }
+    return (chosen and 0x00FFFFFF) or (0xFF shl 24)
+}
+
 val Context.bottomBackground: Int
     get() = ThemeStore.bottomBackground(this)
 

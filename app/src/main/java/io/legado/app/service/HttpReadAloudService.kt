@@ -69,6 +69,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
@@ -143,6 +144,14 @@ class HttpReadAloudService : BaseReadAloudService(),
     private var playIndexJob: Job? = null
     private var playErrorNo = 0
     private val downloadTaskActiveLock = Mutex()
+    private val systemTtsCoordinator by lazy {
+        SystemTtsSynthesisCoordinator(
+            mainDispatcher = Main,
+            createEngine = { engine, callback ->
+                createSystemTtsEngine(engine, callback)
+            }
+        )
+    }
 
     private data class NextChapterSpeechPlan(
         val chapter: TextChapter,
@@ -181,6 +190,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onDestroy() {
         super.onDestroy()
         downloadTask?.cancel()
+        systemTtsCoordinator.release()
         exoPlayer.release()
         cache.release()
         Coroutine.async(Coroutine.defaultScope) {
@@ -304,6 +314,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 ensureActive()
                 val httpTts = ReadAloud.httpTTS
                 val requests = buildCurrentAudioRequests(httpTts)
+                pruneSpeakCacheFiles(requests)
                 val chunkSize = maxSynthesisThreadCount(requests)
                 requests.chunked(chunkSize).forEach { chunk ->
                     ensureActive()
@@ -315,7 +326,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                         }
                     }
                 }
-                preDownloadAudios(httpTts)
+                preDownloadAudios(httpTts, requests)
             }
         }.onError {
             if (it is CancellationException) return@onError
@@ -323,8 +334,14 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
-    private suspend fun preDownloadAudios(httpTts: HttpTTS?) {
+    private suspend fun preDownloadAudios(
+        httpTts: HttpTTS?,
+        currentRequests: List<SpeakAudioRequest>
+    ) {
         val requests = waitForNextChapterAudioRequests(httpTts)
+        if (requests.isNotEmpty()) {
+            pruneSpeakCacheFiles(currentRequests + requests)
+        }
         prepareAudioRequests(requests, pauseOnFailure = false)
     }
 
@@ -336,6 +353,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 ensureActive()
                 val httpTts = ReadAloud.httpTTS
                 val requests = buildCurrentAudioRequests(httpTts)
+                pruneSpeakCacheFiles(requests)
                 val workerCount = maxSynthesisThreadCount(requests)
                 val downloaderChannel = Channel<AudioDownloadTask>((workerCount * 2).coerceAtLeast(4))
                 repeat(workerCount) {
@@ -362,7 +380,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                             exoPlayer.addMediaSource(mediaSource)
                         }
                     }
-                    preDownloadAudiosStream(httpTts, downloaderChannel)
+                    preDownloadAudiosStream(httpTts, downloaderChannel, requests)
                 } finally {
                     downloaderChannel.close()
                 }
@@ -375,9 +393,14 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     private suspend fun preDownloadAudiosStream(
         httpTts: HttpTTS?,
-        downloaderChannel: Channel<AudioDownloadTask>
+        downloaderChannel: Channel<AudioDownloadTask>,
+        currentRequests: List<SpeakAudioRequest>
     ) {
-        waitForNextChapterAudioRequests(httpTts).forEach { request ->
+        val nextRequests = waitForNextChapterAudioRequests(httpTts)
+        if (nextRequests.isNotEmpty()) {
+            pruneSpeakCacheFiles(currentRequests + nextRequests)
+        }
+        nextRequests.forEach { request ->
             currentCoroutineContext().ensureActive()
             val dataSourceFactory = createDataSourceFactory(
                 request.httpTts,
@@ -456,7 +479,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             index = index,
             text = text,
             speakText = speakText,
-            fileName = md5SpeakFileName(text, chapter, route),
+            fileName = md5SpeakFileName(text, chapter, route, httpTts),
             route = route,
             speechItem = speechItem,
             httpTts = httpTts
@@ -950,59 +973,106 @@ class HttpReadAloudService : BaseReadAloudService(),
     ): Boolean {
         val file = createSpeakFile(fileName)
         if (file.exists() && file.length() > 0L) return true
-        return runCatching {
+        return try {
             val engine = resolveSystemTtsEngine(route.engineValue)
-            val initResult = CompletableDeferred<Int>()
-            val tts = withContext(Main) {
-                if (engine.isNullOrBlank()) {
-                    TextToSpeech(this@HttpReadAloudService) { status ->
-                        initResult.complete(status)
-                    }
-                } else {
-                    TextToSpeech(this@HttpReadAloudService, { status ->
-                        initResult.complete(status)
-                    }, engine)
-                }
+            val targetRate = if (!AppConfig.ttsFlowSys) {
+                (AppConfig.ttsSpeechRate + 5) / 10f
+            } else {
+                null
             }
-            try {
-                if (withTimeout(20_000L) { initResult.await() } != TextToSpeech.SUCCESS) {
-                    return@runCatching false
+            val success = systemTtsCoordinator.synthesize(
+                engine = engine,
+                speakText = speakText,
+                outputFile = file,
+                speechRate = targetRate
+            )
+            if (!success) {
+                file.takeIf { it.exists() && it.length() <= 0L }?.delete()
+            }
+            success
+        } catch (e: CancellationException) {
+            file.takeIf { it.exists() && it.length() <= 0L }?.delete()
+            throw e
+        } catch (t: Throwable) {
+            file.takeIf { it.exists() && it.length() <= 0L }?.delete()
+            AppLog.put("系统 TTS 合成失败，使用静音占位\n${t.localizedMessage ?: t.javaClass.simpleName}", t)
+            false
+        }
+    }
+
+    private suspend fun createSystemTtsEngine(
+        engine: String?,
+        callback: SystemTtsUtteranceCallback
+    ): SystemTtsEngineAdapter? {
+        val initResult = CompletableDeferred<Int>()
+        val tts = withContext(Main) {
+            if (engine.isNullOrBlank()) {
+                TextToSpeech(this@HttpReadAloudService) { status ->
+                    initResult.complete(status)
                 }
-                if (!AppConfig.ttsFlowSys) {
-                    tts.setSpeechRate((AppConfig.ttsSpeechRate + 5) / 10f)
+            } else {
+                TextToSpeech(this@HttpReadAloudService, { status ->
+                    initResult.complete(status)
+                }, engine)
+            }
+        }
+        var handoff = false
+        return try {
+            if (initResult.await() != TextToSpeech.SUCCESS) {
+                return null
+            }
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) = Unit
+
+                override fun onDone(utteranceId: String?) {
+                    callback.onDone(utteranceId)
                 }
-                val utteranceId = "mixed_tts_$fileName"
-                val done = CompletableDeferred<Boolean>()
-                tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) = Unit
 
-                    override fun onDone(utteranceId: String?) {
-                        done.complete(true)
-                    }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    callback.onError(utteranceId)
+                }
 
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) {
-                        done.complete(false)
-                    }
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    callback.onError(utteranceId)
+                }
 
-                    override fun onError(utteranceId: String?, errorCode: Int) {
-                        done.complete(false)
-                    }
-                })
-                val params = Bundle()
-                val result = tts.synthesizeToFile(speakText, params, file, utteranceId)
-                if (result == TextToSpeech.ERROR) return@runCatching false
-                withTimeout(120_000L) { done.await() } && file.exists() && file.length() > 0L
-            } finally {
-                withContext(Main) {
+                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                    callback.onError(utteranceId)
+                }
+            })
+            handoff = true
+            object : SystemTtsEngineAdapter {
+                override fun setSpeechRate(rate: Float) {
+                    tts.setSpeechRate(rate)
+                }
+
+                override fun synthesizeToFile(
+                    text: String,
+                    outputFile: File,
+                    utteranceId: String
+                ): Boolean {
+                    return tts.synthesizeToFile(text, Bundle(), outputFile, utteranceId) != TextToSpeech.ERROR
+                }
+
+                override fun stop() {
                     tts.stop()
+                }
+
+                override fun shutdown() {
                     tts.shutdown()
                 }
             }
-        }.onFailure {
-            file.takeIf { it.exists() && it.length() <= 0L }?.delete()
-            AppLog.put("系统 TTS 合成失败，使用静音占位\n${it.localizedMessage ?: it.javaClass.simpleName}", it)
-        }.getOrDefault(false)
+        } finally {
+            if (!handoff) {
+                withContext(NonCancellable + Main) {
+                    runCatching {
+                        tts.stop()
+                        tts.shutdown()
+                    }
+                }
+            }
+        }
     }
 
     private fun resolveSystemTtsEngine(engineValue: String): String? {
@@ -1016,12 +1086,19 @@ class HttpReadAloudService : BaseReadAloudService(),
     private fun md5SpeakFileName(
         content: String,
         textChapter: TextChapter? = this.textChapter,
-        route: SpeechRoute? = null
+        route: SpeechRoute? = null,
+        httpTts: HttpTTS? = ReadAloud.httpTTS
     ): String {
-        val routeKey = route?.takeIf { it.isConfigured }?.toJson().orEmpty()
-        val engineKey = ReadAloud.httpTTS?.url ?: ReadAloud.ttsEngine.orEmpty()
-        return MD5Utils.md5Encode16(textChapter.readAloudTitle()) + "_" +
-                MD5Utils.md5Encode16("$engineKey-|-$routeKey-|-$speechRate-|-$content")
+        return HttpReadAloudCacheKey.buildSpeakFileName(
+            chapterTitle = textChapter.readAloudTitle(),
+            content = content,
+            route = route,
+            httpTts = httpTts,
+            defaultTtsEngine = ReadAloud.ttsEngine,
+            speechRate = speechRate,
+            ttsFlowSys = AppConfig.ttsFlowSys,
+            ttsSpeechRate = AppConfig.ttsSpeechRate
+        )
     }
 
     private fun TextChapter?.readAloudTitle(): String {
@@ -1053,20 +1130,34 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    private fun pruneSpeakCacheFiles(activeRequests: List<SpeakAudioRequest>) {
+        val protectedFileNames = activeRequests
+            .mapTo(HashSet(activeRequests.size)) { "${it.fileName}.mp3" }
+        val protectedPrefixes = buildSet {
+            HttpReadAloudCachePruner.chapterPrefix(textChapter.readAloudTitle())?.let(::add)
+            HttpReadAloudCachePruner.chapterPrefix(
+                ReadBook.nextTextChapter?.takeIf { it.isCompleted }?.readAloudTitle()
+            )?.let(::add)
+        }
+        HttpReadAloudCachePruner.prune(
+            cacheDir = File(ttsFolderPath),
+            protectedFileNames = protectedFileNames,
+            protectedPrefixes = protectedPrefixes
+        )
+    }
+
     /**
      * 移除缓存文件
      */
     private fun removeCacheFile() {
-        val titleMd5 = MD5Utils.md5Encode16(textChapter.readAloudTitle())
-        FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
-            val isSilentSound = it.length() == 2160L
-            if ((!it.name.startsWith(titleMd5)
-                        && System.currentTimeMillis() - it.lastModified() > 600000)
-                || isSilentSound
-            ) {
-                FileUtils.delete(it.absolutePath)
-            }
+        val protectedPrefixes = buildSet {
+            HttpReadAloudCachePruner.chapterPrefix(textChapter.readAloudTitle())?.let(::add)
         }
+        HttpReadAloudCachePruner.prune(
+            cacheDir = File(ttsFolderPath),
+            protectedFileNames = emptySet(),
+            protectedPrefixes = protectedPrefixes
+        )
     }
 
 

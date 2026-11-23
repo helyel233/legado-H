@@ -40,7 +40,22 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     @Volatile
     private var diffVersion = 0L
 
+    @Volatile
     private var isResumed = false
+    @Volatile
+    private var hasExplicitResumeState = false
+
+    /**
+     * 子类在审计过实体 `equals()` / 快照语义后可覆写为 `true`，使 `setItems` 默认走异步 DiffUtil；
+     * 未审计子类保持 `false`（走全量 [setItemsAll]），避免依赖位置序号或可变状态的旧适配器回归。
+     *
+     * 若宿主通过 [upResumed] 显式托管前后台生命周期（如 `ExploreFragment`、`RssArticlesFragment`、
+     * `TxtTocRuleDialog`），则以宿主传入的 [isResumed] 为准：前台走 DiffUtil，后台切回 [setItemsAll] 并取消挂起 diff。
+     */
+    protected open val useDiffUtil: Boolean get() = false
+
+    private fun isDiffActive(): Boolean =
+        if (hasExplicitResumeState) isResumed else useDiffUtil
 
     var itemAnimation: ItemAnimation? = null
 
@@ -121,19 +136,26 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     protected open fun areContentsTheSame(oldItem: ITEM, newItem: ITEM): Boolean = oldItem == newItem
 
-    private val defaultDiffCallback = object : DiffUtil.ItemCallback<ITEM>() {
-        override fun areItemsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
-            return this@RecyclerAdapter.areItemsTheSame(oldItem, newItem)
-        }
+    protected open fun getChangePayload(oldItem: ITEM, newItem: ITEM): Any? = null
 
-        override fun areContentsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
-            return this@RecyclerAdapter.areContentsTheSame(oldItem, newItem)
+    protected open val diffItemCallback: DiffUtil.ItemCallback<ITEM> =
+        object : DiffUtil.ItemCallback<ITEM>() {
+            override fun areItemsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
+                return this@RecyclerAdapter.areItemsTheSame(oldItem, newItem)
+            }
+
+            override fun areContentsTheSame(oldItem: ITEM & Any, newItem: ITEM & Any): Boolean {
+                return this@RecyclerAdapter.areContentsTheSame(oldItem, newItem)
+            }
+
+            override fun getChangePayload(oldItem: ITEM & Any, newItem: ITEM & Any): Any? {
+                return this@RecyclerAdapter.getChangePayload(oldItem, newItem)
+            }
         }
-    }
 
     @Synchronized
     fun setItems(items: List<ITEM>?) {
-        setItems(items, defaultDiffCallback)
+        setItems(items, diffItemCallback)
     }
 
     @Synchronized
@@ -143,12 +165,13 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         skipDiff: Boolean = false
     ) {
         kotlin.runCatching {
-            if (!isResumed) { //全量标记更新
+            if (!isDiffActive()) { //全量标记更新
                 setItemsAll(items)
                 return@runCatching
             }
-            val oldItems = this.items.toList()
-            val itemsSize = items?.size ?: 0
+            val newItems = items?.let { synchronized(it) { ArrayList(it) } }
+            val oldItems = ArrayList(this.items)
+            val itemsSize = newItems?.size ?: 0
             val headerCount = getHeaderCount()
             val footerCount = getFooterCount()
             val callback = object : DiffUtil.Callback() {
@@ -175,7 +198,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     }
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return false
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = newItems?.getOrNull(newItemPosition - headerCount)
                         ?: return false
                     return itemCallback.areItemsTheSame(oldItem, newItem)
                 }
@@ -192,7 +215,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                     }
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = newItems?.getOrNull(newItemPosition - headerCount)
                         ?: return true
                     return itemCallback.areContentsTheSame(oldItem, newItem)
                 }
@@ -200,14 +223,10 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any? {
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return null
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = newItems?.getOrNull(newItemPosition - headerCount)
                         ?: return null
                     return itemCallback.getChangePayload(oldItem, newItem)
                 }
-            }
-            if (!isResumed) {
-                setItemsAll(items)
-                return@runCatching
             }
             diffJob?.cancel()
             val version = ++diffVersion
@@ -219,24 +238,30 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
                 ensureActive()
                 handler.post {
-                    if (version != diffVersion) {
-                        return@post
+                    val shouldDispatchDiff = synchronized(this@RecyclerAdapter) {
+                        if (version != diffVersion) {
+                            return@post
+                        }
+                        // 非活跃或 diff 计算失败才全量刷新；活跃且 diff 成功走增量 dispatch。
+                        // 原写法 `if (isResumed || diffResult == null)` 把活跃态也导向全量刷新，
+                        // 导致 dispatchUpdatesTo 永远走不到、DiffUtil 形同虚设。
+                        if (!isDiffActive() || diffResult == null) {
+                            setItemsAll(newItems)
+                            false
+                        } else {
+                            if (this@RecyclerAdapter.items.isNotEmpty()) {
+                                this@RecyclerAdapter.items.clear()
+                            }
+                            if (newItems != null) {
+                                this@RecyclerAdapter.items.addAll(newItems)
+                            }
+                            true
+                        }
                     }
-                    // 非活跃或 diff 计算失败才全量刷新；活跃且 diff 成功走增量 dispatch。
-                    // 原写法 `if (isResumed || diffResult == null)` 把活跃态也导向全量刷新，
-                    // 导致 dispatchUpdatesTo 永远走不到、DiffUtil 形同虚设。
-                    if (!isResumed || diffResult == null) {
-                        setItemsAll(items)
-                        return@post
+                    if (shouldDispatchDiff && diffResult != null) {
+                        diffResult.dispatchUpdatesTo(this@RecyclerAdapter)
+                        onCurrentListChanged()
                     }
-                    if (this@RecyclerAdapter.items.isNotEmpty()) {
-                        this@RecyclerAdapter.items.clear()
-                    }
-                    if (items != null) {
-                        this@RecyclerAdapter.items.addAll(items)
-                    }
-                    diffResult.dispatchUpdatesTo(this@RecyclerAdapter)
-                    onCurrentListChanged()
                 }
             }
         }
@@ -536,7 +561,9 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         handler.removeCallbacksAndMessages(null)
     }
 
-    fun upResumed(isResumed : Boolean) {
+    @Synchronized
+    fun upResumed(isResumed: Boolean) {
+        hasExplicitResumeState = true
         if (!isResumed) {
             diffJob?.cancel()
             diffJob = null

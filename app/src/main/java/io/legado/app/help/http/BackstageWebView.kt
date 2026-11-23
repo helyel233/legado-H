@@ -19,7 +19,6 @@ import io.legado.app.constant.AppConst
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.CacheManager
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -151,9 +150,6 @@ class BackstageWebView(
                             }
                         }
                     }
-                    result?.let {
-                        CacheManager.put("webview_result", it)
-                    }
                     webView.loadDataWithBaseURL(url, html, "text/html", getEncoding(), url)
                 }
 
@@ -212,6 +208,8 @@ class BackstageWebView(
         return JS
     }
 
+    internal fun injectResultScript(): String? = result?.let(::buildWindowResultScript)
+
     private fun setCookie(url: String) {
         tag?.let {
             Coroutine.async(Coroutine.defaultScope, executeContext = IO) {
@@ -241,8 +239,8 @@ class BackstageWebView(
         override fun onPageFinished(view: WebView, url: String) {
             if (!isActiveWebView(view)) return
             setCookie(url)
-            result?.let {
-                view.evaluateJavascript("window.result = $nameCache.getFromMemory('webview_result')", null)
+            injectResultScript()?.let { script ->
+                view.evaluateJavascript(script, null)
             }
             val runnable = runnable ?: EvalJsRunnable(view, url, getJs()).also {
                 runnable = it
@@ -435,6 +433,32 @@ class BackstageWebView(
                 // GLOBAL 全局并发；INLINE 即用即毁、不进池，无需限流。
                 WebViewPool.Scope.GLOBAL, WebViewPool.Scope.INLINE -> null
             }
+        }
+
+        internal fun buildWindowResultScript(result: String): String {
+            val sb = StringBuilder(result.length + 20)
+            sb.append("window.result = \"")
+            for (ch in result) {
+                when (ch) {
+                    '\\' -> sb.append("\\\\")
+                    '"' -> sb.append("\\\"")
+                    '\n' -> sb.append("\\n")
+                    '\r' -> sb.append("\\r")
+                    '\t' -> sb.append("\\t")
+                    '\b' -> sb.append("\\b")
+                    '\u000C' -> sb.append("\\f")
+                    '<' -> sb.append("\\u003C")
+                    '\u2028' -> sb.append("\\u2028")
+                    '\u2029' -> sb.append("\\u2029")
+                    else -> if (ch.code < 0x20) {
+                        sb.append(String.format("\\u%04X", ch.code))
+                    } else {
+                        sb.append(ch)
+                    }
+                }
+            }
+            sb.append('"')
+            return sb.toString()
         }
     }
 

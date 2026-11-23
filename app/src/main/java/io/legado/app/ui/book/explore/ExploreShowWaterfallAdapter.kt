@@ -3,7 +3,10 @@ package io.legado.app.ui.book.explore
 import android.content.Context
 import android.os.Bundle
 import android.view.ViewGroup
+import androidx.core.os.bundleOf
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import java.util.concurrent.ConcurrentHashMap
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
@@ -24,6 +27,53 @@ class ExploreShowWaterfallAdapter(
     private val callBack: ExploreShowBookCallback,
     private val columns: Int
 ) : RecyclerAdapter<SearchBook, ItemSearchWaterfallBinding>(context) {
+
+    private data class BookItemKey(val bookUrl: String, val origin: String)
+
+    // 记录上一次列表提交/绑定时各条目的书架命中状态，避免外部书架状态变化后 setItems 被 DiffUtil 误判为内容未变
+    private val boundBookshelfState = ConcurrentHashMap<BookItemKey, Boolean>()
+
+    override val useDiffUtil: Boolean get() = true
+
+    private fun itemKey(item: SearchBook): BookItemKey = BookItemKey(item.bookUrl, item.origin)
+
+    private fun areItemFieldsEqual(oldItem: SearchBook, newItem: SearchBook): Boolean {
+        // SearchBook.equals() 仅比较 bookUrl；显式核对所有渲染字段
+        return oldItem.name == newItem.name &&
+            oldItem.author == newItem.author &&
+            oldItem.latestChapterTitle == newItem.latestChapterTitle &&
+            oldItem.intro == newItem.intro &&
+            oldItem.kind == newItem.kind &&
+            oldItem.coverUrl == newItem.coverUrl
+    }
+
+    override val diffItemCallback: DiffUtil.ItemCallback<SearchBook> =
+        object : DiffUtil.ItemCallback<SearchBook>() {
+            override fun areItemsTheSame(oldItem: SearchBook, newItem: SearchBook): Boolean {
+                return oldItem.bookUrl == newItem.bookUrl && oldItem.origin == newItem.origin
+            }
+
+            override fun areContentsTheSame(oldItem: SearchBook, newItem: SearchBook): Boolean {
+                val previousInBookshelf = boundBookshelfState[itemKey(oldItem)]
+                val currentInBookshelf = callBack.isInBookshelf(newItem)
+                return areItemFieldsEqual(oldItem, newItem) &&
+                    (previousInBookshelf == null || previousInBookshelf == currentInBookshelf)
+            }
+
+            override fun getChangePayload(oldItem: SearchBook, newItem: SearchBook): Any? {
+                val previousInBookshelf = boundBookshelfState[itemKey(oldItem)]
+                val currentInBookshelf = callBack.isInBookshelf(newItem)
+                return if (
+                    areItemFieldsEqual(oldItem, newItem) &&
+                    previousInBookshelf != null &&
+                    previousInBookshelf != currentInBookshelf
+                ) {
+                    bundleOf("isInBookshelf" to currentInBookshelf)
+                } else {
+                    null
+                }
+            }
+        }
 
     override fun getViewBinding(parent: ViewGroup): ItemSearchWaterfallBinding {
         return ItemSearchWaterfallBinding.inflate(inflater, parent, false).apply {
@@ -78,8 +128,10 @@ class ExploreShowWaterfallAdapter(
     }
 
     private fun bindKindLabels(binding: ItemSearchWaterfallBinding, item: SearchBook) {
+        val inBookshelf = callBack.isInBookshelf(item)
+        boundBookshelfState[itemKey(item)] = inBookshelf
         val labels = buildList {
-            if (callBack.isInBookshelf(item)) add(IN_BOOKSHELF_LABEL)
+            if (inBookshelf) add(IN_BOOKSHELF_LABEL)
             addAll(item.getKindList())
         }.take(4)
         if (labels.isEmpty()) {
@@ -88,6 +140,17 @@ class ExploreShowWaterfallAdapter(
             binding.llKind.visible()
             binding.llKind.setLabels(labels)
         }
+    }
+
+    override fun onCurrentListChanged() {
+        val current = getItems()
+        val activeKeys = HashSet<BookItemKey>(current.size)
+        for (item in current) {
+            val key = itemKey(item)
+            activeKeys.add(key)
+            boundBookshelfState[key] = callBack.isInBookshelf(item)
+        }
+        boundBookshelfState.keys.retainAll(activeKeys)
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemSearchWaterfallBinding) {

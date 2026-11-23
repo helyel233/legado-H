@@ -1,7 +1,7 @@
 package io.legado.app.model.analyzeRule
 
-import android.text.TextUtils
 import androidx.annotation.Keep
+import androidx.collection.LruCache
 import com.google.gson.internal.LinkedTreeMap
 import com.script.CompiledScript
 import com.script.buildScriptBindings
@@ -30,7 +30,6 @@ import io.legado.app.utils.GSONStrict
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.getOrPutLimit
 import io.legado.app.utils.isDataUrl
 import io.legado.app.utils.isJson
 import io.legado.app.utils.isMainThread
@@ -46,6 +45,7 @@ import org.mozilla.javascript.NativeObject
 import org.mozilla.javascript.Scriptable
 import java.lang.ref.WeakReference
 import java.net.URL
+import java.util.Collections
 import java.util.Locale
 import java.util.regex.Pattern
 import kotlin.coroutines.ContinuationInterceptor
@@ -79,9 +79,6 @@ class AnalyzeRule(
     private var analyzeByJSoup: AnalyzeByJSoup? = null
     private var analyzeByJSonPath: AnalyzeByJSonPath? = null
 
-    private val stringRuleCache = hashMapOf<String, List<SourceRule>>()
-    private val regexCache = hashMapOf<String, Regex?>()
-    private val scriptCache = hashMapOf<String, CompiledScript>()
     private var topScopeRef: WeakReference<Scriptable>? = null
     private var evalJSCallCount = 0
 
@@ -347,13 +344,13 @@ class AnalyzeRule(
      */
     @JvmOverloads
     fun getString(ruleStr: String?, mContent: Any? = null, isUrl: Boolean = false): String {
-        if (TextUtils.isEmpty(ruleStr)) return ""
+        if (ruleStr.isNullOrEmpty()) return ""
         val ruleList = splitSourceRuleCacheString(ruleStr)
         return getString(ruleList, mContent, isUrl)
     }
 
     fun getString(ruleStr: String?, unescape: Boolean): String {
-        if (TextUtils.isEmpty(ruleStr)) return ""
+        if (ruleStr.isNullOrEmpty()) return ""
         val ruleList = splitSourceRuleCacheString(ruleStr)
         return getString(ruleList, unescape = unescape)
     }
@@ -433,7 +430,7 @@ class AnalyzeRule(
      * 获取Element
      */
     fun getElement(ruleStr: String): Any? {
-        if (TextUtils.isEmpty(ruleStr)) return null
+        if (ruleStr.isEmpty()) return null
         var result: Any? = null
         val content = this.content
         val ruleList = splitSourceRule(ruleStr, true)
@@ -508,34 +505,6 @@ class AnalyzeRule(
     }
 
     /**
-     * 分离put规则
-     */
-    private fun splitPutRule(ruleStr: String, putMap: HashMap<String, String>): String {
-        var vRuleStr = ruleStr
-        val putMatcher = putPattern.matcher(vRuleStr)
-        while (putMatcher.find()) {
-            vRuleStr = vRuleStr.replace(putMatcher.group(), "")
-            val putJsonStr = putMatcher.group(1)
-            val putJson = GSONStrict.fromJsonObject<Map<String, String>>(putJsonStr)
-                .getOrNull()
-            if (putJson != null) {
-                putMap.putAll(putJson)
-                continue
-            }
-            GSON.fromJsonObject<Map<String, String>>(putJsonStr)
-                .getOrNull()
-                ?.let {
-                    if (!loggedNonStandardJSON) {
-                        Debug.log("≡@put 规则 JSON 格式不规范，请改为规范格式")
-                        loggedNonStandardJSON = true
-                    }
-                    putMap.putAll(it)
-                }
-        }
-        return vRuleStr
-    }
-
-    /**
      * 正则替换
      */
     private fun replaceRegex(result: String, rule: SourceRule): String {
@@ -565,13 +534,17 @@ class AnalyzeRule(
     }
 
     private fun compileRegexCache(regex: String): Regex? {
-        return regexCache.getOrPutLimit(regex, 16) {
-            try {
-                regex.toRegex()
-            } catch (e: Exception) {
-                null
-            }
+        regexCache[regex]?.let { return it }
+        val compiled = try {
+            regex.toRegex()
+        } catch (e: Exception) {
+            return null
         }
+        synchronized(regexCache) {
+            regexCache[regex]?.let { return it }
+            regexCache.put(regex, compiled)
+        }
+        return compiled
     }
 
     /**
@@ -579,10 +552,7 @@ class AnalyzeRule(
      */
     private fun splitSourceRuleCacheString(ruleStr: String?): List<SourceRule> {
         if (ruleStr.isNullOrEmpty()) return emptyList()
-        // 与同文件其它规则缓存一致加上限，避免异常长的规则串列表撑大单次解析任务的内存
-        return stringRuleCache.getOrPutLimit(ruleStr, 16) {
-            splitSourceRule(ruleStr)
-        }
+        return splitSourceRule(ruleStr)
     }
 
     /**
@@ -590,7 +560,6 @@ class AnalyzeRule(
      */
     fun splitSourceRule(ruleStr: String?, allInOne: Boolean = false): List<SourceRule> {
         if (ruleStr.isNullOrEmpty()) return emptyList()
-        val ruleList = ArrayList<SourceRule>()
         var mMode: Mode = Mode.Default
         var start = 0
         //仅首字符为:时为AllInOne，其实:与伪类选择器冲突，建议改成?更合理
@@ -601,172 +570,54 @@ class AnalyzeRule(
         } else if (isRegex) {
             mMode = Mode.Regex
         }
-        var tmp: String
-        val jsMatcher = JS_PATTERN.matcher(ruleStr)
-        while (jsMatcher.find()) {
-            if (jsMatcher.start() > start) {
-                tmp = ruleStr.substring(start, jsMatcher.start()).trim { it <= ' ' }
-                if (tmp.isNotEmpty()) {
-                    ruleList.add(SourceRule(tmp, mMode))
-                }
-            }
-            ruleList.add(SourceRule(jsMatcher.group(2) ?: jsMatcher.group(1), Mode.Js))
-            start = jsMatcher.end()
+        val cacheKey = "split:$start:$mMode:$isJSON:$ruleStr"
+        val templates = getOrCreateRuleTemplates(cacheKey) {
+            parseRuleTemplates(ruleStr, start, mMode, isJSON)
         }
-        val webJsMatcher = WebJS_PATTERN.matcher(ruleStr)
-        while (webJsMatcher.find()) {
-            if (webJsMatcher.start() > start) {
-                tmp = ruleStr.substring(start, webJsMatcher.start()).trim { it <= ' ' }
-                if (tmp.isNotEmpty()) {
-                    ruleList.add(SourceRule(tmp, mMode))
-                }
-            }
-            ruleList.add(SourceRule(webJsMatcher.group(1) ?: "", Mode.WebJs))
-            start = webJsMatcher.end()
-        }
-        if (ruleStr.length > start) {
-            tmp = ruleStr.substring(start).trim { it <= ' ' }
-            if (tmp.isNotEmpty()) {
-                ruleList.add(SourceRule(tmp, mMode))
-            }
-        }
-        return ruleList
+        return templates.map { SourceRule(it) }
     }
 
     private fun getOrCreateSingleSourceRule(rule: String): List<SourceRule> {
-        return stringRuleCache.getOrPutLimit(rule, 16) {
-            listOf(SourceRule(rule))
+        val cacheKey = "single:$isJSON:$rule"
+        val templates = getOrCreateRuleTemplates(cacheKey) {
+            listOf(parseSingleRuleTemplate(rule, Mode.Default, isJSON))
         }
+        return templates.map { SourceRule(it) }
     }
 
     /**
      * 规则类
      */
-    inner class SourceRule internal constructor(
-        ruleStr: String,
-        internal var mode: Mode = Mode.Default
+    inner class SourceRule private constructor(
+        internal var mode: Mode,
+        internal var rule: String,
+        internal val putMap: Map<String, String>,
+        private val ruleParam: List<String>,
+        private val ruleType: List<Int>
     ) {
-        internal var rule: String
         internal var replaceRegex = ""
         internal var replacement = ""
         internal var replaceFirst = false
-        internal val putMap = HashMap<String, String>()
-        private val ruleParam = ArrayList<String>()
-        private val ruleType = ArrayList<Int>()
         private val getRuleType = -2
         private val jsRuleType = -1
         private val defaultRuleType = 0
 
-        init {
-            rule = when {
-                mode == Mode.Js || mode == Mode.Regex -> ruleStr
-                ruleStr.startsWith("@CSS:", true) -> {
-                    mode = Mode.Default
-                    ruleStr
-                }
-
-                ruleStr.startsWith("@@") -> {
-                    mode = Mode.Default
-                    ruleStr.substring(2)
-                }
-
-                ruleStr.startsWith("@XPath:", true) -> {
-                    mode = Mode.XPath
-                    ruleStr.substring(7)
-                }
-
-                ruleStr.startsWith("@Json:", true) -> {
-                    mode = Mode.Json
-                    ruleStr.substring(6)
-                }
-
-                isJSON || ruleStr.startsWith("$.") || ruleStr.startsWith("$[") -> {
-                    mode = Mode.Json
-                    ruleStr
-                }
-
-                ruleStr.startsWith("/") -> {//XPath特征很明显,无需配置单独的识别标头
-                    mode = Mode.XPath
-                    ruleStr
-                }
-
-                else -> ruleStr
-            }
-            //分离put
-            rule = splitPutRule(rule, putMap)
-            //@get,{{ }}, 拆分
-            var start = 0
-            var tmp: String
-            val evalMatcher = evalPattern.matcher(rule)
-
-            if (evalMatcher.find()) {
-                tmp = rule.substring(start, evalMatcher.start())
-                if (mode != Mode.Js && mode != Mode.Regex &&
-                    (evalMatcher.start() == 0 || !tmp.contains("##"))
-                ) {
-                    mode = Mode.Regex
-                }
-                do {
-                    if (evalMatcher.start() > start) {
-                        tmp = rule.substring(start, evalMatcher.start())
-                        splitRegex(tmp)
-                    }
-                    tmp = evalMatcher.group()
-                    when {
-                        tmp.startsWith("@get:", true) -> {
-                            ruleType.add(getRuleType)
-                            ruleParam.add(tmp.substring(6, tmp.lastIndex))
-                        }
-
-                        tmp.startsWith("{{") -> {
-                            ruleType.add(jsRuleType)
-                            ruleParam.add(tmp.substring(2, tmp.length - 2))
-                        }
-
-                        else -> {
-                            splitRegex(tmp)
-                        }
-                    }
-                    start = evalMatcher.end()
-                } while (evalMatcher.find())
-            }
-            if (rule.length > start) {
-                tmp = rule.substring(start)
-                splitRegex(tmp)
+        internal constructor(template: SourceRuleTemplate) : this(
+            mode = template.mode,
+            rule = template.rule,
+            putMap = template.putMap,
+            ruleParam = template.ruleParam,
+            ruleType = template.ruleType
+        ) {
+            if (template.hasNonStandardPutJson && !loggedNonStandardJSON) {
+                Debug.log("≡@put 规则 JSON 格式不规范，请改为规范格式")
+                loggedNonStandardJSON = true
             }
         }
 
-        /**
-         * 拆分\$\d{1,2}
-         */
-        private fun splitRegex(ruleStr: String) {
-            var start = 0
-            var tmp: String
-            val ruleStrArray = ruleStr.split("##")
-            val regexMatcher = regexPattern.matcher(ruleStrArray[0])
-
-            if (regexMatcher.find()) {
-                if (mode != Mode.Js && mode != Mode.Regex) {
-                    mode = Mode.Regex
-                }
-                do {
-                    if (regexMatcher.start() > start) {
-                        tmp = ruleStr.substring(start, regexMatcher.start())
-                        ruleType.add(defaultRuleType)
-                        ruleParam.add(tmp)
-                    }
-                    tmp = regexMatcher.group()
-                    ruleType.add(tmp.substring(1).toInt())
-                    ruleParam.add(tmp)
-                    start = regexMatcher.end()
-                } while (regexMatcher.find())
-            }
-            if (ruleStr.length > start) {
-                tmp = ruleStr.substring(start)
-                ruleType.add(defaultRuleType)
-                ruleParam.add(tmp)
-            }
-        }
+        internal constructor(ruleStr: String, mode: Mode = Mode.Default) : this(
+            parseSingleRuleTemplate(ruleStr, mode, isJSON)
+        )
 
         /**
          * 替换@get,{{ }}
@@ -919,9 +770,13 @@ class AnalyzeRule(
     }
 
     private fun compileScriptCache(jsStr: String): CompiledScript {
-        return scriptCache.getOrPutLimit(jsStr, 16) {
-            RhinoScriptEngine.compile(jsStr)
+        scriptCache[jsStr]?.let { return it }
+        val compiled = RhinoScriptEngine.compile(jsStr)
+        synchronized(scriptCache) {
+            scriptCache[jsStr]?.let { return it }
+            scriptCache.put(jsStr, compiled)
         }
+        return compiled
     }
 
     override fun getSource(): BaseSource? {
@@ -1010,10 +865,255 @@ class AnalyzeRule(
     }
 
     companion object {
+        private const val RULE_CACHE_MAX_SIZE = 256
+        private const val GET_RULE_TYPE = -2
+        private const val JS_RULE_TYPE = -1
+        private const val DEFAULT_RULE_TYPE = 0
+
         private val putPattern = Pattern.compile("@put:(\\{[^}]+?\\})", Pattern.CASE_INSENSITIVE)
         private val evalPattern =
             Pattern.compile("@get:\\{[^}]+?\\}|\\{\\{[\\w\\W]*?\\}\\}", Pattern.CASE_INSENSITIVE)
         private val regexPattern = Pattern.compile("\\$\\d{1,2}")
+
+        /**
+         * 进程级无状态编译缓存：仅缓存只读规则模板、不可变 Regex 及无作用域 CompiledScript，
+         * 严禁缓存任何 Scriptable 作用域或实例绑定状态。
+         */
+        private val stringRuleCache = LruCache<String, List<SourceRuleTemplate>>(RULE_CACHE_MAX_SIZE)
+        private val regexCache = LruCache<String, Regex>(RULE_CACHE_MAX_SIZE)
+        private val scriptCache = LruCache<String, CompiledScript>(RULE_CACHE_MAX_SIZE)
+
+        fun clearRuleCache() {
+            stringRuleCache.evictAll()
+            regexCache.evictAll()
+            scriptCache.evictAll()
+        }
+
+        internal fun getCachedRegexForTest(regex: String): Regex? = regexCache[regex]
+
+        internal fun getCachedScriptForTest(jsStr: String): CompiledScript? = scriptCache[jsStr]
+
+        internal fun getCachedRuleTemplatesForTest(cacheKey: String): Any? = stringRuleCache[cacheKey]
+
+        internal fun getRuleCacheSizeForTest(): Int = stringRuleCache.size()
+
+        internal fun getRegexCacheSizeForTest(): Int = regexCache.size()
+
+        internal fun getScriptCacheSizeForTest(): Int = scriptCache.size()
+
+        internal class SourceRuleTemplate(
+            val mode: Mode,
+            val rule: String,
+            val putMap: Map<String, String>,
+            val ruleParam: List<String>,
+            val ruleType: List<Int>,
+            val hasNonStandardPutJson: Boolean
+        )
+
+        private fun getOrCreateRuleTemplates(
+            cacheKey: String,
+            builder: () -> List<SourceRuleTemplate>
+        ): List<SourceRuleTemplate> {
+            stringRuleCache[cacheKey]?.let { return it }
+            val built = builder()
+            synchronized(stringRuleCache) {
+                stringRuleCache[cacheKey]?.let { return it }
+                stringRuleCache.put(cacheKey, built)
+            }
+            return built
+        }
+
+        private fun parseRuleTemplates(
+            ruleStr: String,
+            initialStart: Int,
+            mMode: Mode,
+            isJson: Boolean
+        ): List<SourceRuleTemplate> {
+            val ruleList = ArrayList<SourceRuleTemplate>()
+            var start = initialStart
+            var tmp: String
+            val jsMatcher = JS_PATTERN.matcher(ruleStr)
+            while (jsMatcher.find()) {
+                if (jsMatcher.start() > start) {
+                    tmp = ruleStr.substring(start, jsMatcher.start()).trim { it <= ' ' }
+                    if (tmp.isNotEmpty()) {
+                        ruleList.add(parseSingleRuleTemplate(tmp, mMode, isJson))
+                    }
+                }
+                ruleList.add(
+                    parseSingleRuleTemplate(jsMatcher.group(2) ?: jsMatcher.group(1), Mode.Js, isJson)
+                )
+                start = jsMatcher.end()
+            }
+            val webJsMatcher = WebJS_PATTERN.matcher(ruleStr)
+            while (webJsMatcher.find()) {
+                if (webJsMatcher.start() > start) {
+                    tmp = ruleStr.substring(start, webJsMatcher.start()).trim { it <= ' ' }
+                    if (tmp.isNotEmpty()) {
+                        ruleList.add(parseSingleRuleTemplate(tmp, mMode, isJson))
+                    }
+                }
+                ruleList.add(parseSingleRuleTemplate(webJsMatcher.group(1) ?: "", Mode.WebJs, isJson))
+                start = webJsMatcher.end()
+            }
+            if (ruleStr.length > start) {
+                tmp = ruleStr.substring(start).trim { it <= ' ' }
+                if (tmp.isNotEmpty()) {
+                    ruleList.add(parseSingleRuleTemplate(tmp, mMode, isJson))
+                }
+            }
+            return Collections.unmodifiableList(ruleList)
+        }
+
+        private fun parseSingleRuleTemplate(
+            ruleStr: String,
+            initialMode: Mode,
+            isJson: Boolean
+        ): SourceRuleTemplate {
+            var mode = initialMode
+            var rule = when {
+                mode == Mode.Js || mode == Mode.Regex -> ruleStr
+                ruleStr.startsWith("@CSS:", true) -> {
+                    mode = Mode.Default
+                    ruleStr
+                }
+
+                ruleStr.startsWith("@@") -> {
+                    mode = Mode.Default
+                    ruleStr.substring(2)
+                }
+
+                ruleStr.startsWith("@XPath:", true) -> {
+                    mode = Mode.XPath
+                    ruleStr.substring(7)
+                }
+
+                ruleStr.startsWith("@Json:", true) -> {
+                    mode = Mode.Json
+                    ruleStr.substring(6)
+                }
+
+                isJson || ruleStr.startsWith("$.") || ruleStr.startsWith("$[") -> {
+                    mode = Mode.Json
+                    ruleStr
+                }
+
+                ruleStr.startsWith("/") -> {//XPath特征很明显,无需配置单独的识别标头
+                    mode = Mode.XPath
+                    ruleStr
+                }
+
+                else -> ruleStr
+            }
+            val putMap = HashMap<String, String>()
+            val (strippedRule, hasNonStandardPutJson) = splitPutRuleTemplate(rule, putMap)
+            rule = strippedRule
+            val ruleParam = ArrayList<String>()
+            val ruleType = ArrayList<Int>()
+            var start = 0
+            var tmp: String
+            val evalMatcher = evalPattern.matcher(rule)
+
+            fun splitRegexIntoTemplate(segment: String) {
+                var segStart = 0
+                var segTmp: String
+                val ruleStrArray = segment.split("##")
+                val regexMatcher = regexPattern.matcher(ruleStrArray[0])
+
+                if (regexMatcher.find()) {
+                    if (mode != Mode.Js && mode != Mode.Regex) {
+                        mode = Mode.Regex
+                    }
+                    do {
+                        if (regexMatcher.start() > segStart) {
+                            segTmp = segment.substring(segStart, regexMatcher.start())
+                            ruleType.add(DEFAULT_RULE_TYPE)
+                            ruleParam.add(segTmp)
+                        }
+                        segTmp = regexMatcher.group()
+                        ruleType.add(segTmp.substring(1).toInt())
+                        ruleParam.add(segTmp)
+                        segStart = regexMatcher.end()
+                    } while (regexMatcher.find())
+                }
+                if (segment.length > segStart) {
+                    segTmp = segment.substring(segStart)
+                    ruleType.add(DEFAULT_RULE_TYPE)
+                    ruleParam.add(segTmp)
+                }
+            }
+
+            if (evalMatcher.find()) {
+                tmp = rule.substring(start, evalMatcher.start())
+                if (mode != Mode.Js && mode != Mode.Regex &&
+                    (evalMatcher.start() == 0 || !tmp.contains("##"))
+                ) {
+                    mode = Mode.Regex
+                }
+                do {
+                    if (evalMatcher.start() > start) {
+                        tmp = rule.substring(start, evalMatcher.start())
+                        splitRegexIntoTemplate(tmp)
+                    }
+                    tmp = evalMatcher.group()
+                    when {
+                        tmp.startsWith("@get:", true) -> {
+                            ruleType.add(GET_RULE_TYPE)
+                            ruleParam.add(tmp.substring(6, tmp.lastIndex))
+                        }
+
+                        tmp.startsWith("{{") -> {
+                            ruleType.add(JS_RULE_TYPE)
+                            ruleParam.add(tmp.substring(2, tmp.length - 2))
+                        }
+
+                        else -> {
+                            splitRegexIntoTemplate(tmp)
+                        }
+                    }
+                    start = evalMatcher.end()
+                } while (evalMatcher.find())
+            }
+            if (rule.length > start) {
+                tmp = rule.substring(start)
+                splitRegexIntoTemplate(tmp)
+            }
+
+            return SourceRuleTemplate(
+                mode = mode,
+                rule = rule,
+                putMap = Collections.unmodifiableMap(putMap),
+                ruleParam = Collections.unmodifiableList(ruleParam),
+                ruleType = Collections.unmodifiableList(ruleType),
+                hasNonStandardPutJson = hasNonStandardPutJson
+            )
+        }
+
+        private fun splitPutRuleTemplate(
+            ruleStr: String,
+            putMap: HashMap<String, String>
+        ): Pair<String, Boolean> {
+            var vRuleStr = ruleStr
+            var hasNonStandardJson = false
+            val putMatcher = putPattern.matcher(vRuleStr)
+            while (putMatcher.find()) {
+                vRuleStr = vRuleStr.replace(putMatcher.group(), "")
+                val putJsonStr = putMatcher.group(1)
+                val putJson = GSONStrict.fromJsonObject<Map<String, String>>(putJsonStr)
+                    .getOrNull()
+                if (putJson != null) {
+                    putMap.putAll(putJson)
+                    continue
+                }
+                GSON.fromJsonObject<Map<String, String>>(putJsonStr)
+                    .getOrNull()
+                    ?.let {
+                        hasNonStandardJson = true
+                        putMap.putAll(it)
+                    }
+            }
+            return vRuleStr to hasNonStandardJson
+        }
 
         fun AnalyzeRule.setCoroutineContext(context: CoroutineContext): AnalyzeRule {
             coroutineContext = context.minusKey(ContinuationInterceptor)

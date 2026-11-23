@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -42,6 +43,34 @@ class HomepageBooksAdapter(
 
         fun onBookLongClick(book: SearchBook)
     }
+
+    // 排行榜依赖 position + 1 渲染序号，move 不触发 rebind；其余展示模式无位置序号依赖
+    override val useDiffUtil: Boolean get() = mode != MODE_RANK
+
+    override val diffItemCallback: DiffUtil.ItemCallback<HomepageBookItemUi> =
+        object : DiffUtil.ItemCallback<HomepageBookItemUi>() {
+            override fun areItemsTheSame(
+                oldItem: HomepageBookItemUi,
+                newItem: HomepageBookItemUi
+            ): Boolean {
+                return oldItem.book.bookUrl == newItem.book.bookUrl &&
+                    oldItem.book.origin == newItem.book.origin
+            }
+
+            override fun areContentsTheSame(
+                oldItem: HomepageBookItemUi,
+                newItem: HomepageBookItemUi
+            ): Boolean {
+                // SearchBook.equals() 仅比较 bookUrl，导致 HomepageBookItemUi == 会漏掉书名/封面/简介变化
+                return oldItem.shelfState == newItem.shelfState &&
+                    oldItem.book.name == newItem.book.name &&
+                    oldItem.book.author == newItem.book.author &&
+                    oldItem.book.coverUrl == newItem.book.coverUrl &&
+                    oldItem.book.intro == newItem.book.intro &&
+                    oldItem.book.wordCount == newItem.book.wordCount &&
+                    oldItem.book.kind == newItem.book.kind
+            }
+        }
 
     override fun getViewBinding(parent: ViewGroup): ViewBinding {
         return when (mode) {

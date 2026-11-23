@@ -3,6 +3,7 @@ package io.legado.app.ui.rss.favorites
 import android.content.Context
 import android.graphics.drawable.Drawable
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
@@ -20,6 +21,19 @@ import io.legado.app.utils.visible
 
 class RssFavoritesAdapter(context: Context, val callBack: CallBack) :
     RecyclerAdapter<RssStar, ItemRssArticleBinding>(context) {
+
+    override val useDiffUtil: Boolean get() = true
+
+    override val diffItemCallback: DiffUtil.ItemCallback<RssStar> =
+        object : DiffUtil.ItemCallback<RssStar>() {
+            override fun areItemsTheSame(oldItem: RssStar, newItem: RssStar): Boolean {
+                return oldItem.origin == newItem.origin && oldItem.link == newItem.link
+            }
+
+            override fun areContentsTheSame(oldItem: RssStar, newItem: RssStar): Boolean {
+                return oldItem == newItem
+            }
+        }
 
     override fun getViewBinding(parent: ViewGroup): ItemRssArticleBinding {
         return ItemRssArticleBinding.inflate(inflater, parent, false)

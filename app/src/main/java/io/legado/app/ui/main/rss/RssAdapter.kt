@@ -11,6 +11,7 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
+import androidx.recyclerview.widget.DiffUtil
 import com.bumptech.glide.request.RequestOptions
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
@@ -36,6 +37,22 @@ class RssAdapter(
 ) : RecyclerAdapter<RssSource, ItemRssBinding>(context) {
 
     private var modernMenuPopup: ModernActionPopup.Handle? = null
+
+    override val useDiffUtil: Boolean get() = true
+
+    override val diffItemCallback: DiffUtil.ItemCallback<RssSource> =
+        object : DiffUtil.ItemCallback<RssSource>() {
+            override fun areItemsTheSame(oldItem: RssSource, newItem: RssSource): Boolean {
+                return oldItem.sourceUrl == newItem.sourceUrl
+            }
+
+            override fun areContentsTheSame(oldItem: RssSource, newItem: RssSource): Boolean {
+                // RssSource.equals() 仅比较 sourceUrl；这里显式比较行渲染与菜单可见性字段
+                return oldItem.sourceName == newItem.sourceName &&
+                    oldItem.sourceIcon == newItem.sourceIcon &&
+                    oldItem.loginUrl == newItem.loginUrl
+            }
+        }
 
     /**
      * 当前列数，多列时改用「图标在上、名称在下」的布局，保证名称有足够宽度显示全名

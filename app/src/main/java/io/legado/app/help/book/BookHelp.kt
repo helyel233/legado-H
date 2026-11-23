@@ -598,11 +598,12 @@ object BookHelp {
     fun delContent(book: Book, bookChapter: BookChapter) {
         io.legado.app.model.ReadBook.invalidateDirectTextContent(book.bookUrl)
         LibrarySearchIndexer.deleteChapterAsync(book.bookUrl, bookChapter.index)
-        getContentFileCandidates(book, bookChapter).forEach {
+        val candidates = getContentFileCandidates(book, bookChapter)
+        candidates.forEach {
             if (it.exists()) it.delete()
         }
-        // 文件已删，同一份内容不能再从内存缓存里返回
-        ChapterContentCache.clear()
+        // 文件已删，仅精确驱逐该章节对应的内存缓存，避免误伤同书或他书的其余已缓存章节
+        ChapterContentCache.removeAll(candidates)
     }
 
     /**

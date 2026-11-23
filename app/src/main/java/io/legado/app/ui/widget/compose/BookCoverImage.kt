@@ -58,7 +58,7 @@ import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
 import io.legado.app.help.glide.HtmlCoverRenderer
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
-import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.fallbackCoverStrokeColor
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.titleTextColor
@@ -345,7 +345,7 @@ private fun BookCoverNameOverlay(
 ) {
     val context = LocalContext.current
     val themeSignature = rememberThemeUiPalette().signature
-    val backgroundColor = remember(context, themeSignature) { context.backgroundColor }
+    val strokeColor = remember(context, themeSignature) { context.fallbackCoverStrokeColor }
     val nameColor = remember(context, themeSignature) { context.titleTextColor }
     val authorColor = remember(context, themeSignature) { context.secondaryTextColor }
     Canvas(modifier = modifier) {
@@ -364,7 +364,7 @@ private fun BookCoverNameOverlay(
             namePaint.textSize = viewWidth / 7f
             namePaint.strokeWidth = namePaint.textSize / 6f
             chars.forEachIndexed { index, char ->
-                namePaint.color = backgroundColor
+                namePaint.color = strokeColor
                 namePaint.style = Paint.Style.STROKE
                 drawContext.canvas.nativeCanvas.drawText(char, startX, startY, namePaint)
                 namePaint.color = nameColor
@@ -400,7 +400,7 @@ private fun BookCoverNameOverlay(
             startY = viewHeight * 0.95f - chars.size * authorPaint.textHeight
             startY = maxOf(startY, viewHeight * 0.3f)
             chars.forEach { char ->
-                authorPaint.color = backgroundColor
+                authorPaint.color = strokeColor
                 authorPaint.style = Paint.Style.STROKE
                 drawContext.canvas.nativeCanvas.drawText(char, startX, startY, authorPaint)
                 authorPaint.color = authorColor

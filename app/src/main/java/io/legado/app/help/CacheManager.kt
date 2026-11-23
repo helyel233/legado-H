@@ -5,6 +5,7 @@ import android.webkit.JavascriptInterface
 import androidx.annotation.Keep
 import androidx.collection.LruCache
 import io.legado.app.data.appDb
+import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.entities.Cache
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.utils.ACache
@@ -88,41 +89,71 @@ object AppCacheManager {
 }
 
 
-@Keep
-@Suppress("unused")
-object CacheManager {
+internal class CacheStore(
+    private val cacheDaoProvider: () -> CacheDao,
+    private val aCacheProvider: () -> ACache?,
+    private val timeProvider: () -> Long,
+    private val memoryDeadlines: ConcurrentHashMap<String, Long> = ConcurrentHashMap(),
+    private val memoryLruCache: LruCache<String, Any> = createMemoryLruCache(memoryDeadlines)
+) {
 
-    /**
-     * saveTime 单位为秒
-     */
-    @JvmOverloads
+    internal fun computeDeadline(saveTime: Int, now: Long = timeProvider()): Long {
+        return if (saveTime <= 0) 0L else now + saveTime.toLong() * 1000L
+    }
+
+    internal fun clearMemory() {
+        memoryLruCache.evictAll()
+        memoryDeadlines.clear()
+    }
+
+    internal fun getMemoryDeadline(key: String): Long? = memoryDeadlines[key]
+
     fun put(key: String, value: Any, saveTime: Int = 0) {
-        val deadline =
-            if (saveTime == 0) 0 else System.currentTimeMillis() + saveTime * 1000
+        val deadline = computeDeadline(saveTime)
         when (value) {
-            is ByteArray -> ACache.get().put(key, value, saveTime)
+            is ByteArray -> {
+                deleteMemory(key)
+                aCacheProvider()?.put(key, value, saveTime)
+            }
             else -> {
                 val valueStr = value.toString()
-                putMemory(key, valueStr)
-                // 内存副本也要记过期时间：否则 TTL 只对磁盘生效，内存命中会把过期数据一直返回
-                if (deadline > 0L) {
-                    memoryDeadlines[key] = deadline
-                }
+                putMemoryInternal(key, valueStr, deadline)
                 val cache = Cache(key, valueStr, deadline)
-                appDb.cacheDao.insert(cache)
+                cacheDaoProvider().insert(cache)
             }
         }
     }
 
     fun putMemory(key: String, value: Any) {
-        memoryLruCache.put(key, value)
-        // 重新写入视为刷新，过期时间一并清掉
-        memoryDeadlines.remove(key)
+        putMemoryInternal(key, value, 0L)
     }
 
-    //从内存中获取数据 使用lruCache
+    private fun putMemoryInternal(key: String, value: Any, deadline: Long) {
+        // 先写/清 deadline 再写 LruCache：避免并发读看到新值却误读旧 deadline 或无 TTL，
+        // 若 LruCache 立即淘汰该条目，entryRemoved 也会同步清除 memoryDeadlines[key]。
+        if (deadline > 0L) {
+            memoryDeadlines[key] = deadline
+        } else {
+            memoryDeadlines.remove(key)
+        }
+        memoryLruCache.put(key, value)
+    }
+
     fun getFromMemory(key: String): Any? {
-        return memoryLruCache[key]
+        val value = memoryLruCache[key] ?: return null
+        val memoryDecision = CacheExpiryPolicy.memoryDecision(
+            hasEntry = true,
+            deadline = memoryDeadlines[key] ?: 0L,
+            now = timeProvider()
+        )
+        return when (memoryDecision) {
+            CacheExpiryPolicy.Decision.MEMORY_HIT -> value
+            CacheExpiryPolicy.Decision.MEMORY_EXPIRED -> {
+                deleteMemory(key)
+                null
+            }
+            else -> null
+        }
     }
 
     fun deleteMemory(key: String) {
@@ -131,22 +162,12 @@ object CacheManager {
     }
 
     fun get(key: String): String? {
-        val now = System.currentTimeMillis()
         val memoryValue = getFromMemory(key)
         if (memoryValue is String) {
-            val memoryDecision = CacheExpiryPolicy.memoryDecision(
-                hasEntry = true,
-                deadline = memoryDeadlines[key] ?: 0L,
-                now = now
-            )
-            when (memoryDecision) {
-                CacheExpiryPolicy.Decision.MEMORY_HIT -> return memoryValue
-                // 内存副本已过期：清掉后回落到磁盘判定
-                CacheExpiryPolicy.Decision.MEMORY_EXPIRED -> deleteMemory(key)
-                else -> Unit
-            }
+            return memoryValue
         }
-        val cache = appDb.cacheDao.get(key)
+        val now = timeProvider()
+        val cache = cacheDaoProvider().get(key)
         val diskDecision = CacheExpiryPolicy.diskDecision(
             hasEntry = cache != null,
             deadline = cache?.deadline ?: 0L,
@@ -154,11 +175,7 @@ object CacheManager {
         )
         if (diskDecision == CacheExpiryPolicy.Decision.DISK_HIT) {
             return cache?.value?.also {
-                putMemory(key, it)
-                // 回填内存时保留磁盘上的过期时间，避免 TTL 在内存层失效
-                if (cache.deadline > 0L) {
-                    memoryDeadlines[key] = cache.deadline
-                }
+                putMemoryInternal(key, it, cache.deadline)
             }
         }
         return null
@@ -168,8 +185,8 @@ object CacheManager {
         if (!onlyDisk) {
             return get(key)
         }
-        val cache = appDb.cacheDao.get(key)
-        if (cache != null && (cache.deadline == 0L || cache.deadline > System.currentTimeMillis())) {
+        val cache = cacheDaoProvider().get(key)
+        if (cache != null && !CacheExpiryPolicy.isExpired(cache.deadline, timeProvider())) {
             return cache.value
         }
         return null
@@ -177,48 +194,156 @@ object CacheManager {
 
     fun getInt(key: String): Int? {
         getFromMemory(key)?.let {
-            if (it is Int) return it
+            when (it) {
+                is Int -> return it
+                is String -> it.toIntOrNull()?.let { parsed -> return parsed }
+            }
         }
         return get(key, true)?.toIntOrNull()
     }
 
     fun getLong(key: String): Long? {
         getFromMemory(key)?.let {
-            if (it is Long) return it
+            when (it) {
+                is Long -> return it
+                is String -> it.toLongOrNull()?.let { parsed -> return parsed }
+            }
         }
         return get(key, true)?.toLongOrNull()
     }
 
     fun getDouble(key: String): Double? {
         getFromMemory(key)?.let {
-            if (it is Double) return it
+            when (it) {
+                is Double -> return it
+                is String -> it.toDoubleOrNull()?.let { parsed -> return parsed }
+            }
         }
         return get(key, true)?.toDoubleOrNull()
     }
 
     fun getFloat(key: String): Float? {
         getFromMemory(key)?.let {
-            if (it is Float) return it
+            when (it) {
+                is Float -> return it
+                is String -> it.toFloatOrNull()?.let { parsed -> return parsed }
+            }
         }
         return get(key, true)?.toFloatOrNull()
     }
 
     fun getByteArray(key: String): ByteArray? {
-        return ACache.get().getAsBinary(key)
+        return aCacheProvider()?.getAsBinary(key)
     }
 
     fun putFile(key: String, value: String, saveTime: Int = 0) {
-        ACache.get().put(key, value, saveTime)
+        aCacheProvider()?.put(key, value, saveTime)
     }
 
     fun getFile(key: String): String? {
-        return ACache.get().getAsString(key)
+        return aCacheProvider()?.getAsString(key)
     }
 
     fun delete(key: String) {
-        appDb.cacheDao.delete(key)
+        cacheDaoProvider().delete(key)
         deleteMemory(key)
-        ACache.get().remove(key)
+        aCacheProvider()?.remove(key)
+    }
+}
+
+private fun createMemoryLruCache(
+    deadlines: ConcurrentHashMap<String, Long>
+): LruCache<String, Any> = object : LruCache<String, Any>(1024 * 1024 * 50) {
+
+    override fun sizeOf(key: String, value: Any): Int {
+        return value.estimatedMemorySize().coerceAtLeast(1)
+    }
+
+    override fun entryRemoved(evicted: Boolean, key: String, oldValue: Any, newValue: Any?) {
+        super.entryRemoved(evicted, key, oldValue, newValue)
+        if (newValue == null) {
+            // 容量淘汰时同步清掉过期时间表条目，否则 memoryDeadlines 会无界慢涨
+            deadlines.remove(key)
+        }
+    }
+}
+
+
+@Keep
+@Suppress("unused")
+object CacheManager {
+
+    private val defaultStore = CacheStore(
+        cacheDaoProvider = { appDb.cacheDao },
+        aCacheProvider = { ACache.get() },
+        timeProvider = { System.currentTimeMillis() },
+        memoryDeadlines = memoryDeadlines,
+        memoryLruCache = memoryLruCache
+    )
+
+    internal fun clearMemoryForTest() {
+        defaultStore.clearMemory()
+    }
+
+    /**
+     * saveTime 单位为秒
+     */
+    @JvmOverloads
+    fun put(key: String, value: Any, saveTime: Int = 0) {
+        defaultStore.put(key, value, saveTime)
+    }
+
+    fun putMemory(key: String, value: Any) {
+        defaultStore.putMemory(key, value)
+    }
+
+    //从内存中获取数据 使用lruCache
+    fun getFromMemory(key: String): Any? {
+        return defaultStore.getFromMemory(key)
+    }
+
+    fun deleteMemory(key: String) {
+        defaultStore.deleteMemory(key)
+    }
+
+    fun get(key: String): String? {
+        return defaultStore.get(key)
+    }
+
+    fun get(key: String, onlyDisk: Boolean): String? {
+        return defaultStore.get(key, onlyDisk)
+    }
+
+    fun getInt(key: String): Int? {
+        return defaultStore.getInt(key)
+    }
+
+    fun getLong(key: String): Long? {
+        return defaultStore.getLong(key)
+    }
+
+    fun getDouble(key: String): Double? {
+        return defaultStore.getDouble(key)
+    }
+
+    fun getFloat(key: String): Float? {
+        return defaultStore.getFloat(key)
+    }
+
+    fun getByteArray(key: String): ByteArray? {
+        return defaultStore.getByteArray(key)
+    }
+
+    fun putFile(key: String, value: String, saveTime: Int = 0) {
+        defaultStore.putFile(key, value, saveTime)
+    }
+
+    fun getFile(key: String): String? {
+        return defaultStore.getFile(key)
+    }
+
+    fun delete(key: String) {
+        defaultStore.delete(key)
     }
 }
 
@@ -232,17 +357,15 @@ object WebCacheManager {
     }
     @JavascriptInterface
     fun putMemory(key: String, value: String) {
-        memoryLruCache.put(key, value)
-        memoryDeadlines.remove(key)
+        CacheManager.putMemory(key, value)
     }
     @JavascriptInterface
     fun getFromMemory(key: String): String? {
-        return memoryLruCache[key]?.toString()
+        return CacheManager.getFromMemory(key)?.toString()
     }
     @JavascriptInterface
     fun deleteMemory(key: String) {
-        memoryLruCache.remove(key)
-        memoryDeadlines.remove(key)
+        CacheManager.deleteMemory(key)
     }
     @JavascriptInterface
     fun get(key: String): String? {

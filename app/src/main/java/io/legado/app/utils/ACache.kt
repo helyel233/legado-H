@@ -89,12 +89,20 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
      * Configuration owners use this when they need transactional file IO or
      * restore snapshots while keeping ACache's key-to-file mapping centralized.
      */
-    internal fun peekFile(key: String): File? = mCache?.newFile(key)
+    internal fun peekFile(key: String): File? = mCache?.peekFile(key)
 
     /** Removes stale LRU bookkeeping after an owner deleted a cache file transactionally. */
     internal fun forgetFile(key: String, removedSize: Long) {
         mCache?.forget(key, removedSize)
     }
+
+    internal fun cacheSizeForTest(): Long = mCache?.cacheSizeForTest() ?: 0L
+
+    internal fun cacheCountForTest(): Int = mCache?.cacheCountForTest() ?: 0
+
+    internal fun cacheFileForTest(key: String): File? = mCache?.newFile(key)
+
+    internal fun legacyFileForTest(key: String): File? = mCache?.legacyFile(key)
 
     // =======================================
     // ============ String数据 读写 ==============
@@ -108,12 +116,17 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
      */
     fun put(key: String, value: String) {
         mCache?.let { mCache ->
+            val file = mCache.newFile(key)
+            mCache.beginWrite(file)
             try {
-                val file = mCache.newFile(key)
+                val previousSize = if (file.exists()) file.length() else -1L
                 file.writeText(value)
-                mCache.put(file)
+                mCache.put(file, previousSize)
+                mCache.removeLegacyFile(key)
             } catch (e: Exception) {
                 e.printOnDebug()
+            } finally {
+                mCache.endWrite(file)
             }
         }
     }
@@ -252,8 +265,15 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
     fun put(key: String, value: ByteArray) {
         mCache?.let { mCache ->
             val file = mCache.newFile(key)
-            file.writeBytes(value)
-            mCache.put(file)
+            mCache.beginWrite(file)
+            try {
+                val previousSize = if (file.exists()) file.length() else -1L
+                file.writeBytes(value)
+                mCache.put(file, previousSize)
+                mCache.removeLegacyFile(key)
+            } finally {
+                mCache.endWrite(file)
+            }
         }
     }
 
@@ -443,8 +463,8 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
     fun file(key: String): File? {
         mCache?.let { mCache ->
             try {
-                val f = mCache.newFile(key)
-                if (f.exists()) {
+                val f = mCache.resolveExistingFile(key)
+                if (f != null && f.exists()) {
                     return f
                 }
             } catch (e: Exception) {
@@ -657,6 +677,8 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
     ) {
         private val cacheSize: AtomicLong = AtomicLong()
         private val cacheCount: AtomicInteger = AtomicInteger()
+        private val clearEpoch: AtomicInteger = AtomicInteger()
+        private val activeWrites = HashSet<File>()
         private val lastUsageDates = Collections
             .synchronizedMap(HashMap<File, Long>())
 
@@ -664,83 +686,174 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
             calculateCacheSizeAndCacheCount()
         }
 
+        internal fun cacheSizeForTest(): Long = cacheSize.get()
+
+        internal fun cacheCountForTest(): Int = cacheCount.get()
+
+        internal fun beginWrite(file: File) {
+            synchronized(lastUsageDates) {
+                activeWrites.add(file)
+            }
+        }
+
+        internal fun endWrite(file: File) {
+            synchronized(lastUsageDates) {
+                activeWrites.remove(file)
+            }
+        }
+
         /**
          * 计算 cacheSize和cacheCount
          */
         private fun calculateCacheSizeAndCacheCount() {
+            val epoch = clearEpoch.get()
             Thread {
-
                 try {
-                    var size = 0
-                    var count = 0
                     val cachedFiles = cacheDir.listFiles { file ->
                         !file.name.endsWith(".staging") && !file.name.endsWith(".backup")
                     }
                     if (cachedFiles != null) {
-                        for (cachedFile in cachedFiles) {
-                            size += calculateSize(cachedFile).toInt()
-                            count += 1
-                            lastUsageDates[cachedFile] = cachedFile.lastModified()
+                        synchronized(lastUsageDates) {
+                            if (clearEpoch.get() != epoch) return@Thread
+                            for (cachedFile in cachedFiles) {
+                                if (!activeWrites.contains(cachedFile) &&
+                                    !lastUsageDates.containsKey(cachedFile) &&
+                                    cachedFile.exists()
+                                ) {
+                                    cacheSize.addAndGet(calculateSize(cachedFile))
+                                    cacheCount.incrementAndGet()
+                                    lastUsageDates[cachedFile] = cachedFile.lastModified()
+                                }
+                            }
                         }
-                        cacheSize.set(size.toLong())
-                        cacheCount.set(count)
                     }
                 } catch (e: Exception) {
                     e.printOnDebug()
                 }
-
-
             }.start()
         }
 
         fun put(file: File) {
+            put(file, -1L)
+        }
 
+        internal fun put(file: File, previousSize: Long) {
             try {
-                var curCacheCount = cacheCount.get()
-                while (curCacheCount + 1 > countLimit) {
-                    val freedSize = removeNext()
-                    if (freedSize < 0L) break
-                    cacheSize.addAndGet(-freedSize)
-
-                    curCacheCount = cacheCount.addAndGet(-1)
-                }
-                cacheCount.addAndGet(1)
-
                 val valueSize = calculateSize(file)
-                var curCacheSize = cacheSize.get()
-                while (curCacheSize + valueSize > sizeLimit) {
-                    val freedSize = removeNext()
-                    if (freedSize < 0L) break
-                    curCacheSize = cacheSize.addAndGet(-freedSize)
-                }
-                cacheSize.addAndGet(valueSize)
-
                 val currentTime = System.currentTimeMillis()
                 file.setLastModified(currentTime)
-                lastUsageDates[file] = currentTime
+                synchronized(lastUsageDates) {
+                    val isOverwrite = lastUsageDates.containsKey(file)
+                    if (!isOverwrite) {
+                        while (cacheCount.get() + 1 > countLimit) {
+                            if (removeNext() < 0L) break
+                        }
+                        cacheCount.addAndGet(1)
+                    }
+
+                    val deltaSize = if (isOverwrite && previousSize >= 0L) {
+                        valueSize - previousSize
+                    } else {
+                        valueSize
+                    }
+                    if (deltaSize > 0L) {
+                        while (cacheSize.get() + deltaSize > sizeLimit) {
+                            if (removeNext() < 0L) break
+                        }
+                    }
+                    cacheSize.updateAndGet { (it + deltaSize).coerceAtLeast(0L) }
+                    lastUsageDates[file] = currentTime
+                    activeWrites.remove(file)
+                }
             } catch (e: Exception) {
                 e.printOnDebug()
             }
-
         }
 
         operator fun get(key: String): File {
             val file = newFile(key)
-            val currentTime = System.currentTimeMillis()
-            file.setLastModified(currentTime)
-            lastUsageDates[file] = currentTime
-
+            if (file.exists()) {
+                touchFile(file)
+                return file
+            }
+            val legacy = legacyFile(key)
+            if (legacy.exists()) {
+                val resolved = migrateLegacyFile(legacy, file)
+                touchFile(resolved)
+                return resolved
+            }
             return file
         }
 
+        private fun touchFile(file: File) {
+            val currentTime = System.currentTimeMillis()
+            file.setLastModified(currentTime)
+            lastUsageDates[file] = currentTime
+        }
+
+        internal fun resolveExistingFile(key: String): File? {
+            val file = newFile(key)
+            if (file.exists()) return file
+            val legacy = legacyFile(key)
+            if (legacy.exists()) {
+                return migrateLegacyFile(legacy, file)
+            }
+            return null
+        }
+
+        /** 只读解析 key 对应文件路径（优先主文件，其次遗留文件），不触发磁盘迁移或 LRU 更新。 */
+        internal fun peekFile(key: String): File {
+            val file = newFile(key)
+            if (file.exists()) return file
+            val legacy = legacyFile(key)
+            if (legacy.exists()) return legacy
+            return file
+        }
+
+        private fun migrateLegacyFile(legacy: File, target: File): File {
+            synchronized(lastUsageDates) {
+                if (target.exists()) return target
+                if (!legacy.exists()) return target
+                if (legacy.renameTo(target)) {
+                    val previousUsage = lastUsageDates.remove(legacy)
+                    lastUsageDates[target] = previousUsage ?: target.lastModified()
+                    return target
+                }
+                return legacy
+            }
+        }
+
+        internal fun removeLegacyFile(key: String) {
+            val legacy = legacyFile(key)
+            if (legacy != newFile(key) && legacy.exists()) {
+                removeSingleFile(legacy)
+            }
+        }
+
+        private fun sha256Key(key: String): String {
+            return Utf8Sha256.digestHex(key)
+        }
+
         fun newFile(key: String): File {
-            return File(cacheDir, key.hashCode().toString() + "")
+            return File(cacheDir, sha256Key(key))
+        }
+
+        internal fun legacyFile(key: String): File {
+            return File(cacheDir, key.hashCode().toString())
         }
 
         fun remove(key: String): Boolean {
-            val file = newFile(key)
-            val fileSize = file.length()
-            val removed = !file.exists() || file.delete()
+            val primaryFile = newFile(key)
+            val legacy = legacyFile(key)
+            val primaryRemoved = removeSingleFile(primaryFile)
+            val legacyRemoved = if (legacy != primaryFile) removeSingleFile(legacy) else true
+            return primaryRemoved && legacyRemoved
+        }
+
+        private fun removeSingleFile(file: File): Boolean {
+            val existed = file.exists()
+            val fileSize = if (existed) file.length() else 0L
+            val removed = !existed || file.delete()
             if (removed) {
                 forget(file, fileSize)
             }
@@ -748,22 +861,36 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
         }
 
         fun forget(key: String, removedSize: Long) {
-            forget(newFile(key), removedSize)
+            val primaryFile = newFile(key)
+            val legacy = legacyFile(key)
+            var remainingSize = removedSize.coerceAtLeast(0L)
+            if (!primaryFile.exists() && forget(primaryFile, remainingSize)) {
+                remainingSize = 0L
+            }
+            if (legacy != primaryFile && !legacy.exists()) {
+                forget(legacy, remainingSize)
+            }
         }
 
-        private fun forget(file: File, removedSize: Long) {
+        private fun forget(file: File, removedSize: Long): Boolean {
             synchronized(lastUsageDates) {
                 if (lastUsageDates.remove(file) != null) {
                     cacheCount.updateAndGet { (it - 1).coerceAtLeast(0) }
                     cacheSize.updateAndGet { (it - removedSize).coerceAtLeast(0L) }
+                    return true
                 }
+                return false
             }
         }
 
         fun clear() {
             try {
-                lastUsageDates.clear()
-                cacheSize.set(0)
+                synchronized(lastUsageDates) {
+                    clearEpoch.incrementAndGet()
+                    lastUsageDates.clear()
+                    cacheSize.set(0)
+                    cacheCount.set(0)
+                }
                 val files = cacheDir.listFiles()
                 if (files != null) {
                     for (f in files) {
@@ -773,7 +900,6 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
             } catch (e: Exception) {
                 e.printOnDebug()
             }
-
         }
 
         /**
@@ -781,44 +907,37 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
          */
         private fun removeNext(): Long {
             try {
-                if (lastUsageDates.isEmpty()) {
-                    cacheSize.set(0)
-                    cacheCount.set(0)
-                    return -1
-                }
-
-                var oldestUsage: Long? = null
-                var mostLongUsedFile: File? = null
-                val entries = lastUsageDates.entries
                 synchronized(lastUsageDates) {
-                    for ((key, lastValueUsage) in entries) {
-                        if (mostLongUsedFile == null) {
-                            mostLongUsedFile = key
+                    if (lastUsageDates.isEmpty()) {
+                        cacheSize.set(0)
+                        cacheCount.set(0)
+                        return -1L
+                    }
+
+                    var oldestUsage = Long.MAX_VALUE
+                    var mostLongUsedFile: File? = null
+                    for ((key, lastValueUsage) in lastUsageDates.entries) {
+                        if (mostLongUsedFile == null || lastValueUsage < oldestUsage) {
                             oldestUsage = lastValueUsage
-                        } else {
-                            if (lastValueUsage < oldestUsage!!) {
-                                oldestUsage = lastValueUsage
-                                mostLongUsedFile = key
-                            }
+                            mostLongUsedFile = key
                         }
                     }
-                }
 
-                var fileSize: Long = 0
-                if (mostLongUsedFile != null) {
-                    fileSize = calculateSize(mostLongUsedFile)
-                    if (!mostLongUsedFile.exists() || mostLongUsedFile.delete()) {
-                        lastUsageDates.remove(mostLongUsedFile)
-                    } else {
-                        return -1
+                    val target = mostLongUsedFile ?: return -1L
+                    val existed = target.exists()
+                    val fileSize = if (existed) calculateSize(target) else 0L
+                    if (!existed || target.delete()) {
+                        lastUsageDates.remove(target)
+                        cacheCount.updateAndGet { (it - 1).coerceAtLeast(0) }
+                        cacheSize.updateAndGet { (it - fileSize).coerceAtLeast(0L) }
+                        return fileSize
                     }
+                    return -1L
                 }
-                return fileSize
             } catch (e: Exception) {
                 e.printOnDebug()
-                return 0
+                return -1L
             }
-
         }
 
         private fun calculateSize(file: File): Long {

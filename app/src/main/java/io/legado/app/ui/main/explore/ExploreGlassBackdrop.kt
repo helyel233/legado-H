@@ -51,6 +51,7 @@ import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
 import io.legado.app.utils.stackBlurSoftware
 import java.io.File
+import java.util.WeakHashMap
 import kotlin.math.max
 import splitties.init.appCtx
 
@@ -805,36 +806,49 @@ object ExploreGlassBackdrop {
         val useHardware = supportsHardwareBlur() && config.hardwareBlur
         val density = context.resources.displayMetrics.density
         val blurPx = exploreHardwareBlurPx(material.blurDp, density)
-        return FrostedGlassDrawable(
+        val baseColor = ThemeStore.bottomBackground(context)
+        val strokeColor = glassStrokeColor(context)
+        val effectiveBlurPx = if (useHardware) blurPx else 0f
+        val useLiquid = rowLiquidCapability(
+            sdkInt = Build.VERSION.SDK_INT,
+            rowLiquidEnabled = ROW_LIQUID_ENABLED,
+            hardwareBlurPref = config.hardwareBlur,
+            isEInk = false,
+            isLowRam = false,
+            canvasHardwareAccelerated = true,
+            backdropAvailable = true,
+            liquidFailed = RowLiquidRuntimeState.shaderFailed
+        ) == RowLiquidCapability.LIQUID
+        val reusable = (host.background as? FrostedGlassDrawable)?.takeIf {
+            it.matchesConfig(
+                radiusPx = cornerRadiusPx,
+                baseColor = baseColor,
+                material = material,
+                strokeColor = strokeColor,
+                useHardware = useHardware,
+                blurPx = effectiveBlurPx,
+                useLiquid = useLiquid,
+                screenAligned = screenAligned
+            )
+        }
+        val drawable = reusable ?: FrostedGlassDrawable(
             host = host,
             radiusPx = cornerRadiusPx,
-            baseColor = ThemeStore.bottomBackground(context),
+            baseColor = baseColor,
             material = material,
-            strokeColor = glassStrokeColor(context),
+            strokeColor = strokeColor,
             useHardware = useHardware,
-            blurPx = if (useHardware) blurPx else 0f,
-            screenAligned = screenAligned,
-            // 设备与偏好层面判定一次；「当帧」的三个事实（硬件加速 Canvas / 底图可用 /
-            // 持久故障位）交给 rowLiquidDrawableNow 在 draw() 里逐帧判定，
-            // 故障位传**进程级**那一位：AGSL 一旦失败过，之后重建的行不再建液态层。
-            useLiquid = rowLiquidCapability(
-                sdkInt = Build.VERSION.SDK_INT,
-                rowLiquidEnabled = ROW_LIQUID_ENABLED,
-                hardwareBlurPref = config.hardwareBlur,
-                isEInk = false,
-                isLowRam = false,
-                canvasHardwareAccelerated = true,
-                backdropAvailable = true,
-                liquidFailed = RowLiquidRuntimeState.shaderFailed
-            ) == RowLiquidCapability.LIQUID
-        ).also { drawable ->
-            //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
-            //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
-            drawable.updateBackdrop(
-                backdrop(context, config, material, drawable::updateBackdrop)
-            )
-            GlassPositionTracker.attach(host, drawable)
-        }
+            blurPx = effectiveBlurPx,
+            useLiquid = useLiquid,
+            screenAligned = screenAligned
+        )
+        //主线程只查缓存；miss 时异步构建（decode + 软件模糊较重，避免主线程卡顿/ANR），
+        //完成后回填刷新，期间先用上一张缓存位图（若有）过渡
+        drawable.updateBackdrop(
+            backdrop(context, config, material, drawable::updateBackdrop)
+        )
+        GlassPositionTracker.attach(host, drawable)
+        return drawable
     }
 
     private fun backdrop(
@@ -1015,7 +1029,7 @@ object ExploreGlassBackdrop {
 private class FrostedGlassDrawable(
     private val host: View,
     private val radiusPx: Float,
-    baseColor: Int,
+    private val baseColor: Int,
     private val material: GlassMaterialPreset.Params,
     /** 全局描边色（非空时覆盖默认的 surfaceColor × strokeAlpha 描边）。 */
     private val strokeColor: Int?,
@@ -1023,13 +1037,32 @@ private class FrostedGlassDrawable(
     /** 硬件 / 液态管线的高斯 sigma（像素）；0 = 模糊倍率 0，不额外模糊。 */
     private val blurPx: Float,
     /** 是否尝试行内液态玻璃（A2）；为 false 时只走静态管线。 */
-    useLiquid: Boolean,
+    private val useLiquid: Boolean,
     /**
      * 采样根是否取屏幕而非宿主根视图。对话框是独立窗口，根视图只有面板大小，
      * 按根视图换算会把整张壁纸缩进面板；置 true 后与壁纸位图的屏幕口径一致。
      */
     private val screenAligned: Boolean = false
 ) : Drawable() {
+
+    fun matchesConfig(
+        radiusPx: Float,
+        baseColor: Int,
+        material: GlassMaterialPreset.Params,
+        strokeColor: Int?,
+        useHardware: Boolean,
+        blurPx: Float,
+        useLiquid: Boolean,
+        screenAligned: Boolean
+    ): Boolean =
+        this.radiusPx == radiusPx &&
+            this.baseColor == baseColor &&
+            this.material == material &&
+            this.strokeColor == strokeColor &&
+            this.useHardware == useHardware &&
+            this.blurPx == blurPx &&
+            this.useLiquid == useLiquid &&
+            this.screenAligned == screenAligned
 
     private val glassPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1464,15 +1497,29 @@ internal const val GLASS_POSITION_TRACKING_TAG_KEY: Int = 0x5F_4753_50
 /**
  * 把 [FrostedGlassDrawable] 挂到 host 的布局 / 滚动 / attach 回调上，
  * 用「位置缓存 + 变化才重算」替代 draw() 里的逐帧 getLocationOnScreen。
- * 视图脱离窗口时自动解绑，避免泄漏。
+ *
+ * 同一可滚动祖先（[RecyclerView] / [NestedScrollView]）与同一 [ViewTreeObserver] 上的
+ * 所有已挂载行共享同一个协调器（各只注册 1 个滚动监听 / 1 个绘制前监听），避免 N 行
+ * 扇出 N 倍回调；行复用重复绑定同一 host 时直接就地复用既有 [TrackerBinding]，
+ * 不再逐次拆装监听。视图脱离窗口或主动调用 [detach] 时自动从协调器注销并清理空闲监听。
  */
 private object GlassPositionTracker {
 
     private const val TAG_KEY = GLASS_POSITION_TRACKING_TAG_KEY
     private const val TAG_KEY_SCROLLER = 0x5F_4753_51
+    private const val TAG_KEY_COORDINATOR = 0x5F_4753_52
+
+    private val preDrawCoordinators = WeakHashMap<ViewTreeObserver, PreDrawCoordinator>()
 
     fun attach(host: View, drawable: FrostedGlassDrawable) {
-        // 行复用会反复设置新背景，先把上一次挂接的 tracker 解绑，避免回调累积/泄漏
+        val existing = host.getTag(TAG_KEY) as? TrackerBinding
+        if (existing != null && existing.host === host) {
+            existing.updateDrawable(drawable)
+            if (host.isAttachedToWindow) {
+                existing.ensureAttached(host)
+            }
+            return
+        }
         detach(host)
         val binding = TrackerBinding(host, drawable)
         host.setTag(TAG_KEY, binding)
@@ -1484,13 +1531,8 @@ private object GlassPositionTracker {
 
     /**
      * 显式解绑：切到无玻璃档 / 降级分支时不会再走 [attach]，若不处理，上一份
-     * [TrackerBinding]（含 host 的 attach/layout 监听、RecyclerView / NestedScrollView
-     * 滚动监听与旧 drawable 引用）会滞留在 tag 里直到 View detach 或切回玻璃档。
-     *
-     * 复用 [TrackerBinding.detach] 这条既有的 View-detach 路径，不注册任何新监听、
-     * 不新增对象引用，还顺手清掉 tag 释放旧 drawable；重复调用是 no-op
-     * （[TrackerBinding.uninstallScrollTarget] 本身幂等）。玻璃档 attach 仍会先
-     * detach 再挂新 binding，行为逐值不变。
+     * [TrackerBinding]（含 host 的 attach/layout 监听、与共享滚动/PreDraw 协调器的注册
+     * 以及旧 drawable 引用）会滞留在 tag 里直到 View detach 或切回玻璃档。
      */
     fun detach(host: View) {
         (host.getTag(TAG_KEY) as? TrackerBinding)?.detach(host)
@@ -1502,46 +1544,52 @@ private object GlassPositionTracker {
         (host.getTag(TAG_KEY) as? TrackerBinding)?.updatePosition(host)
     }
 
-    private class TrackerBinding(
-        private val host: View,
-        private val drawable: FrostedGlassDrawable
-    ) : View.OnAttachStateChangeListener, View.OnLayoutChangeListener,
-        ViewTreeObserver.OnPreDrawListener {
-        private var scrollTarget: View? = null
+    private fun getOrCreateScrollCoordinator(target: View): ScrollableCoordinator {
+        return (target.getTag(TAG_KEY_COORDINATOR) as? ScrollableCoordinator)
+            ?: ScrollableCoordinator(target).also {
+                target.setTag(TAG_KEY_COORDINATOR, it)
+            }
+    }
 
-        /**
-         * 宿主所在窗口的「绘制前」回调。
-         *
-         * 行滚动由 [scrollListener] 覆盖，但「展开 / 折叠上方行导致下方行整体位移」不会
-         * 产生滚动事件：RecyclerView 用 change 动画的 translation 移动子项时子项 frame
-         * 不变，`onLayoutChange` 不触发；子项被移动本身也不会让系统重录它的内容，
-         * 于是玻璃里仍是原地采样的壁纸，表现为折叠后下方行错位、滑动一下才恢复。
-         * `OnPreDrawListener` 在每次遍历的布局之后、录制绘制之前派发，能覆盖 translation
-         * 位移，位置变了就 invalidateSelf 让本帧重录，保证采样坐标与绘制位置一致。
-         *
-         * 注册时保存 observer 实例：View 脱离窗口后 `viewTreeObserver` 会返回新的
-         * 游离 observer，用保存的实例才能移除原来那一个。
-         */
-        private var preDrawObserver: ViewTreeObserver? = null
+    private fun getOrCreatePreDrawCoordinator(observer: ViewTreeObserver): PreDrawCoordinator {
+        return preDrawCoordinators[observer]
+            ?: PreDrawCoordinator(observer).also {
+                preDrawCoordinators[observer] = it
+            }
+    }
 
-        fun attach() {
-            host.addOnAttachStateChangeListener(this)
-            host.addOnLayoutChangeListener(this)
+    private class ScrollableCoordinator(val target: View) {
+        private val bindings = LinkedHashSet<TrackerBinding>()
+        private val dispatchSnapshot = ArrayList<TrackerBinding>()
+        private var dispatching = false
+        private var installed = false
+
+        private val scrollListener = object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                notifyBindings()
+            }
         }
 
-        fun detach(v: View) {
-            v.removeOnAttachStateChangeListener(this)
-            v.removeOnLayoutChangeListener(this)
-            uninstallPreDrawListener()
-            onViewDetachedFromWindow(v)
+        private val scrollChangeListener =
+            NestedScrollView.OnScrollChangeListener { _, _, _, _, _ ->
+                notifyBindings()
+            }
+
+        fun register(binding: TrackerBinding) {
+            if (bindings.add(binding) && !installed) {
+                install()
+            }
         }
 
-        override fun onViewAttachedToWindow(v: View) {
-            // attach 可能连续发生（复用/重挂）而中间没有走 detach，
-            // 先卸载旧滚动目标，避免 RecyclerView 滚动监听重复注册
-            scrollTarget?.let { uninstallScrollTarget(it) }
-            scrollTarget = nearestScrollableAncestor(v)
-            when (val target = scrollTarget) {
+        fun unregister(binding: TrackerBinding) {
+            if (bindings.remove(binding) && bindings.isEmpty()) {
+                uninstall()
+            }
+        }
+
+        private fun install() {
+            installed = true
+            when (target) {
                 is RecyclerView -> target.addOnScrollListener(scrollListener)
                 is NestedScrollView -> {
                     target.setOnScrollChangeListener(scrollChangeListener)
@@ -1550,40 +1598,11 @@ private object GlassPositionTracker {
                     target.setTag(TAG_KEY_SCROLLER, scrollChangeListener)
                 }
             }
-            installPreDrawListener(v)
-            updatePosition(v)
         }
 
-        override fun onViewDetachedFromWindow(v: View) {
-            scrollTarget?.let { uninstallScrollTarget(it) }
-            scrollTarget = null
-            uninstallPreDrawListener()
-        }
-
-        private fun installPreDrawListener(v: View) {
-            uninstallPreDrawListener()
-            val observer = v.viewTreeObserver
-            if (observer.isAlive) {
-                observer.addOnPreDrawListener(this)
-                preDrawObserver = observer
-            }
-        }
-
-        private fun uninstallPreDrawListener() {
-            val observer = preDrawObserver ?: return
-            if (observer.isAlive) {
-                observer.removeOnPreDrawListener(this)
-            }
-            preDrawObserver = null
-        }
-
-        /** 绘制前：按当帧位置刷新采样坐标；位置变化时重录内容。始终返回 true 放行绘制。 */
-        override fun onPreDraw(): Boolean {
-            updatePosition(host)
-            return true
-        }
-
-        private fun uninstallScrollTarget(target: View) {
+        private fun uninstall() {
+            if (!installed) return
+            installed = false
             when (target) {
                 is RecyclerView -> target.removeOnScrollListener(scrollListener)
                 is NestedScrollView -> {
@@ -1593,6 +1612,170 @@ private object GlassPositionTracker {
                     }
                 }
             }
+            if (target.getTag(TAG_KEY_COORDINATOR) === this) {
+                target.setTag(TAG_KEY_COORDINATOR, null)
+            }
+        }
+
+        private fun notifyBindings() {
+            if (bindings.isEmpty()) return
+            if (dispatching) {
+                bindings.toList().forEach { it.updatePosition() }
+                return
+            }
+            dispatching = true
+            try {
+                dispatchSnapshot.clear()
+                dispatchSnapshot.addAll(bindings)
+                for (i in 0 until dispatchSnapshot.size) {
+                    dispatchSnapshot[i].updatePosition()
+                }
+            } finally {
+                dispatchSnapshot.clear()
+                dispatching = false
+            }
+        }
+    }
+
+    /**
+     * 共享绘制前协调器：同窗口所有玻璃行共用一个 `OnPreDrawListener`，
+     * 覆盖「展开 / 折叠上方行引发 RecyclerView translation 位移」这类不产生滚动事件的场景。
+     * 注册时保存 observer 实例：View 脱离窗口后 `viewTreeObserver` 可能返回新的游离 observer。
+     */
+    private class PreDrawCoordinator(
+        val observer: ViewTreeObserver
+    ) : ViewTreeObserver.OnPreDrawListener {
+        private val bindings = LinkedHashSet<TrackerBinding>()
+        private val dispatchSnapshot = ArrayList<TrackerBinding>()
+        private var dispatching = false
+        private var installed = false
+
+        fun register(binding: TrackerBinding) {
+            if (bindings.add(binding) && !installed) {
+                install()
+            }
+        }
+
+        fun unregister(binding: TrackerBinding) {
+            if (bindings.remove(binding) && bindings.isEmpty()) {
+                uninstall()
+            }
+        }
+
+        private fun install() {
+            if (!observer.isAlive) return
+            observer.addOnPreDrawListener(this)
+            installed = true
+        }
+
+        private fun uninstall() {
+            if (installed && observer.isAlive) {
+                observer.removeOnPreDrawListener(this)
+            }
+            installed = false
+            if (preDrawCoordinators[observer] === this) {
+                preDrawCoordinators.remove(observer)
+            }
+        }
+
+        override fun onPreDraw(): Boolean {
+            if (!observer.isAlive || bindings.isEmpty()) {
+                uninstall()
+                return true
+            }
+            if (dispatching) {
+                bindings.toList().forEach { it.updatePosition() }
+                return true
+            }
+            dispatching = true
+            try {
+                dispatchSnapshot.clear()
+                dispatchSnapshot.addAll(bindings)
+                for (i in 0 until dispatchSnapshot.size) {
+                    dispatchSnapshot[i].updatePosition()
+                }
+            } finally {
+                dispatchSnapshot.clear()
+                dispatching = false
+            }
+            return true
+        }
+    }
+
+    private class TrackerBinding(
+        val host: View,
+        private var drawable: FrostedGlassDrawable
+    ) : View.OnAttachStateChangeListener, View.OnLayoutChangeListener {
+        private val scrollCoordinators = ArrayList<ScrollableCoordinator>(2)
+        private var preDrawCoordinator: PreDrawCoordinator? = null
+        private val location = IntArray(2)
+        private val rootLocation = IntArray(2)
+
+        fun updateDrawable(next: FrostedGlassDrawable) {
+            drawable = next
+        }
+
+        fun attach() {
+            host.addOnAttachStateChangeListener(this)
+            host.addOnLayoutChangeListener(this)
+        }
+
+        fun detach(v: View) {
+            v.removeOnAttachStateChangeListener(this)
+            v.removeOnLayoutChangeListener(this)
+            onViewDetachedFromWindow(v)
+        }
+
+        fun ensureAttached(v: View) {
+            if (scrollCoordinators.isEmpty() && preDrawCoordinator == null) {
+                onViewAttachedToWindow(v)
+                return
+            }
+            val observer = v.viewTreeObserver
+            val currentNearestScrollable = nearestScrollableAncestor(v)
+            val sameObserver = preDrawCoordinator?.observer === observer || !observer.isAlive
+            val sameNearestScrollable =
+                scrollCoordinators.firstOrNull()?.target === currentNearestScrollable
+            if (!sameObserver || !sameNearestScrollable) {
+                onViewAttachedToWindow(v)
+                return
+            }
+            updatePosition(v)
+        }
+
+        override fun onViewAttachedToWindow(v: View) {
+            // attach 可能连续发生（复用/重挂）而中间没有走 detach，
+            // 先注销旧协调器注册，避免重复挂接
+            unregisterCoordinators()
+            var parent = v.parent
+            while (parent is ViewGroup) {
+                if (parent is RecyclerView || parent is NestedScrollView) {
+                    val coordinator = getOrCreateScrollCoordinator(parent)
+                    coordinator.register(this)
+                    scrollCoordinators.add(coordinator)
+                }
+                parent = parent.parent
+            }
+            val observer = v.viewTreeObserver
+            if (observer.isAlive) {
+                val preDraw = getOrCreatePreDrawCoordinator(observer)
+                preDraw.register(this)
+                preDrawCoordinator = preDraw
+            }
+            updatePosition(v)
+        }
+
+        override fun onViewDetachedFromWindow(v: View) {
+            unregisterCoordinators()
+        }
+
+        private fun unregisterCoordinators() {
+            for (i in 0 until scrollCoordinators.size) {
+                scrollCoordinators[i].unregister(this)
+            }
+            scrollCoordinators.clear()
+            preDrawCoordinator?.unregister(this)
+            preDrawCoordinator = null
         }
 
         override fun onLayoutChange(
@@ -1609,28 +1792,16 @@ private object GlassPositionTracker {
             updatePosition(v)
         }
 
-        private val scrollListener = object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                updatePosition(host)
-            }
-        }
-
-        private val scrollChangeListener =
-            NestedScrollView.OnScrollChangeListener { _, _, _, _, _ ->
-                updatePosition(host)
-            }
-
-        /** 供 [GlassPositionTracker.refresh] 调用：预览容器滚动后主动重采样。 */
-        fun updatePosition(v: View) {
+        /** 供 [GlassPositionTracker.refresh] 与共享协调器调用：主动重采样位置。 */
+        fun updatePosition(v: View = host) {
             val root = v.rootView
             if (v.width <= 0 || v.height <= 0 || root.width <= 0 || root.height <= 0) return
-            val location = IntArray(2)
-            val rootLocation = IntArray(2)
             v.getLocationOnScreen(location)
             root.getLocationOnScreen(rootLocation)
             drawable.onPositionChanged(location[0], location[1], rootLocation[0], rootLocation[1])
         }
     }
+
     private fun nearestScrollableAncestor(view: View): View? {
         var parent = view.parent
         while (parent is ViewGroup) {
