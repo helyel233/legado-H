@@ -1,5 +1,27 @@
 # 更新日志
 
+## 1.37.1 版（2026-11-23）
+
+阅读体验与底层稳定性大批次：段评快照持久化、字体预览体系、封面槽位包三轨落地，配合阅读排版引擎收口（两端对齐纯函数化 + 特殊字符单一真相源）、章节加载单飞与翻页预热稳定性、缓存与性能批次治理。本批 173 文件 +20298/−2678，新增 60+ 纯逻辑单测类。**特性 + 优化/修复 → minor+0.1、跳过 1.x.0。**
+
+### 新增
+- 段评快照持久化：review 目录落盘 / 内存 LruCache / 资源 blob / 目录索引四层收口，Inventory 有界缓存（索引 length+lastModified 校验），清书缓存联动四层失效；段评按钮用原始 src 做快照 key，角标主题色 + 对比描边（无假玻璃）
+- 字体预览体系：FontPreviewSupport（字体魔数 / SFNT name 表校验 + system:/@font:/content:// 协议解析 + 双层有界 LruCache 异步解码）+ ArtFontPreviewComponents 实时排版卡 / 候选选择器，Typeface 缓存统一 UiTypefaceCache（MAX=8）
+- 封面槽位包：PreferKey 新增 6 键，UnifiedPackage 新增 COVER_SLOT 第三轨（Codec/Models/Repository），备份导出 active_prefs.json + 恢复 reapply，覆盖优先级由 coverSlotLocked 决定；双轨名单真相源统一
+- 章节加载协调：BookSessionLoadCoordinator（book-info/TOC single-flight + 30s TTL handoff）+ ChangeSourceTextAnchorHelper + TocEarlyChapterDispatchPolicy，内容抓取复用 ChapterFetchCoordinator 不另起单飞
+- 阅读加载：ChapterFetchCoordinator（single-flight + 引用计数取消）作为阅读器抓取单飞真相源，ReadBookContentLoader 布局漂移/陈旧请求哨兵（独立布尔态），ChapterLoadGuard 三态判定
+- 翻页预热：PageTurnPrewarmPolicy（6 条件门控）+ FloatPageScroller（浮点滚动消除整数累积误差），全部 PageDelegate 子类接线 + generation 防过期回调；DoublePageSimulation 从 Bitmap 迁 CanvasRecorder 降内存
+- 朗读协调：HttpReadAloudSupport（SystemTtsSynthesisCoordinator，并发安全 pending/seq/released），HttpReadAloudService 接入
+- 正文缓存 + 段评快照双进度展示，底层真相源 ReviewSnapshotStore + EventBus 增量
+
+### 优化与修复
+- 阅读排版引擎收口：TypographyJustification 纯 JVM 两端对齐（中英文标点压缩 + 有效空格数分配 + 溢出行标点分级压缩），TextChapterLayout 内联逻辑改调纯函数 + 越界回退自然布局；特殊字符（袮/꧁/零宽锚点）常量收敛单一真相源
+- 快速绘制：TextLine 新增 hasCustomColumnLayout 门控（标点压缩后自定义列回退逐列绘制），补 drawThinStroke 快速路径 + needsPerColumnThinStroke 防误伤字形；ZhLayout 标点集扩展 + cnCharWidthCache 线程安全双检索
+- 缓存稳定性：ACache key→文件映射 hashCode 改 sha256 + legacy 双文件名过渡迁移 + clearEpoch/activeWrites 线程安全；CacheManager/ChapterContentCache/BookHelp 统一 memoryDeadlines 单一真相源 + Long 防溢出 + 精确驱逐替代全局 clear
+- DiffUtil 修复：RecyclerAdapter useDiffUtil/isDiffActive + upResumed 主线程同步，5 个 XML Adapter 接入并核对 equals 渲染字段；AnalyzeRule 三处缓存迁 companion object + 双检锁 + 不可变集合
+- 主界面：ViewPager→ViewPager2（稳定 ID + DiffUtil），MainTabDiff + BookshelfTabRegistry + RssTabIdRegistry 收敛 tab ID 单一真相源，删除 MainFragmentInterface；UiPerfMetrics 锁粒度收敛逐 bucket
+- 其他：OkHttpStreamFetcher/BlurTransformation/BackstageWebView 失败 URL 处理 + disk cache key 含 radius + 删除全局 webview_result key；封面 fallback 描边色 Compose/XML 双轨同步；玻璃位置追踪共享化（N 行共享 1 个 Scroll/PreDraw 监听器，渲染管线未动）；BookHelp durIndex 修比例方向反转 + Long 防溢出；ReadBook.msgIsError 独立布尔态（upMsg 显式 isError 优先）；骨架屏过渡态前缀白名单
+
 ## 1.36.2 版（2026-11-22）
 
 修复主题模式与独立墨水屏（eInk）开关在多入口间的状态不同步：统一主题模式选择的单一写入口，移除外观中心重复的模式切换控件，「我的」页切换日/夜/跟随系统时同步清除 eInk 状态，恢复此前非墨水屏偏好。**仅修复 → patch+0.1。**

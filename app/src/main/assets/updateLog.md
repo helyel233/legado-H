@@ -4,6 +4,19 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.37.1 · 2026/11/23**
+
+- 段评快照持久化：落盘/内存LruCache/资源blob/目录索引四层收口，清书缓存联动失效，段评角标主题色+对比描边
+- 字体预览体系：FontPreviewSupport（魔数/SFNT name 表校验 + 三协议解析 + 双层有界缓存异步解码）+ 实时排版卡/候选选择器，Typeface 缓存统一（MAX=8）
+- 封面槽位包：PreferKey 新增 6 键，UnifiedPackage 新增 COVER_SLOT 第三轨，备份导出/恢复含 active_prefs.json，锁定键决定覆盖优先级
+- 阅读加载稳定性：ChapterFetchCoordinator 单飞真相源 + BookSessionLoadCoordinator（30s TTL handoff）+ 布局漂移/陈旧请求哨兵 + ChapterLoadGuard 三态判定
+- 翻页：PageTurnPrewarmPolicy 六条件门控 + FloatPageScroller 浮点滚动消累积误差 + generation 防过期回调，DoublePageSimulation 迁 CanvasRecorder 降内存
+- 排版引擎：TypographyJustification 纯函数两端对齐 + 标点分级压缩，特殊字符单一真相源，TextLine 自定义列回退 + 细描边快速路径
+- 缓存治理：ACache key 改 sha256 + 双文件名迁移，memoryDeadlines 单一真相源 + 精确驱逐，DiffUtil 真正启用（5 个 Adapter 接入），AnalyzeRule 缓存双检锁
+- 主界面 ViewPager→ViewPager2 + 稳定 ID/DiffUtil，tab ID 三处注册表单一真相源，删除 MainFragmentInterface
+- 朗读协调器并发安全化、玻璃位置追踪 N 行共享单监听器（渲染管线未动）、封面 fallback 描边色双轨同步
+- 新增 60+ 纯逻辑单测类；五项静态门禁全通过，编译检查通过
+
 **vH.1.36.2 · 2026/11/22**
 
 - 修复主题模式/eInk 多入口状态不同步：AppConfig 新增统一入口 setThemeModeSelection + resolveDisplayThemeMode，切日/夜/跟随系统时一次提交同步 themeMode+eInkMode+lastNonEInkThemeMode
