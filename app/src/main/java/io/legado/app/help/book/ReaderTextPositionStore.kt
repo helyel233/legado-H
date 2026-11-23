@@ -5,11 +5,41 @@ import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefString
 import splitties.init.appCtx
+import java.util.concurrent.ConcurrentHashMap
 
 /** One bounded anchor per ordinary book; does not mutate the directory or source variables. */
 object ReaderTextPositionStore {
     @androidx.annotation.Keep
     data class Position(val chapterUrl: String, val renderer: String, val offset: Int, val anchor: ReaderTextAnchor)
+
+    private data class ChangeSourceAnchorKey(val bookUrl: String, val chapterIndex: Int)
+
+    private val pendingChangeSourceAnchors =
+        ConcurrentHashMap<ChangeSourceAnchorKey, ChangeSourceTextAnchor>()
+
+    fun saveChangeSourceAnchor(bookUrl: String, chapterIndex: Int, anchor: ChangeSourceTextAnchor) {
+        if (bookUrl.isBlank() || chapterIndex < 0) return
+        pendingChangeSourceAnchors[ChangeSourceAnchorKey(bookUrl, chapterIndex)] = anchor
+    }
+
+    fun hasChangeSourceAnchor(bookUrl: String, chapterIndex: Int): Boolean {
+        if (bookUrl.isBlank() || chapterIndex < 0) return false
+        return pendingChangeSourceAnchors.containsKey(ChangeSourceAnchorKey(bookUrl, chapterIndex))
+    }
+
+    fun consumeChangeSourceAnchor(bookUrl: String, chapterIndex: Int): ChangeSourceTextAnchor? {
+        if (bookUrl.isBlank() || chapterIndex < 0) return null
+        return pendingChangeSourceAnchors.remove(ChangeSourceAnchorKey(bookUrl, chapterIndex))
+    }
+
+    fun clearChangeSourceAnchors(bookUrl: String? = null) {
+        if (bookUrl.isNullOrBlank()) {
+            pendingChangeSourceAnchors.clear()
+        } else {
+            pendingChangeSourceAnchors.keys.removeIf { it.bookUrl == bookUrl }
+        }
+    }
+
     private fun key(bookUrl: String) = "readerTextAnchor." + MD5Utils.md5Encode16(bookUrl)
 
     private fun read(bookUrl: String): Position? = runCatching {

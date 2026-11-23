@@ -10,6 +10,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.book.BookSessionLoadCoordinator
 import io.legado.app.model.ReadBook
 import io.legado.app.help.search.LibrarySearchIndexer
 import io.legado.app.model.localBook.LocalBook
@@ -28,6 +29,7 @@ class TocViewModel(application: Application) : BaseViewModel(application) {
     fun initBook(bookUrl: String) {
         this.bookUrl = bookUrl
         execute {
+            BookSessionLoadCoordinator.default.awaitPendingPersist(bookUrl)
             appDb.bookDao.getBook(bookUrl)?.let {
                 bookData.postValue(it)
             }

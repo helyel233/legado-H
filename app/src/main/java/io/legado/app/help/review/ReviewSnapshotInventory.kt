@@ -20,9 +20,34 @@ internal object ReviewSnapshotInventory {
         val modified: Long,
         val chapterUrl: String,
         val status: ReviewChapterSnapshotStatus? = null,
+        val buttonSrc: String? = null,
+    )
+
+    data class SnapshotHeader(
+        val bookUrl: String,
+        val chapterUrl: String,
+        val buttonSrc: String,
     )
 
     data class Inventory(val files: Map<String, Entry> = emptyMap())
+
+    private data class CachedInventory(
+        val length: Long,
+        val modified: Long,
+        val inventory: Inventory,
+    )
+
+    private const val MEMORY_CACHE_LIMIT = 8
+    private val memoryCache = object : LinkedHashMap<String, CachedInventory>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedInventory>?): Boolean =
+            size > MEMORY_CACHE_LIMIT
+    }
+
+    @Synchronized
+    fun invalidate(dir: File) {
+        val key = MD5Utils.md5Encode(dir.absolutePath)
+        memoryCache.remove(key)
+    }
 
     @Synchronized
     fun read(book: Book, checkActive: () -> Unit = {}): Inventory {
@@ -36,27 +61,24 @@ internal object ReviewSnapshotInventory {
         check(indexDir.isDirectory || indexDir.mkdirs()) {
             "无法创建评论目录索引: ${indexDir.absolutePath}"
         }
-        val index = AtomicFile(File(indexDir, MD5Utils.md5Encode(dir.absolutePath) + ".json"))
-        val previous = if (index.baseFile.exists()) {
-            index.openRead().bufferedReader(Charsets.UTF_8).use {
-                requireNotNull(GSON.fromJson(it, Inventory::class.java)) {
-                    "评论目录索引为空: ${index.baseFile.absolutePath}"
-                }
-            }
-        } else Inventory()
+        val dirKey = MD5Utils.md5Encode(dir.absolutePath)
+        val index = AtomicFile(File(indexDir, "$dirKey.json"))
+        val previous = readPreviousInventory(dirKey, index)
         val entries = files.associate { file ->
             checkActive()
             val size = file.length()
             val modified = file.lastModified()
             val old = previous.files[file.name]
-            val entry = if (old != null && old.size == size && old.modified == modified) {
+            val isStatus = ReviewSnapshotStore.isChapterStatusFile(file)
+            val entry = if (old != null && old.size == size && old.modified == modified && (isStatus || old.buttonSrc != null)) {
                 old
-            } else if (ReviewSnapshotStore.isChapterStatusFile(file)) {
+            } else if (isStatus) {
                 val status = requireNotNull(ReviewSnapshotStore.readChapterStatus(file))
                 require(status.bookUrl == book.bookUrl) { "评论状态书籍不匹配: ${file.absolutePath}" }
                 Entry(size, modified, status.chapterUrl.trim(), status)
             } else {
-                Entry(size, modified, readChapterUrl(file, book))
+                val header = readHeader(file, book)
+                Entry(size, modified, header.chapterUrl, buttonSrc = header.buttonSrc)
             }
             file.name to entry
         }
@@ -69,34 +91,75 @@ internal object ReviewSnapshotInventory {
                 GSON.toJson(result, writer)
                 writer.flush()
                 index.finishWrite(stream)
+                val baseFile = index.baseFile
+                memoryCache[dirKey] = CachedInventory(baseFile.length(), baseFile.lastModified(), result)
             } catch (error: Throwable) {
                 index.failWrite(stream)
+                memoryCache.remove(dirKey)
                 throw error
             }
         }
         return result
     }
 
-    private fun readChapterUrl(file: File, book: Book): String {
+    private fun readPreviousInventory(dirKey: String, index: AtomicFile): Inventory {
+        val baseFile = index.baseFile
+        if (!baseFile.exists()) {
+            memoryCache.remove(dirKey)
+            return Inventory()
+        }
+        val length = baseFile.length()
+        val modified = baseFile.lastModified()
+        memoryCache[dirKey]?.let { cached ->
+            if (cached.length == length && cached.modified == modified) {
+                return cached.inventory
+            }
+        }
+        val loaded = index.openRead().bufferedReader(Charsets.UTF_8).use {
+            requireNotNull(GSON.fromJson(it, Inventory::class.java)) {
+                "评论目录索引为空: ${baseFile.absolutePath}"
+            }
+        }
+        memoryCache[dirKey] = CachedInventory(length, modified, loaded)
+        return loaded
+    }
+
+    private fun readHeader(file: File, book: Book): SnapshotHeader {
+        val header = readHeaderUnchecked(file)
+        require(header.bookUrl == book.bookUrl && header.chapterUrl.isNotBlank() && header.buttonSrc.isNotBlank()) {
+            "评论快照身份错误: ${file.absolutePath}"
+        }
+        return header
+    }
+
+    internal fun readHeaderUnchecked(file: File): SnapshotHeader {
         JsonReader(file.bufferedReader(Charsets.UTF_8)).use { reader ->
             var bookUrl: String? = null
             var chapterUrl: String? = null
+            var buttonSrc: String? = null
             reader.beginObject()
             while (reader.hasNext()) {
                 when (reader.nextName()) {
                     "bookUrl" -> bookUrl = reader.nextString()
                     "chapterUrl" -> chapterUrl = reader.nextString().trim()
-                    "html" -> error("评论快照头缺少书籍或章节标识: ${file.absolutePath}")
+                    "buttonSrc" -> buttonSrc = reader.nextString().trim()
+                    "html" -> {
+                        if (bookUrl == null || chapterUrl == null) {
+                            error("评论快照头缺少书籍或章节标识: ${file.absolutePath}")
+                        }
+                        reader.skipValue()
+                    }
                     else -> reader.skipValue()
                 }
-                if (bookUrl != null && chapterUrl != null) {
-                    require(bookUrl == book.bookUrl && chapterUrl.isNotBlank()) {
-                        "评论快照身份错误: ${file.absolutePath}"
-                    }
-                    return chapterUrl
+                if (bookUrl != null && chapterUrl != null && buttonSrc != null) {
+                    return SnapshotHeader(bookUrl, chapterUrl, buttonSrc)
                 }
             }
+            return SnapshotHeader(
+                bookUrl = bookUrl.orEmpty(),
+                chapterUrl = chapterUrl.orEmpty(),
+                buttonSrc = buttonSrc.orEmpty(),
+            )
         }
-        error("评论快照缺少章节标识: ${file.absolutePath}")
     }
 }

@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.read.page.provider
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -94,6 +95,64 @@ class SkeletonLayoutTest {
         )
         assertTrue(
             SkeletonLayout.lines(100f, 100f, 0f, 200f, 10f, 5f).isEmpty()
+        )
+    }
+
+    @Test
+    fun `transitional loading messages stay on skeleton mode`() {
+        val transitionalMessages = listOf(
+            "正在加载目录...",
+            "正在加载目录 1/4 页…",
+            "正在加载目录，已加载 120 章…",
+            "加载中…",
+            "加载数据中…",
+            "正在换源",
+            "正在自动换源",
+            "更新目录中",
+            "正在解析目录 45%",
+            "Loading…",
+            "Loading chapters list 1/4 pages…",
+            "Changing source"
+        )
+        transitionalMessages.forEach { msg ->
+            assertTrue("Expected transitional loading for: $msg", SkeletonLayout.isTransitionalLoadingMessage(msg))
+            assertEquals(
+                "Expected SKELETON mode for: $msg",
+                StatusPageMode.SKELETON,
+                resolveStatusPageMode(msg, isExplicitError = false)
+            )
+        }
+    }
+
+    @Test
+    fun `error and failure messages switch to error message mode`() {
+        val errorMessages = listOf(
+            null,
+            "",
+            "   ",
+            "加载正文失败\nTimeout",
+            "获取正文失败\nHTTP 500",
+            "加载目录失败",
+            "目录加载失败，已切换为本地缓存目录",
+            "LoadTocError:404",
+            "初始化数据失败\nNullPointerException",
+            "详情页出错: 连接超时",
+            "当前无网络连接\n无法获取正文",
+            "没有书源",
+            "Failed to load content\nNetwork error"
+        )
+        errorMessages.forEach { msg ->
+            assertFalse("Expected error (non-transitional) for: $msg", SkeletonLayout.isTransitionalLoadingMessage(msg))
+            assertEquals(
+                "Expected ERROR_MESSAGE mode for: $msg",
+                StatusPageMode.ERROR_MESSAGE,
+                resolveStatusPageMode(msg, isExplicitError = false)
+            )
+        }
+        // Explicit error flag always forces error message mode even for ambiguous text.
+        assertEquals(
+            StatusPageMode.ERROR_MESSAGE,
+            resolveStatusPageMode("正在加载目录...", isExplicitError = true)
         )
     }
 }

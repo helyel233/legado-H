@@ -12,7 +12,63 @@ internal data class SkeletonLine(
     val height: Float
 )
 
+internal enum class StatusPageMode {
+    SKELETON,
+    ERROR_MESSAGE
+}
+
 internal object SkeletonLayout {
+
+    /**
+     * 判断当前阅读器提示文案是否属于过渡加载态（保持骨架屏+底部阶段文案，不跳变为错误白屏）。
+     */
+    fun isTransitionalLoadingMessage(msg: String?): Boolean {
+        val text = msg?.trim() ?: return false
+        if (text.isEmpty()) return false
+        if (looksLikeErrorMessage(text)) return false
+        val lower = text.lowercase()
+        return text.startsWith("正在") ||
+            text.startsWith("加载中") ||
+            text.startsWith("加载数据") ||
+            text.startsWith("更新目录") ||
+            text.startsWith("读取云端") ||
+            text.startsWith("删除云端") ||
+            text.startsWith("缓冲") ||
+            text.startsWith("连接中") ||
+            lower.startsWith("loading") ||
+            lower.startsWith("updating chapters") ||
+            lower.startsWith("parsing contents") ||
+            lower.startsWith("changing source") ||
+            lower.startsWith("reading cloud chapter") ||
+            lower.startsWith("deleting cloud cache")
+    }
+
+    private fun looksLikeErrorMessage(text: String): Boolean {
+        val lower = text.lowercase()
+        if (text.contains("失败") ||
+            text.contains("出错") ||
+            text.contains("异常") ||
+            text.contains("错误") ||
+            text.contains("找不到") ||
+            text.contains("没有权限") ||
+            text.contains("没有书籍") ||
+            text.contains("没有书源") ||
+            text.contains("无网络连接") ||
+            text.contains("切换为本地缓存")
+        ) {
+            return true
+        }
+        return lower.contains("failed") ||
+            lower.contains("error") ||
+            lower.contains("exception") ||
+            lower.contains("no book") ||
+            lower.contains("no source") ||
+            lower.contains("no network") ||
+            lower.contains("not found") ||
+            lower.contains("no access permission") ||
+            lower.contains("outside the chapter list") ||
+            lower.contains("canceled")
+    }
 
     /**
      * 每行的宽度比例，按固定序列模拟真实段落的参差。

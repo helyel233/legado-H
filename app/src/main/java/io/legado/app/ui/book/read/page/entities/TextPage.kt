@@ -14,6 +14,7 @@ import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.TextUtils
 import androidx.annotation.Keep
 import androidx.core.graphics.withTranslation
 import io.legado.app.R
@@ -88,6 +89,7 @@ data class TextPage(
      * 代替「整页只有一句加载文案」的空白页，消除正文到达时的整页闪烁。
      */
     var isSkeleton: Boolean = false
+    var skeletonHint: String? = null
     var canvasRecorder = CanvasRecorderFactory.create(true)
     private var epubBackgroundRecorder = CanvasRecorderFactory.create(true)
     var doublePage = false
@@ -632,15 +634,22 @@ data class TextPage(
      * 骨架底部的加载提示文字
      */
     private fun drawSkeletonHint(canvas: Canvas, left: Float, right: Float, baseline: Float) {
-        val hint = appCtx.getString(R.string.data_loading)
+        val hint = skeletonHint?.takeIf { it.isNotBlank() } ?: appCtx.getString(R.string.data_loading)
         val paint = PaintPool.obtain()
         paint.style = Paint.Style.FILL
         paint.isAntiAlias = true
-        paint.color = skeletonColor(0.34f)
+        paint.color = skeletonColor(0.45f)
         paint.textSize = ChapterProvider.contentPaint.textSize * 0.85f
         paint.typeface = ChapterProvider.contentPaint.typeface ?: ChapterProvider.typeface
-        val textWidth = paint.measureText(hint)
-        canvas.drawText(hint, left + (right - left - textWidth) / 2f, baseline, paint)
+        val maxWidth = (right - left).coerceAtLeast(1f)
+        val drawText = TextUtils.ellipsize(
+            hint,
+            TextPaint(paint),
+            maxWidth,
+            TextUtils.TruncateAt.END
+        ).toString()
+        val textWidth = paint.measureText(drawText)
+        canvas.drawText(drawText, left + (right - left - textWidth) / 2f, baseline, paint)
         PaintPool.recycle(paint)
     }
 

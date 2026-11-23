@@ -72,6 +72,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.legado.app.help.book.BookSessionLoadCoordinator
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.library.LibraryCloudState
 import io.legado.app.help.book.isEpub
@@ -279,6 +280,10 @@ class ReadMenu @JvmOverloads constructor(
         viewScope()?.launch {
             val loaded = withContext(Dispatchers.IO) {
                 appDb.bookChapterDao.getChapter(book.bookUrl, ReadBook.durChapterIndex)
+                    ?: BookSessionLoadCoordinator.default.findStagedChapter(
+                        book.bookUrl,
+                        ReadBook.durChapterIndex
+                    )
             }
             if (loaded != null) {
                 applyTextChapter(loaded, null)
@@ -841,7 +846,8 @@ class ReadMenu @JvmOverloads constructor(
                                 hasLogin = !ReadBook.bookSource?.loginUrl.isNullOrEmpty(),
                                 hasVipChapter = !ReadBook.bookSource?.loginUrl.isNullOrEmpty()
                                         && ReadBook.curTextChapter?.isVip == true
-                                        && ReadBook.curTextChapter?.isPay != true
+                                        && ReadBook.curTextChapter?.isPay != true,
+                                canRevertSource = callBack.canRevertSourceChange()
                             ),
                             actions = ReadMenuActionBarActions(
                                 onChapterClick = { handleChapterClick() },
@@ -850,6 +856,7 @@ class ReadMenu @JvmOverloads constructor(
                                 onPayClick = { callBack.payAction() },
                                 onEditSourceClick = { callBack.openSourceEditActivity() },
                                 onDisableSourceClick = { callBack.disableSource() },
+                                onRevertSourceClick = { callBack.revertLastSourceChange() },
                                 onCustomButtonClick = { handleCustomButtonClick() },
                                 onCustomButtonLongClick = { handleCustomButtonLongClick() },
                                 onCloudClick = { callBack.showLibraryCloudChapters(refresh = false) },
@@ -1306,6 +1313,8 @@ class ReadMenu @JvmOverloads constructor(
         fun refreshContent()
         fun changeSource()
         fun changeSourceSingle()
+        fun canRevertSourceChange(): Boolean = false
+        fun revertLastSourceChange() = Unit
         fun showRefreshOptions()
         fun showCacheDialog()
         fun addBookmark()

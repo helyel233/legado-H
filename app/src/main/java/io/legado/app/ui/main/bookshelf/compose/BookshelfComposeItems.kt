@@ -232,6 +232,8 @@ fun BookshelfGridItem(
     onLongClick: (BookshelfItemUi) -> Unit
 ) {
     val context = LocalContext.current
+    @Suppress("UNUSED_VARIABLE")
+    val appearanceVersion = LocalBookshelfAppearanceVersion.current
     val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
     val cardScope = tokens.bookshelfCard
     val themeSignature = tokens.paletteSignature

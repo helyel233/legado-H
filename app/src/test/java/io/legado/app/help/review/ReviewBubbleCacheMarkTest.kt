@@ -81,4 +81,16 @@ class ReviewBubbleCacheMarkTest {
         // 小数点若被区域设置成逗号，SVG 属性会解析失败（cx="3,14"）
         assertEquals("3.14", ParagraphBubbleRenderer.fixed(3.14159f))
     }
+
+    @Test
+    fun markInjectsHighContrastHaloForLightAndDarkColors() {
+        val svg = """<svg viewBox="0 0 64 64"><text x="32" y="32">5</text></svg>"""
+        val darkMarkMarked = ParagraphBubbleRenderer.injectCachedMark(svg, "#0A84FF")
+        assertTrue(darkMarkMarked.contains("fill=\"#FFFFFF\""))
+        assertTrue(darkMarkMarked.contains("stroke=\"#0A84FF\""))
+
+        val lightMarkMarked = ParagraphBubbleRenderer.injectCachedMark(svg, "#FFF59D")
+        assertTrue(lightMarkMarked.contains("fill=\"#18181B\""))
+        assertTrue(lightMarkMarked.contains("stroke=\"#FFF59D\""))
+    }
 }

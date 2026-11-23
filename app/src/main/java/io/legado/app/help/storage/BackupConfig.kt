@@ -59,6 +59,8 @@ object BackupConfig {
     private val ignorePrefKeys = arrayOf(
         PreferKey.defaultCover,
         PreferKey.defaultCoverDark,
+        PreferKey.defaultGroupCover,
+        PreferKey.defaultGroupCoverDark,
         PreferKey.backupPath,
         PreferKey.defaultBookTreeUri,
         PreferKey.webDavDeviceName,
@@ -166,7 +168,15 @@ object BackupConfig {
         PreferKey.coverShowName,
         PreferKey.coverShowAuthor,
         PreferKey.coverShowNameN,
-        PreferKey.coverShowAuthorN
+        PreferKey.coverShowAuthorN,
+        PreferKey.currentCoverSlotPackageId,
+        PreferKey.activeDayCoverSlotPackageId,
+        PreferKey.activeNightCoverSlotPackageId,
+        PreferKey.coverSlotLocked,
+        PreferKey.coverCollectionDay,
+        PreferKey.coverCollectionNight,
+        PreferKey.coverCollectionModeDay,
+        PreferKey.coverCollectionModeNight
     )
 
     fun keyIsNotIgnore(key: String): Boolean {
@@ -189,7 +199,7 @@ object BackupConfig {
         get() = ignoreConfig[PreferKey.themeMode] == true
     private val ignoreThemeConfig: Boolean
         get() = ignoreConfig[themeConfigKey] == true
-    private val ignoreCoverConfig: Boolean
+    val ignoreCoverConfig: Boolean
         get() = ignoreConfig[coverConfigKey] == true
     private val ignoreBookshelfLayout: Boolean
         get() = ignoreConfig[PreferKey.bookshelfLayout] == true

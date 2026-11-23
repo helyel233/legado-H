@@ -3,6 +3,7 @@ package io.legado.app.ui.config
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
@@ -30,6 +32,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,6 +64,8 @@ import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.pkg.ArtPackagePayload
+import io.legado.app.help.config.pkg.CoverSlotApplyMode
+import io.legado.app.help.config.pkg.CoverSlotPackagePayload
 import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.help.config.pkg.PackageKind
 import io.legado.app.help.config.pkg.ParamPackagePayload
@@ -109,7 +114,9 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -150,14 +157,20 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private var artSlotNightState by mutableStateOf(AppConfig.isNightTheme)
     private var paramSlotNightState by mutableStateOf(AppConfig.isNightTheme)
+    private var coverSlotNightState by mutableStateOf(AppConfig.isNightTheme)
 
     private var artPackagesState by mutableStateOf<List<UnifiedPackageRepository.StoredEntry>>(emptyList())
     private var paramPackagesState by mutableStateOf<List<UnifiedPackageRepository.StoredEntry>>(emptyList())
+    private var coverSlotPackagesState by mutableStateOf<List<UnifiedPackageRepository.StoredEntry>>(emptyList())
 
     private var activeDayArtIdState by mutableStateOf("")
     private var activeNightArtIdState by mutableStateOf("")
     private var activeDayParamIdState by mutableStateOf("")
     private var activeNightParamIdState by mutableStateOf("")
+    private var activeDayCoverSlotIdState by mutableStateOf("")
+    private var activeNightCoverSlotIdState by mutableStateOf("")
+    private var coverSlotLockedState by mutableStateOf(false)
+    private var scrollToCoverSlotSignal by mutableIntStateOf(0)
 
     private var cornerScaleState by mutableFloatStateOf(AppConfig.uiCornerScale)
     private var layoutAlphaState by mutableIntStateOf(AppConfig.uiLayoutAlpha)
@@ -174,10 +187,13 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var deleteTargetState by mutableStateOf<DeleteDialogTarget?>(null)
     private var editingArtEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
     private var editingParamEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
+    private var editingCoverSlotEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
     private var cloudContainerId: String? = null
     private var containerMenuLabelState by mutableStateOf<String?>(null)
     private val handledWebDavTasks = hashSetOf<String>()
     private var pendingAssetFileCallback: ((String) -> Unit)? = null
+    private var pendingAssetExpectFont: Boolean = false
+    private var pendingMultiImageCallback: ((List<String>) -> Unit)? = null
 
     private val importPackage = registerForActivityResult(HandleFileContract()) {
         it.uri?.let(::importAppearanceKit)
@@ -190,23 +206,96 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private val pickAssetFileLauncher = registerForActivityResult(HandleFileContract()) { result ->
-        val uri = result.uri ?: return@registerForActivityResult
-        val callback = pendingAssetFileCallback ?: return@registerForActivityResult
+        val callback = pendingAssetFileCallback
+        val expectFont = pendingAssetExpectFont
         pendingAssetFileCallback = null
+        pendingAssetExpectFont = false
+        val uri = result.uri ?: return@registerForActivityResult
+        if (callback == null) return@registerForActivityResult
         lifecycleScope.launch {
             runCatching {
-                PackageManageUiDelegate.stageImportUriToTempFile(
+                val fallbackExt = if (expectFont) "font" else "dat"
+                val ext = resolveAssetExtension(uri, fallback = fallbackExt)
+                val staged = PackageManageUiDelegate.stageImportUriToTempFile(
                     context = this@AppearanceKitActivity,
                     uri = uri,
                     dirName = "uiPackageImport",
-                    filePrefix = "art_asset",
-                    extension = "dat"
+                    filePrefix = if (expectFont) "art_font" else "art_asset",
+                    extension = ext
                 )
+                if (!expectFont) {
+                    return@runCatching staged
+                }
+                val inspection = withContext(Dispatchers.IO) {
+                    FontFileValidator.inspectFile(staged)
+                }
+                if (!inspection.isValid || !inspection.isNativeSupported) {
+                    staged.delete()
+                    throw IllegalArgumentException(
+                        inspection.errorReason ?: "无效的字体文件（仅支持 .ttf / .otf / .ttc）"
+                    )
+                }
+                val targetExt = inspection.suggestedExtension
+                if (!targetExt.isNullOrBlank() && !staged.extension.equals(targetExt, ignoreCase = true)) {
+                    val renamed = File(staged.parentFile, "${staged.nameWithoutExtension}.$targetExt")
+                    if (renamed.exists()) renamed.delete()
+                    if (staged.renameTo(renamed)) {
+                        return@runCatching renamed
+                    }
+                }
+                staged
             }.onSuccess { staged ->
                 callback(staged.absolutePath)
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
+        }
+    }
+
+    private val pickMultipleImagesLauncher = registerForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        val callback = pendingMultiImageCallback ?: return@registerForActivityResult
+        pendingMultiImageCallback = null
+        if (uris.isNullOrEmpty()) return@registerForActivityResult
+        lifecycleScope.launch {
+            runCatching {
+                uris.mapNotNull { uri ->
+                    val ext = resolveAssetExtension(uri, fallback = "jpg")
+                    PackageManageUiDelegate.stageImportUriToTempFile(
+                        context = this@AppearanceKitActivity,
+                        uri = uri,
+                        dirName = "uiPackageImport",
+                        filePrefix = "cover_asset",
+                        extension = ext
+                    ).takeIf { it.isFile && it.length() > 0L }?.absolutePath
+                }
+            }.onSuccess { paths ->
+                if (paths.isNotEmpty()) callback(paths)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun resolveAssetExtension(uri: Uri, fallback: String): String {
+        val fromPath = uri.lastPathSegment
+            ?.substringAfterLast('/', "")
+            ?.substringAfterLast('.', "")
+            ?.lowercase(Locale.ROOT)
+            ?.takeIf { it.isNotBlank() && it.length <= 6 }
+        if (fromPath != null) return fromPath
+        val mime = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
+        return when {
+            mime.contains("png") -> "png"
+            mime.contains("webp") -> "webp"
+            mime.contains("bmp") -> "bmp"
+            mime.contains("gif") -> "gif"
+            mime.contains("jpeg") || mime.contains("jpg") -> "jpg"
+            mime.contains("ttf") -> "ttf"
+            mime.contains("otf") -> "otf"
+            mime.contains("ttc") -> "ttc"
+            else -> fallback
         }
     }
 
@@ -236,7 +325,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun observeWebDavTasks() {
         PackageManageUiDelegate.observeWebDavTasks(
             activity = this,
-            taskTypes = setOf(WebDavTaskType.ART_PACKAGE_UPLOAD, WebDavTaskType.PARAM_PACKAGE_UPLOAD),
+            taskTypes = setOf(
+                WebDavTaskType.ART_PACKAGE_UPLOAD,
+                WebDavTaskType.PARAM_PACKAGE_UPLOAD,
+                WebDavTaskType.COVER_SLOT_PACKAGE_UPLOAD
+            ),
             handledTaskTokens = handledWebDavTasks,
             onCompleted = { state ->
                 toastOnUi("「${state.bookName}」${getString(R.string.package_sync_task_status_completed)}")
@@ -258,7 +351,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
         add(
             AppManagementMenuAction(
-                text = "导入美术包 / 参数包",
+                text = "导入美术包 / 参数包 / 书架封面包",
                 onClick = ::selectImportPackage
             )
         )
@@ -278,6 +371,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             AppManagementMenuAction(
                 text = "新建参数设置包（从当前状态）",
                 onClick = { promptCreatePackage(PackageKind.PARAM) }
+            )
+        )
+        add(
+            AppManagementMenuAction(
+                text = "新建书架封面包",
+                onClick = { promptCreatePackage(PackageKind.COVER_SLOT) }
             )
         )
         add(
@@ -306,12 +405,18 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         isEInkMode = isEInkState,
                         artSlotNight = artSlotNightState,
                         paramSlotNight = paramSlotNightState,
+                        coverSlotNight = coverSlotNightState,
                         artPackages = artPackagesState,
                         paramPackages = paramPackagesState,
+                        coverSlotPackages = coverSlotPackagesState,
                         activeDayArtId = activeDayArtIdState,
                         activeNightArtId = activeNightArtIdState,
                         activeDayParamId = activeDayParamIdState,
                         activeNightParamId = activeNightParamIdState,
+                        activeDayCoverSlotId = activeDayCoverSlotIdState,
+                        activeNightCoverSlotId = activeNightCoverSlotIdState,
+                        coverSlotLocked = coverSlotLockedState,
+                        scrollToCoverSlotSignal = scrollToCoverSlotSignal,
                         cornerScale = cornerScaleState,
                         layoutAlpha = layoutAlphaState,
                         glassMode = glassModeState,
@@ -324,13 +429,17 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onToggleEInkMode = ::toggleEInkMode,
                         onSelectArtSlotNight = { artSlotNightState = it },
                         onSelectParamSlotNight = { paramSlotNightState = it },
+                        onSelectCoverSlotNight = { coverSlotNightState = it },
                         onMountArtPackage = { entry -> mountArtPackage(entry, artSlotNightState) },
                         onMountParamPackage = { entry -> mountParamPackage(entry, paramSlotNightState) },
+                        onMountCoverSlotPackage = { entry -> mountCoverSlotPackage(entry, coverSlotNightState) },
+                        onToggleCoverSlotLocked = ::toggleCoverSlotLocked,
                         onCreatePackage = ::promptCreatePackage,
                         onImportPackage = ::selectImportPackage,
                         onClonePackage = ::promptClonePackage,
                         onEditArtPackage = { editingArtEntryState = it },
                         onEditParamPackage = { editingParamEntryState = it },
+                        onEditCoverSlotPackage = ::openEditCoverSlot,
                         onExportPackage = ::exportPackageEntry,
                         onUploadPackage = ::uploadPackageEntry,
                         onDeletePackage = ::promptDeletePackage,
@@ -397,14 +506,21 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     }
 
                     createTargetState?.let { target ->
-                        val existingNames = if (target.kind == PackageKind.ART) {
-                            artPackagesState.map { it.manifest.name }
+                        val existingNames = existingNamesForKind(target.kind)
+                        val title = when (target.kind) {
+                            PackageKind.ART -> "新建美术资源包"
+                            PackageKind.PARAM -> "新建参数设置包"
+                            PackageKind.COVER_SLOT -> "新建书架封面包"
+                            else -> "新建外观包"
+                        }
+                        val subtitle = if (target.kind == PackageKind.COVER_SLOT) {
+                            "将创建空书架封面包并打开编辑器配置图集与兜底封面（同类型内包名唯一）："
                         } else {
-                            paramPackagesState.map { it.manifest.name }
+                            "将从当前界面状态捕获并生成新包（同类型内包名唯一）："
                         }
                         PackageNamePromptDialog(
-                            title = if (target.kind == PackageKind.ART) "新建美术资源包" else "新建参数设置包",
-                            subtitle = "将从当前界面状态捕获并生成新包（同类型内包名唯一）：",
+                            title = title,
+                            subtitle = subtitle,
                             initialName = target.suggestedName,
                             existingNames = existingNames,
                             confirmText = "创建",
@@ -417,11 +533,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     }
 
                     cloneTargetState?.let { target ->
-                        val existingNames = if (target.kind == PackageKind.ART) {
-                            artPackagesState.map { it.manifest.name }
-                        } else {
-                            paramPackagesState.map { it.manifest.name }
-                        }
+                        val existingNames = existingNamesForKind(target.kind)
                         PackageNamePromptDialog(
                             title = "复制包（写时复制克隆）",
                             subtitle = "基于「${target.source.manifest.name}」创建派生包（仅存储增量修改文件，导出时自动物化）：",
@@ -449,16 +561,34 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     }
 
                     editingArtEntryState?.let { entry ->
+                        val artBaseDir = entry.manifest.basePackageId?.let { baseId ->
+                            artPackagesState.firstOrNull { it.manifest.id == baseId }?.dir
+                        }
                         ArtPackageEditorDialog(
                             entry = entry,
                             existingNames = artPackagesState.map { it.manifest.name },
                             preferNightSlot = artSlotNightState,
+                            baseDir = artBaseDir,
                             onPickAssetFile = { _, onPicked ->
+                                pendingAssetExpectFont = false
                                 pendingAssetFileCallback = onPicked
                                 pickAssetFileLauncher.launch {
                                     mode = HandleFileContract.FILE
                                     title = "选择美术资源文件"
                                 }
+                            },
+                            onPickFontFile = { onPicked ->
+                                pendingAssetExpectFont = true
+                                pendingAssetFileCallback = onPicked
+                                pickAssetFileLauncher.launch {
+                                    mode = HandleFileContract.FILE
+                                    title = "选择字体文件 (.ttf / .otf / .ttc)"
+                                    allowExtensions = arrayOf("ttf", "otf", "ttc")
+                                }
+                            },
+                            onNavigateToCoverSlotConfig = {
+                                editingArtEntryState = null
+                                scrollToCoverSlotSignal++
                             },
                             onDismiss = { editingArtEntryState = null },
                             onSave = { newName, updatedArt ->
@@ -476,6 +606,30 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                             onSave = { newName, updatedParam ->
                                 editingParamEntryState = null
                                 executeSaveEditedParam(entry.manifest.id, newName, updatedParam)
+                            }
+                        )
+                    }
+
+                    editingCoverSlotEntryState?.let { entry ->
+                        CoverSlotPackageEditorDialog(
+                            entry = entry,
+                            existingNames = coverSlotPackagesState.map { it.manifest.name },
+                            onPickSingleImage = { _, onPicked ->
+                                pendingAssetFileCallback = onPicked
+                                pickAssetFileLauncher.launch {
+                                    mode = HandleFileContract.FILE
+                                    title = "选择封面图片"
+                                    allowExtensions = arrayOf("jpg", "jpeg", "png", "webp", "bmp", "gif")
+                                }
+                            },
+                            onPickMultipleImages = { onPicked ->
+                                pendingMultiImageCallback = onPicked
+                                pickMultipleImagesLauncher.launch("image/*")
+                            },
+                            onDismiss = { editingCoverSlotEntryState = null },
+                            onSave = { newName, updatedSlot ->
+                                editingCoverSlotEntryState = null
+                                executeSaveEditedCoverSlot(entry.manifest.id, newName, updatedSlot)
                             }
                         )
                     }
@@ -508,12 +662,26 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             UnifiedPackageRepository.ensureDefaultPackagesExist(this@AppearanceKitActivity)
             val arts = UnifiedPackageRepository.listArtPackages()
             val params = UnifiedPackageRepository.listParamPackages()
+            val coverSlots = UnifiedPackageRepository.listCoverSlotPackages()
             artPackagesState = arts
             paramPackagesState = params
+            coverSlotPackagesState = coverSlots
             activeDayArtIdState = UnifiedPackageRepository.activeArtPackageId(this@AppearanceKitActivity, false)
             activeNightArtIdState = UnifiedPackageRepository.activeArtPackageId(this@AppearanceKitActivity, true)
             activeDayParamIdState = UnifiedPackageRepository.activeParamPackageId(this@AppearanceKitActivity, false)
             activeNightParamIdState = UnifiedPackageRepository.activeParamPackageId(this@AppearanceKitActivity, true)
+            activeDayCoverSlotIdState = UnifiedPackageRepository.activeCoverSlotPackageId(this@AppearanceKitActivity, false)
+            activeNightCoverSlotIdState = UnifiedPackageRepository.activeCoverSlotPackageId(this@AppearanceKitActivity, true)
+            coverSlotLockedState = UnifiedPackageRepository.isCoverSlotLocked(this@AppearanceKitActivity)
+        }
+    }
+
+    private fun existingNamesForKind(kind: PackageKind): List<String> {
+        return when (kind) {
+            PackageKind.ART -> artPackagesState.map { it.manifest.name }
+            PackageKind.PARAM -> paramPackagesState.map { it.manifest.name }
+            PackageKind.COVER_SLOT -> coverSlotPackagesState.map { it.manifest.name }
+            else -> emptyList()
         }
     }
 
@@ -525,6 +693,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         if (nextNight != prevNight) {
             artSlotNightState = nextNight
             paramSlotNightState = nextNight
+            coverSlotNightState = nextNight
         }
         isEInkState = AppConfig.isEInkMode
         recomputeThemeUiSignatureAfterBatch()
@@ -568,48 +737,20 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun promptCreatePackage(kind: PackageKind) {
-        val existing = if (kind == PackageKind.ART) {
-            artPackagesState.map { it.manifest.name }
-        } else {
-            paramPackagesState.map { it.manifest.name }
-        }
-        val base = if (kind == PackageKind.ART) "自定义美术包" else "自定义参数包"
-        createTargetState = CreateDialogTarget(
-            kind = kind,
-            suggestedName = UnifiedPackageRepository.suggestUniquePackageName(existing, base)
-        )
-    }
-
-    private fun executeCreatePackage(kind: PackageKind, newName: String) {
+    private fun mountCoverSlotPackage(entry: UnifiedPackageRepository.StoredEntry, forNight: Boolean) {
         lifecycleScope.launch {
             runCatching {
-                if (kind == PackageKind.ART) {
-                    val created = UnifiedPackageRepository.captureArtFromCurrent(
-                        context = this@AppearanceKitActivity,
-                        name = newName,
-                        enforceUniqueName = true
-                    )
-                    UnifiedPackageRepository.mountArtPackage(
-                        context = this@AppearanceKitActivity,
-                        entry = created,
-                        forNight = artSlotNightState
-                    )
-                    created
+                val lock = if (entry.manifest.id != UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID) {
+                    true
                 } else {
-                    val created = UnifiedPackageRepository.captureParamFromCurrent(
-                        context = this@AppearanceKitActivity,
-                        name = newName,
-                        enforceUniqueName = true
-                    )
-                    UnifiedPackageRepository.mountParamPackage(
-                        context = this@AppearanceKitActivity,
-                        entry = created,
-                        forNight = paramSlotNightState,
-                        applyGeometryGlobal = true
-                    )
-                    created
+                    null
                 }
+                UnifiedPackageRepository.mountCoverSlotPackage(
+                    context = this@AppearanceKitActivity,
+                    entry = entry,
+                    forNight = forNight,
+                    lockCoverSlot = lock
+                )
             }.onSuccess {
                 refreshStudioState()
                 toastOnUi(R.string.success)
@@ -619,12 +760,107 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun promptClonePackage(kind: PackageKind, source: UnifiedPackageRepository.StoredEntry) {
-        val existing = if (kind == PackageKind.ART) {
-            artPackagesState.map { it.manifest.name }
-        } else {
-            paramPackagesState.map { it.manifest.name }
+    private fun toggleCoverSlotLocked(locked: Boolean) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.setCoverSlotFollowArt(
+                    context = this@AppearanceKitActivity,
+                    followArt = !locked
+                )
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(if (locked) "已切换为独立固定书架封面包" else "已切换为跟随美术包推荐封面")
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
         }
+    }
+
+    private fun openEditCoverSlot(entry: UnifiedPackageRepository.StoredEntry) {
+        if (entry.manifest.id == UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID) {
+            toastOnUi("内置默认「原生书架封面」不可直接修改，请复制后自定义")
+            promptClonePackage(PackageKind.COVER_SLOT, entry)
+            return
+        }
+        editingCoverSlotEntryState = entry
+    }
+
+    private fun promptCreatePackage(kind: PackageKind) {
+        val existing = existingNamesForKind(kind)
+        val base = when (kind) {
+            PackageKind.ART -> "自定义美术包"
+            PackageKind.PARAM -> "自定义参数包"
+            PackageKind.COVER_SLOT -> "自定义书架封面包"
+            else -> "自定义包"
+        }
+        createTargetState = CreateDialogTarget(
+            kind = kind,
+            suggestedName = UnifiedPackageRepository.suggestUniquePackageName(existing, base)
+        )
+    }
+
+    private fun executeCreatePackage(kind: PackageKind, newName: String) {
+        lifecycleScope.launch {
+            runCatching {
+                when (kind) {
+                    PackageKind.ART -> {
+                        val created = UnifiedPackageRepository.captureArtFromCurrent(
+                            context = this@AppearanceKitActivity,
+                            name = newName,
+                            enforceUniqueName = true
+                        )
+                        UnifiedPackageRepository.mountArtPackage(
+                            context = this@AppearanceKitActivity,
+                            entry = created,
+                            forNight = artSlotNightState
+                        )
+                        created
+                    }
+                    PackageKind.PARAM -> {
+                        val created = UnifiedPackageRepository.captureParamFromCurrent(
+                            context = this@AppearanceKitActivity,
+                            name = newName,
+                            enforceUniqueName = true
+                        )
+                        UnifiedPackageRepository.mountParamPackage(
+                            context = this@AppearanceKitActivity,
+                            entry = created,
+                            forNight = paramSlotNightState,
+                            applyGeometryGlobal = true
+                        )
+                        created
+                    }
+                    PackageKind.COVER_SLOT -> {
+                        val created = UnifiedPackageRepository.createEmptyPackage(
+                            kind = PackageKind.COVER_SLOT,
+                            name = newName,
+                            enforceUniqueName = true
+                        )
+                        UnifiedPackageRepository.mountCoverSlotPackage(
+                            context = this@AppearanceKitActivity,
+                            entry = created,
+                            forNight = coverSlotNightState,
+                            lockCoverSlot = true
+                        )
+                        created
+                    }
+                    else -> throw IllegalArgumentException("Unsupported package kind: ${kind.id}")
+                }
+            }.onSuccess { created ->
+                refreshStudioState()
+                if (kind == PackageKind.COVER_SLOT) {
+                    editingCoverSlotEntryState = created
+                } else {
+                    toastOnUi(R.string.success)
+                }
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
+    private fun promptClonePackage(kind: PackageKind, source: UnifiedPackageRepository.StoredEntry) {
+        val existing = existingNamesForKind(kind)
         cloneTargetState = CloneDialogTarget(
             kind = kind,
             source = source,
@@ -638,10 +874,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 UnifiedPackageRepository.clonePackageCoW(kind, sourceId, newName)
             }.onSuccess { cloned ->
                 refreshStudioState()
-                if (kind == PackageKind.ART) {
-                    editingArtEntryState = cloned
-                } else {
-                    editingParamEntryState = cloned
+                when (kind) {
+                    PackageKind.ART -> editingArtEntryState = cloned
+                    PackageKind.PARAM -> editingParamEntryState = cloned
+                    PackageKind.COVER_SLOT -> editingCoverSlotEntryState = cloned
+                    else -> Unit
                 }
             }.onFailure {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
@@ -685,8 +922,39 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
+    private fun executeSaveEditedCoverSlot(
+        entryId: String,
+        newName: String,
+        updatedCoverSlot: CoverSlotPackagePayload
+    ) {
+        lifecycleScope.launch {
+            runCatching {
+                UnifiedPackageRepository.saveEditedCoverSlotPackage(
+                    context = this@AppearanceKitActivity,
+                    entryId = entryId,
+                    newName = newName,
+                    updatedCoverSlot = updatedCoverSlot
+                )
+            }.onSuccess {
+                refreshStudioState()
+                toastOnUi(R.string.success)
+            }.onFailure {
+                toastOnUi(it.localizedMessage ?: getString(R.string.error))
+            }
+        }
+    }
+
     private fun promptDeletePackage(kind: PackageKind, entry: UnifiedPackageRepository.StoredEntry) {
-        val list = if (kind == PackageKind.ART) artPackagesState else paramPackagesState
+        if (kind == PackageKind.COVER_SLOT && entry.manifest.id == UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID) {
+            toastOnUi("内置默认「原生书架封面」不可删除")
+            return
+        }
+        val list = when (kind) {
+            PackageKind.ART -> artPackagesState
+            PackageKind.PARAM -> paramPackagesState
+            PackageKind.COVER_SLOT -> coverSlotPackagesState
+            else -> emptyList()
+        }
         if (list.size <= 1) {
             toastOnUi("至少需保留 1 个预设包，无法删除最后一个包")
             return
@@ -720,7 +988,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             runCatching {
                 UnifiedPackageRepository.exportEntryZip(entry)
             }.onSuccess { zipFile ->
-                val suffix = if (entry.manifest.kind == PackageKind.ART) "lart.zip" else "lparam.zip"
+                val suffix = when (entry.manifest.kind) {
+                    PackageKind.ART -> "lart.zip"
+                    PackageKind.PARAM -> "lparam.zip"
+                    PackageKind.COVER_SLOT -> "lcover.zip"
+                    else -> "zip"
+                }
                 PackageManageUiDelegate.launchExportZip(
                     exportPackage,
                     zipFile,
@@ -857,11 +1130,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 )
                 if (result.nameConflictName != null) {
                     val kind = UnifiedPackageRepository.peekKind(file)
-                    val existingNames = if (kind == PackageKind.PARAM) {
-                        paramPackagesState.map { it.manifest.name }
-                    } else {
-                        artPackagesState.map { it.manifest.name }
-                    }
+                    val existingNames = existingNamesForKind(kind ?: PackageKind.ART)
                     importConflictTargetState = ImportConflictTarget(
                         file = file,
                         applySurface = applySurface,
@@ -887,6 +1156,14 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         applyGeometryGlobal = applySurface
                     )
                 }
+                result.duplicateCoverSlot?.let { dup ->
+                    UnifiedPackageRepository.mountCoverSlotPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = dup,
+                        forNight = coverSlotNightState,
+                        lockCoverSlot = true
+                    )
+                }
                 result.importedArt?.let {
                     UnifiedPackageRepository.mountArtPackage(
                         context = this@AppearanceKitActivity,
@@ -902,17 +1179,27 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         applyGeometryGlobal = applySurface
                     )
                 }
+                result.importedCoverSlot?.let {
+                    UnifiedPackageRepository.mountCoverSlotPackage(
+                        context = this@AppearanceKitActivity,
+                        entry = it,
+                        forNight = coverSlotNightState,
+                        lockCoverSlot = true
+                    )
+                }
                 result
             }.onSuccess { result ->
                 if (result == null) return@onSuccess
                 refreshStudioState()
                 val newItems = listOfNotNull(
                     result.importedArt?.manifest?.name,
-                    result.importedParam?.manifest?.name
+                    result.importedParam?.manifest?.name,
+                    result.importedCoverSlot?.manifest?.name
                 )
                 val reusedItems = listOfNotNull(
                     result.duplicateArt?.manifest?.name,
-                    result.duplicateParam?.manifest?.name
+                    result.duplicateParam?.manifest?.name,
+                    result.duplicateCoverSlot?.manifest?.name
                 )
                 val message = when {
                     newItems.isNotEmpty() && reusedItems.isNotEmpty() ->
@@ -924,7 +1211,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     result.legacyTotal > 0 ->
                         "已从旧版套件转换导入 ${result.legacyTotal} 项配置"
                     else ->
-                        "未识别到可导入的美术包或参数包"
+                        "未识别到可导入的美术包、参数包或书架封面包"
                 }
                 toastOnUi(message)
             }.onFailure {
@@ -935,10 +1222,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun uploadPackageEntry(entry: UnifiedPackageRepository.StoredEntry) {
-        val type = if (entry.manifest.kind == PackageKind.ART) {
-            WebDavTaskType.ART_PACKAGE_UPLOAD
-        } else {
-            WebDavTaskType.PARAM_PACKAGE_UPLOAD
+        val type = when (entry.manifest.kind) {
+            PackageKind.ART -> WebDavTaskType.ART_PACKAGE_UPLOAD
+            PackageKind.PARAM -> WebDavTaskType.PARAM_PACKAGE_UPLOAD
+            PackageKind.COVER_SLOT -> WebDavTaskType.COVER_SLOT_PACKAGE_UPLOAD
+            else -> WebDavTaskType.ART_PACKAGE_UPLOAD
         }
         val queued = WebDavTaskManager.enqueueUpload(
             key = "unified_upload:${entry.manifest.kind.id}:${entry.manifest.id}",
@@ -992,16 +1280,26 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     containerId = cloudContainerId,
                     scope = S3ContainerScope.UI_PACKAGE.key
                 ).map { PackageKind.PARAM to it }
-                arts + params
+                val coverSlots = UnifiedPackageRepository.listCloudPackages(
+                    kind = PackageKind.COVER_SLOT,
+                    containerId = cloudContainerId,
+                    scope = S3ContainerScope.UI_PACKAGE.key
+                ).map { PackageKind.COVER_SLOT to it }
+                arts + params + coverSlots
             }.onSuccess { remoteItems ->
                 if (remoteItems.isEmpty()) {
-                    toastOnUi("云端 uiPackages/{art,param}/ 目录暂无可用外观包")
+                    toastOnUi("云端 uiPackages/{art,param,cover_slot}/ 目录暂无可用外观包")
                     return@onSuccess
                 }
                 showComposeChoiceListDialog(
                     title = "云端外观包（点击下载并导入）",
                     labels = remoteItems.map { (kind, file) ->
-                        val prefix = if (kind == PackageKind.ART) "[美术]" else "[参数]"
+                        val prefix = when (kind) {
+                            PackageKind.ART -> "[美术]"
+                            PackageKind.PARAM -> "[参数]"
+                            PackageKind.COVER_SLOT -> "[封面]"
+                            else -> "[外观]"
+                        }
                         "$prefix ${file.displayName.removeSuffix(".zip")}"
                     },
                     selectedIndex = -1
@@ -1044,6 +1342,12 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 result.importedParam?.let {
                     UnifiedPackageRepository.mountParamPackage(this@AppearanceKitActivity, it, paramSlotNightState, applyGeometryGlobal = true)
                 }
+                result.duplicateCoverSlot?.let {
+                    UnifiedPackageRepository.mountCoverSlotPackage(this@AppearanceKitActivity, it, coverSlotNightState, lockCoverSlot = true)
+                }
+                result.importedCoverSlot?.let {
+                    UnifiedPackageRepository.mountCoverSlotPackage(this@AppearanceKitActivity, it, coverSlotNightState, lockCoverSlot = true)
+                }
                 refreshStudioState()
                 toastOnUi("已从云端下载并挂载「${remoteFile.displayName.removeSuffix(".zip")}」")
             }.onFailure {
@@ -1057,6 +1361,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             setOf(
                 WebDavTaskType.ART_PACKAGE_UPLOAD,
                 WebDavTaskType.PARAM_PACKAGE_UPLOAD,
+                WebDavTaskType.COVER_SLOT_PACKAGE_UPLOAD,
                 WebDavTaskType.THEME_PACKAGE_UPLOAD,
                 WebDavTaskType.TOP_BAR_PACKAGE_UPLOAD,
                 WebDavTaskType.NAVIGATION_BAR_PACKAGE_UPLOAD
@@ -1071,10 +1376,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 ownerConfigTag = "",
                 key = "activity_appearance_kit_art",
                 title = "美术资源包（日/夜）",
-                summary = "在外观中心自由搭配与编辑主题色板、全套壁纸、启动页图、字体、图标与封面集",
+                summary = "在外观中心自由搭配与编辑主题色板、全套壁纸、启动页图、字体与底栏图标",
                 aliases = listOf(
                     "美术包", "美术资源包", "主题包", "主题管理", "配色", "字体", "壁纸",
-                    "背景图", "启动页", "图标", "封面套系", "appearance", "theme", "welcome", "cover"
+                    "背景图", "启动页", "图标", "appearance", "theme", "welcome"
                 ),
                 destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
             ),
@@ -1089,6 +1394,17 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     "毛玻璃", "实底", "透明", "圆角", "阴影", "密度", "墨水屏", "eink", "glass", "topbar", "navbar"
                 ),
                 destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
+            ),
+            SettingsSearchIndex.Entry(
+                ownerKey = "appearanceKit",
+                ownerConfigTag = "",
+                key = "activity_appearance_kit_cover_slot",
+                title = "书架封面包（日/夜）",
+                summary = "独立配置书架封面图集、应用模式（随机/顺序/混合/仅兜底）、日夜兜底单图与分组默认封面",
+                aliases = listOf(
+                    "书架封面包", "封面包", "封面集", "默认封面", "分组封面", "cover", "cover_slot"
+                ),
+                destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
             )
         )
     }
@@ -1099,12 +1415,18 @@ private fun AppearanceStudioScreen(
     isEInkMode: Boolean,
     artSlotNight: Boolean,
     paramSlotNight: Boolean,
+    coverSlotNight: Boolean,
     artPackages: List<UnifiedPackageRepository.StoredEntry>,
     paramPackages: List<UnifiedPackageRepository.StoredEntry>,
+    coverSlotPackages: List<UnifiedPackageRepository.StoredEntry>,
     activeDayArtId: String,
     activeNightArtId: String,
     activeDayParamId: String,
     activeNightParamId: String,
+    activeDayCoverSlotId: String,
+    activeNightCoverSlotId: String,
+    coverSlotLocked: Boolean,
+    scrollToCoverSlotSignal: Int,
     cornerScale: Float,
     layoutAlpha: Int,
     glassMode: String,
@@ -1117,13 +1439,17 @@ private fun AppearanceStudioScreen(
     onToggleEInkMode: (Boolean) -> Unit,
     onSelectArtSlotNight: (Boolean) -> Unit,
     onSelectParamSlotNight: (Boolean) -> Unit,
+    onSelectCoverSlotNight: (Boolean) -> Unit,
     onMountArtPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onMountParamPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onMountCoverSlotPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onToggleCoverSlotLocked: (Boolean) -> Unit,
     onCreatePackage: (PackageKind) -> Unit,
     onImportPackage: () -> Unit,
     onClonePackage: (PackageKind, UnifiedPackageRepository.StoredEntry) -> Unit,
     onEditArtPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onEditParamPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onEditCoverSlotPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onExportPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onUploadPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onDeletePackage: (PackageKind, UnifiedPackageRepository.StoredEntry) -> Unit,
@@ -1141,6 +1467,13 @@ private fun AppearanceStudioScreen(
     val wallpaperVisible = rememberHasUsableBgImage() && !AppConfig.isEInkMode
     val glassSignature = rememberGlassConfigSignature()
     val effectiveGlassSig = glassSignature.takeIf { wallpaperVisible }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(scrollToCoverSlotSignal) {
+        if (scrollToCoverSlotSignal > 0) {
+            listState.animateScrollToItem(4)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1161,6 +1494,7 @@ private fun AppearanceStudioScreen(
             glassSignature = glassSignature
         )
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -1205,7 +1539,7 @@ private fun AppearanceStudioScreen(
             item("3_art_packages") {
                 StudioDualSlotPackageSection(
                     title = "美术资源包（日 / 夜）",
-                    subtitle = "包含色板、全套壁纸、启动页图、字体、底栏图标与封面集",
+                    subtitle = "包含色板、全套壁纸、启动页图、字体与底栏图标",
                     isNightSlot = artSlotNight,
                     dayMountedId = activeDayArtId,
                     nightMountedId = activeNightArtId,
@@ -1245,8 +1579,40 @@ private fun AppearanceStudioScreen(
                     onDeleteEntry = { onDeletePackage(PackageKind.PARAM, it) }
                 )
             }
+            // 5. 书架封面包选择（日 / 夜双槽）— 第三条正交轨
+            item("5_cover_slot_packages") {
+                StudioDualSlotPackageSection(
+                    title = "书架封面包（日 / 夜）",
+                    subtitle = "独立管理书架封面图集、应用模式（随机/顺序/混合/仅兜底）、日夜默认与分组封面",
+                    isNightSlot = coverSlotNight,
+                    dayMountedId = activeDayCoverSlotId,
+                    nightMountedId = activeNightCoverSlotId,
+                    entries = coverSlotPackages,
+                    palette = palette,
+                    glassSignature = effectiveGlassSig,
+                    headerExtra = {
+                        CoverSlotFollowModeBanner(
+                            coverSlotLocked = coverSlotLocked,
+                            palette = palette,
+                            onToggleLocked = onToggleCoverSlotLocked
+                        )
+                    },
+                    canDeleteEntry = { entry ->
+                        entry.manifest.id != UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID
+                    },
+                    onSelectSlotNight = onSelectCoverSlotNight,
+                    onSelectEntry = onMountCoverSlotPackage,
+                    onCreateNew = { onCreatePackage(PackageKind.COVER_SLOT) },
+                    onImport = onImportPackage,
+                    onCloneEntry = { onClonePackage(PackageKind.COVER_SLOT, it) },
+                    onEditEntry = onEditCoverSlotPackage,
+                    onExportEntry = onExportPackage,
+                    onUploadEntry = onUploadPackage,
+                    onDeleteEntry = { onDeletePackage(PackageKind.COVER_SLOT, it) }
+                )
+            }
             // 底部折叠的兼容回滚开关（保留 1 个大版本）
-            item("5_rollback_switches") {
+            item("6_rollback_switches") {
                 StudioRollbackSwitchesSection(
                     useLegacyTokenPipeline = useLegacyTokenPipeline,
                     useLegacyPackageManager = useLegacyPackageManager,
@@ -1533,6 +1899,49 @@ private fun StudioLivePreviewCard(
 }
 
 @Composable
+private fun CoverSlotFollowModeBanner(
+    coverSlotLocked: Boolean,
+    palette: AppManagementPalette,
+    onToggleLocked: (Boolean) -> Unit
+) {
+    val bannerShape = RoundedCornerShape(palette.miuix.actionRadius ?: 8.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(bannerShape)
+            .background(Color(palette.settings.slot))
+            .border(0.75.dp, palette.settings.divider, bannerShape)
+            .clickable { onToggleLocked(!coverSlotLocked) }
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = if (coverSlotLocked) "独立固定书架封面包" else "跟随美术包推荐封面",
+                color = palette.settings.primaryText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (coverSlotLocked) {
+                    "已锁定独立封面包：切换日/夜美术包时绝不覆盖当前书架封面设置"
+                } else {
+                    "跟随模式：切换含旧版封面推荐的美术包时自动应用；手动挂载自定义封面包将转为独立固定"
+                },
+                color = palette.settings.secondaryText,
+                fontSize = 10.sp
+            )
+        }
+        LegadoMiuixSwitch(
+            checked = coverSlotLocked,
+            onCheckedChange = onToggleLocked,
+            palette = palette.miuix
+        )
+    }
+}
+
+@Composable
 private fun StudioDualSlotPackageSection(
     title: String,
     subtitle: String,
@@ -1542,6 +1951,8 @@ private fun StudioDualSlotPackageSection(
     entries: List<UnifiedPackageRepository.StoredEntry>,
     palette: AppManagementPalette,
     glassSignature: String?,
+    headerExtra: (@Composable () -> Unit)? = null,
+    canDeleteEntry: (UnifiedPackageRepository.StoredEntry) -> Boolean = { true },
     onSelectSlotNight: (Boolean) -> Unit,
     onSelectEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onCreateNew: () -> Unit,
@@ -1608,6 +2019,7 @@ private fun StudioDualSlotPackageSection(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                headerExtra?.invoke()
                 LegadoSegmentedControl(
                     options = slotOptions,
                     selectedValue = isNightSlot,
@@ -1625,6 +2037,7 @@ private fun StudioDualSlotPackageSection(
                         isSelected = isSelected,
                         isAlsoOtherSlot = isAlsoOtherSlot,
                         otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
+                        canDelete = canDeleteEntry(entry),
                         palette = palette,
                         onSelect = { onSelectEntry(entry) },
                         onEdit = { onEditEntry(entry) },
@@ -1670,6 +2083,7 @@ private fun PackageEntryCard(
     isSelected: Boolean,
     isAlsoOtherSlot: Boolean,
     otherSlotLabel: String,
+    canDelete: Boolean = true,
     palette: AppManagementPalette,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
@@ -1768,8 +2182,10 @@ private fun PackageEntryCard(
                 SmallPackageActionText("上传", palette.settings.primaryText, onUpload)
                 Spacer(modifier = Modifier.width(10.dp))
                 SmallPackageActionText("导出", palette.settings.primaryText, onExport)
-                Spacer(modifier = Modifier.width(10.dp))
-                SmallPackageActionText("删除", palette.settings.danger, onDelete)
+                if (canDelete) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    SmallPackageActionText("删除", palette.settings.danger, onDelete)
+                }
             }
         }
     }
@@ -1799,6 +2215,25 @@ private fun PackageSwatchDot(
     isNightSlot: Boolean,
     palette: AppManagementPalette
 ) {
+    if (entry.manifest.kind == PackageKind.COVER_SLOT) {
+        val count = entry.manifest.coverSlot?.covers?.size ?: 0
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(palette.settings.accent.copy(alpha = 0.16f))
+                .border(1.dp, palette.settings.accent.copy(alpha = 0.45f), RoundedCornerShape(5.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (count > 0) count.coerceAtMost(99).toString() else "书",
+                color = palette.settings.accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        return
+    }
     val art = entry.manifest.art
     val artPalette = if (isNightSlot) {
         art?.nightPalette ?: art?.dayPalette
@@ -1834,31 +2269,58 @@ private fun PackageSwatchDot(
 }
 
 private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry): String {
-    return if (entry.manifest.kind == PackageKind.ART) {
-        val art = entry.manifest.art
-        val w = art?.dayWallpapers ?: art?.nightWallpapers
-        val hasBg = !w?.main.isNullOrBlank() || !w?.topBar.isNullOrBlank() || !w?.welcome.isNullOrBlank()
-        val fontCount = listOfNotNull(
-            (art?.dayTypography ?: art?.nightTypography)?.uiFontPath,
-            (art?.dayTypography ?: art?.nightTypography)?.titleFontPath
-        ).count { it.isNotBlank() }
-        buildString {
-            append("12色板")
-            if (hasBg) append(" · 含壁纸/启动图")
-            if (fontCount > 0) append(" · ${fontCount}项字体")
+    return when (entry.manifest.kind) {
+        PackageKind.ART -> {
+            val art = entry.manifest.art
+            val w = art?.dayWallpapers ?: art?.nightWallpapers
+            val hasBg = !w?.main.isNullOrBlank() || !w?.topBar.isNullOrBlank() || !w?.welcome.isNullOrBlank()
+            val fontCount = listOfNotNull(
+                (art?.dayTypography ?: art?.nightTypography)?.uiFontPath,
+                (art?.dayTypography ?: art?.nightTypography)?.titleFontPath
+            ).count { it.isNotBlank() }
+            buildString {
+                append("12色板")
+                if (hasBg) append(" · 含壁纸/启动图")
+                if (fontCount > 0) append(" · ${fontCount}项字体")
+            }
         }
-    } else {
-        val g = entry.manifest.param?.surfaceGlobal
-        val modeLabel = when (g?.materialMode) {
-            GlassMaterialPreset.SOLID -> "实底"
-            GlassMaterialPreset.CLEAR -> "透明无玻璃"
-            GlassMaterialPreset.FROSTED -> "磨砂玻璃"
-            GlassMaterialPreset.GLASS -> "液态玻璃"
-            else -> "默认材质"
+        PackageKind.COVER_SLOT -> {
+            val slot = entry.manifest.coverSlot
+            if (entry.manifest.id == UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID) {
+                return "系统原生默认封面 · 无自定义图集"
+            }
+            val modeText = when (CoverSlotApplyMode.normalize(slot?.applyMode)) {
+                CoverSlotApplyMode.SEQUENCE -> "顺序"
+                CoverSlotApplyMode.MIXED -> "混合"
+                CoverSlotApplyMode.FALLBACK_ONLY -> "仅兜底"
+                else -> "随机"
+            }
+            val coverCount = slot?.covers?.size ?: 0
+            val fallbacks = listOfNotNull(
+                slot?.dayDefaultCoverPath?.takeIf { it.isNotBlank() }?.let { "日默认" },
+                slot?.nightDefaultCoverPath?.takeIf { it.isNotBlank() }?.let { "夜默认" },
+                slot?.groupCoverPath?.takeIf { it.isNotBlank() }?.let { "分组默认" }
+            )
+            buildString {
+                append("模式: $modeText · 图集 ${coverCount} 张")
+                if (fallbacks.isNotEmpty()) {
+                    append(" · ${fallbacks.joinToString("/")}")
+                }
+            }
         }
-        val corner = String.format(Locale.US, "%.1fx", g?.cornerBaseScale ?: 1f)
-        val alpha = "${g?.surfaceAlpha ?: 100}%"
-        "$modeLabel · 圆角 $corner · 不透明度 $alpha"
+        else -> {
+            val g = entry.manifest.param?.surfaceGlobal
+            val modeLabel = when (g?.materialMode) {
+                GlassMaterialPreset.SOLID -> "实底"
+                GlassMaterialPreset.CLEAR -> "透明无玻璃"
+                GlassMaterialPreset.FROSTED -> "磨砂玻璃"
+                GlassMaterialPreset.GLASS -> "液态玻璃"
+                else -> "默认材质"
+            }
+            val corner = String.format(Locale.US, "%.1fx", g?.cornerBaseScale ?: 1f)
+            val alpha = "${g?.surfaceAlpha ?: 100}%"
+            "$modeLabel · 圆角 $corner · 不透明度 $alpha"
+        }
     }
 }
 

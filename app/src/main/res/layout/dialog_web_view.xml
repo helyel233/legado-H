@@ -1,52 +1,165 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/native_sheet_surface"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="bottom"
         android:background="@color/dialog_surface"
         android:clickable="true"
-        android:focusable="true">
+        android:focusable="true"
+        android:orientation="vertical">
 
-        <FrameLayout
-            android:id="@+id/web_view_container"
+        <!-- 评论弹窗固定 Header：收纳快照状态胶囊、标题与关闭按钮，彻底避免遮挡网页顶部 Tab -->
+        <LinearLayout
+            android:id="@+id/review_header_bar"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-        <!-- 内容加载期的占位骨架：盖在 WebView 之上，首帧可见后淡出 -->
-        <io.legado.app.ui.widget.ReviewLoadingSkeletonView
-            android:id="@+id/review_loading_skeleton"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone" />
-
-        <FrameLayout
-            android:id="@+id/web_view_placeholder"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:visibility="gone" />
-
-        <!-- 快照来源标识：显示缓存快照时浮出，让用户知道看到的不是实时内容 -->
-        <TextView
-            android:id="@+id/review_source_badge"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top|center_horizontal"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/shape_review_snapshot_badge"
-            android:paddingStart="12dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="4dp"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
+            android:gravity="center_vertical"
+            android:minHeight="44dp"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/review_header_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="@string/review"
+                android:textColor="@color/primaryText"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <!-- 快照来源状态胶囊：收纳于标题栏内，与标题/关闭按钮并排 -->
+            <TextView
+                android:id="@+id/review_source_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/shape_review_snapshot_badge"
+                android:ellipsize="end"
+                android:maxWidth="180dp"
+                android:paddingStart="10dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="3dp"
+                android:singleLine="true"
+                android:textColor="@color/accent"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/review_header_close"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/close"
+                android:padding="6dp"
+                android:src="@drawable/ic_baseline_close"
+                app:tint="@color/primaryText" />
+
+        </LinearLayout>
+
+        <View
+            android:id="@+id/review_header_divider"
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="@color/bg_divider_line"
             android:visibility="gone" />
 
-    </FrameLayout>
+        <!-- SNAPSHOT_FIRST 检测到新评论时的平滑顶部更新提示条 -->
+        <LinearLayout
+            android:id="@+id/review_update_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#1A0A84FF"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="7dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/review_update_banner_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="@string/review_update_banner_text"
+                android:textColor="@color/primaryText"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/review_update_banner_action"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/shape_review_snapshot_badge"
+                android:paddingStart="10dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="3dp"
+                android:text="@string/review_update_banner_action"
+                android:textColor="@color/accent"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/review_update_banner_dismiss"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/close"
+                android:padding="6dp"
+                android:src="@drawable/ic_baseline_close"
+                app:tint="@color/secondaryText" />
+
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <FrameLayout
+                android:id="@+id/web_view_container"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- 内容加载期的占位骨架：盖在 WebView 之上，首帧可见后淡出 -->
+            <io.legado.app.ui.widget.ReviewLoadingSkeletonView
+                android:id="@+id/review_loading_skeleton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+            <FrameLayout
+                android:id="@+id/web_view_placeholder"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+    </LinearLayout>
 
     <FrameLayout
         android:id="@+id/custom_web_view"

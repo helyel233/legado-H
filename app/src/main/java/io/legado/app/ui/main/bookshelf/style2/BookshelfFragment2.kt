@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.View
+import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,11 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
+import androidx.core.view.children
 import androidx.core.view.isGone
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
+import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.data.AppDatabase
@@ -45,10 +49,15 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.CoverWarmup
 import splitties.init.appCtx
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.titleTextColor
+import io.legado.app.lib.theme.titleTypeface
+import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.info.BookInfoNavigator
@@ -146,6 +155,8 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
     private var composeScrollToTopTick by mutableStateOf(0)
     private var composeListItemStyle by mutableIntStateOf(AppConfig.bookshelfListItemStyle)
     private var composeListIntroLines by mutableIntStateOf(AppConfig.bookshelfListIntroLines)
+    private var composeAppearanceVersion by mutableIntStateOf(0)
+    private val appearanceRefreshRunnable = Runnable { refreshAppearanceNow() }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
@@ -154,6 +165,11 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
         initComposeBookshelf()
         initBookGroupData()
         initBooksData()
+    }
+
+    override fun onDestroyView() {
+        view?.removeCallbacks(appearanceRefreshRunnable)
+        super.onDestroyView()
     }
 
     private fun initRecyclerView() {
@@ -250,39 +266,44 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
                 }
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(bookshelfLayout),
-                state = gridState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 8.dp,
-                    top = marginDp + 24.dp,
-                    end = 8.dp,
-                    bottom = marginDp + bottomBarPadding + 12.dp
-                )
-            ) {
-                items(
-                    items = composeItems,
-                    key = { it.key },
-                    contentType = { it.contentType }
-                ) { item ->
-                    BookshelfGridItem(
-                        item = item,
-                        glassSignature = glassSignature,
-                        modifier = Modifier,
-                        fragment = this@BookshelfFragment2,
-                        lifecycle = viewLifecycleOwner.lifecycle,
-                        onClick = ::onComposeItemClick,
-                        onLongClick = ::onComposeItemLongClick
+        val appearanceVersion = composeAppearanceVersion
+        androidx.compose.runtime.CompositionLocalProvider(
+            io.legado.app.ui.main.bookshelf.compose.LocalBookshelfAppearanceVersion provides appearanceVersion
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(bookshelfLayout),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 8.dp,
+                        top = marginDp + 24.dp,
+                        end = 8.dp,
+                        bottom = marginDp + bottomBarPadding + 12.dp
                     )
+                ) {
+                    items(
+                        items = composeItems,
+                        key = { it.key },
+                        contentType = { it.contentType }
+                    ) { item ->
+                        BookshelfGridItem(
+                            item = item,
+                            glassSignature = glassSignature,
+                            modifier = Modifier,
+                            fragment = this@BookshelfFragment2,
+                            lifecycle = viewLifecycleOwner.lifecycle,
+                            onClick = ::onComposeItemClick,
+                            onLongClick = ::onComposeItemLongClick
+                        )
+                    }
                 }
+                ComposeLazyGridFastScroller(
+                    state = gridState,
+                    enabled = AppConfig.showBookshelfFastScroller,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
-            ComposeLazyGridFastScroller(
-                state = gridState,
-                enabled = AppConfig.showBookshelfFastScroller,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
         }
     }
 
@@ -339,43 +360,48 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
                 }
             }
         }
+        val appearanceVersion = composeAppearanceVersion
         val listHorizontalPadding = if (composeListItemStyle == BookshelfListItemStyle.RoundedCard) 12.dp else 8.dp
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = listHorizontalPadding,
-                    top = marginDp + 24.dp,
-                    end = listHorizontalPadding,
-                    bottom = marginDp + bottomBarPadding + 12.dp
-                )
-            ) {
-                items(
-                    items = composeItems,
-                    key = { it.key },
-                    contentType = { it.contentType }
-                ) { item ->
-                    BookshelfListItem(
-                        item = item,
-                        listLayout = bookshelfLayout,
-                        cardStyle = composeListItemStyle,
-                        introMaxLines = composeListIntroLines,
-                        renderConfig = renderConfig,
-                        showReadProgress = AppConfig.showReadProgress,
-                        modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
-                        fragment = this@BookshelfFragment2,
-                        lifecycle = viewLifecycleOwner.lifecycle,
-                        onClick = ::onComposeItemClick,
-                        onLongClick = ::onComposeItemLongClick
+        androidx.compose.runtime.CompositionLocalProvider(
+            io.legado.app.ui.main.bookshelf.compose.LocalBookshelfAppearanceVersion provides appearanceVersion
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = listHorizontalPadding,
+                        top = marginDp + 24.dp,
+                        end = listHorizontalPadding,
+                        bottom = marginDp + bottomBarPadding + 12.dp
                     )
+                ) {
+                    items(
+                        items = composeItems,
+                        key = { it.key },
+                        contentType = { it.contentType }
+                    ) { item ->
+                        BookshelfListItem(
+                            item = item,
+                            listLayout = bookshelfLayout,
+                            cardStyle = composeListItemStyle,
+                            introMaxLines = composeListIntroLines,
+                            renderConfig = renderConfig,
+                            showReadProgress = AppConfig.showReadProgress,
+                            modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
+                            fragment = this@BookshelfFragment2,
+                            lifecycle = viewLifecycleOwner.lifecycle,
+                            onClick = ::onComposeItemClick,
+                            onLongClick = ::onComposeItemLongClick
+                        )
+                    }
                 }
+                ComposeLazyListFastScroller(
+                    state = listState,
+                    enabled = AppConfig.showBookshelfFastScroller,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
-            ComposeLazyListFastScroller(
-                state = listState,
-                enabled = AppConfig.showBookshelfFastScroller,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
         }
     }
 
@@ -705,8 +731,46 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
         observeEvent<String>(EventBus.BOOKSHELF_STRUCTURE_CHANGED) {
             rebuildBookshelfContent()
         }
-        // 注意：不监听 MAIN_THEME_BACKGROUND_CHANGED —— 主题/背景变化时 ThemeConfig
-        // 紧接着必发 RECREATE，Activity recreate 会重建一切；这里再全量重建是双倍卡顿。
+        observeEvent<Boolean>(EventBus.MAIN_APPEARANCE_KIT_CHANGED) {
+            scheduleAppearanceRefresh()
+        }
+        observeEvent<Boolean>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
+            scheduleAppearanceRefresh()
+        }
+    }
+
+    private fun scheduleAppearanceRefresh() {
+        val rootView = view ?: return
+        rootView.removeCallbacks(appearanceRefreshRunnable)
+        rootView.post(appearanceRefreshRunnable)
+    }
+
+    private fun refreshAppearanceNow() {
+        val rootView = view ?: return
+        if (!isAdded) return
+        val ctx = requireContext()
+        if (!AppConfig.isEInkMode && ThemeConfig.hasUsableBgImage(ctx)) {
+            ViewCompat.setBackgroundTintList(rootView, null)
+            rootView.background = null
+        }
+        val pageShowsWallpaper = (activity as? BaseActivity<*>)?.showsWallpaperBehindContent
+            ?: (!AppConfig.isEInkMode && ThemeConfig.hasUsableBgImage(ctx))
+        binding.titleBar.applyAutoWallpaperGlass(pageShowsWallpaper)
+        val titleColor = ctx.titleTextColor
+        val titleTf = ctx.titleTypeface()
+        binding.titleBar.setTextColor(titleColor)
+        binding.titleBar.setColorFilter(titleColor)
+        binding.titleBar.toolbar.children.filterIsInstance<TextView>().forEach {
+            it.typeface = titleTf
+            it.setTextColor(titleColor)
+        }
+        binding.refreshLayout.setColorSchemeColors(accentColor)
+        binding.rvBookshelf.setEdgeEffectColor(primaryColor)
+        binding.root.applyUiBodyTypefaceDeep(ctx.uiTypeface())
+        bookshelfMargin = AppConfig.bookshelfMargin
+        composeListItemStyle = AppConfig.bookshelfListItemStyle
+        composeListIntroLines = AppConfig.bookshelfListIntroLines
+        composeAppearanceVersion++
     }
 
     private fun rebuildBookshelfContent() {

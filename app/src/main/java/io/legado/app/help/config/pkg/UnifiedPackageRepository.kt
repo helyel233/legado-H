@@ -12,16 +12,22 @@ import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.lib.cloud.CloudStorageFile
 import io.legado.app.help.config.MainLayoutPresetConfig
 import io.legado.app.help.config.NavigationBarIconConfig
+import io.legado.app.help.config.RedAssetPackage
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.ThemeRuntimeKeys
+import io.legado.app.lib.theme.ThemeStore
+import io.legado.app.lib.theme.UiTypefaceCache
 import io.legado.app.lib.theme.defaultThemeTextColorHex
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.model.BookCover
+import io.legado.app.ui.config.FontFileValidator
+import io.legado.app.ui.config.FontProtocolResolver
 import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.getFile
@@ -36,6 +42,7 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -57,6 +64,10 @@ import java.util.UUID
 object UnifiedPackageRepository {
 
     private const val MAX_MANIFEST_BYTES = 2L * 1024L * 1024L
+    const val BUILTIN_DEFAULT_COVER_SLOT_ID = "cover_slot_builtin_default"
+    private const val BUILTIN_DEFAULT_COVER_SLOT_DIR = "builtin_default"
+    private const val LEGACY_COVER_MIGRATED_MARKER = ".legacy_cover_migrated"
+
     private val repoMutex = Mutex()
     private val cacheLock = Any()
 
@@ -66,6 +77,9 @@ object UnifiedPackageRepository {
     @Volatile
     private var paramIndexCache: Map<String, StoredEntry>? = null
 
+    @Volatile
+    private var coverSlotIndexCache: Map<String, StoredEntry>? = null
+
     data class StoredEntry(
         val manifest: UnifiedPackageManifest,
         val dir: File
@@ -74,19 +88,23 @@ object UnifiedPackageRepository {
     data class UnifiedImportResult(
         val importedArt: StoredEntry? = null,
         val importedParam: StoredEntry? = null,
+        val importedCoverSlot: StoredEntry? = null,
         val duplicateArt: StoredEntry? = null,
         val duplicateParam: StoredEntry? = null,
+        val duplicateCoverSlot: StoredEntry? = null,
         val nameConflictName: String? = null,
         val legacyTotal: Int = 0
     ) {
         val duplicateOfExisting: StoredEntry?
-            get() = duplicateArt ?: duplicateParam
+            get() = duplicateArt ?: duplicateParam ?: duplicateCoverSlot
 
         val total: Int
             get() = (if (importedArt != null) 1 else 0) +
                 (if (importedParam != null) 1 else 0) +
+                (if (importedCoverSlot != null) 1 else 0) +
                 (if (duplicateArt != null) 1 else 0) +
                 (if (duplicateParam != null) 1 else 0) +
+                (if (duplicateCoverSlot != null) 1 else 0) +
                 legacyTotal
     }
 
@@ -214,20 +232,35 @@ object UnifiedPackageRepository {
     private val paramDir: File
         get() = rootDir.getFile("param").apply { mkdirs() }
 
+    private val coverSlotDir: File
+        get() = rootDir.getFile("cover_slot").apply { mkdirs() }
+
     private val tempDir: File
         get() = appCtx.externalFiles.getFile("unifiedPackageTemp").apply { mkdirs() }
+
+    private fun dirForKind(kind: PackageKind): File {
+        return when (kind) {
+            PackageKind.ART -> artDir
+            PackageKind.PARAM -> paramDir
+            PackageKind.COVER_SLOT -> coverSlotDir
+            else -> throw IllegalArgumentException("Unsupported unified package kind: ${kind.id}")
+        }
+    }
 
     fun invalidateCache() {
         synchronized(cacheLock) {
             artIndexCache = null
             paramIndexCache = null
+            coverSlotIndexCache = null
         }
+        CoverCollectionManager.invalidateCache()
     }
 
     suspend fun prewarmCache() = withContext(IO) {
         repoMutex.withLock {
             loadEntries(artDir, PackageKind.ART)
             loadEntries(paramDir, PackageKind.PARAM)
+            loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
         }
     }
 
@@ -240,6 +273,18 @@ object UnifiedPackageRepository {
     suspend fun listParamPackages(): List<StoredEntry> = withContext(IO) {
         repoMutex.withLock {
             loadEntries(paramDir, PackageKind.PARAM)
+        }
+    }
+
+    suspend fun listCoverSlotPackages(): List<StoredEntry> = withContext(IO) {
+        repoMutex.withLock {
+            loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+        }
+    }
+
+    suspend fun listEntries(kind: PackageKind): List<StoredEntry> = withContext(IO) {
+        repoMutex.withLock {
+            loadEntries(dirForKind(kind), kind)
         }
     }
 
@@ -263,6 +308,12 @@ object UnifiedPackageRepository {
             ?: context.getPrefString(PreferKey.currentParamPackageId, "").orEmpty()
     }
 
+    fun currentCoverSlotPackageId(context: Context = appCtx): String {
+        val key = if (AppConfig.isNightTheme) PreferKey.activeNightCoverSlotPackageId else PreferKey.activeDayCoverSlotPackageId
+        return context.getPrefString(key, null)?.takeIf { it.isNotBlank() }
+            ?: context.getPrefString(PreferKey.currentCoverSlotPackageId, "").orEmpty()
+    }
+
     fun activeArtPackageId(context: Context = appCtx, isNight: Boolean): String {
         val key = if (isNight) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId
         return context.getPrefString(key, null)?.takeIf { it.isNotBlank() }
@@ -275,6 +326,30 @@ object UnifiedPackageRepository {
             ?: context.getPrefString(PreferKey.currentParamPackageId, "").orEmpty()
     }
 
+    fun activeCoverSlotPackageId(context: Context = appCtx, isNight: Boolean): String {
+        val key = if (isNight) PreferKey.activeNightCoverSlotPackageId else PreferKey.activeDayCoverSlotPackageId
+        return context.getPrefString(key, null)?.takeIf { it.isNotBlank() }
+            ?: context.getPrefString(PreferKey.currentCoverSlotPackageId, "").orEmpty()
+    }
+
+    fun isCoverSlotLocked(context: Context = appCtx): Boolean {
+        val prefs = context.defaultSharedPreferences
+        if (prefs.contains(PreferKey.coverSlotLocked)) {
+            return prefs.getBoolean(PreferKey.coverSlotLocked, false)
+        }
+        val activeId = currentCoverSlotPackageId(context)
+        return activeId.isNotBlank() && activeId != BUILTIN_DEFAULT_COVER_SLOT_ID
+    }
+
+    fun shouldApplyArtCoverMount(context: Context, forNight: Boolean): Boolean {
+        val prefs = context.defaultSharedPreferences
+        if (prefs.contains(PreferKey.coverSlotLocked)) {
+            return !prefs.getBoolean(PreferKey.coverSlotLocked, false)
+        }
+        val activeId = activeCoverSlotPackageId(context, forNight)
+        return activeId.isBlank() || activeId == BUILTIN_DEFAULT_COVER_SLOT_ID
+    }
+
     fun getMountedSlotLabels(context: Context, entryId: String): List<String> {
         if (entryId.isBlank()) return emptyList()
         val labels = mutableListOf<String>()
@@ -282,7 +357,13 @@ object UnifiedPackageRepository {
         if (activeArtPackageId(context, true) == entryId) labels += "夜间美术槽"
         if (activeParamPackageId(context, false) == entryId) labels += "日间参数槽"
         if (activeParamPackageId(context, true) == entryId) labels += "夜间参数槽"
+        if (activeCoverSlotPackageId(context, false) == entryId) labels += "日间封面槽"
+        if (activeCoverSlotPackageId(context, true) == entryId) labels += "夜间封面槽"
         return labels
+    }
+
+    suspend fun ensureInitialized(context: Context = appCtx) {
+        ensureDefaultPackagesExist(context)
     }
 
     suspend fun ensureDefaultPackagesExist(context: Context = appCtx) {
@@ -325,7 +406,205 @@ object UnifiedPackageRepository {
                 context.putPrefString(PreferKey.activeNightParamPackageId, nightCandidate.manifest.id)
             }
         }
+
+        ensureCoverSlotPackagesInitialized(context)
     }
+
+    private suspend fun ensureCoverSlotPackagesInitialized(context: Context) = withContext(IO) {
+        val bridgeIdsToMount = repoMutex.withLock {
+            var existing = loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+            if (existing.none { it.manifest.id == BUILTIN_DEFAULT_COVER_SLOT_ID }) {
+                val builtinDir = File(coverSlotDir, BUILTIN_DEFAULT_COVER_SLOT_DIR).apply { mkdirs() }
+                val payload = CoverSlotPackagePayload(
+                    covers = emptyList(),
+                    applyMode = CoverSlotApplyMode.FALLBACK_ONLY
+                )
+                val draft = UnifiedPackageManifest(
+                    kind = PackageKind.COVER_SLOT,
+                    id = BUILTIN_DEFAULT_COVER_SLOT_ID,
+                    name = "原生书架封面",
+                    updatedAt = 0L,
+                    coverSlot = payload
+                )
+                val manifest = draft.copy(
+                    contentHash = UnifiedPackageCodec.computeContentHash(draft, builtinDir)
+                )
+                writeManifest(builtinDir, manifest)
+                upsertCacheEntry(PackageKind.COVER_SLOT, StoredEntry(manifest, builtinDir))
+                existing = loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+            }
+
+            val marker = File(coverSlotDir, LEGACY_COVER_MIGRATED_MARKER)
+            if (!marker.isFile) {
+                val legacyDaySelected = context.getPrefString(PreferKey.coverCollectionDay, "")?.trim().orEmpty()
+                val legacyNightSelected = context.getPrefString(PreferKey.coverCollectionNight, "")?.trim().orEmpty()
+                val legacyCollections = runCatching {
+                    CoverCollectionManager.load(false) + CoverCollectionManager.load(true)
+                }.getOrDefault(emptyList())
+
+                val legacyIdToSlotId = hashMapOf<String, String>()
+                var currentEntries = existing
+                legacyCollections.forEach { legacy ->
+                    val slotId = "cover_slot_legacy_${legacy.id.normalizeFileName().ifBlank { UUID.randomUUID().toString() }}"
+                    legacyIdToSlotId[legacy.id] = slotId
+                    if (currentEntries.any { it.manifest.id == slotId }) return@forEach
+                    val uniqueName = suggestUniquePackageName(
+                        currentEntries.map { it.manifest.name },
+                        legacy.name.ifBlank { if (legacy.isNight) "夜间封面集" else "日间封面集" }
+                    )
+                    val slug = PackageIoKernel.uniqueDirName(coverSlotDir, uniqueName, "legacy_cover")
+                    val targetDir = File(coverSlotDir, slug).apply { mkdirs() }
+                    val assetsDir = File(targetDir, "assets").apply { mkdirs() }
+                    val copiedCovers = mutableListOf<String>()
+                    legacy.images.forEachIndexed { idx, imgPath ->
+                        val src = File(imgPath)
+                        if (!src.isFile) return@forEachIndexed
+                        val ext = src.extension.lowercase(Locale.ROOT).ifBlank { "jpg" }
+                        val rawStem = src.nameWithoutExtension.normalizeFileName().ifBlank { "cover_${idx + 1}" }
+                        var dst = File(assetsDir, "$rawStem.$ext")
+                        var suffix = 1
+                        while (dst.exists()) {
+                            dst = File(assetsDir, "${rawStem}_$suffix.$ext")
+                            suffix++
+                        }
+                        src.copyTo(dst, overwrite = true)
+                        copiedCovers.add("assets/${dst.name}")
+                    }
+                    val payload = CoverSlotPackagePayload(
+                        covers = copiedCovers,
+                        applyMode = CoverSlotApplyMode.normalize(legacy.mode)
+                    )
+                    val draft = UnifiedPackageManifest(
+                        kind = PackageKind.COVER_SLOT,
+                        id = slotId,
+                        name = uniqueName,
+                        updatedAt = legacy.updatedAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                        coverSlot = payload
+                    )
+                    val manifest = draft.copy(
+                        contentHash = UnifiedPackageCodec.computeContentHash(draft, targetDir)
+                    )
+                    writeManifest(targetDir, manifest)
+                    val stored = StoredEntry(manifest, targetDir)
+                    upsertCacheEntry(PackageKind.COVER_SLOT, stored)
+                    currentEntries = currentEntries + stored
+                }
+
+                val mappedDay = legacyIdToSlotId[legacyDaySelected]
+                val mappedNight = legacyIdToSlotId[legacyNightSelected]
+                if (mappedDay != null && activeCoverSlotPackageId(context, false).isBlank()) {
+                    context.putPrefString(PreferKey.activeDayCoverSlotPackageId, mappedDay)
+                }
+                if (mappedNight != null && activeCoverSlotPackageId(context, true).isBlank()) {
+                    context.putPrefString(PreferKey.activeNightCoverSlotPackageId, mappedNight)
+                }
+                if ((mappedDay != null || mappedNight != null) &&
+                    !context.defaultSharedPreferences.contains(PreferKey.coverSlotLocked)
+                ) {
+                    context.putPrefBoolean(PreferKey.coverSlotLocked, true)
+                }
+                runCatching {
+                    PackageIoKernel.writeTextAtomic(marker, "migratedAt=${System.currentTimeMillis()}\n")
+                }
+                existing = currentEntries
+            }
+
+            val dayId = activeCoverSlotPackageId(context, false)
+            if (dayId.isBlank() || existing.none { it.manifest.id == dayId }) {
+                context.putPrefString(PreferKey.activeDayCoverSlotPackageId, BUILTIN_DEFAULT_COVER_SLOT_ID)
+            }
+            val nightId = activeCoverSlotPackageId(context, true)
+            if (nightId.isBlank() || existing.none { it.manifest.id == nightId }) {
+                context.putPrefString(PreferKey.activeNightCoverSlotPackageId, BUILTIN_DEFAULT_COVER_SLOT_ID)
+            }
+            val resolvedCurrent = if (AppConfig.isNightTheme) {
+                activeCoverSlotPackageId(context, true)
+            } else {
+                activeCoverSlotPackageId(context, false)
+            }
+            if (context.getPrefString(PreferKey.currentCoverSlotPackageId, "").isNullOrBlank()) {
+                context.putPrefString(PreferKey.currentCoverSlotPackageId, resolvedCurrent)
+            }
+            val activeId = activeCoverSlotPackageId(context, AppConfig.isNightTheme)
+            existing.firstOrNull { it.manifest.id == activeId && it.manifest.id != BUILTIN_DEFAULT_COVER_SLOT_ID }
+        }
+        if (bridgeIdsToMount != null && isCoverSlotLocked(context)) {
+            val activeNight = AppConfig.isNightTheme
+            if (context.getPrefString(if (activeNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay, "") != bridgeIdsToMount.manifest.id) {
+                mountCoverSlotPackage(context, bridgeIdsToMount, forNight = activeNight, lockCoverSlot = null)
+            }
+        }
+    }
+
+    suspend fun createEmptyPackage(
+        kind: PackageKind,
+        name: String,
+        enforceUniqueName: Boolean = true
+    ): StoredEntry = withContext(IO) {
+        val rawName = name.trim().ifBlank {
+            when (kind) {
+                PackageKind.ART -> "自定义美术包"
+                PackageKind.PARAM -> "自定义参数包"
+                PackageKind.COVER_SLOT -> "自定义书架封面包"
+                else -> "自定义包"
+            }
+        }
+        repoMutex.withLock {
+            val root = dirForKind(kind)
+            val existing = loadEntries(root, kind)
+            val existingNames = existing.map { it.manifest.name }
+            val cleanName = if (enforceUniqueName) {
+                require(isPackageNameUnique(existingNames, rawName)) {
+                    "包名称「$rawName」已存在，严禁包名重复"
+                }
+                rawName
+            } else {
+                suggestUniquePackageName(existingNames, rawName)
+            }
+            val dirName = PackageIoKernel.uniqueDirName(root, cleanName)
+            val targetDir = File(root, dirName).apply { mkdirs() }
+            val draft = when (kind) {
+                PackageKind.ART -> UnifiedPackageManifest(
+                    kind = PackageKind.ART,
+                    id = "art_${UUID.randomUUID()}",
+                    name = cleanName,
+                    updatedAt = System.currentTimeMillis(),
+                    art = ArtPackagePayload()
+                )
+                PackageKind.PARAM -> UnifiedPackageManifest(
+                    kind = PackageKind.PARAM,
+                    id = "param_${UUID.randomUUID()}",
+                    name = cleanName,
+                    updatedAt = System.currentTimeMillis(),
+                    param = ParamPackagePayload()
+                )
+                PackageKind.COVER_SLOT -> UnifiedPackageManifest(
+                    kind = PackageKind.COVER_SLOT,
+                    id = "cover_slot_${UUID.randomUUID()}",
+                    name = cleanName,
+                    updatedAt = System.currentTimeMillis(),
+                    coverSlot = CoverSlotPackagePayload(
+                        covers = emptyList(),
+                        applyMode = CoverSlotApplyMode.RANDOM
+                    )
+                )
+                else -> throw IllegalArgumentException("Unsupported package kind: ${kind.id}")
+            }
+            val manifest = draft.copy(
+                contentHash = UnifiedPackageCodec.computeContentHash(draft, targetDir)
+            )
+            writeManifest(targetDir, manifest)
+            StoredEntry(manifest, targetDir).also {
+                upsertCacheEntry(kind, it)
+            }
+        }
+    }
+
+    suspend fun clonePackage(
+        kind: PackageKind,
+        sourceId: String,
+        newName: String
+    ): StoredEntry = clonePackageCoW(kind, sourceId, newName)
 
     /**
      * Copy-on-Write (CoW) package clone with strict case-insensitive name uniqueness enforcement.
@@ -341,7 +620,7 @@ object UnifiedPackageRepository {
         val cleanName = newName.trim()
         require(cleanName.isNotBlank()) { "包名称不能为空" }
         repoMutex.withLock {
-            val root = if (kind == PackageKind.ART) artDir else paramDir
+            val root = dirForKind(kind)
             val existing = loadEntries(root, kind)
             val source = existing.firstOrNull { it.manifest.id == sourceId }
                 ?: throw IllegalArgumentException("未找到源包: $sourceId")
@@ -360,10 +639,14 @@ object UnifiedPackageRepository {
                     else if (child.isFile) child.copyTo(dst, overwrite = true)
                 }
             }
-            val rootBaseId = if (kind == PackageKind.ART) {
-                source.manifest.basePackageId ?: source.manifest.id
-            } else {
-                null
+            val rootBaseId = when (kind) {
+                PackageKind.ART -> source.manifest.basePackageId ?: source.manifest.id
+                PackageKind.COVER_SLOT -> if (source.manifest.id == BUILTIN_DEFAULT_COVER_SLOT_ID) {
+                    null
+                } else {
+                    source.manifest.basePackageId ?: source.manifest.id
+                }
+                else -> null
             }
             val newId = "${kind.id}_${UUID.randomUUID()}"
             val baseDir = rootBaseId?.let { bid -> existing.firstOrNull { it.manifest.id == bid }?.dir }
@@ -399,8 +682,8 @@ object UnifiedPackageRepository {
             require(isPackageNameUnique(otherNames, cleanName)) {
                 "包名称「$cleanName」已存在，严禁包名重复"
             }
-            val packagedArt = copyArtAssetsIntoDir(updatedArt, target.dir)
             val baseDir = resolveBaseDir(target, entriesById)
+            val packagedArt = copyArtAssetsIntoDir(updatedArt, target.dir, baseDir)
             val cowResolver: (String) -> File? = { rel -> resolveCoWAssetFile(target.dir, baseDir, rel) }
             val draft = target.manifest.copy(
                 name = cleanName,
@@ -417,8 +700,12 @@ object UnifiedPackageRepository {
         }
         val activeDay = activeArtPackageId(context, false) == entryId
         val activeNight = activeArtPackageId(context, true) == entryId
-        if (activeDay) mountArtPackage(context, saved, forNight = false)
-        if (activeNight) mountArtPackage(context, saved, forNight = true)
+        if (activeDay || activeNight) {
+            withContext(Dispatchers.Main.immediate) {
+                if (activeDay) mountArtPackage(context, saved, forNight = false)
+                if (activeNight) mountArtPackage(context, saved, forNight = true)
+            }
+        }
         saved
     }
 
@@ -453,8 +740,57 @@ object UnifiedPackageRepository {
         }
         val activeDay = activeParamPackageId(context, false) == entryId
         val activeNight = activeParamPackageId(context, true) == entryId
-        if (activeDay) mountParamPackage(context, saved, forNight = false, applyGeometryGlobal = true)
-        if (activeNight) mountParamPackage(context, saved, forNight = true, applyGeometryGlobal = !activeDay)
+        if (activeDay || activeNight) {
+            withContext(Dispatchers.Main.immediate) {
+                if (activeDay) mountParamPackage(context, saved, forNight = false, applyGeometryGlobal = true)
+                if (activeNight) mountParamPackage(context, saved, forNight = true, applyGeometryGlobal = !activeDay)
+            }
+        }
+        saved
+    }
+
+    suspend fun saveEditedCoverSlotPackage(
+        context: Context,
+        entryId: String,
+        newName: String,
+        updatedCoverSlot: CoverSlotPackagePayload
+    ): StoredEntry = withContext(IO) {
+        require(entryId != BUILTIN_DEFAULT_COVER_SLOT_ID) { "内置默认「原生书架封面」不可直接修改，请先复制后再编辑" }
+        val cleanName = newName.trim()
+        require(cleanName.isNotBlank()) { "包名称不能为空" }
+        val saved = repoMutex.withLock {
+            val existing = loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+            val entriesById = existing.associateBy { it.manifest.id }
+            val target = existing.firstOrNull { it.manifest.id == entryId }
+                ?: throw IllegalArgumentException("未找到书架封面包: $entryId")
+            val otherNames = existing.filter { it.manifest.id != entryId }.map { it.manifest.name }
+            require(isPackageNameUnique(otherNames, cleanName)) {
+                "包名称「$cleanName」已存在，严禁包名重复"
+            }
+            val baseDir = resolveBaseDir(target, entriesById)
+            val packagedSlot = copyCoverSlotAssetsIntoDir(updatedCoverSlot, target.dir, baseDir)
+            val cowResolver: (String) -> File? = { rel -> resolveCoWAssetFile(target.dir, baseDir, rel) }
+            val draft = target.manifest.copy(
+                name = cleanName,
+                updatedAt = System.currentTimeMillis(),
+                coverSlot = packagedSlot
+            )
+            val finalManifest = draft.copy(
+                contentHash = UnifiedPackageCodec.computeContentHash(draft, target.dir, cowResolver)
+            )
+            writeManifest(target.dir, finalManifest)
+            StoredEntry(finalManifest, target.dir).also {
+                upsertCacheEntry(PackageKind.COVER_SLOT, it)
+            }
+        }
+        val activeDay = activeCoverSlotPackageId(context, false) == entryId
+        val activeNight = activeCoverSlotPackageId(context, true) == entryId
+        if (activeDay || activeNight) {
+            withContext(Dispatchers.Main.immediate) {
+                if (activeDay) mountCoverSlotPackage(context, saved, forNight = false, lockCoverSlot = null)
+                if (activeNight) mountCoverSlotPackage(context, saved, forNight = true, lockCoverSlot = null)
+            }
+        }
         saved
     }
 
@@ -463,9 +799,12 @@ object UnifiedPackageRepository {
         kind: PackageKind,
         entryId: String
     ): DeletePackageResult = withContext(IO) {
+        if (kind == PackageKind.COVER_SLOT) {
+            require(entryId != BUILTIN_DEFAULT_COVER_SLOT_ID) { "内置默认「原生书架封面」不可删除" }
+        }
         val affectedSlots = getMountedSlotLabels(context, entryId)
         val fallback = repoMutex.withLock {
-            val root = if (kind == PackageKind.ART) artDir else paramDir
+            val root = dirForKind(kind)
             val existing = loadEntries(root, kind)
             require(existing.size > 1) { "至少需要保留 1 个包，无法删除最后一个包" }
             val target = existing.firstOrNull { it.manifest.id == entryId }
@@ -483,23 +822,40 @@ object UnifiedPackageRepository {
             }
             PackageIoKernel.deletePackageDirSafely(target.dir, root)
             removeCacheEntry(kind, entryId)
-            existing.firstOrNull { it.manifest.id != entryId }
+            if (kind == PackageKind.COVER_SLOT) {
+                existing.firstOrNull { it.manifest.id == BUILTIN_DEFAULT_COVER_SLOT_ID }
+                    ?: existing.firstOrNull { it.manifest.id != entryId }
+            } else {
+                existing.firstOrNull { it.manifest.id != entryId }
+            }
         }
         if (fallback != null) {
-            if (kind == PackageKind.ART) {
-                if (activeArtPackageId(context, false) == entryId) {
-                    mountArtPackage(context, fallback, forNight = false)
+            when (kind) {
+                PackageKind.ART -> {
+                    if (activeArtPackageId(context, false) == entryId) {
+                        mountArtPackage(context, fallback, forNight = false)
+                    }
+                    if (activeArtPackageId(context, true) == entryId) {
+                        mountArtPackage(context, fallback, forNight = true)
+                    }
                 }
-                if (activeArtPackageId(context, true) == entryId) {
-                    mountArtPackage(context, fallback, forNight = true)
+                PackageKind.PARAM -> {
+                    if (activeParamPackageId(context, false) == entryId) {
+                        mountParamPackage(context, fallback, forNight = false, applyGeometryGlobal = true)
+                    }
+                    if (activeParamPackageId(context, true) == entryId) {
+                        mountParamPackage(context, fallback, forNight = true, applyGeometryGlobal = true)
+                    }
                 }
-            } else if (kind == PackageKind.PARAM) {
-                if (activeParamPackageId(context, false) == entryId) {
-                    mountParamPackage(context, fallback, forNight = false, applyGeometryGlobal = true)
+                PackageKind.COVER_SLOT -> {
+                    if (activeCoverSlotPackageId(context, false) == entryId) {
+                        mountCoverSlotPackage(context, fallback, forNight = false, lockCoverSlot = null)
+                    }
+                    if (activeCoverSlotPackageId(context, true) == entryId) {
+                        mountCoverSlotPackage(context, fallback, forNight = true, lockCoverSlot = null)
+                    }
                 }
-                if (activeParamPackageId(context, true) == entryId) {
-                    mountParamPackage(context, fallback, forNight = true, applyGeometryGlobal = true)
-                }
+                else -> Unit
             }
         }
         DeletePackageResult(deletedId = entryId, affectedSlots = affectedSlots, fallbackEntry = fallback)
@@ -692,32 +1048,57 @@ object UnifiedPackageRepository {
         val palette = if (forNight) (art.nightPalette ?: art.dayPalette) else (art.dayPalette ?: art.nightPalette)
         val wallpapers = if (forNight) (art.nightWallpapers ?: art.dayWallpapers) else (art.dayWallpapers ?: art.nightWallpapers)
         val typography = if (forNight) (art.nightTypography ?: art.dayTypography) else (art.dayTypography ?: art.nightTypography)
-
-        PrefBatchTransaction.beginBatch()
-        try {
-            palette?.let { applyPalette(context, isNight = forNight, it) }
-            wallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = forNight, it) }
-            typography?.let { applyTypography(context, entry.dir, baseDir, isNight = forNight, it) }
-            if (applyMounts) {
-                applyMountsForSlot(context, art.mounts, forNight)
+        val iconEntry = if (applyMounts) {
+            val iconId = if (forNight) (art.mounts.nightIconSlotId ?: art.mounts.dayIconSlotId) else (art.mounts.dayIconSlotId ?: art.mounts.nightIconSlotId)
+            resolveMountIconEntry(iconId, forNight)
+        } else null
+        val coverId = if (applyMounts) {
+            if (forNight) (art.mounts.nightCoverSlotId ?: art.mounts.dayCoverSlotId) else (art.mounts.dayCoverSlotId ?: art.mounts.nightCoverSlotId)
+        } else null
+        val allowArtCover = shouldApplyArtCoverMount(context, forNight)
+        val mountedCoverSlotMap = if (applyMounts && allowArtCover && !coverId.isNullOrBlank()) {
+            synchronized(cacheLock) {
+                coverSlotIndexCache ?: loadEntriesIntoCacheLocked(coverSlotDir, PackageKind.COVER_SLOT)
             }
-            context.putPrefString(
-                if (forNight) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId,
-                entry.manifest.id
-            )
-            if (AppConfig.isNightTheme == forNight) {
-                context.putPrefString(PreferKey.currentArtPackageId, entry.manifest.id)
-            }
-        } finally {
-            PrefBatchTransaction.endBatch {
-                context.applicationContext.recomputeThemeUiSignatureAfterBatch()
-            }
+        } else {
+            emptyMap()
         }
-        if (AppConfig.isNightTheme == forNight) {
-            ThemeConfig.applyTheme(context)
-            BookCover.upDefaultCover()
-            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
-            postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                palette?.let { applyPalette(context, isNight = forNight, it) }
+                wallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = forNight, it) }
+                typography?.let { applyTypography(context, entry.dir, baseDir, isNight = forNight, it) }
+                if (allowArtCover) {
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = forNight, art.defaultCoverPath)
+                    if (applyMounts) {
+                        applyArtRecommendedCoverSlotLocked(context, forNight, coverId, mountedCoverSlotMap)
+                    }
+                }
+                if (applyMounts) {
+                    iconEntry?.let { NavigationBarIconConfig.select(it) }
+                }
+                context.putPrefString(
+                    if (forNight) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId,
+                    entry.manifest.id
+                )
+                if (AppConfig.isNightTheme == forNight) {
+                    context.putPrefString(PreferKey.currentArtPackageId, entry.manifest.id)
+                }
+            } finally {
+                UiTypefaceCache.invalidate()
+                ThemeConfig.clearUsableBgImageCache()
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+            if (AppConfig.isNightTheme == forNight) {
+                ThemeConfig.applyTheme(context)
+                BookCover.upDefaultCover()
+                postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+                postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+            }
         }
     }
 
@@ -728,31 +1109,198 @@ object UnifiedPackageRepository {
     ) {
         val art = entry.manifest.art ?: return
         val baseDir = resolveBaseDir(entry)
-        PrefBatchTransaction.beginBatch()
-        try {
-            art.dayPalette?.let { applyPalette(context, isNight = false, it) }
-            art.nightPalette?.let { applyPalette(context, isNight = true, it) }
-            art.dayWallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = false, it) }
-            art.nightWallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = true, it) }
-            art.dayTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = false, it) }
-            art.nightTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = true, it) }
-            if (applyMounts) {
-                applyMounts(context, art.mounts)
+        val dayIconEntry = if (applyMounts) resolveMountIconEntry(art.mounts.dayIconSlotId, false) else null
+        val nightIconEntry = if (applyMounts) resolveMountIconEntry(art.mounts.nightIconSlotId, true) else null
+        val allowDayCover = shouldApplyArtCoverMount(context, false)
+        val allowNightCover = shouldApplyArtCoverMount(context, true)
+        val coverSlotMap = if (applyMounts && (allowDayCover || allowNightCover)) {
+            synchronized(cacheLock) {
+                coverSlotIndexCache ?: loadEntriesIntoCacheLocked(coverSlotDir, PackageKind.COVER_SLOT)
             }
-            context.putPrefString(PreferKey.currentArtPackageId, entry.manifest.id)
-            context.putPrefString(
-                if (AppConfig.isNightTheme) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId,
-                entry.manifest.id
-            )
-        } finally {
-            PrefBatchTransaction.endBatch {
-                context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+        } else {
+            emptyMap()
+        }
+
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                art.dayPalette?.let { applyPalette(context, isNight = false, it) }
+                art.nightPalette?.let { applyPalette(context, isNight = true, it) }
+                art.dayWallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = false, it) }
+                art.nightWallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = true, it) }
+                art.dayTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = false, it) }
+                art.nightTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = true, it) }
+                if (allowDayCover) {
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = false, art.defaultCoverPath)
+                    if (applyMounts) {
+                        applyArtRecommendedCoverSlotLocked(context, false, art.mounts.dayCoverSlotId, coverSlotMap)
+                    }
+                }
+                if (allowNightCover) {
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = true, art.defaultCoverPath)
+                    if (applyMounts) {
+                        applyArtRecommendedCoverSlotLocked(context, true, art.mounts.nightCoverSlotId, coverSlotMap)
+                    }
+                }
+                if (applyMounts) {
+                    dayIconEntry?.let { NavigationBarIconConfig.select(it) }
+                    nightIconEntry?.let { NavigationBarIconConfig.select(it) }
+                }
+                context.putPrefString(PreferKey.currentArtPackageId, entry.manifest.id)
+                context.putPrefString(
+                    if (AppConfig.isNightTheme) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId,
+                    entry.manifest.id
+                )
+            } finally {
+                UiTypefaceCache.invalidate()
+                ThemeConfig.clearUsableBgImageCache()
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+            ThemeConfig.applyTheme(context)
+            BookCover.upDefaultCover()
+            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+            postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+        }
+    }
+
+    /**
+     * Mounts a [CoverSlotPackagePayload] into either the Day slot (`forNight = false`) or Night slot (`forNight = true`).
+     *
+     * Independent `COVER_SLOT` mounts take highest precedence over ArtPackage embedded covers unless
+     * [lockCoverSlot] is explicitly `false`.
+     */
+    suspend fun mountCoverSlotPackage(
+        context: Context,
+        entry: StoredEntry,
+        forNight: Boolean = AppConfig.isNightTheme,
+        lockCoverSlot: Boolean? = null
+    ) {
+        val baseDir = resolveBaseDir(entry)
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                applyCoverSlotRuntimeSyncLocked(
+                    context = context,
+                    entry = entry,
+                    baseDir = baseDir,
+                    forNight = forNight,
+                    updateSlotPointers = true
+                )
+                if (lockCoverSlot != null) {
+                    context.putPrefBoolean(PreferKey.coverSlotLocked, lockCoverSlot)
+                } else if (entry.manifest.id != BUILTIN_DEFAULT_COVER_SLOT_ID) {
+                    context.putPrefBoolean(PreferKey.coverSlotLocked, true)
+                }
+            } finally {
+                CoverCollectionManager.bumpRevision()
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+            if (AppConfig.isNightTheme == forNight) {
+                BookCover.upDefaultCover()
+                postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+                postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
             }
         }
-        ThemeConfig.applyTheme(context)
-        BookCover.upDefaultCover()
-        postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+    }
+
+    /**
+     * Switches between independent locked `COVER_SLOT` mode (`followArt = false`) and
+     * "follow current ArtPackage recommendation" mode (`followArt = true`).
+     */
+    suspend fun setCoverSlotFollowArt(
+        context: Context,
+        followArt: Boolean
+    ) {
+        context.putPrefBoolean(PreferKey.coverSlotLocked, !followArt)
+        if (followArt) {
+            val dayArtId = activeArtPackageId(context, false)
+            val nightArtId = activeArtPackageId(context, true)
+            val arts = listArtPackages().associateBy { it.manifest.id }
+            val coverMap = listCoverSlotPackages().associateBy { it.manifest.id }
+            withContext(Dispatchers.Main.immediate) {
+                PrefBatchTransaction.beginBatch()
+                try {
+                    listOf(false to dayArtId, true to nightArtId).forEach { (night, artId) ->
+                        val artEntry = arts[artId]
+                        if (artEntry != null) {
+                            val art = artEntry.manifest.art
+                            val artBase = resolveBaseDir(artEntry, arts)
+                            applyDefaultCover(context, artEntry.dir, artBase, night, art?.defaultCoverPath)
+                            val recId = if (night) {
+                                art?.mounts?.nightCoverSlotId ?: art?.mounts?.dayCoverSlotId
+                            } else {
+                                art?.mounts?.dayCoverSlotId ?: art?.mounts?.nightCoverSlotId
+                            }
+                            applyArtRecommendedCoverSlotLocked(context, night, recId, coverMap)
+                        } else {
+                            applyDefaultCover(context, rootDir, null, night, null)
+                            CoverCollectionManager.setSelected(night, "")
+                        }
+                    }
+                } finally {
+                    CoverCollectionManager.bumpRevision()
+                    PrefBatchTransaction.endBatch {
+                        context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                    }
+                }
+                BookCover.upDefaultCover()
+                postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+                postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+            }
+        } else {
+            val coverMap = listCoverSlotPackages().associateBy { it.manifest.id }
+            val dayEntry = coverMap[activeCoverSlotPackageId(context, false)]
+                ?: coverMap[BUILTIN_DEFAULT_COVER_SLOT_ID]
+            val nightEntry = coverMap[activeCoverSlotPackageId(context, true)]
+                ?: coverMap[BUILTIN_DEFAULT_COVER_SLOT_ID]
+            dayEntry?.let { mountCoverSlotPackage(context, it, forNight = false, lockCoverSlot = true) }
+            nightEntry?.let { mountCoverSlotPackage(context, it, forNight = true, lockCoverSlot = true) }
+        }
+    }
+
+    suspend fun reapplyActiveCoverSlotsAfterRestore(context: Context = appCtx) {
+        invalidateCache()
+        ensureInitialized(context)
+        val coverMap = listCoverSlotPackages().associateBy { it.manifest.id }
+        val dayId = activeCoverSlotPackageId(context, false)
+        val nightId = activeCoverSlotPackageId(context, true)
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                if (!shouldApplyArtCoverMount(context, false)) {
+                    coverMap[dayId]?.let { entry ->
+                        applyCoverSlotRuntimeSyncLocked(
+                            context = context,
+                            entry = entry,
+                            baseDir = resolveBaseDir(entry, coverMap),
+                            forNight = false,
+                            updateSlotPointers = true
+                        )
+                    }
+                }
+                if (!shouldApplyArtCoverMount(context, true)) {
+                    coverMap[nightId]?.let { entry ->
+                        applyCoverSlotRuntimeSyncLocked(
+                            context = context,
+                            entry = entry,
+                            baseDir = resolveBaseDir(entry, coverMap),
+                            forNight = true,
+                            updateSlotPointers = true
+                        )
+                    }
+                }
+            } finally {
+                CoverCollectionManager.bumpRevision()
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+            BookCover.upDefaultCover()
+        }
     }
 
     /**
@@ -770,32 +1318,36 @@ object UnifiedPackageRepository {
     ) {
         val param = entry.manifest.param ?: return
         val isActiveMode = AppConfig.isNightTheme == forNight
-        PrefBatchTransaction.beginBatch()
-        try {
-            param.surfaceGlobal?.let { g ->
-                applyParamAtmosphere(context, g, isNight = forNight, activateGlassNow = isActiveMode)
-                if (applyGeometryGlobal) {
-                    applyParamGeometryGlobal(context, g, param.surfaceScopes, param.layout?.densityScale)
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                param.surfaceGlobal?.let { g ->
+                    applyParamAtmosphere(context, g, isNight = forNight, activateGlassNow = isActiveMode)
+                    if (applyGeometryGlobal) {
+                        applyParamGeometryGlobal(context, g, param.surfaceScopes, param.layout?.densityScale)
+                    }
+                } ?: run {
+                    if (applyGeometryGlobal && param.surfaceScopes != null) {
+                        applySurfaceScopes(context, param.surfaceScopes)
+                    }
                 }
-            } ?: run {
-                if (applyGeometryGlobal && param.surfaceScopes != null) {
-                    applySurfaceScopes(context, param.surfaceScopes)
+                context.putPrefString(
+                    if (forNight) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
+                    entry.manifest.id
+                )
+                if (isActiveMode) {
+                    context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
+                }
+                context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
                 }
             }
-            context.putPrefString(
-                if (forNight) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
-                entry.manifest.id
-            )
-            if (isActiveMode) {
-                context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
-            }
-            context.putPrefBoolean(PreferKey.paramPackageDirty, false)
-        } finally {
-            PrefBatchTransaction.endBatch {
-                context.applicationContext.recomputeThemeUiSignatureAfterBatch()
-            }
+            ThemeStore.markChanged(context)
+            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+            postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
         }
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
     }
 
     /**
@@ -821,7 +1373,9 @@ object UnifiedPackageRepository {
         if (context.getPrefBoolean(PreferKey.useLegacyPackageManager, false)) return
         val targetArtId = activeArtPackageId(context, isNight)
         val targetParamId = activeParamPackageId(context, isNight)
-        val (artMap, paramMap) = synchronized(cacheLock) {
+        val targetCoverSlotId = activeCoverSlotPackageId(context, isNight)
+        val allowArtCover = shouldApplyArtCoverMount(context, isNight)
+        val (artMap, paramMap, coverSlotMap) = synchronized(cacheLock) {
             val arts = if (targetArtId.isNotBlank()) {
                 artIndexCache ?: loadEntriesIntoCacheLocked(artDir, PackageKind.ART)
             } else {
@@ -832,11 +1386,21 @@ object UnifiedPackageRepository {
             } else {
                 emptyMap()
             }
-            arts to params
+            val covers = if (targetCoverSlotId.isNotBlank() || !allowArtCover) {
+                coverSlotIndexCache ?: loadEntriesIntoCacheLocked(coverSlotDir, PackageKind.COVER_SLOT)
+            } else {
+                emptyMap()
+            }
+            Triple(arts, params, covers)
         }
         val artEntry = if (targetArtId.isNotBlank()) artMap[targetArtId] else null
         val paramEntry = if (targetParamId.isNotBlank()) paramMap[targetParamId] else null
-        if (artEntry == null && paramEntry == null) return
+        val coverSlotEntry = if (!allowArtCover && targetCoverSlotId.isNotBlank()) {
+            coverSlotMap[targetCoverSlotId]
+        } else {
+            null
+        }
+        if (artEntry == null && paramEntry == null && coverSlotEntry == null) return
 
         PrefBatchTransaction.beginBatch()
         try {
@@ -849,7 +1413,25 @@ object UnifiedPackageRepository {
                 palette?.let { applyPalette(context, isNight = isNight, it) }
                 wallpapers?.let { applyWallpapers(context, artEntry.dir, baseDir, isNight = isNight, it) }
                 typography?.let { applyTypography(context, artEntry.dir, baseDir, isNight = isNight, it) }
+                if (allowArtCover) {
+                    applyDefaultCover(context, artEntry.dir, baseDir, isNight = isNight, art?.defaultCoverPath)
+                    val recCoverId = if (isNight) {
+                        art?.mounts?.nightCoverSlotId ?: art?.mounts?.dayCoverSlotId
+                    } else {
+                        art?.mounts?.dayCoverSlotId ?: art?.mounts?.nightCoverSlotId
+                    }
+                    applyArtRecommendedCoverSlotLocked(context, isNight, recCoverId, coverSlotMap)
+                }
                 context.putPrefString(PreferKey.currentArtPackageId, artEntry.manifest.id)
+            }
+            if (coverSlotEntry != null) {
+                applyCoverSlotRuntimeSyncLocked(
+                    context = context,
+                    entry = coverSlotEntry,
+                    baseDir = resolveBaseDir(coverSlotEntry, coverSlotMap),
+                    forNight = isNight,
+                    updateSlotPointers = true
+                )
             }
             if (paramEntry != null) {
                 paramEntry.manifest.param?.surfaceGlobal?.let { g ->
@@ -858,6 +1440,9 @@ object UnifiedPackageRepository {
                 context.putPrefString(PreferKey.currentParamPackageId, paramEntry.manifest.id)
             }
         } finally {
+            UiTypefaceCache.invalidate()
+            ThemeConfig.clearUsableBgImageCache()
+            CoverCollectionManager.bumpRevision()
             PrefBatchTransaction.endBatch {
                 context.applicationContext.recomputeThemeUiSignatureAfterBatch()
             }
@@ -871,31 +1456,35 @@ object UnifiedPackageRepository {
         applyLayout: Boolean = true
     ) {
         val param = entry.manifest.param ?: return
-        PrefBatchTransaction.beginBatch()
-        try {
-            if (applySurface) {
-                param.surfaceGlobal?.let { applySurfaceGlobal(context, it) }
-                applySurfaceScopes(context, param.surfaceScopes)
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                if (applySurface) {
+                    param.surfaceGlobal?.let { applySurfaceGlobal(context, it) }
+                    applySurfaceScopes(context, param.surfaceScopes)
+                }
+                if (applyLayout) {
+                    param.layout?.let { applyLayoutParams(context, it) }
+                }
+                context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
+                context.putPrefString(
+                    if (AppConfig.isNightTheme) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
+                    entry.manifest.id
+                )
+                context.putPrefBoolean(PreferKey.paramPackageDirty, !(applySurface && applyLayout))
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
             }
+            ThemeStore.markChanged(context)
+            postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
             if (applyLayout) {
-                param.layout?.let { applyLayoutParams(context, it) }
+                postEvent(EventBus.NOTIFY_MAIN, true)
+                postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
             }
-            context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
-            context.putPrefString(
-                if (AppConfig.isNightTheme) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
-                entry.manifest.id
-            )
-            context.putPrefBoolean(PreferKey.paramPackageDirty, !(applySurface && applyLayout))
-        } finally {
-            PrefBatchTransaction.endBatch {
-                context.applicationContext.recomputeThemeUiSignatureAfterBatch()
-            }
+            postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
         }
-        if (applyLayout) {
-            postEvent(EventBus.NOTIFY_MAIN, true)
-            postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
-        }
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
     }
 
     suspend fun listCloudPackages(
@@ -970,6 +1559,22 @@ object UnifiedPackageRepository {
         )
     }
 
+    suspend fun exportPackage(entry: StoredEntry): File = exportEntryZip(entry)
+
+    suspend fun importPackage(
+        context: Context,
+        file: File,
+        importSurface: Boolean = true,
+        importLayout: Boolean = false,
+        customNameOverride: String? = null
+    ): UnifiedImportResult = importFile(
+        context = context,
+        file = file,
+        importSurface = importSurface,
+        importLayout = importLayout,
+        customNameOverride = customNameOverride
+    )
+
     /**
      * Exports [entry] as a 100% self-contained ZIP: if [entry] uses Copy-on-Write (`basePackageId != null`),
      * materializes `base + overlay` into a temporary staging folder before zipping.
@@ -997,39 +1602,11 @@ object UnifiedPackageRepository {
     }
 
     /**
-     * Inspects whether a file is a unified `param` or `kit` package so UI can prompt the user
-     * for `@surface` / `@layout` checkboxes before applying.
+     * Inspects whether a file is a unified `art` / `param` / `cover_slot` / `kit` package
+     * (including legacy `.red` / `.zip` CoverCollection archives).
      */
     suspend fun peekKind(file: File): PackageKind? = withContext(IO) {
-        if (!file.isFile) return@withContext null
-        val textPeek = runCatching {
-            val head = file.inputStream().use { input ->
-                val buf = ByteArray(16)
-                val n = input.read(buf)
-                if (n > 0) String(buf, 0, n, Charsets.UTF_8).trimStart() else ""
-            }
-            head.startsWith("{")
-        }.getOrDefault(false)
-        if (textPeek) {
-            return@withContext runCatching {
-                UnifiedPackageCodec.decode(file.readText()).kind
-            }.getOrNull()
-        }
-        val unzipDir = File(tempDir, "peek_${System.currentTimeMillis()}").apply { mkdirs() }
-        try {
-            PackageIoKernel.extractZipSafe(file, unzipDir) {
-                it == UnifiedPackageManifest.MANIFEST_FILE_NAME ||
-                    it.endsWith("/${UnifiedPackageManifest.MANIFEST_FILE_NAME}")
-            }
-            val manifestFile = unzipDir.walkTopDown().firstOrNull {
-                it.isFile && it.name == UnifiedPackageManifest.MANIFEST_FILE_NAME
-            } ?: return@withContext null
-            UnifiedPackageCodec.decode(manifestFile.readText()).kind
-        } catch (_: Throwable) {
-            null
-        } finally {
-            FileUtils.delete(unzipDir, deleteRootDir = true)
-        }
+        UnifiedPackageCodec.detectArchivePackageKind(file, tempDir)
     }
 
     suspend fun importFile(
@@ -1050,24 +1627,49 @@ object UnifiedPackageRepository {
             val manifest = UnifiedPackageCodec.decode(file.readText())
             return@withContext importManifestOnly(context, manifest, importSurface, importLayout, customNameOverride)
         }
+        val isDirectZip = runCatching {
+            file.inputStream().use { input ->
+                val head = ByteArray(2)
+                input.read(head) == 2 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()
+            }
+        }.getOrDefault(false)
+        val zipPayload = if (isDirectZip) file else (RedAssetPackage.zipPayload(file, tempDir) ?: file)
+        val deleteZipPayload = zipPayload != file
         val unzipDir = File(tempDir, "import_${System.currentTimeMillis()}").apply { mkdirs() }
+        val legacyCoverStaging = File(tempDir, "legacy_cover_${System.currentTimeMillis()}")
         try {
-            PackageIoKernel.extractZipSafe(file, unzipDir)
+            PackageIoKernel.extractZipSafe(zipPayload, unzipDir)
             val manifestFile = unzipDir.walkTopDown().firstOrNull {
                 it.isFile && it.name == UnifiedPackageManifest.MANIFEST_FILE_NAME
-            } ?: throw IllegalArgumentException("Missing ${UnifiedPackageManifest.MANIFEST_FILE_NAME}")
-            val packageRoot = manifestFile.parentFile ?: unzipDir
-            val manifest = UnifiedPackageCodec.decode(manifestFile.readText())
+            }
+            val (packageRoot, manifest) = if (manifestFile != null) {
+                (manifestFile.parentFile ?: unzipDir) to UnifiedPackageCodec.decode(manifestFile.readText())
+            } else if (kind == PackageKind.COVER_SLOT) {
+                val fallbackName = file.nameWithoutExtension
+                    .removeSuffix(".red")
+                    .removeSuffix(".zip")
+                    .ifBlank { "导入封面包" }
+                val converted = UnifiedPackageCodec.convertLegacyCoverCollectionDir(
+                    sourceDir = unzipDir,
+                    targetDir = legacyCoverStaging,
+                    fallbackName = fallbackName
+                )
+                legacyCoverStaging to converted
+            } else {
+                throw IllegalArgumentException("Missing ${UnifiedPackageManifest.MANIFEST_FILE_NAME}")
+            }
             repoMutex.withLock {
                 var importedArt: StoredEntry? = null
                 var importedParam: StoredEntry? = null
+                var importedCoverSlot: StoredEntry? = null
                 var duplicateArt: StoredEntry? = null
                 var duplicateParam: StoredEntry? = null
+                var duplicateCoverSlot: StoredEntry? = null
 
                 if (manifest.art != null && (manifest.kind == PackageKind.ART || manifest.kind == PackageKind.KIT)) {
                     val existingArts = loadEntries(artDir, PackageKind.ART)
                     val artMap = existingArts.associateBy { it.manifest.id }
-                    val artCandidateManifest = manifest.copy(kind = PackageKind.ART, param = null)
+                    val artCandidateManifest = manifest.copy(kind = PackageKind.ART, param = null, coverSlot = null)
                     val incomingArtHash = UnifiedPackageCodec.computeContentHash(artCandidateManifest, packageRoot)
                     val sameContent = existingArts.firstOrNull {
                         ensureCurrentContentHashLocked(it, artMap) == incomingArtHash
@@ -1105,7 +1707,7 @@ object UnifiedPackageRepository {
                         layout = if (importLayout) manifest.param.layout else null,
                         unknownFields = manifest.param.unknownFields
                     )
-                    val candidateManifest = manifest.copy(kind = PackageKind.PARAM, art = null, param = filteredParam)
+                    val candidateManifest = manifest.copy(kind = PackageKind.PARAM, art = null, param = filteredParam, coverSlot = null)
                     val paramHash = UnifiedPackageCodec.computeContentHash(candidateManifest)
                     val sameContent = existingParams.firstOrNull {
                         ensureCurrentContentHashLocked(it) == paramHash
@@ -1134,15 +1736,57 @@ object UnifiedPackageRepository {
                         }
                     }
                 }
+                if (manifest.coverSlot != null && (manifest.kind == PackageKind.COVER_SLOT || manifest.kind == PackageKind.KIT)) {
+                    val errors = UnifiedPackageCodec.validateCoverSlotPackage(
+                        manifest.copy(kind = PackageKind.COVER_SLOT),
+                        packageRoot
+                    )
+                    require(errors.isEmpty()) { errors.joinToString("; ") }
+                    val existingCovers = loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+                    val coverMap = existingCovers.associateBy { it.manifest.id }
+                    val candidateManifest = manifest.copy(kind = PackageKind.COVER_SLOT, art = null, param = null)
+                    val coverHash = UnifiedPackageCodec.computeContentHash(candidateManifest, packageRoot)
+                    val sameContent = existingCovers.firstOrNull {
+                        ensureCurrentContentHashLocked(it, coverMap) == coverHash
+                    }
+                    if (sameContent != null) {
+                        duplicateCoverSlot = sameContent
+                    } else {
+                        val candidateName = customNameOverride?.trim()?.takeIf { it.isNotBlank() }
+                            ?: manifest.name.trim().ifBlank { "导入书架封面包" }
+                        val existingNames = existingCovers.map { it.manifest.name }
+                        if (!isPackageNameUnique(existingNames, candidateName)) {
+                            return@withLock UnifiedImportResult(nameConflictName = candidateName)
+                        }
+                        val slug = PackageIoKernel.uniqueDirName(coverSlotDir, candidateName)
+                        val dst = File(coverSlotDir, slug).apply { mkdirs() }
+                        packageRoot.copyRecursively(dst, overwrite = true)
+                        val coverManifest = candidateManifest.copy(
+                            id = "cover_slot_$slug",
+                            name = candidateName,
+                            updatedAt = System.currentTimeMillis(),
+                            basePackageId = null,
+                            contentHash = coverHash
+                        )
+                        writeManifest(dst, coverManifest)
+                        importedCoverSlot = StoredEntry(coverManifest, dst).also {
+                            upsertCacheEntry(PackageKind.COVER_SLOT, it)
+                        }
+                    }
+                }
                 UnifiedImportResult(
                     importedArt = importedArt,
                     importedParam = importedParam,
+                    importedCoverSlot = importedCoverSlot,
                     duplicateArt = duplicateArt,
-                    duplicateParam = duplicateParam
+                    duplicateParam = duplicateParam,
+                    duplicateCoverSlot = duplicateCoverSlot
                 )
             }
         } finally {
+            if (deleteZipPayload) zipPayload.delete()
             FileUtils.delete(unzipDir, deleteRootDir = true)
+            FileUtils.delete(legacyCoverStaging, deleteRootDir = true)
         }
     }
 
@@ -1155,13 +1799,15 @@ object UnifiedPackageRepository {
     ): UnifiedImportResult = repoMutex.withLock {
         var importedArt: StoredEntry? = null
         var importedParam: StoredEntry? = null
+        var importedCoverSlot: StoredEntry? = null
         var duplicateArt: StoredEntry? = null
         var duplicateParam: StoredEntry? = null
+        var duplicateCoverSlot: StoredEntry? = null
 
         if (manifest.art != null && (manifest.kind == PackageKind.ART || manifest.kind == PackageKind.KIT)) {
             val existingArts = loadEntries(artDir, PackageKind.ART)
             val artMap = existingArts.associateBy { it.manifest.id }
-            val artCandidate = manifest.copy(kind = PackageKind.ART, param = null)
+            val artCandidate = manifest.copy(kind = PackageKind.ART, param = null, coverSlot = null)
             val incomingArtHash = UnifiedPackageCodec.computeContentHash(artCandidate)
             val sameContent = existingArts.firstOrNull {
                 ensureCurrentContentHashLocked(it, artMap) == incomingArtHash
@@ -1196,7 +1842,7 @@ object UnifiedPackageRepository {
                 layout = if (importLayout) manifest.param.layout else null,
                 unknownFields = manifest.param.unknownFields
             )
-            val candidateManifest = manifest.copy(kind = PackageKind.PARAM, art = null, param = filtered)
+            val candidateManifest = manifest.copy(kind = PackageKind.PARAM, art = null, param = filtered, coverSlot = null)
             val paramHash = UnifiedPackageCodec.computeContentHash(candidateManifest)
             val sameContent = existingParams.firstOrNull {
                 ensureCurrentContentHashLocked(it) == paramHash
@@ -1223,11 +1869,43 @@ object UnifiedPackageRepository {
                 }
             }
         }
+        if (manifest.coverSlot != null && (manifest.kind == PackageKind.COVER_SLOT || manifest.kind == PackageKind.KIT)) {
+            val existingCovers = loadEntries(coverSlotDir, PackageKind.COVER_SLOT)
+            val coverMap = existingCovers.associateBy { it.manifest.id }
+            val candidateManifest = manifest.copy(kind = PackageKind.COVER_SLOT, art = null, param = null)
+            val coverHash = UnifiedPackageCodec.computeContentHash(candidateManifest)
+            val sameContent = existingCovers.firstOrNull {
+                ensureCurrentContentHashLocked(it, coverMap) == coverHash
+            }
+            if (sameContent != null) {
+                duplicateCoverSlot = sameContent
+            } else {
+                val candidateName = customNameOverride?.trim()?.takeIf { it.isNotBlank() }
+                    ?: manifest.name.trim().ifBlank { "导入书架封面包" }
+                if (!isPackageNameUnique(existingCovers.map { it.manifest.name }, candidateName)) {
+                    return@withLock UnifiedImportResult(nameConflictName = candidateName)
+                }
+                val slug = PackageIoKernel.uniqueDirName(coverSlotDir, candidateName)
+                val dst = File(coverSlotDir, slug).apply { mkdirs() }
+                val m = candidateManifest.copy(
+                    id = "cover_slot_$slug",
+                    name = candidateName,
+                    updatedAt = System.currentTimeMillis(),
+                    contentHash = coverHash
+                )
+                writeManifest(dst, m)
+                importedCoverSlot = StoredEntry(m, dst).also {
+                    upsertCacheEntry(PackageKind.COVER_SLOT, it)
+                }
+            }
+        }
         UnifiedImportResult(
             importedArt = importedArt,
             importedParam = importedParam,
+            importedCoverSlot = importedCoverSlot,
             duplicateArt = duplicateArt,
-            duplicateParam = duplicateParam
+            duplicateParam = duplicateParam,
+            duplicateCoverSlot = duplicateCoverSlot
         )
     }
 
@@ -1245,7 +1923,7 @@ object UnifiedPackageRepository {
         if (UnifiedPackageCodec.isCurrentContentHash(current)) {
             return current!!
         }
-        val upgradedHash = if (entry.manifest.kind == PackageKind.ART) {
+        val upgradedHash = if (entry.manifest.kind == PackageKind.ART || entry.manifest.kind == PackageKind.COVER_SLOT) {
             val baseDir = resolveBaseDir(entry, allById)
             UnifiedPackageCodec.computeContentHash(
                 entry.manifest,
@@ -1264,22 +1942,31 @@ object UnifiedPackageRepository {
 
     private fun upsertCacheEntry(kind: PackageKind, entry: StoredEntry) {
         synchronized(cacheLock) {
-            if (kind == PackageKind.ART) {
-                val cur = artIndexCache ?: return
-                artIndexCache = cur + (entry.manifest.id to entry)
-            } else if (kind == PackageKind.PARAM) {
-                val cur = paramIndexCache ?: return
-                paramIndexCache = cur + (entry.manifest.id to entry)
+            when (kind) {
+                PackageKind.ART -> {
+                    val cur = artIndexCache ?: return
+                    artIndexCache = cur + (entry.manifest.id to entry)
+                }
+                PackageKind.PARAM -> {
+                    val cur = paramIndexCache ?: return
+                    paramIndexCache = cur + (entry.manifest.id to entry)
+                }
+                PackageKind.COVER_SLOT -> {
+                    val cur = coverSlotIndexCache ?: return
+                    coverSlotIndexCache = cur + (entry.manifest.id to entry)
+                }
+                else -> Unit
             }
         }
     }
 
     private fun removeCacheEntry(kind: PackageKind, id: String) {
         synchronized(cacheLock) {
-            if (kind == PackageKind.ART) {
-                artIndexCache = artIndexCache?.minus(id)
-            } else if (kind == PackageKind.PARAM) {
-                paramIndexCache = paramIndexCache?.minus(id)
+            when (kind) {
+                PackageKind.ART -> artIndexCache = artIndexCache?.minus(id)
+                PackageKind.PARAM -> paramIndexCache = paramIndexCache?.minus(id)
+                PackageKind.COVER_SLOT -> coverSlotIndexCache = coverSlotIndexCache?.minus(id)
+                else -> Unit
             }
         }
     }
@@ -1294,10 +1981,11 @@ object UnifiedPackageRepository {
             }
             .orEmpty()
         val map = loaded.associateBy { it.manifest.id }
-        if (expectedKind == PackageKind.ART) {
-            artIndexCache = map
-        } else if (expectedKind == PackageKind.PARAM) {
-            paramIndexCache = map
+        when (expectedKind) {
+            PackageKind.ART -> artIndexCache = map
+            PackageKind.PARAM -> paramIndexCache = map
+            PackageKind.COVER_SLOT -> coverSlotIndexCache = map
+            else -> Unit
         }
         return map
     }
@@ -1321,11 +2009,21 @@ object UnifiedPackageRepository {
         PackageIoKernel.writeTextAtomic(file, json)
     }
 
-    private fun copyArtAssetsIntoDir(art: ArtPackagePayload, packageDir: File): ArtPackagePayload {
+    private fun copyArtAssetsIntoDir(
+        art: ArtPackagePayload,
+        packageDir: File,
+        baseDir: File? = null
+    ): ArtPackagePayload {
         val assetsDir = File(packageDir, "assets").apply { mkdirs() }
         fun copyFile(path: String?, prefix: String): String? {
             val trimmed = path?.trim()?.takeIf { it.isNotBlank() } ?: return null
             if (trimmed.startsWith("http", ignoreCase = true)) return trimmed
+            if (!File(trimmed).isAbsolute && baseDir != null) {
+                val baseCandidate = File(baseDir, trimmed)
+                if (baseCandidate.isSameOrSubFileOf(baseDir) && baseCandidate.isFile) {
+                    return trimmed.replace('\\', '/')
+                }
+            }
             val src = if (File(trimmed).isAbsolute) File(trimmed) else File(packageDir, trimmed)
             if (!src.isFile) return null
             if (src.isSameOrSubFileOf(packageDir)) {
@@ -1333,6 +2031,35 @@ object UnifiedPackageRepository {
             }
             val ext = src.extension.takeIf { it.isNotBlank() }?.let { ".$it" }.orEmpty()
             val dst = File(assetsDir, "$prefix$ext")
+            src.copyTo(dst, overwrite = true)
+            return "assets/${dst.name}"
+        }
+        fun copyFontFile(path: String?, prefix: String): String? {
+            val trimmed = path?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            FontProtocolResolver.normalizeSystemProtocol(trimmed)?.let { return it }
+            if (trimmed.startsWith("@font:", ignoreCase = true) ||
+                trimmed.startsWith("content://", ignoreCase = true) ||
+                trimmed.startsWith("http", ignoreCase = true)
+            ) {
+                return trimmed
+            }
+            if (!File(trimmed).isAbsolute && baseDir != null) {
+                val baseCandidate = File(baseDir, trimmed)
+                if (baseCandidate.isSameOrSubFileOf(baseDir) && baseCandidate.isFile) {
+                    return trimmed.replace('\\', '/')
+                }
+            }
+            val src = if (File(trimmed).isAbsolute) File(trimmed) else File(packageDir, trimmed)
+            if (!src.isFile) return null
+            if (src.isSameOrSubFileOf(packageDir)) {
+                return src.relativeTo(packageDir).path.replace('\\', '/')
+            }
+            val inspection = FontFileValidator.inspectFile(src)
+            val resolvedExt = inspection.suggestedExtension?.takeIf { it.isNotBlank() }
+                ?: src.extension.lowercase(Locale.ROOT).takeIf { it in FontFileValidator.supportedExtensions }
+                ?: src.extension.takeIf { it.isNotBlank() && !it.equals("dat", ignoreCase = true) }
+            val suffix = resolvedExt?.let { ".$it" }.orEmpty()
+            val dst = File(assetsDir, "$prefix$suffix")
             src.copyTo(dst, overwrite = true)
             return "assets/${dst.name}"
         }
@@ -1356,14 +2083,191 @@ object UnifiedPackageRepository {
                 welcome = copyFile(art.nightWallpapers.welcome, "night_welcome")
             ),
             dayTypography = art.dayTypography?.copy(
-                uiFontPath = copyFile(art.dayTypography.uiFontPath, "day_ui_font"),
-                titleFontPath = copyFile(art.dayTypography.titleFontPath, "day_title_font")
+                uiFontPath = copyFontFile(art.dayTypography.uiFontPath, "day_ui_font"),
+                titleFontPath = copyFontFile(art.dayTypography.titleFontPath, "day_title_font")
             ),
             nightTypography = art.nightTypography?.copy(
-                uiFontPath = copyFile(art.nightTypography.uiFontPath, "night_ui_font"),
-                titleFontPath = copyFile(art.nightTypography.titleFontPath, "night_title_font")
-            )
+                uiFontPath = copyFontFile(art.nightTypography.uiFontPath, "night_ui_font"),
+                titleFontPath = copyFontFile(art.nightTypography.titleFontPath, "night_title_font")
+            ),
+            defaultCoverPath = copyFile(art.defaultCoverPath, "default_cover")
         )
+    }
+
+    private fun copyCoverSlotAssetsIntoDir(
+        slot: CoverSlotPackagePayload,
+        packageDir: File,
+        baseDir: File?
+    ): CoverSlotPackagePayload {
+        val assetsDir = File(packageDir, "assets").apply { mkdirs() }
+        fun copySlotFile(path: String?, prefix: String): String? {
+            val trimmed = path?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            if (trimmed.startsWith("http", ignoreCase = true)) return trimmed
+            if (!File(trimmed).isAbsolute) {
+                val inPackage = File(packageDir, trimmed)
+                if (inPackage.isSameOrSubFileOf(packageDir) && inPackage.isFile) {
+                    return inPackage.relativeTo(packageDir).path.replace('\\', '/')
+                }
+                if (baseDir != null) {
+                    val inBase = File(baseDir, trimmed)
+                    if (inBase.isSameOrSubFileOf(baseDir) && inBase.isFile) {
+                        return trimmed.replace('\\', '/')
+                    }
+                }
+            }
+            val src = if (File(trimmed).isAbsolute) File(trimmed) else File(packageDir, trimmed)
+            if (!src.isFile) return null
+            if (src.isSameOrSubFileOf(packageDir)) {
+                return src.relativeTo(packageDir).path.replace('\\', '/')
+            }
+            if (baseDir != null && src.isSameOrSubFileOf(baseDir)) {
+                return src.relativeTo(baseDir).path.replace('\\', '/')
+            }
+            val ext = src.extension.lowercase(Locale.ROOT).ifBlank { "jpg" }
+            var dst = File(assetsDir, "$prefix.$ext")
+            var suffix = 1
+            while (dst.exists()) {
+                dst = File(assetsDir, "${prefix}_$suffix.$ext")
+                suffix++
+            }
+            src.copyTo(dst, overwrite = true)
+            return "assets/${dst.name}"
+        }
+        val copiedCovers = slot.covers.mapIndexedNotNull { index, raw ->
+            copySlotFile(raw, "cover_${index + 1}")
+        }.distinct()
+        return slot.copy(
+            covers = copiedCovers,
+            applyMode = CoverSlotApplyMode.normalize(slot.applyMode),
+            dayDefaultCoverPath = copySlotFile(slot.dayDefaultCoverPath, "day_default_cover"),
+            nightDefaultCoverPath = copySlotFile(slot.nightDefaultCoverPath, "night_default_cover"),
+            groupCoverPath = copySlotFile(slot.groupCoverPath, "group_default_cover")
+        )
+    }
+
+    private fun applyCoverSlotRuntimeSyncLocked(
+        context: Context,
+        entry: StoredEntry,
+        baseDir: File?,
+        forNight: Boolean,
+        updateSlotPointers: Boolean
+    ) {
+        val slot = entry.manifest.coverSlot ?: CoverSlotPackagePayload()
+        val resolvedCovers = slot.covers.mapNotNull { rel ->
+            resolvePackageAssetPath(entry.dir, baseDir, rel)
+        }.filter { File(it).isFile }
+        val rawDefault = if (forNight) {
+            slot.nightDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.dayDefaultCoverPath
+        } else {
+            slot.dayDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.nightDefaultCoverPath
+        }
+        val resolvedDefault = resolvePackageAssetPath(entry.dir, baseDir, rawDefault)
+        val resolvedGroupCover = resolvePackageAssetPath(entry.dir, baseDir, slot.groupCoverPath)
+        val collectionMode = toCollectionManagerMode(slot.applyMode)
+
+        putOrRemovePref(
+            context,
+            if (forNight) PreferKey.defaultCoverDark else PreferKey.defaultCover,
+            resolvedDefault
+        )
+        putOrRemovePref(
+            context,
+            if (forNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover,
+            resolvedGroupCover
+        )
+        context.putPrefString(
+            if (forNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
+            collectionMode
+        )
+        if (resolvedCovers.isNotEmpty()) {
+            CoverCollectionManager.upsertBridgeCollectionSync(
+                collectionId = entry.manifest.id,
+                name = entry.manifest.name,
+                dirName = entry.dir.name,
+                isNight = forNight,
+                mode = collectionMode,
+                imagePaths = resolvedCovers,
+                updatedAt = entry.manifest.updatedAt
+            )
+            CoverCollectionManager.setSelected(forNight, entry.manifest.id)
+        } else {
+            CoverCollectionManager.setSelected(forNight, "")
+        }
+        if (updateSlotPointers) {
+            context.putPrefString(
+                if (forNight) PreferKey.activeNightCoverSlotPackageId else PreferKey.activeDayCoverSlotPackageId,
+                entry.manifest.id
+            )
+            if (AppConfig.isNightTheme == forNight) {
+                context.putPrefString(PreferKey.currentCoverSlotPackageId, entry.manifest.id)
+            }
+        }
+    }
+
+    private fun applyArtRecommendedCoverSlotLocked(
+        context: Context,
+        forNight: Boolean,
+        recommendedCoverSlotId: String?,
+        coverSlotMap: Map<String, StoredEntry>
+    ) {
+        val targetId = recommendedCoverSlotId?.trim()?.takeIf { it.isNotBlank() }
+        if (targetId == null) {
+            putOrRemovePref(
+                context,
+                if (forNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover,
+                null
+            )
+            CoverCollectionManager.setSelected(forNight, "")
+            return
+        }
+        val matched = coverSlotMap[targetId]
+            ?: coverSlotMap["cover_slot_legacy_$targetId"]
+            ?: coverSlotMap.values.firstOrNull {
+                it.dir.name == targetId || it.manifest.name == targetId
+            }
+        if (matched != null) {
+            val baseDir = resolveBaseDir(matched, coverSlotMap)
+            val slot = matched.manifest.coverSlot ?: CoverSlotPackagePayload()
+            val resolvedCovers = slot.covers.mapNotNull { rel ->
+                resolvePackageAssetPath(matched.dir, baseDir, rel)
+            }.filter { File(it).isFile }
+            val resolvedGroup = resolvePackageAssetPath(matched.dir, baseDir, slot.groupCoverPath)
+            val mode = toCollectionManagerMode(slot.applyMode)
+            putOrRemovePref(
+                context,
+                if (forNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover,
+                resolvedGroup
+            )
+            context.putPrefString(
+                if (forNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
+                mode
+            )
+            if (resolvedCovers.isNotEmpty()) {
+                CoverCollectionManager.upsertBridgeCollectionSync(
+                    collectionId = matched.manifest.id,
+                    name = matched.manifest.name,
+                    dirName = matched.dir.name,
+                    isNight = forNight,
+                    mode = mode,
+                    imagePaths = resolvedCovers,
+                    updatedAt = matched.manifest.updatedAt
+                )
+                CoverCollectionManager.setSelected(forNight, matched.manifest.id)
+            } else {
+                CoverCollectionManager.setSelected(forNight, "")
+            }
+        } else {
+            CoverCollectionManager.setSelected(forNight, targetId)
+        }
+    }
+
+    private fun toCollectionManagerMode(raw: String?): String {
+        return when (CoverSlotApplyMode.normalize(raw)) {
+            CoverSlotApplyMode.SEQUENCE -> CoverCollectionManager.MODE_SEQUENCE
+            CoverSlotApplyMode.MIXED -> CoverCollectionManager.MODE_MIXED
+            CoverSlotApplyMode.FALLBACK_ONLY -> CoverCollectionManager.MODE_FALLBACK_ONLY
+            else -> CoverCollectionManager.MODE_RANDOM
+        }
     }
 
     private fun resolveBaseDir(
@@ -1375,12 +2279,17 @@ object UnifiedPackageRepository {
             return entriesById[baseId]?.dir
         }
         val cached = synchronized(cacheLock) {
-            if (entry.manifest.kind == PackageKind.ART) artIndexCache else paramIndexCache
+            when (entry.manifest.kind) {
+                PackageKind.ART -> artIndexCache
+                PackageKind.PARAM -> paramIndexCache
+                PackageKind.COVER_SLOT -> coverSlotIndexCache
+                else -> null
+            }
         }
         if (cached != null) {
             return cached[baseId]?.dir
         }
-        val root = if (entry.manifest.kind == PackageKind.ART) artDir else paramDir
+        val root = dirForKind(entry.manifest.kind)
         return loadEntries(root, entry.manifest.kind)
             .firstOrNull { it.manifest.id == baseId }
             ?.dir
@@ -1617,48 +2526,50 @@ object UnifiedPackageRepository {
         isNight: Boolean,
         t: ArtTypographySpec
     ) {
+        fun resolveTypographyPath(rawPath: String?): String? {
+            val trimmed = rawPath?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            FontProtocolResolver.normalizeSystemProtocol(trimmed)?.let { return it }
+            if (trimmed.startsWith("@font:", ignoreCase = true) ||
+                trimmed.startsWith("content://", ignoreCase = true) ||
+                trimmed.startsWith("http", ignoreCase = true)
+            ) {
+                return trimmed
+            }
+            return resolvePackageAssetPath(packageDir, baseDir, trimmed)
+        }
         putOrRemovePref(
             context,
             ThemeRuntimeKeys.uiFontPath(isNight),
-            resolvePackageAssetPath(packageDir, baseDir, t.uiFontPath)
+            resolveTypographyPath(t.uiFontPath)
         )
         putOrRemovePref(
             context,
             ThemeRuntimeKeys.titleFontPath(isNight),
-            resolvePackageAssetPath(packageDir, baseDir, t.titleFontPath)
+            resolveTypographyPath(t.titleFontPath)
         )
     }
 
-    private suspend fun applyMountsForSlot(context: Context, mounts: ArtAssetMounts, isNight: Boolean) {
-        val iconId = if (isNight) (mounts.nightIconSlotId ?: mounts.dayIconSlotId) else (mounts.dayIconSlotId ?: mounts.nightIconSlotId)
-        iconId?.let { id ->
-            NavigationBarIconConfig.loadLocalOnlyForKit(isNight)
-                .firstOrNull { it.dirName == id || it.config.name == id }
-                ?.let { NavigationBarIconConfig.select(it) }
-        }
-        val coverId = if (isNight) (mounts.nightCoverSlotId ?: mounts.dayCoverSlotId) else (mounts.dayCoverSlotId ?: mounts.nightCoverSlotId)
-        coverId?.let { id ->
-            CoverCollectionManager.setSelected(isNight, id)
-        }
+    private fun applyDefaultCover(
+        context: Context,
+        packageDir: File,
+        baseDir: File?,
+        isNight: Boolean,
+        defaultCoverPath: String?
+    ) {
+        putOrRemovePref(
+            context,
+            if (isNight) PreferKey.defaultCoverDark else PreferKey.defaultCover,
+            resolvePackageAssetPath(packageDir, baseDir, defaultCoverPath)
+        )
     }
 
-    private suspend fun applyMounts(context: Context, mounts: ArtAssetMounts) {
-        mounts.dayIconSlotId?.let { id ->
-            NavigationBarIconConfig.loadLocalOnlyForKit(false)
-                .firstOrNull { it.dirName == id || it.config.name == id }
-                ?.let { NavigationBarIconConfig.select(it) }
-        }
-        mounts.nightIconSlotId?.let { id ->
-            NavigationBarIconConfig.loadLocalOnlyForKit(true)
-                .firstOrNull { it.dirName == id || it.config.name == id }
-                ?.let { NavigationBarIconConfig.select(it) }
-        }
-        mounts.dayCoverSlotId?.let { id ->
-            CoverCollectionManager.setSelected(false, id)
-        }
-        mounts.nightCoverSlotId?.let { id ->
-            CoverCollectionManager.setSelected(true, id)
-        }
+    private suspend fun resolveMountIconEntry(
+        iconId: String?,
+        isNight: Boolean
+    ): NavigationBarIconConfig.Entry? {
+        val target = iconId ?: return null
+        return NavigationBarIconConfig.loadLocalOnlyForKit(isNight)
+            .firstOrNull { it.dirName == target || it.config.name == target }
     }
 
     /**

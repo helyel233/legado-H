@@ -99,6 +99,7 @@ fun BookCoverImage(
     lifecycle: Lifecycle? = null,
     preferThumb: Boolean = true,
     fillBounds: Boolean = false,
+    appearanceVersion: Int = 0,
     onBoundsChanged: ((Rect) -> Unit)? = null
 ) {
     val display = remember(
@@ -126,6 +127,7 @@ fun BookCoverImage(
         forcePath = display.forcePath,
         allowNameOverlay = display.allowNameOverlay,
         fillBounds = fillBounds,
+        appearanceVersion = appearanceVersion,
         onBoundsChanged = onBoundsChanged
     )
 }
@@ -140,6 +142,7 @@ fun BookCoverImage(
     lifecycle: Lifecycle? = null,
     preferThumb: Boolean = true,
     fillBounds: Boolean = false,
+    appearanceVersion: Int = 0,
     onBoundsChanged: ((Rect) -> Unit)? = null
 ) {
     val display = remember(
@@ -167,6 +170,7 @@ fun BookCoverImage(
         forcePath = display.forcePath,
         allowNameOverlay = display.allowNameOverlay,
         fillBounds = fillBounds,
+        appearanceVersion = appearanceVersion,
         onBoundsChanged = onBoundsChanged
     )
 }
@@ -186,9 +190,12 @@ fun BookCoverImage(
     forcePath: Boolean = false,
     allowNameOverlay: Boolean? = null,
     fillBounds: Boolean = false,
+    appearanceVersion: Int = 0,
     onBoundsChanged: ((Rect) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    @Suppress("UNUSED_VARIABLE")
+    val observedAppearanceVersion = appearanceVersion
     val defaultBitmap = rememberDefaultCoverBitmap()
     val cleanName = remember(name) { name?.replace(AppPattern.bdRegex, "")?.trim() }
     val cleanAuthor = remember(author) { author?.replace(AppPattern.bdRegex, "")?.trim() }

@@ -2472,6 +2472,7 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="package_sync_task_status_failed">失败</string>
     <string name="package_sync_task_type_art">美术资源包</string>
     <string name="package_sync_task_type_param">参数设置包</string>
+    <string name="package_sync_task_type_cover_slot">书架封面包</string>
     <string name="package_sync_task_type_theme">主题</string>
     <string name="package_sync_task_type_top_bar">顶栏</string>
     <string name="package_sync_task_type_navigation_bar">底栏</string>
@@ -3462,4 +3463,10 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="theme_advanced_colors_toggle">高级表面与栏位覆写</string>
     <string name="theme_advanced_colors_summary_auto">默认由核心种子色自动派生</string>
     <string name="theme_advanced_colors_summary_custom">已自定义 %1$d 项</string>
+
+    <string name="download_count_with_review">正文 %1$d/%2$d · 评论 %3$d/%4$d</string>
+    <string name="cache_manage_body_progress">正文 %1$d/%2$d</string>
+    <string name="cache_manage_review_cached_progress">评论 %1$d/%2$d</string>
+    <string name="review_update_banner_text">发现新评论内容</string>
+    <string name="review_update_banner_action">点击更新</string>
 </resources>

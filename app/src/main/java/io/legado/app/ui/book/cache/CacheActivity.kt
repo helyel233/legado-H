@@ -359,6 +359,15 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             viewModel.cacheChapters[book.bookUrl]?.add(chapter.url)
             notifyItemChanged(book.bookUrl)
         }
+        observeEvent<Triple<String, String, Boolean>>(EventBus.REVIEW_CACHE_SAVED) { (bookUrl, chapterUrl, hasSnapshot) ->
+            val set = viewModel.reviewChapters[bookUrl] ?: if (hasSnapshot) {
+                hashSetOf<String>().also { viewModel.reviewChapters[bookUrl] = it }
+            } else {
+                return@observeEvent
+            }
+            val changed = if (hasSnapshot) set.add(chapterUrl) else set.remove(chapterUrl)
+            if (changed) notifyItemChanged(bookUrl)
+        }
     }
 
     override fun export(position: Int) {
@@ -607,6 +616,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     override val cacheChapters: HashMap<String, HashSet<String>>
         get() = viewModel.cacheChapters
+
+    override val reviewChapters: HashMap<String, HashSet<String>>
+        get() = viewModel.reviewChapters
 
     override fun exportProgress(bookUrl: String): Int? {
         return ExportBookService.exportProgress[bookUrl]

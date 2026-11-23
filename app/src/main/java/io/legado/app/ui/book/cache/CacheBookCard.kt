@@ -274,26 +274,46 @@ private fun cacheStateLabelRes(item: CacheBookItem): Int {
 
 private fun CacheBookItem.cacheCountText(context: Context): String {
     return buildCacheCountText(
-        context, localCachedCount, remoteCachedCount, totalChapterCount, remoteAvailable
+        context,
+        localCachedCount,
+        remoteCachedCount,
+        totalChapterCount,
+        remoteAvailable,
+        reviewCachedCount
     )
 }
 
 fun CacheBookSourceVariant.cacheCountText(context: Context): String {
     return buildCacheCountText(
-        context, localCachedCount, remoteCachedCount, totalChapterCount, remoteAvailable
+        context,
+        localCachedCount,
+        remoteCachedCount,
+        totalChapterCount,
+        remoteAvailable,
+        reviewCachedCount
     )
 }
 
-private fun buildCacheCountText(
+internal fun buildCacheCountText(
     context: Context,
     localCount: Int,
     remoteCount: Int,
     totalCount: Int,
-    remoteAvailable: Boolean
+    remoteAvailable: Boolean,
+    reviewCount: Int = 0
 ): String {
     val parts = arrayListOf<String>()
     if (localCount > 0) {
-        parts += context.getString(R.string.cache_manage_local_cached_count, localCount)
+        if (reviewCount > 0 && totalCount > 0) {
+            parts += context.getString(R.string.cache_manage_body_progress, localCount, totalCount)
+        } else {
+            parts += context.getString(R.string.cache_manage_local_cached_count, localCount)
+        }
+    }
+    if (reviewCount > 0) {
+        val reviewTotal = if (totalCount > 0) totalCount else reviewCount
+        val clampedReview = reviewCount.coerceAtMost(reviewTotal)
+        parts += context.getString(R.string.cache_manage_review_cached_progress, clampedReview, reviewTotal)
     }
     if (remoteAvailable && remoteCount > 0) {
         parts += context.getString(R.string.cache_manage_remote_cached_count, remoteCount)

@@ -252,13 +252,14 @@ object ReviewSnapshotManager {
             if (existed == null) {
                 check(group.queued.add(key)) { "review queue already contains chapter: $key" }
                 channel.trySend(Task(key, executionLease))
-            } else if (force && !existed.force) {
-                // force 合并：已排队任务升级为强制重抓，不丢 true
+            } else if ((force && !existed.force) || (incremental && !existed.incremental)) {
+                // 合并同章重复入队时的 force / incremental 标记，避免后入队把增量或强制丢失
                 pendingForce.replace(
                     key,
                     existed,
                     existed.copy(
-                        force = true,
+                        force = existed.force || force,
+                        incremental = existed.incremental || incremental,
                         executionLease = executionLease,
                         commitIfLeaseActive = commitIfLeaseActive,
                         reportProgress = reportProgress,
@@ -809,14 +810,18 @@ object ReviewSnapshotManager {
             return
         }
         sb.append("8. 章评/书评补充快照：\n")
-        val chapterTabComplete = !force && ReviewSnapshotStore.hasCompleteChapterTab(book, chapter)
-        val chapterTabExisting = if (chapterTabComplete) {
+        val chapterTabPolicy = resolveExistingSnapshotPolicy(
+            ReviewSnapshotStore.hasCompleteChapterTab(book, chapter),
+            force = force,
+            incremental = incremental,
+        )
+        val chapterTabExisting = if (chapterTabPolicy == ExistingSnapshotPolicy.INCREMENTAL) {
             ReviewSnapshotStore.getChapterTab(book, chapter)
         } else {
             null
         }
         when {
-            chapterTabComplete && chapterTabExisting != null && incremental -> {
+            chapterTabPolicy == ExistingSnapshotPolicy.INCREMENTAL && chapterTabExisting != null -> {
                 incrementalSupplementTab(
                     tabLabel = "章评",
                     book = book,
@@ -841,7 +846,7 @@ object ReviewSnapshotManager {
                     },
                 )
             }
-            chapterTabComplete -> {
+            chapterTabPolicy == ExistingSnapshotPolicy.SKIP -> {
                 sb.append("   章评：已有完整快照，跳过\n")
             }
             else -> {
@@ -889,14 +894,18 @@ object ReviewSnapshotManager {
                 )
             }
         }
-        val bookTabComplete = !force && ReviewSnapshotStore.hasCompleteBookTab(book)
-        val bookTabExisting = if (bookTabComplete) {
+        val bookTabPolicy = resolveExistingSnapshotPolicy(
+            ReviewSnapshotStore.hasCompleteBookTab(book),
+            force = force,
+            incremental = incremental,
+        )
+        val bookTabExisting = if (bookTabPolicy == ExistingSnapshotPolicy.INCREMENTAL) {
             ReviewSnapshotStore.getBookTab(book)
         } else {
             null
         }
         when {
-            bookTabComplete && bookTabExisting != null && incremental -> {
+            bookTabPolicy == ExistingSnapshotPolicy.INCREMENTAL && bookTabExisting != null -> {
                 // 书评整本一份：同一次下载任务内只增量一次，其余章节直接跳过
                 val guardKey = "${book.bookUrl}|${diagnostics.sessionId}/${diagnostics.taskId}"
                 if (!bookTabIncrementalHandled.add(guardKey)) {
@@ -926,7 +935,7 @@ object ReviewSnapshotManager {
                     )
                 }
             }
-            bookTabComplete -> {
+            bookTabPolicy == ExistingSnapshotPolicy.SKIP -> {
                 sb.append("   书评：已有完整快照，跳过\n")
             }
             else -> {
@@ -1076,6 +1085,28 @@ object ReviewSnapshotManager {
         )
     }
 
+    internal enum class ExistingSnapshotPolicy {
+        SKIP,
+        INCREMENTAL,
+        FULL,
+    }
+
+    /**
+     * 解耦 force 与 incremental：
+     * - 无完整快照时恒全量抓取；
+     * - incremental=true 且已有完整快照时，无论 force 是否为 true，都以现有完整快照为基底做增量合并；
+     * - incremental=false 时，force=true 重抓覆盖，force=false 跳过。
+     */
+    internal fun resolveExistingSnapshotPolicy(
+        hasCompleteSnapshot: Boolean,
+        force: Boolean,
+        incremental: Boolean,
+    ): ExistingSnapshotPolicy {
+        if (!hasCompleteSnapshot) return ExistingSnapshotPolicy.FULL
+        if (incremental) return ExistingSnapshotPolicy.INCREMENTAL
+        return if (force) ExistingSnapshotPolicy.FULL else ExistingSnapshotPolicy.SKIP
+    }
+
     private suspend fun processButtonInPipeline(
         book: Book,
         bookSource: BookSource,
@@ -1092,11 +1123,12 @@ object ReviewSnapshotManager {
         if (!button.hasAction) return ButtonOutcome(buttonIndex, button.src, "")
         val sb = StringBuilder()
         // 普通触发只跳过完整快照；部分成功快照不完整，必须重新抓取覆盖。
-        // 增量下载（用户显式重复下载）：完整快照不跳过，改为“只补新增评论”的
-        // 增量抓取——原快照为基底合入新增，绝不整页覆盖、绝不删除已缓存评论。
+        // 增量下载（用户显式重复下载）：即使外层因非 READER 来源设置 force=true，
+        // 只要本地已有完整快照就读取其作为基底合入新增，绝不整页覆盖或删除历史评论。
+        val hasCompleteSnapshot = ReviewSnapshotStore.hasComplete(book, chapter, button.src)
+        val policy = resolveExistingSnapshotPolicy(hasCompleteSnapshot, force, incremental)
         var incrementalBase: ReviewSnapshot? = null
-        val hasCompleteSnapshot = !force && ReviewSnapshotStore.hasComplete(book, chapter, button.src)
-        if (hasCompleteSnapshot && incremental) {
+        if (policy == ExistingSnapshotPolicy.INCREMENTAL) {
             incrementalBase = runCatching {
                 ReviewSnapshotStore.get(book, chapter, button.src)
             }.getOrNull()
@@ -1105,16 +1137,20 @@ object ReviewSnapshotManager {
         sb.append("   src=").append(button.src).append('\n')
         sb.append("   click=").append(if (button.click.isNullOrBlank()) appCtx.getString(R.string.cover_collection_none) else "有")
             .append("  js=").append(if (button.js.isNullOrBlank()) appCtx.getString(R.string.cover_collection_none) else "有").append('\n')
-        if (hasCompleteSnapshot && !incremental) {
+        if (policy == ExistingSnapshotPolicy.SKIP) {
             sb.append("   已有有效快照，跳过\n")
             return ButtonOutcome(buttonIndex, button.src, sb.toString())
         }
-        if (hasCompleteSnapshot && incremental) {
+        if (policy == ExistingSnapshotPolicy.INCREMENTAL) {
             if (incrementalBase == null) {
-                sb.append("   已有完整快照，但读取失败，无法增量，跳过\n")
-                return ButtonOutcome(buttonIndex, button.src, sb.toString())
+                if (!force) {
+                    sb.append("   已有完整快照，但读取失败，无法增量，跳过\n")
+                    return ButtonOutcome(buttonIndex, button.src, sb.toString())
+                }
+                sb.append("   已有完整快照，但读取失败，改为重抓最新完整快照\n")
+            } else {
+                sb.append("   已有完整快照，执行增量下载（只补新增评论，不翻页重抓历史）\n")
             }
-            sb.append("   已有完整快照，执行增量下载（只补新增评论，不翻页重抓历史）\n")
         }
         // 计数拆分：抛异常记一次并 continue；无异常但 URL 为空才记 browser open 超时
         val resolveResult = runCatching {
@@ -1137,6 +1173,7 @@ object ReviewSnapshotManager {
             sb.append("   ").append(error.stackTraceToString()).append('\n')
             if (incrementalBase != null) {
                 sb.append("   增量下载失败（原快照保留，下次下载再试）\n")
+                if (force) onSnapshotSaved()
                 return ButtonOutcome(buttonIndex, button.src, sb.toString())
             }
             return ButtonOutcome(buttonIndex, button.src, sb.toString(), failed = true)
@@ -1149,6 +1186,7 @@ object ReviewSnapshotManager {
                 .append(RESOLVE_TIMEOUT_MS / 1000).append("s 超时）\n")
             if (incrementalBase != null) {
                 sb.append("   增量下载失败（原快照保留，下次下载再试）\n")
+                if (force) onSnapshotSaved()
                 return ButtonOutcome(buttonIndex, button.src, sb.toString())
             }
             return ButtonOutcome(buttonIndex, button.src, sb.toString(), failed = true)
@@ -1198,12 +1236,18 @@ object ReviewSnapshotManager {
             sb.append("   ").append(e.stackTraceToString()).append('\n')
             if (incrementalBase != null) {
                 sb.append("   增量下载失败（原快照保留，下次下载再试）\n")
+                if (force) onSnapshotSaved()
                 return ButtonOutcome(buttonIndex, button.src, sb.toString())
             }
             return ButtonOutcome(buttonIndex, button.src, sb.toString(), failed = true)
         }
         val capture = outcome.getOrNull()!!
-        sb.append("4. 抓取成功，引擎：").append(capture.engine).append('\n')
+        val engineLabel = if (capture.engine == "data") {
+            "data（HTTP JSON 直写快照，跳过 WebView 抓拍）"
+        } else {
+            capture.engine
+        }
+        sb.append("4. 抓取成功，引擎：").append(engineLabel).append('\n')
         sb.append("   资源失败记录：").append(capture.snapshot.resourceFailures.size)
             .append("；按当前策略影响完整性：").append(capture.droppedResources).append('\n')
         capture.snapshot.resourceFailures.forEach { sb.append("   ").append(it).append('\n') }
@@ -1222,6 +1266,7 @@ object ReviewSnapshotManager {
             }
             if (mergeResult.addedCount == 0) {
                 sb.append("7. 增量合并：无新增评论，原快照保持不变\n")
+                if (force) onSnapshotSaved()
                 return ButtonOutcome(buttonIndex, button.src, sb.toString())
             }
             val mergedSnapshot = capture.snapshot.copy(
@@ -1242,8 +1287,10 @@ object ReviewSnapshotManager {
             if (putResult.isFailure) {
                 sb.append("7. 增量合并落盘：失败，原快照未被覆盖\n")
                 sb.append("   ").append(putResult.exceptionOrNull()!!.stackTraceToString()).append('\n')
+                if (force) onSnapshotSaved()
                 return ButtonOutcome(buttonIndex, button.src, sb.toString())
             }
+            if (force) onSnapshotSaved()
             sb.append("7. 增量合并落盘：成功，新增 ").append(mergeResult.addedCount)
                 .append(" 条评论\n")
             return ButtonOutcome(buttonIndex, button.src, sb.toString())

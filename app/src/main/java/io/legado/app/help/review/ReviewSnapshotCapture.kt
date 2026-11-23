@@ -38,8 +38,16 @@ import io.legado.app.utils.configureOfflineResourceLoading
 import io.legado.app.utils.runOnUI
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import org.apache.commons.text.StringEscapeUtils
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -363,19 +371,29 @@ object ReviewSnapshotCapture {
                         "${initialHtml.length} 字符，已按失败处理）"
                 )
             }
-            suspend fun loadPage() = snapshotPage(
-                url,
-                bookSource,
-                book,
-                preparedHtml,
-                if (useData) null else preloadJs,
-                tab,
-                trace,
-                commitIfLeaseActive,
-                paginationEnabled = !incremental,
-                dataPrepared = useData,
-            )
-            val page = if (useData) loadPage() else ReviewDownloadScheduler.pages.withPermit { loadPage() }
+            val page = if (useData) {
+                inlineDataPageResources(
+                    url = url,
+                    book = book,
+                    preparedHtml = requireNotNull(preparedHtml),
+                    trace = trace,
+                    commitIfLeaseActive = commitIfLeaseActive,
+                )
+            } else {
+                ReviewDownloadScheduler.pages.withPermit {
+                    snapshotPage(
+                        url,
+                        bookSource,
+                        book,
+                        preparedHtml,
+                        preloadJs,
+                        tab,
+                        trace,
+                        commitIfLeaseActive,
+                        paginationEnabled = !incremental,
+                    )
+                }
+            }
             CaptureOutcome(
                 snapshot = buildSnapshot(page).copy(
                     downloadEngine = if (useData) "data" else "web",
@@ -406,7 +424,7 @@ object ReviewSnapshotCapture {
     )
 
     /**
-     * 无头加载页面并穷尽展开后返回最终 HTML 与展开诊断数据。
+     * 无头加载页面并穷尽展开后返回最终 HTML 与展开诊断数据（普通网页抓拍路径）。
      *
      * @param tab 非 null 时页面加载完成后先切换到目标评论 tab 再展开（章评/书评补充抓取）
      * @param paginationEnabled false = 增量抓取：展开循环不再点击“加载更多”类翻页元素，
@@ -423,7 +441,6 @@ object ReviewSnapshotCapture {
         diagnostics: CacheOperationDiagnostics.Operation? = null,
         commitIfLeaseActive: ((() -> Unit) -> Boolean),
         paginationEnabled: Boolean = true,
-        dataPrepared: Boolean = false,
     ): SnapshotPageResult {
         val analyzeUrl = AnalyzeUrl(url, source = bookSource)
         val headerMap = analyzeUrl.headerMap
@@ -462,7 +479,7 @@ object ReviewSnapshotCapture {
                         headerMap[AppConst.UA_NAME]?.let { userAgentString = it }
                     }
                     AppCookieManager.applyToWebView(url)
-                    val jsBridge = if (!dataPrepared && !initialHtml.isNullOrBlank()) {
+                    val jsBridge = if (!initialHtml.isNullOrBlank()) {
                         PageJsBridge(preloadJs)
                     } else {
                         null
@@ -476,7 +493,6 @@ object ReviewSnapshotCapture {
                         diagnostics,
                         commitIfLeaseActive,
                         paginationEnabled,
-                        dataPrepared,
                         resourceFailures,
                     ) {
                         result, error, rounds, clicks, discardWebView, resourceKeys, droppedResources ->
@@ -506,7 +522,7 @@ object ReviewSnapshotCapture {
                         webView.addJavascriptInterface(bookSource, nameSource)
                         webView.addJavascriptInterface(WebJsExtensions(bookSource, null, webView), nameJava)
                         webView.loadDataWithBaseURL(
-                            url, if (dataPrepared) initialHtml else spliceJsUrl(initialHtml), "text/html", "utf-8", url
+                            url, spliceJsUrl(initialHtml), "text/html", "utf-8", url
                         )
                     } else {
                         webView.loadUrl(url, headerMap)
@@ -521,6 +537,599 @@ object ReviewSnapshotCapture {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * ReviewDataCapture 纯 HTTP/JSON 引擎的直写静态资源内联路径：
+     * 直接解析标准化 HTML 中的头像与配图，通过 [ReviewSnapshotResourceStore] 下载落盘并重写为
+     * `review-resource://`，彻底跳过无头 WebView 拉起与 DOM 序列化开销。
+     */
+    private suspend fun inlineDataPageResources(
+        url: String,
+        book: Book,
+        preparedHtml: String,
+        trace: CacheOperationDiagnostics.Operation?,
+        commitIfLeaseActive: ((() -> Unit) -> Boolean),
+    ): SnapshotPageResult = withContext(Dispatchers.IO) {
+        val coroutineContext = currentCoroutineContext()
+        val activeCalls = java.util.Collections.synchronizedSet(mutableSetOf<okhttp3.Call>())
+        val cancelHook = coroutineContext[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) {
+                synchronized(activeCalls) { activeCalls.toList() }.forEach { it.cancel() }
+            }
+        }
+        val resourceFailures = java.util.Collections.synchronizedList(mutableListOf<String>())
+        try {
+            val cacheAvatars = AppConfig.cacheReviewAvatars
+            val cacheCommentImages = AppConfig.cacheReviewImages
+            val doc = withContext(Dispatchers.Default) {
+                heavyStagePermits.withPermit {
+                    Jsoup.parse(preparedHtml, url)
+                }
+            }
+            coroutineContext.ensureActive()
+            val imageRoles = linkedMapOf<String, ImageRoles>()
+            val imgElements = doc.select("img[src]")
+            imgElements.forEach { el ->
+                val rawSrc = el.attr("src").trim()
+                val resolved = el.absUrl("src").takeIf { it.isNotBlank() } ?: rawSrc
+                if (!resolved.startsWith("http://", ignoreCase = true) &&
+                    !resolved.startsWith("https://", ignoreCase = true)
+                ) {
+                    return@forEach
+                }
+                val roles = imageRoles.getOrPut(resolved) { ImageRoles(resolved) }
+                if (isAvatarElement(el)) roles.hasAvatar = true else roles.hasCommentImage = true
+            }
+            val selection = selectImagesForDownload(book, imageRoles, cacheAvatars, cacheCommentImages)
+            trace?.mark(
+                "RESOURCE_LIST_READY",
+                CacheOperationDiagnostics.Metrics(resourceCount = selection.imagesToDownload.size),
+            )
+            trace?.stageStart(
+                "RESOURCE_DOWNLOAD",
+                CacheOperationDiagnostics.Metrics(resourceCount = selection.imagesToDownload.size),
+                startAlways = true,
+            )
+            val imgMap = linkedMapOf<String, String>()
+            var resourceBytes = 0L
+            selection.reusableImages.forEach { (imageUrl, entry) ->
+                imgMap[imageUrl] = ReviewSnapshotResourceStore.referenceFor(entry.key)
+                resourceBytes += entry.byteCount
+            }
+            if (selection.imagesToDownload.isNotEmpty()) {
+                val stagingDir = File(
+                    appCtx.cacheDir,
+                    "review_data_snapshot_${System.nanoTime()}_${Thread.currentThread().id}",
+                )
+                check(stagingDir.mkdirs() || stagingDir.isDirectory) {
+                    "无法创建评论快照资源暂存目录"
+                }
+                try {
+                    val targets = selection.imagesToDownload.mapIndexed { index, image ->
+                        ResourceTarget(
+                            index = index,
+                            url = image.url,
+                            kind = ResourceKind.IMAGE,
+                            compressionMaxBytes = image.compressionMaxBytes,
+                        )
+                    }
+                    val stagedList = stageDataTargetsConcurrently(
+                        targets = targets,
+                        refererUrl = url,
+                        book = book,
+                        stagingDir = stagingDir,
+                        diagnostics = trace,
+                        resourceFailures = resourceFailures,
+                        isCancelled = { !coroutineContext.isActive },
+                        registerCall = { call ->
+                            if (!coroutineContext.isActive) {
+                                call.cancel()
+                                throw InterruptedIOException("评论快照资源请求已取消")
+                            }
+                            activeCalls += call
+                        },
+                        unregisterCall = { call -> activeCalls -= call },
+                        cancelAllCalls = {
+                            synchronized(activeCalls) { activeCalls.toList() }.forEach { it.cancel() }
+                        },
+                    )
+                    for (staged in stagedList) {
+                        coroutineContext.ensureActive()
+                        val prepared = prepareSnapshotImage(staged) { coroutineContext.ensureActive() }
+                        resourceBytes += prepared.byteCount
+                        val committed = putSnapshotResource(
+                            book = book,
+                            url = staged.target.url,
+                            mimeType = prepared.mimeType,
+                            file = prepared.file,
+                            processing = imageProcessingTag(staged.target.compressionMaxBytes),
+                            commitIfLeaseActive = commitIfLeaseActive,
+                        )
+                        imgMap[staged.target.url] = ReviewSnapshotResourceStore.referenceFor(committed.key)
+                    }
+                } finally {
+                    stagingDir.deleteRecursively()
+                }
+            }
+            trace?.stageDone(
+                "RESOURCE_DOWNLOAD",
+                CacheOperationDiagnostics.Metrics(
+                    resourceCount = imgMap.size,
+                    outputBytes = resourceBytes,
+                ),
+            )
+            val (finalHtml, dropped) = withContext(Dispatchers.Default) {
+                heavyStagePermits.withPermit {
+                    var removedCount = 0
+                    imgElements.forEach { el ->
+                        val isAvatar = isAvatarElement(el)
+                        if (!(if (isAvatar) cacheAvatars else cacheCommentImages)) return@forEach
+                        val rawSrc = el.attr("src").trim()
+                        val resolved = el.absUrl("src").takeIf { it.isNotBlank() } ?: rawSrc
+                        if (!resolved.startsWith("http://", ignoreCase = true) &&
+                            !resolved.startsWith("https://", ignoreCase = true)
+                        ) {
+                            return@forEach
+                        }
+                        val mapped = imgMap[resolved]
+                        if (mapped != null) {
+                            el.attr("src", mapped)
+                        } else {
+                            el.removeAttr("src")
+                            removedCount++
+                        }
+                    }
+                    val requiredDropped = selection.imagesToDownload.count { it.required && imgMap[it.url] == null }
+                    doc.outerHtml() to maxOf(removedCount, requiredDropped)
+                }
+            }
+            val resourceKeys = imgMap.values
+                .mapNotNull { ReviewSnapshotResourceStore.keyFromReference(it) }
+                .distinct()
+            SnapshotPageResult(
+                html = finalHtml,
+                expandRounds = 0,
+                expandClickCount = 0,
+                resourceKeys = resourceKeys,
+                resourceFailures = resourceFailures.toList(),
+                droppedResources = dropped,
+            )
+        } catch (error: Throwable) {
+            trace?.stageFail("RESOURCE_DOWNLOAD", error)
+            throw error
+        } finally {
+            cancelHook?.dispose()
+        }
+    }
+
+    private enum class ResourceKind {
+        IMAGE,
+        CSS,
+        /** CSS 文本内的 url()/@import 子资源（字体、背景图等）；失败按非关键资源跳过。 */
+        SUB_RESOURCE,
+    }
+
+    private data class ImageResource(
+        val url: String,
+        val compressionMaxBytes: Long?,
+        val required: Boolean,
+    )
+
+    /** A shared URL can occur in both an avatar and a comment image. */
+    private data class ImageRoles(
+        val url: String,
+        var hasAvatar: Boolean = false,
+        var hasCommentImage: Boolean = false,
+    )
+
+    private data class ResourceTarget(
+        val index: Int,
+        val url: String,
+        val kind: ResourceKind,
+        val compressionMaxBytes: Long? = null,
+    )
+
+    private data class StagedResource(
+        val target: ResourceTarget,
+        val file: File,
+        val byteCount: Long,
+    )
+
+    /**
+     * CSS and image downloads enrich an already-captured comment page; they do not define
+     * whether the page snapshot itself is usable. Keep the target in the error so a skipped
+     * resource is visible in cache diagnostics instead of being silently discarded.
+     */
+    private class ResourceDownloadException(
+        target: ResourceTarget,
+        cause: Throwable? = null,
+    ) : java.io.IOException(
+        "评论快照非关键资源下载失败 kind=${target.kind} url=${target.url}",
+        cause,
+    )
+
+    private data class PreparedImage(
+        val file: File,
+        val byteCount: Long,
+        val mimeType: String,
+    )
+
+    private val AVATAR_CLASSIFIER_REGEX =
+        Regex("avatar|profile[-_]?image|head[-_]?img|头像", RegexOption.IGNORE_CASE)
+
+    private fun imageProcessingTag(maxBytes: Long?) = maxBytes?.let { "webp-max:$it" } ?: "original"
+
+    private fun putSnapshotResource(
+        book: Book,
+        url: String,
+        mimeType: String,
+        file: File,
+        processing: String = "original",
+        commitIfLeaseActive: ((() -> Unit) -> Boolean),
+    ): ReviewSnapshotResourceEntry {
+        var stored: ReviewSnapshotResourceEntry? = null
+        val committedLease = commitIfLeaseActive.invoke {
+            stored = ReviewSnapshotResourceStore.put(
+                book = book,
+                url = url,
+                mimeType = mimeType,
+                source = file,
+                processing = processing,
+            )
+        }
+        if (!committedLease) {
+            throw CancellationException("review lease is no longer active at resource commit")
+        }
+        return checkNotNull(stored)
+    }
+
+    private fun stageResourceWithRetry(
+        target: ResourceTarget,
+        refererUrl: String,
+        book: Book,
+        stagingDir: File,
+        diagnostics: CacheOperationDiagnostics.Operation?,
+        ensureActive: () -> Unit,
+        isAborted: () -> Boolean,
+        registerCall: (okhttp3.Call) -> Unit,
+        unregisterCall: (okhttp3.Call) -> Unit,
+    ): StagedResource {
+        var attempt = 0
+        while (true) {
+            ensureActive()
+            try {
+                return ReviewDownloadScheduler.resources.blocking {
+                    stageResourceOnceShared(
+                        target = target,
+                        refererUrl = refererUrl,
+                        book = book,
+                        stagingDir = stagingDir,
+                        diagnostics = diagnostics,
+                        ensureActive = ensureActive,
+                        isAborted = isAborted,
+                        registerCall = registerCall,
+                        unregisterCall = unregisterCall,
+                    )
+                }
+            } catch (error: ResourceDownloadException) {
+                diagnostics?.warn("RESOURCE_HTTP_FAILED", error)
+                ensureActive()
+                if (attempt >= ReviewDownloadConfig.Number.RETRIES.value) throw error
+                attempt++
+                diagnostics?.mark("RESOURCE_HTTP_RETRY_$attempt", force = true)
+                Thread.sleep(ReviewDownloadConfig.retryDelay(attempt))
+            }
+        }
+    }
+
+    private fun stageResourceOnceShared(
+        target: ResourceTarget,
+        refererUrl: String,
+        book: Book,
+        stagingDir: File,
+        diagnostics: CacheOperationDiagnostics.Operation?,
+        ensureActive: () -> Unit,
+        isAborted: () -> Boolean,
+        registerCall: (okhttp3.Call) -> Unit,
+        unregisterCall: (okhttp3.Call) -> Unit,
+    ): StagedResource {
+        val targetFile = File(stagingDir, target.index.toString())
+        if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && target.kind != ResourceKind.IMAGE) {
+            val stored = ReviewSnapshotResourceStore.entries(book)[target.url]
+            if (stored != null) {
+                val handle = checkNotNull(ReviewSnapshotResourceStore.open(book, stored.key))
+                handle.inputStream.use { input -> targetFile.outputStream().use { input.copyTo(it) } }
+                diagnostics?.mark("RESOURCE_CACHE_HIT", force = true)
+                return StagedResource(target, targetFile, stored.byteCount)
+            }
+        }
+        val request = okhttp3.Request.Builder()
+            .url(target.url)
+            .header("Referer", refererUrl)
+            .build()
+        val call = okHttpClient.newBuilder()
+            .connectTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .callTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+            .newCall(request)
+        registerCall(call)
+        var completed = false
+        try {
+            ensureActive()
+            try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw ResourceDownloadException(
+                            target,
+                            IllegalStateException("HTTP ${response.code}"),
+                        )
+                    }
+                    val body = response.body ?: throw ResourceDownloadException(
+                        target,
+                        IllegalStateException("评论快照资源响应为空"),
+                    )
+                    body.byteStream().use { input ->
+                        targetFile.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(RESOURCE_COPY_BUFFER_BYTES)
+                            var copiedBytes = 0L
+                            while (true) {
+                                ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                val nextBytes = copiedBytes + count
+                                output.write(buffer, 0, count)
+                                copiedBytes = nextBytes
+                            }
+                            if (copiedBytes == 0L) throw ResourceDownloadException(
+                                target,
+                                IllegalStateException("评论资源响应内容为空"),
+                            )
+                            completed = true
+                            return StagedResource(target, targetFile, copiedBytes)
+                        }
+                    }
+                }
+            } catch (error: ResourceDownloadException) {
+                throw error
+            } catch (error: java.io.IOException) {
+                if (isAborted()) throw error
+                throw ResourceDownloadException(target, error)
+            }
+        } finally {
+            unregisterCall(call)
+            if (!completed) {
+                targetFile.delete()
+            }
+        }
+    }
+
+    private fun prepareSnapshotImage(
+        staged: StagedResource,
+        ensureActive: () -> Unit,
+    ): PreparedImage {
+        check(staged.file.length() == staged.byteCount) {
+            "评论快照图片暂存文件长度异常: ${staged.target.url}"
+        }
+        val maxBytes = staged.target.compressionMaxBytes
+        if (maxBytes == null || staged.byteCount <= maxBytes) {
+            return PreparedImage(
+                file = staged.file,
+                byteCount = staged.byteCount,
+                mimeType = guessImageMime(staged.target.url, staged.file),
+            )
+        }
+        require(maxBytes > 0L) { "评论图片压缩上限必须大于 0" }
+        return compressSnapshotImage(staged.file, maxBytes, staged.target.url, ensureActive)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun compressSnapshotImage(
+        source: File,
+        maxBytes: Long,
+        sourceUrl: String,
+        ensureActive: () -> Unit,
+    ): PreparedImage {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(source.absolutePath, bounds)
+        check(bounds.outWidth > 0 && bounds.outHeight > 0) {
+            "评论图片无法解码，不能压缩: $sourceUrl"
+        }
+        val targetPixels = (maxBytes * 4L).coerceAtMost(Int.MAX_VALUE.toLong())
+        var sampleSize = 1
+        while (
+            bounds.outWidth.toLong() / sampleSize *
+            (bounds.outHeight.toLong() / sampleSize) > targetPixels
+        ) {
+            sampleSize *= 2
+        }
+        var bitmap = BitmapFactory.decodeFile(
+            source.absolutePath,
+            BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+        ) ?: error("评论图片无法解码，不能压缩: $sourceUrl")
+        val output = File(source.parentFile, "${source.name}.webp")
+        var completed = false
+        try {
+            while (true) {
+                for (quality in intArrayOf(92, 80, 65, 50, 35, 20, 10)) {
+                    ensureActive()
+                    FileOutputStream(output, false).buffered().use { stream ->
+                        check(bitmap.compress(Bitmap.CompressFormat.WEBP, quality, stream)) {
+                            "评论图片 WebP 压缩失败: $sourceUrl"
+                        }
+                    }
+                    if (output.length() <= maxBytes) {
+                        completed = true
+                        return PreparedImage(output, output.length(), "image/webp")
+                    }
+                }
+                check(bitmap.width > 1 || bitmap.height > 1) {
+                    "评论图片无法压缩到 ${maxBytes}B: $sourceUrl"
+                }
+                val scaled = Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width / 2).coerceAtLeast(1),
+                    (bitmap.height / 2).coerceAtLeast(1),
+                    true,
+                )
+                bitmap.recycle()
+                bitmap = scaled
+            }
+        } finally {
+            bitmap.recycle()
+            if (!completed) output.delete()
+        }
+    }
+
+    private fun guessImageMime(rawUrl: String, file: File): String {
+        val header = ByteArray(16)
+        val headerLength = file.inputStream().use { input -> input.read(header) }
+        val lower = rawUrl.substringBefore('?').lowercase()
+        return when {
+            lower.endsWith(".png") -> "image/png"
+            lower.endsWith(".webp") -> "image/webp"
+            lower.endsWith(".gif") -> "image/gif"
+            lower.endsWith(".svg") -> "image/svg+xml"
+            lower.endsWith(".css") -> "text/css"
+            headerLength > 3 && header[0] == 0xFF.toByte() &&
+                header[1] == 0xD8.toByte() -> "image/jpeg"
+            else -> "image/jpeg"
+        }
+    }
+
+    private fun isAvatarElement(element: Element): Boolean {
+        var current: Element? = element
+        while (current != null) {
+            val combined = "${current.className()} ${current.id()} ${current.attr("alt")} ${current.attr("data-role")}"
+            if (AVATAR_CLASSIFIER_REGEX.containsMatchIn(combined)) return true
+            current = current.parent()
+        }
+        return false
+    }
+
+    private data class ImageSelection(
+        val imagesToDownload: List<ImageResource>,
+        val reusableImages: Map<String, ReviewSnapshotResourceEntry>,
+    )
+
+    private fun selectImagesForDownload(
+        book: Book,
+        imageRoles: Map<String, ImageRoles>,
+        cacheAvatars: Boolean,
+        cacheCommentImages: Boolean,
+    ): ImageSelection {
+        val avatarCompressionMaxBytes = AppConfig.reviewAvatarCompressionMaxBytes
+        val imageCompressionMaxBytes = AppConfig.reviewImageCompressionMaxBytes
+        val compressAvatars = cacheAvatars && AppConfig.compressReviewAvatars && avatarCompressionMaxBytes > 0L
+        val compressCommentImages = cacheCommentImages && AppConfig.compressReviewImages && imageCompressionMaxBytes > 0L
+        val selectedImages = imageRoles.values.asSequence()
+            .filter { roles -> (roles.hasAvatar && cacheAvatars) || (roles.hasCommentImage && cacheCommentImages) }
+            .map { roles ->
+                val maximums = buildList {
+                    if (roles.hasAvatar && compressAvatars) add(avatarCompressionMaxBytes)
+                    if (roles.hasCommentImage && compressCommentImages) add(imageCompressionMaxBytes)
+                }
+                ImageResource(
+                    url = roles.url,
+                    compressionMaxBytes = maximums.minOrNull(),
+                    required = (roles.hasAvatar && cacheAvatars && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_AVATARS)) ||
+                        (roles.hasCommentImage && cacheCommentImages && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_IMAGES)),
+                )
+            }
+            .toList()
+        val storedImages = ReviewSnapshotResourceStore.entries(book)
+        val reusableImages = linkedMapOf<String, ReviewSnapshotResourceEntry>()
+        val imagesToDownload = selectedImages.filter { image ->
+            val stored = storedImages[image.url]
+            if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && stored != null &&
+                stored.processing == imageProcessingTag(image.compressionMaxBytes) &&
+                (image.compressionMaxBytes == null || stored.byteCount <= image.compressionMaxBytes)
+            ) {
+                reusableImages[image.url] = stored
+                false
+            } else {
+                true
+            }
+        }
+        return ImageSelection(imagesToDownload, reusableImages)
+    }
+
+    private fun stageDataTargetsConcurrently(
+        targets: List<ResourceTarget>,
+        refererUrl: String,
+        book: Book,
+        stagingDir: File,
+        diagnostics: CacheOperationDiagnostics.Operation?,
+        resourceFailures: MutableList<String>,
+        isCancelled: () -> Boolean,
+        registerCall: (okhttp3.Call) -> Unit,
+        unregisterCall: (okhttp3.Call) -> Unit,
+        cancelAllCalls: () -> Unit,
+    ): List<StagedResource> {
+        val threadCount = ReviewDownloadConfig.Number.RESOURCES.value
+        val executor = Executors.newFixedThreadPool(threadCount) { runnable ->
+            Thread(runnable, "ReviewDataSnapshotResource").apply { isDaemon = true }
+        }
+        fun ensureActiveWorker() {
+            if (isCancelled() || Thread.currentThread().isInterrupted) {
+                throw InterruptedIOException("评论快照资源工作已取消")
+            }
+        }
+        val futures = targets.map { target ->
+            target to executor.submit(Callable {
+                stageResourceWithRetry(
+                    target = target,
+                    refererUrl = refererUrl,
+                    book = book,
+                    stagingDir = stagingDir,
+                    diagnostics = diagnostics,
+                    ensureActive = ::ensureActiveWorker,
+                    isAborted = { isCancelled() || Thread.currentThread().isInterrupted },
+                    registerCall = registerCall,
+                    unregisterCall = unregisterCall,
+                )
+            })
+        }
+        try {
+            return futures.mapNotNull { (_, future) ->
+                try {
+                    future.get()
+                } catch (error: java.util.concurrent.ExecutionException) {
+                    val cause = error.cause ?: error
+                    if (cause is ResourceDownloadException) {
+                        resourceFailures += cause.message.orEmpty() + ": " + cause.cause?.message.orEmpty()
+                        diagnostics?.warn("RESOURCE_DOWNLOAD_SKIPPED", cause)
+                        null
+                    } else {
+                        throw cause
+                    }
+                } catch (error: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw InterruptedIOException("评论快照资源下载已取消").also { it.initCause(error) }
+                }
+            }
+        } catch (error: Throwable) {
+            futures.forEach { (_, future) -> future.cancel(true) }
+            cancelAllCalls()
+            throw error
+        } finally {
+            executor.shutdownNow()
+            var restoreInterrupt = Thread.interrupted()
+            while (!executor.isTerminated) {
+                try {
+                    executor.awaitTermination(100L, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    restoreInterrupt = true
+                    cancelAllCalls()
+                }
+            }
+            if (restoreInterrupt) Thread.currentThread().interrupt()
         }
     }
 
@@ -555,7 +1164,6 @@ object ReviewSnapshotCapture {
         private val diagnostics: CacheOperationDiagnostics.Operation?,
         private val commitIfLeaseActive: ((() -> Unit) -> Boolean),
         private val paginationEnabled: Boolean = true,
-        private val dataPrepared: Boolean = false,
         private val resourceFailures: MutableList<String>,
         private val done: (String?, Throwable?, Int, Int, Boolean, List<String>, Int) -> Unit
     ) {
@@ -578,13 +1186,6 @@ object ReviewSnapshotCapture {
             val calls: List<okhttp3.Call>,
         )
 
-        private enum class ResourceKind {
-            IMAGE,
-            CSS,
-            /** CSS 文本内的 url()/@import 子资源（字体、背景图等）；失败按非关键资源跳过。 */
-            SUB_RESOURCE,
-        }
-
         private data class CollectedImage(
             val url: String = "",
             val kind: String = "",
@@ -605,26 +1206,6 @@ object ReviewSnapshotCapture {
         ) {
             val resourceCount: Int get() = images.size + css.size
         }
-
-        private data class ImageResource(
-            val url: String,
-            val compressionMaxBytes: Long?,
-            val required: Boolean,
-        )
-
-        /** A shared URL can occur in both an avatar and a comment image. */
-        private data class ImageRoles(
-            val url: String,
-            var hasAvatar: Boolean = false,
-            var hasCommentImage: Boolean = false,
-        )
-
-        private data class ResourceTarget(
-            val index: Int,
-            val url: String,
-            val kind: ResourceKind,
-            val compressionMaxBytes: Long? = null,
-        )
 
         /** 已暂存 CSS 的文本与其解析出的子资源引用。 */
         private data class StagedCss(
@@ -647,31 +1228,6 @@ object ReviewSnapshotCapture {
             val storedBytes: Long,
             /** 下载失败（按非关键资源跳过、引用以 # 占位）的子资源数 */
             val failedCount: Int,
-        )
-
-        private data class StagedResource(
-            val target: ResourceTarget,
-            val file: File,
-            val byteCount: Long,
-        )
-
-        /**
-         * CSS and image downloads enrich an already-captured comment page; they do not define
-         * whether the page snapshot itself is usable. Keep the target in the error so a skipped
-         * resource is visible in cache diagnostics instead of being silently discarded.
-         */
-        private class ResourceDownloadException(
-            target: ResourceTarget,
-            cause: Throwable? = null,
-        ) : java.io.IOException(
-            "评论快照非关键资源下载失败 kind=${target.kind} url=${target.url}",
-            cause,
-        )
-
-        private data class PreparedImage(
-            val file: File,
-            val byteCount: Long,
-            val mimeType: String,
         )
 
         @Volatile
@@ -723,9 +1279,7 @@ object ReviewSnapshotCapture {
         val client = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, finishedUrl: String?) {
                 if (destroyed) return
-                if (dataPrepared) {
-                    inlineResources()
-                } else if (tab == null) {
+                if (tab == null) {
                     mHandler.postDelayed({ expandRound() }, 1500L)
                 } else {
                     // 章评/书评补充抓取：先点目标 tab，切换校验通过后再进入展开循环
@@ -789,9 +1343,6 @@ object ReviewSnapshotCapture {
                 view: WebView,
                 request: WebResourceRequest
             ): WebResourceResponse? {
-                if (dataPrepared && request.url.scheme in listOf("http", "https")) {
-                    return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-                }
                 // 初始 HTML 模式：拦截 nameUrl，注入 JS_INJECTION + 书源 preloadJs，
                 // 给真实评论页提供 window.java/run/ajaxAwait 等 JS bridge 环境
                 val bridge = jsBridge
@@ -1314,14 +1865,6 @@ object ReviewSnapshotCapture {
         private fun parseResourceUrls(json: String?): ResourceUrls {
             val cacheAvatars = AppConfig.cacheReviewAvatars
             val cacheCommentImages = AppConfig.cacheReviewImages
-            val avatarCompressionMaxBytes = AppConfig.reviewAvatarCompressionMaxBytes
-            val imageCompressionMaxBytes = AppConfig.reviewImageCompressionMaxBytes
-            // 阈值非正时按「不压缩」处理，而不是抛异常：AppConfig 已钳制下限，
-            // 这里是最后一道兜底，坏配置只该降级，不该让整次抓取失败。
-            val compressAvatars = cacheAvatars && AppConfig.compressReviewAvatars &&
-                avatarCompressionMaxBytes > 0L
-            val compressCommentImages = cacheCommentImages && AppConfig.compressReviewImages &&
-                imageCompressionMaxBytes > 0L
             json ?: return ResourceUrls(
                 cacheAvatars = cacheAvatars,
                 cacheCommentImages = cacheCommentImages,
@@ -1345,42 +1888,11 @@ object ReviewSnapshotCapture {
                     roles.hasCommentImage = true
                 }
             }
-            val selectedImages = imageRoles.values.asSequence()
-                .filter { roles ->
-                    (roles.hasAvatar && cacheAvatars) ||
-                        (roles.hasCommentImage && cacheCommentImages)
-                }
-                .map { roles ->
-                    val maximums = buildList {
-                        if (roles.hasAvatar && compressAvatars) add(avatarCompressionMaxBytes)
-                        if (roles.hasCommentImage && compressCommentImages) {
-                            add(imageCompressionMaxBytes)
-                        }
-                    }
-                    ImageResource(roles.url, maximums.minOrNull(),
-                        (roles.hasAvatar && cacheAvatars && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_AVATARS)) ||
-                        (roles.hasCommentImage && cacheCommentImages && ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_IMAGES)))
-                }
-                .toList()
-            val storedImages = ReviewSnapshotResourceStore.entries(book)
-            val reusableImages = linkedMapOf<String, ReviewSnapshotResourceEntry>()
-            val imagesToDownload = selectedImages.filter { image ->
-                val stored = storedImages[image.url]
-                if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && stored != null &&
-                    stored.processing == imageProcessing(image.compressionMaxBytes) &&
-                    (image.compressionMaxBytes == null ||
-                        stored.byteCount <= image.compressionMaxBytes)
-                ) {
-                    reusableImages[image.url] = stored
-                    false
-                } else {
-                    true
-                }
-            }
+            val selection = selectImagesForDownload(book, imageRoles, cacheAvatars, cacheCommentImages)
             return ResourceUrls(
-                images = imagesToDownload,
+                images = selection.imagesToDownload,
                 css = collected.css.filter { it.startsWith("http") }.distinct(),
-                databaseImages = reusableImages,
+                databaseImages = selection.reusableImages,
                 cacheAvatars = cacheAvatars,
                 cacheCommentImages = cacheCommentImages,
             )
@@ -1628,30 +2140,15 @@ object ReviewSnapshotCapture {
             return CssRefOccurrence(valueStart, valueEnd, absolute, keepAsIs = false)
         }
 
-        /** 单个资源入库统一走 lease 提交：lease 失效即取消整个 Capture，不落半套资源。 */
-        private fun imageProcessing(maxBytes: Long?) = maxBytes?.let { "webp-max:$it" } ?: "original"
-
         private fun putResource(
             url: String,
             mimeType: String,
             file: File,
             processing: String = "original",
-        ): ReviewSnapshotResourceEntry {
-            var stored: ReviewSnapshotResourceEntry? = null
-            val committedLease = commitIfLeaseActive.invoke {
-                stored = ReviewSnapshotResourceStore.put(
-                    book = book,
-                    url = url,
-                    mimeType = mimeType,
-                    source = file,
-                    processing = processing,
-                )
-            }
-            if (!committedLease) {
-                throw CancellationException("review lease is no longer active at resource commit")
-            }
-            return checkNotNull(stored)
-        }
+        ): ReviewSnapshotResourceEntry =
+            putSnapshotResource(book, url, mimeType, file, processing, commitIfLeaseActive)
+
+        private fun imageProcessing(maxBytes: Long?) = imageProcessingTag(maxBytes)
 
         /**
          * 资源线程数只控制网络拉取。响应通过固定小缓冲区写入临时文件，随后才逐项转为
@@ -1719,187 +2216,21 @@ object ReviewSnapshotCapture {
 
         /** 每次尝试单独取得资源配额；退避等待不占用网络配额。 */
         private fun stageResource(target: ResourceTarget, stagingDir: File): StagedResource {
-            var attempt = 0
-            while (true) {
-                ensureHeavyActive()
-                try {
-                    return ReviewDownloadScheduler.resources.blocking { stageResourceOnce(target, stagingDir) }
-                } catch (error: ResourceDownloadException) {
-                    diagnostics?.warn("RESOURCE_HTTP_FAILED", error)
-                    ensureHeavyActive()
-                    if (attempt >= ReviewDownloadConfig.Number.RETRIES.value) throw error
-                    attempt++
-                    diagnostics?.mark("RESOURCE_HTTP_RETRY_$attempt", force = true)
-                    Thread.sleep(ReviewDownloadConfig.retryDelay(attempt))
-                }
-            }
-        }
-
-        private fun stageResourceOnce(
-            target: ResourceTarget,
-            stagingDir: File,
-        ): StagedResource {
-            val targetFile = File(stagingDir, target.index.toString())
-            if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_RESOURCES) && target.kind != ResourceKind.IMAGE) {
-                val stored = ReviewSnapshotResourceStore.entries(book)[target.url]
-                if (stored != null) {
-                    val handle = checkNotNull(ReviewSnapshotResourceStore.open(book, stored.key))
-                    handle.inputStream.use { input -> targetFile.outputStream().use { input.copyTo(it) } }
-                    diagnostics?.mark("RESOURCE_CACHE_HIT", force = true)
-                    return StagedResource(target, targetFile, stored.byteCount)
-                }
-            }
-            val request = okhttp3.Request.Builder()
-                .url(target.url)
-                .header("Referer", url)
-                .build()
-            val call = okHttpClient.newBuilder()
-                .connectTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .readTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .callTimeout(RESOURCE_FETCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                .retryOnConnectionFailure(false)
-                .build()
-                .newCall(request)
-            registerResourceCall(call)
-            var completed = false
-            try {
-                ensureHeavyActive()
-                try {
-                    call.execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw ResourceDownloadException(
-                                target,
-                                IllegalStateException("HTTP ${response.code}"),
-                            )
-                        }
-                        val body = response.body ?: throw ResourceDownloadException(
-                            target,
-                            IllegalStateException("评论快照资源响应为空"),
-                        )
-                        body.byteStream().use { input ->
-                            targetFile.outputStream().buffered().use { output ->
-                                val buffer = ByteArray(RESOURCE_COPY_BUFFER_BYTES)
-                                var copiedBytes = 0L
-                                while (true) {
-                                    ensureHeavyActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    val nextBytes = copiedBytes + count
-                                    output.write(buffer, 0, count)
-                                    copiedBytes = nextBytes
-                                }
-                                if (copiedBytes == 0L) throw ResourceDownloadException(target,
-                                    IllegalStateException("评论资源响应内容为空"))
-                                completed = true
-                                return StagedResource(target, targetFile, copiedBytes)
-                            }
-                        }
-                    }
-                } catch (error: ResourceDownloadException) {
-                    throw error
-                } catch (error: java.io.IOException) {
-                    if (destroyed || Thread.currentThread().isInterrupted) throw error
-                    throw ResourceDownloadException(target, error)
-                }
-            } finally {
-                unregisterResourceCall(call)
-                if (!completed) {
-                    targetFile.delete()
-                }
-            }
+            return stageResourceWithRetry(
+                target = target,
+                refererUrl = url,
+                book = book,
+                stagingDir = stagingDir,
+                diagnostics = diagnostics,
+                ensureActive = ::ensureHeavyActive,
+                isAborted = { destroyed || Thread.currentThread().isInterrupted },
+                registerCall = ::registerResourceCall,
+                unregisterCall = ::unregisterResourceCall,
+            )
         }
 
         private fun prepareImage(staged: StagedResource): PreparedImage {
-            check(staged.file.length() == staged.byteCount) {
-                "评论快照图片暂存文件长度异常: ${staged.target.url}"
-            }
-            val maxBytes = staged.target.compressionMaxBytes
-            if (maxBytes == null || staged.byteCount <= maxBytes) {
-                return PreparedImage(
-                    file = staged.file,
-                    byteCount = staged.byteCount,
-                    mimeType = guessMime(staged.target.url, staged.file),
-                )
-            }
-            require(maxBytes > 0L) { "评论图片压缩上限必须大于 0" }
-            return compressImage(staged.file, maxBytes, staged.target.url)
-        }
-
-        /**
-         * Re-encodes one staged image directly to a bounded WebP file. No full byte[] or
-         * encoded String is created here; sampling occurs before decode and every retry replaces
-         * the same temporary file.
-         */
-        @Suppress("DEPRECATION")
-        private fun compressImage(source: File, maxBytes: Long, sourceUrl: String): PreparedImage {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(source.absolutePath, bounds)
-            check(bounds.outWidth > 0 && bounds.outHeight > 0) {
-                "评论图片无法解码，不能压缩: $sourceUrl"
-            }
-            val targetPixels = (maxBytes * 4L).coerceAtMost(Int.MAX_VALUE.toLong())
-            var sampleSize = 1
-            while (
-                bounds.outWidth.toLong() / sampleSize *
-                (bounds.outHeight.toLong() / sampleSize) > targetPixels
-            ) {
-                sampleSize *= 2
-            }
-            var bitmap = BitmapFactory.decodeFile(
-                source.absolutePath,
-                BitmapFactory.Options().apply {
-                    inSampleSize = sampleSize
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-            ) ?: error("评论图片无法解码，不能压缩: $sourceUrl")
-            val output = File(source.parentFile, "${source.name}.webp")
-            var completed = false
-            try {
-                while (true) {
-                    for (quality in intArrayOf(92, 80, 65, 50, 35, 20, 10)) {
-                        ensureHeavyActive()
-                        FileOutputStream(output, false).buffered().use { stream ->
-                            check(bitmap.compress(Bitmap.CompressFormat.WEBP, quality, stream)) {
-                                "评论图片 WebP 压缩失败: $sourceUrl"
-                            }
-                        }
-                        if (output.length() <= maxBytes) {
-                            completed = true
-                            return PreparedImage(output, output.length(), "image/webp")
-                        }
-                    }
-                    check(bitmap.width > 1 || bitmap.height > 1) {
-                        "评论图片无法压缩到 ${maxBytes}B: $sourceUrl"
-                    }
-                    val scaled = Bitmap.createScaledBitmap(
-                        bitmap,
-                        (bitmap.width / 2).coerceAtLeast(1),
-                        (bitmap.height / 2).coerceAtLeast(1),
-                        true,
-                    )
-                    bitmap.recycle()
-                    bitmap = scaled
-                }
-            } finally {
-                bitmap.recycle()
-                if (!completed) output.delete()
-            }
-        }
-
-        private fun guessMime(rawUrl: String, file: File): String {
-            val header = ByteArray(16)
-            val headerLength = file.inputStream().use { input -> input.read(header) }
-            val lower = rawUrl.substringBefore('?').lowercase()
-            return when {
-                lower.endsWith(".png") -> "image/png"
-                lower.endsWith(".webp") -> "image/webp"
-                lower.endsWith(".gif") -> "image/gif"
-                lower.endsWith(".svg") -> "image/svg+xml"
-                lower.endsWith(".css") -> "text/css"
-                headerLength > 3 && header[0] == 0xFF.toByte() &&
-                    header[1] == 0xD8.toByte() -> "image/jpeg"
-                else -> "image/jpeg"
-            }
+            return prepareSnapshotImage(staged, ::ensureHeavyActive)
         }
 
         /** CSS 子资源入库 MIME：按扩展名判定，浏览器以此决定字体/图片如何消费。 */

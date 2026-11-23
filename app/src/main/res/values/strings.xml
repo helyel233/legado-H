@@ -2643,6 +2643,7 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="package_sync_task_status_failed">Failed</string>
     <string name="package_sync_task_type_art">Art package</string>
     <string name="package_sync_task_type_param">Param package</string>
+    <string name="package_sync_task_type_cover_slot">Bookshelf cover package</string>
     <string name="package_sync_task_type_theme">Theme</string>
     <string name="package_sync_task_type_top_bar">Top bar</string>
     <string name="package_sync_task_type_navigation_bar">Bottom bar</string>
@@ -3533,4 +3534,10 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="theme_advanced_colors_toggle">Advanced surface &amp; bar overrides</string>
     <string name="theme_advanced_colors_summary_auto">Auto-derived from seed colors</string>
     <string name="theme_advanced_colors_summary_custom">%1$d overridden</string>
+
+    <string name="download_count_with_review">Body %1$d/%2$d · Reviews %3$d/%4$d</string>
+    <string name="cache_manage_body_progress">Body %1$d/%2$d</string>
+    <string name="cache_manage_review_cached_progress">Reviews %1$d/%2$d</string>
+    <string name="review_update_banner_text">New reviews available</string>
+    <string name="review_update_banner_action">Refresh</string>
 </resources>

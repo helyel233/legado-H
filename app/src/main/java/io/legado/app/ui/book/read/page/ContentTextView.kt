@@ -654,7 +654,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                 if (!debounceClick) {
                                     if (ReadBook.book?.isOnLineTxt == true) {
                                         val click = column.click
-                                        val src = column.src
+                                        val src = column.reviewButtonSrc
                                         if (!click.isNullOrBlank()) {
                                             // 段评气泡/图片 click 要跑 JS 或等网络，
                                             // 先给一个点击处涟漪，别让用户以为没反应
@@ -676,7 +676,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                     val click = column.click
                                     if (!click.isNullOrBlank()) {
                                         showTapFeedback(x, y)
-                                        callBack.clickImg(click, column.src)
+                                        callBack.clickImg(click, column.reviewButtonSrc)
                                         handled = true
                                     }
                                 } else {
@@ -688,7 +688,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                                     val click = column.click
                                     if (!click.isNullOrBlank()) {
                                         showTapFeedback(x, y)
-                                        callBack.clickImg(click, column.src)
+                                        callBack.clickImg(click, column.reviewButtonSrc)
                                         handled = true
                                     }
                                 }

@@ -4,6 +4,7 @@ import android.text.TextUtils
 import com.script.ScriptBindings
 import com.script.rhino.RhinoScriptEngine
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -11,7 +12,14 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
+import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
+import io.legado.app.help.book.ChapterFetchCoordinator
+import io.legado.app.help.book.ChapterFetchKey
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.StrResponse
@@ -20,12 +28,18 @@ import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.isTrue
 import io.legado.app.utils.mapAsync
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import org.mozilla.javascript.Context
 import splitties.init.appCtx
 import io.legado.app.constant.AppPattern
@@ -64,6 +78,8 @@ object BookChapterList {
      */
     private const val TOC_PAGE_RETRY_DELAY_MS = 500L
 
+    private val earlyDispatchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     suspend fun analyzeChapterList(
         bookSource: BookSource,
         book: Book,
@@ -72,7 +88,8 @@ object BookChapterList {
         body: String?,
         isFromBookInfo: Boolean = false,
         onProgress: ((loaded: Int, total: Int) -> Unit)? = null,
-        loadState: TocLoadState? = null
+        loadState: TocLoadState? = null,
+        earlyDispatchFirstChapter: Boolean = false
     ): List<BookChapter> {
         body ?: throw NoStackTraceException(
             appCtx.getString(R.string.error_get_web_content, baseUrl)
@@ -98,148 +115,240 @@ object BookChapterList {
                 isFromBookInfo = isFromBookInfo
             )
         chapterList.addAll(chapterData.first)
-        when (chapterData.second.size) {
-            0 -> Unit
-            1 -> {
-                var nextUrl = chapterData.second[0]
-                while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
-                    nextUrlList.add(nextUrl)
-                    val res = fetchTocPage(bookSource, book, nextUrl)
-                    val nextBody = res?.body
-                    if (nextBody.isNullOrEmpty()) {
-                        // 本页取不到内容：已解析出的章节照常使用（部分目录可用），
-                        // 不再因为个别分页失败把整本目录作废
-                        loadState?.onPageFailed()
-                        Debug.log(
-                            bookSource.bookSourceUrl,
-                            "◇目录第${nextUrlList.size}页获取失败，沿用已解析的${chapterList.size}章"
-                        )
-                        break
-                    }
-                    chapterData = analyzeChapterList(
-                        book, nextUrl, nextUrl,
-                        nextBody, tocRule, listRule, bookSource,
-                        isFromBookInfo = isFromBookInfo
-                    )
-                    nextUrl = chapterData.second.firstOrNull() ?: ""
-                    chapterList.addAll(chapterData.first)
-                    onProgress?.invoke(chapterList.size, -1)
-                }
-                Debug.log(bookSource.bookSourceUrl, "◇目录总页数:${nextUrlList.size}")
-            }
-
-            else -> {
-                val totalPages = chapterData.second.size
-                Debug.log(
-                    bookSource.bookSourceUrl,
-                    "◇并发解析目录,总页数:${totalPages}"
+        val targetIndex = book.durChapterIndex.coerceAtLeast(0)
+        var earlyDispatchedUrl: String? = null
+        var earlyDispatchJob: Job? = null
+        if (TocEarlyChapterDispatchPolicy.canDispatchAfterFirstPage(
+                earlyDispatchEnabled = earlyDispatchFirstChapter,
+                isLocal = book.isLocal,
+                isAudioOrVideo = book.isAudio || book.isVideo,
+                isReverseSourceRule = reverse,
+                isBookReverseToc = book.getReverseToc(),
+                formatJs = tocRule.formatJs,
+                targetChapterIndex = targetIndex,
+                firstPageChapterCount = chapterData.first.size,
+                hasNextTocPages = chapterData.second.isNotEmpty()
+            )
+        ) {
+            val targetChapter = chapterData.first.getOrNull(targetIndex)
+            if (targetChapter != null) {
+                val nextChapterUrl = chapterData.first.getOrNull(targetIndex + 1)?.url
+                earlyDispatchedUrl = targetChapter.url
+                earlyDispatchJob = launchEarlyChapterFetch(
+                    bookSource = bookSource,
+                    book = book,
+                    chapter = targetChapter,
+                    targetIndex = targetIndex,
+                    nextChapterUrl = nextChapterUrl
                 )
-                val failedPages = AtomicInteger(0)
-                flow {
-                    for (urlStr in chapterData.second) {
-                        emit(urlStr)
-                    }
-                }.mapAsync(AppConfig.threadCount) { urlStr ->
-                    try {
-                        val res = fetchTocPage(bookSource, book, urlStr)
-                        val resBody = res?.body
-                        if (resBody.isNullOrEmpty()) {
-                            failedPages.incrementAndGet()
+            }
+        }
+        val list = try {
+            when (chapterData.second.size) {
+                0 -> Unit
+                1 -> {
+                    var nextUrl = chapterData.second[0]
+                    while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
+                        nextUrlList.add(nextUrl)
+                        val res = fetchTocPage(bookSource, book, nextUrl)
+                        val nextBody = res?.body
+                        if (nextBody.isNullOrEmpty()) {
+                            // 本页取不到内容：已解析出的章节照常使用（部分目录可用），
+                            // 不再因为个别分页失败把整本目录作废
                             loadState?.onPageFailed()
-                            emptyList()
-                        } else {
-                            analyzeChapterList(
-                                book, urlStr, res?.url ?: urlStr,
-                                resBody, tocRule, listRule, bookSource, false,
-                                isFromBookInfo = isFromBookInfo
-                            ).first
+                            Debug.log(
+                                bookSource.bookSourceUrl,
+                                "◇目录第${nextUrlList.size}页获取失败，沿用已解析的${chapterList.size}章"
+                            )
+                            break
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        // 单页失败只跳过这一页，其余页照常解析
-                        failedPages.incrementAndGet()
-                        loadState?.onPageFailed()
-                        Debug.log(
-                            bookSource.bookSourceUrl,
-                            "◇目录页解析失败:$urlStr ${e.localizedMessage}"
+                        chapterData = analyzeChapterList(
+                            book, nextUrl, nextUrl,
+                            nextBody, tocRule, listRule, bookSource,
+                            isFromBookInfo = isFromBookInfo
                         )
-                        emptyList()
+                        nextUrl = chapterData.second.firstOrNull() ?: ""
+                        chapterList.addAll(chapterData.first)
+                        onProgress?.invoke(chapterList.size, -1)
                     }
-                }.collect {
-                    chapterList.addAll(it)
-                    onProgress?.invoke(chapterList.size, totalPages)
+                    Debug.log(bookSource.bookSourceUrl, "◇目录总页数:${nextUrlList.size}")
                 }
-                val failed = failedPages.get()
-                if (failed > 0) {
+
+                else -> {
+                    val totalPages = chapterData.second.size
                     Debug.log(
                         bookSource.bookSourceUrl,
-                        "◇目录有$failed 页获取失败，已跳过，剩余${chapterList.size}章"
+                        "◇并发解析目录,总页数:${totalPages}"
                     )
-                }
-            }
-        }
-        if (chapterList.isEmpty()) {
-            throw TocEmptyException(appCtx.getString(R.string.chapter_list_empty))
-        }
-        if (!reverse) {
-            chapterList.reverse()
-        }
-        currentCoroutineContext().ensureActive()
-        //去重
-        val lh = LinkedHashSet(chapterList)
-        val list = ArrayList(lh)
-        if (!book.getReverseToc()) {
-            list.reverse()
-        }
-        Debug.log(book.origin, "◇目录总数:${list.size}")
-        currentCoroutineContext().ensureActive()
-        list.forEachIndexed { index, bookChapter ->
-            bookChapter.index = index
-        }
-        val formatJs = tocRule.formatJs
-        if (!formatJs.isNullOrBlank()) {
-            Context.enter().use {
-                val bindings = ScriptBindings()
-                bindings["gInt"] = 0
-                list.forEachIndexed { index, bookChapter ->
-                    bindings["index"] = index + 1
-                    bindings["chapter"] = bookChapter
-                    bindings["title"] = bookChapter.title
-                    RhinoScriptEngine.runCatching {
-                        eval(formatJs, bindings)?.toString()?.let {
-                            bookChapter.title = it
+                    val failedPages = AtomicInteger(0)
+                    flow {
+                        for (urlStr in chapterData.second) {
+                            emit(urlStr)
                         }
-                    }.onFailure {
-                        Debug.log(book.origin, "格式化标题出错, ${it.localizedMessage}")
+                    }.mapAsync(AppConfig.threadCount) { urlStr ->
+                        try {
+                            val res = fetchTocPage(bookSource, book, urlStr)
+                            val resBody = res?.body
+                            if (resBody.isNullOrEmpty()) {
+                                failedPages.incrementAndGet()
+                                loadState?.onPageFailed()
+                                emptyList()
+                            } else {
+                                analyzeChapterList(
+                                    book, urlStr, res?.url ?: urlStr,
+                                    resBody, tocRule, listRule, bookSource, false,
+                                    isFromBookInfo = isFromBookInfo
+                                ).first
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            // 单页失败只跳过这一页，其余页照常解析
+                            failedPages.incrementAndGet()
+                            loadState?.onPageFailed()
+                            Debug.log(
+                                bookSource.bookSourceUrl,
+                                "◇目录页解析失败:$urlStr ${e.localizedMessage}"
+                            )
+                            emptyList()
+                        }
+                    }.collect {
+                        chapterList.addAll(it)
+                        onProgress?.invoke(chapterList.size, totalPages)
+                    }
+                    val failed = failedPages.get()
+                    if (failed > 0) {
+                        Debug.log(
+                            bookSource.bookSourceUrl,
+                            "◇目录有$failed 页获取失败，已跳过，剩余${chapterList.size}章"
+                        )
                     }
                 }
             }
-        }
-        val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
-        val replaceBook = book.toReplaceBook()
-        book.durChapterTitle = list.getOrElse(book.durChapterIndex) { list.last() }
-            .getDisplayTitle(
-                replaceRules,
-                book.getUseReplaceRule(),
-                replaceBook = replaceBook
-            )
-        if (book.totalChapterNum < list.size) {
-            book.lastCheckCount = list.size - book.totalChapterNum
-            book.latestChapterTime = System.currentTimeMillis()
-        }
-        book.lastCheckTime = System.currentTimeMillis()
-        book.totalChapterNum = list.size
-        book.latestChapterTitle =
-            list.getOrElse(book.simulatedTotalChapterNum() - 1) { list.last() }
+            if (chapterList.isEmpty()) {
+                throw TocEmptyException(appCtx.getString(R.string.chapter_list_empty))
+            }
+            if (!reverse) {
+                chapterList.reverse()
+            }
+            currentCoroutineContext().ensureActive()
+            //去重
+            val lh = LinkedHashSet(chapterList)
+            val result = ArrayList(lh)
+            if (!book.getReverseToc()) {
+                result.reverse()
+            }
+            Debug.log(book.origin, "◇目录总数:${result.size}")
+            currentCoroutineContext().ensureActive()
+            result.forEachIndexed { index, bookChapter ->
+                bookChapter.index = index
+            }
+            val formatJs = tocRule.formatJs
+            if (!formatJs.isNullOrBlank()) {
+                Context.enter().use {
+                    val bindings = ScriptBindings()
+                    bindings["gInt"] = 0
+                    result.forEachIndexed { index, bookChapter ->
+                        bindings["index"] = index + 1
+                        bindings["chapter"] = bookChapter
+                        bindings["title"] = bookChapter.title
+                        RhinoScriptEngine.runCatching {
+                            eval(formatJs, bindings)?.toString()?.let {
+                                bookChapter.title = it
+                            }
+                        }.onFailure {
+                            Debug.log(book.origin, "格式化标题出错, ${it.localizedMessage}")
+                        }
+                    }
+                }
+            }
+            val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
+            val replaceBook = book.toReplaceBook()
+            book.durChapterTitle = result.getOrElse(book.durChapterIndex) { result.last() }
                 .getDisplayTitle(
                     replaceRules,
                     book.getUseReplaceRule(),
                     replaceBook = replaceBook
                 )
-        currentCoroutineContext().ensureActive()
-        upChapterInfo(list, book)
+            if (book.totalChapterNum < result.size) {
+                book.lastCheckCount = result.size - book.totalChapterNum
+                book.latestChapterTime = System.currentTimeMillis()
+            }
+            book.lastCheckTime = System.currentTimeMillis()
+            book.totalChapterNum = result.size
+            book.latestChapterTitle =
+                result.getOrElse(book.simulatedTotalChapterNum() - 1) { result.last() }
+                    .getDisplayTitle(
+                        replaceRules,
+                        book.getUseReplaceRule(),
+                        replaceBook = replaceBook
+                    )
+            currentCoroutineContext().ensureActive()
+            upChapterInfo(result, book)
+            result
+        } catch (e: CancellationException) {
+            earlyDispatchJob?.cancel()
+            throw e
+        }
+
+        // For reverse sources, global formatJs, or dedup shifts, dispatch in memory right before
+        // returning so chapter fetch runs concurrently with SQLite persistence.
+        val resolvedIndex = targetIndex.coerceIn(0, list.lastIndex)
+        val finalChapter = list.getOrNull(resolvedIndex)
+        if (TocEarlyChapterDispatchPolicy.shouldDispatchAfterFinalList(
+                earlyDispatchEnabled = earlyDispatchFirstChapter,
+                isLocal = book.isLocal,
+                isAudioOrVideo = book.isAudio || book.isVideo,
+                earlyDispatchedUrl = earlyDispatchedUrl,
+                resolvedChapterUrl = finalChapter?.url
+            ) && finalChapter != null
+        ) {
+            if (earlyDispatchedUrl != null && earlyDispatchedUrl != finalChapter.url) {
+                earlyDispatchJob?.cancel()
+            }
+            val finalNextUrl = list.getOrNull(resolvedIndex + 1)?.url
+            launchEarlyChapterFetch(
+                bookSource = bookSource,
+                book = book,
+                chapter = finalChapter,
+                targetIndex = resolvedIndex,
+                nextChapterUrl = finalNextUrl
+            )
+        }
         return list
+    }
+
+    private fun launchEarlyChapterFetch(
+        bookSource: BookSource,
+        book: Book,
+        chapter: BookChapter,
+        targetIndex: Int,
+        nextChapterUrl: String?
+    ): Job? {
+        if (book.isLocal || book.isAudio || book.isVideo) return null
+        if (chapter.isVolume || chapter.url.isBlank()) return null
+        if (!NetworkUtils.isAvailable()) return null
+        val bookSnapshot = BookSessionLoadCoordinator.copyBookSnapshot(book)
+        val chapterSnapshot = chapter.copy(index = targetIndex)
+        if (BookHelp.hasContent(bookSnapshot, chapterSnapshot)) return null
+        val fetchKey = ChapterFetchKey(bookSnapshot.bookUrl, chapterSnapshot.url, targetIndex)
+        return earlyDispatchScope.launch {
+            try {
+                ChapterFetchCoordinator.fetchOrJoin(fetchKey) {
+                    WebBook.getContentAwait(
+                        bookSource = bookSource,
+                        book = bookSnapshot,
+                        bookChapter = chapterSnapshot,
+                        nextChapterUrl = nextChapterUrl,
+                        needSave = true
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                AppLog.put("首章抢跑预取失败 ${bookSnapshot.name} #$targetIndex: ${e.localizedMessage}")
+            }
+        }
     }
 
     /**

@@ -618,6 +618,12 @@ object Backup {
             UnifiedPackageRepository.rootDir,
             File(backupPath, unifiedPackagesDirName)
         )
+        val prefs = appCtx.defaultSharedPreferences
+        UiPackageBackup.exportUnifiedActivePrefs(
+            targetRoot = File(backupPath, unifiedPackagesDirName),
+            readString = { key -> prefs.getString(key, null) },
+            readBoolean = { key -> if (prefs.contains(key)) prefs.getBoolean(key, false) else null }
+        )
     }
 
     /**

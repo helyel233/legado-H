@@ -13,6 +13,7 @@ import io.legado.app.ui.book.read.page.provider.TextChapterLayout
 import io.legado.app.utils.fastBinarySearchBy
 import kotlinx.coroutines.CoroutineScope
 import org.jsoup.parser.Parser
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -54,6 +55,11 @@ data class TextChapter(
 
     val lastReadLength: Int get() = getReadLength(lastIndex)
 
+    private val dynamicReviewCacheOverrides = ConcurrentHashMap<String, Boolean>()
+
+    internal fun dynamicReviewCacheState(normalizedButtonSrc: String): Boolean? =
+        dynamicReviewCacheOverrides[normalizedButtonSrc]
+
     /**
      * 把本章对应按钮的段评气泡标成「已缓存」，并重绘所在行。
      *
@@ -61,17 +67,19 @@ data class TextChapter(
      * 出现，用户正在读的这一页会被打散重刷。刷新行位图即可让标记生效。
      * 主线程调用。
      */
-    fun markReviewSnapshotCached(buttonSrc: String) {
-        val target = buttonSrc.trim()
-        if (target.isEmpty()) return
+    fun markReviewSnapshotCached(buttonSrc: String, cached: Boolean = true) {
+        val normalized = buttonSrc.trim()
+        if (normalized.isEmpty()) return
+        dynamicReviewCacheOverrides[normalized] = cached
         for (page in pages) {
             for (line in page.lines) {
                 var hit = false
                 for (column in line.columns) {
-                    if (column is ImageColumn && !column.reviewCached &&
-                        column.src.trim() == target
+                    if (column is ImageColumn &&
+                        column.reviewCached != cached &&
+                        (column.reviewButtonSrc.trim() == normalized || column.src.trim() == normalized)
                     ) {
-                        column.reviewCached = true
+                        column.reviewCached = cached
                         hit = true
                     }
                 }

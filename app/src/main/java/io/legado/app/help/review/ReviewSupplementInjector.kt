@@ -135,7 +135,8 @@ object ReviewSupplementInjector {
                     var svg = node.querySelector('svg');
                     var svgHtml = svg ? svg.outerHTML : '';
                     var n = list.querySelectorAll('.reply-item').length;
-                    node.dataset.legadoCollapseLabel = node.innerHTML;
+                    var customCollapse = node.getAttribute('data-collapse-label');
+                    node.dataset.legadoCollapseLabel = customCollapse ? (customCollapse + (svgHtml ? ' ' + svgHtml : '')) : node.innerHTML;
                     node.dataset.legadoExpandLabel = '展开 ' + n + ' 条回复 ' + svgHtml;
                 }
                 if (list.style.display === 'none') {
@@ -158,7 +159,8 @@ object ReviewSupplementInjector {
                 var svg = node.querySelector('svg');
                 var svgHtml = svg ? svg.outerHTML : '';
                 var n = list.querySelectorAll('.reply-item').length;
-                node.dataset.legadoCollapseLabel = node.innerHTML;
+                var customCollapse = node.getAttribute('data-collapse-label');
+                node.dataset.legadoCollapseLabel = customCollapse ? (customCollapse + (svgHtml ? ' ' + svgHtml : '')) : node.innerHTML;
                 node.dataset.legadoExpandLabel = '展开 ' + n + ' 条回复 ' + svgHtml;
                 list.style.display = 'none';
                 node.classList.remove('expanded');

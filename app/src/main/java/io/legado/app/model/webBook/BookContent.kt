@@ -10,6 +10,7 @@ import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
@@ -51,8 +52,10 @@ object BookContent {
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         Debug.log(bookSource.bookSourceUrl, body, state = 40)
         val mNextChapterUrl = if (nextChapterUrl.isNullOrEmpty()) {
-            appDb.bookChapterDao.getChapter(book.bookUrl, bookChapter.index + 1)?.url
-                ?: appDb.bookChapterDao.getChapter(book.bookUrl, 0)?.url
+            (appDb.bookChapterDao.getChapter(book.bookUrl, bookChapter.index + 1)
+                ?: BookSessionLoadCoordinator.default.findStagedChapter(book.bookUrl, bookChapter.index + 1))?.url
+                ?: (appDb.bookChapterDao.getChapter(book.bookUrl, 0)
+                    ?: BookSessionLoadCoordinator.default.findStagedChapter(book.bookUrl, 0))?.url
         } else {
             nextChapterUrl
         }

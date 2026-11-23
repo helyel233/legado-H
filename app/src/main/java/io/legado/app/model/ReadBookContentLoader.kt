@@ -7,9 +7,16 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.UiPerfMetrics
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
+import io.legado.app.help.book.ChangeSourceTextAnchorHelper
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
+import io.legado.app.help.book.ReaderTextPositionStore
+import io.legado.app.help.book.SourceSwitchQualityPolicy
+import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.usesDirectReader
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.utils.stackTraceStr
@@ -90,6 +97,18 @@ internal interface ReadBookContentHost {
     val simulatedChapterSize: Int
 
     fun onPageChanged(pageChanged: Boolean = false, fromReadAloud: Boolean = false)
+
+    /** 首屏当前章首次从 null 落位并完成排版时，按需触发相邻章节（±1）预加载。 */
+    fun onFirstCurrentChapterInstalled(chapterIndex: Int, resetPageOffset: Boolean)
+
+    fun updateDurChapterPos(bookUrl: String, chapterIndex: Int, pos: Int)
+
+    fun onCurrentChapterQualityEvaluated(
+        bookUrl: String?,
+        chapterIndex: Int,
+        issue: SourceSwitchQualityPolicy.ChapterIssue,
+        effectiveCharCount: Int
+    )
 }
 
 /**
@@ -196,6 +215,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             host.refreshParagraphRuleLayoutKey()
             val requestedLayoutKey = host.currentChapterLayoutKey()
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index)
+                ?: BookSessionLoadCoordinator.default.findStagedChapter(book.bookUrl, index)
             if (chapter == null) {
                 logContentLoadSkip("chapter_null", index, book)
                 host.showCurrentChapterLoadError(index, appCtx.getString(R.string.misc_current_chapter_not_found_table))
@@ -277,6 +297,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         ?: return@withContext
                 }
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index)
+                    ?: BookSessionLoadCoordinator.default.findStagedChapter(book.bookUrl, index)
                 if (chapter == null) {
                     logContentLoadSkip("chapter_null_await", index, book)
                     host.showCurrentChapterLoadError(index, "Current chapter not found")
@@ -732,6 +753,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             return
         }
         var installedTextChapter: TextChapter? = null
+        var installedAsFirstCurrentChapter = false
         var contentApplied = false
         lateinit var job: Coroutine<Boolean>
         job = Coroutine.async(this, start = CoroutineStart.LAZY) {
@@ -754,6 +776,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     contentProcessor.getContent(book, chapter, content, includeTitle = false, checkActive = { ensureActive() })
                 )
             }
+            evaluateCurrentChapterQuality(book, chapter, content, contents.textList)
             val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
             ensureActive()
             effectiveLayoutKey = resolveEffectiveLayoutKey(
@@ -771,6 +794,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 0 -> curChapterLoadingLock.withLock {
                     val installed = withContext(Main) {
                         ensureActive()
+                        val wasCurChapterMissing = host.curTextChapter == null
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
@@ -778,7 +802,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             generation,
                             offset,
                             textChapter
-                        )
+                        ).also { if (it) installedAsFirstCurrentChapter = wasCurChapterMissing }
                     }
                     if (!installed) return@withLock false
                     if (!isChapterLoadSlotCurrent(
@@ -791,6 +815,10 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                         )
                     ) return@withLock false
                     host.callBack?.upMenuView()
+                    val deferForSourceAnchor = ReaderTextPositionStore.hasChangeSourceAnchor(
+                        book.bookUrl,
+                        chapter.index
+                    )
                     var available = false
                     for (page in textChapter.layoutChannel) {
                         if (!isChapterLoadSlotCurrent(
@@ -806,7 +834,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             return@withLock false
                         }
                         val index = page.index
-                        if (!available && page.containPos(host.durChapterPos)) {
+                        if (!deferForSourceAnchor && !available && page.containPos(host.durChapterPos)) {
                             if (upContent) {
                                 host.callBack?.upContent(offset, resetPageOffset)
                             }
@@ -828,7 +856,15 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             textChapter
                         )
                     ) return@withLock false
-                    if (upContent) host.callBack?.upContent(offset, !available && resetPageOffset)
+                    applyPendingChangeSourceAnchorOrUpContent(
+                        book = book,
+                        chapter = chapter,
+                        textChapter = textChapter,
+                        offset = offset,
+                        upContent = upContent,
+                        available = available,
+                        resetPageOffset = resetPageOffset
+                    )
                     val fromReadAloud = readAloudPendingLoadChapterIndex == chapter.index
                     if (fromReadAloud) {
                         readAloudPendingLoadChapterIndex = -1
@@ -960,6 +996,9 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     recordChapterLoadTiming(startNs, "async", chapter.index)
                 }
                 success?.invoke()
+                if (installedAsFirstCurrentChapter) {
+                    host.onFirstCurrentChapterInstalled(chapter.index, resetPageOffset)
+                }
             }
         }
         host.chapterLoads.setJob(chapter.index, job)
@@ -1011,6 +1050,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                     contentProcessor.getContent(book, chapter, content, includeTitle = false, checkActive = { ensureActive() })
                 )
             }
+            evaluateCurrentChapterQuality(book, chapter, content, contents.textList)
             val displayTitle = contents.displayTitle ?: fallbackDisplayTitle
             ensureActive()
             effectiveLayoutKey = resolveEffectiveLayoutKey(
@@ -1024,10 +1064,12 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                 this, book, chapter, displayTitle, contents, host.simulatedChapterSize
             )
             textChapter = createdChapter
+            var installedAsFirstCurrentChapter = false
             applied = when (val offset = chapter.index - host.durChapterIndex) {
                 0 -> curChapterLoadingLock.withLock {
                     val installed = withContext(Main) {
                         ensureActive()
+                        val wasCurChapterMissing = host.curTextChapter == null
                         installChapterSlot(
                             book.bookUrl,
                             chapter.index,
@@ -1035,10 +1077,14 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             requestGeneration,
                             offset,
                             createdChapter
-                        )
+                        ).also { if (it) installedAsFirstCurrentChapter = wasCurChapterMissing }
                     }
                     if (!installed) return@withLock false
                     host.callBack?.upMenuView()
+                    val deferForSourceAnchor = ReaderTextPositionStore.hasChangeSourceAnchor(
+                        book.bookUrl,
+                        chapter.index
+                    )
                     var available = false
                     for (page in createdChapter.layoutChannel) {
                         if (!isChapterLoadSlotCurrent(
@@ -1054,7 +1100,7 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             return@withLock false
                         }
                         val index = page.index
-                        if (!available && page.containPos(host.durChapterPos)) {
+                        if (!deferForSourceAnchor && !available && page.containPos(host.durChapterPos)) {
                             if (upContent) {
                                 host.callBack?.upContent(offset, resetPageOffset)
                             }
@@ -1076,7 +1122,15 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
                             createdChapter
                         )
                     ) return@withLock false
-                    if (upContent) host.callBack?.upContent(offset, !available && resetPageOffset)
+                    applyPendingChangeSourceAnchorOrUpContent(
+                        book = book,
+                        chapter = chapter,
+                        textChapter = createdChapter,
+                        offset = offset,
+                        upContent = upContent,
+                        available = available,
+                        resetPageOffset = resetPageOffset
+                    )
                     val fromReadAloud = readAloudPendingLoadChapterIndex == chapter.index
                     if (fromReadAloud) {
                         readAloudPendingLoadChapterIndex = -1
@@ -1176,6 +1230,9 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             }
             if (applied) {
                 recordChapterLayoutTiming(layoutStartNs, "await", chapter.index)
+                if (installedAsFirstCurrentChapter) {
+                    host.onFirstCurrentChapterInstalled(chapter.index, resetPageOffset)
+                }
             }
             return applied
         } catch (e: CancellationException) {
@@ -1194,6 +1251,50 @@ internal class ReadBookContentLoader(private val host: ReadBookContentHost) :
             return false
         } finally {
             if (!applied) clearIncompleteChapterSlot(chapter.index, textChapter)
+        }
+    }
+
+    private fun evaluateCurrentChapterQuality(
+        book: Book,
+        chapter: BookChapter,
+        rawContent: String,
+        processedParagraphs: List<String>
+    ) {
+        if (chapter.index != host.durChapterIndex) return
+        val evaluation = SourceSwitchQualityPolicy.evaluateChapter(
+            rawContent = rawContent,
+            processedParagraphs = processedParagraphs,
+            isImageOrMedia = book.isImage || book.isAudio || book.isVideo
+        )
+        host.onCurrentChapterQualityEvaluated(
+            bookUrl = book.bookUrl,
+            chapterIndex = chapter.index,
+            issue = evaluation.issue,
+            effectiveCharCount = evaluation.effectiveCharCount
+        )
+    }
+
+    private fun applyPendingChangeSourceAnchorOrUpContent(
+        book: Book,
+        chapter: BookChapter,
+        textChapter: TextChapter,
+        offset: Int,
+        upContent: Boolean,
+        available: Boolean,
+        resetPageOffset: Boolean
+    ) {
+        val pendingAnchor = ReaderTextPositionStore.consumeChangeSourceAnchor(book.bookUrl, chapter.index)
+        if (pendingAnchor != null) {
+            val resolvedPos = ChangeSourceTextAnchorHelper.resolveOffset(
+                pendingAnchor,
+                textChapter.getContent()
+            )
+            host.updateDurChapterPos(book.bookUrl, chapter.index, resolvedPos)
+            if (upContent) {
+                host.callBack?.upContent(offset, resetPageOffset)
+            }
+        } else if (upContent) {
+            host.callBack?.upContent(offset, !available && resetPageOffset)
         }
     }
 

@@ -6,9 +6,15 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
+import io.legado.app.help.config.RedAssetPackage
+import io.legado.app.utils.FileUtils
 import io.legado.app.utils.isSameOrSubFileOf
+import io.legado.app.utils.normalizeFileName
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
+import java.util.UUID
+import java.util.zip.ZipFile
 
 /**
  * Schema-versioned codec for [UnifiedPackageManifest] with full unknown-field round-trip
@@ -35,6 +41,7 @@ object UnifiedPackageCodec {
         manifest.contentHash?.takeIf { it.isNotBlank() }?.let { root.addProperty("contentHash", it) }
         manifest.art?.let { root.add("art", encodeArt(it)) }
         manifest.param?.let { root.add("param", encodeParam(it)) }
+        manifest.coverSlot?.let { root.add("coverSlot", encodeCoverSlot(it)) }
         appendUnknownFields(root, manifest.unknownFields)
         return prettyGson.toJson(root)
     }
@@ -51,9 +58,10 @@ object UnifiedPackageCodec {
         val contentHash = root.stringOrNull("contentHash")?.takeIf { it.isNotBlank() }
         val art = root.objOrNull("art")?.let(::decodeArt)
         val param = root.objOrNull("param")?.let(::decodeParam)
+        val coverSlot = root.objOrNull("coverSlot")?.let(::decodeCoverSlot)
         val known = setOf(
             "schemaVersion", "kind", "id", "name", "updatedAt",
-            "basePackageId", "contentHash", "art", "param"
+            "basePackageId", "contentHash", "art", "param", "coverSlot"
         )
         return UnifiedPackageManifest(
             schemaVersion = schemaVersion,
@@ -65,6 +73,7 @@ object UnifiedPackageCodec {
             contentHash = contentHash,
             art = art,
             param = param,
+            coverSlot = coverSlot,
             unknownFields = collectUnknownFields(root, known)
         )
     }
@@ -83,6 +92,7 @@ object UnifiedPackageCodec {
         canonical.addProperty("kind", manifest.kind.id)
         manifest.art?.let { canonical.add("art", encodeArt(it)) }
         manifest.param?.let { canonical.add("param", encodeParam(it)) }
+        manifest.coverSlot?.let { canonical.add("coverSlot", encodeCoverSlot(it)) }
         val md = MessageDigest.getInstance("SHA-256")
         md.update(canonical.toString().toByteArray(Charsets.UTF_8))
 
@@ -101,6 +111,20 @@ object UnifiedPackageCodec {
                 }
             }
             runCatching { file.canonicalPath }.getOrNull()?.let(hashedCanonicalPaths::add)
+        }
+
+        fun hashAssetRefs(refs: Map<String, String?>) {
+            refs.forEach { (slot, rawPath) ->
+                val trimmed = rawPath?.trim()?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (trimmed.startsWith("http", ignoreCase = true)) return@forEach
+                val resolved = assetResolver?.invoke(trimmed) ?: packageDir?.let { dir ->
+                    val candidate = File(dir, trimmed)
+                    candidate.takeIf { it.isSameOrSubFileOf(dir) && it.isFile }
+                }
+                if (resolved != null && resolved.isFile) {
+                    updateFile("slot:$slot", resolved)
+                }
+            }
         }
 
         manifest.art?.let { art ->
@@ -127,21 +151,19 @@ object UnifiedPackageCodec {
             art.icons.toSortedMap().forEach { (k, v) -> refs["icon.$k"] = v }
             art.covers.sorted().forEachIndexed { idx, v -> refs["cover.$idx"] = v }
             refs["defaultCoverPath"] = art.defaultCoverPath
-
-            refs.forEach { (slot, rawPath) ->
-                val trimmed = rawPath?.trim()?.takeIf { it.isNotBlank() } ?: return@forEach
-                if (trimmed.startsWith("http", ignoreCase = true)) return@forEach
-                val resolved = assetResolver?.invoke(trimmed) ?: packageDir?.let { dir ->
-                    val candidate = File(dir, trimmed)
-                    candidate.takeIf { it.isSameOrSubFileOf(dir) && it.isFile }
-                }
-                if (resolved != null && resolved.isFile) {
-                    updateFile("slot:$slot", resolved)
-                }
-            }
+            hashAssetRefs(refs)
         }
 
-        if (manifest.art != null && packageDir != null && packageDir.isDirectory) {
+        manifest.coverSlot?.let { coverSlot ->
+            val refs = linkedMapOf<String, String?>()
+            coverSlot.covers.sorted().forEachIndexed { idx, v -> refs["coverSlot.cover.$idx"] = v }
+            refs["coverSlot.dayDefaultCoverPath"] = coverSlot.dayDefaultCoverPath
+            refs["coverSlot.nightDefaultCoverPath"] = coverSlot.nightDefaultCoverPath
+            refs["coverSlot.groupCoverPath"] = coverSlot.groupCoverPath
+            hashAssetRefs(refs)
+        }
+
+        if ((manifest.art != null || manifest.coverSlot != null) && packageDir != null && packageDir.isDirectory) {
             packageDir.walkTopDown()
                 .onEnter { dir -> dir == packageDir || !dir.name.startsWith(".") }
                 .filter { file ->
@@ -174,6 +196,287 @@ object UnifiedPackageCodec {
             val obj = JsonParser.parseString(trimmed).asJsonObject
             decodeScopeOverrideObject(obj)
         }.getOrNull()
+    }
+
+    /**
+     * Collects all local/relative asset paths referenced by [manifest] (excluding remote `http(s)` URLs).
+     */
+    fun collectAssetPaths(manifest: UnifiedPackageManifest): List<String> {
+        val paths = linkedSetOf<String>()
+        fun addLocal(raw: String?) {
+            val trimmed = raw?.trim()?.takeIf { it.isNotBlank() } ?: return
+            if (!trimmed.startsWith("http", ignoreCase = true)) {
+                paths.add(trimmed)
+            }
+        }
+        manifest.art?.let { art ->
+            listOf(art.dayWallpapers, art.nightWallpapers).forEach { w ->
+                if (w != null) {
+                    addLocal(w.main)
+                    addLocal(w.topBar)
+                    addLocal(w.bottomBar)
+                    addLocal(w.sidebar)
+                    addLocal(w.bookInfo)
+                    addLocal(w.panel)
+                    addLocal(w.welcome)
+                }
+            }
+            listOf(art.dayTypography, art.nightTypography).forEach { t ->
+                if (t != null) {
+                    addLocal(t.uiFontPath)
+                    addLocal(t.titleFontPath)
+                }
+            }
+            art.icons.values.forEach(::addLocal)
+            art.covers.forEach(::addLocal)
+            addLocal(art.defaultCoverPath)
+        }
+        manifest.coverSlot?.let { slot ->
+            slot.covers.forEach(::addLocal)
+            addLocal(slot.dayDefaultCoverPath)
+            addLocal(slot.nightDefaultCoverPath)
+            addLocal(slot.groupCoverPath)
+        }
+        return paths.toList()
+    }
+
+    /**
+     * Validates a [PackageKind.COVER_SLOT] manifest and optionally verifies local asset paths
+     * exist and stay confined inside [packageDir] (or resolve via [assetResolver]).
+     */
+    fun validateCoverSlotPackage(
+        manifest: UnifiedPackageManifest,
+        packageDir: File? = null,
+        assetResolver: ((String) -> File?)? = null
+    ): List<String> {
+        val errors = mutableListOf<String>()
+        if (manifest.kind != PackageKind.COVER_SLOT) {
+            errors += "Invalid kind: expected cover_slot, got ${manifest.kind.id}"
+        }
+        val slot = manifest.coverSlot
+        if (slot == null) {
+            errors += "Missing coverSlot payload"
+            return errors
+        }
+        val rawMode = slot.applyMode?.trim()?.takeIf { it.isNotBlank() }
+        if (rawMode != null) {
+            val allowed = setOf(
+                CoverSlotApplyMode.RANDOM,
+                CoverSlotApplyMode.SEQUENCE,
+                CoverSlotApplyMode.MIXED,
+                CoverSlotApplyMode.FALLBACK_ONLY,
+                "FALLBACK"
+            )
+            if (rawMode.uppercase(Locale.ROOT) !in allowed) {
+                errors += "Unsupported coverSlot applyMode: $rawMode"
+            }
+        }
+        collectAssetPaths(manifest).forEach { rel ->
+            if (!isSafeRelativePackagePath(rel)) {
+                errors += "Unsafe asset path: $rel"
+                return@forEach
+            }
+            if (assetResolver != null || packageDir != null) {
+                val resolved = assetResolver?.invoke(rel) ?: packageDir?.let { dir ->
+                    File(dir, rel).takeIf { it.isSameOrSubFileOf(dir) && it.isFile }
+                }
+                if (resolved == null || !resolved.isFile) {
+                    errors += "Missing cover asset: $rel"
+                }
+            }
+        }
+        return errors
+    }
+
+    /**
+     * Detects the [PackageKind] of a JSON, unified ZIP, or legacy `.red`/`.zip` cover collection archive.
+     */
+    fun detectArchivePackageKind(file: File, tempDir: File): PackageKind? {
+        if (!file.isFile) return null
+        val isJson = runCatching {
+            val buf = ByteArray(16)
+            val count = file.inputStream().use { it.read(buf) }
+            count > 0 && String(buf, 0, count, Charsets.UTF_8).trimStart().startsWith("{")
+        }.getOrDefault(false)
+        if (isJson) {
+            return runCatching { decode(file.readText()).kind }.getOrNull()
+        }
+        val (zipFile, isTempZip) = unwrapRedOrZip(file, tempDir) ?: return null
+        return try {
+            ZipFile(zipFile).use { zip ->
+                val manifestEntry = zip.entries().asSequence().firstOrNull { entry ->
+                    !entry.isDirectory &&
+                        (entry.name == UnifiedPackageManifest.MANIFEST_FILE_NAME ||
+                            entry.name.endsWith("/${UnifiedPackageManifest.MANIFEST_FILE_NAME}"))
+                }
+                if (manifestEntry != null) {
+                    val text = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { reader ->
+                        reader.readText()
+                    }
+                    return runCatching { decode(text).kind }.getOrNull()
+                }
+            }
+            if (RedAssetPackage.classifyZip(zipFile) == RedAssetPackage.Kind.CoverCollection) {
+                PackageKind.COVER_SLOT
+            } else {
+                null
+            }
+        } catch (_: Throwable) {
+            null
+        } finally {
+            if (isTempZip) zipFile.delete()
+        }
+    }
+
+    /**
+     * Extracts and losslessly converts a legacy `.red` / `.zip` CoverCollection archive
+     * (`collection.json` + `images/` or pure cover image zip) into a `PackageKind.COVER_SLOT`
+     * directory (`manifest.json` + `assets/`).
+     */
+    fun convertLegacyCoverCollectionArchive(
+        archiveFile: File,
+        targetDir: File,
+        tempDir: File,
+        fallbackName: String? = null,
+        packageId: String? = null
+    ): UnifiedPackageManifest {
+        val (zipFile, isTempZip) = unwrapRedOrZip(archiveFile, tempDir)
+            ?: throw IllegalArgumentException("Unsupported archive format: ${archiveFile.name}")
+        val unzipDir = File(tempDir, "legacy_cover_${System.currentTimeMillis()}_${UUID.randomUUID()}")
+        unzipDir.mkdirs()
+        return try {
+            PackageIoKernel.extractZipSafe(zipFile, unzipDir)
+            val resolvedFallbackName = fallbackName?.trim()?.takeIf { it.isNotBlank() }
+                ?: archiveFile.nameWithoutExtension
+                    .removeSuffix(".red")
+                    .removeSuffix(".zip")
+                    .ifBlank { "导入封面包" }
+            val manifest = convertLegacyCoverCollectionDir(
+                sourceDir = unzipDir,
+                targetDir = targetDir,
+                fallbackName = resolvedFallbackName,
+                packageId = packageId
+            )
+            PackageIoKernel.writeTextAtomic(
+                File(targetDir, UnifiedPackageManifest.MANIFEST_FILE_NAME),
+                encode(manifest)
+            )
+            manifest
+        } finally {
+            if (isTempZip) zipFile.delete()
+            FileUtils.delete(unzipDir, deleteRootDir = true)
+        }
+    }
+
+    /**
+     * Losslessly converts an extracted legacy CoverCollection directory (`collection.json` + `images/`)
+     * into `PackageKind.COVER_SLOT` (`assets/` + [UnifiedPackageManifest]).
+     */
+    fun convertLegacyCoverCollectionDir(
+        sourceDir: File,
+        targetDir: File,
+        fallbackName: String = "导入封面包",
+        packageId: String? = null
+    ): UnifiedPackageManifest {
+        require(sourceDir.isDirectory) { "Legacy cover directory does not exist: ${sourceDir.absolutePath}" }
+        val collectionFile = sourceDir.walkTopDown()
+            .firstOrNull { it.isFile && it.name == "collection.json" }
+        val packageRoot = collectionFile?.parentFile ?: sourceDir
+        val collectionObj = collectionFile?.let { file ->
+            runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrNull()
+        }
+        val resolvedName = collectionObj?.stringOrNull("name")?.takeIf { it.isNotBlank() }
+            ?: fallbackName.ifBlank { "导入封面包" }
+        val resolvedMode = CoverSlotApplyMode.normalize(collectionObj?.stringOrNull("mode"))
+        val updatedAt = collectionObj?.longOrNull("updatedAt")?.takeIf { it > 0L }
+            ?: System.currentTimeMillis()
+
+        val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")
+        fun isImageFile(f: File): Boolean = f.isFile && f.extension.lowercase(Locale.ROOT) in imageExtensions
+
+        val candidateFiles = mutableListOf<File>()
+        val imagesElem = collectionObj?.get("images")
+        if (imagesElem != null && imagesElem.isJsonArray) {
+            imagesElem.asJsonArray.forEach { elem ->
+                if (!elem.isJsonPrimitive || !elem.asJsonPrimitive.isString) return@forEach
+                val raw = elem.asString.trim()
+                if (raw.isBlank()) return@forEach
+                val direct = if (!File(raw).isAbsolute) {
+                    File(packageRoot, raw).takeIf { it.isSameOrSubFileOf(sourceDir) && isImageFile(it) }
+                } else null
+                val fallbackByName = direct ?: run {
+                    val fileName = File(raw).name
+                    File(packageRoot, "images/$fileName").takeIf { it.isSameOrSubFileOf(sourceDir) && isImageFile(it) }
+                        ?: File(packageRoot, fileName).takeIf { it.isSameOrSubFileOf(sourceDir) && isImageFile(it) }
+                }
+                if (fallbackByName != null) {
+                    candidateFiles.add(fallbackByName)
+                }
+            }
+        }
+        if (candidateFiles.isEmpty()) {
+            sourceDir.walkTopDown()
+                .filter(::isImageFile)
+                .sortedBy { it.relativeTo(sourceDir).path.replace('\\', '/') }
+                .forEach { candidateFiles.add(it) }
+        }
+        require(candidateFiles.isNotEmpty()) { "封面包内未找到有效图片文件" }
+
+        targetDir.mkdirs()
+        val assetsDir = File(targetDir, "assets").apply { mkdirs() }
+        val packagedCovers = mutableListOf<String>()
+        candidateFiles.distinctBy { it.canonicalPath }.forEachIndexed { index, src ->
+            val rawStem = src.nameWithoutExtension.normalizeFileName().ifBlank { "cover_${index + 1}" }
+            val ext = src.extension.lowercase(Locale.ROOT).ifBlank { "jpg" }
+            var candidate = File(assetsDir, "$rawStem.$ext")
+            var suffix = 1
+            while (candidate.exists()) {
+                candidate = File(assetsDir, "${rawStem}_$suffix.$ext")
+                suffix++
+            }
+            src.copyTo(candidate, overwrite = true)
+            packagedCovers.add("assets/${candidate.name}")
+        }
+
+        val payload = CoverSlotPackagePayload(
+            covers = packagedCovers,
+            applyMode = resolvedMode
+        )
+        val draft = UnifiedPackageManifest(
+            kind = PackageKind.COVER_SLOT,
+            id = packageId?.takeIf { it.isNotBlank() } ?: "cover_slot_${UUID.randomUUID()}",
+            name = resolvedName,
+            updatedAt = updatedAt,
+            coverSlot = payload
+        )
+        return draft.copy(
+            contentHash = computeContentHash(draft, targetDir)
+        )
+    }
+
+    private fun unwrapRedOrZip(file: File, tempDir: File): Pair<File, Boolean>? {
+        val header = runCatching {
+            file.inputStream().use { input ->
+                val buf = ByteArray(8)
+                val n = input.read(buf)
+                if (n >= 2) buf.copyOf(n) else null
+            }
+        }.getOrNull() ?: return null
+        if (header.size >= 2 && header[0] == 'P'.code.toByte() && header[1] == 'K'.code.toByte()) {
+            return file to false
+        }
+        tempDir.mkdirs()
+        val tempZip = RedAssetPackage.zipPayload(file, tempDir) ?: return null
+        return tempZip to true
+    }
+
+    private fun isSafeRelativePackagePath(path: String): Boolean {
+        val normalized = path.trim().replace('\\', '/')
+        if (normalized.isBlank() || '\u0000' in normalized) return false
+        if (normalized.startsWith('/')) return false
+        if (Regex("^[A-Za-z]:.*").matches(normalized)) return false
+        val segments = normalized.split('/')
+        return segments.none { it.isEmpty() || it == "." || it == ".." }
     }
 
     private fun encodeArt(art: ArtPackagePayload): JsonObject {
@@ -357,6 +660,48 @@ object UnifiedPackageCodec {
             nightIconSlotId = obj.stringOrNull("nightIconSlotId"),
             dayCoverSlotId = obj.stringOrNull("dayCoverSlotId"),
             nightCoverSlotId = obj.stringOrNull("nightCoverSlotId"),
+            unknownFields = collectUnknownFields(obj, known)
+        )
+    }
+
+    private fun encodeCoverSlot(slot: CoverSlotPackagePayload): JsonObject = JsonObject().apply {
+        if (slot.covers.isNotEmpty()) {
+            val arr = JsonArray()
+            slot.covers.forEach { path ->
+                if (path.isNotBlank()) arr.add(path)
+            }
+            if (arr.size() > 0) add("covers", arr)
+        }
+        putStr("applyMode", slot.applyMode)
+        putStr("dayDefaultCoverPath", slot.dayDefaultCoverPath)
+        putStr("nightDefaultCoverPath", slot.nightDefaultCoverPath)
+        putStr("groupCoverPath", slot.groupCoverPath)
+        appendUnknownFields(this, slot.unknownFields)
+    }
+
+    private fun decodeCoverSlot(obj: JsonObject): CoverSlotPackagePayload {
+        val coversList = mutableListOf<String>()
+        val coversElem = obj.get("covers")
+        if (coversElem != null && coversElem.isJsonArray) {
+            coversElem.asJsonArray.forEach { elem ->
+                if (elem.isJsonPrimitive && elem.asJsonPrimitive.isString) {
+                    elem.asString.trim().takeIf { it.isNotBlank() }?.let(coversList::add)
+                }
+            }
+        }
+        val known = setOf(
+            "covers",
+            "applyMode",
+            "dayDefaultCoverPath",
+            "nightDefaultCoverPath",
+            "groupCoverPath"
+        )
+        return CoverSlotPackagePayload(
+            covers = coversList,
+            applyMode = obj.stringOrNull("applyMode")?.takeIf { it.isNotBlank() },
+            dayDefaultCoverPath = obj.stringOrNull("dayDefaultCoverPath")?.takeIf { it.isNotBlank() },
+            nightDefaultCoverPath = obj.stringOrNull("nightDefaultCoverPath")?.takeIf { it.isNotBlank() },
+            groupCoverPath = obj.stringOrNull("groupCoverPath")?.takeIf { it.isNotBlank() },
             unknownFields = collectUnknownFields(obj, known)
         )
     }

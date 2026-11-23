@@ -265,12 +265,21 @@ object ReviewSnapshotResourceStore {
      */
     fun deleteAllResources(book: Book): Int = synchronized(lock) {
         val dir = ReviewSnapshotStore.reviewsDir(book)
+        databaseCache.remove(dir.absolutePath)
         var removed = 0
         if (databaseFile(dir).delete()) removed++
         dir.listFiles()?.forEach { file ->
             if (isResourceBlob(file) && file.delete()) removed++
         }
         removed
+    }
+
+    /** 清理单本书在资源数据库内存缓存中的索引条目 */
+    fun invalidateBookCache(book: Book) {
+        val cacheKey = ReviewSnapshotStore.reviewsDir(book).absolutePath
+        synchronized(lock) {
+            databaseCache.remove(cacheKey)
+        }
     }
 
     /**

@@ -126,7 +126,8 @@ data class ReadMenuActionBarState(
     val showCloudIcon: Boolean,
     val cloudState: LibraryCloudState,
     val hasLogin: Boolean,
-    val hasVipChapter: Boolean
+    val hasVipChapter: Boolean,
+    val canRevertSource: Boolean = false
 )
 
 data class ReadMenuActionBarActions(
@@ -136,6 +137,7 @@ data class ReadMenuActionBarActions(
     val onPayClick: () -> Unit,
     val onEditSourceClick: () -> Unit,
     val onDisableSourceClick: () -> Unit,
+    val onRevertSourceClick: () -> Unit = {},
     val onCustomButtonClick: () -> Unit,
     val onCustomButtonLongClick: () -> Unit,
     val onCloudClick: () -> Unit,
@@ -358,6 +360,7 @@ fun ReadMenuActionBar(
     val chapterPayTitle = stringResource(R.string.chapter_pay)
     val editSourceTitle = stringResource(R.string.edit_source)
     val disableSourceTitle = stringResource(R.string.disable_source)
+    val revertSourceTitle = stringResource(R.string.ui_book_revert_source)
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -457,6 +460,9 @@ fun ReadMenuActionBar(
                                 }
                                 if (state.hasVipChapter) {
                                     add(ModernActionPopup.Action(title = chapterPayTitle, invoke = actions.onPayClick))
+                                }
+                                if (state.canRevertSource) {
+                                    add(ModernActionPopup.Action(title = revertSourceTitle, invoke = actions.onRevertSourceClick))
                                 }
                                 add(ModernActionPopup.Action(title = editSourceTitle, invoke = actions.onEditSourceClick))
                                 add(ModernActionPopup.Action(title = disableSourceTitle, invoke = actions.onDisableSourceClick))

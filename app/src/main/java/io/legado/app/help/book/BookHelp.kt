@@ -14,6 +14,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.book.library.LibraryCloudSync
+import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.search.LibrarySearchIndexer
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -89,6 +90,7 @@ object BookHelp {
         // 先释放书级媒体缓存的 SimpleCache 实例，否则 media3 会持有目录锁导致删除失败
         io.legado.app.help.exoplayer.ExoPlayerHelper.releaseBookMediaCacheOf(File(filePath))
         FileUtils.delete(filePath)
+        ReviewSnapshotStore.clearBookCache(book)
     }
 
     fun getCacheDir(book: Book): File {
@@ -772,8 +774,13 @@ object BookHelp {
         val oldName = getPureChapterName(oldDurChapterName)
         val newChapterSize = newChapterList.size
         val durIndex =
-            if (oldChapterListSize == 0) oldDurChapterIndex
-            else oldDurChapterIndex * oldChapterListSize / newChapterSize
+            if (oldChapterListSize <= 0) {
+                oldDurChapterIndex.coerceIn(0, newChapterSize - 1)
+            } else {
+                (oldDurChapterIndex.toLong() * newChapterSize / oldChapterListSize)
+                    .toInt()
+                    .coerceIn(0, newChapterSize - 1)
+            }
         val min = max(0, min(oldDurChapterIndex, durIndex) - 10)
         val max = min(newChapterSize - 1, max(oldDurChapterIndex, durIndex) + 10)
         var nameSim = 0.0

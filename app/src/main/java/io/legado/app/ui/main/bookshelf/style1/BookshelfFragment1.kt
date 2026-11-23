@@ -20,7 +20,10 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf1Binding
 import io.legado.app.help.book.BookTagHelper
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
+import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
 import io.legado.app.ui.main.bookshelf.style1.books.BooksFragment
@@ -57,6 +60,7 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf1) {
     private var topOverlaySpace = 0
     private var topOverlayEnabled = false
     private var structureVersion = 0
+    private val appearanceRefreshRunnable = Runnable { refreshAppearanceNow() }
     override val groupId: Long get() = selectedGroup?.groupId ?: 0
 
     override val books: List<Book>
@@ -134,6 +138,7 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf1) {
     }
 
     override fun onDestroyView() {
+        view?.removeCallbacks(appearanceRefreshRunnable)
         binding.viewPagerBookshelfPager.unregisterOnPageChangeCallback(pageChangeCallback)
         binding.viewPagerBookshelfPager.adapter = null
         super.onDestroyView()
@@ -513,9 +518,36 @@ class BookshelfFragment1 : BaseBookshelfFragment(R.layout.fragment_bookshelf1) {
         observeEvent<String>(EventBus.BOOKSHELF_STRUCTURE_CHANGED) {
             rebuildBookshelfContent()
         }
-        // 注意：不监听 MAIN_THEME_BACKGROUND_CHANGED —— 主题/背景变化时 ThemeConfig
-        // 紧接着必发 RECREATE，Activity recreate 会重建一切；这里再全量重建
-        // （fragmentMap.clear + notifyDataSetChanged 销毁全部分组页）是双倍卡顿。
+        observeEvent<Boolean>(EventBus.MAIN_APPEARANCE_KIT_CHANGED) {
+            scheduleAppearanceRefresh()
+        }
+        observeEvent<Boolean>(EventBus.MAIN_THEME_BACKGROUND_CHANGED) {
+            scheduleAppearanceRefresh()
+        }
+    }
+
+    private fun scheduleAppearanceRefresh() {
+        val rootView = view ?: return
+        rootView.removeCallbacks(appearanceRefreshRunnable)
+        rootView.post(appearanceRefreshRunnable)
+    }
+
+    private fun refreshAppearanceNow() {
+        if (!isAdded || view == null) return
+        val ctx = requireContext()
+        (binding.viewPagerBookshelfPager.getChildAt(0) as? RecyclerView)
+            ?.setEdgeEffectColor(primaryColor)
+        binding.topBar.refreshStyle()
+        binding.topBar.titleText.applyUiTitleTypeface(ctx)
+        binding.topBar.applyUiBodyTypefaceDeep(ctx.uiTypeface())
+        binding.root.applyUiBodyTypefaceDeep(ctx.uiTypeface())
+        updateTopBarOverlay()
+        val activeFragments = LinkedHashSet<BooksFragment>()
+        bookGroups.forEach { group ->
+            findBooksFragment(group.groupId)?.let(activeFragments::add)
+        }
+        activeFragments.addAll(fragmentMap.values)
+        activeFragments.forEach { it.refreshAppearance() }
     }
 
     private fun rebuildBookshelfContent() {

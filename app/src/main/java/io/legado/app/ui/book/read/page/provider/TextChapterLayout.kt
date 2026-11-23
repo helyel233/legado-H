@@ -210,13 +210,20 @@ class TextChapterLayout(
     private var activeEpubBlockDecoration: ActiveEpubBlockDecoration? = null
     private val imageInfoCache = hashMapOf<String, ImageInfo>()
 
-    /** 段评气泡「已缓存」判定结果：同章同一按钮 src 只查一次文件系统 */
-    private val reviewSnapshotPresence = hashMapOf<String, Boolean>()
+    /** 排版期单次加载的本章已缓存段评按钮 src 集合：行内气泡 O(1) 内存比对 */
+    private var cachedReviewSrcSet: Set<String>? = null
+
+    private fun ensureCachedReviewSrcSet(): Set<String> {
+        return cachedReviewSrcSet ?: ReviewSnapshotStore
+            .getCachedButtonSrcSet(book, bookChapter.url)
+            .also { cachedReviewSrcSet = it }
+    }
 
     private fun isReviewSnapshotCached(src: String): Boolean {
-        return reviewSnapshotPresence.getOrPut(src) {
-            ReviewSnapshotStore.hasSnapshot(book, bookChapter.url, src)
-        }
+        val normalized = src.trim()
+        if (normalized.isEmpty()) return false
+        textChapter.dynamicReviewCacheState(normalized)?.let { return it }
+        return normalized in ensureCachedReviewSrcSet()
     }
     private var currentSourceIndex = -1
 
@@ -327,6 +334,8 @@ class TextChapterLayout(
         displayTitle: String,
         bookContent: BookContent,
     ) {
+        // 排版章节前单次批量加载本章已缓存段评按钮集合，避免每个气泡单独触发 stat
+        ensureCachedReviewSrcSet()
         val contents = bookContent.textList
         // 配图记录按全书查询，段间锚点用前后段落指纹匹配：
         // TXT 重新导入后章节索引可能与导出时错位，指纹与章节无关，能稳定还原位置
@@ -350,6 +359,7 @@ class TextChapterLayout(
             }
             for (text in titleLines) {
                 val srcList = LinkedList<String>()
+                val rawSrcList = LinkedList<String?>()
                 val clickList = LinkedList<String?>()
                 val titleImg = if (firstLine) {
                     firstLine = false
@@ -377,11 +387,13 @@ class TextChapterLayout(
                     when (style) {
                         "text" -> {
                             srcList.add(imageInfo.renderSrc)
+                            rawSrcList.add(imageInfo.rawButtonSrc)
                             clickList.add(click)
                             srcReplaceChar
                         }
                         "TEXT" -> {
                             srcList.add(imageInfo.renderSrc)
+                            rawSrcList.add(imageInfo.rawButtonSrc)
                             clickList.add(click)
                             reviewPlaceholder(imageInfo.renderSrc)
                         }
@@ -407,6 +419,7 @@ class TextChapterLayout(
                     imageStyle,
                     srcList = srcList,
                     clickList = clickList,
+                    rawSrcList = rawSrcList,
                     isTitle = true,
                     emptyContent = contents.isEmpty(),
                     isVolumeTitle = bookChapter.isVolume,
@@ -467,6 +480,7 @@ class TextChapterLayout(
             if (isTextImageStyle || directText) {
                 //图片样式为文字嵌入类型
                 val srcList = LinkedList<String>()
+                val rawSrcList = LinkedList<String?>()
                 val clickList = LinkedList<String?>()
                 sb.setLength(0)
                 if (directText) {
@@ -477,6 +491,7 @@ class TextChapterLayout(
                         matcher.group(1)?.let { src ->
                             val imageInfo = parseImageInfo(src)
                             srcList.add(imageInfo.renderSrc)
+                            rawSrcList.add(imageInfo.rawButtonSrc)
                             clickList.add(imageInfo.click)
                             matcher.appendReplacement(sb, srcReplaceStr)
                         }
@@ -493,7 +508,8 @@ class TextChapterLayout(
                     contentPaintFontMetrics,
                     imageStyle,
                     srcList = srcList,
-                    clickList = clickList
+                    clickList = clickList,
+                    rawSrcList = rawSrcList
                 )
             } else {
                 if (isSingleImageStyle && isSetTypedImage) {
@@ -502,6 +518,7 @@ class TextChapterLayout(
                 }
                 var start = 0
                 val srcList = LinkedList<String>()
+                val rawSrcList = LinkedList<String?>()
                 val clickList = LinkedList<String?>()
                 sb.setLength(0)
                 var isFirstLine = true
@@ -531,11 +548,13 @@ class TextChapterLayout(
                             "TEXT" -> {
                                 sb.append(reviewPlaceholder(imgSrc))
                                 srcList.add(imageInfo.renderSrc)
+                                rawSrcList.add(imageInfo.rawButtonSrc)
                                 clickList.add(click)
                             }
                             "text" -> {
                                 sb.append(srcReplaceChar)
                                 srcList.add(imageInfo.renderSrc)
+                                rawSrcList.add(imageInfo.rawButtonSrc)
                                 clickList.add(click)
                             }
                             else -> {
@@ -551,7 +570,8 @@ class TextChapterLayout(
                                         "TEXT",
                                         isFirstLine = isFirstLine,
                                         srcList = srcList,
-                                        clickList = clickList
+                                        clickList = clickList,
+                                        rawSrcList = rawSrcList
                                     )
                                     sb.setLength(0)
                                     isFirstLine = false
@@ -590,7 +610,8 @@ class TextChapterLayout(
                         "TEXT",
                         isFirstLine = isFirstLine,
                         srcList = srcList,
-                        clickList = clickList
+                        clickList = clickList,
+                        rawSrcList = rawSrcList
                     )
                 }
             }
@@ -1858,7 +1879,7 @@ class TextChapterLayout(
                     val source = span.source ?: return@let
                     val imageInfo = parseImageInfo(source)
                     val urlMatcher = paramPattern.matcher(source)
-                    if (urlMatcher.find()) {
+                    if (urlMatcher.find() || imageInfo.rawButtonSrc != null) {
                         var iStyle = imageInfo.style
                         val width = imageInfo.width
                         val click = imageInfo.click
@@ -1876,6 +1897,8 @@ class TextChapterLayout(
                         when (iStyle?.uppercase()) {
                             "TEXT" -> {
                                 val renderSrc = imageInfo.renderSrc
+                                val rawButtonSrc = imageInfo.rawButtonSrc
+                                val snapshotKey = rawButtonSrc?.takeIf { it.isNotBlank() } ?: renderSrc
                                 val derivedBubble = ParagraphBubbleRenderer.isBubbleSrc(renderSrc)
                                 if (!derivedBubble) {
                                     ImageProvider.cacheImage(book, renderSrc, ReadBook.bookSource)
@@ -1885,7 +1908,7 @@ class TextChapterLayout(
                                 val nativeBubble = !derivedBubble &&
                                     ReviewBubble.isParagraphBubble(iStyle, click)
                                 val cached = (derivedBubble || nativeBubble) &&
-                                    isReviewSnapshotCached(renderSrc)
+                                    isReviewSnapshotCached(snapshotKey)
                                 columns.add(
                                     ImageColumn(
                                         start = lineAbsStartX + charX,
@@ -1893,7 +1916,8 @@ class TextChapterLayout(
                                         src = renderSrc,
                                         click = click,
                                         reviewBubble = nativeBubble,
-                                        reviewCached = cached
+                                        reviewCached = cached,
+                                        rawButtonSrc = rawButtonSrc
                                     )
                                 )
                             }
@@ -2127,7 +2151,8 @@ class TextChapterLayout(
         isVolumeTitle: Boolean = false,
         forceMiddleTitle: Boolean = false,
         srcList: LinkedList<String>? = null,
-        clickList: LinkedList<String?>?
+        clickList: LinkedList<String?>?,
+        rawSrcList: LinkedList<String?>? = null
     ) {
         breakAfterSingleImageIfNeed()
         val highlights = nativeHighlights.prepare(text, isTitle, textPaint)
@@ -2194,7 +2219,7 @@ class TextChapterLayout(
                     //多行的第一行 非标题
                     addCharsToLineFirst(
                         book, absStartX, textLine, words, textPaint,
-                        desiredWidth, widths, srcList, clickList
+                        desiredWidth, widths, srcList, clickList, rawSrcList
                     )
                 }
                 layout.lineCount - 1 -> {
@@ -2211,7 +2236,7 @@ class TextChapterLayout(
                     }
                     addCharsToLineNatural(
                         book, absStartX, textLine, words,
-                        startX, !isTitle && lineIndex == 0, widths, srcList, clickList
+                        startX, !isTitle && lineIndex == 0, widths, srcList, clickList, rawSrcList
                     )
                 }
                 else -> {
@@ -2224,13 +2249,13 @@ class TextChapterLayout(
                         val startX = (visibleWidth - desiredWidth) / 2
                         addCharsToLineNatural(
                             book, absStartX, textLine, words,
-                            startX, false, widths, srcList, clickList
+                            startX, false, widths, srcList, clickList, rawSrcList
                         )
                     } else {
                         //中间行
                         addCharsToLineMiddle(
                             book, absStartX, textLine, words, textPaint,
-                            desiredWidth, 0f, widths, srcList, clickList
+                            desiredWidth, 0f, widths, srcList, clickList, rawSrcList
                         )
                     }
                 }
@@ -2288,13 +2313,14 @@ class TextChapterLayout(
         desiredWidth: Float,
         textWidths: List<Float>,
         srcList: LinkedList<String>?,
-        clickList: LinkedList<String?>?
+        clickList: LinkedList<String?>?,
+        rawSrcList: LinkedList<String?>? = null
     ) {
         var x = 0f
         if (!textFullJustify) {
             addCharsToLineNatural(
                 book, absStartX, textLine, words,
-                x, true, textWidths, srcList, clickList
+                x, true, textWidths, srcList, clickList, rawSrcList
             )
             return
         }
@@ -2317,7 +2343,7 @@ class TextChapterLayout(
             val textWidths1 = textWidths.subList(bodyIndent.length, textWidths.size)
             addCharsToLineMiddle(
                 book, absStartX, textLine, text1, textPaint,
-                desiredWidth, x, textWidths1, srcList, clickList
+                desiredWidth, x, textWidths1, srcList, clickList, rawSrcList
             )
         }
     }
@@ -2337,13 +2363,14 @@ class TextChapterLayout(
         startX: Float,
         textWidths: List<Float>,
         srcList: LinkedList<String>?,
-        clickList: LinkedList<String?>?
+        clickList: LinkedList<String?>?,
+        rawSrcList: LinkedList<String?>? = null
     ) {
         if (!textFullJustify) {
             addCharsToLineNatural(
                 book, absStartX, textLine, words,
                 startX, false, textWidths, srcList,
-                clickList
+                clickList, rawSrcList
             )
             return
         }
@@ -2363,7 +2390,7 @@ class TextChapterLayout(
             addCharsToLineNatural(
                 book, absStartX, textLine, words,
                 startX, false, textWidths, srcList,
-                clickList
+                clickList, rawSrcList
             )
             return
         }
@@ -2382,7 +2409,8 @@ class TextChapterLayout(
                 result.columnEnds[index],
                 index + 1 == words.size,
                 srcList,
-                clickList
+                clickList,
+                rawSrcList
             )
         }
         exceed(absStartX, textLine, words)
@@ -2400,7 +2428,8 @@ class TextChapterLayout(
         hasIndent: Boolean,
         textWidths: List<Float>,
         srcList: LinkedList<String>?,
-        clickList: LinkedList<String?>?
+        clickList: LinkedList<String?>?,
+        rawSrcList: LinkedList<String?>? = null
     ) {
         val indentLength = paragraphIndent.length
         var x = startX
@@ -2409,7 +2438,7 @@ class TextChapterLayout(
             val char = words[index]
             val cw = textWidths.getOrNull(index) ?: 0f
             val x1 = x + cw
-            addCharToLine(book, absStartX, textLine, char, x, x1, index + 1 == words.size, srcList, clickList)
+            addCharToLine(book, absStartX, textLine, char, x, x1, index + 1 == words.size, srcList, clickList, rawSrcList)
             x = x1
             if (hasIndent && index == indentLength - 1) {
                 textLine.indentWidth = x
@@ -2430,19 +2459,21 @@ class TextChapterLayout(
         xEnd: Float,
         isLineEnd: Boolean,
         srcList: LinkedList<String>?,
-        clickList: LinkedList<String?>?
+        clickList: LinkedList<String?>?,
+        rawSrcList: LinkedList<String?>? = null
     ) {
         val column = when {
             !srcList.isNullOrEmpty() && (
                 char == srcReplaceStr || char == reviewStr || char == hiddenReviewChar.toString()
                 ) -> {
                 val src = srcList.removeFirst()
+                val rawButtonSrc = rawSrcList?.pollFirst()
                 val click = clickList?.removeFirst()
                 if (char == hiddenReviewChar.toString()) {
                     HiddenReviewColumn(
                         start = absStartX + xStart,
                         end = absStartX + xStart,
-                        reviewButton = ReviewButton(src, click)
+                        reviewButton = ReviewButton(rawButtonSrc?.takeIf { it.isNotBlank() } ?: src, click)
                     )
                 } else {
                     val derivedBubble = ParagraphBubbleRenderer.isBubbleSrc(src)
@@ -2451,13 +2482,15 @@ class TextChapterLayout(
                     }
                     // 直接阅读路径没有 style 选项，只按 click 语义认定原生气泡
                     val nativeBubble = !derivedBubble && ReviewBubble.isParagraphBubble(null, click)
+                    val snapshotKey = rawButtonSrc?.takeIf { it.isNotBlank() } ?: src
                     ImageColumn(
                         start = absStartX + xStart,
                         end = absStartX + xEnd,
                         src = src,
                         click = click,
                         reviewBubble = nativeBubble,
-                        reviewCached = (derivedBubble || nativeBubble) && isReviewSnapshotCached(src)
+                        reviewCached = (derivedBubble || nativeBubble) && isReviewSnapshotCached(snapshotKey),
+                        rawButtonSrc = rawButtonSrc
                     )
                 }
             }
@@ -2559,7 +2592,8 @@ class TextChapterLayout(
         val renderSrc: String,
         val style: String? = null,
         val width: String? = null,
-        val click: String? = null
+        val click: String? = null,
+        val rawButtonSrc: String? = null
     )
 
     private companion object {
@@ -2665,7 +2699,8 @@ class TextChapterLayout(
             renderSrc = "bubble://paragraph?displayText=${Uri.encode(displayText)}&num=${Uri.encode(displayText)}&status=${Uri.encode(status)}$colorQuery",
             style = "TEXT",
             width = option.valueIgnoreCase("width"),
-            click = click
+            click = click,
+            rawButtonSrc = src
         )
     }
 
@@ -2804,7 +2839,8 @@ class TextChapterLayout(
         return ImageInfo(
             renderSrc = "bubble://paragraph?displayText=${encodedCount}&num=${encodedCount}&status=${encodedStatus}$colorQuery",
             style = "TEXT",
-            click = pclick ?: click
+            click = pclick ?: click,
+            rawButtonSrc = src
         )
     }
 

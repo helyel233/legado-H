@@ -98,6 +98,111 @@ class ReviewSnapshotPageStyleTest {
         assertFalse(identity.contains("D:"))
     }
 
+    @Test
+    fun refreshPolicySkipsReloadWhenSnapshotContentIsEquivalent() {
+        val snapshotHtml = """
+            <!doctype html>
+            <html data-theme="light">
+            <head><style id="legado-snapshot-deferral">img{content-visibility:auto}</style></head>
+            <body>
+              <div id="contentArea">
+                <article class="comment-card" data-comment-id="c1">
+                  <div class="comment-header">
+                    <img class="avatar" src="review-resource://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+                    <span class="comment-author">甲</span>
+                    <span class="comment-time">3分钟前</span>
+                  </div>
+                  <p class="comment-body">这段不错</p>
+                </article>
+              </div>
+              <div id="bottomBar"><button id="commentTrigger">写段评</button></div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        val refreshedEquivalentHtml = """
+            <!doctype html>
+            <html data-theme="dark">
+            <head><style>body{color:#fff}</style></head>
+            <body>
+              <div id="contentArea">
+                <article class="comment-card" data-comment-id="c1">
+                  <div class="comment-header">
+                    <img class="avatar" src="https://cdn.example.com/u/1.png">
+                    <span class="comment-author">甲</span>
+                    <span class="comment-time">8分钟前</span>
+                  </div>
+                  <p class="comment-body">这段不错</p>
+                </article>
+              </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE,
+            ReviewSnapshotRefreshPolicy.evaluateRefresh(snapshotHtml, snapshotHtml)
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE,
+            ReviewSnapshotRefreshPolicy.evaluateRefresh(snapshotHtml, refreshedEquivalentHtml)
+        )
+    }
+
+    @Test
+    fun refreshPolicyTriggersUpdateWhenCommentsOrRepliesChange() {
+        val baseHtml = """
+            <html><body><div id="contentArea">
+              <article class="comment-card" data-comment-id="c1">
+                <p class="comment-body">第一条</p>
+                <div class="reply-list"><article class="reply-item">回复A</article></div>
+              </article>
+            </div></body></html>
+        """.trimIndent()
+
+        val newCommentHtml = """
+            <html><body><div id="contentArea">
+              <article class="comment-card" data-comment-id="c2">
+                <p class="comment-body">新增评论</p>
+              </article>
+              <article class="comment-card" data-comment-id="c1">
+                <p class="comment-body">第一条</p>
+                <div class="reply-list"><article class="reply-item">回复A</article></div>
+              </article>
+            </div></body></html>
+        """.trimIndent()
+
+        val newReplyHtml = """
+            <html><body><div id="contentArea">
+              <article class="comment-card" data-comment-id="c1">
+                <p class="comment-body">第一条</p>
+                <div class="reply-list">
+                  <article class="reply-item">回复A</article>
+                  <article class="reply-item">回复B</article>
+                </div>
+              </article>
+            </div></body></html>
+        """.trimIndent()
+
+        val ajaxShellHtml = """
+            <html><head><script>loadParaFromApi();</script></head>
+            <body><div id="contentArea"></div></body></html>
+        """.trimIndent()
+
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED,
+            ReviewSnapshotRefreshPolicy.evaluateRefresh(baseHtml, newCommentHtml)
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED,
+            ReviewSnapshotRefreshPolicy.evaluateRefresh(baseHtml, newReplyHtml)
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED,
+            ReviewSnapshotRefreshPolicy.evaluateRefresh(baseHtml, ajaxShellHtml)
+        )
+    }
+
     private fun countOccurrences(source: String, needle: String): Int {
         var count = 0
         var index = source.indexOf(needle)

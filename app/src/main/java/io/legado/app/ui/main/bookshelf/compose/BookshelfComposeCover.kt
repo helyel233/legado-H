@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.dao.BookShelfDisplay
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
@@ -18,6 +20,10 @@ import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.CoverCollectionManager.isRealCoverPath
 import io.legado.app.ui.widget.compose.BookCoverImage
 import io.legado.app.ui.widget.image.CoverImageView
+import io.legado.app.utils.getPrefString
+import splitties.init.appCtx
+
+val LocalBookshelfAppearanceVersion = compositionLocalOf { 0 }
 
 @Composable
 fun BookshelfComposeCover(
@@ -28,17 +34,19 @@ fun BookshelfComposeCover(
     fillBounds: Boolean = false,
     style: CoverImageView.CoverStyle = CoverImageView.CoverStyle.GRID
 ) {
+    val appearanceVersion = LocalBookshelfAppearanceVersion.current
     if (item is BookshelfCollectionItemUi) {
         BookshelfCollectionMosaicCover(
             books = item.previewBooks,
             fallbackName = item.collection.name,
             modifier = modifier,
             fragment = fragment,
-            lifecycle = lifecycle
+            lifecycle = lifecycle,
+            appearanceVersion = appearanceVersion
         )
         return
     }
-    val coverRequest = remember(item.coverIdentityKey()) {
+    val coverRequest = remember(item.coverIdentityKey(), appearanceVersion) {
         item.toCoverRequest()
     }
     BookCoverImage(
@@ -53,7 +61,8 @@ fun BookshelfComposeCover(
         preferThumb = coverRequest.preferThumb,
         forcePath = coverRequest.forcePath,
         allowNameOverlay = coverRequest.allowNameOverlay,
-        fillBounds = fillBounds
+        fillBounds = fillBounds,
+        appearanceVersion = appearanceVersion
     )
 }
 
@@ -87,7 +96,8 @@ private fun BookshelfCollectionMosaicCover(
     fallbackName: String,
     modifier: Modifier,
     fragment: Fragment?,
-    lifecycle: Lifecycle?
+    lifecycle: Lifecycle?,
+    appearanceVersion: Int = 0
 ) {
     val previews = books.take(4)
     if (previews.isEmpty()) {
@@ -96,7 +106,8 @@ private fun BookshelfCollectionMosaicCover(
             modifier = modifier,
             fragment = fragment,
             lifecycle = lifecycle,
-            fillBounds = true
+            fillBounds = true,
+            appearanceVersion = appearanceVersion
         )
         return
     }
@@ -112,7 +123,8 @@ private fun BookshelfCollectionMosaicCover(
                         style = CoverImageView.CoverStyle.GRID,
                         fragment = fragment,
                         lifecycle = lifecycle,
-                        fillBounds = true
+                        fillBounds = true,
+                        appearanceVersion = appearanceVersion
                     )
                 }
                 if (rowBooks.size == 1) {
@@ -147,14 +159,30 @@ internal fun BookShelfDisplay.toCoverRequest(): BookshelfCoverRequest {
     )
 }
 
-private fun BookGroup.toCoverRequest(): BookshelfCoverRequest {
+internal fun resolveMountedGroupDefaultCover(): String? {
+    return runCatching {
+        val key = if (AppConfig.isNightTheme) {
+            PreferKey.defaultGroupCoverDark
+        } else {
+            PreferKey.defaultGroupCover
+        }
+        appCtx.getPrefString(key)?.trim()?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+}
+
+internal fun BookGroup.toCoverRequest(
+    fallbackGroupCover: String? = resolveMountedGroupDefaultCover()
+): BookshelfCoverRequest {
+    val ownCover = cover?.trim()?.takeIf { it.isNotBlank() }
+    val fallback = fallbackGroupCover?.trim()?.takeIf { it.isNotBlank() }
+    val resolvedPath = ownCover ?: fallback
     return buildCoverRequest(
-        path = cover,
+        path = resolvedPath,
         name = groupName,
         author = null,
         sourceOrigin = null,
         preferThumb = true,
-        forcePath = false,
+        forcePath = ownCover == null && fallback != null,
         allowNameOverlay = true,
     )
 }
@@ -183,7 +211,8 @@ private fun BookshelfItemUi.coverIdentityKey(): String {
     val configKey = listOf(
         AppConfig.useDefaultCover.toString(),
         AppConfig.loadCoverHighQuality.toString(),
-        CoverCollectionManager.selectionKey()
+        CoverCollectionManager.selectionKey(),
+        resolveMountedGroupDefaultCover().orEmpty()
     ).joinToString("|")
     return when (this) {
         is BookshelfBookItemUi -> "$configKey|book|${display.bookUrl}|${display.getDisplayCover()}|${display.name}|${display.author}"

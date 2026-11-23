@@ -12,6 +12,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
@@ -49,6 +50,7 @@ import androidx.core.view.isVisible
 import androidx.core.view.doOnLayout
 import androidx.core.view.doOnPreDraw
 import androidx.core.view.size
+import androidx.core.view.updateLayoutParams
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
@@ -83,6 +85,7 @@ import io.legado.app.help.book.BookImgClick
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.help.book.ReadMenuCustomButtonExecutor
+import io.legado.app.help.book.SourceSwitchQualityPolicy
 import io.legado.app.help.book.library.LibraryChapterManifestV3
 import io.legado.app.help.book.library.LibraryChapterPayloadV3
 import io.legado.app.help.book.library.LibraryCloudBackend
@@ -205,6 +208,9 @@ import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
+import io.legado.app.ui.book.read.page.provider.StatusPageMode
+import io.legado.app.ui.book.read.page.provider.resolveStatusPageMode
+import io.legado.app.utils.ColorUtils
 import io.legado.app.ui.book.read.epub.EpubChapterNavigationPolicy
 import io.legado.app.ui.book.read.epub.EpubTemplateSafeAreaPolicy
 import io.legado.app.ui.book.read.epub.EpubDirectAutoPager
@@ -756,6 +762,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var libraryCloudState: LibraryCloudState = LibraryCloudState.DISABLED
     private var lastReaderNightMode = AppConfig.isNightTheme
     private var epubLoadingWindow: EpubLoadingWindowOverlay? = null
+    private var recoveryDismissedForErrorMsg: String? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -996,6 +1003,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             withContext(IO) { ReviewOutboxStore.recoverSendingOnStart() }
         }
         ReadBook.register(this)
+        setupSourceRecoveryBar()
+        viewModel.sourceSwitchRecoveryLiveData.observe(this) {
+            updateRecoveryActionBar()
+        }
         Backup.autoBack(this)
         onBackPressedDispatcher.addCallback(this) {
             if (epubAnnotationBackCheckPending) return@addCallback
@@ -2723,6 +2734,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         consumeOpenReadAloudPanelIntent(intent)
         consumeGlobalReadAloudPanelOpen()
         loadStates = true
+        runOnUiThread {
+            updateRecoveryActionBar()
+        }
     }
 
     private fun consumeOpenReadAloudPanelIntent(intent: Intent = this.intent): Boolean {
@@ -2807,6 +2821,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             if (relativePosition == 0) {
                 upSeekBarProgress()
                 preheatReviewSnapshots()
+                updateRecoveryActionBar()
             }
             loadStates = false
             success?.invoke()
@@ -2978,6 +2993,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (relativePosition == 0) {
             upSeekBarProgress()
             preheatReviewSnapshots()
+            updateRecoveryActionBar()
         }
         loadStates = false
     }
@@ -6651,6 +6667,111 @@ class ReadBookActivity : BaseReadBookActivity(),
         binding.readMenu.runMenuOut()
         ReadBook.book?.let {
             showDialogFragment(ChangeBookSourceDialog(it.name, it.author))
+        }
+    }
+
+    override fun canRevertSourceChange(): Boolean {
+        return viewModel.canRevertSourceChange()
+    }
+
+    override fun revertLastSourceChange() {
+        binding.readMenu.runMenuOut()
+        viewModel.revertLastSourceChange()
+    }
+
+    private fun setupSourceRecoveryBar() = binding.run {
+        val surface = themeCardColorOrDefault()
+        val border = UiCorner.borderLineColor(this@ReadBookActivity)
+        llSourceRecoveryBar.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 12.dpToPx().toFloat()
+            setColor(surface)
+            setStroke(1.dpToPx(), border)
+        }
+        val pillRadius = 8.dpToPx().toFloat()
+        val accentBg = ColorUtils.withAlpha(accentColor, 0.14f)
+        val secondaryBg = ColorUtils.withAlpha(primaryTextColor, 0.08f)
+        tvRecoveryMessage.setTextColor(primaryTextColor)
+        tvRecoveryRevert.setTextColor(accentColor)
+        tvRecoveryRevert.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = pillRadius
+            setColor(accentBg)
+        }
+        tvRecoveryChangeSource.setTextColor(accentColor)
+        tvRecoveryChangeSource.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = pillRadius
+            setColor(accentBg)
+        }
+        tvRecoveryRetry.setTextColor(primaryTextColor)
+        tvRecoveryRetry.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = pillRadius
+            setColor(secondaryBg)
+        }
+        tvRecoveryDismiss.setTextColor(secondaryTextColor)
+
+        tvRecoveryRevert.setOnClickListener {
+            viewModel.revertLastSourceChange()
+        }
+        tvRecoveryChangeSource.setOnClickListener {
+            viewModel.dismissSourceSwitchRecovery()
+            changeSource()
+        }
+        tvRecoveryRetry.setOnClickListener {
+            viewModel.dismissSourceSwitchRecovery()
+            recoveryDismissedForErrorMsg = null
+            refreshContent()
+        }
+        tvRecoveryDismiss.setOnClickListener {
+            recoveryDismissedForErrorMsg = ReadBook.msg
+            viewModel.dismissSourceSwitchRecovery()
+            updateRecoveryActionBar()
+        }
+    }
+
+    private fun updateRecoveryActionBar() {
+        if (isFinishing || isDestroyed) return
+        binding.run {
+            val switchRecovery = viewModel.sourceSwitchRecoveryLiveData.value
+            val msg = ReadBook.msg
+            val isErrorMsg = !msg.isNullOrBlank() &&
+                resolveStatusPageMode(msg, ReadBook.msgIsError) == StatusPageMode.ERROR_MESSAGE
+            if (!isErrorMsg) {
+                recoveryDismissedForErrorMsg = null
+            }
+            val showForSwitch = switchRecovery != null
+            val showForError = isErrorMsg && recoveryDismissedForErrorMsg != msg
+            if (!showForSwitch && !showForError) {
+                llSourceRecoveryBar.isVisible = false
+                return
+            }
+            val isLocalBook = ReadBook.book?.isLocal == true
+            val canRevert = viewModel.canRevertSourceChange()
+            tvRecoveryMessage.text = when {
+                switchRecovery != null -> when {
+                    switchRecovery.issue == SourceSwitchQualityPolicy.ChapterIssue.LOAD_FAILED ->
+                        getString(R.string.ui_book_switch_source_failed)
+                    switchRecovery.effectiveCharCount <= 0 ->
+                        getString(R.string.ui_book_switch_source_empty_chapter)
+                    else ->
+                        getString(
+                            R.string.ui_book_switch_source_short_chapter,
+                            switchRecovery.effectiveCharCount
+                        )
+                }
+                else -> getString(R.string.ui_book_chapter_load_error_hint)
+            }
+            tvRecoveryRevert.isVisible = canRevert
+            tvRecoveryChangeSource.isVisible = !isLocalBook
+            tvRecoveryRetry.isVisible = true
+            tvRecoveryDismiss.isVisible = true
+            val navInset = navigationBar.height.takeIf { it > 0 } ?: 0
+            llSourceRecoveryBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                bottomMargin = navInset + 52.dpToPx()
+            }
+            llSourceRecoveryBar.isVisible = true
         }
     }
 

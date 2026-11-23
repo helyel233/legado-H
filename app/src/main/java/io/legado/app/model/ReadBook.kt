@@ -13,9 +13,11 @@ import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.ReadRecordDailyHelper
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
 import io.legado.app.help.book.ChapterPrefetcher
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
+import io.legado.app.help.book.SourceSwitchQualityPolicy
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.usesDirectReader
 import io.legado.app.help.book.ReaderTextPositionStore
@@ -107,6 +109,40 @@ object ReadBook : CoroutineScope by MainScope() {
             directTextRevisionSeed.incrementAndGet()
         }
     var msg: String? = null
+    @Volatile
+    var msgIsError: Boolean = false
+        private set
+
+    data class ChapterQualityReport(
+        val bookUrl: String?,
+        val chapterIndex: Int,
+        val issue: SourceSwitchQualityPolicy.ChapterIssue,
+        val effectiveCharCount: Int
+    )
+
+    private val chapterQualityListeners =
+        java.util.concurrent.CopyOnWriteArrayList<(ChapterQualityReport) -> Unit>()
+
+    fun addChapterQualityListener(listener: (ChapterQualityReport) -> Unit) {
+        chapterQualityListeners.addIfAbsent(listener)
+    }
+
+    fun removeChapterQualityListener(listener: (ChapterQualityReport) -> Unit) {
+        chapterQualityListeners.remove(listener)
+    }
+
+    private fun notifyChapterQuality(
+        bookUrl: String?,
+        chapterIndex: Int,
+        issue: SourceSwitchQualityPolicy.ChapterIssue,
+        effectiveCharCount: Int
+    ) {
+        val report = ChapterQualityReport(bookUrl, chapterIndex, issue, effectiveCharCount)
+        chapterQualityListeners.forEach { listener ->
+            runCatching { listener(report) }
+        }
+    }
+
     private val readRecord = ReadRecord()
     /**
      * 章节加载的在途记录（哪个章在加载、加载到第几代、用的哪个排版键、任务句柄）。
@@ -204,6 +240,27 @@ object ReadBook : CoroutineScope by MainScope() {
         override fun onPageChanged(pageChanged: Boolean, fromReadAloud: Boolean) =
             ReadBook.curPageChanged(pageChanged, fromReadAloud)
 
+        override fun onFirstCurrentChapterInstalled(chapterIndex: Int, resetPageOffset: Boolean) {
+            if (book == null || durChapterIndex != chapterIndex) return
+            val isEpub = book?.isEpub == true
+            val adjacentResetOffset = if (isEpub) false else resetPageOffset
+            val adjacentUpContent = !isEpub
+            if (nextTextChapter == null && !chapterLoads.isLoading(chapterIndex + 1)) {
+                loadContent(
+                    chapterIndex + 1,
+                    upContent = adjacentUpContent,
+                    resetPageOffset = adjacentResetOffset
+                )
+            }
+            if (prevTextChapter == null && !chapterLoads.isLoading(chapterIndex - 1)) {
+                loadContent(
+                    chapterIndex - 1,
+                    upContent = adjacentUpContent,
+                    resetPageOffset = adjacentResetOffset
+                )
+            }
+        }
+
         override fun currentChapterLayoutKey(): String =
             ReadBook.currentChapterLayoutKey()
 
@@ -227,6 +284,23 @@ object ReadBook : CoroutineScope by MainScope() {
             message: String,
             throwable: Throwable?
         ) = ReadBook.showCurrentChapterLoadError(index, message, throwable)
+
+        override fun updateDurChapterPos(bookUrl: String, chapterIndex: Int, pos: Int) {
+            val activeBook = ReadBook.book ?: return
+            if (activeBook.bookUrl != bookUrl || ReadBook.durChapterIndex != chapterIndex) return
+            val safePos = pos.coerceAtLeast(0)
+            ReadBook.durChapterPos = safePos
+            activeBook.durChapterPos = safePos
+        }
+
+        override fun onCurrentChapterQualityEvaluated(
+            bookUrl: String?,
+            chapterIndex: Int,
+            issue: SourceSwitchQualityPolicy.ChapterIssue,
+            effectiveCharCount: Int
+        ) {
+            notifyChapterQuality(bookUrl, chapterIndex, issue, effectiveCharCount)
+        }
 
     }
 
@@ -269,14 +343,22 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
-    fun resetData(book: Book, notifyContent: Boolean = true) {
+    fun resetData(
+        book: Book,
+        notifyContent: Boolean = true,
+        cancelInFlight: Boolean = true
+    ) {
         stopReadAloudForBookSwitch(book)
-        releaseAndCancel()
+        if (cancelInFlight) {
+            releaseAndCancel()
+        }
         ReadBook.book = book
         refreshParagraphRuleLayoutKey()
         readRecord.bookName = book.name
         readRecord.readTime = appDb.readRecordDao.getReadTime(book.name) ?: 0
-        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
+        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl).takeIf { it > 0 }
+            ?: BookSessionLoadCoordinator.default.findStagedChapterCount(book.bookUrl)
+            ?: 0
         simulatedChapterSize = if (book.readSimulating()) {
             book.simulatedTotalChapterNum()
         } else {
@@ -314,7 +396,9 @@ object ReadBook : CoroutineScope by MainScope() {
         releaseAndCancel()
         ReadBook.book = book
         refreshParagraphRuleLayoutKey()
-        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl)
+        chapterSize = appDb.bookChapterDao.getChapterCount(book.bookUrl).takeIf { it > 0 }
+            ?: BookSessionLoadCoordinator.default.findStagedChapterCount(book.bookUrl)
+            ?: 0
         simulatedChapterSize = if (book.readSimulating()) {
             book.simulatedTotalChapterNum()
         } else {
@@ -591,9 +675,16 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     }
 
-    fun upMsg(msg: String?) {
-        if (ReadBook.msg != msg) {
+    fun upMsg(msg: String?, isError: Boolean? = null) {
+        val resolvedError = when {
+            msg == null -> false
+            isError != null -> isError
+            else -> !io.legado.app.ui.book.read.page.provider.SkeletonLayout
+                .isTransitionalLoadingMessage(msg)
+        }
+        if (ReadBook.msg != msg || ReadBook.msgIsError != resolvedError) {
             ReadBook.msg = msg
+            ReadBook.msgIsError = resolvedError
             callBack?.upContent()
         }
     }
@@ -916,14 +1007,16 @@ object ReadBook : CoroutineScope by MainScope() {
         success: (() -> Unit)? = null
     ) {
         val isEpub = book?.isEpub == true
+        val curChapterMissing = curTextChapter == null
+        val deferAdjacent = isEpub || curChapterMissing
         loadContent(durChapterIndex, upContent = upContent, resetPageOffset = resetPageOffset) {
             success?.invoke()
-            if (isEpub) {
+            if (isEpub && !curChapterMissing) {
                 loadContent(durChapterIndex + 1, upContent = false, resetPageOffset = false)
                 loadContent(durChapterIndex - 1, upContent = false, resetPageOffset = false)
             }
         }
-        if (!isEpub) {
+        if (!deferAdjacent) {
             loadContent(durChapterIndex + 1, resetPageOffset = resetPageOffset)
             loadContent(durChapterIndex - 1, resetPageOffset = resetPageOffset)
         }
@@ -936,12 +1029,12 @@ object ReadBook : CoroutineScope by MainScope() {
             }
         } else {
             callBack?.upContent()
-        }
-        if (nextTextChapter == null) {
-            loadContent(durChapterIndex + 1)
-        }
-        if (prevTextChapter == null) {
-            loadContent(durChapterIndex - 1)
+            if (nextTextChapter == null) {
+                loadContent(durChapterIndex + 1)
+            }
+            if (prevTextChapter == null) {
+                loadContent(durChapterIndex - 1)
+            }
         }
     }
 
@@ -1021,9 +1114,15 @@ object ReadBook : CoroutineScope by MainScope() {
             AppLog.put(msg)
         }
         launch(Main) {
-            upMsg(msg)
+            upMsg(msg, isError = true)
             callBack?.contentLoadFinish()
         }
+        notifyChapterQuality(
+            bookUrl = book?.bookUrl,
+            chapterIndex = index,
+            issue = SourceSwitchQualityPolicy.ChapterIssue.LOAD_FAILED,
+            effectiveCharCount = 0
+        )
     }
 
     /**
@@ -1233,10 +1332,13 @@ object ReadBook : CoroutineScope by MainScope() {
         executor.execute {
             kotlin.runCatching {
                 if (!pageChanged || chapterChanged) {
-                    appDb.bookChapterDao.getChapter(
+                    (appDb.bookChapterDao.getChapter(
                         bookSnapshot.bookUrl,
                         targetChapterIndex
-                    )?.let {
+                    ) ?: BookSessionLoadCoordinator.default.findStagedChapter(
+                        bookSnapshot.bookUrl,
+                        targetChapterIndex
+                    ))?.let {
                         bookSnapshot.durChapterTitle = it.getDisplayTitle(
                             ContentProcessor.get(
                                 bookSnapshot.name,
@@ -1366,8 +1468,9 @@ object ReadBook : CoroutineScope by MainScope() {
         return true
     }
 
-    private fun releaseAndCancel() {
+    fun releaseAndCancel() {
         msg = null
+        msgIsError = false
         preDownloadTask?.cancel()
         ChapterPrefetcher.cancel()
         contentLoader.release()

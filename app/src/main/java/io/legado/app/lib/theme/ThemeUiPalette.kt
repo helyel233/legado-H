@@ -3,6 +3,8 @@ package io.legado.app.lib.theme
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.ColorInt
 import androidx.annotation.ColorRes
 import androidx.compose.runtime.Composable
@@ -98,8 +100,14 @@ private val themeUiDependencyKeySet = (
         PreferKey.activeNightArtPackageId,
         PreferKey.activeDayParamPackageId,
         PreferKey.activeNightParamPackageId,
+        PreferKey.activeDayCoverSlotPackageId,
+        PreferKey.activeNightCoverSlotPackageId,
         PreferKey.currentArtPackageId,
         PreferKey.currentParamPackageId,
+        PreferKey.currentCoverSlotPackageId,
+        PreferKey.coverSlotLocked,
+        PreferKey.defaultGroupCover,
+        PreferKey.defaultGroupCoverDark,
         PreferKey.paramPackageDirty,
         PreferKey.bgImage,
         PreferKey.bgImageN,
@@ -218,8 +226,17 @@ fun Context.themeUiSignatureCached(): String {
 internal fun currentThemeUiBatchRevision(): Int = ThemeUiSignatureCache.batchRevision
 
 internal fun bumpThemeUiBatchRevision() {
-    ThemeUiSignatureCache.bumpBatchRevision()
-    Snapshot.sendApplyNotifications()
+    val mainLooper = runCatching { Looper.getMainLooper() }.getOrNull()
+    val isMain = mainLooper == null || Looper.myLooper() == mainLooper
+    if (isMain) {
+        ThemeUiSignatureCache.bumpBatchRevision()
+        Snapshot.sendApplyNotifications()
+    } else {
+        Handler(mainLooper).post {
+            ThemeUiSignatureCache.bumpBatchRevision()
+            Snapshot.sendApplyNotifications()
+        }
+    }
 }
 
 /**
@@ -308,8 +325,8 @@ fun Context.themeUiSignature(): String {
                 "exploreGlassBlur=${getPrefInt(ThemeRuntimeKeys.themeExploreGlassBlur(), -1)}",
         "bookCoverShadow=${AppConfig.bookCoverShadow}",
         "fontScale=${getPrefInt(ThemeRuntimeKeys.fontScale(), 0)}",
-        "uiFont=${getPrefString(ThemeRuntimeKeys.uiFontPath()).orEmpty()}",
-        "titleFont=${getPrefString(ThemeRuntimeKeys.titleFontPath()).orEmpty()}",
+        "uiFont=${fileStamp(getPrefString(ThemeRuntimeKeys.uiFontPath()).orEmpty())}",
+        "titleFont=${fileStamp(getPrefString(ThemeRuntimeKeys.titleFontPath()).orEmpty())}",
         "uiFontColor=${getPrefString(ThemeRuntimeKeys.uiFontColor()).orEmpty()}",
         "titleFontColor=${getPrefString(ThemeRuntimeKeys.titleFontColor()).orEmpty()}",
         "panelImage=${themePanelImageSignature()}",
@@ -334,11 +351,31 @@ fun Context.themeUiSignature(): String {
         "nArt=${getPrefString(PreferKey.activeNightArtPackageId).orEmpty()}",
         "dParam=${getPrefString(PreferKey.activeDayParamPackageId).orEmpty()}",
         "nParam=${getPrefString(PreferKey.activeNightParamPackageId).orEmpty()}",
+        "dCover=${getPrefString(PreferKey.activeDayCoverSlotPackageId).orEmpty()}",
+        "nCover=${getPrefString(PreferKey.activeNightCoverSlotPackageId).orEmpty()}",
         "cArt=${getPrefString(PreferKey.currentArtPackageId).orEmpty()}",
         "cParam=${getPrefString(PreferKey.currentParamPackageId).orEmpty()}",
+        "cCover=${getPrefString(PreferKey.currentCoverSlotPackageId).orEmpty()}",
+        "cLock=${getPrefBoolean(PreferKey.coverSlotLocked, false)}",
         "dirty=${getPrefBoolean(PreferKey.paramPackageDirty, false)}"
     ).joinToString("|")
     return "mode=$themeMode|night=${AppConfig.isNightTheme}|eInk=${AppConfig.isEInkMode}|themeStore=${ThemeStore.valuesChanged(this)}|$activePkgSig|$rawPrefs|$shapePrefs|$computedColors"
+}
+
+fun fileStamp(path: String): String {
+    val trimmed = path.trim()
+    if (trimmed.isEmpty() ||
+        trimmed.startsWith("http", ignoreCase = true) ||
+        trimmed.startsWith("content://", ignoreCase = true)
+    ) {
+        return path
+    }
+    val file = File(trimmed)
+    return if (file.isFile) {
+        "$trimmed#${file.length()}:${file.lastModified()}"
+    } else {
+        path
+    }
 }
 
 private fun Context.themePanelImageSignature(): String {
@@ -346,11 +383,7 @@ private fun Context.themePanelImageSignature(): String {
     val scaleKey = if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
     val path = getPrefString(imageKey).orEmpty()
     val mode = getPrefString(scaleKey).orEmpty()
-    val fileKey = path.takeUnless { it.isBlank() || it.startsWith("http", ignoreCase = true) }
-        ?.let(::File)
-        ?.takeIf { it.exists() }
-        ?.let { "${it.absolutePath}:${it.length()}:${it.lastModified()}" }
-        ?: path
+    val fileKey = fileStamp(path)
     return "$fileKey|$mode|${UiCorner.layoutAlpha()}"
 }
 

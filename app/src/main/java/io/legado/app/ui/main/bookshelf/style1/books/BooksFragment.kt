@@ -57,7 +57,9 @@ import io.legado.app.help.CoverWarmup
 import splitties.init.appCtx
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.book.info.BookInfoNavigator
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.MainViewModel
@@ -148,6 +150,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
     private var composeImmediateScrollToTopTick by mutableStateOf(0)
     private var composeListItemStyle by mutableIntStateOf(AppConfig.bookshelfListItemStyle)
     private var composeListIntroLines by mutableIntStateOf(AppConfig.bookshelfListIntroLines)
+    private var composeAppearanceVersion by mutableIntStateOf(0)
     private var scrollToTopWhenReturnFromRead = false
 
     private fun ensureArgsInitialized() {
@@ -399,39 +402,44 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                 }
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(bookshelfLayout.coerceAtLeast(2)),
-                state = gridState,
-                modifier = lazyModifier,
-                contentPadding = PaddingValues(
-                    start = 8.dp,
-                    top = contentTopPadding,
-                    end = 8.dp,
-                    bottom = marginDp + bottomBarPadding + 12.dp
-                )
-            ) {
-                items(
-                    items = composeItems,
-                    key = { it.key },
-                    contentType = { it.contentType }
-                ) { item ->
-                    BookshelfGridItem(
-                        item = item,
-                        glassSignature = glassSignature,
-                        modifier = Modifier.padding(marginDp.coerceAtLeast(2.dp)),
-                        fragment = this@BooksFragment,
-                        lifecycle = viewLifecycleOwner.lifecycle,
-                        onClick = ::onComposeItemClick,
-                        onLongClick = ::onComposeItemLongClick
+        val appearanceVersion = composeAppearanceVersion
+        androidx.compose.runtime.CompositionLocalProvider(
+            io.legado.app.ui.main.bookshelf.compose.LocalBookshelfAppearanceVersion provides appearanceVersion
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(bookshelfLayout.coerceAtLeast(2)),
+                    state = gridState,
+                    modifier = lazyModifier,
+                    contentPadding = PaddingValues(
+                        start = 8.dp,
+                        top = contentTopPadding,
+                        end = 8.dp,
+                        bottom = marginDp + bottomBarPadding + 12.dp
                     )
+                ) {
+                    items(
+                        items = composeItems,
+                        key = { it.key },
+                        contentType = { it.contentType }
+                    ) { item ->
+                        BookshelfGridItem(
+                            item = item,
+                            glassSignature = glassSignature,
+                            modifier = Modifier.padding(marginDp.coerceAtLeast(2.dp)),
+                            fragment = this@BooksFragment,
+                            lifecycle = viewLifecycleOwner.lifecycle,
+                            onClick = ::onComposeItemClick,
+                            onLongClick = ::onComposeItemLongClick
+                        )
+                    }
                 }
+                ComposeLazyGridFastScroller(
+                    state = gridState,
+                    enabled = AppConfig.showBookshelfFastScroller,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
-            ComposeLazyGridFastScroller(
-                state = gridState,
-                enabled = AppConfig.showBookshelfFastScroller,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
         }
     }
 
@@ -487,43 +495,48 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                 }
             }
         }
+        val appearanceVersion = composeAppearanceVersion
         val listHorizontalPadding = if (composeListItemStyle == BookshelfListItemStyle.RoundedCard) 12.dp else 8.dp
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = lazyModifier,
-                contentPadding = PaddingValues(
-                    start = listHorizontalPadding,
-                    top = contentTopPadding,
-                    end = listHorizontalPadding,
-                    bottom = marginDp + bottomBarPadding + 12.dp
-                )
-            ) {
-                items(
-                    items = composeItems,
-                    key = { it.key },
-                    contentType = { it.contentType }
-                ) { item ->
-                    BookshelfListItem(
-                        item = item,
-                        listLayout = bookshelfLayout,
-                        cardStyle = composeListItemStyle,
-                        introMaxLines = composeListIntroLines,
-                        renderConfig = renderConfig,
-                        showReadProgress = AppConfig.showReadProgress,
-                        modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
-                        fragment = this@BooksFragment,
-                        lifecycle = viewLifecycleOwner.lifecycle,
-                        onClick = ::onComposeItemClick,
-                        onLongClick = ::onComposeItemLongClick
+        androidx.compose.runtime.CompositionLocalProvider(
+            io.legado.app.ui.main.bookshelf.compose.LocalBookshelfAppearanceVersion provides appearanceVersion
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = lazyModifier,
+                    contentPadding = PaddingValues(
+                        start = listHorizontalPadding,
+                        top = contentTopPadding,
+                        end = listHorizontalPadding,
+                        bottom = marginDp + bottomBarPadding + 12.dp
                     )
+                ) {
+                    items(
+                        items = composeItems,
+                        key = { it.key },
+                        contentType = { it.contentType }
+                    ) { item ->
+                        BookshelfListItem(
+                            item = item,
+                            listLayout = bookshelfLayout,
+                            cardStyle = composeListItemStyle,
+                            introMaxLines = composeListIntroLines,
+                            renderConfig = renderConfig,
+                            showReadProgress = AppConfig.showReadProgress,
+                            modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
+                            fragment = this@BooksFragment,
+                            lifecycle = viewLifecycleOwner.lifecycle,
+                            onClick = ::onComposeItemClick,
+                            onLongClick = ::onComposeItemLongClick
+                        )
+                    }
                 }
+                ComposeLazyListFastScroller(
+                    state = listState,
+                    enabled = AppConfig.showBookshelfFastScroller,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
-            ComposeLazyListFastScroller(
-                state = listState,
-                enabled = AppConfig.showBookshelfFastScroller,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
         }
     }
 
@@ -940,6 +953,19 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
         lifecycleScope.launch {
             val book = withContext(IO) { appDb.bookDao.getBook(bookUrl) } ?: return@launch
             openBookInfo(book)
+        }
+    }
+
+    fun refreshAppearance() {
+        if (!isAdded || view == null) return
+        binding.refreshLayout.setColorSchemeColors(accentColor)
+        binding.rvBookshelf.setEdgeEffectColor(primaryColor)
+        binding.root.applyUiBodyTypefaceDeep(requireContext().uiTypeface())
+        bookshelfMargin = AppConfig.bookshelfMargin
+        composeListItemStyle = AppConfig.bookshelfListItemStyle
+        composeListIntroLines = AppConfig.bookshelfListIntroLines
+        if (useComposeBookshelf) {
+            composeAppearanceVersion++
         }
     }
 

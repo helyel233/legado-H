@@ -45,33 +45,31 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
             if (payloads.isEmpty()) {
                 tvName.text = item.name
                 tvAuthor.text = context.getString(R.string.author_show, item.getRealAuthor())
-                if (item.isLocal) {
-                    tvDownload.setText(R.string.local_book)
-                } else {
-                    val cs = callBack.cacheChapters[item.bookUrl]
-                    if (cs == null) {
-                        tvDownload.setText(R.string.loading)
-                    } else {
-                        tvDownload.text =
-                            context.getString(
-                                R.string.download_count,
-                                cs.size,
-                                item.totalChapterNum
-                            )
-                    }
-                }
-            } else {
-                if (item.isLocal) {
-                    tvDownload.setText(R.string.local_book)
-                } else {
-                    val cacheSize = callBack.cacheChapters[item.bookUrl]?.size ?: 0
-                    tvDownload.text =
-                        context.getString(R.string.download_count, cacheSize, item.totalChapterNum)
-                }
             }
+            bindDownloadProgress(tvDownload, item, allowLoadingPlaceholder = payloads.isEmpty())
             upDownloadIv(ivDownload, item)
             upExportInfo(tvMsg, progressExport, item)
         }
+    }
+
+    private fun bindDownloadProgress(
+        tvDownload: TextView,
+        item: Book,
+        allowLoadingPlaceholder: Boolean
+    ) {
+        if (item.isLocal) {
+            tvDownload.setText(R.string.local_book)
+            return
+        }
+        val cs = callBack.cacheChapters[item.bookUrl]
+        if (cs == null && allowLoadingPlaceholder) {
+            tvDownload.setText(R.string.loading)
+            return
+        }
+        val bodyCount = cs?.size ?: 0
+        val totalCount = item.totalChapterNum
+        val reviewCount = callBack.reviewChapters[item.bookUrl]?.size ?: 0
+        tvDownload.text = formatCacheProgressText(context, bodyCount, totalCount, reviewCount)
     }
 
     override fun registerListener(holder: ItemViewHolder, binding: ItemDownloadBinding) {
@@ -121,10 +119,31 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
 
     interface CallBack {
         val cacheChapters: HashMap<String, HashSet<String>>
+        val reviewChapters: HashMap<String, HashSet<String>>
         fun isBookDownloading(bookUrl: String): Boolean
         fun toggleBookDownload(book: Book)
         fun export(position: Int)
         fun exportProgress(bookUrl: String): Int?
         fun exportMsg(bookUrl: String): String?
     }
+}
+
+internal fun formatCacheProgressText(
+    context: Context,
+    bodyCount: Int,
+    totalCount: Int,
+    reviewCount: Int
+): String {
+    if (reviewCount <= 0) {
+        return context.getString(R.string.download_count, bodyCount, totalCount)
+    }
+    val reviewTotal = if (totalCount > 0) totalCount else reviewCount
+    val clampedReviewCount = reviewCount.coerceAtMost(reviewTotal)
+    return context.getString(
+        R.string.download_count_with_review,
+        bodyCount,
+        totalCount,
+        clampedReviewCount,
+        reviewTotal
+    )
 }

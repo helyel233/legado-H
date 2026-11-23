@@ -1,5 +1,6 @@
 package io.legado.app.help.storage
 
+import io.legado.app.constant.PreferKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -130,5 +131,75 @@ class UiPackageBackupTest {
 
         assertEquals("[{\"id\":\"k1\"}]", File(target, "kits.json").readText())
         assertFalse(File(target, "appearanceKitTemp").exists())
+    }
+
+    @Test
+    fun copyUnifiedPackages_includesCoverSlotAndSkipsBuiltinAndStaging() {
+        val source = temporary.newFolder("unified_cover_src")
+        val target = File(temporary.root, "unified_cover_dst")
+
+        File(source, "cover_slot/my_covers/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("""{"kind":"cover_slot","id":"cover_slot_custom","name":"自定义书架封面"}""")
+        }
+        File(source, "cover_slot/my_covers/assets/cover_01.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+        File(source, "cover_slot/builtin_default/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("""{"kind":"cover_slot","id":"cover_slot_builtin_default","name":"原生书架封面"}""")
+        }
+        File(source, "cover_slot/.staging-tmp/manifest.json").apply {
+            parentFile?.mkdirs()
+            writeText("staging")
+        }
+
+        UiPackageBackup.copyUnifiedPackages(source, target)
+
+        assertTrue(File(target, "cover_slot/my_covers/manifest.json").isFile)
+        assertTrue(File(target, "cover_slot/my_covers/assets/cover_01.jpg").isFile)
+        assertFalse(File(target, "cover_slot/builtin_default").exists())
+        assertFalse(File(target, "cover_slot/.staging-tmp").exists())
+    }
+
+    @Test
+    fun unifiedActivePrefs_includeCoverSlotKeysAndRoundTrip() {
+        assertTrue(PreferKey.activeDayCoverSlotPackageId in UiPackageBackup.unifiedActivePrefKeys)
+        assertTrue(PreferKey.activeNightCoverSlotPackageId in UiPackageBackup.unifiedActivePrefKeys)
+        assertTrue(PreferKey.currentCoverSlotPackageId in UiPackageBackup.unifiedActivePrefKeys)
+        assertTrue(PreferKey.coverSlotLocked in UiPackageBackup.unifiedActivePrefKeys)
+
+        val backupDir = temporary.newFolder("unified_prefs_backup")
+        val sourceStrings = mapOf(
+            PreferKey.activeDayArtPackageId to "art_day_1",
+            PreferKey.activeNightArtPackageId to "art_night_1",
+            PreferKey.activeDayCoverSlotPackageId to "cover_slot_day_1",
+            PreferKey.activeNightCoverSlotPackageId to "cover_slot_night_1",
+            PreferKey.currentCoverSlotPackageId to "cover_slot_day_1"
+        )
+        val sourceBools = mapOf(
+            PreferKey.coverSlotLocked to true
+        )
+
+        UiPackageBackup.exportUnifiedActivePrefs(
+            targetRoot = backupDir,
+            readString = { sourceStrings[it] },
+            readBoolean = { sourceBools[it] }
+        )
+
+        assertTrue(File(backupDir, UiPackageBackup.UNIFIED_ACTIVE_PREFS_FILE).isFile)
+
+        val restoredStrings = mutableMapOf<String, String>()
+        val restoredBools = mutableMapOf<String, Boolean>()
+        val ok = UiPackageBackup.importUnifiedActivePrefs(
+            sourceRoot = backupDir,
+            writeString = { k, v -> restoredStrings[k] = v },
+            writeBoolean = { k, v -> restoredBools[k] = v }
+        )
+
+        assertTrue(ok)
+        assertEquals(sourceStrings, restoredStrings)
+        assertEquals(sourceBools, restoredBools)
     }
 }

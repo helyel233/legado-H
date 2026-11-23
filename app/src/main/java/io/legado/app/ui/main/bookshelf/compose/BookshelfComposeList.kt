@@ -189,6 +189,8 @@ fun BookshelfListItem(
     onClick: (BookshelfItemUi) -> Unit,
     onLongClick: (BookshelfItemUi) -> Unit
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val appearanceVersion = io.legado.app.ui.main.bookshelf.compose.LocalBookshelfAppearanceVersion.current
     val compact = listLayout == 1
     val normalizedIntroMaxLines = introMaxLines.coerceIn(0, 3)
     when (cardStyle) {

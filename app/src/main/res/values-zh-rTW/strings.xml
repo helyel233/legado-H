@@ -1508,4 +1508,9 @@
     <string name="text_to_book_failed">存書失敗</string>
     <string name="text_to_book_message">正文 %1$d 字，將存為本地書籍：\n%2$s</string>
 
+    <string name="download_count_with_review">正文 %1$d/%2$d · 評論 %3$d/%4$d</string>
+    <string name="cache_manage_body_progress">正文 %1$d/%2$d</string>
+    <string name="cache_manage_review_cached_progress">評論 %1$d/%2$d</string>
+    <string name="review_update_banner_text">發現新評論內容</string>
+    <string name="review_update_banner_action">點擊更新</string>
 </resources>

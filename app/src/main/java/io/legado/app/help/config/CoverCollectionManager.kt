@@ -31,6 +31,7 @@ object CoverCollectionManager {
     const val MODE_RANDOM = "random"
     const val MODE_SEQUENCE = "sequence"
     const val MODE_MIXED = "mixed"
+    const val MODE_FALLBACK_ONLY = "fallback_only"
     private const val indexFileName = "collections.json"
     private const val packageFileName = "collection.json"
     private val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "bmp")
@@ -38,6 +39,8 @@ object CoverCollectionManager {
     private var dayCache: List<Collection>? = null
     @Volatile
     private var nightCache: List<Collection>? = null
+    @Volatile
+    private var revisionCounter: Long = 0L
     private val assignmentCache = hashMapOf<String, MutableList<Assignment>>()
 
     val rootDir: File
@@ -57,6 +60,18 @@ object CoverCollectionManager {
         ) == MODE_MIXED
     }
 
+    fun bumpRevision() {
+        revisionCounter++
+    }
+
+    @Synchronized
+    fun invalidateCache() {
+        dayCache = null
+        nightCache = null
+        assignmentCache.clear()
+        revisionCounter++
+    }
+
     fun selectionKey(): String {
         val isNight = AppConfig.isNightTheme
         val collectionId = appCtx.getPrefString(
@@ -66,7 +81,13 @@ object CoverCollectionManager {
             if (isNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
             MODE_RANDOM
         ).orEmpty()
-        return "$isNight:$collectionId:$mode"
+        val defaultCover = appCtx.getPrefString(
+            if (isNight) PreferKey.defaultCoverDark else PreferKey.defaultCover
+        ).orEmpty()
+        val groupCover = appCtx.getPrefString(
+            if (isNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover
+        ).orEmpty()
+        return "$isNight:$collectionId:$mode:$defaultCover:$groupCover:$revisionCounter"
     }
 
     suspend fun load(isNight: Boolean): List<Collection> = withContext(IO) {
@@ -334,6 +355,9 @@ object CoverCollectionManager {
             if (isNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
             MODE_RANDOM
         ) ?: MODE_RANDOM
+        if (mode == MODE_FALLBACK_ONLY) {
+            return null
+        }
         if (mode == MODE_MIXED && hasOriginalCover) {
             return null
         }
@@ -347,6 +371,42 @@ object CoverCollectionManager {
     fun setSelected(isNight: Boolean, collectionId: String?) {
         val key = if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
         appCtx.putPrefString(key, collectionId.orEmpty())
+        bumpRevision()
+    }
+
+    @Synchronized
+    fun upsertBridgeCollectionSync(
+        collectionId: String,
+        name: String,
+        dirName: String,
+        isNight: Boolean,
+        mode: String,
+        imagePaths: List<String>,
+        updatedAt: Long
+    ) {
+        val cleanImages = imagePaths.filter { it.isNotBlank() && File(it).isFile }.distinct()
+        val list = loadIndex(isNight).toMutableList()
+        val index = list.indexOfFirst { it.id == collectionId }
+        val existing = if (index >= 0) list[index] else null
+        val updated = Collection(
+            id = collectionId,
+            name = name.ifBlank { collectionId },
+            dirName = dirName.ifBlank { collectionId },
+            isNight = isNight,
+            mode = mode,
+            images = cleanImages,
+            updatedAt = updatedAt
+        )
+        if (index >= 0) {
+            list[index] = updated
+        } else {
+            list.add(updated)
+        }
+        if (existing != null && existing.images != cleanImages) {
+            clearAssignments(collectionId)
+        }
+        saveIndex(isNight, list)
+        bumpRevision()
     }
 
     fun collectionDir(collection: Collection): File {

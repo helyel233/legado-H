@@ -22,13 +22,19 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
+import io.legado.app.help.book.TocSessionResult
 import io.legado.app.help.book.getExportFileName
 import io.legado.app.help.book.getRemoteUrl
+import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.book.isSameNameAuthor
+import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.book.removeType
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.webdav.ObjectNotFoundException
 import io.legado.app.model.AudioPlay
@@ -39,6 +45,7 @@ import io.legado.app.model.ReadManga
 import io.legado.app.model.VideoPlay
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.model.webBook.TocLoadState
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.ui.login.SourceLoginJsExtensions
@@ -252,7 +259,8 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 }
             }
         }.onFinally {
-            loadBookInfo(book, false, true, viewModelScope, request)
+            BookSessionLoadCoordinator.default.invalidateSession(book.bookUrl, book.origin)
+            loadBookInfo(book, false, true, viewModelScope, request, forceRefresh = true)
         }.start()
     }
 
@@ -270,7 +278,8 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         canReName: Boolean,
         runPreUpdateJs: Boolean,
         scope: CoroutineScope,
-        request: Long
+        request: Long,
+        forceRefresh: Boolean = false
     ) {
         if (book.isLocal) {
             try {
@@ -288,35 +297,42 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 context.toastOnUi(R.string.error_no_source)
                 return
             }
-            WebBook.getBookInfo(scope, bookSource, book, canReName = canReName)
-                .onSuccess(IO) {
-                    val displayBook = if (!inBookshelf) {
-                        resolveShelfBook(it)?.also {
-                            inBookshelf = true
-                        } ?: it
-                    } else {
-                        it
-                    }
-                    bookData.postValue(displayBook)
-                    // Only persist a shelf-state change when a shelf row for this identity
-                    // actually exists. Refreshing info can hand back a book carrying a
-                    // freshly derived url, and clearing notShelf on that would save a brand
-                    // new row with the flag already off, putting a book the reader never
-                    // added onto the shelf.
-                    if (inBookshelf && resolveShelfBook(displayBook) != null) {
-                        displayBook.removeType(BookType.notShelf)
-                        displayBook.save()
-                    }
-                    if (displayBook.isWebFile) {
-                        loadWebFile(displayBook, request)
-                    } else {
-                        loadChapter(displayBook, runPreUpdateJs, viewModelScope, true, request)
-                    }
-                }.onError {
-                    tocLoadTracker.fail(request, book.bookUrl)
-                    AppLog.put("获取书籍信息失败\n${it.localizedMessage}", it)
-                    context.toastOnUi(R.string.error_get_book_info)
+            execute(scope, IO) {
+                BookSessionLoadCoordinator.default.fetchOrJoinBookInfo(
+                    book = book,
+                    forceRefresh = forceRefresh,
+                    rememberHandoff = true
+                ) { workingBook ->
+                    WebBook.getBookInfoAwait(bookSource, workingBook, canReName = canReName)
                 }
+            }.onSuccess(IO) {
+                val displayBook = if (!inBookshelf) {
+                    resolveShelfBook(it)?.also {
+                        inBookshelf = true
+                    } ?: it
+                } else {
+                    it
+                }
+                bookData.postValue(displayBook)
+                // Only persist a shelf-state change when a shelf row for this identity
+                // actually exists. Refreshing info can hand back a book carrying a
+                // freshly derived url, and clearing notShelf on that would save a brand
+                // new row with the flag already off, putting a book the reader never
+                // added onto the shelf.
+                if (inBookshelf && resolveShelfBook(displayBook) != null) {
+                    displayBook.removeType(BookType.notShelf)
+                    displayBook.save()
+                }
+                if (displayBook.isWebFile) {
+                    loadWebFile(displayBook, request)
+                } else {
+                    loadChapter(displayBook, runPreUpdateJs, viewModelScope, true, request, forceRefresh)
+                }
+            }.onError {
+                tocLoadTracker.fail(request, book.bookUrl)
+                AppLog.put("获取书籍信息失败\n${it.localizedMessage}", it)
+                context.toastOnUi(R.string.error_get_book_info)
+            }
         }
     }
     fun loadChapter(
@@ -333,7 +349,8 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         runPreUpdateJs: Boolean,
         scope: CoroutineScope,
         isFromBookInfo: Boolean,
-        request: Long
+        request: Long,
+        forceRefresh: Boolean = false
     ) {
         if (book.isLocal) {
             execute(scope) {
@@ -359,45 +376,62 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 return
             }
             val oldBook = book.copy()
-            WebBook.getChapterList(scope, bookSource, book, runPreUpdateJs, isFromBookInfo = isFromBookInfo)
-                .onSuccess(IO) {
-                    if (inBookshelf) {
-                        val oldChapterList = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
-                        BookHelp.remapContentCache(oldBook, oldChapterList, it)
-                        book.removeType(BookType.updateError)
-                        appDb.bookDao.replace(oldBook, book)
-                        /**
-                         * runPreUpdateJs 有可能会修改 book 的 bookUrl
-                         */
-                        if (oldBook.bookUrl != book.bookUrl) {
-                            BookHelp.updateCacheFolder(oldBook, book)
-                        }
-                        appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, it)
-                        ReadBook.onChapterListUpdated(book)
+            execute(scope, IO) {
+                val tocLoadState = TocLoadState()
+                BookSessionLoadCoordinator.default.fetchOrJoinChapterList(
+                    book = book,
+                    forceRefresh = forceRefresh,
+                    rememberHandoff = true
+                ) { workingBook, onProgress ->
+                    val chapters = WebBook.getChapterListAwait(
+                        bookSource = bookSource,
+                        book = workingBook,
+                        runPerJs = runPreUpdateJs,
+                        isFromBookInfo = isFromBookInfo,
+                        loadState = tocLoadState,
+                        earlyDispatchFirstChapter = true,
+                        onProgress = onProgress
+                    ).getOrThrow()
+                    TocSessionResult(workingBook, chapters, tocLoadState.failedPages)
+                }.chapters
+            }.onSuccess(IO) {
+                if (inBookshelf) {
+                    val oldChapterList = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
+                    BookHelp.remapContentCache(oldBook, oldChapterList, it)
+                    book.removeType(BookType.updateError)
+                    appDb.bookDao.replace(oldBook, book)
+                    /**
+                     * runPreUpdateJs 有可能会修改 book 的 bookUrl
+                     */
+                    if (oldBook.bookUrl != book.bookUrl) {
+                        BookHelp.updateCacheFolder(oldBook, book)
                     }
-                    bookData.postValue(book)
-                    chapterListData.postValue(it)
-                    tocLoadTracker.complete(request, book.bookUrl, it.size)
-                }.onError {
-                    tocLoadTracker.fail(request, book.bookUrl)
-                    val oldChapters = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
-                    if (oldChapters.isNotEmpty()) {
-                        bookData.postValue(oldBook)
-                        chapterListData.postValue(oldChapters)
-                        AppLog.put(
-                            "${context.getString(R.string.toc_load_failed_using_cache)}\n${it.localizedMessage}",
-                            it
-                        )
-                        context.toastOnUi(R.string.toc_load_failed_using_cache)
-                    } else {
-                        chapterListData.postValue(emptyList())
-                        AppLog.put(
-                            "${context.getString(R.string.error_get_chapter_list)}\n${it.localizedMessage}",
-                            it
-                        )
-                        context.toastOnUi(R.string.error_get_chapter_list)
-                    }
+                    appDb.bookChapterDao.replaceByBook(oldBook.bookUrl, it)
+                    ReadBook.onChapterListUpdated(book)
                 }
+                bookData.postValue(book)
+                chapterListData.postValue(it)
+                tocLoadTracker.complete(request, book.bookUrl, it.size)
+            }.onError {
+                tocLoadTracker.fail(request, book.bookUrl)
+                val oldChapters = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
+                if (oldChapters.isNotEmpty()) {
+                    bookData.postValue(oldBook)
+                    chapterListData.postValue(oldChapters)
+                    AppLog.put(
+                        "${context.getString(R.string.toc_load_failed_using_cache)}\n${it.localizedMessage}",
+                        it
+                    )
+                    context.toastOnUi(R.string.toc_load_failed_using_cache)
+                } else {
+                    chapterListData.postValue(emptyList())
+                    AppLog.put(
+                        "${context.getString(R.string.error_get_chapter_list)}\n${it.localizedMessage}",
+                        it
+                    )
+                    context.toastOnUi(R.string.error_get_chapter_list)
+                }
+            }
         }
     }
 
@@ -603,12 +637,27 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 if (book.order == 0) {
                     book.order = appDb.bookDao.minOrder - 1
                 }
-                book.save()
-                chapterListData.value?.let {
-                    appDb.bookChapterDao.insert(*it.toTypedArray())
+                val cachedChapters = chapterListData.value
+                val useFastMemoryHandoff = !cachedChapters.isNullOrEmpty() &&
+                    !book.isAudio &&
+                    !book.isVideo &&
+                    !(!book.isLocal && book.isImage && AppConfig.showMangaUi)
+                if (useFastMemoryHandoff && cachedChapters != null) {
+                    book.totalChapterNum = cachedChapters.size
+                    BookSessionLoadCoordinator.default.stageSampledBookEntry(
+                        book = book,
+                        chapters = cachedChapters
+                    )
+                    bookData.postValue(book)
+                    book
+                } else {
+                    book.save()
+                    cachedChapters?.let {
+                        appDb.bookChapterDao.insert(*it.toTypedArray())
+                    }
+                    bookData.postValue(book)
+                    book
                 }
-                bookData.postValue(book)
-                book
             }
         }.onSuccess {
             success?.invoke(it)
@@ -653,6 +702,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
     fun addToBookshelf(success: (() -> Unit)?) { //点击书架按钮或在加分组时触发
         execute {
             bookData.value?.let { book ->
+                BookSessionLoadCoordinator.default.awaitPendingPersist(book.bookUrl)
                 book.removeType(BookType.notShelf)
                 if (book.order == 0) {
                     book.order = appDb.bookDao.minOrder - 1

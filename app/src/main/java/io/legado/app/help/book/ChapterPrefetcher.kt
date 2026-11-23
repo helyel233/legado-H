@@ -55,6 +55,7 @@ object ChapterPrefetcher {
         // 后写者覆盖先写者、先写者的 Job 变成孤儿仍在跑
         val newJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
             val next = appDb.bookChapterDao.getChapter(book.bookUrl, current.index + 1)
+                ?: BookSessionLoadCoordinator.default.findStagedChapter(book.bookUrl, current.index + 1)
                 ?: return@launch
             val fetchKey = ChapterFetchKey(book.bookUrl, next.url, next.index)
             val shouldPrefetch = ChapterPrefetchPolicy.shouldPrefetch(

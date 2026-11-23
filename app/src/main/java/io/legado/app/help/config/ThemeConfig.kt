@@ -121,7 +121,7 @@ object ThemeConfig {
 
     private var needClearImg = true
 
-    private fun clearUsableBgImageCache() {
+    fun clearUsableBgImageCache() {
         usableBgImageCacheKey = null
         usableBgImageCacheValue = false
     }

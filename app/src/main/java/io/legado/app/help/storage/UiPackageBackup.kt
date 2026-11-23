@@ -1,5 +1,9 @@
 package io.legado.app.help.storage
 
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import io.legado.app.constant.PreferKey
 import java.io.File
 
 /**
@@ -24,8 +28,32 @@ internal object UiPackageBackup {
     const val COVER_COLLECTIONS = "coverCollections"
     /** 外观方案（kits.json 与方案预览图等）目录名，与 Restore.restoreAppearanceKits 一致。 */
     const val APP_THEME_KITS = "appThemeKits"
-    /** V4 统一双包（art / param）目录名，与 Restore.restoreUnifiedPackages 一致。 */
+    /** V4 统一包（art / param / cover_slot）目录名，与 Restore.restoreUnifiedPackages 一致。 */
     const val UNIFIED_PACKAGES = "unifiedPackages"
+    const val UNIFIED_ART = "art"
+    const val UNIFIED_PARAM = "param"
+    const val UNIFIED_COVER_SLOT = "cover_slot"
+    const val UNIFIED_ACTIVE_PREFS_FILE = "active_prefs.json"
+
+    val unifiedKindDirNames = listOf(UNIFIED_ART, UNIFIED_PARAM, UNIFIED_COVER_SLOT)
+
+    /** 统一包槽位挂载与锁定状态的活跃偏好键，随统一包备份/恢复一并迁移。 */
+    val unifiedActivePrefKeys = listOf(
+        PreferKey.currentArtPackageId,
+        PreferKey.activeDayArtPackageId,
+        PreferKey.activeNightArtPackageId,
+        PreferKey.currentParamPackageId,
+        PreferKey.activeDayParamPackageId,
+        PreferKey.activeNightParamPackageId,
+        PreferKey.currentCoverSlotPackageId,
+        PreferKey.activeDayCoverSlotPackageId,
+        PreferKey.activeNightCoverSlotPackageId,
+        PreferKey.coverSlotLocked
+    )
+
+    val unifiedBooleanPrefKeys = setOf(PreferKey.coverSlotLocked)
+
+    private val prefsGson = GsonBuilder().setPrettyPrinting().create()
 
     /** V1 历史包目录清单（供 Restore 检测旧版备份并触发自动合成迁移）。 */
     val legacyPackageDirNames = listOf(
@@ -84,17 +112,71 @@ internal object UiPackageBackup {
     }
 
     /**
-     * 导出 V4 统一双包目录（`unifiedPackages/{art,param}/<pkgId>`）：
-     * 过滤掉 `art/` 与 `param/` 下的临时/内置/隐藏子目录。
+     * 导出 V4 统一三轨包目录（`unifiedPackages/{art,param,cover_slot}/<pkgId>`）：
+     * 过滤掉各目录下的临时/内置/隐藏子目录。
      */
     fun copyUnifiedPackages(sourceRoot: File, targetRoot: File) {
         if (!sourceRoot.isDirectory) return
-        listOf("art", "param").forEach { kindDirName ->
+        unifiedKindDirNames.forEach { kindDirName ->
             val kindSource = File(sourceRoot, kindDirName)
             if (kindSource.isDirectory) {
                 copyVisiblePackages(kindSource, File(targetRoot, kindDirName))
             }
         }
+    }
+
+    /**
+     * 导出统一包活跃槽位绑定键（含 `activeDayCoverSlotPackageId` / `activeNightCoverSlotPackageId` /
+     * `currentCoverSlotPackageId` / `coverSlotLocked` 等）到 `targetRoot/active_prefs.json`。
+     */
+    fun exportUnifiedActivePrefs(
+        targetRoot: File,
+        readString: (String) -> String?,
+        readBoolean: (String) -> Boolean?
+    ) {
+        val obj = JsonObject()
+        unifiedActivePrefKeys.forEach { key ->
+            if (key in unifiedBooleanPrefKeys) {
+                readBoolean(key)?.let { obj.addProperty(key, it) }
+            } else {
+                readString(key)?.takeIf { it.isNotBlank() }?.let { obj.addProperty(key, it) }
+            }
+        }
+        if (obj.size() == 0) return
+        targetRoot.mkdirs()
+        File(targetRoot, UNIFIED_ACTIVE_PREFS_FILE).writeText(prefsGson.toJson(obj))
+    }
+
+    /**
+     * 从 `sourceRoot/active_prefs.json` 恢复统一包活跃槽位绑定键。
+     */
+    fun importUnifiedActivePrefs(
+        sourceRoot: File,
+        writeString: (String, String) -> Unit,
+        writeBoolean: (String, Boolean) -> Unit
+    ): Boolean {
+        val file = File(sourceRoot, UNIFIED_ACTIVE_PREFS_FILE)
+        if (!file.isFile) return false
+        return runCatching {
+            val obj = JsonParser.parseString(file.readText()).asJsonObject
+            var restoredAny = false
+            unifiedActivePrefKeys.forEach { key ->
+                val elem = obj.get(key) ?: return@forEach
+                if (!elem.isJsonPrimitive) return@forEach
+                val prim = elem.asJsonPrimitive
+                if (key in unifiedBooleanPrefKeys && prim.isBoolean) {
+                    writeBoolean(key, prim.asBoolean)
+                    restoredAny = true
+                } else if (prim.isString) {
+                    val value = prim.asString
+                    if (value.isNotBlank()) {
+                        writeString(key, value)
+                        restoredAny = true
+                    }
+                }
+            }
+            restoredAny
+        }.getOrDefault(false)
     }
 
     private fun copyDir(source: File, target: File) {

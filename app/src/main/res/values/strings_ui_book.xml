@@ -138,4 +138,11 @@
     <string name="ui_book_import_failed_n">Import failed\n%1$s</string>
     <string name="ui_book_add_bookshelf_again">Add to bookshelf again?</string>
     <string name="ui_book_no_results_group_switch_all_2">No results in the %1$s group; switch to all groups?</string>
+    <string name="ui_book_revert_source">Revert Source</string>
+    <string name="ui_book_revert_source_named">Revert to %1$s</string>
+    <string name="ui_book_switch_source_failed">New source failed to load</string>
+    <string name="ui_book_switch_source_short_chapter">New source returned short chapter (%1$d chars)</string>
+    <string name="ui_book_switch_source_empty_chapter">New source returned empty content</string>
+    <string name="ui_book_chapter_load_error_hint">Failed to load chapter</string>
+    <string name="ui_book_recovery_dismiss_symbol" translatable="false">✕</string>
 </resources>

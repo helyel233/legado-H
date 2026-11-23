@@ -128,7 +128,7 @@ object ReviewSnapshotStore {
     private const val SNAPSHOT_CACHE_MAX_CHARS = 12 * 1024 * 1024
 
     private fun snapshotCacheKey(bookUrl: String, chapterUrl: String, buttonSrc: String): String {
-        return "$bookUrl|$chapterUrl|$buttonSrc"
+        return "$bookUrl|${chapterUrl.trim()}|${buttonSrc.trim()}"
     }
 
     /**
@@ -308,11 +308,15 @@ object ReviewSnapshotStore {
      */
     fun hasSnapshot(book: Book, chapterUrl: String, buttonSrc: String): Boolean {
         if (chapterUrl.isBlank() || buttonSrc.isBlank()) return false
+        val file = runCatching {
+            File(reviewsDir(book), fileName(chapterUrl, buttonSrc))
+        }.getOrNull() ?: return false
         val key = snapshotCacheKey(book.bookUrl, chapterUrl, buttonSrc)
-        if (snapshotCache.get(key) != null) return true
-        return runCatching {
-            File(reviewsDir(book), fileName(chapterUrl, buttonSrc)).isFile
-        }.getOrDefault(false)
+        val exists = runCatching { file.isFile }.getOrDefault(false)
+        if (snapshotCache.get(key) != null && !exists) {
+            snapshotCache.remove(key)
+        }
+        return exists
     }
 
     /**
@@ -408,6 +412,79 @@ object ReviewSnapshotStore {
         snapshotCache.snapshot().keys
             .filter { it.startsWith(prefix) }
             .forEach { snapshotCache.remove(it) }
+    }
+
+    /**
+     * 清理单本书在评论快照存储、章节计数及资源索引中的内存缓存，
+     * 供整书缓存清理联动调用。
+     */
+    fun clearBookCache(book: Book) {
+        invalidateBookCache(book.bookUrl)
+        invalidateChapterCount(book.bookUrl)
+        ReviewSnapshotInventory.invalidate(reviewsDir(book))
+        ReviewSnapshotResourceStore.invalidateBookCache(book)
+    }
+
+    /**
+     * 排版期按章节一次性批量获取已缓存的按钮 `buttonSrc` 集合（供 O(1) 内存比对）。
+     * 优先走轻量级目录索引（避免逐个气泡 stat/读取），索引异常时降级逐文件容错扫描并校验文件存在性。
+     */
+    fun getCachedButtonSrcSet(book: Book, chapterUrl: String): Set<String> {
+        val targetChapter = chapterUrl.trim()
+        if (targetChapter.isEmpty() || isSupplementChapterUrl(targetChapter)) return emptySet()
+        val dir = reviewsDir(book)
+        if (!dir.isDirectory) return emptySet()
+        val fromInventory = runCatching {
+            val inventory = ReviewSnapshotInventory.read(book)
+            val result = hashSetOf<String>()
+            for ((fileName, entry) in inventory.files) {
+                if (entry.status != null) continue
+                if (entry.chapterUrl.trim() != targetChapter) continue
+                val buttonSrc = entry.buttonSrc?.trim().orEmpty()
+                if (buttonSrc.isEmpty() || buttonSrc == CHAPTER_TAB_SRC || buttonSrc == BOOK_TAB_SRC) {
+                    continue
+                }
+                if (File(dir, fileName).isFile) {
+                    result.add(buttonSrc)
+                }
+            }
+            result
+        }.getOrNull()
+        if (fromInventory != null) return fromInventory
+        val fallback = hashSetOf<String>()
+        reviewFiles(book).forEach { file ->
+            if (!file.isFile) return@forEach
+            val header = runCatching { ReviewSnapshotInventory.readHeaderUnchecked(file) }.getOrNull()
+                ?: return@forEach
+            val buttonSrc = header.buttonSrc.trim()
+            if (header.bookUrl == book.bookUrl &&
+                header.chapterUrl.trim() == targetChapter &&
+                buttonSrc.isNotEmpty() &&
+                buttonSrc != CHAPTER_TAB_SRC &&
+                buttonSrc != BOOK_TAB_SRC
+            ) {
+                fallback.add(buttonSrc)
+            }
+        }
+        return fallback
+    }
+
+    /**
+     * 仅静默刷新元数据时间戳（用于 SNAPSHOT_FIRST 内容无实质变化时更新保鲜期）。
+     * 不触发 writeObserver，避免已有气泡无效重绘。
+     */
+    fun touchSavedAt(book: Book, chapterUrl: String, buttonSrc: String, savedAt: Long): Boolean {
+        if (chapterUrl.isBlank() || buttonSrc.isBlank() || savedAt <= 0L) return false
+        return runCatching {
+            val file = File(reviewsDir(book), fileName(chapterUrl, buttonSrc))
+            if (!file.isFile) return false
+            val existing = getByKey(book, chapterUrl, buttonSrc) ?: return false
+            if (savedAt <= existing.savedAt) return true
+            val updated = existing.copy(savedAt = savedAt)
+            writeJsonAtomically(file) { writer -> GSON.toJson(updated, writer) }
+            snapshotCache.put(snapshotCacheKey(book.bookUrl, chapterUrl, buttonSrc), updated)
+            true
+        }.getOrDefault(false)
     }
 
     /** Validate an extracted snapshot against the already-imported resource database. */
@@ -511,6 +588,7 @@ object ReviewSnapshotStore {
 
     fun delete(book: Book, chapter: BookChapter, buttonSrc: String) {
         File(reviewsDir(book), fileName(chapter.url, buttonSrc)).delete()
+        snapshotCache.remove(snapshotCacheKey(book.bookUrl, chapter.url, buttonSrc))
         invalidateChapterCount(book.bookUrl)
     }
 
@@ -519,12 +597,17 @@ object ReviewSnapshotStore {
      * 主键是整体 md5，无法按文件名前缀过滤，因此逐条解析后按 chapterUrl 匹配。
      */
     fun deleteChapter(book: Book, chapter: BookChapter) {
+        val targetChapter = chapter.url.trim()
         reviewFiles(book).forEach { file ->
             readMetadata(file)?.let { snapshot ->
-                val matches = snapshot.chapterUrl.trim() == chapter.url.trim()
+                val matches = snapshot.chapterUrl.trim() == targetChapter
                 if (matches) file.delete()
             }
         }
+        val keyPrefix = "${book.bookUrl}|$targetChapter|"
+        snapshotCache.snapshot().keys
+            .filter { it.startsWith(keyPrefix) }
+            .forEach { snapshotCache.remove(it) }
         File(reviewsDir(book), statusFileName(chapter.url)).delete()
         invalidateChapterCount(book.bookUrl)
     }
@@ -601,10 +684,9 @@ object ReviewSnapshotStore {
             val deleted = file.delete()
             if (deleted && isSnapshotFile(file)) removedSnapshots++
         }
-        // [hasSnapshot] 命中内存缓存时不再查文件，必须同步失效，
-        // 否则清空后重排的章节仍会把气泡标成「已缓存」
-        invalidateBookCache(book.bookUrl)
-        if (removedSnapshots > 0) invalidateChapterCount(book.bookUrl)
+        // [hasSnapshot] 与计数/资源索引必须同步失效，
+        // 否则清空后重排或打开弹窗仍可能命中陈旧内存缓存
+        clearBookCache(book)
         return removedSnapshots
     }
 

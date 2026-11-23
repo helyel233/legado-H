@@ -18,10 +18,18 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.BookSessionLoadCoordinator
+import io.legado.app.help.book.ChangeSourceTextAnchor
+import io.legado.app.help.book.ChangeSourceTextAnchorHelper
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.ReaderTextPositionStore
+import io.legado.app.help.book.SourceSwitchQualityPolicy
+import io.legado.app.help.book.TocSessionResult
+import io.legado.app.help.book.getFolderNameNoCache
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalModified
 import io.legado.app.help.book.isEpub
+import io.legado.app.help.book.readSimulating
 import io.legado.app.help.book.usesDirectReader
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.simulatedTotalChapterNum
@@ -30,6 +38,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
+import io.legado.app.model.ReadBookChapterIndexPolicy
 import io.legado.app.model.inheritNotShelfStateFrom
 import io.legado.app.model.resolveStoredBookshelfState
 import io.legado.app.model.SourceCallBack
@@ -68,15 +77,69 @@ import splitties.init.appCtx
  * 阅读界面数据处理
  */
 class ReadBookViewModel(application: Application) : BaseViewModel(application) {
+    data class PreviousSourceSnapshot(
+        val previousBook: Book,
+        val previousToc: List<BookChapter>,
+        val switchedToBookUrl: String
+    )
+
+    data class SourceSwitchRecoveryState(
+        val bookUrl: String,
+        val chapterIndex: Int,
+        val issue: SourceSwitchQualityPolicy.ChapterIssue,
+        val effectiveCharCount: Int,
+        val previousOriginName: String
+    )
+
     val permissionDenialLiveData = MutableLiveData<Int>()
+    val sourceSwitchRecoveryLiveData = MutableLiveData<SourceSwitchRecoveryState?>(null)
     var isInitFinish = false
     var searchContentQuery = ""
     var searchResultList: List<SearchResult>? = null
     var searchResultIndex: Int = 0
     private var changeSourceCoroutine: Coroutine<*>? = null
+    @Volatile
+    private var lastSourceSnapshot: PreviousSourceSnapshot? = null
+    @Volatile
+    private var pendingSourceValidation: Pair<String, Int>? = null
+
+    private val chapterQualityListener: (ReadBook.ChapterQualityReport) -> Unit = { report ->
+        val currentBookUrl = ReadBook.book?.bookUrl
+        if (report.bookUrl != null && report.bookUrl == currentBookUrl) {
+            val pending = pendingSourceValidation
+            if (pending != null && pending.first == report.bookUrl && pending.second == report.chapterIndex) {
+                pendingSourceValidation = null
+                val snapshot = lastSourceSnapshot
+                if (report.issue != SourceSwitchQualityPolicy.ChapterIssue.NONE && snapshot != null) {
+                    sourceSwitchRecoveryLiveData.postValue(
+                        SourceSwitchRecoveryState(
+                            bookUrl = report.bookUrl,
+                            chapterIndex = report.chapterIndex,
+                            issue = report.issue,
+                            effectiveCharCount = report.effectiveCharCount,
+                            previousOriginName = snapshot.previousBook.originName
+                        )
+                    )
+                } else if (report.issue == SourceSwitchQualityPolicy.ChapterIssue.NONE) {
+                    sourceSwitchRecoveryLiveData.postValue(null)
+                }
+            } else if (report.issue == SourceSwitchQualityPolicy.ChapterIssue.NONE &&
+                sourceSwitchRecoveryLiveData.value != null
+            ) {
+                sourceSwitchRecoveryLiveData.postValue(null)
+            }
+        }
+    }
 
     init {
         AppConfig.detectClickArea()
+        ReadBook.addChapterQualityListener(chapterQualityListener)
+    }
+
+    fun canRevertSourceChange(): Boolean = lastSourceSnapshot != null
+
+    fun dismissSourceSwitchRecovery() {
+        sourceSwitchRecoveryLiveData.postValue(null)
     }
 
     fun initReadBookConfig(intent: Intent) {
@@ -87,6 +150,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             val book = when {
                 bookUrl.isNullOrEmpty() -> appDb.bookDao.lastReadBook
                 else -> appDb.bookDao.getBook(bookUrl)
+                    ?: BookSessionLoadCoordinator.default.peekStagedBook(bookUrl)
             } ?: return@execute
             ReadBook.upReadBookConfig(book)
         }
@@ -103,15 +167,25 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 bookUrl.isNullOrEmpty() -> appDb.bookDao.lastReadBook
                 else -> appDb.bookDao.getBook(bookUrl)
             }
+            val stagedBook = if (storedByUrl == null && !bookUrl.isNullOrEmpty()) {
+                BookSessionLoadCoordinator.default.peekStagedBook(bookUrl)
+            } else {
+                null
+            }
             // A source can derive an unstable bookUrl, so the row written when this book was
             // opened is not always found by the url now in hand. Recover it by identity
             // instead of falling back to the in-memory copy, whose type never carried the
             // temporary flag and would erase it on the next whole-row write.
-            val stored = storedByUrl ?: ReadBook.book?.let { candidate ->
+            val stored = storedByUrl ?: stagedBook ?: ReadBook.book?.let { candidate ->
                 candidate.takeIf { it.name.isNotBlank() }
                     ?.let { appDb.bookDao.getBook(it.name, it.author) }
             }
             val book = stored ?: ReadBook.book
+            if (book != null && lastSourceSnapshot?.switchedToBookUrl != book.bookUrl) {
+                lastSourceSnapshot = null
+                pendingSourceValidation = null
+                sourceSwitchRecoveryLiveData.postValue(null)
+            }
             // Trust whichever side says "not on the shelf": the detail page knows what the
             // reader chose, the stored row knows what was persisted, and treating a sampled
             // book as shelved is the failure that leaves books behind.
@@ -169,23 +243,42 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 "bookSource=${ReadBook.bookSource?.bookSourceUrl}"
         )
         isInitFinish = true
-        notifyNoSourceIfNeeded(book)
-        if (!book.isLocal && book.tocUrl.isEmpty() && !loadBookInfo(book)) {
-            AppLog.put("read-init: stop, reason=book_info_failed, bookUrl=${book.bookUrl}")
-            return
-        }
-        if (book.isLocal && !checkLocalBookFileExist(book)) {
-            AppLog.put("read-init: stop, reason=local_file_missing, bookUrl=${book.bookUrl}")
-            return
-        }
-        if ((ReadBook.chapterSize == 0 || book.isLocalModified()) &&
-            !loadChapterListAwait(book, loadContentAfterUpdate = false)
-        ) {
-            AppLog.put(
-                "read-init: stop, reason=toc_failed, chapterSize=${ReadBook.chapterSize}, " +
-                    "bookUrl=${book.bookUrl}, origin=${book.origin}"
+        val stagedChapters = BookSessionLoadCoordinator.default.consumeStagedToc(book.bookUrl)
+        if (!stagedChapters.isNullOrEmpty() && !book.isLocal) {
+            ReadBook.chapterSize = stagedChapters.size
+            ReadBook.simulatedChapterSize = if (book.readSimulating()) {
+                book.simulatedTotalChapterNum()
+            } else {
+                stagedChapters.size
+            }
+            ReadBook.durChapterIndex = ReadBookChapterIndexPolicy.clamp(
+                ReadBook.durChapterIndex,
+                ReadBook.simulatedChapterSize
             )
-            return
+            AppLog.put(
+                "read-init: fastMemoryToc, chapterSize=${ReadBook.chapterSize}, " +
+                    "bookUrl=${book.bookUrl}"
+            )
+        }
+        notifyNoSourceIfNeeded(book)
+        if (stagedChapters.isNullOrEmpty()) {
+            if (!book.isLocal && book.tocUrl.isEmpty() && !loadBookInfo(book)) {
+                AppLog.put("read-init: stop, reason=book_info_failed, bookUrl=${book.bookUrl}")
+                return
+            }
+            if (book.isLocal && !checkLocalBookFileExist(book)) {
+                AppLog.put("read-init: stop, reason=local_file_missing, bookUrl=${book.bookUrl}")
+                return
+            }
+            if ((ReadBook.chapterSize == 0 || book.isLocalModified()) &&
+                !loadChapterListAwait(book, loadContentAfterUpdate = false)
+            ) {
+                AppLog.put(
+                    "read-init: stop, reason=toc_failed, chapterSize=${ReadBook.chapterSize}, " +
+                        "bookUrl=${book.bookUrl}, origin=${book.origin}"
+                )
+                return
+            }
         }
         ReadBook.upMsg(null)
         if (startup.contentLoader == ReadBookStartupPolicy.ContentLoader.DIRECT_EPUB) {
@@ -257,7 +350,13 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     private suspend fun loadBookInfo(book: Book): Boolean {
         val source = ReadBook.bookSource ?: return true
         try {
-            WebBook.getBookInfoAwait(source, book, canReName = false)
+            BookSessionLoadCoordinator.default.fetchOrJoinBookInfo(
+                book = book,
+                consumeHandoff = true,
+                preserveNameAuthorOnApply = true
+            ) { workingBook ->
+                WebBook.getBookInfoAwait(source, workingBook, canReName = false)
+            }
             return true
         } catch (e: Throwable) {
             currentCoroutineContext().ensureActive()
@@ -271,7 +370,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
      */
     fun loadChapterList(book: Book) {
         execute {
-            if (loadChapterListAwait(book)) {
+            if (loadChapterListAwait(book, forceRefresh = true)) {
                 ReadBook.upMsg(null)
             }
         }
@@ -279,7 +378,8 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     private suspend fun loadChapterListAwait(
         book: Book,
-        loadContentAfterUpdate: Boolean = true
+        loadContentAfterUpdate: Boolean = true,
+        forceRefresh: Boolean = false
     ): Boolean {
         if (book.isLocal) {
             kotlin.runCatching {
@@ -318,14 +418,13 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 return false
             }
         } else {
-            ReadBook.bookSource?.let {
+            ReadBook.bookSource?.let { source ->
                 val oldBook = book.copy()
                 AppLog.put(
                     "read-toc: start, book=${book.name}, bookUrl=${book.bookUrl}, " +
-                        "origin=${book.origin}, source=${it.bookSourceUrl}"
+                        "origin=${book.origin}, source=${source.bookSourceUrl}"
                 )
-                val tocLoadState = TocLoadState()
-                WebBook.getChapterListAwait(it, book, true, loadState = tocLoadState) { loaded, total ->
+                val progressCallback: (Int, Int) -> Unit = { loaded, total ->
                     // 目录分页较多时给出进度反馈，避免长时间没有任何动静
                     val progressText = if (total > 0) {
                         context.getString(R.string.toc_loading_pages, loaded, total)
@@ -334,7 +433,31 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                     }
                     runOnUI { ReadBook.upMsg(progressText) }
                 }
-                    .onSuccess { cList ->
+                kotlin.runCatching {
+                    if (forceRefresh) {
+                        BookSessionLoadCoordinator.default.invalidateSession(book.bookUrl, book.origin)
+                    }
+                    BookSessionLoadCoordinator.default.fetchOrJoinChapterList(
+                        book = book,
+                        forceRefresh = forceRefresh,
+                        consumeHandoff = !forceRefresh,
+                        onProgress = progressCallback
+                    ) { workingBook, onProgress ->
+                        val state = TocLoadState()
+                        val chapters = WebBook.getChapterListAwait(
+                            bookSource = source,
+                            book = workingBook,
+                            runPerJs = true,
+                            loadState = state,
+                            earlyDispatchFirstChapter = true,
+                            onProgress = onProgress
+                        ).getOrThrow()
+                        TocSessionResult(workingBook, chapters, state.failedPages)
+                    }
+                }
+                    .onSuccess { sessionResult ->
+                        val cList = sessionResult.chapters
+                        val failedPages = sessionResult.failedPages
                         AppLog.put(
                             "read-toc: success, size=${cList.size}, oldBookUrl=${oldBook.bookUrl}, " +
                                 "newBookUrl=${book.bookUrl}, first=${cList.firstOrNull()?.title}, " +
@@ -343,7 +466,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         val oldChapterList = appDb.bookChapterDao.getChapterList(oldBook.bookUrl)
                         // 有分页失败时按旧章 url 覆盖率判定：源新增尾部章节会让
                         // newSize >= oldSize，仅比长度会漏掉「更长但缺中间页」的残缺目录
-                        val missingOldUrls = if (tocLoadState.failedPages > 0 && oldChapterList.isNotEmpty()) {
+                        val missingOldUrls = if (failedPages > 0 && oldChapterList.isNotEmpty()) {
                             val newUrls = cList.mapTo(hashSetOf()) { it.url }
                             oldChapterList.count { it.url !in newUrls }
                         } else {
@@ -353,7 +476,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         // 沿用旧目录：既避免把完整目录覆盖成残缺目录，
                         // 也避免已缓存正文失去章节索引
                         if (TocIntegrity.shouldKeepOldToc(
-                                tocLoadState.failedPages,
+                                failedPages,
                                 cList.size,
                                 oldChapterList.size,
                                 missingOldUrls
@@ -361,7 +484,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         ) {
                             AppLog.put(
                                 "read-toc: keep old toc, new=${cList.size}, old=${oldChapterList.size}, " +
-                                    "failedPages=${tocLoadState.failedPages}"
+                                    "failedPages=${failedPages}"
                             )
                             // 恢复被目录解析改写的统计字段，保持内存与库内目录一致
                             book.totalChapterNum = oldChapterList.size
@@ -484,24 +607,136 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
      */
     fun changeTo(book: Book, toc: List<BookChapter>) {
         changeSourceCoroutine?.cancel()
+        val oldBook = ReadBook.book
+        val oldTextChapter = ReadBook.curTextChapter
+        val oldPageIndex = ReadBook.durPageIndex
+        val oldChapterPos = ReadBook.durChapterPos
+        val changeSourceAnchor = captureChangeSourceAnchor(oldTextChapter, oldPageIndex, oldChapterPos)
+        val oldBookSnapshot = oldBook?.let { BookSessionLoadCoordinator.copyBookSnapshot(it) }
+        BookSessionLoadCoordinator.default.cancelEntryPersistence(oldBook?.bookUrl)
         changeSourceCoroutine = execute {
-            ReadBook.upMsg(context.getString(R.string.loading))
-            val oldBook = ReadBook.book
+            val oldToc = oldBookSnapshot?.let {
+                appDb.bookChapterDao.getChapterList(it.bookUrl)
+            }.orEmpty()
+            ReadBook.releaseAndCancel()
+            ReadBook.upMsg(context.getString(R.string.loading), isError = false)
             oldBook?.migrateTo(book, toc)
             book.inheritNotShelfStateFrom(oldBook)
             book.removeType(BookType.updateError)
-            oldBook?.delete()
-            appDb.bookDao.insert(book)
-            appDb.bookChapterDao.insert(*toc.toTypedArray())
-            ReadBook.resetData(book)
+            if (oldBookSnapshot != null) {
+                lastSourceSnapshot = PreviousSourceSnapshot(
+                    previousBook = oldBookSnapshot,
+                    previousToc = oldToc,
+                    switchedToBookUrl = book.bookUrl
+                )
+            }
+            if (changeSourceAnchor != null) {
+                ReaderTextPositionStore.saveChangeSourceAnchor(
+                    bookUrl = book.bookUrl,
+                    chapterIndex = book.durChapterIndex,
+                    anchor = changeSourceAnchor
+                )
+            }
+            pendingSourceValidation = book.bookUrl to book.durChapterIndex
+            sourceSwitchRecoveryLiveData.postValue(null)
+            appDb.runInTransaction {
+                oldBook?.delete()
+                appDb.bookDao.insert(book)
+                appDb.bookChapterDao.insert(*toc.toTypedArray())
+            }
+            if (oldBook != null &&
+                oldBook.bookUrl != book.bookUrl &&
+                oldBook.getFolderNameNoCache() != book.getFolderNameNoCache()
+            ) {
+                runCatching {
+                    BookHelp.clearCache(oldBook)
+                }.onFailure {
+                    AppLog.put("换源清理旧缓存失败: ${oldBook.name}\n${it.localizedMessage}", it)
+                }
+            }
+            ReadBook.resetData(book, cancelInFlight = false)
             ReadBook.upMsg(null)
             ReadBook.loadContent(resetPageOffset = true)
         }.onError {
             AppLog.put("换源失败\n$it", it, true)
-            ReadBook.upMsg(null)
+            ReadBook.upMsg(appCtx.getString(R.string.misc_failed_load_content_n, it.localizedMessage ?: ""), isError = true)
+            lastSourceSnapshot?.let { snapshot ->
+                sourceSwitchRecoveryLiveData.postValue(
+                    SourceSwitchRecoveryState(
+                        bookUrl = book.bookUrl,
+                        chapterIndex = book.durChapterIndex,
+                        issue = SourceSwitchQualityPolicy.ChapterIssue.LOAD_FAILED,
+                        effectiveCharCount = 0,
+                        previousOriginName = snapshot.previousBook.originName
+                    )
+                )
+            }
         }.onFinally {
             postEvent(EventBus.SOURCE_CHANGED, book.bookUrl)
         }
+    }
+
+    fun revertLastSourceChange() {
+        val snapshot = lastSourceSnapshot ?: return
+        changeSourceCoroutine?.cancel()
+        lastSourceSnapshot = null
+        pendingSourceValidation = null
+        sourceSwitchRecoveryLiveData.postValue(null)
+        changeSourceCoroutine = execute {
+            val currentBook = ReadBook.book
+            ReadBook.releaseAndCancel()
+            ReadBook.upMsg(context.getString(R.string.loading), isError = false)
+            ReaderTextPositionStore.clearChangeSourceAnchors(currentBook?.bookUrl)
+            val restoredBook = BookSessionLoadCoordinator.copyBookSnapshot(snapshot.previousBook)
+            restoredBook.inheritNotShelfStateFrom(currentBook)
+            appDb.runInTransaction {
+                currentBook?.takeIf { it.bookUrl != restoredBook.bookUrl }?.delete()
+                appDb.bookDao.insert(restoredBook)
+                if (snapshot.previousToc.isNotEmpty()) {
+                    appDb.bookChapterDao.replaceByBook(restoredBook.bookUrl, snapshot.previousToc)
+                }
+            }
+            if (currentBook != null &&
+                currentBook.bookUrl != restoredBook.bookUrl &&
+                currentBook.getFolderNameNoCache() != restoredBook.getFolderNameNoCache()
+            ) {
+                runCatching {
+                    BookHelp.clearCache(currentBook)
+                }.onFailure {
+                    AppLog.put("回退书源清理缓存失败: ${currentBook.name}\n${it.localizedMessage}", it)
+                }
+            }
+            ReadBook.resetData(restoredBook, cancelInFlight = false)
+            if (snapshot.previousToc.isEmpty() && !restoredBook.isLocal) {
+                loadChapterListAwait(restoredBook, loadContentAfterUpdate = false, forceRefresh = true)
+            }
+            ReadBook.upMsg(null)
+            ReadBook.loadContent(resetPageOffset = true)
+        }.onError {
+            AppLog.put("回退原书源失败\n$it", it, true)
+            ReadBook.upMsg(appCtx.getString(R.string.misc_failed_load_content_n, it.localizedMessage ?: ""), isError = true)
+        }.onFinally {
+            postEvent(EventBus.SOURCE_CHANGED, snapshot.previousBook.bookUrl)
+        }
+    }
+
+    private fun captureChangeSourceAnchor(
+        curTextChapter: TextChapter?,
+        durPageIndex: Int,
+        durChapterPos: Int
+    ): ChangeSourceTextAnchor? {
+        if (curTextChapter == null) return null
+        val chapterContentLength = curTextChapter.getContent().length
+        val page = curTextChapter.getPage(durPageIndex)
+            ?: curTextChapter.getPageByReadPos(durChapterPos)
+        val pageText = page?.text.orEmpty()
+        return ChangeSourceTextAnchorHelper.extractAnchor(
+            pageText = pageText,
+            chapterContentLength = chapterContentLength,
+            durChapterPos = durChapterPos,
+            chapterTitle = curTextChapter.title,
+            isFirstPage = (page?.index ?: durPageIndex) == 0
+        )
     }
 
     /**
@@ -525,17 +760,24 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                     WebBook.getBookInfoAwait(source, book)
                 }
                 val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
-                val chapter = toc.getOrElse(book.durChapterIndex) {
+                if (toc.isEmpty()) {
+                    throw NoStackTraceException("目录为空")
+                }
+                val oldBook = ReadBook.book
+                val targetIndex = if (oldBook != null) {
+                    BookHelp.getDurChapter(oldBook, toc)
+                } else {
+                    book.durChapterIndex.coerceIn(0, maxOf(0, toc.lastIndex))
+                }
+                val chapter = toc.getOrElse(targetIndex) {
                     toc.last()
                 }
-                val nextChapter = toc.getOrElse(chapter.index) {
-                    toc.first()
-                }
+                val nextChapter = toc.getOrNull(chapter.index + 1)
                 WebBook.getContentAwait(
                     bookSource = source,
                     book = book,
                     bookChapter = chapter,
-                    nextChapterUrl = nextChapter.url
+                    nextChapterUrl = nextChapter?.url
                 )
                 book to toc
             }.take(1).onEach { (book, toc) ->
@@ -557,6 +799,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     fun removeFromBookshelf(success: (() -> Unit)?) {
         val book = ReadBook.book
+        BookSessionLoadCoordinator.default.cancelEntryPersistence(book?.bookUrl)
         Coroutine.async(Coroutine.defaultScope) {
             if (book != null) {
                 val byUrl = appDb.bookDao.deleteIfNotShelf(book.bookUrl)
@@ -806,6 +1049,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        ReadBook.removeChapterQualityListener(chapterQualityListener)
         if (BaseReadAloudService.isRun && BaseReadAloudService.pause) {
             ReadAloud.stop(context)
         }

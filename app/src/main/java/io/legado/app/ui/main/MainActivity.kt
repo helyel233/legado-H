@@ -81,6 +81,7 @@ import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryColor
@@ -920,6 +921,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private fun refreshMainTopBars(view: View) {
         if (view is MainTopBarView) {
             view.refreshStyle()
+            view.titleText.applyUiTitleTypeface(view.context)
         }
         if (view is ViewGroup) {
             for (index in 0 until view.childCount) {
@@ -2021,6 +2023,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         refreshMainThemeBackground(force = true, scheduleWarmup = false)
         applyBottomLayoutMode()
         refreshMainTopBars(root)
+        root.applyUiBodyTypefaceDeep(uiTypeface())
         WindowSnapshotTransitionController.invalidateOutlinesRecursively(bottomControls)
         updateAiFloatingBall()
         scheduleLiquidGlassSetup()

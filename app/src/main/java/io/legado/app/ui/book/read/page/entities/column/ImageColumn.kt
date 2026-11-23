@@ -11,6 +11,7 @@ import io.legado.app.R
 import io.legado.app.help.illustration.AudioBlockPlayer
 import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.model.ImageProvider
+import io.legado.app.model.ParagraphBubbleRenderer
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.entities.TextLine
@@ -37,8 +38,14 @@ data class ImageColumn(
      */
     var reviewBubble: Boolean = false,
     /** 该段评气泡所属章节已有本地评论快照；排版期定标，快照写入后就地置位 */
-    var reviewCached: Boolean = false
+    var reviewCached: Boolean = false,
+    /** 段评气泡改写为 bubble:// 前的原始按钮 src（含段落规则 ID / 原始点击键） */
+    val rawButtonSrc: String? = null
 ) : BaseColumn {
+
+    /** 评论缓存命中与点击链路使用的原始按钮键；无原始键时回落 src */
+    val reviewButtonSrc: String
+        get() = rawButtonSrc?.takeIf { it.isNotBlank() } ?: src
 
     override var textLine: TextLine = emptyTextLine
 
@@ -94,25 +101,33 @@ data class ImageColumn(
     }
 
     /**
-     * 「已缓存」角标：气泡右上角一个实心点加细环。
+     * 「已缓存」角标：气泡右上角采用主题强调色实心点 + 高对比度外环描边。
      *
      * 画在绘制层而不是把标记焊进 src：书源原生 SVG 气泡无法重建模板，
-     * 且状态变化只需重绘这一行，不必重排整章。颜色跟正文文字色，
-     * 日夜/主题自动一致，也不会与气泡自身的强调色打架。
+     * 且状态变化只需重绘这一行，不必重排整章。外环衬底避免在小字号或深色模式下
+     * 与气泡轮廓/背景混色导致辨识度下降。
      */
     private fun drawReviewCacheMark(canvas: Canvas, rectF: RectF) {
         val side = minOf(rectF.width(), rectF.height())
-        val radius = (side * 0.19f).coerceAtLeast(1.6f.dpToPx())
-        val cx = rectF.right - radius * 0.94f
-        val cy = rectF.top + radius * 0.94f
+        val radius = (side * 0.21f).coerceAtLeast(2.0f.dpToPx())
+        val cx = rectF.right - radius * 0.90f
+        val cy = rectF.top + radius * 0.90f
+        val markColor = ParagraphBubbleRenderer.resolveCachedMarkColorInt()
+        val haloColor = ParagraphBubbleRenderer.contrastHaloColorInt(markColor)
+        val haloExtra = (radius * 0.28f).coerceAtLeast(0.7f.dpToPx())
         // 共用画笔：颜色/线宽每帧按需设置，避免绘制路径里每帧每个气泡 new 一把
         val paint = reviewCacheMarkPaint
-        paint.color = ChapterProvider.contentPaint.color
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (radius * 0.34f).coerceAtLeast(0.6f.dpToPx())
-        canvas.drawCircle(cx, cy, radius, paint)
         paint.style = Paint.Style.FILL
-        canvas.drawCircle(cx, cy, radius * 0.5f, paint)
+        paint.color = haloColor
+        canvas.drawCircle(cx, cy, radius + haloExtra, paint)
+
+        paint.color = markColor
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = (radius * 0.34f).coerceAtLeast(0.8f.dpToPx())
+        canvas.drawCircle(cx, cy, radius, paint)
+
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(cx, cy, radius * 0.62f, paint)
     }
 
     private fun drawVideo(view: ContentTextView, canvas: Canvas) {

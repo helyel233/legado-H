@@ -25,6 +25,7 @@ data class UnifiedPackageManifest(
     val contentHash: String? = null,
     val art: ArtPackagePayload? = null,
     val param: ParamPackagePayload? = null,
+    val coverSlot: CoverSlotPackagePayload? = null,
     val unknownFields: Map<String, JsonElement> = emptyMap()
 ) {
     companion object {
@@ -167,5 +168,31 @@ data class LayoutParams(
     val discoveryPageLayout: Int? = null,
     val rssSourceLayout: Int? = null,
     val homepageLayoutMode: Int? = null,
+    val unknownFields: Map<String, JsonElement> = emptyMap()
+)
+
+object CoverSlotApplyMode {
+    const val RANDOM = "RANDOM"
+    const val SEQUENCE = "SEQUENCE"
+    const val MIXED = "MIXED"
+    const val FALLBACK_ONLY = "FALLBACK_ONLY"
+
+    fun normalize(raw: String?): String {
+        return when (raw?.trim()?.uppercase()) {
+            SEQUENCE -> SEQUENCE
+            MIXED -> MIXED
+            FALLBACK_ONLY, "FALLBACK" -> FALLBACK_ONLY
+            RANDOM -> RANDOM
+            else -> RANDOM
+        }
+    }
+}
+
+data class CoverSlotPackagePayload(
+    val covers: List<String> = emptyList(),
+    val applyMode: String? = null,
+    val dayDefaultCoverPath: String? = null,
+    val nightDefaultCoverPath: String? = null,
+    val groupCoverPath: String? = null,
     val unknownFields: Map<String, JsonElement> = emptyMap()
 )

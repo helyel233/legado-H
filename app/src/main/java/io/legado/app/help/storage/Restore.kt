@@ -1053,6 +1053,11 @@ object Restore {
                 AppLog.put("恢复底栏包出错\n${it.localizedMessage}", it)
             }
         }
+        kotlin.runCatching {
+            io.legado.app.help.config.pkg.UnifiedPackageRepository.reapplyActiveCoverSlotsAfterRestore(appCtx)
+        }.onFailure {
+            AppLog.put("恢复书架封面包出错\n${it.localizedMessage}", it)
+        }
         // 不再发 RECREATE 事件：恢复成功后统一重启应用（见 restore 尾部），
         // 顶栏/底栏包在新进程加载；RECREATE 会让多 Activity 同时重建，
         // 触发 Compose retained store 条目跨 Activity 复用竞态（见尾部注释）。
@@ -1077,10 +1082,23 @@ object Restore {
      * 自动触发幂等合成迁移，防止老用户恢复 V1 备份后落入静默黑洞。
      */
     private suspend fun restoreUnifiedPackages(path: String) {
+        val backupUnifiedDir = File(path, Backup.unifiedPackagesDirName)
         restorePackageDirectory(
-            File(path, Backup.unifiedPackagesDirName),
+            backupUnifiedDir,
             io.legado.app.help.config.pkg.UnifiedPackageRepository.rootDir
         )
+        io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
+        if (!BackupConfig.ignoreCoverConfig && backupUnifiedDir.isDirectory) {
+            val edit = appCtx.defaultSharedPreferences.edit()
+            val restored = UiPackageBackup.importUnifiedActivePrefs(
+                sourceRoot = backupUnifiedDir,
+                writeString = { key, value -> edit.putString(key, value) },
+                writeBoolean = { key, value -> edit.putBoolean(key, value) }
+            )
+            if (restored) {
+                edit.commit()
+            }
+        }
         val hasRestoredUnifiedDir = File(path, Backup.unifiedPackagesDirName).isDirectory
         val hasRestoredLegacyDirs = UiPackageBackup.legacyPackageDirNames.any { dirName ->
             File(path, dirName).isDirectory

@@ -894,13 +894,14 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             ?: manifest?.let(CacheManifestHelper::toChapters)
             ?: emptyList()
         val rawCachedCount = getFastCachedCount(cacheNames)
-        if (rawCachedCount <= 0 && taskState?.active != true) {
-            CacheManifestHelper.delete(book)
-            return null
-        }
         val totalChapterCount = book.totalChapterNum.takeIf { it > 0 }
             ?: chapters.size.takeIf { it > 0 }
             ?: rawCachedCount
+        val reviewCachedCount = safeReviewChapterCount(book, mode, totalChapterCount)
+        if (rawCachedCount <= 0 && reviewCachedCount <= 0 && taskState?.active != true) {
+            CacheManifestHelper.delete(book)
+            return null
+        }
         val cachedCount = rawCachedCount.coerceAtMost(totalChapterCount)
         return CacheBookItem(
             book = book,
@@ -912,6 +913,7 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             cachedCount = cachedCount,
             totalChapterCount = totalChapterCount,
             localCachedCount = cachedCount,
+            reviewCachedCount = reviewCachedCount,
             taskState = taskState,
             manifest = manifest,
             localUpdatedAt = resolveLocalUpdatedAt(book, manifest),
@@ -983,6 +985,7 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
         val totalChapterCount = manifest.totalChapterNum.takeIf { it > 0 }
             ?: chapters.size.takeIf { it > 0 }
             ?: rawCachedCount
+        val reviewCachedCount = safeReviewChapterCount(book, mode, totalChapterCount)
         return CacheBookItem(
             book = book,
             mode = mode,
@@ -993,11 +996,18 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             cachedCount = rawCachedCount.coerceAtMost(totalChapterCount),
             totalChapterCount = totalChapterCount,
             localCachedCount = rawCachedCount.coerceAtMost(totalChapterCount),
+            reviewCachedCount = reviewCachedCount,
             manifest = manifest,
             localUpdatedAt = resolveLocalUpdatedAt(book, manifest),
             inBookshelf = false,
             sourceAvailable = book.isLocal || book.getBookSource() != null
         )
+    }
+
+    private fun safeReviewChapterCount(book: Book, mode: CacheManageMode, totalChapterCount: Int): Int {
+        if (mode != CacheManageMode.BOOK || book.isLocal) return 0
+        val count = runCatching { ReviewSnapshotStore.chapterUrls(book).size }.getOrDefault(0)
+        return if (totalChapterCount > 0) count.coerceAtMost(totalChapterCount) else count
     }
 
     private fun resolveLocalUpdatedAt(book: Book, manifest: CacheBookManifest?): Long {
@@ -1598,6 +1608,7 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             totalChapterCount = totalChapterCount,
             localCachedCount = localCachedCount,
             remoteCachedCount = remoteCachedCount,
+            reviewCachedCount = reviewCachedCount,
             localUpdatedAt = localUpdatedAt,
             taskState = taskState,
             manifest = manifest,
@@ -1624,6 +1635,7 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
             totalChapterCount = totalChapterCount,
             localCachedCount = localCachedCount,
             remoteCachedCount = remoteCachedCount,
+            reviewCachedCount = reviewCachedCount,
             localUpdatedAt = localUpdatedAt,
             taskState = taskState,
             manifest = manifest,
@@ -1701,6 +1713,7 @@ data class CacheBookItem(
     val totalChapterCount: Int,
     val localCachedCount: Int,
     val remoteCachedCount: Int = 0,
+    val reviewCachedCount: Int = 0,
     val localUpdatedAt: Long = 0L,
     val taskState: AudioCacheTaskState? = null,
     val manifest: CacheBookManifest? = null,
@@ -1752,6 +1765,7 @@ data class CacheBookSourceVariant(
     val totalChapterCount: Int,
     val localCachedCount: Int,
     val remoteCachedCount: Int = 0,
+    val reviewCachedCount: Int = 0,
     val localUpdatedAt: Long = 0L,
     val taskState: AudioCacheTaskState? = null,
     val manifest: CacheBookManifest? = null,

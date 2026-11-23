@@ -6,6 +6,17 @@ import io.legado.app.ui.book.read.page.api.PageFactory
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.entities.TextPage
 
+internal fun resolveStatusPageMode(
+    msg: String?,
+    isExplicitError: Boolean = false
+): StatusPageMode {
+    return if (!isExplicitError && SkeletonLayout.isTransitionalLoadingMessage(msg)) {
+        StatusPageMode.SKELETON
+    } else {
+        StatusPageMode.ERROR_MESSAGE
+    }
+}
+
 internal fun canEnterNextTextChapter(
     hasCurrentChapter: Boolean,
     isScroll: Boolean,
@@ -202,7 +213,11 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
         removeAloudSpan: Boolean = true
     ): TextPage? = with(dataSource) {
         ReadBook.msg?.let {
-            return@with if (spreadOffset == 0 && pairOffset == 0) TextPage(text = it).format() else null
+            return@with if (spreadOffset == 0 && pairOffset == 0) {
+                statusOrMessagePage(it, currentChapter)
+            } else {
+                null
+            }
         }
         val position = spreadPositionAt(spreadOffset) ?: return@with null
         val targetIndex = position.index + pairOffset
@@ -232,7 +247,7 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
 
     private fun pageAtOffset(offset: Int, removeAloudSpan: Boolean = true): TextPage? = with(dataSource) {
         ReadBook.msg?.let {
-            return@with TextPage(text = it).format()
+            return@with statusOrMessagePage(it, currentChapter)
         }
         val chapter = currentChapter ?: return@with null
         val targetIndex = pageIndex + offset
@@ -265,15 +280,30 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
         return skeletonPage(title, this@pageOrPlaceholder)
     }
 
+    private fun statusOrMessagePage(msg: String, chapter: TextChapter? = null): TextPage {
+        return when (resolveStatusPageMode(msg, ReadBook.msgIsError)) {
+            StatusPageMode.SKELETON -> skeletonPage(chapter?.title, chapter, hint = msg)
+            StatusPageMode.ERROR_MESSAGE -> TextPage(text = msg).format()
+        }
+    }
+
     /**
      * 正文尚未就绪时的占位页：灰色骨架条 + 加载提示。
      *
      * 代替原先「整页只有一句加载文案」的空白页，正文到达时由骨架过渡到正文，
      * 视觉跳变更小，不会像卡住不动。
      */
-    private fun skeletonPage(title: String?, chapter: TextChapter? = null): TextPage {
+    private fun skeletonPage(
+        title: String?,
+        chapter: TextChapter? = null,
+        hint: String? = null
+    ): TextPage {
         return (if (title != null) TextPage(title = title) else TextPage()).apply {
             isSkeleton = true
+            skeletonHint = hint
+            if (!hint.isNullOrBlank()) {
+                text = hint
+            }
             if (chapter != null) textChapter = chapter
         }.format()
     }
@@ -299,7 +329,7 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
 
     private fun messageOrEmptyPage(): TextPage = with(dataSource) {
         ReadBook.msg?.let {
-            return@with TextPage(text = it).format()
+            return@with statusOrMessagePage(it, currentChapter)
         }
         currentChapter?.let {
             return@with skeletonPage(it.title, it)
@@ -309,7 +339,7 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
 
     private fun nextFallbackPage(): TextPage = with(dataSource) {
         ReadBook.msg?.let {
-            return@with TextPage(text = it).format()
+            return@with statusOrMessagePage(it, nextChapter ?: currentChapter)
         }
         currentChapter?.let {
             if (!it.isCompleted) {
@@ -325,7 +355,7 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
 
     private fun prevFallbackPage(): TextPage = with(dataSource) {
         ReadBook.msg?.let {
-            return@with TextPage(text = it).format()
+            return@with statusOrMessagePage(it, prevChapter ?: currentChapter)
         }
         currentChapter?.let {
             if (!it.isCompleted) {
