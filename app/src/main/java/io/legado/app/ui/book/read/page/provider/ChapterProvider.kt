@@ -41,15 +41,15 @@ import androidx.core.net.toUri
 @Suppress("DEPRECATION", "ConstPropertyName")
 object ChapterProvider {
     //用于图片字的替换
-    const val srcReplaceStr = "袮" //▩▣ //这是不应该存在的汉字,会替换为祢，这个字符用来标记
-    const val srcReplaceChar = '袮'
+    const val srcReplaceStr = TypographyJustification.SRC_REPLACE_CHAR //▩▣ //这是不应该存在的汉字,会替换为祢，这个字符用来标记
+    const val srcReplaceChar = TypographyJustification.SRC_REPLACE_CHAR_CODE
     const val srcReplacementChar = '祢'
     //用于评论按钮的替换
-    const val reviewStr = "꧁"
-    const val reviewChar = '꧁'
+    const val reviewStr = TypographyJustification.REVIEW_CHAR
+    const val reviewChar = TypographyJustification.REVIEW_CHAR_CODE
 
     //零评论段评泡的零宽语义字符（WORD JOINER），不绘制、不命中，仅承载书源点击载荷
-    const val hiddenReviewChar = '\u2060'
+    const val hiddenReviewChar = TypographyJustification.HIDDEN_REVIEW_CHAR_CODE
     const val indentChar = "　"
 
     @JvmStatic
@@ -483,6 +483,39 @@ object ChapterProvider {
         paint.style = oldStyle
         paint.color = oldColor
         paint.strokeWidth = oldStrokeWidth
+    }
+
+    /**
+     * 系统字体变细时只应作用于汉字；当快速整行绘制遇到同时含汉字与非汉字字母或数字字符的行时，
+     * 整行调用 [drawThinStroke] 会误伤非汉字字形，需回退到逐列绘制。
+     */
+    @JvmStatic
+    fun needsPerColumnThinStroke(
+        isTitle: Boolean,
+        text: String,
+        start: Int,
+        end: Int
+    ): Boolean {
+        val thinStrokeWidth = if (isTitle) titleThinStrokeWidth else contentThinStrokeWidth
+        if (thinStrokeWidth <= 0f || ReadBookConfig.bgMeanColor == 0 || ReadBookConfig.textFont.isNotEmpty()) {
+            return false
+        }
+        val safeStart = start.coerceIn(0, text.length)
+        val safeEnd = end.coerceIn(safeStart, text.length)
+        var hasHanChar = false
+        var hasNonHanLetterOrDigit = false
+        var i = safeStart
+        while (i < safeEnd) {
+            val codePoint = text.codePointAt(i)
+            if (isHan(codePoint)) {
+                hasHanChar = true
+            } else if (Character.isLetterOrDigit(codePoint)) {
+                hasNonHanLetterOrDigit = true
+            }
+            if (hasHanChar && hasNonHanLetterOrDigit) return true
+            i += Character.charCount(codePoint)
+        }
+        return false
     }
 
     /** [start, end) 区间内是否含汉字（含扩展区与兼容区） */

@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.text.Layout
 import android.text.TextPaint
+import java.util.Collections
 import java.util.WeakHashMap
 import kotlin.math.max
 
@@ -22,12 +23,34 @@ class ZhLayout(
     indentSize: Int
 ) : Layout(text, textPaint, width, Alignment.ALIGN_NORMAL, 0f, 0f) {
     companion object {
-        private val postPanc = hashSetOf(
+        internal val postPanc = hashSetOf(
             "，", "。", "：", "？", "！", "、", "”", "’", "）", "》", "}",
-            "】", ")", ">", "]", "}", ",", ".", "?", "!", ":", "」", "；", ";"
+            "】", ")", ">", "]", ",", ".", "?", "!", ":", "」", "；", ";",
+            "…", "—", "·", "～", "〉", "』", "〕", "〗"
         )
-        private val prePanc = hashSetOf("“", "（", "《", "【", "‘", "‘", "(", "<", "[", "{", "「")
-        private val cnCharWidthCache = WeakHashMap<Paint, Float>()
+        internal val prePanc = hashSetOf(
+            "“", "（", "《", "【", "‘", "(", "<", "[", "{", "「",
+            "〈", "『", "〔", "〖"
+        )
+        private val cnCharWidthCache = Collections.synchronizedMap(WeakHashMap<Paint, Float>())
+
+        fun getCnCharWidth(paint: Paint): Float {
+            synchronized(cnCharWidthCache) {
+                cnCharWidthCache[paint]?.let { return it }
+            }
+            val measured = measureDesiredWidth("我", paint)
+            return synchronized(cnCharWidthCache) {
+                cnCharWidthCache.getOrPut(paint) { measured }
+            }
+        }
+
+        private fun measureDesiredWidth(string: String, paint: Paint): Float {
+            var width = paint.measureText(string)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                width += paint.letterSpacing * paint.textSize
+            }
+            return width
+        }
     }
 
     private val defaultCapacity = 10
@@ -35,10 +58,7 @@ class ZhLayout(
     var lineWidth = FloatArray(defaultCapacity)
     private var lineCount = 0
     private val curPaint = textPaint
-    private val cnCharWidth = cnCharWidthCache[textPaint]
-        ?: getDesiredWidth("我", textPaint).also {
-            cnCharWidthCache[textPaint] = it
-        }
+    private val cnCharWidth = getCnCharWidth(textPaint)
 
     enum class BreakMod { NORMAL, BREAK_ONE_CHAR, BREAK_MORE_CHAR, CPS_1, CPS_2, CPS_3, }
     class Locate {
@@ -209,11 +229,7 @@ class ZhLayout(
 
 
     fun getDesiredWidth(string: String, paint: TextPaint): Float {
-        var width = paint.measureText(string)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            width += paint.letterSpacing * paint.textSize
-        }
-        return width
+        return measureDesiredWidth(string, paint)
     }
 
     override fun getLineCount(): Int {

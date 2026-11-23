@@ -1998,75 +1998,37 @@ class TextChapterLayout(
         lineWidth: Int
     ) {
         if (columns.isEmpty()) return
-        // 计算当前行的总宽度
-        val firstCol = columns.first()
-        val lastCol = columns.last()
-        val currentWidth = lastCol.end - firstCol.start
-        // 计算剩余空间
-        val residualWidth = lineWidth - currentWidth
-
-        if (residualWidth <= 0) {
+        val starts = FloatArray(columns.size) { columns[it].start }
+        val ends = FloatArray(columns.size) { columns[it].end }
+        val isSpace = BooleanArray(columns.size) {
+            TypographyJustification.isHtmlJustificationSpace((columns[it] as? TextBaseColumn)?.charData)
+        }
+        val isZeroWidthAnchor = BooleanArray(columns.size) { columns[it] is HiddenReviewColumn }
+        val isFixedWidth = BooleanArray(columns.size) { columns[it] is ImageColumn }
+        val result = TypographyJustification.justifyHtmlSpans(
+            starts = starts,
+            ends = ends,
+            isSpace = isSpace,
+            isZeroWidthAnchor = isZeroWidthAnchor,
+            isFixedWidth = isFixedWidth,
+            lineWidth = lineWidth,
+            textSize = contentPaint.textSize,
+            cnCharWidth = ZhLayout.getCnCharWidth(contentPaint)
+        )
+        if (result.starts.size != columns.size || result.ends.size != columns.size) {
+            AppLog.put(
+                "justifyHtmlSpans 返回列数不匹配: columns=${columns.size}, starts=${result.starts.size}, ends=${result.ends.size}"
+            )
             textLine.addColumns(columns)
             return
         }
-
-        // 统计空格数量
-        val spaceCount = columns.count {
-            (it as? TextBaseColumn)?.charData == " "
-        }
-
-        if (spaceCount > 1) {
-            // 多个空格：调整空格间距
-            val spaceIncrement = residualWidth / spaceCount
-            textLine.wordSpacing = spaceIncrement
-
-            // 重新计算字符位置
-            var currentX = firstCol.start
-            for (i in columns.indices) {
-                val col = columns[i]
-                val width = col.end - col.start
-
-                if ((col as? TextBaseColumn)?.charData == " " && i != columns.lastIndex) {
-                    // 空格，增加额外的间距
-                    col.start = currentX
-                    col.end = currentX + width + spaceIncrement
-                    currentX = col.end
-                } else {
-                    // 非空格或最后一个字符
-                    col.start = currentX
-                    col.end = currentX + width
-                    currentX = col.end
-                }
-
-                textLine.addColumn(col)
-            }
-        } else {
-            // 没有或只有一个空格：调整字符间距
-            val gapCount = columns.lastIndex
-            if (gapCount > 0) {
-                val charIncrement = residualWidth / gapCount
-                var currentX = firstCol.start
-                for (i in columns.indices) {
-                    val col = columns[i]
-                    val width = col.end - col.start
-
-                    if (i != columns.lastIndex) {
-                        // 非最后一个字符，增加额外的间距
-                        col.start = currentX
-                        col.end = currentX + width + charIncrement
-                        currentX = col.end
-                    } else {
-                        // 最后一个字符，不增加额外间距
-                        col.start = currentX
-                        col.end = currentX + width
-                    }
-
-                    textLine.addColumn(col)
-                }
-            } else {
-                // 只有一个字符，不需要调整
-                textLine.addColumns(columns)
-            }
+        textLine.wordSpacing = result.wordSpacing
+        textLine.extraLetterSpacing = result.extraLetterSpacing
+        for (i in columns.indices) {
+            val col = columns[i]
+            col.start = result.starts[i]
+            col.end = result.ends[i]
+            textLine.addColumn(col)
         }
     }
 
@@ -2386,44 +2348,42 @@ class TextChapterLayout(
             return
         }
         val residualWidth = visibleWidth - desiredWidth
-        val spaceSize = words.count { it == " " }
+        val result = TypographyJustification.justifyLine(
+            words = words,
+            widths = textWidths,
+            startX = startX,
+            residualWidth = residualWidth,
+            textSize = textPaint.textSize,
+            cnCharWidth = ZhLayout.getCnCharWidth(textPaint)
+        )
+        if (result.columnStarts.size != words.size || result.columnEnds.size != words.size) {
+            AppLog.put(
+                "justifyLine 返回列数不匹配: words=${words.size}, starts=${result.columnStarts.size}, ends=${result.columnEnds.size}"
+            )
+            addCharsToLineNatural(
+                book, absStartX, textLine, words,
+                startX, false, textWidths, srcList,
+                clickList
+            )
+            return
+        }
         textLine.startX = absStartX + startX
-        if (spaceSize > 1) {
-            val d = residualWidth / spaceSize
-            textLine.wordSpacing = d
-            var x = startX
-            for (index in words.indices) {
-                val char = words[index]
-                val cw = textWidths[index]
-                val x1 = if (char == " ") {
-                    if (index != words.lastIndex) (x + cw + d) else (x + cw)
-                } else {
-                    (x + cw)
-                }
-                addCharToLine(
-                    book, absStartX, textLine, char,
-                    x, x1, index + 1 == words.size, srcList,
-                    clickList
-                )
-                x = x1
-            }
-        } else {
-            val gapCount: Int = words.lastIndex
-            val d = if (gapCount > 0) residualWidth / gapCount else 0f
-            textLine.extraLetterSpacingOffsetX = -d / 2
-            textLine.extraLetterSpacing = d / textPaint.textSize
-            var x = startX
-            for (index in words.indices) {
-                val char = words[index]
-                val cw = textWidths[index]
-                val x1 = if (index != words.lastIndex) (x + cw + d) else (x + cw)
-                addCharToLine(
-                    book, absStartX, textLine, char,
-                    x, x1, index + 1 == words.size, srcList,
-                    clickList
-                )
-                x = x1
-            }
+        textLine.wordSpacing = result.wordSpacing
+        textLine.extraLetterSpacing = result.extraLetterSpacing
+        textLine.extraLetterSpacingOffsetX = result.extraLetterSpacingOffsetX
+        textLine.hasCustomColumnLayout = result.hasCustomColumnLayout
+        for (index in words.indices) {
+            addCharToLine(
+                book,
+                absStartX,
+                textLine,
+                words[index],
+                result.columnStarts[index],
+                result.columnEnds[index],
+                index + 1 == words.size,
+                srcList,
+                clickList
+            )
         }
         exceed(absStartX, textLine, words)
     }
@@ -2447,7 +2407,7 @@ class TextChapterLayout(
         textLine.startX = absStartX + startX
         for (index in words.indices) {
             val char = words[index]
-            val cw = textWidths[index]
+            val cw = textWidths.getOrNull(index) ?: 0f
             val x1 = x + cw
             addCharToLine(book, absStartX, textLine, char, x, x1, index + 1 == words.size, srcList, clickList)
             x = x1

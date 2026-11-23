@@ -49,6 +49,7 @@ data class TextLine(
     var exceed: Boolean = false,
     var onlyTextColumn: Boolean = true,
     var isReadAloudOnly: Boolean = false,
+    var hasCustomColumnLayout: Boolean = false,
 ) {
 
     val columns: List<BaseColumn> get() = textColumns
@@ -223,15 +224,26 @@ data class TextLine(
             paint.wordSpacing = wordSpacing
         }
         val offsetX = if (atLeastApi35) letterSpacingHalf else extraLetterSpacingOffsetX
+        val drawStart = indentSize.coerceIn(0, text.length)
         view.drawTextWithPaperInk(
             canvas = canvas,
             text = text,
-            start = indentSize,
+            start = drawStart,
             end = text.length,
             x = startX + offsetX,
             y = lineBase - lineTop,
             paint = paint,
             enableBlend = !isReadAloud
+        )
+        ChapterProvider.drawThinStroke(
+            canvas,
+            paint,
+            isTitle,
+            text,
+            drawStart,
+            text.length,
+            startX + offsetX,
+            lineBase - lineTop
         )
         PaintPool.recycle(paint)
         for (i in columns.indices) {
@@ -274,13 +286,17 @@ data class TextLine(
     }
 
     fun checkFastDraw(): Boolean {
-        if (!AppConfig.optimizeRender || exceed || !onlyTextColumn || textPage.isMsgPage) {
+        if (!AppConfig.optimizeRender || exceed || !onlyTextColumn || hasCustomColumnLayout || textPage.isMsgPage) {
             return false
         }
         if (wordSpacing != 0f && (!atLeastApi26 || !wordSpacingWorking)) {
             return false
         }
-        return searchResultColumnCount == 0
+        if (searchResultColumnCount != 0) {
+            return false
+        }
+        val drawStart = indentSize.coerceIn(0, text.length)
+        return !ChapterProvider.needsPerColumnThinStroke(isTitle, text, drawStart, text.length)
     }
 
     fun invalidate() {
