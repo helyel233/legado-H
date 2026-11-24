@@ -148,7 +148,8 @@ def main() -> int:
     for token in re.findall(KEY_TOKEN, click_src):
         click_keys.add(resolve(token, consts))
     # 特殊 kind 行不走 handleRowClick，由 MySettingsScreen 的独立回调承接
-    special_rows = {"themeMode", "autoTaskService"}
+    # eInkMode 与 autoTaskService 同为 ServiceSwitchRow，走 onToggleEInkMode 独立回调
+    special_rows = {"themeMode", "autoTaskService", "eInkMode"}
 
     # ---- 4. PageSource(ownerKey, configTag) ----
     index_src = strip_line_comments(src["index"])
